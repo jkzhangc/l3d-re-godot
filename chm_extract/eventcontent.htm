@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Event Content</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Event Content" />
+   <meta name="description" content="[Events] &#8594; [Event Content] &nbsp; &nbsp;When the appearance and start conditions of an event are met during gameplay, processing of the “Event content” begins. Event content is shown as" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal"><span style="font-size: 26pt;">[Events] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[Event Content]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><img alt="bm137" style="margin:0;width:6.2396in;height:4.6979in;border:none" src="bm137.png"/></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">When the appearance and start conditions of an event are met during gameplay, processing of the “Event content” begins. Event content is shown as a list of chosen (&quot;registered&quot;) event commands that are processed for varying in-game results.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Event commands are orders to change values and other elements within the game as it is played. “Change HP”, “Change Actor Name”, “Move Event”, “Play BGM” and all other commands are prepared with different targets and purposes in mind, and the results of their individual processing are reflected in the game.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">92 map and event commands, as well as 36 battle event command types have been prepared. Any number of event commands can be registered in an event in virtually any order, so the possibilities are endless.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The editing methods for event content are common to all event types.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">How to read the list</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The event content list displays registered event commands and their settings.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Registered commands are processed individually from the top of the list to the bottom.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The meanings of the symbols displayed in each line of the list are as follows.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt; font-family: 'Arial Unicode MS', 'Lucida Sans Unicode', 'Arial';"></span></p><p class="p_Normal"><span style="font-size: 11pt;">[@&gt; (Command name) (Content)] :</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Displays the command registered in the list as well as the content it will process.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt; font-family: 'Arial Unicode MS', 'Lucida Sans Unicode', 'Arial';"></span></p><p class="p_Normal"><span style="font-size: 11pt;">[:]:</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">This symbol means that the content of the previous command (an entry with [@&gt;]) is continued on this line. This is used when the content of the command covers multiple lines, or represents branch handling.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt;">[@&gt;] (displayed alone):</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Shown at the end of content or branch handling. Cannot be removed.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Registering Commands</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Event commands can be registered into the event contents by the following process.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">1.</span><span style="font-size: 11pt;">Double-click a line (1) that contains [@&gt;].</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">2.</span><span style="font-size: 11pt;">In the [Event Command] window, click the button for the event command to add.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">3.</span><span style="font-size: 11pt;">The window for setting the event command&#39;s content will open (with the exception of some commands). Complete the required settings and click the [OK] button.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">4.</span><span style="font-size: 11pt;">The event command will be added where [@&gt;] was double-clicked.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Command operations</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">When an entry in the list is right-clicked, the entry will be highlighted, and a shortcut menu will be displayed. The commands on this menu can be used to operate on the highlighted entry. The shortcut menu commands are as follows.</span></p><p class="p_Normal"><img alt="bm138" style="margin:0;width:5.8854in;height:2.7292in;border:none" src="bm138.png"/></p>
+<p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Insert (Enter)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Inserts a new command at the location of the highlighted entry.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Edit (Space)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Opens the settings window of the entry for editing.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Cut (Ctrl+X)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Sends the selected entry to the clipboard and removes it from the list.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Copy (Ctrl+C)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Moves the selected command onto the clipboard.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Paste (Ctrl+V)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Inserts the entry on the clipboard at the location of the highlighted entry.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Delete (Del)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Removes the selected entry from the list.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.3646in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Select All (Ctrl+A)</span></p>
+</td>
+<td style="vertical-align:top; width:11.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Selects all the entries on the list for editing (entries will be highlighted).</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">When one entry is selected and shift is held while another entry is clicked, all entries between and including the clicked entry will be selected for editing. However, if branch handling is within the selected entries, only entries that are within the same branch can be specified together.</span></p><p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+[gd_scene format=3 uid="uid://bs5p3jw2ebse0"]
+
+[ext_resource type="Script" uid="uid://bhxtarphu1dh8" path="res://script/tileset_generator.gd" id="1_sinct"]
+[ext_resource type="Texture2D" uid="uid://bn5pgchwimpce" path="res://art/Tilesets/TileB-Tw2.png" id="2_sinct"]
+
+[node name="Node2D" type="Node2D" unique_id=386019264]
+
+[node name="图块" type="Node2D" parent="." unique_id=193946997]
+script = ExtResource("1_sinct")
+tileset_texture = ExtResource("2_sinct")
+
+[node name="Control" type="Control" parent="图块" unique_id=1705238876]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Button" type="Button" parent="图块/Control" unique_id=901013949]
+layout_mode = 0
+offset_right = 8.0
+offset_bottom = 8.0
+text = "Generate TileSet"
+
+[connection signal="pressed" from="图块/Control/Button" to="图块" method="_on_button_pressed"]

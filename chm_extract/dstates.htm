@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>States</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="States" />
+   <meta name="description" content="[Database] &#8594; [States] &nbsp; &nbsp;Name The name of the state (status effect). &nbsp;Removal Conditions Specify how long to preserve the state. If set to “Ends after Battle”, the actor wi" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt;">[Database] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[States]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;"><img alt="bm107" style="margin:0;width:10.4792in;height:6.5938in;border:none" src="bm107.png"/></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">1.</span><span style="font-size: 11pt; font-weight: bold;">Name</span></p><p class="p_Normal"><span style="font-size: 11pt;">The name of the state (status effect).</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">2.</span><span style="font-size: 11pt; font-weight: bold;">Removal Conditions</span></p><p class="p_Normal"><span style="font-size: 11pt;">Specify how long to preserve the state. If set to “Ends after Battle”, the actor will return to normal after the battle ends. If set to “Persists after Battle”, the state will continue until it is cured.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">3.</span><span style="font-size: 11pt; font-weight: bold;">Color</span></p><p class="p_Normal"><span style="font-size: 11pt;">The color of the text that is displayed when the state is inflicted. Colors that can be selected here will change depending on the text colors in the system graphic.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">4.</span><span style="font-size: 11pt; font-weight: bold;">Rating</span></p><p class="p_Normal"><span style="font-size: 11pt;">Specify the rating (priority) of the state in the range of 1 to 100.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">When multiple states are inflicted, the one with the highest rating will be displayed.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">If multiple states are inflicted at the same time, their ratings will be compared to the state with the highest rating, and states that have less than or equal to 10 rating points will be automatically cured.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">5.</span><span style="font-size: 11pt; font-weight: bold;">Restrictions</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Places limits on actions that can be taken in battle while the state is active. Choose one from the dropdown menu.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">None</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">No actions are limited.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Cannot Move</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The player cannot enter any commands for the actor.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Attack an Enemy</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The actor cannot be controlled, and will use only normal attacks on enemies.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Attack an Ally</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The actor cannot be controlled and will use normal attacks on allies instead of enemies.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">6.</span><span style="font-size: 11pt; font-weight: bold;">State Rate</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The chance of the state occurring. For each level of A through E, please enter a value ranging from 0 to 100%. The actual probabilities for [State Rate] settings for actors and enemies are based on these values.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The values should be set in decreasing order of A, B, C, D, E. State Rates for actors and enemies are set in that order (the order of decreasing weakness). If they are not set in order, state probabilities may not be reflected properly in-game.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">7.</span><span style="font-size: 11pt; font-weight: bold;">Healing Method</span></p><p class="p_Normal"><span style="font-size: 11pt;">Provides 2 options for recovering from the state during battle.</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt; font-weight: bold;">[Recover Naturally] </span><span style="font-size: 11pt;">allows the actor to recover after a specified number of turns regardless of whether any method of recovery was used. Enter the number of turns to maintain the state within the range of 0 to 999, and specify the chance of recovery after the turn count is passed within the range of 0 to 100%.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt; font-weight: bold;">[Recover when Hit] </span><span style="font-size: 11pt;">allows the actor to recover after being hit by a physical attack. Specify the chance of recovery after being hit by an attack, within the range of 0 to 100%. As a note, the chance of recovery will change depending on the physical influence property if a skill is used to attack.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">8.</span><span style="font-size: 11pt; font-weight: bold;">Actor Status</span></p><p class="p_Normal"><span style="font-size: 11pt;">Specify stats that should be halved/doubled when the state is inflicted. The checked stats will be halved/doubled.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">9.</span><span style="font-size: 11pt; font-weight: bold;">Accuracy Modifier</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specifies how much the character&#39;s accuracy will be modified when the state is afflicted. The range is 0 to 100%. </span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">As a note, skills with the “physical attack dodged” message (the bottommost option) will also be treated as a physical attack and be affected by the accuracy change.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">10.</span><span style="font-size: 11pt; font-weight: bold;">Unable to Use Skill</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify skills that will be disabled when the state is inflicted in terms of physical rate and magical rate. Skills that have physical and/or magical rates higher than the specified base value will be disabled when this state is inflicted.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">To apply this setting, check the relevant checkbox and enter the base value.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">11.</span><span style="font-size: 11pt; font-weight: bold;"> HP</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The amount of HP that the character will lose when this state has been inflicted. Specify the values separately for battles and map movement.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under “Increase/Decrease HP every turn in battle”, characters with the state will increase/decrease HP every turn in battle. Specify as a combination of percentage of HP (0 to 100%) and absolute value (0 to 999).</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">“HP Recovered/Reduced during Map Movement” is only set when the removal condition is “Persists after Battle”. Specify the number of steps (tiles) for the actor to move between each decrease in HP. The number of steps should be specified within the range of 0 to 100, and the decrease in HP in the range of 0 to 999.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">12.</span><span style="font-size: 11pt; font-weight: bold;">MP</span></p><p class="p_Normal"><span style="font-size: 11pt;">The amount of MP that the character will lose/gain when this state has been inflicted. These options are set in the same manner as the HP section described above.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">13.</span><span style="font-size: 11pt; font-weight: bold;">Special</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">100% Dodge</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">In battle, for as long as this state is active, opponent attacks will not hit (except for skills).</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Reflect Magic</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">In battle, for as long as this state is active, skills used by the opponent will be reflected and deal damage to the user instead.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Fixed Equipment</span></p>
+</td>
+<td style="vertical-align:top; width:11.9896in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">For as long as this state is active, weapons and equipment cannot be changed.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">14.</span><span style="font-size: 11pt; font-weight: bold;">Animation</span></p><p class="p_Normal"><span style="font-size: 11pt;">Choose the battle animation for characters that have been afflicted with the state.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Enter the animation number for the animation created under “Poses” in “Battle animation 2”.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">The default is “Status” under “Basic”.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Notes</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">For the first state on the list, “Dead”, settings cannot be changed for any option other than [Name], [Color], and [Removal Condition], and also cannot be deleted.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">This is because as a rule of games made with this software, this state is forced to occur when actors&#39; and enemies&#39; HP reach 0. It is used to represent the situation where characters have expended an extreme amount of energy and are unable to move in battle. The defeat of enemy characters is also based on this state.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Dead actors are unable to recover naturally from this state, excluding situations where event processing is involved. To recover, skills possessed by other actors that can cure the state or medicine items with the [Only effective on dead actors] option enabled must be used. As a note, if all actors in the party enter the dead state, it will be considered a Game Over.</span></p><p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

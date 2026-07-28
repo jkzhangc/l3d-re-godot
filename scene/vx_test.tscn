@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://bn1ersfnr2jim"]
+
+[ext_resource type="Script" uid="uid://dvw12mrtj40p1" path="res://script/vx_tilemap_test.gd" id="1"]
+[ext_resource type="Script" uid="uid://cdgrwr3msw2yb" path="res://addons/vx_tilemap/vx_tilemap.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://bls561edu171y" path="res://art/Tilesets/TileA4-Tw.png" id="3_puwt2"]
+
+[node name="VXTest" type="Node2D" unique_id=139175506]
+script = ExtResource("1")
+
+[node name="VXTileMap" type="Node2D" parent="." unique_id=1006049742]
+script = ExtResource("2")
+tile_sheet = ExtResource("3_puwt2")
+draw_grid = true
+metadata/_custom_type_script = "uid://cdgrwr3msw2yb"
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=436049533]
+position = Vector2(320, 240)
+zoom = Vector2(1.5, 1.5)

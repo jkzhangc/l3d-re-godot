@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://btn2ius2x1k85"]
+
+[ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1_kpsov"]
+
+[resource]
+script = ExtResource("1_kpsov")
+item_id = "ammo_smg"
+item_name = "冲锋枪子弹"
+item_type = 5
+description = "冲锋枪用的子弹。"
+sell_price = 2
+stackable = true

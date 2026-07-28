@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://c5shie48qlsbk"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_nq1sq"]
+[ext_resource type="Texture2D" uid="uid://c5x7fd0fggu1i" path="res://art/Animations/ショットガン←.png" id="2_ncrt6"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+script = ExtResource("1_nq1sq")
+texture = ExtResource("2_ncrt6")
+fps = 25.5
+animation_scale = Vector2(0.5, 0.5)
+position_offset = Vector2(-65, 12)
+frame_sequence = Array[int]([0, 1, 2])

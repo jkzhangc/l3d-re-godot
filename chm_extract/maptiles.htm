@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Map Tiles</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Map Tiles" />
+   <meta name="description" content="[Map] &#8594; [Map Tiles] &nbsp;About Map Tiles Map tiles are the smallest unit that make up a map. Map tiles are handled as a collection of artwork in one image: the &quot;tileset graphic&quot;. T" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt;">[Map] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[Map Tiles]</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">About Map Tiles</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Map tiles are the smallest unit that make up a map.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Map tiles are handled as a collection of artwork in one image: the &quot;tileset graphic&quot;. This image, when defined into separate tiles using editor settings such as passage, terrain, etc. is called a “tileset”.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Each map is assigned a tileset, and tiles from this tileset can be placed on the map.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Tile Types</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">There are two types of tiles: “Upper layer tiles” that can be placed on the upper layer of the map, and “Lower layer tiles” that can be placed on the lower layer of the map.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">There are 4 types of lower layer tiles. When the [Edit mode] is set to [Lower Layer], each type of lower layer tile is in the displayed positions.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><img alt="bm46" style="margin:0;width:2.2604in;height:1.8542in;border:none" src="bm46.png"/></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">A.</span><span style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Sea Tiles:</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">These are tiles for sea water, and are animated using 3 frames. When placed next to other lower layer tiles, the coastline will be created automatically (autotiling).</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Sea tiles come in 3 types: two types of shallow sea with different coastlines (left, center) and deep sea (right).</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">B.</span><span style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Animated Tiles:</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Tiles animated using 4 frames, which are are used for waterfalls, fountains, etc. 3 types can be specified.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">C.</span><span style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Normal Terrain Tiles:</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Tiles that are used to represent grasslands, forests, mountains, roads, and so on. When placed next to each other, the border tiles will be created automatically (autotiling). 12 types of tiles can be specified.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">D.</span><span style="font-size: 11pt; font-weight: bold; text-decoration: underline;">Standard Tiles:</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">These are normal tiles that will be used as is. 144 tile slots are available.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Upper layer tiles have up to 144 slots, and have the same properties as lower layer tiles. When placed on the map, the background color of the tile palette will not show up on the map.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;"> “Autotiling” is a feature that adjusts the borders of tiles according to their locations on the map. Regular terrain tiles have 12 variations per tile, and the appropriate version is chosen automatically to display. For example, when 3 snow tiles are lined up, each tile will be reformatted so they are joined properly.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><img alt="bm47" style="margin:0;width:1.1771in;height:0.4271in;border:none" src="bm47.png"/><span style="font-size: 11pt;"> <img alt="bm48" style="margin:0;width:1.1354in;height:0.4063in;border:none" src="bm48.png"/></span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Tileset Settings</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Map tiles are simply drawings. For them to work in the game as intended, it is necessary to create a “tileset” in which the following features are defined:</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Passage/Passability</span><span style="font-size: 11pt;">: Controls whether it is possible for the player to walk over the tile. There are 2 ways to do this: use “Passage” settings to determine if the player can move onto the tile, or use “Passage (4 directions)” to determine which directions the player can use to move on or off the tile.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Terrain:</span><span style="font-size: 11pt;"> Gives</span><span style="font-size: 11pt; font-weight: bold;"> </span><span style="font-size: 11pt;">the feature of “terrain” to the map tiles. Using this, it is possible to modify enemy encounter rates, battle backgrounds, and vehicle passage (small ships, large ships, airships). The features of each kind of “terrain” are defined in the [Database], under the “Terrain” tab.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt;">Tileset settings are handled in the [Database], under the </span><span style="font-size: 11pt; text-decoration: underline;"><a href="dtilesets.htm" class="topiclink">[Tilesets]</a></span><span style="font-size: 11pt;"> tab.</span></p>
+<p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

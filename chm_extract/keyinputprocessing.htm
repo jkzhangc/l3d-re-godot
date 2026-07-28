@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Key Input Processing</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Key Input Processing" />
+   <meta name="description" content="[Key Input Processing] &nbsp;Function Converts the key pressed by the player into a key code (numerical value) and stores it in a variable. It is also possible to wait for the playe" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt; font-weight: bold;">[Key Input Processing]</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Function</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Converts the key pressed by the player into a key code (numerical value) and stores it in a variable.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">It is also possible to wait for the player to press a specific key.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Settings</span></p>
+<p class="p_Normal"><img alt="bm225" style="margin:0;width:3.9271in;height:5.1042in;border:none" src="bm225.png"/></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The keys that can be read and their respective key codes are as follows.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt;">Number: Key (NumLock ON)</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">1: Direction key down, J</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">2: Direction key left, H</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">3: Direction key right, L</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">4: Direction key up, K</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">5: Enter, Spacebar, Z</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">6: Esc, X, C, V, B, N</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">10: 0, Numpad 0</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">11: 1, Numpad 1</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">12: 2, Numpad 2</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">13: 3, Numpad 3</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">14: 4, Numpad 4</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">15: 5, Numpad 5</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">16: 6, Numpad 6</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">17: 7, Numpad 7</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">18: 8, Numpad 8</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">19: 9, Numpad 9</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">20: Numpad +</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">21: Numpad -</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">22: Numpad *</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">23: Numpad /</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">24: Numpad .</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Number: Key (NumLock ON)</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">1: Direction key down, J, Numpad 2</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">2: Direction key left, H, Numpad 4</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">3: Direction key right, L, Numpad 6</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">4: Direction key up, K, Numpad 8</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">5: Enter, Space, Z</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">6: Esc, X, C, V, B, N, Numpad 0</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">10: 0</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">11: 1</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">12: 2</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">13: 3</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">14: 4</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">15: 5</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">16: 6</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">17: 7</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">18: 8</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">19: 9</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">20: Numpad +</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">21: Numpad -</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">22: Numpad *</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">23: Numpad /</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Notes</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Key input is handled using the standard keyboard inclusive of a number pad. On notebook computers and some computers that do not have a number pad, the numpad keys cannot be used regardless of whether the NumLock is ON or OFF.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify the variable to receive the key code under [Variable]. The variable to use can be selected from the [Variables] window which can be opened by clicking the [...] button.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify the variable to receive keypress duration under [Variable] in units of 0.1 seconds. The variable to use can be selected from the [Variables] window which can be opened by clicking the [...] button.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Allowed keys], specify the keys for which to allow input for the processing of this command. Disabled (unchecked) keys will not be accepted as input.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If [Wait for Key Input] under [Options] is enabled, processing will not continue until a key is pressed. This is set to active by default.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

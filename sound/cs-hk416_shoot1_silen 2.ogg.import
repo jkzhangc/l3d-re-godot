@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://nmx5gi3q68ei"
+path="res://.godot/imported/cs-hk416_shoot1_silen 2.ogg-ede80244b2d281695129a0b4c812034d.oggvorbisstr"
+
+[deps]
+
+source_file="res://sound/cs-hk416_shoot1_silen 2.ogg"
+dest_files=["res://.godot/imported/cs-hk416_shoot1_silen 2.ogg-ede80244b2d281695129a0b4c812034d.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

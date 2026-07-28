@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bpt55tvcf1xj"]
+
+[ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_2b1o8"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_lg75x"]
+[ext_resource type="Texture2D" uid="uid://bbrf6dbu1u3lw" path="res://art/misc/Gun.png" id="3_2b1o8"]
+[ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="4_tk8ak"]
+[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_5vlxl"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_lg75x"]
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_oiymr"]
+[ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="7_2b1o8"]
+
+[sub_resource type="Resource" id="Resource_lg75x"]
+script = ExtResource("2_lg75x")
+bullet_texture = ExtResource("3_2b1o8")
+speed = 1000.0
+offset_left = Vector2(0, -14)
+offset_right = Vector2(0, -14)
+collision_size = Vector2(48, 12)
+
+[resource]
+script = ExtResource("6_oiymr")
+attack_power = 30
+attack_range = 200.0
+weapon_state_name = "Rifle"
+weapon_walk_texture = ExtResource("7_2b1o8")
+weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+fire_mode = 1
+pickup_texture = ExtResource("6_lg75x")
+pickup_direction = 2
+pickup_animated = false
+attack_sound = ExtResource("1_2b1o8")
+empty_fire_sound = ExtResource("4_tk8ak")
+raise_sound = ExtResource("5_5vlxl")
+lower_sound = ExtResource("5_5vlxl")
+reload_char_sequence = Array[int]([2, 1])
+attack_effect_anim_down = "anim_effect_步枪攻击下.tscn"
+attack_effect_anim_left = "anim_effect_步枪攻击左.tscn"
+attack_effect_anim_right = "anim_effect_步枪攻击右.tscn"
+attack_effect_follow = true
+hit_effect_anim = "anim_effect_hit.tscn"
+magazine_capacity = 30
+ammo_item_id = "ammo_rifle"
+attack_char_sequence = Array[int]([3, 2])
+attack_frame_durations = Array[float]([0.1, 0.07])
+bullet_list = Array[ExtResource("2_lg75x")]([SubResource("Resource_lg75x")])
+item_id = "rifle_01"
+item_name = "步枪"
+item_type = 3
+description = "一把普通的手枪。远程攻击。"
+sell_price = 100
+max_stack = 1

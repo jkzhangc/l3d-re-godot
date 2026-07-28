@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Control Variables</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Control Variables" />
+   <meta name="description" content="[Control Variables] &nbsp;Function Changes the value stored in a variable. &nbsp;Settings &nbsp; Carries out [Operation] using the values and options specified under [Operand] on the vari" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt; font-weight: bold;">[Control Variables]</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Function</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Changes the value stored in a variable.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Settings</span></p>
+<p class="p_Normal"><img alt="bm159" style="margin:0;width:4.8125in;height:5.0313in;border:none" src="bm159.png"/></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Carries out [Operation] using the values and options specified under [Operand] on the variable specified under [Variable].</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Variable], specify the variable to operate on using one of the 3 following methods.</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Single</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Operates on a single variable. Click the [...] button to display the [Variables] window, and specify the variable to operate.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Batch</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Enter the start and end points of the range of variables to modify. All variables within this range will be operated upon.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Variable</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The variable with the same number as the value stored in the given variable will be operated on. </span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">For example, if variable no. 2 is specified which contains “5” at the time the command is processed, variable no. 5 will become the target of this command.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">The variable to be used can be specified by clicking the [...] button to open the [Variables] window, from which the number of the variable can be chosen.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Operation], choose one of the following operations to perform on the variable specified in [Variable].</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Set</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Sets the variable&#39;s value to the value specified as the operand.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Add</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Adds the operand value to the variable&#39;s original value and stores it in the variable.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Subtract</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Subtracts the operand value from the variable&#39;s original value and stores it in the variable.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Multiply</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Multiplies the operand value by the variable&#39;s original value and stores it in the variable.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Divide</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Divides the variable&#39;s original value by the operand and stores it in the variable.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Modulus</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Divides the variable&#39;s original value by the operand and stores the remainder in the variable.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Operand], specify the value to use in the variable calculation using one of the following methods.</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Constant</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the given constant value.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Variable</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The value stored in the given variable will be used. </span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">For example, if variable no. 5 is specified which contains “2” at the time the command is processed, 2 will be used. </span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">The variable to be used can be specified by clicking the [...] button to open the [Variables] window, from which the number of the variable can be chosen.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Variable ID</span><br>
+<span style="font-size: 11pt; font-weight: bold;">(Number of the Variable)</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Refers to the value in the specified variable and uses the variable that corresponds to that value.</span><br>
+<span style="font-size: 11pt;">For example, if variable no. 5 is specified which contains “2” at the time the command is processed, variable no. 2&#39;s value will be used. </span><br>
+<span style="font-size: 11pt;">The variable to be used can be specified by clicking the [...] button to open the [Variables] window, from which the number of the variable can be chosen.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Random</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses a number randomized within a given range. Random numbers are values that are randomized during the game. </span><br>
+<span style="font-size: 11pt;">For example, if the range “0~100” is specified, the value used will be a random number above 0 but below 100.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Item</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal">Uses the number of a possessed or equipped item. From the dropdown menu, choose the item name, and specify whether inventory items or equipped items should be counted.</p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Actor</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses an actor&#39;s stat, or the item ID of an equipped item. From the dropdown menu, choose the actor&#39;s name, as well as the option to take the value of.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Enemies</span></p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">(Battle Events Only)</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses an enemy stat value. From the dropdown menu, choose the enemy&#39;s name, as well as the stat to take the value of.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Other</span></p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">(Map/Common Events Only)</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the location information of characters or events on the map. Specify the target character (a) and location information type (b) using the dropdown menus.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Targets</span></p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Player</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The walking player.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Boat</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The boat vehicle.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Ship</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The ship vehicle.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Airship</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The airship vehicle.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">This Event</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The current event. If used in a common event, it refers to the last map event on the call stack instead.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Event Name</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Other events.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Location Information</span></p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Map ID</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the ID number of the map the target is on.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">X Coordinate</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the horizontal coordinate of the target&#39;s location on the map.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Y Coordinate</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the vertical coordinate of the target&#39;s location on the map.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Direction</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the facing direction of the target.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">North (Up)</span><span style="font-size: 11pt;"> will be 8</span><br>
+<span style="font-size: 11pt; font-weight: bold;">East (Right)</span><span style="font-size: 11pt;"> will be 6</span></p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">West (Left)</span><span style="font-size: 11pt;"> will be 4</span></p>
+<p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">South (Down)</span><span style="font-size: 11pt;"> will be 2</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Screen X</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the horizontal coordinate of the target with respect to the screen.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Screen Y</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the vertical coordinate of the target with respect to the screen.</span></p>
+<p class="p_Normal">&nbsp;</p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Others</span></p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Use one of the following 8 options. Specify the option from the dropdown menu.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Money</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the amount of money currently possessed by the player.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Timer n Remaining Time</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the remaining number of seconds on the current timer (n = 1 or 2).</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Party Size</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of members in the player&#39;s party.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Save Count</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of times the player has saved the game data up until the current moment.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Battle Count</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of times enemies have been battled up until the current moment.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Win Count</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of times battles have been won up until the current moment.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Loss Count</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of times battles have been lost up until the current moment.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Escape Count</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the number of times battles have been escaped from until the current moment.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:2.0729in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">MIDI Play Location (Tick)</span></p>
+</td>
+<td style="vertical-align:middle; width:12.6458in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses the current data position of the MIDI file that is being played.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

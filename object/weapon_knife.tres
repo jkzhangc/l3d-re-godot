@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cpsl8udnhaphj"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="1_q4c54"]
+[ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="2_12jfk"]
+[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="3_12jfk"]
+[ext_resource type="AudioStream" uid="uid://ct6wqa836p8ov" path="res://sound/ナイフ.wav" id="3_idirh"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 15
+attack_speed = 1.2
+weapon_state_name = "Knife"
+weapon_walk_texture = ExtResource("2")
+is_ranged = false
+weapon_slot = 1
+pickup_char_idx = 2
+pickup_direction = 3
+attack_sound = ExtResource("2_12jfk")
+raise_sound = ExtResource("3_12jfk")
+lower_sound = ExtResource("3_12jfk")
+hit_sound = ExtResource("3_idirh")
+hit_effect_anim = "anim_effect_hit.tscn"
+attack_char_sequence = Array[int]([3, 4, 1, 2])
+melee_attack_char_sequence = Array[int]([3, 4, 5, 2])
+melee_attack_frame_durations = Array[float]([0.1, 0.1, 0.2, 0.1])
+item_id = "knife_01"
+item_name = "小刀"
+item_type = 3
+description = "一把锋利的小刀。近战攻击。"
+sell_price = 50
+max_stack = 1

@@ -1,0 +1,261 @@
+extends Node2D
+## 子弹实体 — 由远程武器射击生成
+##
+## 使用 VX Ace 角色精灵格式渲染（与玩家相同）：
+##   精灵表 576×512，每角色 3帧×4方向，每帧 48×64
+##   通过 bullet_char_idx 选择角色槽位，frame=1（站立帧），方向决定行
+
+# ═══════════════════════════════════════
+# 精灵帧常量（与 player.gd 保持一致）
+# ═══════════════════════════════════════
+const FRAME_W: int = 48
+const FRAME_H: int = 64
+const CHARS_PER_ROW: int = 4
+const DIRECTIONS: int = 4
+const BULLET_FRAME: int = 1   ## 始终使用站立帧
+const DIR_ROWS: Array[int] = [0, 1, 2, 3]  ## DOWN/LEFT/RIGHT/UP
+
+enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
+
+# ═══════════════════════════════════════
+# 公开参数（由武器/生成者设置）
+# ═══════════════════════════════════════
+var direction: Vector2 = Vector2.RIGHT
+var speed: float = 300.0
+var max_range: float = 300.0
+var damage: float = 0.0
+var destroy_on_hit: bool = true
+var penetration: int = 0
+var critical_rate: float = 0.0             ## 暴击率 (0-100)
+
+# 外观
+var _bullet_texture: Texture2D = null
+var _bullet_char_idx: int = 0
+var _bullet_dir: int = FaceDir.RIGHT
+
+# 击退（可由 BulletData 设置）
+var _knockback_force: float = 0.0
+var _knockback_stun: float = 0.0
+
+# 硬直（可由 BulletData 设置）
+var _hitstun_duration: float = 0.0
+
+# 碰撞体（可由 BulletData 覆盖）
+var _collision_size: Vector2 = Vector2(24, 28)
+var _collision_offset: Vector2 = Vector2.ZERO
+
+# ═══════════════════════════════════════
+# 内部状态
+# ═══════════════════════════════════════
+var _distance_traveled: float = 0.0
+var _hits: int = 0
+var _hit_targets: Array[int] = []   ## 已命中目标的 instance_id（防双次命中：物理体 + 受击碰撞体）
+var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
+
+
+var _hit_effect_anim: PackedScene = null  ## 命中时播放的特效场景
+var _hit_effect_follow: bool = false  ## 命中特效是否跟随目标
+var _hit_effect_offset_override: Vector2 = Vector2.ZERO  ## 命中特效偏移覆盖
+var _hit_sound: AudioStream = null  ## 命中时播放的音效
+# ═══════════════════════════════════════
+# 节点引用
+# ═══════════════════════════════════════
+@onready var _sprite: Sprite2D = $Sprite2D
+@onready var _area: Area2D = $Area2D
+
+
+func _ready() -> void:
+	if _area:
+		_area.area_entered.connect(_on_area_entered)
+		_area.body_entered.connect(_on_body_entered)
+	_refresh_sprite()
+	_update_area_rotation()
+
+
+func setup(params: Dictionary) -> void:
+	## 从字典批量设置参数（由武器生成代码调用）
+	direction = params.get("direction", Vector2.RIGHT)
+	speed = params.get("speed", 300.0)
+	max_range = params.get("max_range", 300.0)
+	damage = params.get("damage", 0.0)
+	destroy_on_hit = params.get("destroy_on_hit", true)
+	penetration = params.get("penetration", 0)
+	critical_rate = params.get("critical_rate", 0.0)
+	_bullet_texture = params.get("texture", null)
+	_bullet_char_idx = params.get("char_idx", 0)
+	# 碰撞体（>0 则覆盖默认值）
+	var cs: Vector2 = params.get("collision_size", Vector2.ZERO)
+	if cs != Vector2.ZERO:
+		_collision_size = cs
+	_collision_offset = params.get("collision_offset", Vector2.ZERO)
+	_knockback_force = params.get("knockback_force", 0.0)
+	_knockback_stun = params.get("knockback_stun", 0.0)
+	_hitstun_duration = params.get("hitstun_duration", 0.0)
+	_hit_effect_anim = params.get("hit_effect_anim", null)
+	_hit_effect_follow = params.get("hit_effect_follow", false)
+	_hit_effect_offset_override = params.get("hit_effect_offset_override", Vector2.ZERO)
+	_hit_sound = params.get("hit_sound", null)
+	_shooter = params.get("shooter", null)
+	_apply_collision_shape()
+	# 根据方向计算朝向
+	_bullet_dir = _vec_to_facedir(direction)
+	_refresh_sprite()
+	_update_area_rotation()
+
+
+func _process(_delta: float) -> void:
+	if Global.debug_visuals:
+		queue_redraw()
+
+
+func _physics_process(delta: float) -> void:
+	var step: float = speed * delta
+	position += direction * step
+	_distance_traveled += step
+
+	if _distance_traveled >= max_range:
+		queue_free()
+
+
+func _on_area_entered(area: Area2D) -> void:
+	_hit(area.get_parent() if area.get_parent() else area)
+
+
+func _on_body_entered(body: Node2D) -> void:
+	_hit(body)
+
+
+func _hit(target: Node2D) -> void:
+	## 击中目标的默认处理 — 子类或外部可覆写
+	if target == null:
+		return
+
+	# 解析真正的可伤害目标（如果传入的是受击碰撞体 Area2D，取其父节点）
+	var damageable: Node2D = target
+	if not target.has_method("take_damage") and target.get_parent() and target.get_parent().has_method("take_damage"):
+		damageable = target.get_parent()
+
+	if not damageable.has_method("take_damage"):
+		return
+
+	# 防止击中发射者自己
+	if _shooter and damageable == _shooter:
+		return
+
+	# 去重：防止物理体 + 受击碰撞体双重触发
+	var tid: int = damageable.get_instance_id()
+	if tid in _hit_targets:
+		return
+	_hit_targets.append(tid)
+
+	# 跳过已死亡的目标（尸体不挡子弹、不消耗穿透）
+	if damageable.get("_is_dead") == true or damageable.get("_is_dying") == true:
+		return
+
+	_hits += 1
+
+	# 掷骰判定暴击（爆头）
+	var is_headshot: bool = _roll_critical()
+
+	# 尝试对目标造成伤害
+	# 传递击退参数 + 硬直时长
+	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration)
+
+	# 播放命中特效
+	if _hit_effect_anim:
+		var bf: Node2D = damageable if _hit_effect_follow else null
+		VXAnimSprite.play_scene(_hit_effect_anim, damageable.global_position, get_tree().current_scene, 10.0, bf, _hit_effect_offset_override)
+	# 播放命中音效
+	if _hit_sound:
+		Global.play_sfx_managed(_hit_sound, get_tree().current_scene)
+
+	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(damage), str(is_headshot), penetration - _hits + 1])
+
+	if destroy_on_hit and _hits > penetration:
+		queue_free()
+
+
+func _vec_to_facedir(v: Vector2) -> int:
+	if abs(v.x) > abs(v.y):
+		return FaceDir.RIGHT if v.x > 0 else FaceDir.LEFT
+	return FaceDir.DOWN if v.y > 0 else FaceDir.UP
+
+
+func _refresh_sprite() -> void:
+	if not _sprite or not _bullet_texture:
+		return
+
+	_sprite.texture = _bullet_texture
+	_sprite.region_enabled = true
+
+	var char_col: int = _bullet_char_idx % CHARS_PER_ROW
+	var char_row: int = _bullet_char_idx / CHARS_PER_ROW
+	var dir_row: int = DIR_ROWS[_bullet_dir]
+
+	var x: int = char_col * (FRAME_W * 3) + BULLET_FRAME * FRAME_W
+	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
+	_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+
+	# 旋转精灵以匹配实际飞行方向
+	# 精灵帧有隐含的基础朝向，rotation = 实际方向 - 基础朝向
+	_sprite.rotation = direction.angle() - _facedir_base_angle(_bullet_dir)
+
+
+func _facedir_base_angle(facedir: int) -> float:
+	## 返回精灵帧的基础朝向角度（Godot 坐标系）
+	match facedir:
+		FaceDir.DOWN:  return PI / 2.0   # 90°
+		FaceDir.LEFT:  return PI          # 180°
+		FaceDir.RIGHT: return 0.0          # 0°
+		FaceDir.UP:    return -PI / 2.0   # -90°
+	return 0.0
+
+
+func _update_area_rotation() -> void:
+	## 让 Area2D 碰撞体跟随子弹方向旋转（参考敌人攻击矩形旋转）
+	## 优先用 _area 缓存引用，若未初始化则用 $ 路径（setup 在 add_child 前调用）
+	var area: Area2D = _area if _area else $Area2D
+	if area:
+		area.rotation = direction.angle()
+
+
+func _apply_collision_shape() -> void:
+	## 应用碰撞体尺寸和偏移（由 setup() 在 _update_area_rotation 之前调用）
+	## 注意：setup() 在 add_child() 之前调用，此时 @onready 未初始化，
+	##       必须用 $ 路径而非 _area 缓存引用。
+	var shape_node: CollisionShape2D = $Area2D/CollisionShape2D
+	if not shape_node:
+		return
+	var shape: Shape2D = shape_node.shape
+	if shape is RectangleShape2D:
+		(shape as RectangleShape2D).size = _collision_size
+		print("[子弹] 碰撞体尺寸已更新: %s | 偏移: %s" % [_collision_size, _collision_offset])
+	else:
+		print("[子弹] _apply_collision_shape: shape 不是 RectangleShape2D, 类型=%s" % shape.get_class())
+	shape_node.position = _collision_offset
+
+
+func _draw() -> void:
+	## 调试可视化：绘制子弹碰撞体（跟随 Area2D 旋转 + 偏移）
+	if not Global.debug_visuals:
+		return
+	if not _area:
+		return
+
+	var shape_node: CollisionShape2D = $Area2D/CollisionShape2D
+	var shape: Shape2D = shape_node.shape
+	if shape is RectangleShape2D:
+		var s: Vector2 = (shape as RectangleShape2D).size
+		var offset: Vector2 = shape_node.position
+		draw_set_transform(offset, _area.rotation)
+		draw_rect(Rect2(-s / 2, s), Color.CYAN, false, 1.0)
+		draw_set_transform(Vector2.ZERO, 0.0)
+
+
+func _roll_critical() -> bool:
+	## 掷骰判定是否暴击（爆头）
+	if critical_rate <= 0.0:
+		return false
+	if critical_rate >= 100.0:
+		return true
+	return randf() * 100.0 < critical_rate

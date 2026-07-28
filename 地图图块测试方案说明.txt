@@ -1,0 +1,95 @@
+═══════════════════════════════════════════════════════════
+  地图图块测试方案 — 总结
+═══════════════════════════════════════════════════════════
+
+## 方案分析
+
+关键点：Godot 4.3+ 中 TileMap 已废弃，必须用 TileMapLayer。
+VX Ace 图块分为两类：
+
+| 类型 | 图块组 | 处理方式 |
+|------|--------|----------|
+| 普通图块 | A5、B~E | 直接按 32×32 网格切片，简单 |
+| 自动图块 | A1~A4 | 需要 Godot Terrain（地形）系统来实现自动边框连接 |
+
+推荐做法：
+1. 用 TileMapLayer + TileSet（Godot 标准方案，有碰撞/导航/地形系统）
+2. 写一个 @tool 脚本来自动从 VX Ace 图片生成 TileSet
+3. 创建一个可拖拽缩放摄像头的测试场景
+
+═══════════════════════════════════════════════════════════
+
+## 已创建的文件
+
+script/
+├── tileset_generator.gd    # @tool 编辑器工具：从 VX Ace 图片生成 TileSet
+├── map_controller.gd       # 运行时控制：摄像头 + 程序化放置图块
+└── map_test_viewer.gd      # 即时可视化器：用 _draw() 直接浏览图块
+
+scene/
+├── map_viewer.tscn         # 即时可视化场景（开箱即用）
+└── map_test.tscn           # 正式 TileMapLayer 测试场景
+
+═══════════════════════════════════════════════════════════
+
+## 三种使用方式
+
+### 1. 即时浏览（最快，不需要生成 TileSet）
+
+打开 scene/map_viewer.tscn → 在检查器把 tileset_texture 设为任意图块 PNG → 运行：
+
+- 鼠标悬停 — 高亮当前 tile + 显示坐标
+- 鼠标点击 — 控制台输出 tile 的 (tile_x, tile_y) 编号
+- 滚轮 — 缩放
+- 中键拖拽 — 平移
+
+适合快速看某个图块素材里有什么、确认 tile 坐标。
+
+### 2. 生成 TileSet（编辑器工具）
+
+把 tileset_generator.gd 挂到任意节点上，设置：
+- tileset_texture — 图块图片
+- tileset_type — 选 A5 / B / C 等
+- output_name — 输出文件名
+
+然后点 "Generate TileSet" 按钮 → 自动在 object/ 目录生成 .tres 文件。
+
+### 3. 正式测试（TileMapLayer）
+
+打开 scene/map_test.tscn → 在检查器把 ground_tileset / decor_tileset 设为刚才生成的 .tres → 运行：
+
+| 按键 | 功能 |
+|------|------|
+| 1 | 随机填充地面 |
+| 2 | 条纹测试（验证图块位置） |
+| 3 | 清除地图 |
+| 4 | 填充指定行范围 |
+| WASD / 方向键 | 平移 |
+| 滚轮 | 缩放 |
+| 中键拖拽 | 平移 |
+
+═══════════════════════════════════════════════════════════
+
+## 关键架构说明
+
+### 普通图块（A5、B~E）→ 直接切片即可
+
+这些是标准 32×32 网格，TileSetAtlasSource 直接切片，每个格子就是一个 tile。
+生成后可以直接用 set_cell() 放置。
+
+### 自动图块（A1~A4）→ 需要 Terrain 系统
+
+这是核心难点。VX Ace 的自动图块（autotile）会根据相邻图块自动选择边框形状。
+在 Godot 中对应的是 TileMapLayer 的 Terrain（地形）系统：
+
+1. 先生成 TileSet（用 tileset_generator.gd）
+2. 在 TileSet 编辑器底部切换到 Terrains 标签
+3. 为每种地形（草地、水、墙壁等）创建一个 Terrain
+4. 对每个 tile 设置 Terrain Bitmask（告诉 Godot 这个 tile 的四边/四角连接方式）
+5. 之后在 TileMap 中用 Paint → Terrain 模式画，Godot 自动选正确的 tile
+
+这个手动设置过程比较繁琐，但只需设置一次。后续如果项目规模大了，
+可以考虑写一个自动映射 VX Ace autotile 布局 → Godot terrain bitmask 的脚本。
+目前先用 map_viewer.tscn 浏览素材、手动挑 tile 来放置是最灵活的做法。
+
+═══════════════════════════════════════════════════════════

@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://coh5uvkh28t56"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="1_tx4tb"]
+[ext_resource type="Texture2D" uid="uid://dsmgfx2at3vf6" path="res://art/Characters/のび太セット.png" id="2"]
+[ext_resource type="Resource" uid="uid://damfltust4ay6" path="res://object/bullet_pistol.tres" id="3"]
+[ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="3_55cd1"]
+[ext_resource type="AudioStream" uid="uid://b003n2hnn7bl2" path="res://sound/ベレッタ.wav" id="4_dijym"]
+[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_oxqje"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_dijym"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 25
+attack_range = 200.0
+weapon_state_name = "Pistol"
+weapon_walk_texture = ExtResource("2")
+weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+weapon_slot = 1
+pickup_texture = ExtResource("6_dijym")
+pickup_animated = false
+attack_sound = ExtResource("4_dijym")
+empty_fire_sound = ExtResource("3_55cd1")
+raise_sound = ExtResource("5_oxqje")
+lower_sound = ExtResource("5_oxqje")
+reload_char_sequence = Array[int]([2, 1])
+attack_effect_anim_down = "anim_effect_手枪攻击下.tscn"
+attack_effect_anim_left = "anim_effect_手枪攻击左.tscn"
+attack_effect_anim_right = "anim_effect_手枪攻击右.tscn"
+attack_effect_follow = true
+hit_effect_anim = "anim_effect_hit.tscn"
+magazine_capacity = 12
+ammo_item_id = "ammo_pistol"
+bullet_list = Array[ExtResource("1_tx4tb")]([ExtResource("3")])
+hitstun_duration = 0.1
+item_id = "pistol_01"
+item_name = "手枪"
+item_type = 3
+description = "一把普通的手枪。远程攻击。"
+sell_price = 100
+max_stack = 1

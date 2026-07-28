@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://kcg3fphs4qer"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_c2k45"]
+[ext_resource type="Texture2D" uid="uid://bqvtvivtqvut" path="res://art/Animations/血＋.png" id="2_mdxay"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+script = ExtResource("1_c2k45")
+texture = ExtResource("2_mdxay")
+fps = 20.5
+position_offset = Vector2(0, -12)
+frame_sequence = Array[int]([11, 12, 13, 14])

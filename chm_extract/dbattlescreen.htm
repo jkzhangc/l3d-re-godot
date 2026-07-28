@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Battle Screen</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Battle Screen" />
+   <meta name="description" content="[Database] &#8594; [Battle Screen] &nbsp; Change Actor Ranks/Position and Battle Commands Choose whether the actors should be placed on the frontline or at the rear using the circular but" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt;">[Database] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[Battle Screen]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;"><img alt="clip0006" style="margin:0;width:10.3333in;height:6.5313in;border:none" src="clip0006.png"/></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">1.</span><span style="font-size: 11pt; font-weight: bold;">Change Actor Ranks/Position and Battle Commands</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Choose whether the actors should be placed on the frontline or at the rear using the circular buttons. This setting will not be reflected in the game but will only be shown on this screen as a reference.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Front: The actor will deal greater damage with physical attacks, but will also be more likely to receive attacks.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Rear: The actor&#39;s will deal less damage with physical attacks, but will also be less likely to receive attacks.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The front and rear settings have no effect on skill damage.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Battle commands can be customized per character.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Battle Command Settings</span></p>
+<p class="p_Normal"><img alt="bm113" style="margin:0;width:4.3229in;height:4.2292in;border:none" src="bm113.png"/></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt;">Battle commands with the same purpose can be given different command names.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">In the “Battle Commands” window that can be opened by clicking the “Set” button, click the number of the option to edit from the battle command list, and enter the command name. At the same time, choose the purpose of the command from the dropdown list. Choose the purpose from the following types.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Attack</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Attacks with the equipped weapon. This is required during Menu Commands.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Items</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses an item created in the “Items” tab.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Defend</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Halves the damage received from enemies.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Escape</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Escapes from battle. The chance of escaping is not definite.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Skills</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses a skill set as “Normal” under &quot;Category&quot; in &quot;Skills&quot;.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Skills (Specific)</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Uses a skill. It is possible to create commands for only created skills. To add skills to this new command, select its name under “Category” in the &quot;Skills&quot; tab for the relevant skills.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Special (Event use)</span></p>
+</td>
+<td style="vertical-align:top; width:11.6771in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Used to activate battle events. This action does nothing on its own and has to be detected and handled by events.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Create character-specific battle commands:</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Customize battle commands for characters. Choose the character to customize from the list. Choose the character&#39;s commands from the dropdown menu. Commands created under “Battle command name settings” (Battle Commands) will be listed in the dropdown menu. To create a “Steal” battle command, first create the command as a skill, and create a command with the same name under Battle Commands on the Battle Screen tab. Next, under “Battle Events” in the “Troops” tab, make a battle event occur with “Battle Command” as the “Condition” when that command is selected. Within that event, create the special attack. </span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-size: 11pt;">Characters can have a maximum of 7 battle commands, and the bottommost command is fixed at “Row”. In battle, the commands will be displayed in the order they are set using the dropdown menus. However, setting the topmost command to an “attack” command is recommended. This is because in battle, if there is no command for an unlimited direct attack, the game may enter a soft lock (unwinnable situation) if both enemies and allies run out of MP and cannot move.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">2.</span><span style="font-size: 11pt; font-weight: bold;">Configuration</span></p><p class="p_Normal"><span style="font-size: 11pt;">Sets the placement of actors.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Use circular buttons to choose between “Manual” and “Automatic”.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Manual: Actors can be placed freely. Choose an actor from the Actor list in (1) and drag the character in the preview to the desired position.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Automatic: Places actors in their default positions. If this option is enabled, characters cannot be dragged in the preview in (1).</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">3.</span><span style="font-size: 11pt; font-weight: bold;">Battle Screen Interface</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Choose the battle interface using the circular buttons.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0.1354in;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Type A: The HP (numerical value) and battle time gauge will be displayed, and the MP will only be displayed when “Skills” is chosen. The window transparency setting in the [System] tab is ignored in battle when this layout is used.</span><br>
+<img alt="clip0008" style="margin:0;width:3.3021in;height:2.4688in;border:none" src="clip0008.png"/></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0.1354in;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Type B: The HP (numerical value) and MP (numerical value) will be displayed with the battle time gauge in the back.</span><br>
+<img alt="clip0011" style="margin:0;width:3.3021in;height:2.4688in;border:none" src="clip0011.png"/></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0.1354in;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Type C (Gauge-type): Player portraits, HP (number and gauge), MP (number and gauge) and battle time gauge will be displayed on the Battle Screen (the numbers and gauges can be removed depending on the [Battle UI Skin] from the System 2 graphic).</span><br>
+<img alt="clip0013" style="margin:0;width:3.3333in;height:2.5000in;border:none" src="clip0013.png"/></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">You can also select the size of the windows in battle.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2708in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Large Window: Normal window size (the same size used for windows outside the battle).</span><br>
+<img alt="clip0014" style="margin:0;width:3.3333in;height:2.5000in;border:none" src="clip0014.png"/></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2708in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Small Window: Decreased height and spacing, to make more room available for the battle scene itself.</span><br>
+<img alt="clip0015" style="margin:0;width:3.3333in;height:2.5000in;border:none" src="clip0015.png"/></p><p class="p_Normal" style="margin: 0px 0px 0px 0.1354in;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">4.</span><span style="font-size: 11pt; font-weight: bold;">Death Handler</span></p><p class="p_Normal"><span style="font-size: 11pt;">Set handling for when the party is wiped out in a normal battle.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">The options that can be specified using circular buttons are “Game Over” and “Call Common Event”.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

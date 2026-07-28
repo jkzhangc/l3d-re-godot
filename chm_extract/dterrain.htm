@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Terrain</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Terrain" />
+   <meta name="description" content="[Database] &#8594; [Terrain] &nbsp; &nbsp; Name The name of the terrain. &nbsp;Damage When an actor moves onto a map tile with this terrain setting, the actor&#39;s HP will decrease. Specify the" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt;">[Database] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[Terrain]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><img alt="bm114" style="margin:0;width:10.4792in;height:6.6458in;border:none" src="bm114.png"/></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">1.</span><span style="font-size: 11pt; font-weight: bold;">Name</span></p><p class="p_Normal"><span style="font-size: 11pt;">The name of the terrain.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">2.</span><span style="font-size: 11pt; font-weight: bold;">Damage</span></p><p class="p_Normal"><span style="font-size: 11pt;">When an actor moves onto a map tile with this terrain setting, the actor&#39;s HP will decrease.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Specify the amount within a range of -10 to 10. The default is 0. If set to a positive value, the terrain can represent a poisonous swamp or similar terrain that causes the actor to lose energy. If set to a negative value, the actor&#39;s HP will be recovered.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">3.</span><span style="font-size: 11pt; font-weight: bold;">Encounter Rate</span></p><p class="p_Normal"><span style="font-size: 11pt;">This is a modifier value to change the rate of encounter with enemy characters. Specify the encounter rate modifier as 0 to 500% of the [Encounter Rate] set for the map.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">By default this value is 100%, and if set to a larger value, you can represent a terrain with more enemies than usual.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">4.</span><span style="font-size: 11pt; font-weight: bold;">Vehicle Passage Settings</span></p><p class="p_Normal"><span style="font-size: 11pt;">Settings for the passage of boats, ships, and airships over the tile. The checked options are enabled.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Even if [Airships can land] is enabled for the terrain, if passage is blocked for the tile, airships will not be able to land on that tile.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">5.</span><span style="font-size: 11pt; font-weight: bold;">Character Display</span></p><p class="p_Normal"><span style="font-size: 11pt;">Specify the method for displaying movable graphics (actors, events) on the tile.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">By enabling transparency, the visual effect of a character moving through shallow water or forests can be achieved.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">6.</span><span style="font-size: 11pt; font-weight: bold;">Battle Background Graphic</span></p><p class="p_Normal"><span style="font-size: 11pt;">This is the background image that will be displayed in battle when an enemy character is encountered on the tile.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">From the [Battle Background Graphic] window that can be opened by clicking the [Set] button, specify the image file or scenery to use.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">You can also use the [Background] circular button to use a scrolling background.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">This graphic will be used if the encounter map&#39;s [Battle Background] setting is set to [Terrrain Based].</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">7.</span><span style="font-size: 11pt; font-weight: bold;">Footsteps</span></p><p class="p_Normal"><span style="font-size: 11pt;">Specify the sound of footsteps based on the terrain.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">From the sound effects window that opens when [...] is clicked, choose the sound effect for footsteps.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">8.</span><span style="font-size: 11pt; font-weight: bold;">Battle Formation Rate</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Choose the rates at which battles start under special conditions.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Preemptive Attack</span></p>
+</td>
+<td style="vertical-align:top; width:12.1458in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Launch a preemptive attack from behind the enemies. It is also easier to escape from a preemptive battle than normal battles.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Back Attack</span></p>
+</td>
+<td style="vertical-align:top; width:12.1458in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Enemies launch a surprise attack from behind. Enemy characters appear on the right, while actors appear on the left. In addition, it is harder to escape from the battle compared to normal battles.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Pincer Attack</span></p>
+</td>
+<td style="vertical-align:top; width:12.1458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Launch a pre-emptive attack from the enemies&#39; sides. The enemy cannot escape.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.5938in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Surprise Attack</span></p>
+</td>
+<td style="vertical-align:top; width:12.1458in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Enemies launch a surprise attack from the sides. Actors cannot escape.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If the enemies are placed manually, side attacks cannot occur. </span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If the checkbox is checked, the rates can be set in the form below. The total for all 4 rates together must be less than 100%. (The remaining percentage after subtracting all 4 rates is the rate of normal battles)</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Preemptive Attack: 10%</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Back Attack: 10%</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Pincer Attack: 5%</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Courier New';font-style:normal;color:#000000;text-decoration:none;">&#111;</span><span style="font-size: 11pt;">Surprise Attack: 5%</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">In the above case, normal battles will occur 70% of the time.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">It is also possible to set a category to 100%.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">In each of these situations, the party that sets up the attack will get the first attack, and the battle time gauge will be at MAX from the beginning.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">9.</span><span style="font-size: 11pt; font-weight: bold;">Field Depth</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Choose whether the actors and troop placement will be “Shallow” or “Deep” when an enemy encounter occurs on that terrain.</span></p>
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

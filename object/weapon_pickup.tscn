@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://cpickup000001"]
+
+[ext_resource type="Script" uid="uid://bh7kulqniodq6" path="res://script/weapon_pickup.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="2"]
+
+[sub_resource type="CircleShape2D" id="pickup_shape"]
+radius = 24.0
+
+[node name="WeaponPickup" type="Node2D" unique_id=857466232]
+script = ExtResource("1")
+pickup_texture = ExtResource("2")
+pickup_reserve_ammo = 400
+pickup_animated = false
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=111129080]
+position = Vector2(0, -8)
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 64)
+
+[node name="Area2D" type="Area2D" parent="." unique_id=456509487]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D" unique_id=423521595]
+shape = SubResource("pickup_shape")

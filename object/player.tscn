@@ -1,0 +1,76 @@
+[gd_scene format=3 uid="uid://42mbpy3v0641"]
+
+[ext_resource type="Script" uid="uid://bvlhn7ww03h1b" path="res://script/player.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://dsmgfx2at3vf6" path="res://art/Characters/のび太セット.png" id="2"]
+[ext_resource type="Script" uid="uid://bm5recau6w727" path="res://script/StateMachine.gd" id="4"]
+[ext_resource type="Script" uid="uid://deidq5yq4hbp2" path="res://script/player/PlayerIdleState.gd" id="5"]
+[ext_resource type="Script" uid="uid://db1b8gm8jtwdh" path="res://script/player/PlayerWalkState.gd" id="6"]
+[ext_resource type="Script" uid="uid://x3hkp234qym1" path="res://script/player/PlayerRunState.gd" id="7"]
+[ext_resource type="Script" uid="uid://nenbthelxrl" path="res://script/player/PlayerPistolState.gd" id="8"]
+[ext_resource type="Script" uid="uid://dk5j2vcjx6cjl" path="res://script/player/PlayerKnifeState.gd" id="9"]
+[ext_resource type="Script" uid="uid://ct7tl0wa4nfnh" path="res://script/player/PlayerPistolAttackState.gd" id="10"]
+[ext_resource type="Script" uid="uid://byyfyvj4w6c1e" path="res://script/player/PlayerKnifeAttackState.gd" id="11"]
+[ext_resource type="Script" uid="uid://dsglyhws4ejp8" path="res://script/player/PlayerReloadState.gd" id="12"]
+
+[sub_resource type="RectangleShape2D" id="5_shape"]
+size = Vector2(24, 29)
+
+[node name="Player" type="CharacterBody2D" unique_id=1681709351]
+collision_layer = 4
+collision_mask = 15
+platform_floor_layers = 4294967040
+script = ExtResource("1")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=857465314]
+light_mask = 4
+visibility_layer = 4
+position = Vector2(0, -16)
+texture = ExtResource("2")
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 64)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=944471131]
+position = Vector2(0, 2.5)
+shape = SubResource("5_shape")
+
+[node name="AnimationTimer" type="Timer" parent="." unique_id=1496992385]
+
+[node name="StateMachine" type="Node" parent="." unique_id=1397943362 node_paths=PackedStringArray("initial_state")]
+script = ExtResource("4")
+initial_state = NodePath("Idle")
+
+[node name="Idle" type="Node" parent="StateMachine" unique_id=905583226]
+script = ExtResource("5")
+
+[node name="Walk" type="Node" parent="StateMachine" unique_id=636060323]
+script = ExtResource("6")
+
+[node name="Run" type="Node" parent="StateMachine" unique_id=1647617733]
+script = ExtResource("7")
+
+[node name="Pistol" type="Node" parent="StateMachine" unique_id=505023350]
+script = ExtResource("8")
+
+[node name="Knife" type="Node" parent="StateMachine" unique_id=470291729]
+script = ExtResource("9")
+
+[node name="PistolAttack" type="Node" parent="StateMachine" unique_id=836048565]
+script = ExtResource("10")
+
+[node name="KnifeAttack" type="Node" parent="StateMachine" unique_id=1959724089]
+script = ExtResource("11")
+
+[node name="Shotgun" type="Node" parent="StateMachine" unique_id=1980915167]
+script = ExtResource("8")
+
+[node name="ShotgunAttack" type="Node" parent="StateMachine" unique_id=1952468799]
+script = ExtResource("10")
+
+[node name="Reload" type="Node" parent="StateMachine" unique_id=1928475631]
+script = ExtResource("12")
+
+[node name="Rifle" type="Node" parent="StateMachine" unique_id=297656085]
+script = ExtResource("8")
+
+[node name="RifleAttack" type="Node" parent="StateMachine" unique_id=577506374]
+script = ExtResource("10")

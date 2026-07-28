@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Control Timer</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Control Timer" />
+   <meta name="description" content="[Control Timer] &nbsp;Function Operates a timer. This command makes it possible to execute an event after a certain amount of time has passed. Up to 2 timers can be used at the sam" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 26pt; font-weight: bold;">[Control Timer]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Function</span></p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Operates a timer.</span></p><p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">This command makes it possible to execute an event after a certain amount of time has passed.</span></p><p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Up to 2 timers can be used at the same time.</span></p><p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Settings</span></p>
+<p class="p_Normal"><img alt="bm160" style="margin:0;width:4.2188in;height:3.2292in;border:none" src="bm160.png"/></p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Target Timer], use radio buttons to choose from either of [Timer 1] or [Timer 2].</span></p><p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Under [Operation], choose the timer operation to execute with this command.</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Set Time</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Specify the time on the timer.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Start Timer</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Starts the timer (Start).</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Stop Timer</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1979in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Stops the timer (Stop).</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">[Operand] only needs to be set when [Set value] is chosen under [Operation]. Use either of the following commands to set the time on the timer.</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Constant</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 11pt;">Specify a fixed time. Enter the time in units of [minutes] [seconds].</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.2813in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Variable</span></p>
+</td>
+<td style="vertical-align:middle; width:13.4375in; height:0.1667in; padding:0px;"><p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 11pt;">The number stored in the given variable will be used as the time in seconds. For example, if variable no. 2 is specified which contains “5” at the time the command is processed, the timer will be set to “5 seconds”.</span></p>
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 11pt;">The variable to be used can be specified by clicking the [...] button to bring up the [Variables] window.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">[Options] can only be enabled when [Start timer] is chosen under [Operation]. Specify whether to use any of the following two functions with regards to the timer.</span></p><div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.3854in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Show Timer</span></p>
+</td>
+<td style="vertical-align:middle; width:13.3333in; height:0.1667in; padding:0px;"><p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 11pt;">Displays the timer on the screen.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:middle; width:1.3854in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Continue in Battles</span></p>
+</td>
+<td style="vertical-align:middle; width:13.3333in; height:0.1667in; padding:0px;"><p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 11pt;">The timer continues to count even during battle.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><span style="font-size: 14pt; font-weight: bold; text-decoration: underline;">Notes</span></p>
+<p style="text-align: left; text-indent: 0px; page-break-after: avoid; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The timer stops counting when the menu is displayed.</span></p><p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

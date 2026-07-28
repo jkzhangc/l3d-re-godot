@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://bs8f6fe1bu4l4"
+path="res://.godot/imported/マ・クベ ぐっ….wav-40238c5751647f875bc0e468c28ea191.sample"
+
+[deps]
+
+source_file="res://sound/マ・クベ ぐっ….wav"
+dest_files=["res://.godot/imported/マ・クベ ぐっ….wav-40238c5751647f875bc0e468c28ea191.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

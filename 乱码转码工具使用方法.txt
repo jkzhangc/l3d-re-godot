@@ -1,0 +1,25 @@
+在文件乱码转码工具文件夹里打开终端复制粘贴以下内容，并回车：
+# 1. 引入编码库，防止较新的 PowerShell 找不到 GBK/SJIS
+try { [System.Text.Encoding]::RegisterProvider([System.Text.CodePagesEncodingProvider]::Instance) } catch {}
+
+# 2. 定义 GBK 和 Shift-JIS 编码
+$gbk = [System.Text.Encoding]::GetEncoding(936)
+$sjis = [System.Text.Encoding]::GetEncoding(932)
+
+# 3. 获取当前文件夹下所有文件并开始转换
+Get-ChildItem -File | ForEach-Object {
+    $oldName = $_.Name
+    try {
+        # 将乱码文件名按 GBK 拆回字节，再用 Shift-JIS 重新拼装
+        $bytes = $gbk.GetBytes($oldName)
+        $newName = $sjis.GetString($bytes)
+        
+        # Windows 文件名不允许有 '?'，如果转换结果有 '?' 说明解码失败，不处理
+        if ($oldName -ne $newName -and $newName -notmatch '\?') {
+            # 使用 LiteralPath 完美兼容带有感叹号或单引号的怪异路径
+            Rename-Item -LiteralPath $_.FullName -NewName $newName
+            Write-Host "[成功] $oldName -> $newName" -ForegroundColor Green
+        }
+    } catch {}
+}
+Write-Host "处理完成！" -ForegroundColor Cyan

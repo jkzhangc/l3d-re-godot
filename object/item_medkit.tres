@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "medkit_01"
+item_name = "医疗包"
+item_type = 6
+description = "急救医疗包。恢复大量生命值。"
+effect_text = "回复 +80 HP"
+sell_price = 50
+stackable = false
+max_stack = 1

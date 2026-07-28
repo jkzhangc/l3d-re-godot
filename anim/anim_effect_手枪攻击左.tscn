@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://clqlntwficib4"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_yvttg"]
+[ext_resource type="Texture2D" uid="uid://cgipeges8q034" path="res://art/Animations/ハンドガン発射.png" id="2_67w4k"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+script = ExtResource("1_yvttg")
+texture = ExtResource("2_67w4k")
+fps = 25.0
+position_offset = Vector2(-18, -13)
+frame_offsets = Array[Vector2]([Vector2(-19, 2), Vector2(0, 0), Vector2(0, 4)])
+frame_sequence = Array[int]([3, 5, 6])
+follow_enabled = true

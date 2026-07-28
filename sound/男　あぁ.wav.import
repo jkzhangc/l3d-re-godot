@@ -1,0 +1,24 @@
+[remap]
+
+importer="wav"
+type="AudioStreamWAV"
+uid="uid://diucag38sufh7"
+path="res://.godot/imported/男　あぁ.wav-e6174875ed35d5a32ecdbfac88662c4b.sample"
+
+[deps]
+
+source_file="res://sound/男　あぁ.wav"
+dest_files=["res://.godot/imported/男　あぁ.wav-e6174875ed35d5a32ecdbfac88662c4b.sample"]
+
+[params]
+
+force/8_bit=false
+force/mono=false
+force/max_rate=false
+force/max_rate_hz=44100
+edit/trim=false
+edit/normalize=false
+edit/loop_mode=0
+edit/loop_begin=0
+edit/loop_end=-1
+compress/mode=2

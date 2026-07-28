@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "pills_01"
+item_name = "药品"
+item_type = 7
+description = "止痛药。暂时提升移动速度和耐力。"
+effect_text = "速度 +30%，持续 30 秒"
+sell_price = 30
+stackable = false
+max_stack = 1

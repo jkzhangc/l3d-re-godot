@@ -1,0 +1,30 @@
+[gd_scene format=3 uid="uid://dxt1tlec0v8m7"]
+
+[ext_resource type="Texture2D" uid="uid://uswrptymqtk" path="res://art/Title/title1.png" id="1"]
+[ext_resource type="Script" uid="uid://b2rij6pnqot3r" path="res://script/title_screen.gd" id="3"]
+[ext_resource type="AudioStream" uid="uid://dnp3l87kccuws" path="res://music/l3d_title.mp3" id="3_2fir4"]
+
+[node name="TitleScreen" type="Control" unique_id=1446514083]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3")
+
+[node name="Background" type="TextureRect" parent="." unique_id=921359252]
+layout_mode = 0
+offset_right = 640.0
+offset_bottom = 480.0
+mouse_filter = 2
+texture = ExtResource("1")
+expand_mode = 1
+
+[node name="MenuWindow" type="Control" parent="." unique_id=1800102687]
+anchors_preset = 0
+
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1027434183]
+stream = ExtResource("3_2fir4")
+autoplay = true
+parameters/looping = true

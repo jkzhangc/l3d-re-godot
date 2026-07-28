@@ -1,0 +1,40 @@
+[gd_scene format=4 uid="uid://c3berb5en8a0a"]
+
+[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="1_8yfgv"]
+[ext_resource type="TileSet" uid="uid://bxrd7uaa3llxi" path="res://tres/街道A5.tres" id="1_lnfbi"]
+[ext_resource type="TileSet" uid="uid://b4cei0e6of7ya" path="res://tres/街道B.tres" id="2_wtyt8"]
+[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="3_wtyt8"]
+[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="4_gh60l"]
+[ext_resource type="PackedScene" uid="uid://benemy0000001" path="res://object/enemy.tscn" id="5_jq3mm"]
+[ext_resource type="PackedScene" uid="uid://cpickup000001" path="res://object/weapon_pickup_pistol.tscn" id="6_1wkr3"]
+[ext_resource type="Resource" path="res://object/weapon_pistol.tres" id="7_oqc8j"]
+
+[node name="Test" type="Node2D" unique_id=1940995351]
+
+[node name="GameInit" type="Node" parent="." unique_id=441372598]
+script = ExtResource("1_8yfgv")
+
+[node name="GroundLayer" type="TileMapLayer" parent="." unique_id=730840840]
+tile_map_data = PackedByteArray("AAD/////AAAEAAsAAAAAAP//AAAEAAsAAAAAAAAAAAAEAAsAAAD//wAAAAAEAAsAAAD///7/AAAEAAsAAAABAAAAAAAEAAsAAAABAP//AAAEAAsAAAAAAP7/AAAEAAsAAAABAP7/AAAEAAsAAAD+////AAAEAAsAAAD+//7/AAAEAAsAAAD///3/AAAEAAsAAAAAAP3/AAAEAAsAAAABAAEAAAAEAAsAAAAAAAEAAAAEAAsAAAD//wIAAAAEAAsAAAD+/wIAAAAEAAsAAAD9/wIAAAAEAAsAAAD9/wEAAAAEAAsAAAD8/wEAAAAEAAsAAAD8/wAAAAAEAAsAAAD8////AAAEAAsAAAD9////AAAEAAsAAAD9//7/AAAEAAsAAAD+/wAAAAAEAAsAAAD9/wAAAAAEAAsAAAD+/wEAAAAEAAsAAAD//wEAAAAEAAsAAAACAAAAAAAEAAsAAAADAAAAAAAEAAsAAAADAP//AAAEAAsAAAADAP7/AAAEAAsAAAACAP7/AAAEAAsAAAACAP3/AAAEAAsAAAABAP3/AAAEAAsAAAADAP3/AAAEAAsAAAACAP//AAAEAAsAAAACAAEAAAAEAAsAAAACAAIAAAAEAAsAAAABAAIAAAAEAAsAAAAAAAIAAAAEAAsAAAADAAIAAAAEAAsAAAADAAEAAAAEAAsAAAADAPz/AAAEAAsAAAACAPz/AAAEAAsAAAABAPz/AAAEAAsAAAAAAPz/AAAEAAsAAAD+//3/AAAEAAsAAAD9//3/AAAEAAsAAAD8//3/AAAEAAsAAAD8//7/AAAEAAsAAAD8/wIAAAAEAAsAAAD///z/AAAEAAsAAAD+//z/AAAEAAsAAAD9//z/AAAEAAsAAAD8//z/AAAEAAsAAAA=")
+tile_set = ExtResource("1_lnfbi")
+
+[node name="DecorLayer" type="TileMapLayer" parent="." unique_id=1677088665]
+y_sort_enabled = true
+tile_map_data = PackedByteArray("AAD8/wEAAAAIAA0AAAD8/wIAAAAIAA4AAAD9/wEAAAAJAA0AAAD9/wIAAAAJAA4AAAD+/wEAAAAKAA0AAAD+/wIAAAAKAA4AAAD//wEAAAALAA0AAAD//wIAAAALAA4AAAA=")
+tile_set = ExtResource("2_wtyt8")
+
+[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=1676720400]
+y_sort_enabled = true
+
+[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("3_wtyt8")]
+
+[node name="Enemy" parent="DecorLayer" unique_id=1829775177 instance=ExtResource("5_jq3mm")]
+position = Vector2(50, 0)
+
+[node name="WeaponPickup" parent="DecorLayer" unique_id=1028009372 instance=ExtResource("6_1wkr3")]
+position = Vector2(-79, -75)
+weapon_data = ExtResource("7_oqc8j")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=627066447]
+
+[node name="Menu" parent="." unique_id=1067404182 instance=ExtResource("4_gh60l")]

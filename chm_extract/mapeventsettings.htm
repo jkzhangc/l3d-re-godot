@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Map Event Settings</title>
+   <meta name="viewport" content="width=device-width, initial-scale=1">
+   <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />   
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=8" />
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Map Event Settings" />
+   <meta name="description" content="[Events] &#8594; [Map Events] &#8594; [Map Event Settings] &nbsp; &nbsp;Map event properties and contents are set using the following options in the event editor. &nbsp;ID The fixed number of the even" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <link type="text/css" href="custom.css" rel="stylesheet" />
+
+   <style TYPE="text/css" media="screen"> 
+      html, body { margin:0; 
+        padding:0; 
+        background: #ffffff; 
+      } 
+      div#printheader { display: none; }
+      #idheader { 
+        width:100%; 
+        height:auto; 
+        padding: 0; 
+        margin: 0;
+        position: fixed;
+        top: 0;
+        z-index: 2;
+      } 
+      /* The "min-height" for "#idheader table" ensures that the (blue) header of the topic
+         has at least the same height as the header of the navigation panel left of it */
+      #idheader table { background: #2C5D88; min-height: 59px }             
+      #idheader h1 span { color: #FFF }     
+      #idnav {
+        text-align: right;
+        width: 126px;
+        vertical-align: middle;        
+      } 
+      #idnav a { text-decoration: none }
+      #idnav span {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        margin-left: 4px;
+        background:url('hm_webhelp_buttons_grey.png') top left no-repeat;
+      } 
+      #idnav a span {
+        background-image:url('hm_webhelp_buttons_white.png');
+      } 
+      #idnav a span:hover {
+        background-image:url('hm_webhelp_buttons_orange.png');
+      } 
+      #idnav span.hmbtnprev { background-position: 0 -32px }
+      #idnav span.hmbtnnext { background-position: -24px -32px }
+      #idnav span.hmbtntop  { background-position: -48px -32px }
+      #idnav span.hmbtntoggle  { width: 20px; background-position: -70px -32px }
+      #idnav span.hmbtnprint  { background-position: -88px -32px }
+
+      #callout-table, #overview-table {display:block; position:relative; top:0; left:0;}
+      #callout-icon {display:block; position:absolute; top:-11px; left:-11px;}
+      #callout-icon-flag {display:block; position:absolute; top:-11px; left:-8px;}
+      #callout-table a {text-decoration: none; color: blue;}
+      #callout-table a:visited {text-decoration: none; color: blue;}
+      #overview-table a {text-decoration: none; color: black;}
+      #overview-table a:visited {text-decoration: none; color: black;}
+      #callout-table a:hover, #overview-table a:hover {text-decoration: underline;}       
+      p.help-url { margin: 20px 0 5px 0; text-align: center; font-size: 80%; text-decoration: none }      
+      #switchtoggles { text-align: right; padding: 0 2px 0 0; font-size: 90%; } 
+      .sync-toc { color: #FFF; font-size: 8pt; font-weight: bold; display: none; }
+      .sync-toc a { color: #FFF; text-decoration: none; font-weight: bold;}
+      .sync-toc a:visited { color: #FFF; }
+      .sync-toc a:hover { text-decoration: underline; }
+      a.hmanchor { display: inline-block; margin-top: -4em; padding-top: 4em }	  
+   </style>
+   <style TYPE="text/css" media="print">
+      div#idheader, img.dropdown-toggle-icon, p.help-url { display:none } 
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+
+
+</head>
+<body>
+
+
+<div id="idcontent"><div id="innerdiv">
+<!--ZOOMRESTART-->
+<p class="p_Normal"><span style="font-size: 26pt;">[Events] &#8594; [Map Events] &#8594; </span><span style="font-size: 26pt; font-weight: bold;">[Map Event Settings]</span></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p class="p_Normal" style="page-break-after: avoid;"><img alt="bm147" style="margin:0;width:10.4792in;height:6.5417in;border:none" src="bm147.png"/></p>
+<p class="p_Normal" style="page-break-after: avoid;">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Map event properties and contents are set using the following options in the event editor.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">1.</span><span style="font-size: 11pt; font-weight: bold;">ID</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The fixed number of the event. The ID is automatically assigned starting from 1 for each map.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Using the [Get Event ID] command, this value can be obtained to keep track of which event is at the specified location.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">When the [Call Event] event command is used to call an event by its number using a variable, it will refer to this ID.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">2.</span><span style="font-size: 11pt; font-weight: bold;">Name</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The name of the event. The name “EV (ID number)” will be added automatically. This can be renamed (up to a 10 character maximum).</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">When event commands are used to control and refer to events, this name will be used to specify the target event. Giving important events recognizable names is recommended.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">3.</span><span style="font-size: 11pt; font-weight: bold;">Pages</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The numbered pages within the event. Click the numbers to switch pages.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The buttons at the top of the screen for page operation are listed as follows.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The page that will be used in-game is the page with the largest number that fulfills all the appearance conditions.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">New Page</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Creates a new page with a number 1 larger than the page currently being edited. If a page with the new number already exists, the numbers of that page and any higher-numbered pages will be increased by 1.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Copy Page</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Moves the selected page onto the clipboard.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Paste Page</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Inserts the copied page to the right of the selected page (the pasted page will have a number 1 larger than the selected page).</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Delete Page</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Deletes the current page. If a page with a number higher than the current page exists, that page and any higher-number pages will be decreased by 1.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">4.</span><span style="font-size: 11pt; font-weight: bold;">Conditions</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Appearance conditions determine under what conditions an event tile will appear on the map during gameplay.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Conditions are set using the following 5 categories (7 options). Enable the category to use, and specify the conditional values or options for each category.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The event will only appear if it fulfills all of the conditions in the enabled categories. During gameplay, if the conditions are fulfilled, the event will appear; as soon as any of the conditions are not fulfilled, the event will disappear from the game (but not the editor of course).</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Events that do not have any appearance conditions set will appear unconditionally in the game.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If there are multiple pages with fulfilled conditions, the chosen event page will be the one with the largest number.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Switch</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The condition will require the specified switch to be in the “ON” state. Click the [...] button to open the [Switch] window to specify the number of the switch.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Up to 2 switches can be set as conditions in this category.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Variable</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Compares the specified variable with a given number, and if the condition is fulfilled, displays the event. In the field above, click the [...] button to open the [Variable] window to specify the number of the variable. </span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Enter the conditional number in the lower left field, and choose an option from the dropdown menu on the right. The options are “Equal to”, “Greater than or equal to”, “Less than or equal to”, “Greater than”, “Less than” and “Not equal to.&quot;</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Item</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The condition is set when the player posesses the specified item (equipped items are included). Choose the item from the dropdown menu.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Actor</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The condition is set when a specified actor is in the party. Choose the actor from the dropdown menu.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:0.9792in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Timer</span></p>
+</td>
+<td style="vertical-align:top; width:13.7396in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The condition is set when a timer reaches the specified time remaining. Enter the amount of time in the fields within a range of 0 minutes 0 seconds to 99 minutes 99 seconds. </span><br>
+<span style="font-size: 11pt;">If 0 seconds is specified, an event that will not appear while the timer is working can be created. When the timer is not working, this category will be ignored. </span><br>
+<span style="font-size: 11pt;">The number of timers that can be set is 2, and Timer 1 and Timer 2 can be operated separately.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">5.</span><span style="font-size: 11pt; font-weight: bold;">Graphic</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify the graphic of the event tile. These are set for events that can be seen, such as townspeople and treasure chests.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Only upper layer map tiles and character set images can be used as event graphics.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">By default, a transparent tile will be set. Using a transparent tile allows for an invisible event to be set.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The graphic is specified as follows.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Click the [Set] button. The [Graphic] window will be displayed.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">From the list on the left side of the window, specify the name of the image set to be displayed. In the area on the right side of the window, the images in the image set will be displayed.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Click the image to display from the area on the right side of the window. The selected image will be highlighted with a frame. If a character set image is chosen, specify the [Direction] of the image and the [Pattern] of the walk animation.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Click the [OK] button to close the window. The image specified under [Graphic] will be displayed.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">To return a specified graphic to a transparent tile, in the above [Graphic] window, specify the transparent tile (top left tile) in the [*Tileset 1] image.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">6.</span><span style="font-size: 11pt; font-weight: bold;">Movement Type</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Controls the autonomous movement of the event tile. Autonomous movement means that the event tile will move on its own accord without being controlled by other events or common events. This can be used to make the world seem more active (i.e. showing people moving around at their own pace in town).</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Choose the movement type from one of the following options in the dropdown list.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Stationary</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event tile will not move from where it is placed.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Random</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event tile will move freely over tiles that have passage.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Vertical</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event tile will move up and down from where it is placed. If it hits a tile with no passage or bumps into a character, it will turn around and head in the other direction.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Horizontal</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event tile will move left and right from where it is placed. If it hits a tile with no passage or bumps into a character, it will turn around and head in the other direction.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Approach Player</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event will move towards the player&#39;s current location.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Away from Player</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event will move away from the player&#39;s current location.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.2500in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Custom</span></p>
+</td>
+<td style="vertical-align:top; width:13.4688in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event will move according to a pattern specified by clicking on the [Set Custom Route] button. Please refer to “<a href="setmoveroute.htm" class="topiclink">Move route</a>” for specific details on the settings.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">For all settings other than [Stationary], specify [Frequency] from the dropdown menu. The range is 1 to 8: the larger the value, the more frequent the event will move.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">7.</span><span style="font-size: 11pt; font-weight: bold;">Movement Speed</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify the speed that the event tile will move at using the dropdown menu. Given that the player&#39;s walking speed is [Normal] by default, choose the speed from 6 levels from [x8 Slower] to [x4 Faster].</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">8.</span><span style="font-size: 11pt; font-weight: bold;">Animation Type</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Specify one of the following animation types for the image set under [Graphic]. (This can only be set if a character set with premade walk animation frames are used as the graphic.)</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If “Stepping Animation” or &quot;Walking Animation&quot; are set, the event image will change to face the player when the player starts the event.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Stepping Animation</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">When moving, the image will animate according to the direction of movement. When still, no animation will be carried out.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Walking Animation</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">When moving, the image will animate according to the direction of movement. When still, it will continue to animate in place.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Direction Fix/Inanimate</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Always shows the image fixed in the direction set under [Graphic]. When still, no animation will be carried out.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Direction Fix/Animated</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Always shows the image fixed in the direction set under [Graphic]. When still, it will continue to animate in place.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Fixed Graphic</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Always shows the image fixed in the direction set under [Graphic], and does not show animation.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Spin</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Always shows animation of the character turning clockwise.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Step Frame Fix</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">No step animation will be carried out, but the image will still be changed according to the movement/facing direction.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">9.</span><span style="font-size: 11pt; font-weight: bold;">Priority</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Priority type refers to the vertical height of the event in space. This setting controls how the event graphic is displayed when the player or other event tiles move onto the same map tile.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Settings can be specified using the dropdown menu.</span></p><p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Below Characters</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event is placed below the player and other event graphics. It will be covered by the player or other event graphics on the same tile. </span><br>
+<span style="font-size: 11pt;">This can be used for staircases, moving floors and other events that the player stands on.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Same as Characters</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event is placed on the same level as the player and other event graphics, making it impossible for two of them to be on the same map tile at the same time. </span><br>
+<span style="font-size: 11pt;">This can be used for other characters, doors and other events that the player should not pass through.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Above Characters</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">The event is placed above the player and other event graphics. The graphic will be displayed covering the player and other event graphics on the same tile.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">If [Forbid Event Overlap] is enabled, the event will not allow overlapping on the same tile regardless of priority type.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">10.</span><span style="font-size: 11pt; font-weight: bold;">Trigger</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The trigger/start condition is the operation that will start the content of an event tile that has appeared on the screen.</span></p><p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">The trigger can be specified from the dropdown menu.</span></p><p class="p_Normal">&nbsp;</p>
+<div style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0px; margin: 0px 0px 0px 0px;"><table style="border:none; border-spacing:0px;">
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Action Button</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">When the player presses the select key/action button when on the same location as this event tile, processing will start. Event processing will also start by [Player Touch] or [Event Touch]. </span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Player Touch</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Processing will start when the player moves to the same location as this event tile. Event processing will also start by [Event Touch].</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Event Touch</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Processing will start when the event moves to the same location as the player. </span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Autorun</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Event processing will begin as soon as the event tile appears on the map.</span></p>
+</td>
+</tr>
+<tr style="text-align:left;vertical-align:top;">
+<td style="vertical-align:top; width:1.8125in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt; font-weight: bold;">Parallel Process</span></p>
+</td>
+<td style="vertical-align:top; width:12.9063in; height:0.1667in; padding:0px;"><p class="p_Normal"><span style="font-size: 11pt;">Processing will be repeated regularly for as long as the event tile is present on the map.</span></p>
+</td>
+</tr>
+</table>
+</div>
+<p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.1354in; margin: 0px 0px 0px 0px;"><span style="display:inline-block;width:0.1354in;margin-left:-0.1354in;font-size:11pt;font-family:'Symbol';font-style:normal;color:#000000;text-decoration:none;">&#183;</span><span style="font-size: 11pt;">Event tiles that have [Same as Characters] set under [Priority] will not be able to exist on the same tile as the player. In this situation, the conditions will be met if the player is next to the event tile and is facing it.</span></p><p class="p_Normal">&nbsp;</p>
+<p style="text-align: left; text-indent: 0px; padding: 0px 0px 0px 0.2083in; margin: 0px 0px 0px 0px;"><span style="font-weight:bold; font-size:11pt; font-family: 'Times New Roman';color:#000000;display:inline-block;width:0.2083in;margin-left:-0.2083in">11.</span><span style="font-size: 11pt; font-weight: bold;">Contents</span></p><p class="p_Normal"><span style="font-size: 11pt;">Lists commands for processing the content of the event tile (e.g. use this box to determine what the event will do in-game). The commands will be processed in order of top to bottom of the list.</span></p>
+<p class="p_Normal"><span style="font-size: 11pt;">Please refer to [<a href="eventcontent.htm" class="topiclink">Event content</a>] for details on editing the content.</span></p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">&nbsp;</p>
+
+<!--ZOOMSTOP-->
+</div></div>
+<script type="text/javascript">
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+[gd_scene format=3 uid="uid://benemy0000001"]
+
+[ext_resource type="Script" uid="uid://cq3476274vn6b" path="res://script/enemy.gd" id="1"]
+[ext_resource type="Script" uid="uid://bm5recau6w727" path="res://script/StateMachine.gd" id="2"]
+[ext_resource type="Script" uid="uid://cvkybsadvl2g" path="res://script/enemy/EnemyIdleState.gd" id="3"]
+[ext_resource type="AudioStream" uid="uid://bp2nbnu15myj2" path="res://sound/ゾンビ声5.wav" id="3_vfd3m"]
+[ext_resource type="Script" uid="uid://dksy6ilsw52aw" path="res://script/enemy/EnemyDiscoverState.gd" id="4"]
+[ext_resource type="AudioStream" uid="uid://clqb4gmiiyla6" path="res://sound/ゾンビ声6.wav" id="4_jpigs"]
+[ext_resource type="Script" uid="uid://ba7fcrpnivd4c" path="res://script/enemy/EnemyChaseState.gd" id="5"]
+[ext_resource type="AudioStream" uid="uid://c11squ08m07gm" path="res://sound/ゾンビ声4.wav" id="5_vunvt"]
+[ext_resource type="Script" uid="uid://bkt3kjrwayuvt" path="res://script/enemy/EnemyAttackState.gd" id="6"]
+[ext_resource type="AudioStream" uid="uid://drrv03o6v83yp" path="res://sound/ゾンビ声.wav" id="6_jpigs"]
+[ext_resource type="Script" uid="uid://bmxnep8cisr8o" path="res://script/enemy/EnemyDeathState.gd" id="8"]
+[ext_resource type="Script" uid="uid://bs3edidsf88gt" path="res://script/enemy/EnemyHeadshotDeathState.gd" id="9"]
+[ext_resource type="Texture2D" uid="uid://c1dyjxewy0ldj" path="res://art/Characters/男性ゾンビ1.png" id="10"]
+[ext_resource type="Script" uid="uid://2s70w6drffnt" path="res://script/enemy/EnemyKnockbackState.gd" id="11"]
+[ext_resource type="Script" uid="uid://bn41w43dadxis" path="res://script/enemy/EnemyHitstunState.gd" id="12"]
+
+[sub_resource type="RectangleShape2D" id="enemy_shape"]
+size = Vector2(24, 29)
+
+[sub_resource type="CircleShape2D" id="vision_shape"]
+radius = 200.0
+
+[node name="Enemy" type="CharacterBody2D" unique_id=1198113400]
+collision_layer = 8
+collision_mask = 15
+platform_floor_layers = 4294967040
+script = ExtResource("1")
+max_hp = 200.0
+attack_range = Vector2(50, 32)
+attack_range_forward_offset = 30.0
+attack_hit_range = Vector2(50, 32)
+attack_hit_forward_offset = 30.0
+walk_texture = ExtResource("10")
+attack_frame_durations = Array[float]([0.1, 0.1, 0.5, 0.2, 0.2])
+hurt_sound = ExtResource("3_vfd3m")
+death_sound = ExtResource("4_jpigs")
+attack_sound = ExtResource("5_vunvt")
+discover_sound = ExtResource("6_jpigs")
+attack_effect_anim = "anim_effect_hit.tscn"
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=797700597]
+position = Vector2(0, -16)
+texture = ExtResource("10")
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 64)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=786942456]
+position = Vector2(0, 2)
+shape = SubResource("enemy_shape")
+
+[node name="AnimationTimer" type="Timer" parent="." unique_id=2082223074]
+
+[node name="VisionArea" type="Area2D" parent="." unique_id=2108075112]
+collision_mask = 15
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="VisionArea" unique_id=42734486]
+shape = SubResource("vision_shape")
+
+[node name="DiscoverLabel" type="Label" parent="." unique_id=853365288]
+visible = false
+offset_left = -2.0
+offset_top = -52.0
+offset_right = 3.0
+offset_bottom = -29.0
+text = "!"
+
+[node name="StateMachine" type="Node" parent="." unique_id=1589410064 node_paths=PackedStringArray("initial_state")]
+script = ExtResource("2")
+initial_state = NodePath("Idle")
+
+[node name="Idle" type="Node" parent="StateMachine" unique_id=544497793]
+script = ExtResource("3")
+
+[node name="Discover" type="Node" parent="StateMachine" unique_id=1985275486]
+script = ExtResource("4")
+
+[node name="Chase" type="Node" parent="StateMachine" unique_id=437539029]
+script = ExtResource("5")
+
+[node name="Attack" type="Node" parent="StateMachine" unique_id=900919612]
+script = ExtResource("6")
+
+[node name="Death" type="Node" parent="StateMachine" unique_id=999000001]
+script = ExtResource("8")
+
+[node name="HeadshotDeath" type="Node" parent="StateMachine" unique_id=999000002]
+script = ExtResource("9")
+
+[node name="Knockback" type="Node" parent="StateMachine" unique_id=999000003]
+script = ExtResource("11")
+
+[node name="Hitstun" type="Node" parent="StateMachine" unique_id=999000004]
+script = ExtResource("12")
+
+[connection signal="body_entered" from="VisionArea" to="." method="_on_vision_area_body_entered"]
+[connection signal="body_exited" from="VisionArea" to="." method="_on_vision_area_body_exited"]

@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://df0ku0puvj4eo"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_ieu8r"]
+[ext_resource type="Texture2D" uid="uid://cgipeges8q034" path="res://art/Animations/ハンドガン発射.png" id="2_ym6ku"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+script = ExtResource("1_ieu8r")
+texture = ExtResource("2_ym6ku")
+fps = 21.5
+frame_sequence = Array[int]([7, 8])

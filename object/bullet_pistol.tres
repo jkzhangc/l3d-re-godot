@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="BulletData" format=3 uid="uid://damfltust4ay6"]
+
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bbrf6dbu1u3lw" path="res://art/misc/Gun.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+bullet_texture = ExtResource("2")
+speed = 1000.0
+offset_left = Vector2(0, -16)
+offset_right = Vector2(0, -16)
+collision_size = Vector2(48, 12)

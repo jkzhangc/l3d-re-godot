@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "potion_01"
+item_name = "回复药水"
+item_type = 0
+description = "恢复 50 点 HP。"
+effect_text = "回复 +50 HP"
+sell_price = 25
+stackable = true
+max_stack = 10

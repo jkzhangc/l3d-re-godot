@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://ccbw587a4k8hs"]
+
+[ext_resource type="Script" uid="uid://bdxexptn1qlea" path="res://script/map_test_viewer.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://c40xhbf2ddd84" path="res://art/Tilesets/Inside_A1.png" id="2_1065b"]
+
+[node name="MapViewer" type="Node2D" unique_id=190848004]
+script = ExtResource("1")
+tileset_texture = ExtResource("2_1065b")

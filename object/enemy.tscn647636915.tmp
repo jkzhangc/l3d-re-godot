@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://benemy0000001"]
+
+[ext_resource type="Script" uid="uid://cq3476274vn6b" path="res://script/enemy.gd" id="1"]
+[ext_resource type="Script" uid="uid://bm5recau6w727" path="res://script/StateMachine.gd" id="2"]
+[ext_resource type="Script" uid="uid://cvkybsadvl2g" path="res://script/enemy/EnemyIdleState.gd" id="3"]
+[ext_resource type="Script" uid="uid://dksy6ilsw52aw" path="res://script/enemy/EnemyDiscoverState.gd" id="4"]
+[ext_resource type="Script" uid="uid://ba7fcrpnivd4c" path="res://script/enemy/EnemyChaseState.gd" id="5"]
+[ext_resource type="Script" uid="uid://bkt3kjrwayuvt" path="res://script/enemy/EnemyAttackState.gd" id="6"]
+[ext_resource type="Texture2D" uid="uid://c1dyjxewy0ldj" path="res://art/Characters/男性ゾンビ1.png" id="8"]
+
+[sub_resource type="RectangleShape2D" id="enemy_shape"]
+size = Vector2(24, 28)
+
+[sub_resource type="CircleShape2D" id="vision_shape"]
+radius = 200.0
+
+[node name="Enemy" type="CharacterBody2D" unique_id=1198113400]
+collision_layer = 8
+collision_mask = 15
+script = ExtResource("1")
+walk_texture = ExtResource("8")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=797700597]
+position = Vector2(0, -16)
+texture = ExtResource("8")
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 64)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=786942456]
+position = Vector2(0, 10)
+shape = SubResource("enemy_shape")
+
+[node name="AnimationTimer" type="Timer" parent="." unique_id=2082223074]
+
+[node name="VisionArea" type="Area2D" parent="." unique_id=2108075112]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="VisionArea" unique_id=42734486]
+shape = SubResource("vision_shape")
+
+[node name="DiscoverLabel" type="Label" parent="." unique_id=853365288]
+visible = false
+offset_left = -8.0
+offset_top = -52.0
+offset_right = -8.0
+offset_bottom = -52.0
+text = "!"
+
+[node name="StateMachine" type="Node" parent="." unique_id=1589410064 node_paths=PackedStringArray("initial_state")]
+script = ExtResource("2")
+initial_state = NodePath("Idle")
+
+[node name="Idle" type="Node" parent="StateMachine" unique_id=544497793]
+script = ExtResource("3")
+
+[node name="Discover" type="Node" parent="StateMachine" unique_id=1985275486]
+script = ExtResource("4")
+
+[node name="Chase" type="Node" parent="StateMachine" unique_id=437539029]
+script = ExtResource("5")
+
+[node name="Attack" type="Node" parent="StateMachine" unique_id=900919612]
+script = ExtResource("6")
+
+[connection signal="body_entered" from="VisionArea" to="." method="_on_vision_area_body_entered"]
