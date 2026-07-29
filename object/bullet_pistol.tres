@@ -9,4 +9,4 @@ bullet_texture = ExtResource("2")
 speed = 1000.0
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)

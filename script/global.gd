@@ -178,7 +178,7 @@ func save_config() -> void:
 # 音频总管理
 # ═══════════════════════════════════════
 
-@export var max_sfx_concurrency: int = 3  ## 同一音效最大同时播放数（防止音量叠加）
+@export var max_sfx_concurrency: int = 4  ## 同一音效最大同时播放数（防止音量叠加）
 
 ## 同一音效资源的活跃播放器计数（resource_path → Array[AudioStreamPlayer]）
 var _active_sfx: Dictionary = {}

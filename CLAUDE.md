@@ -34,13 +34,16 @@
 |-----------|---------|
 | `art/Characters/` | 角色精灵表 |
 | `art/Tilesets/`  | 图块素材（RPG Maker VX Ace 格式，32×32） |
+| `art/Animations/` | VX Ace 动画精灵表（.png 源文件，100+ 张） |
 | `art/Title/`     | 标题画面素材（`title1.png` 等） |
 | `art/System/`    | 系统窗口素材（RM03 格式系统窗口） |
 | `art/Ui/`        | HUD/UI 素材（HP 血条框/填充、Boss 血条、GO 图标，详见下文） |
 | `art/misc/`、`art/Weapon/` | 杂项与武器图标 |
+| `anim/` | 动画特效场景（`.tscn`，由 VX Anim Editor 生成） |
 | `script/` | GDScript 脚本文件（`.gd`） |
 | `scene/`  | Godot 场景文件（`.tscn`） |
-| `object/` | 可复用的游戏对象、预制体、打包场景 |
+| `object/` | 可复用的游戏对象、预制体、打包场景（武器/角色/物品 `.tres` 数据资源） |
+| `tres/` | TileSet 资源文件（`.tres`） |
 | `shader/` | 自定义着色器文件（`.gdshader`） |
 | `music/`  | 背景音乐 |
 | `sound/`  | 音效 |
@@ -51,7 +54,7 @@
 
 ### GDScript 风格
 - 使用 **GDScript**（而非 C#）—— 项目目标平台为 `Mobile`，与 GDScript 更为契合。
-- 脚本放在 `script/` 目录，场景放在 `scene/` 目录，可复用对象/打包场景放在 `object/` 目录。
+- 脚本放在 `script/` 目录，场景放在 `scene/` 目录，可复用对象/打包场景放在 `object/` 目录，动画特效场景放在 `anim/` 目录，TileSet 资源放在 `tres/` 目录。
 - **Godot 4.6：lambda 不能直接作为 `connect()` 参数**，必须先赋值给 `Callable` 变量：
   ```gdscript
   # ❌ 报错: "Standalone lambdas cannot be accessed"
@@ -72,7 +75,7 @@
 - **攻击移动**：武器攻击状态下玩家可以移动（velocity 由方向键控制，朝向锁定不变）。
 - **调试可视化开关**：`TAB` 键（切换碰撞体/血条/受击碰撞体调试绘制：玩家=绿色、敌人=红色、受击碰撞体=黄色、子弹/攻击触发=青色、攻击判定=橙红）
 - **全局单例**：`Global` autoload（`script/global.gd`），含调试标志、文字渲染参数、色表缓存、**音频总线管理**（SFX/Music）、**音量/朝向设置**（`music_volume`/`sfx_volume`/`facing_lock_mode`）、死亡处理参数（`death_music_path` / `death_music_volume_db` 音量 / `death_fade_duration` 黑屏淡入时长 / `death_black_hold` 全黑等待时长）
-- **数据资源**：物品/武器/角色均以 `.tres` 资源形式存在 `object/` 目录，通过 Godot Inspector 可视化编辑；玩家脚本通过 `current_character` 引用 `CharacterData` 资源
+- **数据资源**：物品/武器/角色等游戏数据均以 `.tres` 资源形式存在 `object/` 目录，通过 Godot Inspector 可视化编辑；玩家脚本通过 `current_character` 引用 `CharacterData` 资源。TileSet 相关的 `.tres` 资源单独存放在 `tres/` 目录
 - **输入映射**：在 `project.godot` 的 `[input]` 段定义
 - **HUD/血条**：`art/Ui/` 下的血条素材是**正式游戏 HUD** 专用（玩家/敌人/Boss 血条），尚未接入代码。注意 `player.gd::_draw()` 里那个手绘矩形血条是**调试可视化**（红框+绿填充，与碰撞体一起，仅在 `Global.debug_visuals` 为 true 时绘制），正式游戏不显示，二者互不相干。
 
@@ -335,7 +338,7 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 | 装填系统 | ✅ 可用 | `PlayerReloadState`：NORMAL 模式（一次装满）+ SHOTGUN 模式（逐发循环+结束上膛）；装填动画 + 音效 + 共用等待帧 + 朝向锁定；**装填期间可移动**（仅位移，朝向不变） |
 | 攻击后动画 | ✅ 可用 | 攻击帧播完后可选播放 `post_attack_char_sequence` + `post_attack_sound`，再切回武器举起 |
 | 霰弹枪 | ✅ 可用 | `weapon_shotgun.tres`，3发散射 + SHOTGUN 逐发装填；复用 Pistol 状态脚本，纯数据驱动 |
-| 子弹实体 | ✅ 可用 | Node2D + Sprite2D + Area2D（collision_mask=24 层4+5）+ **发射者排除** + **目标去重** + **尸体穿透** + 碰撞矩形随方向旋转 + debug 可视化（TAB 青色绘制） |
+| 子弹实体 | ✅ 可用 | Node2D + Sprite2D + Area2D（collision_mask=24 层4+5）+ **发射者排除** + **目标永久去重** + **尸体穿透** + 碰撞矩形随方向旋转（Area2D 节点偏移到精灵中心再旋转，避免 offset 被旋转带偏）+ debug 可视化（TAB 青色绘制） |
 | 敌人 AI | ✅ 可用 | 状态机（待机/发现/追击/攻击/**击退**/死亡/爆头）+ **受击碰撞体**（HurtArea）+ 暴击率判定 + 攻击矩形拆分：`attack_range`+偏移（触发区，TAB **青色**）、`attack_hit_range`+偏移（判定区，TAB **橙红**），均跟随朝向旋转，统一投影法检测 |
 | 死亡系统 | ✅ 可用 | 死亡精灵 + 渐黑遮罩（CanvasLayer）+ 自动重载存档；黑屏时长（淡入/全黑等待）与死亡音乐音量均在 Global 单例可配 |
 | 角色参数 | ✅ 可用 | CharacterData 资源统一管理行走图/HP/音效，player.gd 通过 `current_character` 引用 |
@@ -383,9 +386,10 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 - **死亡时自动禁用**：玩家死亡 → `hurt_area.monitoring/monitorable = false`；敌人变成尸体 → 同上
 - **Debug 可视化**：TAB 键切换，黄色矩形绘制
 
-**攻击去重机制**：
-- 同一目标可能同时通过物理体（层4 `body_entered`）和受击碰撞体（层5 `area_entered`）被检测到
-- 子弹 `_hit()` 和近战 `_check_melee_hits()` 均按 `instance_id` 去重，**保证每个目标只受一次伤害**
+**攻击去重机制（三层防护）**：
+- **第1层 — 子弹侧永久去重**：`_hit_targets: Dictionary`（`instance_id` → `true`），一旦命中永久标记，同一子弹绝不对同一目标重复判定。body_entered + area_entered 双重触发只生效一次
+- **第2层 — 目标侧源头去重**：`take_damage()` 新增 `source_id: int = 0` 参数。敌人/玩家的 `_recent_damage_sources` 字典追踪 1 秒内的伤害来源，同一 `source_id` 拒绝重复判定。向后兼容（`source_id=0` 跳过检查）
+- **第3层 — 近战去重**：`_check_melee_hits()` 按 `instance_id` 去重，遍历 bodies + areas 统一去重
 - 子弹记录 `_shooter` 引用，**防止击中发射者自己**（子弹 mask=24 会检测到玩家的 HurtArea）
 
 **尸体穿透**：
@@ -462,7 +466,7 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 | | `knockback_force` | float | 200.0 | 击退力度（像素/秒） |
 | | `knockback_stun_duration` | float | 0.5 | 击退后硬直时长（秒） |
 | 碰撞体 | `collision_size` | Vector2 | (0,0) | 碰撞矩形尺寸（0=使用默认 24×28） |
-| | `collision_offset` | Vector2 | (0,0) | 碰撞体相对子弹根节点的偏移 |
+| | `collision_offset` | Vector2 | (0,0) | 碰撞体中心在子弹局部空间的位置（设到精灵中心如 `(24,32)` 可避免旋转时偏移） |
 
 **方法**：
 - `get_effective_damage(attack_power)` — 返回子弹伤害（>0 用自身，否则回退武器攻击力）
@@ -489,20 +493,25 @@ Bullet (Node2D)
 |------|------|
 | `setup(params)` | 从字典批量设置参数（direction/speed/damage/penetration/collision_size/collision_offset/**knockback_force/knockback_stun/shooter** 等） |
 | `_refresh_sprite()` | 根据飞行方向选 4 方向精灵帧 + **rotation 设为 `direction.angle() - 基础朝向角`**（精灵与飞行方向对齐） |
-| `_apply_collision_shape()` | 将 `_collision_size` / `_collision_offset` 写入 CollisionShape2D 的 shape.size 和 position |
+| `_apply_collision_shape()` | 设置碰撞矩形尺寸；将 `collision_offset` 应用到 `Area2D.position`（而非 `CollisionShape2D.position`），使旋转围绕精灵中心而非 bullet 原点 |
 | `_update_area_rotation()` | 将 `Area2D.rotation` 设为 `direction.angle()`，碰撞矩形对齐飞行方向 |
-| `_hit(target)` | 伤害判定 + **目标解析**（area→parent）+ **发射者排除** + **去重**（`_hit_targets`）+ **尸体跳过**（`_is_dead`/`_is_dying`）+ 暴击掷骰 + 击退参数传递 + 播放命中特效/音效 |
+| `_hit(target)` | 伤害判定 + **目标解析**（area→parent）+ **永久去重**（`_hit_targets` Dictionary）+ **发射者排除** + **尸体跳过** + 暴击掷骰 + 击退参数传递 + 传入 `source_id=get_instance_id()` 供目标侧去重 + 播放命中特效/音效 |
 | `_draw()` | 青色（Cyan）绘制旋转+偏移后的碰撞矩形（TAB 键切换） |
 
 **命中流程**（2026-07-28 更新）：
 1. 解析真正可伤害目标（若传入 HurtArea 则取其 parent CharacterBody2D）
 2. 检查 `take_damage` 方法存在性
-3. **发射者排除**：`_shooter` 不为空且目标=发射者 → 跳过
-4. **去重**：目标 `instance_id` 在 `_hit_targets` 中 → 跳过（防 body + hurtbox 双重触发）
+3. **永久去重**：目标 `instance_id` 在 `_hit_targets` Dictionary 中 → 跳过（防 body + hurtbox 双重触发，同一子弹永久只判定一次）
+4. **发射者排除**：`_shooter` 不为空且目标=发射者 → 跳过
 5. **尸体跳过**：`_is_dead` 或 `_is_dying` → 跳过（不消耗穿透、不播特效）
-6. `_hits += 1`，掷骰暴击，调用 `take_damage()`，播放特效/音效
+6. `_hits += 1`，掷骰暴击，调用 `take_damage(..., source_id=get_instance_id())`（传入子弹 ID 供目标侧源头去重），播放特效/音效
 
-**⚠️ `@onready` 时序注意**：`setup()` 在 `add_child()` **之前**调用，此时 `@onready` 变量尚未初始化。`_apply_collision_shape()` 和 `_update_area_rotation()` 均使用 `$` 路径直查（降级 fallback），不能依赖 `@onready` 缓存引用。
+**⚠️ `@onready` 时序注意**：`setup()` 在 `add_child()` **之前**调用，此时 `@onready` 变量尚未初始化。`_apply_collision_shape()`（含 Area2D 节点定位）和 `_update_area_rotation()` 均使用 `$` 路径直查（降级 fallback），不能依赖 `@onready` 缓存引用。
+
+**碰撞体位置实现**（2026-07-28 修正）：
+- `CollisionShape2D.position = Vector2.ZERO`（形状原点对齐 Area2D 原点）
+- `Area2D.position = _collision_offset`（整个检测区移到精灵中心）
+- 这样 `Area2D.rotation` 围绕精灵中心旋转，碰撞体不会因为旋转而偏移到奇怪位置
 
 ### 远程武器空弹机制
 

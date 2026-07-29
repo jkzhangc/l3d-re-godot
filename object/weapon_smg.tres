@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_4rdge"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="7_nmfdk"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
 
 [sub_resource type="Resource" id="Resource_onao4"]
 script = ExtResource("2_a1cwu")
@@ -18,7 +19,7 @@ bullet_texture = ExtResource("3_amhne")
 speed = 1000.0
 offset_left = Vector2(0, -18)
 offset_right = Vector2(0, -18)
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)
 
 [resource]
 script = ExtResource("7_nmfdk")
@@ -42,6 +43,7 @@ attack_effect_anim_left = ExtResource("2_o8qhj")
 attack_effect_anim_right = ExtResource("3_4rdge")
 attack_effect_follow = true
 attack_effect_offset_override = Vector2(0, -5)
+hit_effect_anim = ExtResource("8_o8qhj")
 magazine_capacity = 30
 ammo_item_id = "ammo_smg"
 attack_char_sequence = Array[int]([3, 2])

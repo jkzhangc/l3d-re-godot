@@ -49,7 +49,7 @@ var _collision_offset: Vector2 = Vector2.ZERO
 # ═══════════════════════════════════════
 var _distance_traveled: float = 0.0
 var _hits: int = 0
-var _hit_targets: Array[int] = []   ## 已命中目标的 instance_id（防双次命中：物理体 + 受击碰撞体）
+var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防止重复命中同一目标）
 var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
 
 
@@ -118,10 +118,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_area_entered(area: Area2D) -> void:
+	print("[子弹] area_entered: %s (parent=%s)" % [area.name, area.get_parent().name if area.get_parent() else "null"])
 	_hit(area.get_parent() if area.get_parent() else area)
 
 
 func _on_body_entered(body: Node2D) -> void:
+	print("[子弹] body_entered: %s" % body.name)
 	_hit(body)
 
 
@@ -142,11 +144,13 @@ func _hit(target: Node2D) -> void:
 	if _shooter and damageable == _shooter:
 		return
 
-	# 去重：防止物理体 + 受击碰撞体双重触发
+	# 去重：永久标记已命中目标，绝不对同一目标重复判定
 	var tid: int = damageable.get_instance_id()
 	if tid in _hit_targets:
+		print("[子弹] *** 去重拦截！tid=%d name=%s ***" % [tid, damageable.name])
 		return
-	_hit_targets.append(tid)
+	_hit_targets[tid] = true
+	print("[子弹] 去重记录: tid=%d name=%s (累计=%d)" % [tid, damageable.name, _hit_targets.size()])
 
 	# 跳过已死亡的目标（尸体不挡子弹、不消耗穿透）
 	if damageable.get("_is_dead") == true or damageable.get("_is_dying") == true:
@@ -158,8 +162,9 @@ func _hit(target: Node2D) -> void:
 	var is_headshot: bool = _roll_critical()
 
 	# 尝试对目标造成伤害
-	# 传递击退参数 + 硬直时长
-	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration)
+	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
+	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(damage)])
+	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration, get_instance_id())
 
 	# 播放命中特效
 	if _hit_effect_anim:
@@ -232,7 +237,11 @@ func _apply_collision_shape() -> void:
 		print("[子弹] 碰撞体尺寸已更新: %s | 偏移: %s" % [_collision_size, _collision_offset])
 	else:
 		print("[子弹] _apply_collision_shape: shape 不是 RectangleShape2D, 类型=%s" % shape.get_class())
-	shape_node.position = _collision_offset
+	shape_node.position = Vector2.ZERO
+	# 将 Area2D 节点移到精灵中心，避免 offset 随 Area2D 旋转偏移
+	var _area_node: Area2D = $Area2D
+	if _area_node:
+		_area_node.position = _collision_offset
 
 
 func _draw() -> void:
@@ -246,7 +255,7 @@ func _draw() -> void:
 	var shape: Shape2D = shape_node.shape
 	if shape is RectangleShape2D:
 		var s: Vector2 = (shape as RectangleShape2D).size
-		var offset: Vector2 = shape_node.position
+		var offset: Vector2 = _area.position
 		draw_set_transform(offset, _area.rotation)
 		draw_rect(Rect2(-s / 2, s), Color.CYAN, false, 1.0)
 		draw_set_transform(Vector2.ZERO, 0.0)

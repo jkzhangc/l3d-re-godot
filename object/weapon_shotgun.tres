@@ -1,50 +1,48 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://ccm6q8abo5hy3"]
 
+[ext_resource type="PackedScene" uid="uid://dhskiw348es7t" path="res://anim/anim_effect_霰弹枪攻击下.tscn" id="1_8u1tt"]
 [ext_resource type="AudioStream" uid="uid://3r75aov2jlkc" path="res://sound/ショットガン.wav" id="1_outme"]
+[ext_resource type="PackedScene" uid="uid://c5shie48qlsbk" path="res://anim/anim_effect_霰弹枪攻击左.tscn" id="2_8fi51"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_sw0ir"]
+[ext_resource type="PackedScene" uid="uid://bsmbkbroqnsht" path="res://anim/anim_effect_霰弹枪攻击右.tscn" id="3_y02tm"]
 [ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="4_juw25"]
 [ext_resource type="Texture2D" uid="uid://bbrf6dbu1u3lw" path="res://art/misc/Gun.png" id="4_sw0ir"]
 [ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_5xpys"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_0fguu"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_juw25"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_8fi51"]
 [ext_resource type="AudioStream" uid="uid://8dyndnamhh5n" path="res://sound/ジッポライター1.ogg" id="8_45qvp"]
 [ext_resource type="AudioStream" uid="uid://j81banot3gk0" path="res://sound/ショットガン_pomp.ogg" id="8_juw25"]
 [ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="8_sw0ir"]
 
-[sub_resource type="Resource" id="Resource_juw25"]
+[sub_resource type="Resource" id="Resource_8fi51"]
 script = ExtResource("2_sw0ir")
 bullet_texture = ExtResource("4_sw0ir")
 speed = 1000.0
-penetration = 2
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
 knockback_enabled = true
-knockback_stun_duration = 0.8
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)
 
-[sub_resource type="Resource" id="Resource_45qvp"]
+[sub_resource type="Resource" id="Resource_y02tm"]
 script = ExtResource("2_sw0ir")
 bullet_texture = ExtResource("4_sw0ir")
 speed = 1000.0
-penetration = 2
 angle_offset = -10.0
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
 knockback_enabled = true
-knockback_stun_duration = 0.8
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)
 
-[sub_resource type="Resource" id="Resource_sw0ir"]
+[sub_resource type="Resource" id="Resource_j63fi"]
 script = ExtResource("2_sw0ir")
 bullet_texture = ExtResource("4_sw0ir")
 speed = 1000.0
-penetration = 2
 angle_offset = 10.0
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
 knockback_enabled = true
-knockback_stun_duration = 0.8
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)
 
 [resource]
 script = ExtResource("6_0fguu")
@@ -70,14 +68,14 @@ shotgun_reload_end_frame_durations = Array[float]([0.05, 0.05, 0.05, 0.05])
 shotgun_reload_end_sound = ExtResource("8_juw25")
 post_attack_char_sequence = Array[int]([5, 3, 2])
 post_attack_sound = ExtResource("8_juw25")
-attack_effect_anim_down = "anim_effect_霰弹枪攻击下.tscn"
-attack_effect_anim_left = "anim_effect_霰弹枪攻击左.tscn"
-attack_effect_anim_right = "anim_effect_霰弹枪攻击右.tscn"
+attack_effect_anim_down = ExtResource("1_8u1tt")
+attack_effect_anim_left = ExtResource("2_8fi51")
+attack_effect_anim_right = ExtResource("3_y02tm")
 attack_effect_follow = true
-hit_effect_anim = "anim_effect_hit.tscn"
+hit_effect_anim = ExtResource("8_8fi51")
 magazine_capacity = 5
 ammo_item_id = "ammo_shotgun"
-bullet_list = Array[ExtResource("2_sw0ir")]([SubResource("Resource_juw25"), SubResource("Resource_45qvp"), SubResource("Resource_sw0ir")])
+bullet_list = Array[ExtResource("2_sw0ir")]([SubResource("Resource_8fi51"), SubResource("Resource_y02tm"), SubResource("Resource_j63fi")])
 item_id = "shotgun_01"
 item_name = "霰弹枪"
 item_type = 3

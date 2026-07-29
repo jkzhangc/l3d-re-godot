@@ -13,6 +13,7 @@ const DIRECTIONS: int = 4
 const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
+const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源对当前敌人的重复命中冷却（毫秒）
 
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
@@ -89,6 +90,7 @@ var _knockback_dir: Vector2 = Vector2.ZERO     ## 击退方向（由 take_damage
 var _knockback_force: float = 0.0              ## 击退力度
 var _knockback_stun: float = 0.0               ## 击退硬直时长
 var _hitstun_duration: float = 0.0             ## 命中硬直时长（无击退位移）
+var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
 
 # ═══════════════════════════════════════
 # 节点引用
@@ -216,17 +218,28 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 # 伤害
 # ═══════════════════════════════════════
 
-func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0) -> void:
+func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0) -> void:
 	if _is_dead:
 		return
 
+	# 源头去重 + 调试打印
+	if source_id != 0:
+		var _now: int = Time.get_ticks_msec()
+		_clean_expired_damage_sources(_now)
+		if source_id in _recent_damage_sources:
+			if _now - _recent_damage_sources[source_id] < DAMAGE_SOURCE_COOLDOWN_MSEC:
+				print("[敵人] ★★★ 源头去重拦截！source_id=%d 帧=%d ★★★" % [source_id, Engine.get_physics_frames()])
+				return
+		_recent_damage_sources[source_id] = _now
+
 	current_hp = maxf(0.0, current_hp - damage)
-	print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s" % [int(damage), current_hp, max_hp, str(is_headshot)])
+	print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
 
 	# 弹出伤害数字（白/金色调，爆头用亮黄色）
 	var tree := get_tree()
 	if tree and tree.current_scene:
 		var dmg_color: Color = Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
+		print("[敵人] ▼▼▼ 弹出伤害数字！damage=%d source_id=%d 帧=%d ▼▼▼" % [int(damage), source_id, Engine.get_physics_frames()])
 		DamageNumber.spawn(global_position, damage, tree.current_scene, 0, dmg_color)
 
 	# 播放受伤音效
@@ -285,6 +298,15 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 			else:
 				print("[敵人] StateMachine 中未找到 Hitstun 状态节点")
 
+
+func _clean_expired_damage_sources(now: int) -> void:
+	## 清理超过冷却时间的伤害源记录，防止字典无限增长
+	var to_erase: Array[int] = []
+	for sid: int in _recent_damage_sources:
+		if now - _recent_damage_sources[sid] >= DAMAGE_SOURCE_COOLDOWN_MSEC:
+			to_erase.append(sid)
+	for sid: int in to_erase:
+		_recent_damage_sources.erase(sid)
 
 func _die(is_headshot: bool) -> void:
 	_is_dead = true

@@ -37,12 +37,12 @@ enum EasingType {
 @export var font_size: int = 16            ## 字号（默认 19 = 标题画面菜单同款）
 @export var bold: bool = false             ## 粗体（1px 右偏移叠加，开启会让文字更亮）
 @export var shadow_enabled: bool = true    ## 阴影
-@export var rise_distance: float = 20.0    ## 上浮距离（像素）
-@export var duration: float = 1.0          ## 总显示时长（秒）
+@export var rise_distance: float = 10.0    ## 上浮距离（像素）
+@export var duration: float = 0.5         ## 总显示时长（秒）
 @export var use_easing: bool = true        ## 是否使用缓动
 @export var easing_type: EasingType = EasingType.EASE_OUT_ELASTIC  ## 缓动函数类型
 @export var modulate_color: Color = Color.WHITE  ## 颜色叠加（White=不变）
-@export var position_offset: Vector2 = Vector2(0, -30)  ## 整体位置偏移（相对目标，像素）
+@export var position_offset: Vector2 = Vector2(0, -40)  ## 整体位置偏移（相对目标，像素）
 
 
 # ═══════════════════════════════════════

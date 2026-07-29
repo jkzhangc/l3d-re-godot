@@ -15,7 +15,7 @@ bullet_texture = ExtResource("3_2b1o8")
 speed = 1000.0
 offset_left = Vector2(0, -14)
 offset_right = Vector2(0, -14)
-collision_size = Vector2(48, 12)
+collision_size = Vector2(32, 6)
 
 [resource]
 script = ExtResource("6_oiymr")

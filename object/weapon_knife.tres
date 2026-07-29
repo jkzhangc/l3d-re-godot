@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="2_12jfk"]
 [ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="3_12jfk"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="3_ewivl"]
 [ext_resource type="AudioStream" uid="uid://ct6wqa836p8ov" path="res://sound/ナイフ.wav" id="3_idirh"]
 
 [resource]
@@ -21,7 +22,7 @@ attack_sound = ExtResource("2_12jfk")
 raise_sound = ExtResource("3_12jfk")
 lower_sound = ExtResource("3_12jfk")
 hit_sound = ExtResource("3_idirh")
-hit_effect_anim = "anim_effect_hit.tscn"
+hit_effect_anim = ExtResource("3_ewivl")
 attack_char_sequence = Array[int]([3, 4, 1, 2])
 melee_attack_char_sequence = Array[int]([3, 4, 5, 2])
 melee_attack_frame_durations = Array[float]([0.1, 0.1, 0.2, 0.1])

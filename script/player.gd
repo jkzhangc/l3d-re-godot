@@ -61,6 +61,7 @@ const STAND_FRAME: int = 1
 
 ## 方向 → 行偏移（VX Ace: 下/左/右/上）
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
+const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源重复命中冷却（毫秒）
 
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
@@ -88,6 +89,7 @@ var current_hp: float = 200.0
 
 ## 死亡相关
 var _is_dying: bool = false
+var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
 var _death_fade_timer: float = 0.0
 var _death_phase: int = 0  ## 0=死亡动画, 1=渐黑, 2=全黑等待, 3=重载
 var _death_fade_overlay: ColorRect = null
@@ -309,12 +311,22 @@ func _apply_character_data() -> void:
 	if cd.death_sound:    death_sound = cd.death_sound
 
 
-func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false) -> void:
+func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0) -> void:
 	if _is_dying:
 		return
 
+	# 源头去重：同一伤害源 1 秒内不会对玩家重复判定
+	if source_id != 0:
+		var now: int = Time.get_ticks_msec()
+		_clean_expired_damage_sources(now)
+		if source_id in _recent_damage_sources:
+			if now - _recent_damage_sources[source_id] < DAMAGE_SOURCE_COOLDOWN_MSEC:
+				print("[玩家] 源头去重：source_id=%d 在冷却期内，跳过伤害" % source_id)
+				return
+		_recent_damage_sources[source_id] = now
+
 	current_hp = maxf(0.0, current_hp - damage)
-	print("[玩家] 受到伤害: %d | HP: %.0f/%.0f" % [int(damage), current_hp, max_hp])
+	print("[玩家] 受到伤害: %d | HP: %.0f/%.0f | source=%d" % [int(damage), current_hp, max_hp, source_id])
 
 	# 弹出伤害数字（红色调，表示玩家受伤）
 	var tree := get_tree()
@@ -342,6 +354,17 @@ func heal(amount: float) -> void:
 # ═══════════════════════════════════════
 # 死亡系统
 # ═══════════════════════════════════════
+
+
+func _clean_expired_damage_sources(now: int) -> void:
+	## 清理超过冷却时间的伤害源记录，防止字典无限增长
+	var to_erase: Array[int] = []
+	for sid: int in _recent_damage_sources:
+		if now - _recent_damage_sources[sid] >= DAMAGE_SOURCE_COOLDOWN_MSEC:
+			to_erase.append(sid)
+	for sid: int in to_erase:
+		_recent_damage_sources.erase(sid)
+
 
 func _die() -> void:
 	print("[玩家] 死亡！")
