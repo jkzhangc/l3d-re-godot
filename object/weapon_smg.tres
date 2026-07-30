@@ -5,20 +5,20 @@
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_a1cwu"]
 [ext_resource type="PackedScene" uid="uid://c5nbupmji5188" path="res://anim/anim_effect_步枪攻击左.tscn" id="2_o8qhj"]
 [ext_resource type="PackedScene" uid="uid://dvnf6mrtf1ccb" path="res://anim/anim_effect_步枪攻击右.tscn" id="3_4rdge"]
-[ext_resource type="Texture2D" uid="uid://bbrf6dbu1u3lw" path="res://art/misc/Gun.png" id="3_amhne"]
 [ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="4_onao4"]
 [ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_o8qhj"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_4rdge"]
+[ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="6_o8qhj"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="7_nmfdk"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
 
-[sub_resource type="Resource" id="Resource_onao4"]
+[sub_resource type="Resource" id="Resource_o8qhj"]
 script = ExtResource("2_a1cwu")
-bullet_texture = ExtResource("3_amhne")
+bullet_texture = ExtResource("6_o8qhj")
 speed = 1000.0
-offset_left = Vector2(0, -18)
-offset_right = Vector2(0, -18)
+offset_left = Vector2(0, -12)
+offset_right = Vector2(0, -12)
 collision_size = Vector2(32, 6)
 
 [resource]
@@ -48,7 +48,8 @@ magazine_capacity = 30
 ammo_item_id = "ammo_smg"
 attack_char_sequence = Array[int]([3, 2])
 attack_frame_durations = Array[float]([0.1, 0.03])
-bullet_list = Array[ExtResource("2_a1cwu")]([SubResource("Resource_onao4")])
+bullet_list = Array[ExtResource("2_a1cwu")]([SubResource("Resource_o8qhj")])
+hitstun_duration = 0.1
 item_id = "smg_01"
 item_name = "冲锋枪"
 item_type = 3

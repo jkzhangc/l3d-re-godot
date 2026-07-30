@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="BulletData" format=3 uid="uid://cu5cbgr73wc35"]
 
-[ext_resource type="Texture2D" uid="uid://bbrf6dbu1u3lw" path="res://art/misc/Gun.png" id="1_fjyq5"]
+[ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="1_fjyq5"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_peyvs"]
 
 [resource]

@@ -60,7 +60,29 @@ var _player_ref: CharacterBody2D = null
 var _hold_timer: float = 0.0
 var _step_idx: int = 0           ## 当前踏步帧在 pickup_step_frames 中的索引
 var _step_timer: float = 0.0     ## 踏步帧计时器
-const HOLD_TIME: float = 2.0
+var _indicator_alpha: float = 0.0       ## 指示器当前透明度（用于淡入淡出）
+var _indicator_node: Node2D = null      ## 指示器绘制子节点
+
+const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
+@export_group("Hold Settings")
+## 按住替换所需时长（秒）
+@export var hold_time: float = 1.2
+
+@export_group("Hold Indicator")
+## 是否启用按住进度指示器（圆环填充动画）
+@export var hold_indicator_enabled: bool = true
+## 指示器圆环半径（像素）
+@export var hold_indicator_radius: float = 18.0
+## 圆环线宽（像素）
+@export var hold_indicator_thickness: float = 3.0
+## 指示器位置偏移（相对拾取物原点，Y轴向上为负）
+@export var hold_indicator_offset: Vector2 = Vector2(0, -48)
+## 进度填充颜色
+@export var hold_indicator_color: Color = Color(1.0, 0.9, 0.2, 1.0)
+## 背景圆环颜色
+@export var hold_indicator_bg_color: Color = Color(0.0, 0.0, 0.0, 0.55)
+## 淡入淡出速度（alpha/秒，值越大过渡越快）
+@export var hold_indicator_fade_speed: float = 5.0
 
 
 func _ready() -> void:
@@ -68,6 +90,15 @@ func _ready() -> void:
 		_area.body_entered.connect(_on_body_entered)
 		_area.body_exited.connect(_on_body_exited)
 	_refresh_sprite()
+
+	# 创建按住进度指示器子节点（z_index 高于精灵，确保圆环绘制在精灵上方）
+	if hold_indicator_enabled:
+		_indicator_node = Node2D.new()
+		_indicator_node.name = "HoldIndicator"
+		_indicator_node.z_index = 10
+		_indicator_node.set_script(INDICATOR_SCRIPT)
+		_indicator_node._pickup = self
+		add_child(_indicator_node)
 
 
 func _process(delta: float) -> void:
@@ -82,6 +113,7 @@ func _process(delta: float) -> void:
 	# 拾取逻辑
 	if not _player_in_range or not _player_ref:
 		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
 		return
 	if not weapon_data:
 		return
@@ -97,19 +129,58 @@ func _process(delta: float) -> void:
 	# 槽位已有武器 → 需按住确定键替换
 	if not _can_hold_pickup():
 		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
 		return
 
 	if Input.is_action_pressed("确定键"):
 		_hold_timer += delta
-		if _hold_timer >= HOLD_TIME:
+		_update_hold_indicator(delta, true)
+		if _hold_timer >= hold_time:
 			_do_pickup()
 	else:
 		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
 
 
 func _can_hold_pickup() -> bool:
 	## 玩家在范围内即可拾取（不再限制武器举起/攻击状态）
 	return _player_ref != null
+
+
+func _update_hold_indicator(delta: float, is_holding: bool) -> void:
+	## 更新按住进度指示器的淡入/淡出透明度，并触发重绘
+	if not hold_indicator_enabled or not _indicator_node:
+		return
+	var target: float = 1.0 if is_holding else 0.0
+	_indicator_alpha = move_toward(_indicator_alpha, target, hold_indicator_fade_speed * delta)
+	if _indicator_alpha > 0.001 or _hold_timer > 0.0:
+		_indicator_node.queue_redraw()
+
+
+func _indicator_draw(node: Node2D) -> void:
+	## 由 hold_indicator.gd 子节点的 _draw() 回调
+	## 绘制背景圆环 + 进度填充弧线
+	if _indicator_alpha <= 0.001:
+		return
+
+	var progress: float = clampf(_hold_timer / hold_time, 0.0, 1.0)
+	var center: Vector2 = hold_indicator_offset
+	var radius: float = hold_indicator_radius
+	var thickness: float = hold_indicator_thickness
+	var pts: int = 64
+
+	# 背景圆环（完整一圈）
+	var bg: Color = hold_indicator_bg_color
+	bg.a *= _indicator_alpha
+	node.draw_arc(center, radius, 0, TAU, pts, bg, thickness, true)
+
+	# 进度弧线（顺时针从顶部 12 点钟方向开始填充）
+	if progress > 0.0:
+		var fg: Color = hold_indicator_color
+		fg.a *= _indicator_alpha
+		var start_angle: float = -PI / 2.0
+		var end_angle: float = start_angle + progress * TAU
+		node.draw_arc(center, radius, start_angle, end_angle, pts, fg, thickness, true)
 
 
 func _do_pickup() -> void:
@@ -248,12 +319,14 @@ func _on_body_entered(body: Node2D) -> void:
 		_player_in_range = true
 		_player_ref = player
 		_hold_timer = 0.0
+		player._near_pickup = true
 
 
 func _on_body_exited(body: Node2D) -> void:
 	var player: CharacterBody2D = body as CharacterBody2D
 	if player and player == _player_ref:
 		_player_in_range = false
+		_player_ref._near_pickup = false
 		_player_ref = null
 		_hold_timer = 0.0
 

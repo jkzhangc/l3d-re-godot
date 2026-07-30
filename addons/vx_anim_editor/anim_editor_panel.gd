@@ -825,8 +825,10 @@ func _update_sequence_panel() -> void:
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var col: int = pat % cols
 			var row: int = pat / cols
-			tr.region_enabled = true
-			tr.region_rect = Rect2(col * _cell_size.x, row * _cell_size.y, _cell_size.x, _cell_size.y)
+			var atlas := AtlasTexture.new()
+			atlas.atlas = _texture
+			atlas.region = Rect2(col * _cell_size.x, row * _cell_size.y, _cell_size.x, _cell_size.y)
+			tr.texture = atlas
 			thumb.add_child(tr)
 
 		if i == _selected_seq_idx:

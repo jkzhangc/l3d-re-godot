@@ -93,6 +93,19 @@ var _hitstun_duration: float = 0.0             ## 命中硬直时长（无击退
 var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
 
 # ═══════════════════════════════════════
+# A* 调试字段（由 EnemyChaseState 写入，_draw() 读取）
+# ═══════════════════════════════════════
+var _debug_path: Array = []
+var _debug_path_found: bool = false
+var _debug_start_grid: Vector2i = Vector2i.ZERO
+var _debug_end_grid: Vector2i = Vector2i.ZERO
+var _debug_start_walkable: bool = false
+var _debug_end_walkable: bool = false
+var _debug_astar_iters: int = 0
+var _debug_walk_cache: Dictionary = {}
+var _debug_path_idx: int = 0
+
+# ═══════════════════════════════════════
 # 节点引用
 # ═══════════════════════════════════════
 @onready var sprite: Sprite2D = $Sprite2D
@@ -586,3 +599,67 @@ func _draw() -> void:
 			var hs: Vector2 = (hshape_node.shape as RectangleShape2D).size
 			var ho: Vector2 = hshape_node.position
 			draw_rect(Rect2(ho - hs / 2, hs), Color.YELLOW, false, 1.0)
+
+	# ── A* 调试：绘制路径 ──
+	_draw_debug_path()
+
+	# ── A* 调试：绘制可行走网格 ──
+	_draw_debug_walk_grid()
+
+
+func _draw_debug_path() -> void:
+	if _debug_path.is_empty():
+		return
+
+	# 路径线 — 绿色
+	if _debug_path.size() >= 2:
+		for i in range(_debug_path.size() - 1):
+			var a: Vector2 = _debug_path[i] - global_position
+			var b: Vector2 = _debug_path[i + 1] - global_position
+			draw_line(a, b, Color.GREEN, 2.0)
+
+	# 路径点 — 绿色小圈
+	for wp: Vector2 in _debug_path:
+		var lp: Vector2 = wp - global_position
+		draw_circle(lp, 3.0, Color.GREEN)
+		draw_circle(lp, 4.0, Color.DARK_GREEN, false, 1.0)
+
+	# 下一个目标路径点 — 亮黄色
+	if _debug_path_idx < _debug_path.size():
+		var target: Vector2 = _debug_path[_debug_path_idx] - global_position
+		draw_circle(target, 6.0, Color.YELLOW, false, 2.0)
+
+	# 起点/终点标记（格子坐标 → 世界坐标）
+	var cell_half: float = 16.0
+	var start_wp: Vector2 = Vector2(_debug_start_grid.x * 32.0 + cell_half, _debug_start_grid.y * 32.0 + cell_half) - global_position
+	var end_wp: Vector2 = Vector2(_debug_end_grid.x * 32.0 + cell_half, _debug_end_grid.y * 32.0 + cell_half) - global_position
+	draw_rect(Rect2(start_wp - Vector2(6, 6), Vector2(12, 12)), Color.BLUE, false, 2.0)
+	draw_rect(Rect2(end_wp - Vector2(6, 6), Vector2(12, 12)), Color.RED, false, 2.0)
+
+	# 路径状态文字
+	var status: String = "OK:%d" % _debug_path.size() if _debug_path_found else "FAIL(iters:%d)" % _debug_astar_iters
+	draw_string(ThemeDB.fallback_font, Vector2(20, -50), status, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.GREEN if _debug_path_found else Color.RED)
+
+
+func _draw_debug_walk_grid() -> void:
+	if _debug_walk_cache.is_empty():
+		return
+
+	var cell_half: float = 16.0
+
+	# 只绘制敌人周围 10 格范围内的格子（性能）
+	for gp in _debug_walk_cache:
+		var gv: Vector2i = gp
+		var world: Vector2 = Vector2(gv.x * 32.0 + cell_half, gv.y * 32.0 + cell_half)
+		var local: Vector2 = world - global_position
+
+		if abs(local.x) > 200 or abs(local.y) > 200:
+			continue
+
+		var walkable: bool = _debug_walk_cache[gp]
+		if walkable:
+			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(32, 32)), Color(0, 1, 0, 0.08), true)
+		else:
+			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(32, 32)), Color(1, 0, 0, 0.15), true)
+			draw_line(local + Vector2(-4, -4), local + Vector2(4, 4), Color.RED, 1.0)
+			draw_line(local + Vector2(-4, 4), local + Vector2(4, -4), Color.RED, 1.0)

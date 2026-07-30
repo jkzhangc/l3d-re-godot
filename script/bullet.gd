@@ -1,21 +1,9 @@
 extends Node2D
 ## 子弹实体 — 由远程武器射击生成
 ##
-## 使用 VX Ace 角色精灵格式渲染（与玩家相同）：
-##   精灵表 576×512，每角色 3帧×4方向，每帧 48×64
-##   通过 bullet_char_idx 选择角色槽位，frame=1（站立帧），方向决定行
-
-# ═══════════════════════════════════════
-# 精灵帧常量（与 player.gd 保持一致）
-# ═══════════════════════════════════════
-const FRAME_W: int = 48
-const FRAME_H: int = 64
-const CHARS_PER_ROW: int = 4
-const DIRECTIONS: int = 4
-const BULLET_FRAME: int = 1   ## 始终使用站立帧
-const DIR_ROWS: Array[int] = [0, 1, 2, 3]  ## DOWN/LEFT/RIGHT/UP
-
-enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
+## 使用单张水平帧条图片渲染：
+##   图片被均分为 bullet_anim_frames 列，每帧宽 = 图宽 / 帧数，高 = 图高
+##   精灵旋转跟随飞行方向（图片默认朝向为 DOWN，rotation = angle - PI/2）
 
 # ═══════════════════════════════════════
 # 公开参数（由武器/生成者设置）
@@ -28,10 +16,12 @@ var destroy_on_hit: bool = true
 var penetration: int = 0
 var critical_rate: float = 0.0             ## 暴击率 (0-100)
 
-# 外观
+# 外观 — 动画帧条
 var _bullet_texture: Texture2D = null
-var _bullet_char_idx: int = 0
-var _bullet_dir: int = FaceDir.RIGHT
+var _bullet_anim_frames: int = 1            ## 水平帧数
+var _bullet_frame_duration: int = 1         ## 每帧持续物理帧数
+var _anim_counter: int = 0                  ## 物理帧计数（达到 frame_duration 时切帧）
+var _current_frame: int = 0                 ## 当前动画帧索引
 
 # 击退（可由 BulletData 设置）
 var _knockback_force: float = 0.0
@@ -82,7 +72,8 @@ func setup(params: Dictionary) -> void:
 	penetration = params.get("penetration", 0)
 	critical_rate = params.get("critical_rate", 0.0)
 	_bullet_texture = params.get("texture", null)
-	_bullet_char_idx = params.get("char_idx", 0)
+	_bullet_anim_frames = params.get("anim_frames", 1)
+	_bullet_frame_duration = params.get("frame_duration", 1)
 	# 碰撞体（>0 则覆盖默认值）
 	var cs: Vector2 = params.get("collision_size", Vector2.ZERO)
 	if cs != Vector2.ZERO:
@@ -97,8 +88,6 @@ func setup(params: Dictionary) -> void:
 	_hit_sound = params.get("hit_sound", null)
 	_shooter = params.get("shooter", null)
 	_apply_collision_shape()
-	# 根据方向计算朝向
-	_bullet_dir = _vec_to_facedir(direction)
 	_refresh_sprite()
 	_update_area_rotation()
 
@@ -112,6 +101,14 @@ func _physics_process(delta: float) -> void:
 	var step: float = speed * delta
 	position += direction * step
 	_distance_traveled += step
+
+	# 动画帧更新
+	if _bullet_anim_frames > 1:
+		_anim_counter += 1
+		if _anim_counter >= _bullet_frame_duration:
+			_anim_counter = 0
+			_current_frame = (_current_frame + 1) % _bullet_anim_frames
+			_refresh_sprite()
 
 	if _distance_traveled >= max_range:
 		queue_free()
@@ -180,40 +177,22 @@ func _hit(target: Node2D) -> void:
 		queue_free()
 
 
-func _vec_to_facedir(v: Vector2) -> int:
-	if abs(v.x) > abs(v.y):
-		return FaceDir.RIGHT if v.x > 0 else FaceDir.LEFT
-	return FaceDir.DOWN if v.y > 0 else FaceDir.UP
-
-
 func _refresh_sprite() -> void:
+	## 水平帧条渲染：图片均分为 bullet_anim_frames 列
+	## 精灵朝向 = 飞行方向（图片默认朝 RIGHT，即 0°）
 	if not _sprite or not _bullet_texture:
 		return
 
 	_sprite.texture = _bullet_texture
 	_sprite.region_enabled = true
 
-	var char_col: int = _bullet_char_idx % CHARS_PER_ROW
-	var char_row: int = _bullet_char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[_bullet_dir]
+	var tex_w: float = _bullet_texture.get_width()
+	var tex_h: float = _bullet_texture.get_height()
+	var frame_w: float = tex_w / float(_bullet_anim_frames)
 
-	var x: int = char_col * (FRAME_W * 3) + BULLET_FRAME * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-	_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
-
-	# 旋转精灵以匹配实际飞行方向
-	# 精灵帧有隐含的基础朝向，rotation = 实际方向 - 基础朝向
-	_sprite.rotation = direction.angle() - _facedir_base_angle(_bullet_dir)
-
-
-func _facedir_base_angle(facedir: int) -> float:
-	## 返回精灵帧的基础朝向角度（Godot 坐标系）
-	match facedir:
-		FaceDir.DOWN:  return PI / 2.0   # 90°
-		FaceDir.LEFT:  return PI          # 180°
-		FaceDir.RIGHT: return 0.0          # 0°
-		FaceDir.UP:    return -PI / 2.0   # -90°
-	return 0.0
+	_sprite.region_rect = Rect2(_current_frame * frame_w, 0, frame_w, tex_h)
+	# 旋转精灵指向飞行方向（图片默认朝向为 DOWN，需 -PI/2 补偿）
+	_sprite.rotation = direction.angle() - PI / 2.0
 
 
 func _update_area_rotation() -> void:

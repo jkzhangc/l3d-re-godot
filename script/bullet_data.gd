@@ -9,8 +9,9 @@ class_name BulletData extends Resource
 # 外观
 # ═══════════════════════════════════════
 @export_group("外观")
-@export var bullet_texture: Texture2D         ## 子弹精灵表
-@export var bullet_char_idx: int = 0          ## 精灵表中的角色索引
+@export var bullet_texture: Texture2D         ## 子弹精灵图（水平帧条，单帧宽=图宽/动画帧数）
+@export var bullet_anim_frames: int = 1       ## 子弹动画帧数（水平排列的总帧数）
+@export var bullet_frame_duration: int = 1    ## 每帧持续的物理帧数（>1 = 慢动作，1 = 每物理帧切帧）
 
 
 # ═══════════════════════════════════════

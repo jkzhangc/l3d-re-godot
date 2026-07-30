@@ -333,13 +333,16 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 | 标题画面 | ✅ 可用 | RM2K3 风格窗口 + 光标动画 + 20 色表采样 + 粗体/描边/阴影 + **纵向渐变** |
 | 角色选择 | ⚠️ 占位 | 仅显示"开发中"文字 |
 | 主菜单 | ✅ 可用 | 物品/装备双面板 + 存档 + 退出 |
-| 玩家角色 | ✅ 可用 | 完整状态机（待机/行走/跑步/手枪/小刀）；外观/HP/音效由 CharacterData 驱动 |
-| 武器系统 | ✅ 可用 | 手枪/小刀/霰弹枪举起放下 + 攻击 + 弹夹/装填 + 拾取/替换/掉落 + **WeaponSlot 枚举**（主/副武器）+ **BulletData** 子弹列表 + **碰撞体方向旋转** |
+| 玩家角色 | ✅ 可用 | 完整状态机（待机/行走/跑步/手枪/小刀/霰弹枪/步枪）；外观/HP/音效由 CharacterData 驱动 |
+| 武器系统 | ✅ 可用 | 手枪/小刀/霰弹枪/步枪/冲锋枪举起放下 + 攻击 + 弹夹/装填 + 拾取/替换/掉落 + **WeaponSlot 枚举**（主/副武器）+ **BulletData** 子弹列表 + **FireMode**（TAP点按/HOLD连发）+ 碰撞体方向旋转 |
 | 装填系统 | ✅ 可用 | `PlayerReloadState`：NORMAL 模式（一次装满）+ SHOTGUN 模式（逐发循环+结束上膛）；装填动画 + 音效 + 共用等待帧 + 朝向锁定；**装填期间可移动**（仅位移，朝向不变） |
 | 攻击后动画 | ✅ 可用 | 攻击帧播完后可选播放 `post_attack_char_sequence` + `post_attack_sound`，再切回武器举起 |
-| 霰弹枪 | ✅ 可用 | `weapon_shotgun.tres`，3发散射 + SHOTGUN 逐发装填；复用 Pistol 状态脚本，纯数据驱动 |
+| 霰弹枪 | ✅ 可用 | `weapon_shotgun.tres`，3发散射 + 穿透(2) + 击退 + SHOTGUN 逐发装填 + 攻击后动画；复用 Pistol 状态脚本，纯数据驱动 |
+| 步枪 | ✅ 可用 | `weapon_rifle.tres`，攻击力 30 + HOLD 按住连发 + 30发弹夹 + ammo_rifle；复用 Pistol 状态脚本 |
+| 冲锋枪 | ✅ 可用 | `weapon_smg.tres`，攻击力 20 + HOLD 按住连发 + 30发弹夹 + ammo_smg + 硬直 0.1s；与步枪共用 Rifle 状态 |
 | 子弹实体 | ✅ 可用 | Node2D + Sprite2D + Area2D（collision_mask=24 层4+5）+ **发射者排除** + **目标永久去重** + **尸体穿透** + 碰撞矩形随方向旋转（Area2D 节点偏移到精灵中心再旋转，避免 offset 被旋转带偏）+ debug 可视化（TAB 青色绘制） |
-| 敌人 AI | ✅ 可用 | 状态机（待机/发现/追击/攻击/**击退**/死亡/爆头）+ **受击碰撞体**（HurtArea）+ 暴击率判定 + 攻击矩形拆分：`attack_range`+偏移（触发区，TAB **青色**）、`attack_hit_range`+偏移（判定区，TAB **橙红**），均跟随朝向旋转，统一投影法检测 |
+| 敌人 AI | ✅ 可用 | 状态机（待机/发现/追击(**A\*寻路**)/攻击/**击退**/硬直/死亡/爆头）+ **受击碰撞体**（HurtArea）+ 暴击率判定 + 攻击矩形拆分；**A\***：TileMapLayer 格子可通行性 + 八方向搜索 + 共线平滑 + 推离墙壁 + 降级模式 + 失败退避 + 实体障碍(敌人互绕+多人接口) + static 地图缓存共享 + TAB 调试可视化(路径线/红绿格子) |
+| 寻路系统 | ✅ 可用 | 详见下文「敌人 A* 寻路系统」 |
 | 死亡系统 | ✅ 可用 | 死亡精灵 + 渐黑遮罩（CanvasLayer）+ 自动重载存档；黑屏时长（淡入/全黑等待）与死亡音乐音量均在 Global 单例可配 |
 | 角色参数 | ✅ 可用 | CharacterData 资源统一管理行走图/HP/音效，player.gd 通过 `current_character` 引用 |
 | 地图编辑 | ✅ 可用 | 运行时图块编辑器 + TileSet 生成器 |
@@ -412,13 +415,23 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 | `pickup_step_frames` | Array[int] | `[1, 0, 1, 2]` | 踏步帧序列（与玩家行走帧一致） |
 | `pickup_step_duration` | float | 0.25 | 每帧持续时间（秒） |
 | `pickup_animated` | bool | true | 是否启用踏步动画（关闭=静态站立帧） |
+| `hold_time` | float | 1.2 | 按住替换所需时长（秒） |
+| `hold_indicator_enabled` | bool | true | 是否启用按住进度指示器（圆环填充动画） |
+| `hold_indicator_radius` | float | 18.0 | 指示器圆环半径（像素） |
+| `hold_indicator_thickness` | float | 3.0 | 圆环线宽（像素） |
+| `hold_indicator_offset` | Vector2 | (0, -48) | 指示器位置偏移（相对拾取物原点） |
+| `hold_indicator_color` | Color | 金色 (1, 0.9, 0.2) | 进度填充颜色 |
+| `hold_indicator_bg_color` | Color | 暗色半透明 | 背景圆环颜色 |
+| `hold_indicator_fade_speed` | float | 5.0 | 淡入淡出速度（alpha/秒） |
 
 **渲染公式**：`x = char_col * 144 + frame * 48`，`y = char_row * 256 + direction * 64`
 
 **拾取逻辑**：
 - 该槽位为空 → 自动拾取装备
-- 槽位已有武器 → 按住确定键（Space/Z）2 秒替换
+- 槽位已有武器 → 按住确定键（Space/Z）替换（默认 1.2 秒，`hold_time` 可配）
+- **按住进度指示器**：按住时拾取物上方显示金色圆环顺时针填充，淡入淡出动画（`hold_indicator_*` 系列参数可配，`hold_indicator_enabled=false` 可关闭）
 - **不再限制武器举起/攻击状态**（`_can_hold_pickup()` 仅检查玩家是否在范围内）
+- **拾取范围内禁止攻击**：玩家进入拾取物范围时设置 `_near_pickup` 标志，武器 READY 状态检测到此标志后跳过攻击触发，确保按住替换不被攻击动画打断
 
 **替换掉落**（`_drop_weapon()`）：
 - 旧武器生成为新的 WeaponPickup，掉落在玩家脚下
@@ -451,8 +464,9 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 
 | 分组 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| 外观 | `bullet_texture` | Texture2D | — | 子弹精灵表 |
-| | `bullet_char_idx` | int | 0 | 精灵表中的角色索引 |
+| 外观 | `bullet_texture` | Texture2D | — | 子弹精灵图（水平帧条，单帧宽=图宽/动画帧数） |
+| | `bullet_anim_frames` | int | 1 | 水平排列的动画帧数 |
+| | `bullet_frame_duration` | int | 1 | 每帧持续的物理帧数 |
 | 弹道 | `speed` | float | 300.0 | 飞行速度 |
 | | `max_range` | float | 300.0 | 最大飞行距离 |
 | | `damage` | float | 0.0 | 子弹伤害（0=使用武器 attack_power） |
@@ -479,10 +493,12 @@ godot --headless --export-release "Windows Desktop" build/game.exe
 
 **`script/bullet.gd`** — `class_name Bullet extends Node2D`，运行时子弹节点。由 `PlayerPistolAttackState._fire_bullet()` 从 `object/bullet.tscn` 实例化。
 
+**渲染方式**：单张水平帧条图片（`art/Barrages/`），均分为 `bullet_anim_frames` 列。每帧宽 = 图宽 / 帧数，帧 X = `当前帧索引 × 单帧宽`。精灵旋转跟随飞行方向（图片默认朝 RIGHT = 0°）。
+
 **场景结构**：
 ```
 Bullet (Node2D)
-├── Sprite2D (pos 0,-5)  ← VX Ace 精灵，region_rect 按方向选帧
+├── Sprite2D (pos 0,-5)  ← 水平帧条精灵，region_rect 按动画帧选列
 ├── Area2D                ← collision_mask=24（层4+层5），rotation 跟随方向
 │   └── CollisionShape2D  ← RectangleShape2D，尺寸/偏移可由 BulletData 覆盖
 ```
@@ -491,8 +507,8 @@ Bullet (Node2D)
 
 | 方法 | 说明 |
 |------|------|
-| `setup(params)` | 从字典批量设置参数（direction/speed/damage/penetration/collision_size/collision_offset/**knockback_force/knockback_stun/shooter** 等） |
-| `_refresh_sprite()` | 根据飞行方向选 4 方向精灵帧 + **rotation 设为 `direction.angle() - 基础朝向角`**（精灵与飞行方向对齐） |
+| `setup(params)` | 从字典批量设置参数（direction/speed/damage/penetration/collision_size/collision_offset/**anim_frames/frame_duration**/knockback_force/knockback_stun/shooter 等） |
+| `_refresh_sprite()` | 水平帧条渲染：`frame_w = tex_w / anim_frames`，`region_rect = Rect2(frame * frame_w, 0, frame_w, tex_h)` + **sprite.rotation = direction.angle() - PI/2**（纹理默认朝 DOWN） |
 | `_apply_collision_shape()` | 设置碰撞矩形尺寸；将 `collision_offset` 应用到 `Area2D.position`（而非 `CollisionShape2D.position`），使旋转围绕精灵中心而非 bullet 原点 |
 | `_update_area_rotation()` | 将 `Area2D.rotation` 设为 `direction.angle()`，碰撞矩形对齐飞行方向 |
 | `_hit(target)` | 伤害判定 + **目标解析**（area→parent）+ **永久去重**（`_hit_targets` Dictionary）+ **发射者排除** + **尸体跳过** + 暴击掷骰 + 击退参数传递 + 传入 `source_id=get_instance_id()` 供目标侧去重 + 播放命中特效/音效 |
@@ -661,6 +677,42 @@ DamageNumber.spawn(global_position, damage, get_tree().current_scene)
 **调用位置**：
 - `player.gd:take_damage()` — 玩家受伤弹出红色调数字
 - `enemy.gd:take_damage()` — 敌人受伤弹出白/金色（爆头）数字
+
+### 敌人 A* 寻路系统
+
+**`script/enemy/EnemyChaseState.gd`** — 基于 TileMapLayer 格子数据的 A* 寻路，替代之前的简单追击。
+
+**网格构建**：
+- 格子大小 32×32（与 TileSet 一致）
+- `GroundLayer` 有 tile → 可行走（地板），`DecorLayer` 有 tile → 不可行走（墙壁）
+- 地图缓存为 `static var _tile_walk_cache`，所有敌人共享，全图只查一次
+
+**A* 搜索**：
+- 八方向邻居 + 对角线穿墙防护（两侧邻格必须都可通行）
+- Octile 距离启发式（对角线 cost=√2），最大 2000 次迭代
+- 路径平滑：去除共线中间点 → 推离墙壁（`_push_from_walls`，四方向+对角线墙角检测，`WALL_PUSH=14px`）
+
+**路径跟踪**：
+- 敌人沿路径点移动，到达 `WAYPOINT_RADIUS=10px` 内切下一点
+- 跳过第一个路径点（敌人当前格子中心，防回头）
+- 每 `REPATH_INTERVAL=0.5s` 重算路径
+- 移动统一走 `_move_with_remainder_slide`：碰撞时用剩余速度沿墙滑动，总移动量 ≤ speed×delta
+
+**实体障碍（敌人互绕）**：
+- 用 `intersect_point`（collision_mask=8, enemy 层）实时检测其他敌人占据的格子
+- 多人模式接口：`extra_obstacle_nodes: Array[Node2D]`，外部注册玩家 CharacterBody2D
+- 实体检测不缓存（每帧实时），地图层永久缓存
+
+**降级模式**：
+- 连续寻路失败 `FALLBACK_THRESHOLD=2` 次 → 切到直接追击（朝玩家直走+滑墙），避免 A* 空转卡顿
+- 每 `REPATH_FAIL_INTERVAL=3s` 检查玩家是否移动超过 `REPATH_FAIL_MOVE_DIST=48px`，满足则尝试恢复 A*
+- 无路径累计 5 次 → 停止移动原地等待，有路径后自动恢复
+
+**TAB 调试可视化**：
+- 绿色连线 + 绿圈 = A* 路径，黄色大圈 = 当前目标点
+- 蓝色框 = 起点格子，红色框 = 终点格子
+- 绿色半透明 = 已探测可通行格子，红色半透明+❌ = 墙壁格子
+- 左上角状态文字：`OK:N` 或 `FAIL(iters:N)`
 
 ### 相机跟随与地图边界
 

@@ -85,6 +85,7 @@ var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
+var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var current_hp: float = 200.0
 
 ## 死亡相关

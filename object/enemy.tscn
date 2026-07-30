@@ -28,6 +28,7 @@ collision_mask = 15
 platform_floor_layers = 4294967040
 script = ExtResource("1")
 max_hp = 200.0
+move_speed = 100.0
 attack_range = Vector2(50, 32)
 attack_range_forward_offset = 30.0
 attack_hit_range = Vector2(50, 32)
@@ -38,7 +39,6 @@ hurt_sound = ExtResource("3_vfd3m")
 death_sound = ExtResource("4_jpigs")
 attack_sound = ExtResource("5_vunvt")
 discover_sound = ExtResource("6_jpigs")
-attack_effect_anim = "anim_effect_hit.tscn"
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=797700597]
 position = Vector2(0, -16)

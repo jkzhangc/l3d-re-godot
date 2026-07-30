@@ -76,6 +76,17 @@ func process_update(delta: float) -> void:
 			if move_dir != Vector2.ZERO:
 				character.update_facing(move_dir)
 
+			# 切换到主武器（已是主武器 → 重进举起状态刷新）
+			if Input.is_action_just_pressed("主武器键"):
+				if Global.switch_to_slot("primary"):
+					var new_state: String = Global.get_active_weapon_state_name()
+					if not new_state.is_empty():
+						transition_requested.emit(new_state)
+				else:
+					# 已在主武器槽 → 重新进入举起状态
+					transition_requested.emit("Pistol")
+				return
+
 			# 切换到副武器
 			if Input.is_action_just_pressed("副武器键"):
 				if Global.switch_to_slot("secondary"):
@@ -96,7 +107,9 @@ func process_update(delta: float) -> void:
 				_begin_lower()
 
 			if Input.is_action_just_pressed("确定键"):
-				transition_requested.emit("PistolAttack")
+				# 在拾取物范围内时不攻击，让拾取物处理按住替换
+				if not character._near_pickup:
+					transition_requested.emit("PistolAttack")
 
 			if Input.is_action_just_pressed("装填键"):
 				transition_requested.emit("Reload")
