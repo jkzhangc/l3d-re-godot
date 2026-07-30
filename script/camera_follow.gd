@@ -38,6 +38,7 @@ var _has_bounds: bool = false
 func _ready() -> void:
 	# 自动查找玩家
 	_target = _find_player()
+	print(_target)
 	_calc_bounds()
 
 

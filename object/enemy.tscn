@@ -17,7 +17,7 @@
 [ext_resource type="Script" uid="uid://bn41w43dadxis" path="res://script/enemy/EnemyHitstunState.gd" id="12"]
 
 [sub_resource type="RectangleShape2D" id="enemy_shape"]
-size = Vector2(24, 29)
+size = Vector2(20, 28)
 
 [sub_resource type="CircleShape2D" id="vision_shape"]
 radius = 200.0
@@ -47,7 +47,6 @@ region_enabled = true
 region_rect = Rect2(0, 0, 48, 64)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=786942456]
-position = Vector2(0, 2)
 shape = SubResource("enemy_shape")
 
 [node name="AnimationTimer" type="Timer" parent="." unique_id=2082223074]

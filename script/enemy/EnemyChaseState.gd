@@ -16,6 +16,7 @@ static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格
 var _cell_size: float = 32.0
 var _space_state: PhysicsDirectSpaceState2D = null
 var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer
+var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
 const REPATH_INTERVAL: float = 0.5          ## 正常重算间隔
 const REPATH_FAIL_INTERVAL: float = 3.0     ## 寻路失败后重试间隔（避免卡顿）
@@ -28,6 +29,13 @@ const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模
 
 func enter() -> void:
 	character.update_moving(true)
+	character.up_direction = Vector2.ZERO  # 俯视角
+	# 获取碰撞体半尺寸用于推墙计算
+	var col_shape: CollisionShape2D = character.get_node_or_null("CollisionShape2D")
+	if col_shape and col_shape.shape is RectangleShape2D:
+		_collision_half = (col_shape.shape as RectangleShape2D).size * 0.5
+	else:
+		_collision_half = Vector2(12, 14)  # 默认 24×28
 	_path = []
 	_path_idx = 0
 	_repath_timer = 0.0
@@ -41,6 +49,11 @@ func enter() -> void:
 	# 找到所有 TileMapLayer
 	_tilemaps.clear()
 	_find_all_tilemaps()
+	if _first_path:
+		var names: String = ""
+		for tm in _tilemaps:
+			names += tm.name + " "
+		print("[A*] 找到 TileMapLayer (%d 个): [%s]" % [_tilemaps.size(), names.strip_edges()])
 	# 注册调试绘制字段
 	character._debug_path = []
 	character._debug_path_idx = 0
@@ -123,7 +136,7 @@ func physics_update(delta: float) -> void:
 		if _last_failed:
 			_no_path_count += 1
 			if _no_path_count >= FALLBACK_THRESHOLD:
-				_fallback_mode = true  # 切到降级模式
+				_fallback_mode = true
 		else:
 			_no_path_count = 0
 		enemy._debug_path = _path
@@ -132,14 +145,14 @@ func physics_update(delta: float) -> void:
 		if Global.debug_visuals:
 			enemy.queue_redraw()
 
-	# ── 确定移动目标方向（所有模式统一走 _move_with_slide，速度一致）──
+	# ── 确定移动目标方向 ──
 	if _path.is_empty():
 		_move_direct(enemy, to_player, speed, delta)
 		return
 
 	_no_path_count = 0
 	while _path_idx < _path.size():
-		if enemy.global_position.distance_to(_path[_path_idx]) < WAYPOINT_RADIUS:
+		if enemy.global_position.distance_to(_path[_path_idx]) < 16.0:
 			_path_idx += 1
 		else:
 			break
@@ -150,11 +163,10 @@ func physics_update(delta: float) -> void:
 	else:
 		move_dir = (_path[_path_idx] - enemy.global_position).normalized()
 
+
 	character.update_facing_from_direction(move_dir)
-	_move_with_remainder_slide(character, move_dir, speed, delta)
+	_move_with_stuck_recovery(character, move_dir, speed, delta)
 
-
-# ═══════════════════════════════════════
 # 移动工具
 # ═══════════════════════════════════════
 
@@ -162,19 +174,26 @@ func _move_direct(enemy: Node2D, to_player: Vector2, speed: float, delta: float)
 	## 直接朝玩家移动（降级模式 / 无路径回退）
 	var move_dir: Vector2 = to_player.normalized()
 	character.update_facing_from_direction(move_dir)
-	_move_with_remainder_slide(character, move_dir, speed, delta)
+	_move_with_stuck_recovery(character, move_dir, speed, delta)
 
-
-func _move_with_remainder_slide(body: CharacterBody2D, move_dir: Vector2, speed: float, delta: float) -> void:
-	## 移动 + 碰撞时用剩余速度滑墙（总移动量 ≤ speed*delta）
-	var motion: Vector2 = move_dir * speed * delta
-	for _i in range(3):
-		var col: KinematicCollision2D = body.move_and_collide(motion)
+func _move_with_stuck_recovery(body: CharacterBody2D, move_dir: Vector2, speed: float, delta: float) -> void:
+	## 以撒风格：move_and_collide 滑墙（全速），卡住检测恢复
+	var prev_pos := body.global_position
+	var motion := move_dir * speed * delta
+	for _i in range(6):
+		var col := body.move_and_collide(motion)
 		if not col:
 			break
-		motion = col.get_remainder().slide(col.get_normal())
-		if motion.length() < 0.5:
+		# 全速滑墙：沿碰撞法线方向全速滑动
+		motion = motion.slide(col.get_normal()).normalized() * speed * delta
+		if motion.length() < 1.0:
 			break
+	# 卡住检测：位移不够 → 再追两步
+	if body.global_position.distance_to(prev_pos) < 1.5:
+		for _i in range(3):
+			body.move_and_collide(move_dir * speed * delta)
+			if body.global_position.distance_to(prev_pos) > 1.5:
+				break
 
 
 # ═══════════════════════════════════════
@@ -184,7 +203,7 @@ func _move_with_remainder_slide(body: CharacterBody2D, move_dir: Vector2, speed:
 func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	var start: Vector2i = _world_to_grid(from)
 	var end: Vector2i = _world_to_grid(to)
-	var start_ok: bool = _is_walkable(start)
+	var start_ok: bool = _is_walkable_no_entity(start)
 	var end_ok: bool = _is_walkable(end)
 
 	# 存储调试信息
@@ -265,10 +284,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 			return smoothed
 
 		for neighbor in _get_neighbors(current):
-			var dx: int = neighbor.x - current.x
-			var dy: int = neighbor.y - current.y
-			var move_cost: float = 1.0 if dx == 0 or dy == 0 else 1.41421356
-			var tent_g: float = g_score[current] + move_cost
+			var tent_g: float = g_score[current] + 1.0
 
 			if tent_g < g_score.get(neighbor, 1e9):
 				came_from[neighbor] = current
@@ -293,53 +309,49 @@ func _reconstruct_path(came_from: Dictionary, current: Vector2i) -> Array[Vector
 
 
 func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
-	## 共线简化 → 转世界坐标 → 推离墙壁
+	## 共线简化 → 转世界坐标 → 碰撞体感知推墙 + 轴对齐
+	var world := _to_world_array(grid_path)
 	if grid_path.size() <= 2:
-		return _push_from_walls(_to_world_array(grid_path))
+		return _push_from_walls(world)
 
-	var world: Array[Vector2] = []
-	world.append(_grid_to_world(grid_path[0]))
-
+	var keypoints: Array[Vector2i] = [grid_path[0]]
 	for i in range(1, grid_path.size() - 1):
 		var prev: Vector2i = grid_path[i - 1]
 		var curr: Vector2i = grid_path[i]
 		var next_: Vector2i = grid_path[i + 1]
-		var d1: Vector2i = curr - prev
-		var d2: Vector2i = next_ - curr
-		if d1.x * d2.y != d1.y * d2.x:
-			world.append(_grid_to_world(curr))
+		if (curr - prev) != (next_ - curr):
+			keypoints.append(curr)
+	keypoints.append(grid_path[grid_path.size() - 1])
 
-	world.append(_grid_to_world(grid_path[grid_path.size() - 1]))
+	world = _to_world_array(keypoints)
 	return _push_from_walls(world)
 
 
-const WALL_PUSH: float = 14.0  ## 推离墙壁的像素距离（32格-24碰撞体=8, 需 >4 才有 clearance）
+
+
 
 func _push_from_walls(world_path: Array[Vector2]) -> Array[Vector2]:
-	## 将路径点从相邻墙壁推开，避免碰撞体擦边卡住
+	## 碰撞体感知推墙：按敌人碰撞体半尺寸推开，自由方向不限制
+	if world_path.is_empty():
+		return world_path
+
+	var push_x := _collision_half.x + 4.0
+	var push_y := _collision_half.y + 4.0
 	var result: Array[Vector2] = []
+
 	for wp in world_path:
 		var gp: Vector2i = _world_to_grid(wp)
-		var offset := Vector2.ZERO
-		# 四方向邻居
+		var push := Vector2.ZERO
 		if not _is_tile_walkable(Vector2i(gp.x - 1, gp.y)):
-			offset.x += WALL_PUSH
+			push.x += push_x
 		if not _is_tile_walkable(Vector2i(gp.x + 1, gp.y)):
-			offset.x -= WALL_PUSH
+			push.x -= push_x
 		if not _is_tile_walkable(Vector2i(gp.x, gp.y - 1)):
-			offset.y += WALL_PUSH
+			push.y += push_y
 		if not _is_tile_walkable(Vector2i(gp.x, gp.y + 1)):
-			offset.y -= WALL_PUSH
-		# 对角线邻居也检查（墙角最容易卡）
-		if not _is_tile_walkable(Vector2i(gp.x - 1, gp.y - 1)):
-			offset += Vector2(WALL_PUSH * 0.5, WALL_PUSH * 0.5)
-		if not _is_tile_walkable(Vector2i(gp.x + 1, gp.y - 1)):
-			offset += Vector2(-WALL_PUSH * 0.5, WALL_PUSH * 0.5)
-		if not _is_tile_walkable(Vector2i(gp.x - 1, gp.y + 1)):
-			offset += Vector2(WALL_PUSH * 0.5, -WALL_PUSH * 0.5)
-		if not _is_tile_walkable(Vector2i(gp.x + 1, gp.y + 1)):
-			offset += Vector2(-WALL_PUSH * 0.5, -WALL_PUSH * 0.5)
-		result.append(wp + offset)
+			push.y -= push_y
+		result.append(wp + push)
+
 	return result
 
 
@@ -354,12 +366,23 @@ func _is_tile_walkable(gp: Vector2i) -> bool:
 		if td == null:
 			continue
 		var nl := tm.name.to_lower()
-		if "decor" in nl or "wall" in nl:
+		if "upper" in nl:
+			continue  # UpperLayer 上层装饰，不参与寻路
+		if "wall" in nl:
 			w = false; break
+		if "decor" in nl:
+			if _tile_has_collision(td):
+				w = false; break
+			continue
 		if "ground" in nl or "floor" in nl:
 			w = true
 	_tile_walk_cache[gp] = w
 	return w
+
+
+func _tile_has_collision(td: TileData) -> bool:
+	## 检查 TileData 是否有碰撞体（physics layer 0）
+	return td.get_collision_polygons_count(0) > 0
 
 
 func _to_world_array(grid_path: Array[Vector2i]) -> Array[Vector2]:
@@ -370,25 +393,16 @@ func _to_world_array(grid_path: Array[Vector2i]) -> Array[Vector2]:
 
 
 func _heuristic(a: Vector2i, b: Vector2i) -> float:
-	var dx: int = absi(a.x - b.x)
-	var dy: int = absi(a.y - b.y)
-	return float(maxi(dx, dy)) + 0.41421356 * float(mini(dx, dy))
+	## 曼哈顿距离（四方向寻路的标准启发式）
+	return float(absi(a.x - b.x) + absi(a.y - b.y))
 
 
 func _get_neighbors(pos: Vector2i) -> Array[Vector2i]:
+	## 四方向邻居（禁止斜线，路径全部轴对齐）
 	var neighbors: Array[Vector2i] = []
-	for dx in [-1, 0, 1]:
-		for dy in [-1, 0, 1]:
-			if dx == 0 and dy == 0:
-				continue
-			var n: Vector2i = Vector2i(pos.x + dx, pos.y + dy)
-			if not _is_walkable(n):
-				continue
-			if dx != 0 and dy != 0:
-				if not _is_walkable(Vector2i(pos.x + dx, pos.y)):
-					continue
-				if not _is_walkable(Vector2i(pos.x, pos.y + dy)):
-					continue
+	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
+		var n: Vector2i = pos + d
+		if _is_walkable(n):
 			neighbors.append(n)
 	return neighbors
 
@@ -427,6 +441,31 @@ func _grid_to_world(gp: Vector2i) -> Vector2:
 	return Vector2(gp.x * _cell_size + _cell_size / 2.0, gp.y * _cell_size + _cell_size / 2.0)
 
 
+func _is_walkable_no_entity(gp: Vector2i) -> bool:
+	## 仅查地图层（不含实体障碍），用于起点/终点检查
+	if _tile_walk_cache.has(gp):
+		return _tile_walk_cache[gp]
+	# 首次查询 — 同 _is_walkable 的地图层逻辑
+	var walkable: bool = false
+	for tm in _tilemaps:
+		var td: TileData = tm.get_cell_tile_data(gp)
+		if td == null:
+			continue
+		var name_lower: String = tm.name.to_lower()
+		if "upper" in name_lower:
+			continue  # UpperLayer 上层装饰，不参与寻路
+		if "wall" in name_lower:
+			walkable = false; break
+		if "decor" in name_lower:
+			if _tile_has_collision(td):
+				walkable = false; break
+			continue
+		if "ground" in name_lower or "floor" in name_lower:
+			walkable = true
+	_tile_walk_cache[gp] = walkable
+	return walkable
+
+
 func _is_walkable(gp: Vector2i) -> bool:
 	## 综合判断：1.地图tile(缓存) 2.实体障碍(每帧实时，因敌人/玩家会移动)
 	if _tile_walk_cache.has(gp):
@@ -445,9 +484,19 @@ func _is_walkable(gp: Vector2i) -> bool:
 			continue
 		var name_lower: String = tm.name.to_lower()
 		found_layers += tm.name + ","
-		if "decor" in name_lower or "wall" in name_lower:
+		if "upper" in name_lower:
+			continue  # UpperLayer 上层装饰，不参与寻路
+		if "wall" in name_lower:
+			# Wall 层始终阻挡
 			walkable = false
 			break
+		if "decor" in name_lower:
+			# Decor 层：检查图块是否真的有碰撞体，无碰撞=纯装饰=不挡路
+			if _tile_has_collision(td):
+				walkable = false
+				break
+			# 无碰撞的装饰图块：忽略，继续检查其他层
+			continue
 		if "ground" in name_lower or "floor" in name_lower:
 			walkable = true
 

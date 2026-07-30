@@ -120,6 +120,7 @@ func _ready() -> void:
 	_facing = initial_facing
 	# 俯视角：浮动模式，所有碰撞都是墙壁
 	motion_mode = MOTION_MODE_FLOATING
+	# 敌人之间正常碰撞（move_and_collide 滑墙会自然推开）
 	_update_facing_sprite()
 
 	# 加入敌人组（用于友军伤害等场景查找）

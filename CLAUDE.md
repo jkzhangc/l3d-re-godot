@@ -67,7 +67,8 @@
 ## 快速参考（开发速记）
 
 - **场景入口**：`scene/main.tscn`
-- **默认测试地图**：`scene/maps/test.tscn`（含完整 TileMap、玩家、敌人、HUD、相机跟随）
+- **关卡场景标准**：`scene/maps/突袭-第一关-开头安全屋-户外.tscn`（开局安全屋）。GroundLayer→DecorLayer(y_sort)→UpperLayer(y_sort,上层装饰)。玩家/敌人必须是 **DecorLayer 子节点**。UpperLayer 不参与 A\* 寻路。详见 `memory/scene-conventions.md`
+- **旧测试地图**：`scene/maps/test.tscn`
 - **菜单键**：`X` / `Esc` 打开主菜单（继续游戏/设置/退出游戏）。**武器举起/攻击状态下菜单键被屏蔽**，取消键用于固定朝向。
 - **设置系统**：标题画面 + 游戏内菜单均有设置选项。可调音乐音量/音效音量（0–100%、蓝色音量条）、固定朝向模式（切换式/按住式）。设置保存到 `config.json`。
 - **音频总线**：Global 启动时自动创建 `SFX` / `Music` 总线。SFX 音效路由到 SFX 总线，BGM/死亡音乐路由到 Music 总线，音量通过 `AudioServer.set_bus_volume_db()` 控制。
@@ -680,33 +681,40 @@ DamageNumber.spawn(global_position, damage, get_tree().current_scene)
 
 ### 敌人 A* 寻路系统
 
-**`script/enemy/EnemyChaseState.gd`** — 基于 TileMapLayer 格子数据的 A* 寻路，替代之前的简单追击。
+**`script/enemy/EnemyChaseState.gd`** — 基于 TileMapLayer 格子数据的 A* 寻路（2026-07-30 重写）。
 
 **网格构建**：
 - 格子大小 32×32（与 TileSet 一致）
-- `GroundLayer` 有 tile → 可行走（地板），`DecorLayer` 有 tile → 不可行走（墙壁）
 - 地图缓存为 `static var _tile_walk_cache`，所有敌人共享，全图只查一次
+- **层识别规则**（按 TileMapLayer 节点名）：
+  - 名含 `"upper"` → 跳过（上层装饰，不参与寻路）
+  - 名含 `"wall"` → 始终不可行走
+  - 名含 `"decor"` → 检查 TileData 碰撞体（`get_collision_polygons_count(0) > 0`），有碰撞才阻挡，无碰撞视为透明装饰
+  - 名含 `"ground"` / `"floor"` → 可行走
 
 **A* 搜索**：
-- 八方向邻居 + 对角线穿墙防护（两侧邻格必须都可通行）
-- Octile 距离启发式（对角线 cost=√2），最大 2000 次迭代
-- 路径平滑：去除共线中间点 → 推离墙壁（`_push_from_walls`，四方向+对角线墙角检测，`WALL_PUSH=14px`）
+- **四方向邻居**（上下左右，禁止斜线），曼哈顿距离启发式，统一代价 1.0，最大 2000 次迭代
+- 路径平滑：去除连续同方向中间点，只保留方向变化点（拐弯点）
+- **碰撞体感知推墙**（`_push_from_walls`）：每个路径点按敌人碰撞体半尺寸 + 4px 推开，自由方向不限制
+- 起点检测使用 `_is_walkable_no_entity()`（跳过实体障碍检查，避免敌人重合时寻路失败）
+
+**移动**（以撒风格）：
+- `_move_with_stuck_recovery`：`move_and_collide` 全速滑墙（slide 后重新归一化到全速），最多 6 次迭代
+- 卡住检测：位移 < 1.5px 时追加 3 次硬推恢复
+- 敌人之间正常物理碰撞，滑墙自然推开
 
 **路径跟踪**：
-- 敌人沿路径点移动，到达 `WAYPOINT_RADIUS=10px` 内切下一点
-- 跳过第一个路径点（敌人当前格子中心，防回头）
+- 距离判定推进：`WAYPOINT_RADIUS=16px` 内切下一点
 - 每 `REPATH_INTERVAL=0.5s` 重算路径
-- 移动统一走 `_move_with_remainder_slide`：碰撞时用剩余速度沿墙滑动，总移动量 ≤ speed×delta
 
 **实体障碍（敌人互绕）**：
 - 用 `intersect_point`（collision_mask=8, enemy 层）实时检测其他敌人占据的格子
-- 多人模式接口：`extra_obstacle_nodes: Array[Node2D]`，外部注册玩家 CharacterBody2D
+- 多人模式接口：`extra_obstacle_nodes: Array[Node2D]`
 - 实体检测不缓存（每帧实时），地图层永久缓存
 
 **降级模式**：
-- 连续寻路失败 `FALLBACK_THRESHOLD=2` 次 → 切到直接追击（朝玩家直走+滑墙），避免 A* 空转卡顿
+- 连续寻路失败 `FALLBACK_THRESHOLD=2` 次 → 切到直接追击 + 滑墙
 - 每 `REPATH_FAIL_INTERVAL=3s` 检查玩家是否移动超过 `REPATH_FAIL_MOVE_DIST=48px`，满足则尝试恢复 A*
-- 无路径累计 5 次 → 停止移动原地等待，有路径后自动恢复
 
 **TAB 调试可视化**：
 - 绿色连线 + 绿圈 = A* 路径，黄色大圈 = 当前目标点
