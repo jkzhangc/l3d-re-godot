@@ -15,7 +15,7 @@ var _fallback_mode: bool = false  ## 降级模式：连续失败后切到直接�
 static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格子缓存
 var _cell_size: float = 32.0
 var _space_state: PhysicsDirectSpaceState2D = null
-var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer
+static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
 const REPATH_INTERVAL: float = 0.5          ## 正常重算间隔
@@ -29,7 +29,7 @@ const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模
 
 func enter() -> void:
 	character.update_moving(true)
-	character.up_direction = Vector2.ZERO  # 俯视角
+# 注：enemy 使用 MOTION_MODE_FLOATING，up_direction 无需设置
 	# 获取碰撞体半尺寸用于推墙计算
 	var col_shape: CollisionShape2D = character.get_node_or_null("CollisionShape2D")
 	if col_shape and col_shape.shape is RectangleShape2D:
@@ -45,11 +45,9 @@ func enter() -> void:
 	_fallback_mode = false
 	_space_state = null
 	_first_path = true
-	_tile_walk_cache.clear()
-	# 找到所有 TileMapLayer
-	_tilemaps.clear()
-	_find_all_tilemaps()
-	if _first_path:
+	# 找到所有 TileMapLayer（static 缓存，只在首次进入时搜索并打印）
+	if _tilemaps.is_empty():
+		_find_all_tilemaps()
 		var names: String = ""
 		for tm in _tilemaps:
 			names += tm.name + " "
@@ -212,7 +210,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	character._debug_start_walkable = start_ok
 	character._debug_end_walkable = end_ok
 
-	if _first_path or true:
+	if _first_path:
 		print("[A*] ═══ 寻路开始 ═══")
 		print("[A*] 敌人世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [from.x, from.y, str(start), str(start_ok)])
 		print("[A*] 玩家世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [to.x, to.y, str(end), str(end_ok)])

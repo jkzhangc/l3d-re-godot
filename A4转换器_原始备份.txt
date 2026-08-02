@@ -1,0 +1,147 @@
+# va图块转new格式
+
+# 单图块大小
+$tile_width = 32
+$tile_height = 32
+
+$tile_w_index = 5 # 要转换的图块组横索引
+$tile_h_index = 1 # 要转换的图块组纵索引
+sprite = Sprite.new
+sprite.oy = 128/2
+sprite.y = Graphics.height/2
+sprite.bitmap = Bitmap.new(544,128)
+sprite.bitmap.draw_text(sprite.bitmap.rect, "正在转换", 1)
+
+newbitmap = Bitmap.new(512,480)
+bitmap = Cache.tileset("TileA4-Tw.png")
+Graphics.update
+
+# 屋顶单个
+x,y = 0,0
+tilex = 64*$tile_w_index
+tiley = 160*$tile_h_index
+p tilex,tiley
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶四个边角
+x += 32
+tilex += 32
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶左上
+x = 0
+y += 32
+tilex -= 32
+tiley += 32
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶中上
+x += 32
+tilex += 16
+src_rect = Rect.new(tilex,tiley,16,32)
+newbitmap.blt(x, y, bitmap, src_rect)
+x += 16
+tilex += 16
+src_rect = Rect.new(tilex,tiley,16,32)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶右上
+x += 16
+#~ tilex += 16
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶左中
+x = 0
+y += 32
+tilex -= 32
+tiley += 16
+src_rect = Rect.new(tilex,tiley,$tile_width,16)
+newbitmap.blt(x, y, bitmap, src_rect)
+y += 16
+tiley += 16
+src_rect = Rect.new(tilex,tiley,$tile_width,16)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶左下
+y += 16
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶中下
+x += 32
+tilex += 16
+src_rect = Rect.new(tilex,tiley,16,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+x += 16
+tilex += 16
+src_rect = Rect.new(tilex,tiley,16,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+
+# 屋顶右下
+x += 16
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶右中
+y -= 16
+src_rect = Rect.new(tilex,tiley,$tile_width,16)
+newbitmap.blt(x, y, bitmap, src_rect)
+y -= 16
+tiley -= 16
+src_rect = Rect.new(tilex,tiley,$tile_width,16)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 屋顶中
+tilex -= 16
+x -= 32
+p "屋顶中",tilex,tiley
+src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+
+# 开始画边角各种形态
+#边角左上 边角右上 边角左下 边角右下
+x = 32*3
+y = 32
+tilex = 64*$tile_w_index
+tiley = 160*$tile_h_index
+tilex += 32
+src_rect = Rect.new(64*$tile_w_index+16,160*$tile_h_index+48,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+src_rect = Rect.new(tilex,tiley,16,16)
+newbitmap.blt(x, y, bitmap, src_rect)
+x += 32
+src_rect = Rect.new(64*$tile_w_index+16,160*$tile_h_index+48,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+src_rect = Rect.new(tilex+16,tiley,16,16)
+newbitmap.blt(x+16, y, bitmap, src_rect)
+x -= 32
+y += 32
+src_rect = Rect.new(64*$tile_w_index+16,160*$tile_h_index+48,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+src_rect = Rect.new(tilex,tiley+16,16,16)
+newbitmap.blt(x, y+16, bitmap, src_rect)
+x += 32
+src_rect = Rect.new(64*$tile_w_index+16,160*$tile_h_index+48,$tile_width,$tile_height)
+newbitmap.blt(x, y, bitmap, src_rect)
+src_rect = Rect.new(tilex+16,tiley+16,16,16)
+newbitmap.blt(x+16, y+16, bitmap, src_rect)
+
+# 之后就是有不同边角的情况。。
+
+# 将newbitmap保存为png。
+surface = newbitmap.create_surface
+if surface
+  surface.save_png("A4-new.png")
+end
+
+loop do
+  sprite.bitmap = newbitmap
+  Graphics.update
+  break if Input.press?(:C)
+end
+exit
