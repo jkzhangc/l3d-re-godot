@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://bqvtvivtqvut" path="res://art/Animations/血＋.png" id="2_mdxay"]
 
 [node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
 script = ExtResource("1_c2k45")
 texture = ExtResource("2_mdxay")
 fps = 20.5

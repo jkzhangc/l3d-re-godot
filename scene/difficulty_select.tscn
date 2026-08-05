@@ -1,0 +1,165 @@
+[gd_scene format=3 uid="uid://bxhqo3l8o2dp1"]
+
+[ext_resource type="Script" uid="uid://cbby2o7kmem3" path="res://script/difficulty_select.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://dksnwuxdiamf4" path="res://art/System/Window background color.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://cnkb288dlwahv" path="res://art/System/Window frame.png" id="3"]
+[ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="4"]
+
+[node name="DifficultySelect" type="Control" unique_id=2057074371]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+cursor_y_offset = 0.0
+
+[node name="MenuWindow" type="Control" parent="." unique_id=1078070743]
+anchors_preset = 0
+offset_left = 160.0
+offset_top = 80.0
+offset_right = 480.0
+offset_bottom = 360.0
+
+[node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=2074435951]
+layout_mode = 0
+offset_right = 320.0
+offset_bottom = 280.0
+mouse_filter = 2
+texture = ExtResource("2")
+
+[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow" unique_id=1042586079]
+layout_mode = 0
+offset_right = 320.0
+offset_bottom = 280.0
+texture = ExtResource("3")
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="TitleLabel" type="Control" parent="MenuWindow" unique_id=1060944889]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 10.0
+offset_right = 104.0
+offset_bottom = 43.0
+script = ExtResource("4")
+text = "选择难度"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="Separator" type="ColorRect" parent="MenuWindow" unique_id=1692186805]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 38.0
+offset_right = 304.0
+offset_bottom = 39.0
+color = Color(0.5, 0.5, 0.7, 0.5)
+
+[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow" unique_id=19898106]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 46.0
+offset_right = 216.0
+offset_bottom = 78.0
+patch_margin_left = 16
+patch_margin_top = 16
+patch_margin_right = 16
+patch_margin_bottom = 16
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[node name="Item0" type="Control" parent="MenuWindow" unique_id=1486056565]
+anchors_preset = 0
+offset_left = 28.0
+offset_top = 54.0
+offset_right = 82.0
+offset_bottom = 81.0
+script = ExtResource("4")
+text = "  简单"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="Item1" type="Control" parent="MenuWindow" unique_id=1808363271]
+anchors_preset = 0
+offset_left = 28.0
+offset_top = 86.0
+offset_right = 82.0
+offset_bottom = 113.0
+script = ExtResource("4")
+text = "  普通"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="Item2" type="Control" parent="MenuWindow" unique_id=592562561]
+anchors_preset = 0
+offset_left = 28.0
+offset_top = 118.0
+offset_right = 82.0
+offset_bottom = 145.0
+script = ExtResource("4")
+text = "  困难"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="Item3" type="Control" parent="MenuWindow" unique_id=2095240893]
+anchors_preset = 0
+offset_left = 28.0
+offset_top = 150.0
+offset_right = 82.0
+offset_bottom = 177.0
+script = ExtResource("4")
+text = "  专家"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="DescPanel" type="Panel" parent="MenuWindow" unique_id=1676857120]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 182.0
+offset_right = 304.0
+offset_bottom = 232.0
+
+[node name="DescLabel" type="Label" parent="MenuWindow/DescPanel" unique_id=264734443]
+layout_mode = 0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = 278.0
+offset_bottom = 44.0
+text = "标准难度，推荐首次挑战。"
+autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="MenuWindow" unique_id=431787287]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 256.0
+offset_right = 16.0
+offset_bottom = 256.0
+text = "↑↓选择  确定确认  Esc返回角色选择"

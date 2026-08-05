@@ -1,10 +1,107 @@
-[gd_scene load_steps=2 format=3 uid="uid://c8k1qwl0vsqkb"]
+[gd_scene format=3 uid="uid://c8k1qwl0vsqkb"]
 
-[ext_resource type="Script" path="res://script/character_select.gd" id="1"]
+[ext_resource type="Script" uid="uid://bgp0msc6o3kad" path="res://script/character_select_menu.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://dksnwuxdiamf4" path="res://art/System/Window background color.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://cnkb288dlwahv" path="res://art/System/Window frame.png" id="3"]
+[ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="4"]
 
-[node name="CharacterSelect" type="Control"]
+[node name="CharacterSelect" type="Control" unique_id=1095765913]
 layout_mode = 3
 anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
+item_start_y = 60.0
+cursor_y_offset = 9.0
+
+[node name="MenuWindow" type="Control" parent="." unique_id=290410846]
+anchors_preset = 0
+offset_left = 70.0
+offset_top = 40.0
+offset_right = 570.0
+offset_bottom = 400.0
+
+[node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=130406140]
+layout_mode = 0
+offset_right = 500.0
+offset_bottom = 360.0
+mouse_filter = 2
+texture = ExtResource("2")
+
+[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow" unique_id=2047693753]
+layout_mode = 0
+offset_right = 500.0
+offset_bottom = 360.0
+texture = ExtResource("3")
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="TitleLabel" type="Control" parent="MenuWindow" unique_id=782501874]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 10.0
+offset_right = 104.0
+offset_bottom = 41.0
+script = ExtResource("4")
+text = "选择角色"
+text_font_size = 16
+color_index = 1
+bold = true
+shadow = true
+
+[node name="Separator" type="ColorRect" parent="MenuWindow" unique_id=293984696]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 38.0
+offset_right = 484.0
+offset_bottom = 39.0
+color = Color(0.5, 0.5, 0.7, 0.5)
+
+[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow" unique_id=512672912]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 46.0
+offset_right = 277.0
+offset_bottom = 86.0
+patch_margin_left = 16
+patch_margin_top = 16
+patch_margin_right = 16
+patch_margin_bottom = 16
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+
+[node name="TeamPanel" type="Panel" parent="MenuWindow" unique_id=893306213]
+layout_mode = 0
+offset_left = 330.0
+offset_top = 40.0
+offset_right = 490.0
+offset_bottom = 240.0
+
+[node name="TeamTitle" type="Control" parent="MenuWindow" unique_id=95429946]
+anchors_preset = 0
+offset_left = 344.0
+offset_top = 42.0
+offset_right = 376.0
+offset_bottom = 65.0
+script = ExtResource("4")
+text = "队伍"
+color_index = 1
+bold = true
+shadow = true
+
+[node name="HintLabel" type="Control" parent="MenuWindow" unique_id=1203690]
+anchors_preset = 0
+offset_left = 282.0
+offset_top = 325.0
+offset_right = 476.0
+offset_bottom = 342.0
+script = ExtResource("4")
+text = "Enter开始游戏  Z添加/移除  Esc返回"
+text_font_size = 12
+color_index = 1
+bold = true
+shadow = true

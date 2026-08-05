@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cdgrhrqn1b8tj" path="res://art/Animations/ショットガン→.png" id="2_udj3m"]
 
 [node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
 script = ExtResource("1_u12gp")
 texture = ExtResource("2_udj3m")
 fps = 25.5

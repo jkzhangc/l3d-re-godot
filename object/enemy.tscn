@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://benemy0000001"]
 
-[ext_resource type="Script" uid="uid://cq3476274vn6b" path="res://script/enemy.gd" id="1"]
+[ext_resource type="Script" uid="uid://cqo64jhrtggin" path="res://script/enemy.gd" id="1"]
 [ext_resource type="Script" uid="uid://bm5recau6w727" path="res://script/StateMachine.gd" id="2"]
 [ext_resource type="Script" uid="uid://cvkybsadvl2g" path="res://script/enemy/EnemyIdleState.gd" id="3"]
 [ext_resource type="AudioStream" uid="uid://bp2nbnu15myj2" path="res://sound/ゾンビ声5.wav" id="3_vfd3m"]
@@ -23,12 +23,12 @@ size = Vector2(20, 28)
 radius = 200.0
 
 [node name="Enemy" type="CharacterBody2D" unique_id=1198113400]
+z_index = 1
 collision_layer = 8
 collision_mask = 15
 platform_floor_layers = 4294967040
 script = ExtResource("1")
-max_hp = 200.0
-move_speed = 100.0
+move_speed = 160.0
 attack_range = Vector2(50, 32)
 attack_range_forward_offset = 30.0
 attack_hit_range = Vector2(50, 32)

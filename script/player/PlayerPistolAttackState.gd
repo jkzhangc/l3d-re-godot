@@ -188,6 +188,10 @@ func _fire_bullet() -> void:
 	if _wd.attack_sound:
 		_play_attack_sound(_wd.attack_sound)
 
+	# 枪声惊动范围内敌人
+	if _wd.gunshot_range > 0.0:
+		_alert_nearby_enemies()
+
 
 func _on_attack_complete() -> void:
 	## 攻击动画（含攻击后动画）全部播完。
@@ -226,3 +230,24 @@ func _play_attack_sound(stream: AudioStream) -> void:
 
 func _get_weapon() -> WeaponData:
 	return Global.get_active_weapon()
+
+
+## 通知枪声范围内的敌人（仅影响 Idle 状态的敌人）
+func _alert_nearby_enemies() -> void:
+	var tree := character.get_tree()
+	if not tree:
+		return
+	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+	var shoot_pos: Vector2 = character.global_position
+	var rng: float = _wd.gunshot_range
+	var count: int = 0
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if enemy.global_position.distance_to(shoot_pos) > rng:
+			continue
+		if enemy.has_method("alert_by_gunshot"):
+			enemy.alert_by_gunshot(character)
+			count += 1
+	if count > 0:
+		print("[枪声] 惊动 %d 个敌人（范围 %.0fpx）" % [count, rng])

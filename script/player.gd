@@ -86,6 +86,7 @@ var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
+var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
 
 ## 死亡相关
@@ -312,6 +313,32 @@ func _apply_character_data() -> void:
 	if cd.death_sound:    death_sound = cd.death_sound
 
 
+## 角色切换后刷新外观/HP/装备/状态（由 CharacterSwitchManager 调用）
+func refresh_after_switch() -> void:
+	_apply_character_data()
+	if not animation_timer:
+		return
+	animation_timer.wait_time = walk_frame_duration
+	animation_timer.start()
+	# 切换到 idle 状态（放下武器）
+	var wd: WeaponData = Global.get_active_weapon()
+	if wd and not wd.weapon_state_name.is_empty():
+		# 直接进入武器 ready 帧（跳过举起动画）
+		enter_weapon_mode(wd)
+		set_weapon_ready_frame()
+	else:
+		exit_weapon_mode()
+	current_hp = Global.player_hp
+	_moving = false
+	_anim_step = 0
+	velocity = Vector2.ZERO
+	_refresh_sprite()
+	print("[玩家] 切换后刷新完成: %s HP=%.0f" % [
+		current_character.character_name if current_character else "?",
+		current_hp,
+	])
+
+
 func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0) -> void:
 	if _is_dying:
 		return
@@ -339,6 +366,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 	# 同步 HP 到 Global
 	Global.player_hp = current_hp
+	# 同步到队伍成员数据
+	var member := Global.get_current_team_member()
+	if not member.is_empty():
+		member["current_hp"] = current_hp
 
 	if current_hp <= 0.0:
 		_die()
@@ -349,12 +380,41 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	Global.player_hp = current_hp
+	# 同步到队伍成员数据
+	var member := Global.get_current_team_member()
+	if not member.is_empty():
+		member["current_hp"] = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
 
 
 # ═══════════════════════════════════════
 # 死亡系统
 # ═══════════════════════════════════════
+
+
+## 尝试在死亡时切换到其他存活队员
+func _try_switch_on_death() -> bool:
+	if _switch_on_death_attempted:
+		return false
+	_switch_on_death_attempted = true
+	Global._save_global_to_team_member(Global.current_team_index)
+	var mgr: Node = null
+	var tree := get_tree()
+	if tree:
+		var nodes: Array[Node] = tree.get_nodes_in_group("character_switch_manager")
+		if nodes.size() > 0:
+			mgr = nodes[0]
+	if not mgr:
+		return false
+	# 把当前队员标记为死亡
+	var member := Global.get_current_team_member()
+	if not member.is_empty():
+		member["current_hp"] = 0.0
+	# 尝试切换
+	var switched: bool = mgr.switch_after_death()
+	if switched:
+		print("[玩家] 死亡→切换到下一队员")
+	return switched
 
 
 func _clean_expired_damage_sources(now: int) -> void:
@@ -368,6 +428,9 @@ func _clean_expired_damage_sources(now: int) -> void:
 
 
 func _die() -> void:
+	# 有其他存活队员 → 切换而非死亡
+	if _try_switch_on_death():
+		return
 	print("[玩家] 死亡！")
 	_is_dying = true
 	_death_phase = 0
@@ -465,12 +528,29 @@ func _process_death(delta: float) -> void:
 
 
 func _reload_from_save() -> void:
-	print("[玩家] 重新载入存档...")
+	# L4D2 风格：死亡后回到安全屋，武器清空（安全屋地上会刷新）
+	print("[玩家] 死亡，回到安全屋——武器清空...")
+	var safehouse: String = Global.get_checkpoint_scene()
+	# 清空 checkpoint 标记 + 装备，让安全屋场景以全新状态启动
+	Global.checkpoint.clear()
+	Global.equipment["primary"] = null
+	Global.equipment["secondary"] = null
+	Global.weapon_magazines.clear()
+	Global.player_hp = 200.0
+	Global.inventory.clear()
+	Global.healing_item = null
+	Global.support_item = null
 	var tree: SceneTree = get_tree()
-	if tree:
-		# 先加载存档数据到 Global
-		SaveManager.load_game()
-		# 重载当前场景
+	if not tree:
+		return
+	if not safehouse.is_empty() and safehouse != tree.current_scene.scene_file_path:
+		# 不在安全屋 → 切回安全屋场景
+		var err := tree.change_scene_to_file(safehouse)
+		if err != OK:
+			printerr("[玩家] 无法切回安全屋: %s (err=%d)" % [safehouse, err])
+			tree.reload_current_scene()
+	else:
+		# 已在安全屋死亡 → 直接重载
 		tree.reload_current_scene()
 
 
@@ -549,7 +629,11 @@ func _refresh_sprite() -> void:
 	if _weapon_mode and _weapon_data:
 		if not _weapon_data.weapon_walk_texture:
 			return
-		sprite.texture = _weapon_data.weapon_walk_texture
+		# 优先使用角色专属武器行走图，回退到武器默认行走图
+		var char_walk_tex: Texture2D = null
+		if current_character and _weapon_data:
+			char_walk_tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
+		sprite.texture = char_walk_tex if char_walk_tex else _weapon_data.weapon_walk_texture
 		var char_idx: int = _current_weapon_char_idx
 		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
 

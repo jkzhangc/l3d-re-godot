@@ -1,0 +1,77 @@
+[gd_scene load_steps=5 format=3 uid="uid://duw8t3kng8k1r"]
+
+[ext_resource type="Script" uid="uid://i0aeqdcsvb0m" path="res://script/campaign_select.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://c0nop7c1ibymf" path="res://art/System/Window background color.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://d4nqa7xbhy3cx" path="res://art/System/Window frame.png" id="3"]
+[ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="4"]
+
+[node name="CampaignSelect" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="MenuWindow" type="Control" parent="."]
+size = Vector2(440, 280)
+position = Vector2(100, 60)
+
+[node name="WindowBg" type="TextureRect" parent="MenuWindow"]
+texture = ExtResource("2")
+stretch_mode = 0
+size = Vector2(440, 280)
+mouse_filter = 2
+
+[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow"]
+texture = ExtResource("3")
+patch_margin_left = 20
+patch_margin_right = 20
+patch_margin_top = 20
+patch_margin_bottom = 20
+size = Vector2(440, 280)
+mouse_filter = 2
+
+[node name="TitleLabel" type="Control" parent="MenuWindow"]
+script = ExtResource("4")
+text = "选择战役"
+position = Vector2(16, 10)
+text_font_size = 16
+color_index = 1
+color_row = 0
+use_gradient = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"
+bold = true
+shadow = true
+
+[node name="Separator" type="ColorRect" parent="MenuWindow"]
+color = Color(0.5, 0.5, 0.7, 0.5)
+size = Vector2(408, 1)
+position = Vector2(16, 38)
+
+[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow"]
+patch_margin_left = 16
+patch_margin_right = 16
+patch_margin_top = 16
+patch_margin_bottom = 16
+axis_stretch_horizontal = 1
+axis_stretch_vertical = 1
+size = Vector2(200, 28)
+position = Vector2(16, 45)
+mouse_filter = 2
+
+[node name="DescPanel" type="Panel" parent="MenuWindow"]
+position = Vector2(244, 48)
+size = Vector2(180, 160)
+
+[node name="DescLabel" type="Label" parent="MenuWindow/DescPanel"]
+position = Vector2(10, 8)
+size = Vector2(160, 144)
+autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="MenuWindow"]
+text = "↑↓选择  确定确认  Esc返回"
+position = Vector2(16, 256)

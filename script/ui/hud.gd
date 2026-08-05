@@ -1,23 +1,17 @@
 extends CanvasLayer
-## 战斗 HUD — HP 血条（左上）+ 5 槽位竖排快捷栏（右侧）。
+## 战斗 HUD — HP 血条（左上）+ 5 槽位横排快捷栏（右下角）。
 ##
 ## 在 scene/main.tscn 中作为子节点添加（layer=10）。
 ## 每帧从 Global autoload 读取数据刷新显示。
 ##
-## 布局（640×480）：
+## 布局（1280×960）：
 ##   ┌──────────────────────────────────────┐
 ##   │ ♥ [████████░░░░] 150/200            │ ← HP 血条（左上）
-##   │                          ┌────────┐ │
-##   │                          │1 手枪   │ │
-##   │                          │  12/15  │ │ ← 槽位栏（右侧竖排）
-##   │                          │2 小刀   │ │
-##   │                          │  近战   │ │
-##   │                          │3 医疗包 │ │
-##   │                          │  x3     │ │
-##   │                          │4 药品   │ │
-##   │                          │  x1     │ │
-##   │                          │5 —      │ │
-##   │                          └────────┘ │
+##   │                                      │
+##   │                                      │
+##   │           ┌────┬────┬────┬────┬────┐ │
+##   │           │ 1  │ 2  │ 3  │ 4  │ 5  │ │ ← 槽位栏（右下角横排）
+##   │           └────┴────┴────┴────┴────┘ │
 ##   └──────────────────────────────────────┘
 
 
@@ -33,8 +27,8 @@ const SLOT_GAP: int = 3    ## 槽位间距
 const SLOT_COUNT: int = 5
 const LAYER_INDEX: int = 10
 
-const VIEW_W: int = 640
-const VIEW_H: int = 480
+const VIEW_W: int = 1280
+const VIEW_H: int = 960
 
 const HP_FRAME_TEX := preload("res://art/Ui/ＨＰバー.png")
 const HP_FILL_TEX  := preload("res://art/Ui/ＨＰメーター.png")
@@ -79,7 +73,7 @@ const SLOT_SCRIPT  := preload("res://script/ui/hud_slot.gd")
 		hp_label_visible = v
 		if _hp_label:
 			_hp_label.visible = v
-## 槽位栏位置（屏幕像素坐标，左上角）。设 (0,0) 则自动右侧垂直居中
+## 槽位栏位置（屏幕像素坐标，左上角）。设 (0,0) 则自动右下角
 @export var slot_bar_pos: Vector2 = Vector2.ZERO:
 	set(v):
 		slot_bar_pos = v
@@ -93,8 +87,9 @@ const SLOT_SCRIPT  := preload("res://script/ui/hud_slot.gd")
 var _hp_row: HBoxContainer = null
 var _hp_bar_fill: TextureRect = null
 var _hp_label: Label = null
+var _team_label: Label = null
 var _slot_bg: ColorRect = null
-var _slot_vbox: VBoxContainer = null
+var _slot_hbox: HBoxContainer = null
 var _slots: Array[Control] = []
 
 var _player_ref: CharacterBody2D = null
@@ -183,21 +178,31 @@ func _build_hp_bar() -> void:
 	_hp_label.add_theme_constant_override("outline_size", 2)
 	add_child(_hp_label)  ## 直接加到 CanvasLayer，不受 HBox 布局控制
 
+	# 队伍标签（HP 条下方）
+	_team_label = Label.new()
+	_team_label.name = "TeamLabel"
+	_team_label.position = Vector2(hp_bar_pos.x, hp_bar_pos.y + HP_BAR_HEIGHT + 4)
+	_team_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.9, 0.8))
+	_team_label.add_theme_font_size_override("font_size", 10)
+	_team_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	_team_label.add_theme_constant_override("outline_size", 1)
+	add_child(_team_label)
+
 
 # ═══════════════════════════════════════
-# 槽位栏（右侧竖排）
+# 槽位栏（右下角横排）
 # ═══════════════════════════════════════
 
 func _build_slot_bar() -> void:
-	var bar_w: int = SLOT_W + 8
-	var bar_h: int = SLOT_COUNT * SLOT_H + (SLOT_COUNT - 1) * SLOT_GAP + 8
+	var bar_w: int = SLOT_COUNT * SLOT_W + (SLOT_COUNT - 1) * SLOT_GAP + 8
+	var bar_h: int = SLOT_H + 8
 
-	# 位置：用 slot_bar_pos，若为零则自动右侧垂直居中
+	# 位置：用 slot_bar_pos，若为零则自动右下角
 	var bar_x: int
 	var bar_y: int
 	if slot_bar_pos == Vector2.ZERO:
 		bar_x = VIEW_W - bar_w - 4
-		bar_y = (VIEW_H - bar_h) / 2
+		bar_y = VIEW_H - bar_h - 4  # 右下角
 	else:
 		bar_x = int(slot_bar_pos.x)
 		bar_y = int(slot_bar_pos.y)
@@ -209,11 +214,11 @@ func _build_slot_bar() -> void:
 	_slot_bg.position = Vector2(bar_x, bar_y)
 	add_child(_slot_bg)
 
-	_slot_vbox = VBoxContainer.new()
-	_slot_vbox.name = "SlotVBox"
-	_slot_vbox.position = Vector2(bar_x + 4, bar_y + 4)
-	_slot_vbox.add_theme_constant_override("separation", SLOT_GAP)
-	add_child(_slot_vbox)
+	_slot_hbox = HBoxContainer.new()
+	_slot_hbox.name = "SlotHBox"
+	_slot_hbox.position = Vector2(bar_x + 4, bar_y + 4)
+	_slot_hbox.add_theme_constant_override("separation", SLOT_GAP)
+	add_child(_slot_hbox)
 
 	var slot_configs := [
 		{ "type": "weapon",   "key": "primary"   },
@@ -230,7 +235,7 @@ func _build_slot_bar() -> void:
 		slot.slot_index = i
 		slot.slot_type = slot_configs[i]["type"]
 		slot.slot_key = slot_configs[i]["key"]
-		_slot_vbox.add_child(slot)
+		_slot_hbox.add_child(slot)
 		_slots.append(slot)
 
 
@@ -252,27 +257,27 @@ func _apply_visibility() -> void:
 		_hp_row.visible = hud_visible and hp_bar_visible
 	if _slot_bg:
 		_slot_bg.visible = hud_visible and slot_bar_visible
-	if _slot_vbox:
-		_slot_vbox.visible = hud_visible and slot_bar_visible
+	if _slot_hbox:
+		_slot_hbox.visible = hud_visible and slot_bar_visible
 
 
 func _reposition_slot_bar() -> void:
-	if not _slot_bg or not _slot_vbox:
+	if not _slot_bg or not _slot_hbox:
 		return
 
 	var bar_x: int
 	var bar_y: int
 	if slot_bar_pos == Vector2.ZERO:
-		var bar_w: int = SLOT_W + 8
-		var bar_h: int = SLOT_COUNT * SLOT_H + (SLOT_COUNT - 1) * SLOT_GAP + 8
+		var bar_w: int = SLOT_COUNT * SLOT_W + (SLOT_COUNT - 1) * SLOT_GAP + 8
+		var bar_h: int = SLOT_H + 8
 		bar_x = VIEW_W - bar_w - 4
-		bar_y = (VIEW_H - bar_h) / 2
+		bar_y = VIEW_H - bar_h - 4  # 右下角
 	else:
 		bar_x = int(slot_bar_pos.x)
 		bar_y = int(slot_bar_pos.y)
 
 	_slot_bg.position = Vector2(bar_x, bar_y)
-	_slot_vbox.position = Vector2(bar_x + 4, bar_y + 4)
+	_slot_hbox.position = Vector2(bar_x + 4, bar_y + 4)
 
 
 func _update_hp_bar() -> void:
@@ -287,6 +292,16 @@ func _update_hp_bar() -> void:
 	var ratio: float = clamp(hp / max_hp, 0.0, 1.0)
 	_hp_bar_fill.size.x = floor(float(HP_BAR_WIDTH) * ratio)
 	_hp_label.text = "%d/%d" % [int(hp), int(max_hp)]
+	# 更新队伍标签
+	if _team_label and Global.get_team_size() > 1:
+		var cd: CharacterData = Global.player_character as CharacterData
+		if cd:
+			_team_label.text = "%s (%d/%d)" % [cd.character_name, Global.current_team_index + 1, Global.get_team_size()]
+			_team_label.visible = true
+		else:
+			_team_label.visible = false
+	elif _team_label:
+		_team_label.visible = false
 
 	if ratio < 0.3:
 		_hp_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3, 0.9))

@@ -56,6 +56,7 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 @export var raise_sound: AudioStream = null      ## 举起武器音效
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
+@export var gunshot_range: float = 500.0         ## 枪声传播范围（像素）。0=静音武器（近战），>0=开火时范围内敌人会被惊动
 
 
 @export_group("装填/装弹")

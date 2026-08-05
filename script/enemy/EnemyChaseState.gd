@@ -14,7 +14,6 @@ var _fallback_mode: bool = false  ## 降级模式：连续失败后切到直接�
 # ── A* 网格缓存（静态：所有敌人共享，只查一次）──
 static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格子缓存
 var _cell_size: float = 32.0
-var _space_state: PhysicsDirectSpaceState2D = null
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
@@ -43,13 +42,16 @@ func enter() -> void:
 	_last_failed = false
 	_last_player_pos = Vector2.ZERO
 	_fallback_mode = false
-	_space_state = null
 	_first_path = true
 	# 找到所有 TileMapLayer（static 缓存，只在首次进入时搜索并打印）
-	if _tilemaps.is_empty():
+	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
+		_tilemaps.clear()
+		_tile_walk_cache.clear()
 		_find_all_tilemaps()
 		var names: String = ""
 		for tm in _tilemaps:
+			if not is_instance_valid(tm):
+				continue
 			names += tm.name + " "
 		print("[A*] 找到 TileMapLayer (%d 个): [%s]" % [_tilemaps.size(), names.strip_edges()])
 	# 注册调试绘制字段
@@ -360,15 +362,16 @@ func _is_tile_walkable(gp: Vector2i) -> bool:
 	# 按 _is_walkable 的地图层逻辑查一次
 	var w := false
 	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
 		var td: TileData = tm.get_cell_tile_data(gp)
 		if td == null:
 			continue
 		var nl := tm.name.to_lower()
-		if "upper" in nl:
-			continue  # UpperLayer 上层装饰，不参与寻路
 		if "wall" in nl:
 			w = false; break
-		if "decor" in nl:
+		if "upper" in nl or "decor" in nl:
+			# Upper 和 Decor 层：有碰撞体的图块阻挡寻路，无碰撞=纯装饰=不挡路
 			if _tile_has_collision(td):
 				w = false; break
 			continue
@@ -446,15 +449,16 @@ func _is_walkable_no_entity(gp: Vector2i) -> bool:
 	# 首次查询 — 同 _is_walkable 的地图层逻辑
 	var walkable: bool = false
 	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
 		var td: TileData = tm.get_cell_tile_data(gp)
 		if td == null:
 			continue
 		var name_lower: String = tm.name.to_lower()
-		if "upper" in name_lower:
-			continue  # UpperLayer 上层装饰，不参与寻路
 		if "wall" in name_lower:
 			walkable = false; break
-		if "decor" in name_lower:
+		if "upper" in name_lower or "decor" in name_lower:
+			# Upper 和 Decor 层：有碰撞体的图块阻挡寻路，无碰撞=纯装饰=不挡路
 			if _tile_has_collision(td):
 				walkable = false; break
 			continue
@@ -476,20 +480,26 @@ func _is_walkable(gp: Vector2i) -> bool:
 	var walkable: bool = false
 	var found_layers: String = ""
 
+	# 检测静态缓存中的 TileMapLayer 是否已被释放（场景重载后）
+	if not _tilemaps.is_empty() and not is_instance_valid(_tilemaps[0]):
+		_tilemaps.clear()
+		_tile_walk_cache.clear()
+		_find_all_tilemaps()
+
 	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
 		var td: TileData = tm.get_cell_tile_data(gp)
 		if td == null:
 			continue
 		var name_lower: String = tm.name.to_lower()
 		found_layers += tm.name + ","
-		if "upper" in name_lower:
-			continue  # UpperLayer 上层装饰，不参与寻路
 		if "wall" in name_lower:
 			# Wall 层始终阻挡
 			walkable = false
 			break
-		if "decor" in name_lower:
-			# Decor 层：检查图块是否真的有碰撞体，无碰撞=纯装饰=不挡路
+		if "upper" in name_lower or "decor" in name_lower:
+			# Upper 和 Decor 层：检查图块是否真的有碰撞体，无碰撞=纯装饰=不挡路
 			if _tile_has_collision(td):
 				walkable = false
 				break
@@ -521,20 +531,21 @@ var extra_obstacle_nodes: Array[Node2D] = []
 
 func _is_cell_blocked_by_entity(gp: Vector2i) -> bool:
 	## 检查格子上是否有其他敌人或外部注册的障碍实体
-	var world: Vector2 = _grid_to_world(gp)
-	if not _space_state:
-		_space_state = character.get_world_2d().direct_space_state
-
-	# 用 intersect_point 检测敌人碰撞层（layer 4 = bit 8）
-	var query: PhysicsPointQueryParameters2D = PhysicsPointQueryParameters2D.new()
-	query.position = world
-	query.collision_mask = 8  # layer 4 = enemy
-	query.exclude = [character]
-	var results: Array[Dictionary] = _space_state.intersect_point(query)
-	if not results.is_empty():
-		return true
+	# 遍历所有敌人，检查是否有其他敌人占据此格子
+	var tree: SceneTree = character.get_tree()
+	if tree:
+		for other in tree.get_nodes_in_group("enemy"):
+			if other == character or not is_instance_valid(other):
+				continue
+			# 跳过已死亡的敌人（尸体不阻挡寻路）
+			if other.get("_is_dead") == true:
+				continue
+			# 检查其他敌人的格子坐标
+			if _world_to_grid(other.global_position) == gp:
+				return true
 
 	# 检查外部注册的障碍节点（多人模式玩家等）
+	var world: Vector2 = _grid_to_world(gp)
 	for node in extra_obstacle_nodes:
 		if not is_instance_valid(node):
 			continue

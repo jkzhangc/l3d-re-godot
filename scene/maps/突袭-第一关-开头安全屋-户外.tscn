@@ -4,9 +4,16 @@
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="2_5dirb"]
 [ext_resource type="TileSet" uid="uid://bxrd7uaa3llxi" path="res://tres/街道A5.tres" id="3_oygib"]
 [ext_resource type="TileSet" uid="uid://b4cei0e6of7ya" path="res://tres/街道B.tres" id="4_5gk8a"]
+[ext_resource type="PackedScene" uid="uid://cpickup000001" path="res://object/weapon_pickup.tscn" id="4_oygib"]
+[ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="5_5gk8a"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="5_vqqwu"]
+[ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="6_5gk8a"]
 [ext_resource type="PackedScene" path="res://scene/menu.tscn" id="6_57ke7"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="7_oc1v5"]
+[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="7_vqqwu"]
+[ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="8_57ke7"]
+[ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="11_caxuo"]
+[ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="12_bktjj"]
 
 [node name="Test" type="Node2D" unique_id=1940995351]
 
@@ -20,6 +27,51 @@ script = ExtResource("2_5dirb")
 [node name="GroundLayer" type="TileMapLayer" parent="." unique_id=730840840]
 tile_map_data = PackedByteArray("AAD///z/AAAEAAsAAAD///3/AAAEAAsAAAD///7/AAAEAAsAAAD/////AAAEAAsAAAD//wAAAAAEAAsAAAD//wEAAAAEAAAAAAD//wIAAAAEAAsAAAD//wMAAAAEAAsAAAD//wUAAAAEAAsAAAD//wQAAAAEAAsAAAD///v/AAAEAAsAAAD///r/AAAEAAsAAAD///n/AAAEAAsAAAD4//n/AAAEAAsAAAD5//n/AAAEAAsAAAD6//n/AAAEAAsAAAD7//n/AAAEAAsAAAD8//n/AAAEAAsAAAD9//n/AAAEAAsAAAD+//n/AAAEAAsAAAAAAPn/AAAEAAsAAAABAPn/AAAEAAsAAAACAPn/AAAEAAsAAAADAPn/AAAEAAsAAAAEAPn/AAAEAAsAAAAFAPn/AAAEAAsAAAAGAPn/AAAEAAsAAAAHAPn/AAAEAAsAAAAIAPn/AAAEAAsAAAAJAPn/AAAEAAsAAAD4//r/AAAEAAsAAAD4//v/AAAEAAsAAAD4//z/AAAEAAsAAAD4//3/AAAEAAsAAAD4//7/AAAEAAsAAAD5//r/AAAEAAsAAAD5//v/AAAEAAsAAAD5//z/AAAEAAsAAAD5//3/AAAEAAsAAAD5//7/AAAEAAsAAAD6//r/AAAEAAsAAAD6//v/AAAEAAsAAAD6//z/AAAEAAsAAAD6//3/AAAEAAsAAAD6//7/AAAEAAsAAAD7//r/AAAEAAsAAAD7//v/AAAEAAsAAAD7//z/AAAEAAsAAAD7//3/AAAEAAsAAAD7//7/AAAEAAsAAAD8//r/AAAEAAsAAAD8//v/AAAEAAsAAAD8//z/AAAEAAsAAAD8//3/AAAEAAsAAAD8//7/AAAEAAAAAAD9//r/AAAEAAsAAAD9//v/AAAEAAsAAAD9//z/AAAEAAsAAAD9//3/AAAEAAsAAAD9//7/AAAEAAAAAAD+//r/AAAEAAsAAAD+//v/AAAEAAsAAAD+//z/AAAEAAsAAAD+//3/AAAEAAsAAAD+//7/AAAEAAAAAAAAAPr/AAAEAAsAAAAAAPv/AAAEAAsAAAAAAPz/AAAEAAsAAAAAAP3/AAAEAAsAAAAAAP7/AAAEAAsAAAABAPr/AAAEAAsAAAABAPv/AAAEAAsAAAABAPz/AAAEAAsAAAABAP3/AAAEAAsAAAABAP7/AAAEAAsAAAACAPr/AAAEAAsAAAACAPv/AAAEAAsAAAACAPz/AAAEAAsAAAACAP3/AAAEAAsAAAACAP7/AAAEAAsAAAADAPr/AAAEAAsAAAADAPv/AAAEAAsAAAADAPz/AAAEAAsAAAADAP3/AAAEAAsAAAADAP7/AAAEAAsAAAAEAPr/AAAEAAsAAAAEAPv/AAAEAAsAAAAEAPz/AAAEAAsAAAAEAP3/AAAEAAsAAAAEAP7/AAAEAAsAAAAFAPr/AAAEAAsAAAAFAPv/AAAEAAsAAAAFAPz/AAAEAAsAAAAFAP3/AAAEAAsAAAAFAP7/AAAEAAsAAAAGAPr/AAAEAAsAAAAGAPv/AAAEAAsAAAAGAPz/AAAEAAsAAAAGAP3/AAAEAAsAAAAGAP7/AAAEAAsAAAAHAPr/AAAEAAsAAAAHAPv/AAAEAAsAAAAHAPz/AAAEAAsAAAAHAP3/AAAEAAsAAAAHAP7/AAAEAAsAAAAIAPr/AAAEAAsAAAAIAPv/AAAEAAsAAAAIAPz/AAAEAAsAAAAIAP3/AAAEAAsAAAAIAP7/AAAEAAsAAAAJAPr/AAAEAAsAAAAJAPv/AAAEAAsAAAAJAPz/AAAEAAsAAAAJAP3/AAAEAAsAAAAJAP7/AAAEAAsAAAD4////AAAEAAsAAAD4/wAAAAAEAAsAAAD4/wEAAAAEAAAAAAD4/wIAAAAEAAsAAAD4/wMAAAAEAAsAAAD4/wQAAAAEAAsAAAD4/wUAAAAEAAsAAAD5////AAAEAAsAAAD5/wAAAAAEAAsAAAD5/wEAAAAEAAAAAAD5/wIAAAAEAAsAAAD5/wMAAAAEAAsAAAD5/wQAAAAEAAsAAAD5/wUAAAAEAAsAAAD6////AAAEAAsAAAD6/wAAAAAEAAsAAAD6/wEAAAAEAAAAAAD6/wIAAAAEAAsAAAD6/wMAAAAEAAsAAAD6/wQAAAAEAAsAAAD6/wUAAAAEAAsAAAD7////AAAEAAsAAAD7/wAAAAAEAAsAAAD7/wEAAAAEAAAAAAD7/wIAAAAEAAsAAAD7/wMAAAAEAAsAAAD7/wQAAAAEAAsAAAD7/wUAAAAEAAsAAAD8////AAAEAAAAAAD8/wAAAAAEAAAAAAD8/wEAAAAEAAAAAAD8/wIAAAAEAAsAAAD8/wMAAAAEAAsAAAD8/wQAAAAEAAsAAAD8/wUAAAAEAAsAAAD9////AAAEAAAAAAD9/wAAAAAEAAAAAAD9/wEAAAAEAAAAAAD9/wIAAAAEAAsAAAD9/wMAAAAEAAsAAAD9/wQAAAAEAAsAAAD9/wUAAAAEAAsAAAD+////AAAEAAAAAAD+/wAAAAAEAAAAAAD+/wEAAAAEAAAAAAD+/wIAAAAEAAsAAAD+/wMAAAAEAAsAAAD+/wQAAAAEAAsAAAD+/wUAAAAEAAsAAAAAAP//AAAEAAsAAAAAAAAAAAAEAAsAAAAAAAEAAAAEAAAAAAAAAAIAAAAEAAsAAAAAAAMAAAAEAAsAAAAAAAQAAAAEAAsAAAAAAAUAAAAEAAsAAAABAP//AAAEAAsAAAABAAAAAAAEAAsAAAABAAEAAAAEAAAAAAABAAIAAAAEAAsAAAABAAMAAAAEAAsAAAABAAQAAAAEAAsAAAABAAUAAAAEAAsAAAACAP//AAAEAAsAAAACAAAAAAAEAAsAAAACAAEAAAAEAAAAAAACAAIAAAAEAAsAAAACAAMAAAAEAAsAAAACAAQAAAAEAAsAAAACAAUAAAAEAAsAAAADAP//AAAEAAsAAAADAAAAAAAEAAsAAAADAAEAAAAEAAAAAAADAAIAAAAEAAsAAAADAAMAAAAEAAsAAAADAAQAAAAEAAsAAAADAAUAAAAEAAsAAAAEAP//AAAEAAsAAAAEAAAAAAAEAAsAAAAEAAEAAAAEAAAAAAAEAAIAAAAEAAsAAAAEAAMAAAAEAAsAAAAEAAQAAAAEAAsAAAAEAAUAAAAEAAsAAAAFAP//AAAEAAsAAAAFAAAAAAAEAAsAAAAFAAEAAAAEAAAAAAAFAAIAAAAEAAsAAAAFAAMAAAAEAAsAAAAFAAQAAAAEAAsAAAAFAAUAAAAEAAsAAAAGAP//AAAEAAsAAAAGAAAAAAAEAAsAAAAGAAEAAAAEAAAAAAAGAAIAAAAEAAsAAAAGAAMAAAAEAAsAAAAGAAQAAAAEAAsAAAAGAAUAAAAEAAsAAAAHAP//AAAEAAAAAAAHAAAAAAAEAAAAAAAHAAEAAAAEAAAAAAAHAAIAAAAEAAsAAAAHAAMAAAAEAAsAAAAHAAQAAAAEAAsAAAAHAAUAAAAEAAsAAAAIAP//AAAEAAAAAAAIAAAAAAAEAAAAAAAIAAEAAAAEAAAAAAAIAAIAAAAEAAsAAAAIAAMAAAAEAAsAAAAIAAQAAAAEAAsAAAAIAAUAAAAEAAsAAAAJAP//AAAEAAAAAAAJAAAAAAAEAAAAAAAJAAEAAAAEAAAAAAAJAAIAAAAEAAsAAAAJAAMAAAAEAAsAAAAJAAQAAAAEAAsAAAAJAAUAAAAEAAsAAAA=")
 tile_set = ExtResource("3_oygib")
+
+[node name="手枪" parent="GroundLayer" unique_id=857466232 instance=ExtResource("4_oygib")]
+position = Vector2(-17, 44)
+weapon_data = ExtResource("5_5gk8a")
+pickup_char_idx = null
+pickup_direction = null
+pickup_magazine_ammo = null
+pickup_step_frames = null
+pickup_step_duration = null
+
+[node name="霰弹枪" parent="GroundLayer" unique_id=864820333 instance=ExtResource("4_oygib")]
+position = Vector2(36, 43)
+weapon_data = ExtResource("6_5gk8a")
+pickup_char_idx = null
+pickup_direction = 1
+pickup_reserve_ammo = 280
+pickup_magazine_ammo = null
+pickup_step_frames = null
+pickup_step_duration = null
+
+[node name="冲锋枪" parent="GroundLayer" unique_id=1233783021 instance=ExtResource("4_oygib")]
+position = Vector2(88, 47)
+weapon_data = ExtResource("7_vqqwu")
+pickup_char_idx = null
+pickup_direction = 2
+pickup_magazine_ammo = null
+pickup_step_frames = Array[int]([2])
+pickup_step_duration = null
+
+[node name="小刀" parent="GroundLayer" unique_id=248018633 instance=ExtResource("4_oygib")]
+position = Vector2(142, 47)
+weapon_data = ExtResource("8_57ke7")
+pickup_char_idx = 2
+pickup_direction = 3
+pickup_magazine_ammo = null
+pickup_step_frames = null
+pickup_step_duration = null
+
+[node name="TeleportPoint" type="Node2D" parent="GroundLayer" unique_id=1267413586]
+position = Vector2(294, 126)
+script = ExtResource("11_caxuo")
+target_scene = "res://scene/maps/突袭-第一关-街道.tscn"
+walk_texture = ExtResource("12_bktjj")
+walk_char_index = 6
+walk_direction = 2
 
 [node name="DecorLayer" type="TileMapLayer" parent="." unique_id=1677088665]
 y_sort_enabled = true
@@ -44,3 +96,4 @@ script = ExtResource("7_oc1v5")
 follow_speed = 6.0
 bounds_margin = 0.0
 bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
+zoom = Vector2(2, 2)

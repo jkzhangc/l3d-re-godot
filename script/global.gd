@@ -22,7 +22,8 @@ var facing_lock_mode: int = 0   ## 固定朝向模式: 0=切换式, 1=按住式
 # 文字渲染全局设置（各 UI 场景读取这些默认值）
 # ═══════════════════════════════════════
 @export_group("文字默认")
-@export var text_font_path: String = "res://art/System/SimsunXS_12_GB18030_J.ttf"
+@export var text_font_path: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+@export var text_font_path_small: String = "res://art/System/ark-pixel-12px-monospaced-zh_cn.ttf"  ## 12px 小字专用
 @export var text_color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var text_color_shader_path: String = "res://shader/text_color.gdshader"
 @export var text_color_index: int = 0
@@ -83,6 +84,35 @@ var support_item: ItemData = null
 var weapon_magazines: Dictionary = {}
 
 # ═══════════════════════════════════════
+# 队伍数据（角色切换系统）
+# ═══════════════════════════════════════
+## 队伍成员列表，每个是一个 Dictionary:
+##   character: CharacterData       — 角色资源
+##   current_hp: float              — 当前 HP
+##   equipment: Dictionary          — {primary: WeaponData, secondary: WeaponData}
+##   weapon_magazines: Dictionary   — item_id → 弹夹子弹数
+##   active_weapon_slot: String     — "primary" 或 "secondary"
+##   facing: int                    — 最后朝向 (FaceDir)
+##   position: Vector2              — 场景位置
+##   healing_item: ItemData         — 消耗品
+##   support_item: ItemData         — 消耗品
+##   inventory: Array               — 背包物品
+var team: Array[Dictionary] = []
+var current_team_index: int = 0
+
+# ═══════════════════════════════════════
+# 战役 / 难度
+# ═══════════════════════════════════════
+var selected_campaign: CampaignData = null
+var selected_difficulty: int = 0  ## 0=Easy, 1=Normal, 2=Hard, 3=Expert
+var difficulty_multipliers: Dictionary = {
+	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6},
+	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0},
+	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5},
+	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0},
+}
+
+# ═══════════════════════════════════════
 # 尸体管理
 # ═══════════════════════════════════════
 var corpse_list: Array = []
@@ -96,12 +126,6 @@ var corpse_list: Array = []
 @export var death_fade_duration: float = 10.0  ## 死亡黑屏淡入时长（秒）
 @export var death_black_hold: float = 2.0     ## 死亡全黑后等待时长（秒）
 @export var death_music_volume_db: float = -10.0  ## 死亡音乐音量（dB, 0 为原始音量）
-
-# ═══════════════════════════════════════
-# 存档路径
-# ═══════════════════════════════════════
-const SAVE_DIR: String = "res://saves/"
-const SAVE_FILE: String = "save_data.json"
 const CONFIG_FILE: String = "res://config.json"
 
 
@@ -110,20 +134,128 @@ func _ready() -> void:
 	_ensure_audio_buses()
 
 
-func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST:
-		_clear_save_on_quit()
+# ═══════════════════════════════════════
+# 内存 Checkpoint（安全屋存档点）
+# ═══════════════════════════════════════
+var checkpoint: Dictionary = {}  ## 安全屋捕获的快照（仅在内存中，不写磁盘）
+
+## 在安全屋捕获 checkpoint —— 深拷贝当前状态为快照
+func capture_checkpoint() -> void:
+	var scene_path: String = ""
+	if get_tree() and get_tree().current_scene:
+		scene_path = get_tree().current_scene.scene_file_path
+
+	_save_global_to_team_member(current_team_index)
+	checkpoint = {
+		"scene_path": scene_path,
+		"player_hp": player_hp,
+		"equipment_primary": equipment.get("primary"),
+		"equipment_secondary": equipment.get("secondary"),
+		"active_weapon_slot": active_weapon_slot,
+		"weapon_magazines": weapon_magazines.duplicate(),
+		"inventory": inventory.duplicate(),
+		"healing_item": healing_item,
+		"support_item": support_item,
+		"gold": gold,
+		"team": team.duplicate(true),
+		"current_team_index": current_team_index,
+		"selected_campaign": selected_campaign,
+		"selected_difficulty": selected_difficulty,
+	}
+	print("[Checkpoint] 已捕获: 场景=%s HP=%.0f 主武器=%s 弹夹=%s 物品=%d" % [
+		scene_path, player_hp,
+		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "无",
+		str(weapon_magazines),
+		inventory.size(),
+	])
+
+## 返回 checkpoint 中的安全屋场景路径（用于死亡后切回安全屋）
+func get_checkpoint_scene() -> String:
+	return checkpoint.get("scene_path", "")
+
+## 从内存 checkpoint 恢复游戏状态（死亡时调用）
+func restore_checkpoint() -> void:
+	if checkpoint.is_empty():
+		print("[Checkpoint] 无 checkpoint，保持当前状态")
+		return
+	player_hp = checkpoint.get("player_hp", 200.0)
+	equipment["primary"] = checkpoint.get("equipment_primary")
+	equipment["secondary"] = checkpoint.get("equipment_secondary")
+	active_weapon_slot = checkpoint.get("active_weapon_slot", "primary")
+	weapon_magazines = checkpoint.get("weapon_magazines", {}).duplicate()
+	inventory = checkpoint.get("inventory", []).duplicate()
+	healing_item = checkpoint.get("healing_item")
+	support_item = checkpoint.get("support_item")
+	gold = checkpoint.get("gold", 0)
+	# 恢复队伍
+	if checkpoint.has("team"):
+		team = checkpoint["team"].duplicate(true)
+		current_team_index = checkpoint.get("current_team_index", 0)
+		_apply_team_member_to_global(current_team_index)
+	selected_campaign = checkpoint.get("selected_campaign")
+	selected_difficulty = checkpoint.get("selected_difficulty", 0)
+	print("[Checkpoint] 已恢复: HP=%.0f 主武器=%s 弹夹=%s 物品=%d 队伍=%d" % [
+		player_hp,
+		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "无",
+		str(weapon_magazines),
+		inventory.size(),
+	])
+
+# ═══════════════════════════════════════
+# 队伍管理
+# ═══════════════════════════════════════
+
+## 将指定索引的队员数据加载到当前 Global 读写字段
+func _apply_team_member_to_global(index: int) -> void:
+	if index < 0 or index >= team.size():
+		return
+	var member: Dictionary = team[index]
+	player_character = member.get("character")
+	player_hp = member.get("current_hp", 200.0)
+	equipment = member.get("equipment", {"primary": null, "secondary": null}).duplicate()
+	weapon_magazines = member.get("weapon_magazines", {}).duplicate()
+	active_weapon_slot = member.get("active_weapon_slot", "primary")
+	if active_weapon_slot not in equipment:
+		active_weapon_slot = "primary"
+	healing_item = member.get("healing_item")
+	support_item = member.get("support_item")
+	inventory = member.get("inventory", []).duplicate()
 
 
-func _clear_save_on_quit() -> void:
-	var path: String = SAVE_DIR + SAVE_FILE
-	if FileAccess.file_exists(path):
-		DirAccess.remove_absolute(path)
-		print("[Global] 退出游戏，存档已清除")
+## 从当前 Global 字段保存到指定索引的队员数据
+func _save_global_to_team_member(index: int) -> void:
+	if index < 0 or index >= team.size():
+		return
+	var member: Dictionary = team[index]
+	member["character"] = player_character
+	member["current_hp"] = player_hp
+	member["equipment"] = equipment.duplicate()
+	member["weapon_magazines"] = weapon_magazines.duplicate()
+	member["active_weapon_slot"] = active_weapon_slot
+	member["healing_item"] = healing_item
+	member["support_item"] = support_item
+	member["inventory"] = inventory.duplicate()
 
 
-func _exit_tree() -> void:
-	_clear_save_on_quit()
+## 获取当前队员数据字典（先保存再返回）
+func get_current_team_member() -> Dictionary:
+	if team.size() == 0:
+		return {}
+	_save_global_to_team_member(current_team_index)
+	return team[current_team_index]
+
+
+## 队伍总人数
+func get_team_size() -> int:
+	return team.size()
+
+
+## 切换到队伍中指定索引的成员
+func set_active_team_index(index: int) -> void:
+	if index < 0 or index >= team.size():
+		return
+	current_team_index = index
+	_apply_team_member_to_global(index)
 
 
 func _input(event: InputEvent) -> void:
@@ -422,6 +554,14 @@ func consume_ammo_item(ammo_item_id: String, count: int) -> int:
 # ═══════════════════════════════════════
 
 func init_new_game() -> void:
+	# 如果队伍非空（由角色选择界面设置），初始化第一个队员
+	if team.size() > 0:
+		current_team_index = 0
+		_apply_team_member_to_global(0)
+		corpse_list.clear()
+		print("[Global] 新游戏初始化完成 队伍=%d人 HP=%.0f" % [team.size(), player_hp])
+		return
+	# 回退：单角色模式
 	player_character = load("res://object/character_nobita.tres") as CharacterData
 	inventory.clear()
 	equipment["primary"] = null
@@ -433,25 +573,25 @@ func init_new_game() -> void:
 	gold = 0
 	player_hp = 200.0
 	corpse_list.clear()
-
-	add_item(load("res://object/weapon_pistol.tres") as ItemData)
-	add_item(load("res://object/weapon_knife.tres") as ItemData)
-
-	pickup_consumable(load("res://object/item_medkit.tres") as ItemData)
-	pickup_consumable(load("res://object/item_pills.tres") as ItemData)
-
-	for _i: int in range(20):
-		add_item(load("res://object/item_pistol_ammo.tres") as ItemData)
-
-	weapon_magazines["pistol_01"] = 12
-
-	print("[Global] 新游戏初始化完成")
+	print("[Global] 新游戏初始化完成（单角色回退模式）")
 
 
 func try_load_or_init() -> void:
-	if SaveManager.auto_load_on_start():
-		if not player_character:
-			player_character = load("res://object/character_nobita.tres") as CharacterData
-		print("[Global] 存档加载成功 | HP=%.0f" % player_hp)
-	else:
+	if not player_character:
+		player_character = load("res://object/character_nobita.tres") as CharacterData
+
+	if not checkpoint.is_empty():
+		# 有 checkpoint → 恢复（死亡重载 / 回到安全屋）
+		restore_checkpoint()
+		print("[Global] checkpoint 恢复完成 | HP=%.0f | 队伍=%d" % [player_hp, team.size()])
+		return
+
+	# 无 checkpoint。仅首次启动（装备为空 且 队伍为空）时初始化新游戏；
+	# 否则保留当前内存状态（死亡重载但从未进入过安全屋）
+	if equipment.get("primary") == null and equipment.get("secondary") == null and team.size() == 0:
 		init_new_game()
+	else:
+		# 有队伍数据（从菜单流程过来），应用第一个队员
+		if team.size() > 0:
+			_apply_team_member_to_global(current_team_index)
+		print("[Global] try_load_or_init: 保留当前状态 | HP=%.0f | 队伍=%d" % [player_hp, team.size()])

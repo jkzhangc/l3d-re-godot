@@ -7,6 +7,7 @@
 [ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="3_12jfk"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="3_ewivl"]
 [ext_resource type="AudioStream" uid="uid://ct6wqa836p8ov" path="res://sound/ナイフ.wav" id="3_idirh"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_kp675"]
 
 [resource]
 script = ExtResource("1")
@@ -16,8 +17,10 @@ weapon_state_name = "Knife"
 weapon_walk_texture = ExtResource("2")
 is_ranged = false
 weapon_slot = 1
+pickup_texture = ExtResource("6_kp675")
 pickup_char_idx = 2
 pickup_direction = 3
+pickup_animated = false
 attack_sound = ExtResource("2_12jfk")
 raise_sound = ExtResource("3_12jfk")
 lower_sound = ExtResource("3_12jfk")

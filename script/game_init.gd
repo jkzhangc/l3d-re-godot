@@ -1,37 +1,31 @@
 extends Node
-## 游戏启动器
+## 游戏启动器 — 场景加载时初始化玩家数据 + 创建 CharacterSwitchManager
 
 func _ready() -> void:
 	Global.try_load_or_init()
-	print("[GameInit] 初始化完成 | debug=%s | 物品数=%d" % [
-		Global.debug_enabled, Global.inventory.size()
+	print("[GameInit] 初始化完成 | debug=%s | HP=%.0f | team=%d | checkpoint=%s" % [
+		Global.debug_enabled, Global.player_hp, Global.get_team_size(),
+		"有" if not Global.checkpoint.is_empty() else "无"
 	])
-	_auto_save_on_scene_start()
+	_spawn_switch_manager()
 
 
-func _auto_save_on_scene_start() -> void:
-	var player: Node = _find_player()
-	if player and player.has_method("take_damage"):
-		Global.player_hp = player.current_hp
-	SaveManager.save_game()
-	print("[GameInit] 场景自动存档完成")
-
-
-func _find_player() -> Node:
-	var tree: SceneTree = get_tree()
-	if not tree:
-		return null
-	var root: Window = tree.root
-	if not root:
-		return null
-	return _find_player_recursive(root)
-
-
-func _find_player_recursive(node: Node) -> Node:
-	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_player_recursive(child)
-		if found:
-			return found
-	return null
+func _spawn_switch_manager() -> void:
+	## 如果队伍 > 1人且场景中不存在，自动创建 CharacterSwitchManager
+	var tree := get_tree()
+	if not tree or not tree.current_scene:
+		return
+	var existing: Node = tree.current_scene.find_child("CharacterSwitchManager", true, false)
+	if existing:
+		return
+	var script_path := "res://script/character_switch_manager.gd"
+	if not ResourceLoader.exists(script_path):
+		return
+	var mgr_script: Script = load(script_path) as Script
+	var mgr := Node.new()
+	mgr.set_script(mgr_script)
+	mgr.name = "CharacterSwitchManager"
+	# 延迟添加，避免在场景初始化期间 add_child
+	tree.current_scene.call_deferred("add_child", mgr)
+	var log_cb: Callable = func(): print("[GameInit] CharacterSwitchManager 已创建 team=%d" % Global.get_team_size())
+	log_cb.call_deferred()

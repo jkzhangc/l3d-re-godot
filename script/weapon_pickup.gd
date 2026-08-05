@@ -187,6 +187,13 @@ func _do_pickup() -> void:
 	if not weapon_data:
 		return
 
+	# 检查当前角色是否可以使用此武器
+	var player_character: CharacterData = Global.player_character as CharacterData
+	if player_character and not player_character.can_use_weapon(weapon_data):
+		print("[拾取] 角色 %s 无法使用 %s，拾取拒绝" % [player_character.character_name, weapon_data.item_name])
+		_hold_timer = 0.0
+		return
+
 	var slot: String = weapon_data.get_slot_key()
 	var old: WeaponData = Global.get_equipped_weapon(slot)
 

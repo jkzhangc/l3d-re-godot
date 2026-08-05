@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CampaignData" format=3 uid="uid://bkaqdnsr0f7nx"]
+
+[ext_resource type="Script" path="res://script/campaign_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+campaign_id = "assault"
+campaign_name = "突袭"
+description = "穿越被感染的城市街道，在丧尸浪潮中求生。"
+level_scenes = Array[String](["res://scene/maps/突袭-第一关-开头安全屋-户外.tscn", "res://scene/maps/突袭-第一关-街道.tscn"])

@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://ddbep30i23r4i" path="res://art/Animations/アサルト.png" id="2_0a8vi"]
 
 [node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
 script = ExtResource("1_mehfk")
 texture = ExtResource("2_0a8vi")
 fps = 25.5

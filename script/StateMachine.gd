@@ -39,9 +39,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _on_transition_requested(nxt_state: String) -> void:
-	if not states.has(nxt_state) or (current_state and current_state.name == nxt_state):
+	if not states.has(nxt_state):
 		return
 
+	# 允许同名状态重入（武器切换时需重新 enter 读取新武器数据）
 	if current_state:
 		current_state.exit()
 		last_state = current_state

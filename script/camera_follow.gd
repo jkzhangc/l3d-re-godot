@@ -13,6 +13,8 @@ extends Camera2D
 @export var follow_enabled: bool = true
 ## 平滑跟随速度（越大越快，1=瞬间跟随）
 @export var follow_speed: float = 5.0
+## 默认缩放（所有地图场景统一 2x）
+@export var default_zoom: Vector2 = Vector2(2, 2)
 
 @export_group("Bounds")
 @export var limit_to_map: bool = true
@@ -36,6 +38,8 @@ var _has_bounds: bool = false
 # ═══════════════════════════════════════
 
 func _ready() -> void:
+	# 应用默认缩放
+	zoom = default_zoom
 	# 自动查找玩家
 	_target = _find_player()
 	print(_target)

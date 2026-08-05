@@ -1,0 +1,2 @@
+- [项目状态](memory/project-status.md) — 整体实现进度
+- [场景规范](memory/scene-conventions.md) — 关卡节点标准

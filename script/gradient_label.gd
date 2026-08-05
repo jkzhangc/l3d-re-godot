@@ -1,3 +1,4 @@
+@tool
 class_name GradientLabel
 extends Control
 ## 渐变文字标签 — 自动应用色表纵向渐变效果。

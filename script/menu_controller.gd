@@ -16,7 +16,7 @@ const MENU_ITEMS_NO_SAVE: Array[String] = ["继续游戏", "设置", "退出游�
 @export var menu_item_start_y: float = 38.0
 @export var menu_item_height: float = 24.0
 @export var menu_panel_size: Vector2 = Vector2(260, 160)
-@export var menu_panel_pos: Vector2 = Vector2(190, 160)
+@export var menu_panel_pos: Vector2 = Vector2(510, 400)
 
 var _menu_open: bool = false
 var _cursor_idx: int = 0
@@ -89,7 +89,7 @@ func _create_menu() -> void:
 	_menu_panel = _make_panel("MenuPanel", menu_panel_size, menu_panel_pos)
 	add_child(_menu_panel)
 
-	var title: Label = _make_label("主菜单", Vector2(60, 8), 18, Color.WHITE)
+	var title: Label = _make_label("主菜单", Vector2(60, 8), 16, Color.WHITE)
 	title.name = "MenuTitle"
 	_menu_panel.add_child(title)
 
@@ -103,7 +103,7 @@ func _create_menu() -> void:
 		var lbl: Label = Label.new()
 		lbl.text = "  %s" % MENU_ITEMS[i]
 		lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
-		lbl.add_theme_font_size_override("font_size", 15)
+		lbl.add_theme_font_size_override("font_size", 16)
 		vbox.add_child(lbl)
 		_item_labels.append(lbl)
 
@@ -184,7 +184,7 @@ func _build_settings_items() -> void:
 		var pos_y: float = start_y + i * row_step
 		var text: String = SETTINGS_ITEMS[i]
 
-		var lbl: Label = _make_label("  %s" % text, Vector2(label_x, pos_y), 15, Color(0.9, 0.9, 0.9, 1))
+		var lbl: Label = _make_label("  %s" % text, Vector2(label_x, pos_y), 16, Color(0.9, 0.9, 0.9, 1))
 		_menu_panel.add_child(lbl)
 		_settings_labels.append(lbl)
 
@@ -210,12 +210,12 @@ func _build_settings_items() -> void:
 			_menu_panel.add_child(fill)
 			_settings_bar_fill.append(fill)
 
-			var pct := _make_label("", Vector2(bar_x + bar_w + 8, pos_y), 15, Color(0.7, 0.7, 1.0, 1))
+			var pct := _make_label("", Vector2(bar_x + bar_w + 8, pos_y), 16, Color(0.7, 0.7, 1.0, 1))
 			_menu_panel.add_child(pct)
 			_settings_value_labels.append(pct)
 		elif i == 2:
 			var mode_text: String = "切换式" if Global.facing_lock_mode == 0 else "按住式"
-			var mode_lbl := _make_label(mode_text, Vector2(bar_x, pos_y), 15, Color(0.7, 0.7, 1.0, 1))
+			var mode_lbl := _make_label(mode_text, Vector2(bar_x, pos_y), 16, Color(0.7, 0.7, 1.0, 1))
 			_menu_panel.add_child(mode_lbl)
 			_settings_value_labels.append(mode_lbl)
 		else:
@@ -340,6 +340,8 @@ func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> La
 
 func _is_player_in_weapon_state() -> bool:
 	for node in get_tree().get_nodes_in_group("player"):
+		if not is_instance_valid(node):
+			continue
 		if node.has_method("is_facing_locked"):
 			return node.player_in_weapon_state
 	return false

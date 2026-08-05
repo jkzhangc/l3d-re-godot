@@ -115,6 +115,7 @@ script = ExtResource("10_cam")
 follow_speed = 6.0
 bounds_margin = 0.0
 bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
+zoom = Vector2(2, 2)
 
 [node name="UI" type="Control" parent="Camera2D" unique_id=1069130550]
 visible = false

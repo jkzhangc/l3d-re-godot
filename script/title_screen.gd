@@ -26,8 +26,8 @@ const WINDOW_TITLE: String = "のび太的求生之路"
 @export var panel_margin: float = 6.0
 
 @export_group("选项布局")
-@export var title_font_size: int = 18
-@export var item_font_size: int = 19
+@export var title_font_size: int = 16
+@export var item_font_size: int = 16
 @export var item_start_y: float = 20.0
 @export var item_height: float = 28.0
 @export var item_spacing: float = 16.0
@@ -76,7 +76,7 @@ const WINDOW_TITLE: String = "のび太的求生之路"
 @export var arrow_up_path: String = "res://art/System/arrow_up.png"
 @export var color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var color_shader_path: String = "res://shader/text_color.gdshader"
-@export var character_select_scene: String = "res://scene/character_select.tscn"
+@export var campaign_select_scene: String = "res://scene/campaign_select.tscn"
 
 
 var _cursor_idx: int = 0
@@ -264,8 +264,8 @@ func _create_menu_window() -> void:
 	var win: Control = $MenuWindow
 
 	win.position = Vector2(
-		(640.0 - window_size.x) / 2.0,
-		(480.0 - window_size.y) / 2.0 + window_y_offset
+		(1280.0 - window_size.x) / 2.0,
+		(960.0 - window_size.y) / 2.0 + window_y_offset
 	)
 	win.size = window_size
 
@@ -451,7 +451,7 @@ func _refresh_cursor_frame() -> void:
 func _confirm() -> void:
 	match MENU_ITEMS[_cursor_idx]:
 		"开始游戏":
-			_go_to_character_select()
+			_go_to_campaign_select()
 		"设置":
 			_enter_settings()
 		"退出游戏":
@@ -617,11 +617,11 @@ func _update_all_settings_volume_display() -> void:
 	_update_settings_volume_display(1)
 
 
-func _go_to_character_select() -> void:
-	print("[标题画面] 开始游戏 → 角色选择")
-	var err: Error = get_tree().change_scene_to_file(character_select_scene)
+func _go_to_campaign_select() -> void:
+	print("[标题画面] 开始游戏 → 战役选择")
+	var err: Error = get_tree().change_scene_to_file(campaign_select_scene)
 	if err != OK:
-		printerr("[标题画面] 场景切换失败: %s (err=%d)" % [character_select_scene, err])
+		printerr("[标题画面] 场景切换失败: %s (err=%d)" % [campaign_select_scene, err])
 
 
 func _quit_game() -> void:

@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://cgipeges8q034" path="res://art/Animations/ハンドガン発射.png" id="2_8df8x"]
 
 [node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
 script = ExtResource("1_y0427")
 texture = ExtResource("2_8df8x")
 fps = 25.5

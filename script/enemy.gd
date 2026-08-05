@@ -437,6 +437,20 @@ func _find_player_recursive(node: Node) -> CharacterBody2D:
 			return found
 	return null
 
+
+## 被枪声惊动（由玩家开火时调用）。
+## 仅影响尚未发现玩家的敌人（Idle 状态）。
+func alert_by_gunshot(shooter: Node2D) -> void:
+	if _is_dead:
+		return
+	if _player_ref != null:
+		return  # 已经发现玩家，不需要重复惊动
+	_player_ref = shooter as CharacterBody2D
+	var sm := get_node_or_null("StateMachine") as StateMachine
+	if sm and sm.current_state and sm.current_state.name == "Idle":
+		print("[敌人] %s 被枪声惊动！" % name)
+		sm._on_transition_requested("Discover")
+
 # ═══════════════════════════════════════
 # 视野检测
 # ═══════════════════════════════════════

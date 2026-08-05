@@ -31,10 +31,10 @@ enum EasingType {
 # ═══════════════════════════════════════
 
 @export var amount: float = 0.0            ## 伤害数值
-@export var font_path: String = "res://art/System/SimsunXS_12_GB18030_J.ttf"  ## 字体路径
+@export var font_path: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"  ## 字体路径
 @export var color_index: int = 1           ## 色表颜色索引（0–19，默认 1 = 标题画面同款白）
 @export var color_row: int = 0             ## 色表颜色行（0–3，同一色相明暗变体）
-@export var font_size: int = 16            ## 字号（默认 19 = 标题画面菜单同款）
+@export var font_size: int = 32            ## 字号（1280×960 基准）
 @export var bold: bool = false             ## 粗体（1px 右偏移叠加，开启会让文字更亮）
 @export var shadow_enabled: bool = true    ## 阴影
 @export var rise_distance: float = 10.0    ## 上浮距离（像素）
