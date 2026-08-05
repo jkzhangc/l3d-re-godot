@@ -7,7 +7,7 @@ class_name State extends Node
 ##   process_update()  — 每帧调用（输入检测、状态转换判断放这里）
 ##   physics_update()  — 物理帧调用（移动、碰撞放这里）
 
-var character: CharacterBody2D
+var character  ## CharacterBody2D (宽松类型以支持 _player_input)
 var last_state: State
 
 signal transition_requested(nxt_state: String)

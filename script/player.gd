@@ -85,9 +85,13 @@ var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
-var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
+var _near_pickup: bool = false
+var _net_sync_timer: float = 0.0  ## 网络位置同步计时器            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
+
+## 输入抽象层（单机用 LocalPlayerInput，联机远程玩家用 NetworkPlayerInput）
+var _player_input: PlayerInput = LocalPlayerInput.new()
 
 ## 死亡相关
 var _is_dying: bool = false
@@ -104,6 +108,9 @@ var facing: int:
 
 func _ready() -> void:
 	add_to_group("player")
+	# TODO Phase 3: 联机位置同步
+	# if NetworkManager.is_online():
+	# 	_setup_network_sync()
 	# 从 CharacterData 资源读取外观/HP 参数（覆盖本地 @export 默认值）
 	_apply_character_data()
 
@@ -125,6 +132,34 @@ func _ready() -> void:
 		current_hp = Global.player_hp
 	else:
 		current_hp = max_hp
+
+
+func _physics_process(_delta: float) -> void:
+	# 每帧开头刷新输入状态（联机远程玩家会被替换为 NetworkPlayerInput）
+	if _player_input is LocalPlayerInput:
+		(_player_input as LocalPlayerInput).read()
+	# 联机：定期同步位置到自己的 NetworkPlayer 节点
+	if NetworkManager.is_online() and _player_input is LocalPlayerInput:
+		_net_sync_timer += _delta
+		if _net_sync_timer > 0.033:
+			_net_sync_timer = 0.0  # 30Hz
+			_sync_to_network_player()
+
+func _setup_network_sync() -> void:
+	# 防止重复创建
+	if has_node("NetworkSync"):
+		return
+	var sync := MultiplayerSynchronizer.new()
+	sync.name = "NetworkSync"
+	sync.replication_interval = 0.05  # 20Hz
+	# 在 Inspector 中配置要同步的属性：添加 position
+	add_child(sync)
+
+
+func _sync_to_network_player() -> void:
+	## 通过 RPC 广播自己的位置到所有 peer
+	var my_id: int = multiplayer.get_unique_id()
+	NetworkManager.broadcast_player_state.rpc(my_id, global_position.x, global_position.y, _facing, current_hp, _moving, _weapon_data.item_id if _weapon_data else "")
 
 
 func _setup_hurt_area() -> Area2D:

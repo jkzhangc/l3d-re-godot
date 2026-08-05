@@ -109,7 +109,7 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	character.velocity = character._player_input.get_move_vector() * character.run_speed
 	character.move_and_slide()
 
 	# 近战判定区域存在时检测命中（只检测一次）
@@ -246,7 +246,7 @@ func _on_attack_complete() -> void:
 func _try_continue_attack() -> bool:
 	## HOLD 模式下按住确定键 → 重新开始一轮攻击。
 	## 返回 true 表示已重新开始攻击。
-	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
+	if _wd.fire_mode == WeaponData.FireMode.HOLD and character._player_input.is_action_pressed("确定键"):
 		# 重新开始攻击
 		_seq_idx = 0
 		_timer = _wd.get_melee_attack_frame_duration(_seq_idx)

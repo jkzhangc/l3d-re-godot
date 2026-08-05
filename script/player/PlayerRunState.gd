@@ -8,31 +8,31 @@ func enter() -> void:
 
 func process_update(_delta: float) -> void:
 	# 切换武器
-	if Input.is_action_just_pressed("主武器键"):
+	if character._player_input.is_action_just_pressed("主武器键"):
 		_try_switch_weapon("primary")
 		return
-	if Input.is_action_just_pressed("副武器键"):
+	if character._player_input.is_action_just_pressed("副武器键"):
 		_try_switch_weapon("secondary")
 		return
 
 	# 使用消耗品
-	if Input.is_action_just_pressed("治疗品键"):
+	if character._player_input.is_action_just_pressed("治疗品键"):
 		Global.use_healing_item()
 		return
-	if Input.is_action_just_pressed("辅助品键"):
+	if character._player_input.is_action_just_pressed("辅助品键"):
 		Global.use_support_item()
 		return
 
-	if Input.is_action_just_pressed("举起放下武器键"):
+	if character._player_input.is_action_just_pressed("举起放下武器键"):
 		_try_weapon_state()
 		return
 
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = character._player_input.get_move_vector()
 	if move_dir == Vector2.ZERO:
 		transition_requested.emit("Idle")
 		return
 
-	if Input.is_action_pressed("行走键"):
+	if character._player_input.is_action_pressed("行走键"):
 		transition_requested.emit("Walk")
 		return
 
@@ -50,5 +50,5 @@ func _try_switch_weapon(slot: String) -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	character.velocity = character._player_input.get_move_vector() * character.run_speed
 	character.move_and_slide()
