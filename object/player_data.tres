@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PlayerData" load_steps=2 format=3 uid="uid://d1p2q3r4s5t6"]
+
+[ext_resource type="Script" path="res://script/player_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+character = null
+gold = 0
+current_hp = 200.0
+equipment = {"primary": null, "secondary": null}
+active_weapon_slot = "primary"
+healing_item = null
+support_item = null
+inventory = []
+weapon_magazines = {}

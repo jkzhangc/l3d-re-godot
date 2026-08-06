@@ -13,6 +13,7 @@ extends CharacterBody2D
 ##
 ## VX Ace 角色精灵布局（576×512, 4×2共8角色, 每角色3帧×4方向）
 
+
 # ═══════════════════════════════════════
 # 角色参数（行走图/HP/音效 → 由 CharacterData 驱动）
 # ═══════════════════════════════════════
@@ -89,6 +90,12 @@ var _near_pickup: bool = false            ## 玩家是否在武器拾取物范�
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
 
+## 玩家数据容器（联机准备：从 Global 分离玩家状态）
+## 类型实际为 PlayerData，不标注类型以避免 Godot 4.6 跨文件 class_name 解析顺序问题
+var player_data = null
+## 网络归属 ID：1 = 本地玩家/Host，其他值 = 远程 peer ID
+var owner_id: int = 1
+
 ## 死亡相关
 var _is_dying: bool = false
 var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
@@ -120,11 +127,47 @@ func _ready() -> void:
 	animation_timer.start()
 	_refresh_sprite()
 
+	# 初始化 PlayerData 容器（从 Global 同步初始状态）
+	_init_player_data()
+
 	# 从 Global 恢复 HP（用于存档加载后）
 	if Global.player_hp > 0.0:
 		current_hp = Global.player_hp
 	else:
 		current_hp = max_hp
+	# 同步到 PlayerData
+	if player_data:
+		player_data.current_hp = current_hp
+
+
+func _init_player_data() -> void:
+	## 创建 PlayerData 并从 Global 同步初始状态
+	var pd_script: Script = load("res://script/player_data.gd") as Script
+	player_data = pd_script.new()
+	player_data.character = Global.player_character as CharacterData
+	player_data.current_hp = current_hp
+	player_data.equipment = Global.equipment.duplicate()
+	player_data.weapon_magazines = Global.weapon_magazines.duplicate()
+	player_data.active_weapon_slot = Global.active_weapon_slot
+	player_data.healing_item = Global.healing_item
+	player_data.support_item = Global.support_item
+	player_data.inventory = Global.inventory.duplicate()
+	player_data.gold = Global.gold
+
+
+## 将 PlayerData 同步回 Global（保持向后兼容）
+func _sync_player_data_to_global() -> void:
+	if not player_data:
+		return
+	Global.player_hp = player_data.current_hp
+	Global.player_character = player_data.character
+	Global.equipment = player_data.equipment.duplicate()
+	Global.weapon_magazines = player_data.weapon_magazines.duplicate()
+	Global.active_weapon_slot = player_data.active_weapon_slot
+	Global.healing_item = player_data.healing_item
+	Global.support_item = player_data.support_item
+	Global.inventory = player_data.inventory.duplicate()
+	Global.gold = player_data.gold
 
 
 func _setup_hurt_area() -> Area2D:
@@ -282,6 +325,25 @@ func toggle_facing_lock() -> void:
 ## 返回当前朝向是否锁定
 func is_facing_locked() -> bool:
 	return _facing_locked
+
+
+# ═══════════════════════════════════════
+# 输入抽象层（联机准备）
+# ═══════════════════════════════════════
+
+## 获取移动输入向量。当前代理到 Input 单例；联机时改为读取网络输入。
+func get_input_vector() -> Vector2:
+	return Input.get_vector("左", "右", "上", "下")
+
+
+## 检查指定动作是否被按下。当前代理到 Input 单例；联机时改为读取网络输入。
+func is_input_action_pressed(action: String) -> bool:
+	return Input.is_action_pressed(action)
+
+
+## 检查指定动作是否刚被按下（单次触发）。
+func is_input_action_just_pressed(action: String) -> bool:
+	return Input.is_action_just_pressed(action)
 
 
 # ═══════════════════════════════════════

@@ -86,6 +86,7 @@ var _moving: bool = false
 var _player_ref: CharacterBody2D = null       ## 发现的玩家引用
 var _player_in_sight: bool = false
 var _is_dead: bool = false                     ## 是否已死亡
+var owner_id: int = 1                           ## 网络归属 ID（联机准备）
 var _knockback_dir: Vector2 = Vector2.ZERO     ## 击退方向（由 take_damage 设置）
 var _knockback_force: float = 0.0              ## 击退力度
 var _knockback_stun: float = 0.0               ## 击退硬直时长

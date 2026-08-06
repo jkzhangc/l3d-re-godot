@@ -38,6 +38,7 @@ var _collision_offset: Vector2 = Vector2.ZERO
 # 内部状态
 # ═══════════════════════════════════════
 var _distance_traveled: float = 0.0
+var owner_id: int = 0                           ## 网络归属 ID（联机准备，0=未设置）
 var _hits: int = 0
 var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防止重复命中同一目标）
 var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
