@@ -108,18 +108,14 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 	set(v):
 		if state_enum != v:
 			state_enum = v
-			# Puppet 模式：根据状态枚举切换武器外观
+			# Puppet 模式：根据状态切换武器外观
 			if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 				if get_multiplayer_authority() != multiplayer.get_unique_id():
 					match v:
 						3, 4, 5:  # Weapon / Attack / Reload → 显示武器
-							var wd := Global.get_active_weapon()
-							if wd and not _weapon_mode:
-								enter_weapon_mode(wd)
-						0, 1, 2:  # Idle / Walk / Run → 放下武器
-							if _weapon_mode:
-								exit_weapon_mode()
-						6:  # Downed → 放下武器
+							if not _weapon_mode and _puppet_weapon_data:
+								enter_weapon_mode(_puppet_weapon_data)
+						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 放下武器
 							if _weapon_mode:
 								exit_weapon_mode()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
@@ -215,16 +211,22 @@ func _process(delta: float) -> void:
 			_net_sync_timer += delta
 			if _net_sync_timer >= NET_SYNC_INTERVAL:
 				_net_sync_timer = 0.0
-				_sync_state.rpc(global_position, _facing, _moving, _is_walking, state_enum)
+				var weapon_id: String = ""
+				var wd := Global.get_active_weapon()
+				if wd:
+					weapon_id = wd.item_id
+				_sync_state.rpc(global_position, _facing, _moving, _is_walking, state_enum, weapon_id)
 
 
-## Authority 调用 → 远程 puppet 接收位置/朝向/移动/行走状态
+## Authority 调用 → 远程 puppet 接收位置/朝向/移动/行走状态 + 状态枚举 + 武器ID
 @rpc("authority", "unreliable")
-func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool, st_enum: int) -> void:
+func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool, st_enum: int, weapon_id: String) -> void:
 	global_position = pos
 	_facing = facing        ## setter 自动触发 _refresh_sprite()
 	_is_walking = is_walking  ## setter 自动触发 _refresh_sprite()
 	_moving = moving        ## setter 自动启停 animation_timer（放最后避免重复刷新）
+	# 更新 puppet 武器外观
+	_update_puppet_weapon(weapon_id)
 	state_enum = st_enum
 
 
@@ -277,6 +279,44 @@ func _init_puppet() -> void:
 		sprite.modulate = Color(1, 1, 1, 0.7)
 
 	print("[Player] Puppet 初始化完成")
+
+
+## puppet: 根据同步的 weapon_id 更新武器外观
+var _puppet_weapon_id: String = ""
+var _puppet_weapon_data: WeaponData = null
+func _update_puppet_weapon(weapon_id: String) -> void:
+	if weapon_id.is_empty():
+		return
+	if weapon_id == _puppet_weapon_id:
+		return
+	_puppet_weapon_id = weapon_id
+	# 查找 WeaponData 资源（遍历 Global.equipment 和已知武器路径）
+	var wd: WeaponData = null
+	# 尝试从 Global 查找（Host 端 puppet 有完整装备数据）
+	for slot: String in ["primary", "secondary"]:
+		var eq: WeaponData = Global.get_equipped_weapon(slot) as WeaponData
+		if eq and eq.item_id == weapon_id:
+			wd = eq
+			break
+	if not wd:
+		# 回退：尝试加载已知武器资源
+		var known_weapons: Array[String] = [
+			"res://object/weapon_pistol.tres",
+			"res://object/weapon_knife.tres",
+			"res://object/weapon_shotgun.tres",
+			"res://object/weapon_rifle.tres",
+			"res://object/weapon_smg.tres",
+		]
+		for path: String in known_weapons:
+			if ResourceLoader.exists(path):
+				var res: WeaponData = load(path) as WeaponData
+				if res and res.item_id == weapon_id:
+					wd = res
+					break
+	if wd:
+		_puppet_weapon_data = wd
+		enter_weapon_mode(wd)
+		print("[Player] Puppet 武器更新: %s" % weapon_id)
 
 
 func _init_player_data() -> void:

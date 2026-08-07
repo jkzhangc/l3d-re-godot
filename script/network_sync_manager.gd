@@ -93,6 +93,27 @@ func alert_enemy_by_gunshot(enemy_name: String, shooter_peer_id: int) -> void:
 # Host → Clients RPCs
 # ═══════════════════════════════════════
 
+## Host 广播：生成敌人（Client 端创建 puppet 敌人）
+@rpc("authority", "reliable")
+func spawn_enemy(enemy_name: String, pos: Vector2, facing: int) -> void:
+	if multiplayer.is_server():
+		return  # Host 已通过 Director 本地生成
+	var enemy_scene: PackedScene = load("res://object/enemy.tscn") as PackedScene
+	if not enemy_scene:
+		printerr("[NetSync] 无法加载 enemy.tscn")
+		return
+	var enemy: Node2D = enemy_scene.instantiate()
+	enemy.name = enemy_name
+	enemy.global_position = pos
+	if facing >= 0:
+		enemy.initial_facing = facing
+	var tree := get_tree()
+	if tree and tree.current_scene:
+		var decor: Node = tree.current_scene.get_node_or_null("DecorLayer")
+		if decor:
+			decor.add_child(enemy)
+			print("[NetSync] Client 生成 puppet 敌人: %s at (%d,%d)" % [enemy_name, int(pos.x), int(pos.y)])
+
 ## Host 广播：玩家 HP 变化（reliable）
 @rpc("authority", "reliable")
 func sync_player_hp(player_name: String, hp: float) -> void:

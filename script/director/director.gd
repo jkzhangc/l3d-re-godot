@@ -219,6 +219,8 @@ func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
 	if Lobby.is_online():
 		enemy.set_multiplayer_authority(1)
 		enemy.name = NetworkSyncManager.get_unique_enemy_name()
+		# 广播到所有 Client 生成 puppet 敌人
+		NetworkSyncManager.spawn_enemy.rpc(enemy.name, pos, facing if facing >= 0 else enemy.initial_facing)
 
 	_spawn_history.append({
 		"time": Time.get_ticks_msec(),
