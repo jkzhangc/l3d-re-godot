@@ -132,8 +132,6 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 								_start_puppet_lower_anim()
 							else:
 								exit_weapon_mode()
-							if _weapon_mode:
-								exit_weapon_mode()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
@@ -382,7 +380,6 @@ func _start_puppet_attack_anim() -> void:
 
 ## puppet: 启动放下动画（举起序列反向播放）
 func _start_puppet_lower_anim() -> void:
-	print("[Puppet] LOWER called: weapon_mode=%s weapon_data=%s" % [_weapon_mode, "有" if _puppet_weapon_data else "无"])
 	if not _puppet_weapon_data:
 		exit_weapon_mode()
 		return
