@@ -248,6 +248,7 @@ func _spawn_visual_bullets() -> void:
 			area.collision_mask = 0
 		var extra: Vector2 = bd.get_extra_offset(character.facing)
 		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
+		bullet.add_to_group("visual_bullet")
 		character.get_tree().current_scene.add_child(bullet)
 
 

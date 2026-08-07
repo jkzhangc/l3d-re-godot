@@ -145,6 +145,10 @@ func sync_enemy_hp(enemy_name: String, hp: float, is_dead: bool) -> void:
 		if hit_effect:
 			VXAnimSprite.play_scene(hit_effect, enemy.global_position, get_tree().current_scene)
 
+		# Client 端：销毁命中点附近的视觉子弹（模拟穿透检测，视觉子弹 collision_mask=0 不会碰撞）
+		if not multiplayer.is_server():
+			_destroy_nearby_visual_bullets(enemy.global_position)
+
 	if is_dead and not enemy._is_dead:
 		enemy._is_dead = true
 		if enemy.has_method("_show_death_sprite"):
@@ -242,6 +246,7 @@ func broadcast_attack_effects(peer_id: int, weapon_item_id: String, pos: Vector2
 					area.collision_mask = 0
 				var extra: Vector2 = bd.get_extra_offset(facing)
 				bullet.position = pos + dir_vec * bd.spawn_offset + extra
+				bullet.add_to_group("visual_bullet")
 				get_tree().current_scene.add_child(bullet)
 
 
@@ -336,3 +341,25 @@ func _facing_to_vector(facing: int) -> Vector2:
 		2: return Vector2(1, 0)    # RIGHT
 		3: return Vector2(0, -1)   # UP
 	return Vector2(0, 1)
+
+
+## 销毁命中点附近的视觉子弹（Client 端，模拟穿透检测）
+## 只销毁最近的一颗（对应非穿透子弹），穿透子弹的额外子弹继续飞行
+const VISUAL_BULLET_DESTROY_RADIUS: float = 80.0
+
+func _destroy_nearby_visual_bullets(hit_pos: Vector2) -> void:
+	var tree := get_tree()
+	if not tree:
+		return
+	var bullets: Array[Node] = tree.get_nodes_in_group("visual_bullet")
+	var closest: Node2D = null
+	var closest_dist: float = VISUAL_BULLET_DESTROY_RADIUS
+	for bullet: Node in bullets:
+		if not is_instance_valid(bullet):
+			continue
+		var dist: float = bullet.global_position.distance_to(hit_pos)
+		if dist < closest_dist:
+			closest_dist = dist
+			closest = bullet as Node2D
+	if closest:
+		closest.queue_free()
