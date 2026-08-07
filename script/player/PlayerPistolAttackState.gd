@@ -122,7 +122,6 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 func _fire_bullet() -> void:
 	# 播放攻击特效和音效（本地预测：Client 和 Host 都播放）
 	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
-	print("[手枪] 攻击特效 facing=%d scene=%s" % [character.facing, "有" if effect_scene else "无"])
 	if effect_scene:
 		var follow: Node2D = character if _wd.attack_effect_follow else null
 		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
