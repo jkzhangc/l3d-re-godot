@@ -83,6 +83,13 @@ var current_hp: float = 100.0
 var _facing: int = FaceDir.DOWN
 var _anim_step: int = 0
 var _moving: bool = false
+
+# Puppet 攻击动画（联机 Client 端）
+var _puppet_anim_playing: bool = false
+var _puppet_anim_seq_idx: int = 0
+var _puppet_anim_timer: float = 0.0
+var _puppet_prev_synced_state: String = ""
+
 var _player_ref: CharacterBody2D = null       ## 发现的玩家引用
 var _player_in_sight: bool = false
 var _is_dead: bool = false                     ## 是否已死亡
@@ -189,12 +196,70 @@ func _init_enemy_puppet() -> void:
 
 	_update_facing_sprite()
 	_refresh_sprite()
+
+	# 初始化 puppet 动画状态
+	_puppet_anim_playing = false
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = 0.0
+	_puppet_prev_synced_state = ""
+
 	print("[Enemy] Puppet 初始化完成: %s" % name)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if Global.debug_visuals:
 		queue_redraw()
+
+	# Puppet 攻击动画驱动（联机 Client 端）
+	if _puppet_anim_playing:
+		_process_puppet_attack_anim(delta)
+	elif Lobby.is_online() and not multiplayer.is_server():
+		# 检查 synced_state 是否变为攻击状态
+		var cur: String = str(get_meta("synced_state", ""))
+		if cur != _puppet_prev_synced_state:
+			_puppet_prev_synced_state = cur
+			if cur == "EnemyAttackState":
+				_start_puppet_attack()
+
+
+func _start_puppet_attack() -> void:
+	## 开始 puppet 攻击动画
+	if attack_char_sequence.is_empty():
+		return
+	# 停掉行走动画 timer，防止回调覆盖攻击帧
+	if animation_timer:
+		animation_timer.stop()
+	_puppet_anim_playing = true
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = get_attack_frame_duration(0)
+	_set_puppet_attack_frame(0)
+
+
+func _process_puppet_attack_anim(delta: float) -> void:
+	## 驱动 puppet 攻击动画帧
+	_puppet_anim_timer -= delta
+	if _puppet_anim_timer <= 0.0:
+		_puppet_anim_seq_idx += 1
+		if _puppet_anim_seq_idx >= attack_char_sequence.size():
+			# 动画结束
+			_puppet_anim_playing = false
+			_puppet_anim_seq_idx = 0
+			if animation_timer:
+				animation_timer.start()
+			_refresh_sprite()
+			# 如果 synced_state 仍是攻击状态（连续攻击），重新触发
+			var cur: String = str(get_meta("synced_state", ""))
+			if cur == "EnemyAttackState":
+				_puppet_prev_synced_state = ""  # 强制重新检测
+			return
+		_puppet_anim_timer = get_attack_frame_duration(_puppet_anim_seq_idx)
+		_set_puppet_attack_frame(_puppet_anim_seq_idx)
+
+
+func _set_puppet_attack_frame(seq_idx: int) -> void:
+	## 设置 puppet 攻击动画的当前帧
+	var char_idx: int = attack_char_sequence[seq_idx]
+	_refresh_sprite_with_index(char_idx)
 
 
 func _setup_hurt_area() -> Area2D:
