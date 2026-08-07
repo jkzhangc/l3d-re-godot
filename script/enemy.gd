@@ -218,7 +218,7 @@ func _process(delta: float) -> void:
 		var cur: String = str(get_meta("synced_state", ""))
 		if cur != _puppet_prev_synced_state:
 			_puppet_prev_synced_state = cur
-			if cur == "EnemyAttackState":
+			if cur == "Attack":
 				_start_puppet_attack()
 
 
@@ -249,7 +249,7 @@ func _process_puppet_attack_anim(delta: float) -> void:
 			_refresh_sprite()
 			# 如果 synced_state 仍是攻击状态（连续攻击），重新触发
 			var cur: String = str(get_meta("synced_state", ""))
-			if cur == "EnemyAttackState":
+			if cur == "Attack":
 				_puppet_prev_synced_state = ""  # 强制重新检测
 			return
 		_puppet_anim_timer = get_attack_frame_duration(_puppet_anim_seq_idx)
