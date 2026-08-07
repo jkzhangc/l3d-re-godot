@@ -125,7 +125,8 @@ func sync_player_hp(player_name: String, hp: float) -> void:
 
 
 ## Host 广播：敌人 HP 变化 / 死亡（reliable，低频）
-@rpc("authority", "reliable")
+## call_local 确保 Host 也执行此 RPC（用于播放命中特效和伤害数字）
+@rpc("authority", "call_local", "reliable")
 func sync_enemy_hp(enemy_name: String, hp: float, is_dead: bool) -> void:
 	var enemy: Node = _find_enemy(enemy_name)
 	if not enemy:
@@ -134,11 +135,12 @@ func sync_enemy_hp(enemy_name: String, hp: float, is_dead: bool) -> void:
 	var damage: float = old_hp - hp
 	enemy.current_hp = hp
 
-	# Client 端：本地生成伤害数字和命中特效
 	if damage > 0.0 and get_tree() and get_tree().current_scene:
-		var dmg_color: Color = Color.WHITE
-		DamageNumber.spawn(enemy.global_position, damage, get_tree().current_scene, 0, dmg_color)
-		# 播放通用命中特效
+		# 伤害数字：Host 已在 enemy.take_damage() 中生成（带头部颜色），此处跳过避免重复
+		if not multiplayer.is_server():
+			var dmg_color: Color = Color.WHITE
+			DamageNumber.spawn(enemy.global_position, damage, get_tree().current_scene, 0, dmg_color)
+		# 命中特效：所有端都播放（Host 依赖此路径，bullet._hit() 的本地特效可能为空）
 		var hit_effect: PackedScene = load("res://anim/anim_effect_hit.tscn") as PackedScene
 		if hit_effect:
 			VXAnimSprite.play_scene(hit_effect, enemy.global_position, get_tree().current_scene)

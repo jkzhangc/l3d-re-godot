@@ -164,8 +164,8 @@ func _hit(target: Node2D) -> void:
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(damage)])
 	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration, get_instance_id())
 
-	# 播放命中特效
-	if _hit_effect_anim:
+	# 播放命中特效（联机模式由 sync_enemy_hp RPC 统一提供，避免重复）
+	if _hit_effect_anim and not (Lobby.is_online() and multiplayer.is_server()):
 		var bf: Node2D = damageable if _hit_effect_follow else null
 		VXAnimSprite.play_scene(_hit_effect_anim, damageable.global_position, get_tree().current_scene, 10.0, bf, _hit_effect_offset_override)
 	# 播放命中音效
