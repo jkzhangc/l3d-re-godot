@@ -192,7 +192,8 @@ func _create_start_button() -> void:
 	_start_button_rect.name = "StartButton"
 	_start_button_rect.color = Color(0.15, 0.4, 0.15, 0.8)
 	_start_button_rect.size = Vector2(btn_w, btn_h)
-	_start_button_rect.position = Vector2((1280.0 - btn_w) / 2.0, panel.position.y + panel_height - 100)
+	var panel_y: float = (960.0 - panel_height) / 2.0 - 40
+	_start_button_rect.position = Vector2((1280.0 - btn_w) / 2.0, panel_y + panel_height - 100)
 	add_child(_start_button_rect)
 
 	_start_button_label = _make_label("开始游戏", Vector2(_start_button_rect.position.x, _start_button_rect.position.y), font_size)
