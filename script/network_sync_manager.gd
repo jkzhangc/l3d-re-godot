@@ -130,7 +130,15 @@ func sync_enemy_hp(enemy_name: String, hp: float, is_dead: bool) -> void:
 	var enemy: Node = _find_enemy(enemy_name)
 	if not enemy:
 		return
+	var old_hp: float = enemy.current_hp
+	var damage: float = old_hp - hp
 	enemy.current_hp = hp
+
+	# Client 端：本地生成伤害数字和命中特效
+	if damage > 0.0 and get_tree() and get_tree().current_scene:
+		var dmg_color: Color = Color.WHITE
+		DamageNumber.spawn(enemy.global_position, damage, get_tree().current_scene, 0, dmg_color)
+
 	if is_dead and not enemy._is_dead:
 		enemy._is_dead = true
 		if enemy.has_method("_show_death_sprite"):
