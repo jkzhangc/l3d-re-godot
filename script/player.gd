@@ -228,7 +228,6 @@ func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool, st_e
 	_moving = moving        ## setter 自动启停 animation_timer（放最后避免重复刷新）
 	# 更新 puppet 武器外观
 	_update_puppet_weapon(weapon_id)
-	print("[Player] _sync_state puppet: st=%d weapon=%s pos=(%d,%d)" % [st_enum, weapon_id, int(pos.x), int(pos.y)])
 	state_enum = st_enum
 
 
@@ -317,8 +316,11 @@ func _update_puppet_weapon(weapon_id: String) -> void:
 					break
 	if wd:
 		_puppet_weapon_data = wd
-		enter_weapon_mode(wd)
-		print("[Player] Puppet 武器更新: %s" % weapon_id)
+		print("[Player] Puppet 武器缓存: %s" % weapon_id)
+		# 如果当前已处于武器状态，立即切换武器外观
+		if _weapon_mode:
+			exit_weapon_mode()
+			enter_weapon_mode(wd)
 
 
 func _init_player_data() -> void:
