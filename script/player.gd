@@ -111,11 +111,11 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 			# Puppet 模式：根据状态切换武器外观
 			if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 				if get_multiplayer_authority() != multiplayer.get_unique_id():
-					print("[Player] Puppet state_enum: %d→%d weapon_data=%s" % [state_enum if state_enum != v else -1, v, "有" if _puppet_weapon_data else "无"])
 					match v:
 						3, 4, 5:  # Weapon / Attack / Reload → 显示武器
 							if not _weapon_mode and _puppet_weapon_data:
 								enter_weapon_mode(_puppet_weapon_data)
+								set_weapon_ready_frame()  # 跳过举起动画，直接显示就绪帧
 						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 放下武器
 							if _weapon_mode:
 								exit_weapon_mode()

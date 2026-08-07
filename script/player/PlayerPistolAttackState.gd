@@ -215,11 +215,9 @@ func _on_attack_complete() -> void:
 func _spawn_visual_bullets() -> void:
 	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
 	if not bullet_scene:
-		print("[视觉子弹] 无法加载 bullet.tscn")
 		return
 	var base_dir: Vector2 = character.get_facing_vector()
 	var base_pos: Vector2 = character.global_position
-	print("[视觉子弹] 生成 %d 颗子弹 武器=%s" % [_wd.bullet_list.size(), _wd.item_id])
 	for bd: BulletData in _wd.bullet_list:
 		var bullet: Node2D = bullet_scene.instantiate()
 		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
