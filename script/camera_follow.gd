@@ -40,9 +40,12 @@ var _has_bounds: bool = false
 func _ready() -> void:
 	# 应用默认缩放
 	zoom = default_zoom
-	# 自动查找玩家
+	# 自动查找玩家（联机模式下玩家可能尚未生成，延迟到 _process 中重试）
 	_target = _find_player()
-	print(_target)
+	if _target:
+		print("[Camera] 玩家已找到: %s" % _target.name)
+	else:
+		print("[Camera] 玩家未找到，将在 _process 中重试...")
 	_calc_bounds()
 
 
@@ -130,6 +133,12 @@ func _calc_bounds() -> void:
 # ═══════════════════════════════════════
 
 func _process(delta: float) -> void:
+	# 联机模式下玩家延迟生成，持续重试查找
+	if not _target:
+		_target = _find_player()
+		if _target:
+			print("[Camera] 延迟找到玩家: %s" % _target.name)
+
 	if not follow_enabled or not _target:
 		return
 

@@ -175,7 +175,7 @@ func _init_singleplayer() -> void:
 # ═══════════════════════════════════════
 # 联机同步（Authority → Puppets）
 # ═══════════════════════════════════════
-const NET_SYNC_INTERVAL: float = 0.1    ## 10Hz 位置同步
+const NET_SYNC_INTERVAL: float = 0.05   ## 20Hz 位置同步
 var _net_sync_timer: float = 0.0
 
 
