@@ -96,7 +96,12 @@ var _anim_step: int = 0
 					animation_timer.stop()
 					_anim_step = 0
 					_refresh_sprite()
-var _is_walking: bool = false   ## 当前外观是行走(true)还是跑步(false)
+var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(false)，setter 供 puppet 同步
+	set(v):
+		if _is_walking != v:
+			_is_walking = v
+			if not _is_dying:
+				_refresh_sprite()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
@@ -189,15 +194,16 @@ func _process(delta: float) -> void:
 			_net_sync_timer += delta
 			if _net_sync_timer >= NET_SYNC_INTERVAL:
 				_net_sync_timer = 0.0
-				_sync_state.rpc(global_position, _facing, _moving)
+				_sync_state.rpc(global_position, _facing, _moving, _is_walking)
 
 
-## Authority 调用 → 远程 puppet 接收位置/朝向/移动状态
+## Authority 调用 → 远程 puppet 接收位置/朝向/移动/行走状态
 @rpc("authority", "unreliable")
-func _sync_state(pos: Vector2, facing: int, moving: bool) -> void:
+func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool) -> void:
 	global_position = pos
-	_facing = facing    ## setter 自动触发 _refresh_sprite()
-	_moving = moving    ## setter 自动启停 animation_timer
+	_facing = facing        ## setter 自动触发 _refresh_sprite()
+	_is_walking = is_walking  ## setter 自动触发 _refresh_sprite()
+	_moving = moving        ## setter 自动启停 animation_timer（放最后避免重复刷新）
 
 
 func _init_puppet() -> void:

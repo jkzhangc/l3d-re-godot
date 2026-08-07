@@ -30,8 +30,28 @@ func _init_network_game() -> void:
 	if not Lobby.game_started.is_connected(cb):
 		Lobby.game_started.connect(cb)
 
+	# 连接断连信号：移除离线的玩家节点
+	var dc_cb: Callable = _on_player_disconnected
+	if not Lobby.player_disconnected.is_connected(dc_cb):
+		Lobby.player_disconnected.connect(dc_cb)
+
 	# 通知 Host 本 peer 已加载地图
 	Lobby.player_loaded.rpc_id(1)
+
+
+func _on_player_disconnected(peer_id: int) -> void:
+	## 玩家断连：移除对应的 Player 节点
+	print("[GameInit] 玩家 %d 断连，移除 Player 节点" % peer_id)
+	var tree := get_tree()
+	if not tree or not tree.current_scene:
+		return
+	var player_name := "Player%d" % peer_id
+	var container: Node = tree.current_scene.get_node_or_null("DecorLayer/Players")
+	if container:
+		var player: Node = container.get_node_or_null(NodePath(player_name))
+		if player:
+			player.queue_free()
+			print("[GameInit] %s 已移除" % player_name)
 
 
 func _on_start_game() -> void:

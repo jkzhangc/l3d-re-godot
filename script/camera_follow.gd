@@ -51,35 +51,38 @@ func _ready() -> void:
 
 ## 在整个场景树中查找 Player 节点。
 ## 联机模式下优先返回 authority 为自己的玩家。
+## 重要：扫描整棵树，不提前返回——多个玩家可能在同一棵子树下。
 func _find_player() -> Node2D:
 	var tree := get_tree()
 	if not tree:
 		return null
 
 	var my_id: int = multiplayer.get_unique_id()
-	var fallback: Node2D = null
 
-	for node: Node in tree.root.get_children():
-		var found := _find_player_recursive(node, my_id)
-		if found:
-			if found[1]:  # is_own_player
-				return found[0]
-			elif not fallback:
-				fallback = found[0]
+	# 收集所有玩家，优先返回自己的
+	var own_player: Node2D = null
+	var any_player: Node2D = null
+	_collect_players(tree.root, my_id, own_player, any_player)
 
-	return fallback
+	if own_player:
+		print("[Camera] 找到自己的玩家 (peer=%d)" % my_id)
+		return own_player
+	if any_player:
+		print("[Camera] 回退：使用其他玩家")
+		return any_player
+	return null
 
 
-## 返回 [player_node, is_own_player]
-func _find_player_recursive(node: Node, my_id: int) -> Array:
+## 递归收集玩家节点（通过 out-Array 传递可变引用）
+func _collect_players(node: Node, my_id: int, own: Array, any_p: Array) -> void:
 	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		var is_own: bool = (node.get_multiplayer_authority() == my_id)
-		return [node as Node2D, is_own]
+		if node.get_multiplayer_authority() == my_id:
+			if own.is_empty():
+				own.append(node as Node2D)
+		elif any_p.is_empty():
+			any_p.append(node as Node2D)
 	for child: Node in node.get_children():
-		var found := _find_player_recursive(child, my_id)
-		if found:
-			return found
-	return []
+		_collect_players(child, my_id, own, any_p)
 
 
 ## 根据 TileMapLayer 计算地图像素边界。
