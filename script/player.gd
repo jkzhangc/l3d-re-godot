@@ -1114,12 +1114,12 @@ func _refresh_sprite() -> void:
 
 	# 武器模式下使用武器纹理和角色索引
 	if _weapon_mode and _weapon_data:
-		if not _weapon_data.weapon_walk_texture:
-			return
 		# 优先使用角色专属武器行走图，回退到武器默认行走图
 		var char_walk_tex: Texture2D = null
 		if current_character and _weapon_data:
 			char_walk_tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
+		if not char_walk_tex and not _weapon_data.weapon_walk_texture:
+			return  # 无任何武器纹理可用
 		sprite.texture = char_walk_tex if char_walk_tex else _weapon_data.weapon_walk_texture
 		var char_idx: int = _current_weapon_char_idx
 		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
