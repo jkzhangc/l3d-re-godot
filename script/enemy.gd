@@ -117,6 +117,15 @@ var _debug_path_idx: int = 0
 
 
 func _ready() -> void:
+	# 联机模式下设置 Host 为敌人权威（对所有敌人，包括预置的和动态生成的）
+	if Lobby.is_online():
+		set_multiplayer_authority(1)
+
+	# 联机模式下非 Host → puppet 模式（禁用 AI，纯视觉渲染）
+	if Lobby.is_online() and not multiplayer.is_server():
+		_init_enemy_puppet()
+		return
+
 	current_hp = max_hp
 	_facing = initial_facing
 	# 俯视角：浮动模式，所有碰撞都是墙壁
@@ -136,6 +145,51 @@ func _ready() -> void:
 		discover_label.hide()
 
 	_refresh_sprite()
+
+
+func _init_enemy_puppet() -> void:
+	## 联机 Client 端：敌人 puppet 模式 — 禁用 AI 逻辑，只做视觉渲染
+	print("[Enemy] Puppet 模式 — name=%s" % name)
+
+	# 禁用 StateMachine（authority gate 已处理，显式禁用更安全）
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm:
+		sm.set_process(false)
+		sm.set_physics_process(false)
+
+	# 禁用碰撞（视觉 puppet，不参与物理）
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", true)
+
+	# 禁用受击碰撞体
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", false)
+		hurt_area.set_deferred("monitorable", false)
+
+	# 禁用视野区域
+	var vision: Area2D = get_node_or_null("VisionArea")
+	if vision:
+		vision.set_deferred("monitoring", false)
+
+	# 角度模式
+	motion_mode = MOTION_MODE_FLOATING
+
+	# 保持动画 timer 运行（用于本地视觉动画）
+	if animation_timer:
+		animation_timer.wait_time = walk_frame_duration
+		animation_timer.timeout.connect(_on_animation_timer_timeout)
+		animation_timer.start()
+
+	# 加入敌人组（供网络查找）
+	add_to_group("enemy")
+
+	# 半透明标记为远程 puppet
+	if sprite:
+		sprite.modulate = Color(1, 1, 1, 0.7)
+
+	_update_facing_sprite()
+	_refresh_sprite()
+	print("[Enemy] Puppet 初始化完成: %s" % name)
 
 
 func _process(_delta: float) -> void:
@@ -237,6 +291,10 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	if _is_dead:
 		return
 
+	# 联机模式：只有 Host 处理敌人伤害
+	if Lobby.is_online() and not multiplayer.is_server():
+		return
+
 	# 源头去重 + 调试打印
 	if source_id != 0:
 		var _now: int = Time.get_ticks_msec()
@@ -249,6 +307,10 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 
 	current_hp = maxf(0.0, current_hp - damage)
 	print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
+
+	# 联机模式：Host 广播敌人 HP 变化
+	if Lobby.is_online() and multiplayer.is_server():
+		NetworkSyncManager.sync_enemy_hp.rpc(name, current_hp, current_hp <= 0.0)
 
 	# 弹出伤害数字（白/金色调，爆头用亮黄色）
 	var tree := get_tree()
@@ -322,6 +384,22 @@ func _clean_expired_damage_sources(now: int) -> void:
 			to_erase.append(sid)
 	for sid: int in to_erase:
 		_recent_damage_sources.erase(sid)
+
+## 网络 puppet 端：显示死亡精灵（由 sync_enemy_hp RPC 触发）
+func _show_death_sprite() -> void:
+	print("[Enemy] Puppet 显示死亡精灵: %s" % name)
+	# 停止动画
+	if animation_timer:
+		animation_timer.stop()
+	# 显示死亡帧
+	_refresh_sprite_with_index(death_char_index)
+	# 禁用碰撞残留
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", true)
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", false)
+		hurt_area.set_deferred("monitorable", false)
+
 
 func _die(is_headshot: bool) -> void:
 	_is_dead = true

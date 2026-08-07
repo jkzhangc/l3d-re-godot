@@ -120,6 +120,11 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 
 
 func _fire_bullet() -> void:
+	# 联机模式：Client 不本地生成子弹，通过 RPC 让 Host 代为执行
+	if Lobby.is_online() and not multiplayer.is_server():
+		NetworkSyncManager.request_attack.rpc_id(1, multiplayer.get_unique_id())
+		return
+
 	# 消耗弹药
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
 	if current <= 0:

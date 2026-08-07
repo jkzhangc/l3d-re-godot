@@ -221,6 +221,11 @@ func _process_wait(delta: float) -> void:
 
 ## NORMAL 模式：一次性装入所有可用的弹药
 func _do_reload() -> void:
+	# 联机模式：Client 不本地操作弹药，通过 RPC 让 Host 代为执行
+	if Lobby.is_online() and not multiplayer.is_server():
+		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id())
+		return
+
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
 	var capacity: int = _wd.magazine_capacity
 	var need: int = capacity - current
@@ -240,6 +245,11 @@ func _do_reload() -> void:
 
 ## SHOTGUN 模式：装入一发子弹
 func _load_one_shell() -> void:
+	# 联机模式：Client 不本地操作弹药，通过 RPC 让 Host 代为执行
+	if Lobby.is_online() and not multiplayer.is_server():
+		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id())
+		return
+
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
 	if current >= _wd.magazine_capacity:
 		return

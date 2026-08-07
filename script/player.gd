@@ -97,6 +97,9 @@ var _anim_step: int = 0
 					_anim_step = 0
 					_refresh_sprite()
 var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(false)，setter 供 puppet 同步
+## 当前状态枚举（供联机 puppet 推断动画）
+## 0=Idle 1=Walk 2=Run 3=Weapon 4=Attack 5=Reload 6=Downed
+@export var state_enum: int = 0
 	set(v):
 		if _is_walking != v:
 			_is_walking = v
@@ -194,16 +197,23 @@ func _process(delta: float) -> void:
 			_net_sync_timer += delta
 			if _net_sync_timer >= NET_SYNC_INTERVAL:
 				_net_sync_timer = 0.0
-				_sync_state.rpc(global_position, _facing, _moving, _is_walking)
+				_sync_state.rpc(global_position, _facing, _moving, _is_walking, state_enum)
 
 
 ## Authority 调用 → 远程 puppet 接收位置/朝向/移动/行走状态
 @rpc("authority", "unreliable")
-func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool) -> void:
+func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool, st_enum: int) -> void:
 	global_position = pos
 	_facing = facing        ## setter 自动触发 _refresh_sprite()
 	_is_walking = is_walking  ## setter 自动触发 _refresh_sprite()
 	_moving = moving        ## setter 自动启停 animation_timer（放最后避免重复刷新）
+	state_enum = st_enum
+
+
+## Authority 调用 → 远程 puppet 接收 HP 变化（reliable, HP 变化时触发）
+@rpc("authority", "reliable")
+func _sync_hp(hp: float) -> void:
+	current_hp = hp
 
 
 func _init_puppet() -> void:
@@ -508,6 +518,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	if _is_dying:
 		return
 
+	# 联机模式：只有 Host 处理伤害
+	if Lobby.is_online() and not multiplayer.is_server():
+		return
+
 	# 源头去重：同一伤害源 1 秒内不会对玩家重复判定
 	if source_id != 0:
 		var now: int = Time.get_ticks_msec()
@@ -536,6 +550,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	if not member.is_empty():
 		member["current_hp"] = current_hp
 
+	# 联机模式：广播 HP 变化给所有 peer
+	if Lobby.is_online() and multiplayer.is_server():
+		_sync_hp.rpc(current_hp)
+
 	if current_hp <= 0.0:
 		_die()
 
@@ -543,6 +561,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 
 func heal(amount: float) -> void:
+	# 联机模式：只有 Host 处理治疗
+	if Lobby.is_online() and not multiplayer.is_server():
+		return
 	current_hp = minf(max_hp, current_hp + amount)
 	Global.player_hp = current_hp
 	# 同步到队伍成员数据
@@ -550,6 +571,195 @@ func heal(amount: float) -> void:
 	if not member.is_empty():
 		member["current_hp"] = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
+	# 联机模式：广播 HP 变化
+	if Lobby.is_online() and multiplayer.is_server():
+		_sync_hp.rpc(current_hp)
+
+
+# ═══════════════════════════════════════
+# 联机战斗方法（由 NetworkSyncManager RPC 调用）
+# ═══════════════════════════════════════
+
+## Host 收到 Client 的攻击请求后调用，生成子弹实体
+## 注意：当前使用 Global 的武器/弹药数据（Phase 3 将迁移到 player_data）
+func _execute_attack() -> void:
+	var wd := Global.get_active_weapon()
+	if not wd or not wd.is_ranged:
+		return
+
+	var current: int = Global.get_magazine_ammo(wd.item_id)
+	if current <= 0:
+		if wd.empty_fire_sound:
+			Global.play_sfx_managed(wd.empty_fire_sound, get_tree().current_scene)
+		return
+
+	# 消耗弹药
+	Global.set_magazine_ammo(wd.item_id, current - 1)
+	var bullet_count: int = wd.bullet_list.size()
+	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d" % [current - 1, wd.magazine_capacity, bullet_count])
+
+	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
+	if not bullet_scene:
+		return
+
+	var base_dir: Vector2 = get_facing_vector()
+	var base_pos: Vector2 = global_position
+
+	for bd: BulletData in wd.bullet_list:
+		var bullet: Node2D = bullet_scene.instantiate()
+		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
+		var damage: float = bd.get_effective_damage(wd.attack_power)
+
+		if bullet.has_method("setup"):
+			bullet.setup({
+				"direction": dir_vec,
+				"speed": bd.speed,
+				"max_range": bd.max_range,
+				"damage": damage,
+				"destroy_on_hit": bd.destroy_on_hit,
+				"penetration": bd.penetration,
+				"critical_rate": wd.critical_rate,
+				"hit_effect_anim": wd.hit_effect_anim,
+				"hit_effect_follow": wd.hit_effect_follow,
+				"hit_effect_offset_override": wd.hit_effect_offset_override,
+				"hit_sound": wd.hit_sound,
+				"texture": bd.bullet_texture,
+				"anim_frames": bd.bullet_anim_frames,
+				"frame_duration": bd.bullet_frame_duration,
+				"collision_size": bd.collision_size,
+				"collision_offset": bd.collision_offset,
+				"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
+				"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
+				"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else wd.hitstun_duration,
+				"shooter": self,
+			})
+
+		var extra: Vector2 = bd.get_extra_offset(facing)
+		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
+		get_tree().current_scene.add_child(bullet)
+
+	# 播放攻击特效和音效
+	var effect_scene: PackedScene = wd.get_attack_effect_anim(facing)
+	if effect_scene:
+		var follow: Node2D = self if wd.attack_effect_follow else null
+		VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene, 10.0, follow, wd.attack_effect_offset_override)
+	if wd.attack_sound:
+		Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
+
+	# 枪声惊敌
+	if wd.gunshot_range > 0.0:
+		_alert_enemies_by_gunshot(wd.gunshot_range)
+
+
+## Host 收到 Client 的近战请求后调用，执行近战判定
+func _execute_melee() -> void:
+	var wd := Global.get_active_weapon()
+	if not wd or wd.is_ranged:
+		return
+
+	var is_headshot: bool = false
+	if wd.critical_rate > 0.0:
+		is_headshot = randf() * 100.0 < wd.critical_rate
+
+	# 创建近战判定区域
+	var hitbox := Area2D.new()
+	hitbox.collision_layer = 0
+	hitbox.collision_mask = 24  # 层4+5
+
+	var shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = wd.melee_range_size
+	shape.shape = rect
+	hitbox.add_child(shape)
+
+	var offset: Vector2 = get_facing_vector() * wd.melee_range_forward_offset
+	hitbox.global_position = global_position + offset
+	get_tree().current_scene.add_child(hitbox)
+
+	# 检测命中
+	var bodies: Array[Node2D] = hitbox.get_overlapping_bodies()
+	var areas: Array[Area2D] = hitbox.get_overlapping_areas()
+	var damage: float = wd.get_effective_damage()
+	var hit_ids: Array[int] = []
+
+	for body: Node2D in bodies:
+		if body == self: continue
+		if body.get("_is_dead") == true or body.get("_is_dying") == true: continue
+		if body.has_method("take_damage"):
+			var bid: int = body.get_instance_id()
+			if bid in hit_ids: continue
+			hit_ids.append(bid)
+			body.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
+			if wd.hit_effect_anim:
+				VXAnimSprite.play_scene(wd.hit_effect_anim, body.global_position, get_tree().current_scene)
+			if wd.hit_sound:
+				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
+
+	for area: Area2D in areas:
+		var parent: Node = area.get_parent()
+		if parent == self: continue
+		if parent.get("_is_dead") == true or parent.get("_is_dying") == true: continue
+		if parent and parent.has_method("take_damage"):
+			var pid: int = parent.get_instance_id()
+			if pid in hit_ids: continue
+			hit_ids.append(pid)
+			parent.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
+			if wd.hit_effect_anim:
+				VXAnimSprite.play_scene(wd.hit_effect_anim, parent.global_position, get_tree().current_scene)
+			if wd.hit_sound:
+				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
+
+	hitbox.queue_free()
+
+	# 播放攻击特效
+	var effect_scene: PackedScene = wd.get_attack_effect_anim(facing)
+	if effect_scene:
+		VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene)
+	if wd.attack_sound:
+		Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
+
+
+## Host 收到 Client 的装填请求后调用，执行装填
+func _execute_reload() -> void:
+	var wd := Global.get_active_weapon()
+	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
+		return
+
+	var current: int = Global.get_magazine_ammo(wd.item_id)
+	if current >= wd.magazine_capacity:
+		return
+
+	var need: int = wd.magazine_capacity - current
+	var available: int = Global.count_ammo_item(wd.ammo_item_id)
+	if available <= 0:
+		return
+
+	var to_load: int = mini(need, available)
+	var consumed: int = Global.consume_ammo_item(wd.ammo_item_id, to_load)
+	if consumed > 0:
+		Global.set_magazine_ammo(wd.item_id, current + consumed)
+		print("[Player] _execute_reload: %d → %d / %d" % [current, current + consumed, wd.magazine_capacity])
+
+	if wd.reload_sound:
+		Global.play_sfx_managed(wd.reload_sound, get_tree().current_scene)
+
+
+## 枪声惊动范围内敌人（由 _execute_attack 调用）
+func _alert_enemies_by_gunshot(gunshot_range: float) -> void:
+	var tree := get_tree()
+	if not tree: return
+	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+	var shoot_pos: Vector2 = global_position
+	var count: int = 0
+	for enemy: Node in enemies:
+		if not is_instance_valid(enemy): continue
+		if enemy.global_position.distance_to(shoot_pos) > gunshot_range: continue
+		# 联机模式下由 Host 直接调用 enemy.alert_by_gunshot
+		if enemy.has_method("alert_by_gunshot"):
+			enemy.alert_by_gunshot(self)
+			count += 1
+	if count > 0:
+		print("[枪声] 惊动 %d 个敌人（范围 %.0fpx）" % [count, gunshot_range])
 
 
 # ═══════════════════════════════════════

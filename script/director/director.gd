@@ -95,6 +95,10 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# 联机模式：Director 只在 Host 运行（敌人生成、AI、物品投放的权威方）
+	if Lobby.is_online() and not multiplayer.is_server():
+		return
+
 	var player: Node2D = _find_player()
 	if not player or not is_instance_valid(player):
 		return
@@ -210,6 +214,11 @@ func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
 		# 未指定朝向时，自动面向玩家
 		enemy.initial_facing = _calc_facing_toward_player(pos)
 	decor_layer.add_child(enemy)
+
+	# 联机模式：Host 是敌人权威，Client 端为 puppet
+	if Lobby.is_online():
+		enemy.set_multiplayer_authority(1)
+		enemy.name = NetworkSyncManager.get_unique_enemy_name()
 
 	_spawn_history.append({
 		"time": Time.get_ticks_msec(),

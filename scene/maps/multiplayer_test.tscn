@@ -13,6 +13,7 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="8_emmcv"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="9_1a117"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="10_cam"]
+[ext_resource type="Script" uid="uid://djprj6ymwb6jj" path="res://script/director/spawn_point.gd" id="11_spp"]
 
 [node name="MultiplayerTest" type="Node2D"]
 
@@ -84,6 +85,18 @@ y_sort_enabled = true
 [node name="PlayerSpawn" type="Node2D" parent="DecorLayer"]
 y_sort_enabled = true
 position = Vector2(-349, -68)
+
+[node name="Spawn1" type="Node2D" parent="DecorLayer"]
+y_sort_enabled = true
+position = Vector2(-150, -68)
+script = ExtResource("11_spp")
+enabled = true
+
+[node name="Spawn2" type="Node2D" parent="DecorLayer"]
+y_sort_enabled = true
+position = Vector2(150, -68)
+script = ExtResource("11_spp")
+enabled = true
 
 [node name="Menu" parent="." instance=ExtResource("4_gh60l")]
 
