@@ -585,30 +585,35 @@ func heal(amount: float) -> void:
 # ═══════════════════════════════════════
 
 ## Host 收到 Client 的攻击请求后调用，生成子弹实体
-## 优先使用 player_data（支持联机多玩家独立弹药），回退到 Global
+## 武器 = Global（Host 已拾取），弹药 = player_data（独立弹药池，首次自动初始化）
 func _execute_attack() -> void:
-	var pd = player_data
-	var wd: WeaponData = null
-	if pd:
-		wd = pd.get_active_weapon()
-	if not wd:
-		wd = Global.get_active_weapon()
+	var wd := Global.get_active_weapon()
 	if not wd or not wd.is_ranged:
 		return
 
-	var current: int = pd.get_magazine_ammo(wd.item_id) if pd else Global.get_magazine_ammo(wd.item_id)
+	# 弹药：使用 player_data 独立管理（每个玩家的 puppet 有独立弹药池）
+	var current: int = 0
+	if player_data:
+		current = player_data.get_magazine_ammo(wd.item_id)
+		if current <= 0:
+			# 首次攻击：自动初始化为满弹夹
+			current = wd.magazine_capacity
+			player_data.set_magazine_ammo(wd.item_id, current)
+	else:
+		current = Global.get_magazine_ammo(wd.item_id)
+
 	if current <= 0:
 		if wd.empty_fire_sound:
 			Global.play_sfx_managed(wd.empty_fire_sound, get_tree().current_scene)
 		return
 
 	# 消耗弹药
-	if pd:
-		pd.set_magazine_ammo(wd.item_id, current - 1)
+	if player_data:
+		player_data.set_magazine_ammo(wd.item_id, current - 1)
 	else:
 		Global.set_magazine_ammo(wd.item_id, current - 1)
 	var bullet_count: int = wd.bullet_list.size()
-	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d | 使用 %s" % [current - 1, wd.magazine_capacity, bullet_count, "player_data" if pd else "Global"])
+	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d | 数据源=%s" % [current - 1, wd.magazine_capacity, bullet_count, "player_data" if player_data else "Global"])
 
 	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
 	if not bullet_scene:
