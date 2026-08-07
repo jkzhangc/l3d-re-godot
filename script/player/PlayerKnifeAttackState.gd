@@ -162,6 +162,10 @@ func _create_melee_hitbox() -> void:
 	character.get_tree().current_scene.add_child(_hitbox)
 	print("[小刀] 近战判定区域已创建 | 偏移=%s | 大小=%s" % [offset, _wd.melee_range_size])
 
+	# 联机模式：Host 广播攻击特效/音效给其他客户端
+	if Lobby.is_online() and multiplayer.is_server():
+		NetworkSyncManager.broadcast_attack_effects.rpc(multiplayer.get_unique_id(), _wd.item_id, character.global_position, character.facing)
+
 
 func _get_melee_offset() -> Vector2:
 	var fv: Vector2 = character.get_facing_vector()

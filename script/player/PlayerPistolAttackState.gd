@@ -199,6 +199,10 @@ func _fire_bullet() -> void:
 	if _wd.gunshot_range > 0.0:
 		_alert_nearby_enemies()
 
+	# 联机模式：Host 广播攻击特效/音效/视觉子弹给其他客户端
+	if Lobby.is_online() and multiplayer.is_server():
+		NetworkSyncManager.broadcast_attack_effects.rpc(multiplayer.get_unique_id(), _wd.item_id, character.global_position, character.facing)
+
 
 func _on_attack_complete() -> void:
 	## 攻击动画（含攻击后动画）全部播完。

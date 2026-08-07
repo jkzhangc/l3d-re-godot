@@ -169,6 +169,80 @@ func sync_enemies_batch(data: Dictionary) -> void:
 		# HP 通过独立的 reliable RPC 更新，不在批量中覆盖
 
 
+## Host 广播：攻击特效/音效/视觉子弹给 Clients
+## 当 Host 自己攻击时，本地已播放特效，此 RPC 通知所有 Client 播放
+@rpc("authority", "unreliable")
+func broadcast_attack_effects(peer_id: int, weapon_item_id: String, pos: Vector2, facing: int) -> void:
+	if multiplayer.is_server():
+		return  # Host 已本地播放，跳过
+
+	var player: Node = _find_player(peer_id)
+	if not player:
+		print("[NetSync] broadcast_attack_effects: 未找到 Player%d" % peer_id)
+		return
+
+	# 查找 WeaponData
+	var wd: WeaponData = null
+	var known: Array[String] = [
+		"res://object/weapon_pistol.tres",
+		"res://object/weapon_knife.tres",
+		"res://object/weapon_shotgun.tres",
+		"res://object/weapon_rifle.tres",
+		"res://object/weapon_smg.tres",
+	]
+	for path: String in known:
+		if ResourceLoader.exists(path):
+			var res: WeaponData = load(path) as WeaponData
+			if res and res.item_id == weapon_item_id:
+				wd = res
+				break
+
+	if not wd:
+		return
+
+	# 播放攻击特效
+	var effect_scene: PackedScene = wd.get_attack_effect_anim(facing)
+	if effect_scene:
+		var follow: Node2D = player if wd.attack_effect_follow else null
+		VXAnimSprite.play_scene(effect_scene, pos, get_tree().current_scene, 10.0, follow, wd.attack_effect_offset_override)
+
+	# 播放攻击音效
+	if wd.attack_sound:
+		Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
+
+	# 远程武器：生成视觉子弹
+	if wd.is_ranged and wd.bullet_list.size() > 0:
+		var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
+		if bullet_scene:
+			var base_dir: Vector2 = _facing_to_vector(facing)
+			for bd: BulletData in wd.bullet_list:
+				var bullet: Node2D = bullet_scene.instantiate()
+				var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
+				if bullet.has_method("setup"):
+					bullet.setup({
+						"direction": dir_vec,
+						"speed": bd.speed,
+						"max_range": bd.max_range,
+						"damage": 0.0,
+						"destroy_on_hit": false,
+						"penetration": 0,
+						"critical_rate": 0.0,
+						"texture": bd.bullet_texture,
+						"anim_frames": bd.bullet_anim_frames,
+						"frame_duration": bd.bullet_frame_duration,
+						"collision_size": bd.collision_size,
+						"collision_offset": bd.collision_offset,
+						"shooter": player,
+					})
+				# 禁用碰撞检测（纯视觉）
+				var area: Area2D = bullet.get_node_or_null("Area2D")
+				if area:
+					area.collision_mask = 0
+				var extra: Vector2 = bd.get_extra_offset(facing)
+				bullet.position = pos + dir_vec * bd.spawn_offset + extra
+				get_tree().current_scene.add_child(bullet)
+
+
 # ═══════════════════════════════════════
 # 内部工具方法
 # ═══════════════════════════════════════
@@ -250,3 +324,13 @@ func _find_enemy(enemy_name: String) -> Node:
 func get_unique_enemy_name() -> String:
 	_enemy_name_counter += 1
 	return "Enemy_%d" % _enemy_name_counter
+
+
+## 将 facing int 转为方向向量（与 player.gd FaceDir 枚举一致）
+func _facing_to_vector(facing: int) -> Vector2:
+	match facing:
+		0: return Vector2(0, 1)    # DOWN
+		1: return Vector2(-1, 0)   # LEFT
+		2: return Vector2(1, 0)    # RIGHT
+		3: return Vector2(0, -1)   # UP
+	return Vector2(0, 1)
