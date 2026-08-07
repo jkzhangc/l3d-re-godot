@@ -190,6 +190,7 @@ var _net_sync_timer: float = 0.0
 func _process(delta: float) -> void:
 	if _is_dying:
 		_process_death(delta)
+		return
 
 	# 联机模式：Authority 定时广播状态给其他 peer
 	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
@@ -244,6 +245,9 @@ func _init_puppet() -> void:
 		walk_texture = load("res://art/Characters/のび太セット.png") as Texture2D
 	if run_texture == null:
 		run_texture = load("res://art/Characters/のび太歩行セット.png") as Texture2D
+
+	# 初始化 PlayerData（从 Global 复制初始状态，供 Host 端 _execute_attack 使用）
+	_init_player_data()
 
 	# 启动简单动画 timer（只用于 puppet 本地视觉）
 	animation_timer.wait_time = walk_frame_duration
@@ -581,22 +585,30 @@ func heal(amount: float) -> void:
 # ═══════════════════════════════════════
 
 ## Host 收到 Client 的攻击请求后调用，生成子弹实体
-## 注意：当前使用 Global 的武器/弹药数据（Phase 3 将迁移到 player_data）
+## 优先使用 player_data（支持联机多玩家独立弹药），回退到 Global
 func _execute_attack() -> void:
-	var wd := Global.get_active_weapon()
+	var pd = player_data
+	var wd: WeaponData = null
+	if pd:
+		wd = pd.get_active_weapon()
+	if not wd:
+		wd = Global.get_active_weapon()
 	if not wd or not wd.is_ranged:
 		return
 
-	var current: int = Global.get_magazine_ammo(wd.item_id)
+	var current: int = pd.get_magazine_ammo(wd.item_id) if pd else Global.get_magazine_ammo(wd.item_id)
 	if current <= 0:
 		if wd.empty_fire_sound:
 			Global.play_sfx_managed(wd.empty_fire_sound, get_tree().current_scene)
 		return
 
 	# 消耗弹药
-	Global.set_magazine_ammo(wd.item_id, current - 1)
+	if pd:
+		pd.set_magazine_ammo(wd.item_id, current - 1)
+	else:
+		Global.set_magazine_ammo(wd.item_id, current - 1)
 	var bullet_count: int = wd.bullet_list.size()
-	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d" % [current - 1, wd.magazine_capacity, bullet_count])
+	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d | 使用 %s" % [current - 1, wd.magazine_capacity, bullet_count, "player_data" if pd else "Global"])
 
 	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
 	if not bullet_scene:
@@ -721,23 +733,31 @@ func _execute_melee() -> void:
 
 ## Host 收到 Client 的装填请求后调用，执行装填
 func _execute_reload() -> void:
-	var wd := Global.get_active_weapon()
+	var pd = player_data
+	var wd: WeaponData = null
+	if pd:
+		wd = pd.get_active_weapon()
+	if not wd:
+		wd = Global.get_active_weapon()
 	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
 		return
 
-	var current: int = Global.get_magazine_ammo(wd.item_id)
+	var current: int = pd.get_magazine_ammo(wd.item_id) if pd else Global.get_magazine_ammo(wd.item_id)
 	if current >= wd.magazine_capacity:
 		return
 
 	var need: int = wd.magazine_capacity - current
-	var available: int = Global.count_ammo_item(wd.ammo_item_id)
+	var available: int = pd.count_ammo_item(wd.ammo_item_id) if pd else Global.count_ammo_item(wd.ammo_item_id)
 	if available <= 0:
 		return
 
 	var to_load: int = mini(need, available)
-	var consumed: int = Global.consume_ammo_item(wd.ammo_item_id, to_load)
+	var consumed: int = pd.consume_ammo_item(wd.ammo_item_id, to_load) if pd else Global.consume_ammo_item(wd.ammo_item_id, to_load)
 	if consumed > 0:
-		Global.set_magazine_ammo(wd.item_id, current + consumed)
+		if pd:
+			pd.set_magazine_ammo(wd.item_id, current + consumed)
+		else:
+			Global.set_magazine_ammo(wd.item_id, current + consumed)
 		print("[Player] _execute_reload: %d → %d / %d" % [current, current + consumed, wd.magazine_capacity])
 
 	if wd.reload_sound:
