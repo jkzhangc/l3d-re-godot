@@ -112,8 +112,13 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 			if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
 				if get_multiplayer_authority() != multiplayer.get_unique_id():
 					match v:
-						3, 5:  # Weapon / Reload → 显示武器就绪帧
-							_puppet_attack_playing = false
+						3:  # Weapon → 播放举起动画
+							_puppet_anim_playing = false
+							if not _weapon_mode and _puppet_weapon_data:
+								enter_weapon_mode(_puppet_weapon_data)
+								_start_puppet_raise_anim()
+						5:  # Reload → 显示武器就绪帧（跳过动画）
+							_puppet_anim_playing = false
 							if not _weapon_mode and _puppet_weapon_data:
 								enter_weapon_mode(_puppet_weapon_data)
 							set_weapon_ready_frame()
@@ -122,7 +127,7 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 								enter_weapon_mode(_puppet_weapon_data)
 							_start_puppet_attack_anim()
 						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 放下武器
-							_puppet_attack_playing = false
+							_puppet_anim_playing = false
 							if _weapon_mode:
 								exit_weapon_mode()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
@@ -212,9 +217,9 @@ func _process(delta: float) -> void:
 		_process_death(delta)
 		return
 
-	# Puppet 攻击动画驱动
-	if _puppet_attack_playing:
-		_process_puppet_attack_anim(delta)
+	# Puppet 动画驱动（举起/攻击）
+	if _puppet_anim_playing:
+		_process_puppet_anim(delta)
 
 	# 联机模式：Authority 定时广播状态给其他 peer
 	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
@@ -295,10 +300,12 @@ func _init_puppet() -> void:
 ## puppet: 根据同步的 weapon_id 更新武器外观
 var _puppet_weapon_id: String = ""
 var _puppet_weapon_data: WeaponData = null
-## puppet: 本地攻击动画驱动
-var _puppet_attack_seq_idx: int = 0
-var _puppet_attack_timer: float = 0.0
-var _puppet_attack_playing: bool = false
+## puppet: 本地动画驱动（攻击 + 举起/放下）
+var _puppet_anim_seq_idx: int = 0
+var _puppet_anim_timer: float = 0.0
+var _puppet_anim_playing: bool = false
+enum PuppetAnimType { NONE, RAISE, ATTACK }
+var _puppet_anim_type: int = PuppetAnimType.NONE
 
 func _update_puppet_weapon(weapon_id: String) -> void:
 	if weapon_id.is_empty():
@@ -338,43 +345,62 @@ func _update_puppet_weapon(weapon_id: String) -> void:
 			enter_weapon_mode(wd)
 
 
-## puppet: 启动本地攻击动画
+## puppet: 启动举起动画
+func _start_puppet_raise_anim() -> void:
+	if not _puppet_weapon_data:
+		return
+	var seq: Array[int] = _puppet_weapon_data.get_raise_char_sequence()
+	if seq.is_empty():
+		set_weapon_ready_frame()
+		return
+	_puppet_anim_type = PuppetAnimType.RAISE
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(0)
+	_puppet_anim_playing = true
+	_current_weapon_char_idx = seq[0]
+	_refresh_sprite()
+
+
+## puppet: 启动攻击动画
 func _start_puppet_attack_anim() -> void:
 	if not _puppet_weapon_data:
 		return
 	var seq: Array[int] = _puppet_weapon_data.attack_char_sequence
 	if seq.is_empty():
 		return
-	_puppet_attack_seq_idx = 0
-	_puppet_attack_timer = _puppet_weapon_data.get_attack_frame_duration(0)
-	_puppet_attack_playing = true
-	# 显示第一帧
-	_set_puppet_attack_frame(0)
+	_puppet_anim_type = PuppetAnimType.ATTACK
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = _puppet_weapon_data.get_attack_frame_duration(0)
+	_puppet_anim_playing = true
+	_current_weapon_char_idx = seq[0]
+	_refresh_sprite()
 
 
-## puppet: 驱动攻击动画（_process 中调用）
-func _process_puppet_attack_anim(delta: float) -> void:
-	if not _puppet_attack_playing:
+## puppet: 统一动画驱动（_process 中调用）
+func _process_puppet_anim(delta: float) -> void:
+	if not _puppet_anim_playing or not _puppet_weapon_data:
 		return
-	_puppet_attack_timer -= delta
-	if _puppet_attack_timer <= 0.0:
-		_puppet_attack_seq_idx += 1
-		var seq: Array[int] = _puppet_weapon_data.attack_char_sequence if _puppet_weapon_data else []
-		if _puppet_attack_seq_idx >= seq.size():
-			# 动画结束，回到武器就绪帧
-			_puppet_attack_playing = false
-			set_weapon_ready_frame()
+	_puppet_anim_timer -= delta
+	if _puppet_anim_timer <= 0.0:
+		_puppet_anim_seq_idx += 1
+		var seq: Array[int] = []
+		match _puppet_anim_type:
+			PuppetAnimType.RAISE:
+				seq = _puppet_weapon_data.get_raise_char_sequence()
+			PuppetAnimType.ATTACK:
+				seq = _puppet_weapon_data.attack_char_sequence
+		if _puppet_anim_seq_idx >= seq.size():
+			_puppet_anim_playing = false
+			_puppet_anim_type = PuppetAnimType.NONE
+			set_weapon_ready_frame()  # 回到就绪帧
 			return
-		_puppet_attack_timer = _puppet_weapon_data.get_attack_frame_duration(_puppet_attack_seq_idx)
-		_set_puppet_attack_frame(_puppet_attack_seq_idx)
-
-
-func _set_puppet_attack_frame(seq_idx: int) -> void:
-	if not _puppet_weapon_data:
-		return
-	var seq: Array[int] = _puppet_weapon_data.attack_char_sequence
-	if seq_idx >= 0 and seq_idx < seq.size():
-		_current_weapon_char_idx = seq[seq_idx]
+		# 下一帧
+		match _puppet_anim_type:
+			PuppetAnimType.RAISE:
+				_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(_puppet_anim_seq_idx)
+			PuppetAnimType.ATTACK:
+				_puppet_anim_timer = _puppet_weapon_data.get_attack_frame_duration(_puppet_anim_seq_idx)
+		_current_weapon_char_idx = seq[_puppet_anim_seq_idx]
 		_refresh_sprite()
 
 
