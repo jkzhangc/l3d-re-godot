@@ -120,6 +120,14 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 
 
 func _fire_bullet() -> void:
+	# 播放攻击特效和音效（本地预测：Client 和 Host 都播放）
+	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
+	if effect_scene:
+		var follow: Node2D = character if _wd.attack_effect_follow else null
+		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
+	if _wd.attack_sound:
+		_play_attack_sound(_wd.attack_sound)
+
 	# 联机模式：Client 不本地生成子弹，通过 RPC 让 Host 代为执行
 	if Lobby.is_online() and not multiplayer.is_server():
 		NetworkSyncManager.request_attack.rpc_id(1, multiplayer.get_unique_id())
@@ -185,15 +193,7 @@ func _fire_bullet() -> void:
 
 	# 播放开枪音效（只播一次，不是每颗子弹都播）
 	# 播放开枪特效
-	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
-	if effect_scene:
-		var follow: Node2D = character if _wd.attack_effect_follow else null
-		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
-
-	if _wd.attack_sound:
-		_play_attack_sound(_wd.attack_sound)
-
-	# 枪声惊动范围内敌人
+	# 枪声惊动范围内敌人（仅 Host 执行）
 	if _wd.gunshot_range > 0.0:
 		_alert_nearby_enemies()
 

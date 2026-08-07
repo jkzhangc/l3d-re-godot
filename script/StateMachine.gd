@@ -46,6 +46,13 @@ func _physics_process(delta: float) -> void:
 		current_state.physics_update(delta)
 
 
+const STATE_ENUM_MAP: Dictionary = {
+	"Idle": 0, "Walk": 1, "Run": 2,
+	"Pistol": 3, "Knife": 3, "Shotgun": 3, "Rifle": 3,
+	"PistolAttack": 4, "KnifeAttack": 4, "ShotgunAttack": 4, "RifleAttack": 4,
+	"Reload": 5,
+}
+
 func _on_transition_requested(nxt_state: String) -> void:
 	if not states.has(nxt_state):
 		return
@@ -58,4 +65,7 @@ func _on_transition_requested(nxt_state: String) -> void:
 	current_state = states[nxt_state]
 	if current_state:
 		current_state.last_state = last_state
+		# 更新 state_enum（供联机 puppet 推断动画）
+		if STATE_ENUM_MAP.has(nxt_state):
+			character.state_enum = STATE_ENUM_MAP[nxt_state]
 		current_state.enter()

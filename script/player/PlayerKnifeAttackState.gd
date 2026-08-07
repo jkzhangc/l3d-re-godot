@@ -95,17 +95,9 @@ func process_update(delta: float) -> void:
 		_timer = _wd.get_melee_attack_frame_duration(_seq_idx)
 		_set_attack_frame(_seq_idx)
 
-		# 在命中索引发射判定区域
+		# 在命中索引发射判定区域（特效/音效已移至 _create_melee_hitbox 内）
 		if not _hit_done and _seq_idx == _wd.melee_hit_at_sequence_idx:
 			_create_melee_hitbox()
-			# 播放攻击特效
-			var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
-			if effect_scene:
-				var follow: Node2D = character if _wd.attack_effect_follow else null
-				VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
-			# 播放攻击音效
-			if _wd.attack_sound:
-				_play_attack_sound(_wd.attack_sound)
 
 
 func physics_update(delta: float) -> void:
@@ -137,6 +129,14 @@ func _roll_critical() -> bool:
 
 
 func _create_melee_hitbox() -> void:
+	# 播放攻击特效和音效（本地预测：Client 和 Host 都播放）
+	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
+	if effect_scene:
+		var follow: Node2D = character if _wd.attack_effect_follow else null
+		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
+	if _wd.attack_sound:
+		_play_attack_sound(_wd.attack_sound)
+
 	# 联机模式：Client 不本地创建判定区域，通过 RPC 让 Host 代为执行
 	if Lobby.is_online() and not multiplayer.is_server():
 		NetworkSyncManager.request_melee.rpc_id(1, multiplayer.get_unique_id())
