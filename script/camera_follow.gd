@@ -49,40 +49,34 @@ func _ready() -> void:
 	_calc_bounds()
 
 
-## 在整个场景树中查找 Player 节点。
+## 在场景中查找 Player 节点。
 ## 联机模式下优先返回 authority 为自己的玩家。
-## 重要：扫描整棵树，不提前返回——多个玩家可能在同一棵子树下。
 func _find_player() -> Node2D:
 	var tree := get_tree()
 	if not tree:
 		return null
 
 	var my_id: int = multiplayer.get_unique_id()
+	var fallback: Node2D = null
 
-	# 收集所有玩家，优先返回自己的
-	var own_arr: Array = []
-	var any_arr: Array = []
-	_collect_players(tree.root, my_id, own_arr, any_arr)
+	# 使用 group "player" 查找（Player._ready() 中 add_to_group）
+	var players: Array[Node] = tree.get_nodes_in_group("player")
+	print("[Camera] 找到 %d 个玩家 (my_id=%d)" % [players.size(), my_id])
 
-	if own_arr.size() > 0:
-		print("[Camera] 找到自己的玩家 (peer=%d)" % my_id)
-		return own_arr[0] as Node2D
-	if any_arr.size() > 0:
-		print("[Camera] 回退：使用其他玩家")
-		return any_arr[0] as Node2D
-	return null
+	for p: Node in players:
+		if not (p is CharacterBody2D) or not p.has_method("get_weapon_data"):
+			continue
+		var auth: int = p.get_multiplayer_authority()
+		print("[Camera]   - %s authority=%d" % [p.name, auth])
+		if auth == my_id:
+			print("[Camera] 选中自己的玩家: %s" % p.name)
+			return p as Node2D
+		if not fallback:
+			fallback = p as Node2D
 
-
-## 递归收集玩家节点（通过 out-Array 传递可变引用）
-func _collect_players(node: Node, my_id: int, own: Array, any_p: Array) -> void:
-	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		if node.get_multiplayer_authority() == my_id:
-			if own.is_empty():
-				own.append(node as Node2D)
-		elif any_p.is_empty():
-			any_p.append(node as Node2D)
-	for child: Node in node.get_children():
-		_collect_players(child, my_id, own, any_p)
+	if fallback:
+		print("[Camera] 回退：%s" % fallback.name)
+	return fallback
 
 
 ## 根据 TileMapLayer 计算地图像素边界。
