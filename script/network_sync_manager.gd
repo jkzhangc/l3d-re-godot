@@ -163,6 +163,9 @@ func sync_enemies_batch(data: Dictionary) -> void:
 			enemy._facing = state["facing"]
 		if "moving" in state and enemy.has_method("update_moving"):
 			enemy.update_moving(state["moving"])
+		# 存储同步的状态名（供 puppet 驱动动画）
+		if "state" in state:
+			enemy.set_meta("synced_state", state["state"])
 		# HP 通过独立的 reliable RPC 更新，不在批量中覆盖
 
 
@@ -183,10 +186,16 @@ func _broadcast_enemy_states() -> void:
 	for enemy: Node in enemies:
 		if not is_instance_valid(enemy):
 			continue
+		# 获取当前状态名
+		var state_name: String = ""
+		var sm: Node = enemy.get_node_or_null("StateMachine")
+		if sm and sm.current_state:
+			state_name = sm.current_state.name
 		var state: Dictionary = {
 			"pos": enemy.global_position,
 			"facing": enemy.get("_facing"),
 			"moving": enemy.get("_moving"),
+			"state": state_name,
 		}
 		data[enemy.name] = state
 
