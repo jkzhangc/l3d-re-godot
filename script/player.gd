@@ -642,9 +642,35 @@ func heal(amount: float) -> void:
 # ═══════════════════════════════════════
 
 ## Host 收到 Client 的攻击请求后调用，生成子弹实体
-## 武器 = Global（Host 已拾取），弹药 = player_data（独立弹药池，首次自动初始化）
-func _execute_attack() -> void:
-	var wd := Global.get_active_weapon()
+## weapon_item_id: Client 当前使用的武器 ID（不是 Host 的武器）
+## 弹药 = player_data（独立弹药池，首次自动初始化）
+func _execute_attack(weapon_item_id: String = "") -> void:
+	var wd: WeaponData = null
+	# 根据 weapon_item_id 查找 WeaponData
+	if not weapon_item_id.is_empty():
+		# 先查 Global.equipment（Host 本地装备）
+		for slot: String in ["primary", "secondary"]:
+			var eq: WeaponData = Global.get_equipped_weapon(slot) as WeaponData
+			if eq and eq.item_id == weapon_item_id:
+				wd = eq
+				break
+		# 回退：加载已知武器资源
+		if not wd:
+			var known: Array[String] = [
+				"res://object/weapon_pistol.tres",
+				"res://object/weapon_knife.tres",
+				"res://object/weapon_shotgun.tres",
+				"res://object/weapon_rifle.tres",
+				"res://object/weapon_smg.tres",
+			]
+			for path: String in known:
+				if ResourceLoader.exists(path):
+					var res: WeaponData = load(path) as WeaponData
+					if res and res.item_id == weapon_item_id:
+						wd = res
+						break
+	if not wd:
+		wd = Global.get_active_weapon()  # 最终回退
 	if not wd or not wd.is_ranged:
 		return
 

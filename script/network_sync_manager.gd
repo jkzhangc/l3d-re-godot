@@ -37,7 +37,7 @@ func _process(delta: float) -> void:
 
 ## Client 请求 Host 代为执行远程攻击（生成子弹）
 @rpc("any_peer", "reliable")
-func request_attack(peer_id: int) -> void:
+func request_attack(peer_id: int, weapon_item_id: String) -> void:
 	if not multiplayer.is_server():
 		return
 	var player: Node = _find_player(peer_id)
@@ -45,8 +45,8 @@ func request_attack(peer_id: int) -> void:
 		print("[NetSync] request_attack: 未找到 Player%d" % peer_id)
 		return
 	if player.has_method("_execute_attack"):
-		player._execute_attack()
-		print("[NetSync] Host 执行 Player%d 的攻击" % peer_id)
+		player._execute_attack(weapon_item_id)
+		print("[NetSync] Host 执行 Player%d 的攻击 (武器=%s)" % [peer_id, weapon_item_id])
 
 
 ## Client 请求 Host 代为执行近战攻击判定

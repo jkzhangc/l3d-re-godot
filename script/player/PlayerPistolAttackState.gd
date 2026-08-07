@@ -129,9 +129,11 @@ func _fire_bullet() -> void:
 	if _wd.attack_sound:
 		_play_attack_sound(_wd.attack_sound)
 
-	# 联机模式：Client 不本地生成子弹，通过 RPC 让 Host 代为执行
-	if Lobby.is_online() and not multiplayer.is_server():
-		NetworkSyncManager.request_attack.rpc_id(1, multiplayer.get_unique_id())
+	# 联机模式：Client 本地生成视觉子弹（无碰撞），通过 RPC 让 Host 生成权威子弹
+	var is_client_peer: bool = Lobby.is_online() and not multiplayer.is_server()
+	if is_client_peer:
+		_spawn_visual_bullets()
+		NetworkSyncManager.request_attack.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id)
 		return
 
 	# 消耗弹药
@@ -208,6 +210,42 @@ func _on_attack_complete() -> void:
 		return
 	else:
 		transition_requested.emit("Pistol")
+
+
+## 联机 Client 端：生成纯视觉子弹（collision_mask=0，不做碰撞检测）
+func _spawn_visual_bullets() -> void:
+	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
+	if not bullet_scene:
+		return
+	var base_dir: Vector2 = character.get_facing_vector()
+	var base_pos: Vector2 = character.global_position
+	for bd: BulletData in _wd.bullet_list:
+		var bullet: Node2D = bullet_scene.instantiate()
+		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
+		var damage: float = bd.get_effective_damage(_wd.attack_power)
+		if bullet.has_method("setup"):
+			bullet.setup({
+				"direction": dir_vec,
+				"speed": bd.speed,
+				"max_range": bd.max_range,
+				"damage": 0.0,  # 视觉子弹不造成伤害
+				"destroy_on_hit": false,
+				"penetration": 0,
+				"critical_rate": 0.0,
+				"texture": bd.bullet_texture,
+				"anim_frames": bd.bullet_anim_frames,
+				"frame_duration": bd.bullet_frame_duration,
+				"collision_size": bd.collision_size,
+				"collision_offset": bd.collision_offset,
+				"shooter": character,
+			})
+		# 禁用碰撞检测（纯视觉）
+		var area: Area2D = bullet.get_node_or_null("Area2D")
+		if area:
+			area.collision_mask = 0
+		var extra: Vector2 = bd.get_extra_offset(character.facing)
+		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
+		character.get_tree().current_scene.add_child(bullet)
 
 
 func _try_continue_attack() -> bool:
