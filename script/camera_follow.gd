@@ -60,16 +60,16 @@ func _find_player() -> Node2D:
 	var my_id: int = multiplayer.get_unique_id()
 
 	# 收集所有玩家，优先返回自己的
-	var own_player: Node2D = null
-	var any_player: Node2D = null
-	_collect_players(tree.root, my_id, own_player, any_player)
+	var own_arr: Array = []
+	var any_arr: Array = []
+	_collect_players(tree.root, my_id, own_arr, any_arr)
 
-	if own_player:
+	if own_arr.size() > 0:
 		print("[Camera] 找到自己的玩家 (peer=%d)" % my_id)
-		return own_player
-	if any_player:
+		return own_arr[0] as Node2D
+	if any_arr.size() > 0:
 		print("[Camera] 回退：使用其他玩家")
-		return any_player
+		return any_arr[0] as Node2D
 	return null
 
 
