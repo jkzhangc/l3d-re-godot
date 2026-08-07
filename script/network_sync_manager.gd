@@ -138,6 +138,10 @@ func sync_enemy_hp(enemy_name: String, hp: float, is_dead: bool) -> void:
 	if damage > 0.0 and get_tree() and get_tree().current_scene:
 		var dmg_color: Color = Color.WHITE
 		DamageNumber.spawn(enemy.global_position, damage, get_tree().current_scene, 0, dmg_color)
+		# 播放通用命中特效
+		var hit_effect: PackedScene = load("res://anim/anim_effect_hit.tscn") as PackedScene
+		if hit_effect:
+			VXAnimSprite.play_scene(hit_effect, enemy.global_position, get_tree().current_scene)
 
 	if is_dead and not enemy._is_dead:
 		enemy._is_dead = true
