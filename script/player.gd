@@ -126,8 +126,9 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 							if not _weapon_mode and _puppet_weapon_data:
 								enter_weapon_mode(_puppet_weapon_data)
 							_start_puppet_attack_anim()
-						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 放下武器
-							_puppet_anim_playing = false
+						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 播放放下动画
+							if _weapon_mode and _puppet_weapon_data:
+								_start_puppet_lower_anim()
 							if _weapon_mode:
 								exit_weapon_mode()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
@@ -304,7 +305,7 @@ var _puppet_weapon_data: WeaponData = null
 var _puppet_anim_seq_idx: int = 0
 var _puppet_anim_timer: float = 0.0
 var _puppet_anim_playing: bool = false
-enum PuppetAnimType { NONE, RAISE, ATTACK }
+enum PuppetAnimType { NONE, RAISE, ATTACK, LOWER }
 var _puppet_anim_type: int = PuppetAnimType.NONE
 
 func _update_puppet_weapon(weapon_id: String) -> void:
@@ -376,6 +377,24 @@ func _start_puppet_attack_anim() -> void:
 	_refresh_sprite()
 
 
+## puppet: 启动放下动画（举起序列反向播放）
+func _start_puppet_lower_anim() -> void:
+	if not _puppet_weapon_data:
+		return
+	var seq: Array[int] = _puppet_weapon_data.get_raise_char_sequence().duplicate()
+	seq.reverse()
+	if seq.is_empty():
+		exit_weapon_mode()
+		return
+	_puppet_anim_type = PuppetAnimType.LOWER
+	_puppet_anim_seq_idx = 0
+	# 反向动画的时长：原序列的反向帧时长
+	_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(seq.size() - 1 - 0)
+	_puppet_anim_playing = true
+	_current_weapon_char_idx = seq[0]
+	_refresh_sprite()
+
+
 ## puppet: 统一动画驱动（_process 中调用）
 func _process_puppet_anim(delta: float) -> void:
 	if not _puppet_anim_playing or not _puppet_weapon_data:
@@ -384,22 +403,35 @@ func _process_puppet_anim(delta: float) -> void:
 	if _puppet_anim_timer <= 0.0:
 		_puppet_anim_seq_idx += 1
 		var seq: Array[int] = []
+		var dur: float = 0.1
+		var orig_size: int = _puppet_weapon_data.get_raise_char_sequence().size()
 		match _puppet_anim_type:
 			PuppetAnimType.RAISE:
 				seq = _puppet_weapon_data.get_raise_char_sequence()
+			PuppetAnimType.LOWER:
+				seq = _puppet_weapon_data.get_raise_char_sequence().duplicate()
+				seq.reverse()
 			PuppetAnimType.ATTACK:
 				seq = _puppet_weapon_data.attack_char_sequence
 		if _puppet_anim_seq_idx >= seq.size():
 			_puppet_anim_playing = false
+			var finished_type: int = _puppet_anim_type
 			_puppet_anim_type = PuppetAnimType.NONE
-			set_weapon_ready_frame()  # 回到就绪帧
+			match finished_type:
+				PuppetAnimType.LOWER:
+					exit_weapon_mode()
+				_:
+					set_weapon_ready_frame()
 			return
-		# 下一帧
+		# 获取当前帧时长
 		match _puppet_anim_type:
 			PuppetAnimType.RAISE:
-				_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(_puppet_anim_seq_idx)
+				dur = _puppet_weapon_data.get_raise_frame_duration(_puppet_anim_seq_idx)
+			PuppetAnimType.LOWER:
+				dur = _puppet_weapon_data.get_raise_frame_duration(orig_size - 1 - _puppet_anim_seq_idx)
 			PuppetAnimType.ATTACK:
-				_puppet_anim_timer = _puppet_weapon_data.get_attack_frame_duration(_puppet_anim_seq_idx)
+				dur = _puppet_weapon_data.get_attack_frame_duration(_puppet_anim_seq_idx)
+		_puppet_anim_timer = dur
 		_current_weapon_char_idx = seq[_puppet_anim_seq_idx]
 		_refresh_sprite()
 
