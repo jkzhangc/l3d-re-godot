@@ -47,25 +47,36 @@ func _ready() -> void:
 
 
 ## 在整个场景树中查找 Player 节点。
+## 联机模式下优先返回 authority 为自己的玩家。
 func _find_player() -> Node2D:
 	var tree := get_tree()
 	if not tree:
 		return null
+
+	var my_id: int = multiplayer.get_unique_id()
+	var fallback: Node2D = null
+
 	for node: Node in tree.root.get_children():
-		var found := _find_player_recursive(node)
+		var found := _find_player_recursive(node, my_id)
 		if found:
-			return found
-	return null
+			if found[1]:  # is_own_player
+				return found[0]
+			elif not fallback:
+				fallback = found[0]
+
+	return fallback
 
 
-func _find_player_recursive(node: Node) -> Node2D:
+## 返回 [player_node, is_own_player]
+func _find_player_recursive(node: Node, my_id: int) -> Array:
 	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node as Node2D
+		var is_own: bool = (node.get_multiplayer_authority() == my_id)
+		return [node as Node2D, is_own]
 	for child: Node in node.get_children():
-		var found := _find_player_recursive(child)
+		var found := _find_player_recursive(child, my_id)
 		if found:
 			return found
-	return null
+	return []
 
 
 ## 根据 TileMapLayer 计算地图像素边界。

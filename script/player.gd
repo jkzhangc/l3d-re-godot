@@ -76,11 +76,26 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 # ═══════════════════════════════════════
 # 内部状态
 # ═══════════════════════════════════════
-var _facing: int = FaceDir.DOWN
+@export var _facing: int = FaceDir.DOWN:    ## @export 以暴露给 MultiplayerSynchronizer
+	set(v):
+		if _facing != v:
+			_facing = v
+			if not _is_dying:
+				_refresh_sprite()
 var _facing_locked: bool = false
 var _locked_facing: int = FaceDir.DOWN
 var _anim_step: int = 0
-var _moving: bool = false
+@export var _moving: bool = false:           ## @export 以暴露给 MultiplayerSynchronizer
+	set(v):
+		if _moving != v:
+			_moving = v
+			if animation_timer:
+				if _moving:
+					animation_timer.start()
+				else:
+					animation_timer.stop()
+					_anim_step = 0
+					_refresh_sprite()
 var _is_walking: bool = false   ## 当前外观是行走(true)还是跑步(false)
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
@@ -111,6 +126,22 @@ var facing: int:
 
 func _ready() -> void:
 	add_to_group("player")
+
+	# 判断运行模式
+	var is_puppet: bool = false
+	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
+		# 联机模式：检查 authority
+		if get_multiplayer_authority() != multiplayer.get_unique_id():
+			is_puppet = true
+
+	if is_puppet:
+		_init_puppet()
+	else:
+		_init_singleplayer()
+
+
+func _init_singleplayer() -> void:
+	## 单机 / Authority 模式的完整初始化
 	# 从 CharacterData 资源读取外观/HP 参数（覆盖本地 @export 默认值）
 	_apply_character_data()
 
@@ -123,7 +154,8 @@ func _ready() -> void:
 	motion_mode = MOTION_MODE_FLOATING
 
 	animation_timer.wait_time = walk_frame_duration
-	animation_timer.timeout.connect(_on_animation_timer_timeout)
+	var cb: Callable = _on_animation_timer_timeout
+	animation_timer.timeout.connect(cb)
 	animation_timer.start()
 	_refresh_sprite()
 
@@ -138,6 +170,66 @@ func _ready() -> void:
 	# 同步到 PlayerData
 	if player_data:
 		player_data.current_hp = current_hp
+
+	# 配置 MultiplayerSynchronizer（联机时同步位置/朝向/移动状态）
+	_setup_multiplayer_sync()
+
+
+func _setup_multiplayer_sync() -> void:
+	var sync: MultiplayerSynchronizer = get_node_or_null("MultiplayerSynchronizer") as MultiplayerSynchronizer
+	if not sync:
+		return
+	# 仅在联机模式下配置同步属性
+	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		return
+	var config := SceneReplicationConfig.new()
+	config.add_property(NodePath("position"))
+	config.add_property(NodePath("_facing"))
+	config.add_property(NodePath("_moving"))
+	sync.replication_config = config
+	print("[Player] MultiplayerSynchronizer 已配置: position, _facing, _moving")
+
+
+func _init_puppet() -> void:
+	## 远程玩家 puppet 模式 — 禁用逻辑，只做视觉渲染
+	print("[Player] Puppet 模式 — peer_id=%d authority=%d" % [multiplayer.get_unique_id(), get_multiplayer_authority()])
+
+	# 禁用状态机
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm:
+		sm.set_process(false)
+		sm.set_physics_process(false)
+
+	# 禁用碰撞
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", true)
+
+	# 禁用受击碰撞体
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", false)
+		hurt_area.set_deferred("monitorable", false)
+
+	# 俯视角模式
+	motion_mode = MOTION_MODE_FLOATING
+
+	# 基本外观
+	_apply_character_data()
+	if walk_texture == null:
+		walk_texture = load("res://art/Characters/のび太セット.png") as Texture2D
+	if run_texture == null:
+		run_texture = load("res://art/Characters/のび太歩行セット.png") as Texture2D
+
+	# 启动简单动画 timer（只用于 puppet 本地视觉）
+	animation_timer.wait_time = walk_frame_duration
+	var cb: Callable = _on_animation_timer_timeout
+	animation_timer.timeout.connect(cb)
+	animation_timer.start()
+
+	# 半透明标记为远程玩家
+	if sprite:
+		sprite.modulate = Color(1, 1, 1, 0.7)
+
+	print("[Player] Puppet 初始化完成")
 
 
 func _init_player_data() -> void:

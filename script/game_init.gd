@@ -1,13 +1,79 @@
 extends Node
 ## 游戏启动器 — 场景加载时初始化玩家数据 + 创建 CharacterSwitchManager
+##
+## 联机模式：等待 Lobby.start_game 信号 → 通过 MultiplayerSpawner 生成玩家
+## 单机模式：保持原有逻辑
+
 
 func _ready() -> void:
+	if Lobby.is_online():
+		_init_network_game()
+	else:
+		_init_singleplayer_game()
+
+
+func _init_singleplayer_game() -> void:
 	Global.try_load_or_init()
-	print("[GameInit] 初始化完成 | debug=%s | HP=%.0f | team=%d | checkpoint=%s" % [
+	print("[GameInit] 单机初始化完成 | debug=%s | HP=%.0f | team=%d | checkpoint=%s" % [
 		Global.debug_enabled, Global.player_hp, Global.get_team_size(),
 		"有" if not Global.checkpoint.is_empty() else "无"
 	])
 	_spawn_switch_manager()
+
+
+func _init_network_game() -> void:
+	## 联机模式：通知 Host 本 peer 已加载，等待 game_started 信号
+	print("[GameInit] 联机模式 — peer_id=%d is_server=%s" % [multiplayer.get_unique_id(), multiplayer.is_server()])
+
+	# 连接 Lobby.game_started 信号（start_game RPC 触发后 emit）
+	var cb: Callable = _on_start_game
+	if not Lobby.game_started.is_connected(cb):
+		Lobby.game_started.connect(cb)
+
+	# 通知 Host 本 peer 已加载地图
+	Lobby.player_loaded.rpc_id(1)
+
+
+func _on_start_game() -> void:
+	## Host 广播 start_game 后，Host 为每个 peer 创建 Player
+	print("[GameInit] game_started! peer=%d is_server=%s" % [multiplayer.get_unique_id(), multiplayer.is_server()])
+
+	# 初始化玩家数据（从 Global 读取初始数据）
+	if multiplayer.is_server():
+		Global.try_load_or_init()
+
+	# Host 为所有 peer 生成玩家（通过 RPC 在所有 peer 上创建）
+	if multiplayer.is_server():
+		var idx: int = 0
+		for peer_id: int in Lobby.players:
+			var pos: Vector2 = Vector2(-349 + idx * 48, -68)
+			idx += 1
+			_create_player.rpc(peer_id, pos)
+
+
+## 在所有 peer 上创建一个 Player 节点
+@rpc("call_local", "reliable")
+func _create_player(peer_id: int, spawn_pos: Vector2) -> void:
+	print("[GameInit] _create_player: peer=%d pos=%s" % [peer_id, spawn_pos])
+
+	var player_scene: PackedScene = load("res://object/player.tscn") as PackedScene
+	if not player_scene:
+		printerr("[GameInit] 无法加载 Player 场景")
+		return
+
+	var player: CharacterBody2D = player_scene.instantiate()
+	player.name = "Player%d" % peer_id
+	player.set_multiplayer_authority(peer_id)
+	player.position = spawn_pos
+
+	var tree := get_tree()
+	if tree and tree.current_scene:
+		var container: Node = tree.current_scene.get_node_or_null("DecorLayer/Players")
+		if container:
+			container.add_child(player, true)
+			print("[GameInit] Player%d 已创建 (authority=%d)" % [peer_id, peer_id])
+		else:
+			printerr("[GameInit] 未找到 Players 容器")
 
 
 func _spawn_switch_manager() -> void:

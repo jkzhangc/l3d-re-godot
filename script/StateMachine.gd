@@ -29,12 +29,20 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if current_state:
+	if current_state and current_state.has_method("process_update"):
+		# 联机模式：仅 authority peer 运行状态机
+		if character and is_instance_valid(character):
+			if character.get_multiplayer_authority() != multiplayer.get_unique_id():
+				return
 		current_state.process_update(delta)
 
 
 func _physics_process(delta: float) -> void:
-	if current_state:
+	if current_state and current_state.has_method("physics_update"):
+		# 联机模式：仅 authority peer 运行状态机
+		if character and is_instance_valid(character):
+			if character.get_multiplayer_authority() != multiplayer.get_unique_id():
+				return
 		current_state.physics_update(delta)
 
 

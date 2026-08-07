@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 Global="*res://script/global.gd"
 Director="*res://script/director/director.gd"
+Lobby="*res://script/lobby.gd"
 
 [display]
 

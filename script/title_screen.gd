@@ -10,7 +10,7 @@ extends Control
 ##   确定键  → 确认
 
 
-const MENU_ITEMS: Array[String] = ["开始游戏", "设置", "退出游戏"]
+const MENU_ITEMS: Array[String] = ["开始游戏", "联机游戏", "设置", "退出游戏"]
 const WINDOW_TITLE: String = "のび太的求生之路"
 
 # ═══════════════════════════════════════
@@ -77,6 +77,7 @@ const WINDOW_TITLE: String = "のび太的求生之路"
 @export var color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var color_shader_path: String = "res://shader/text_color.gdshader"
 @export var campaign_select_scene: String = "res://scene/campaign_select.tscn"
+@export var lobby_scene: String = "res://scene/lobby.tscn"
 
 
 var _cursor_idx: int = 0
@@ -452,6 +453,8 @@ func _confirm() -> void:
 	match MENU_ITEMS[_cursor_idx]:
 		"开始游戏":
 			_go_to_campaign_select()
+		"联机游戏":
+			_go_to_lobby()
 		"设置":
 			_enter_settings()
 		"退出游戏":
@@ -622,6 +625,13 @@ func _go_to_campaign_select() -> void:
 	var err: Error = get_tree().change_scene_to_file(campaign_select_scene)
 	if err != OK:
 		printerr("[标题画面] 场景切换失败: %s (err=%d)" % [campaign_select_scene, err])
+
+
+func _go_to_lobby() -> void:
+	print("[标题画面] 联机游戏 → 大厅")
+	var err: Error = get_tree().change_scene_to_file(lobby_scene)
+	if err != OK:
+		printerr("[标题画面] 大厅场景切换失败: %s (err=%d)" % [lobby_scene, err])
 
 
 func _quit_game() -> void:
