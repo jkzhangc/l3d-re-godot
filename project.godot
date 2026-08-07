@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="bird's-eye_view-ARPG test"
-run/main_scene="uid://c3berb5en8a0a"
+run/main_scene="uid://dxt1tlec0v8m7"
 config/features=PackedStringArray("4.6", "Mobile")
 config/icon="res://icon.svg"
 
