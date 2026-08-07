@@ -7,8 +7,8 @@ extends Control
 ##   取消键  → 返回标题画面
 
 
-const MENU_ITEMS_HOST: Array[String] = ["创建房间", "返回"]
-const MENU_ITEMS_CLIENT: Array[String] = ["输入 IP 地址", "加入房间", "返回"]
+const MENU_ITEMS_MAIN: Array[String] = ["创建房间", "加入房间", "返回"]
+const MENU_ITEMS_JOINING: Array[String] = ["输入 IP 地址", "连接", "返回"]
 
 enum Phase { MAIN, HOST_LOBBY, CLIENT_LOBBY, JOINING }
 
@@ -157,7 +157,7 @@ func _refresh_phase() -> void:
 	match _phase:
 		Phase.MAIN:
 			_status_label.text = ""
-			_build_item_labels(MENU_ITEMS_HOST)
+			_build_item_labels(MENU_ITEMS_MAIN)
 			_cursor_idx = 0
 			_cursor_rect.visible = true
 
@@ -176,9 +176,8 @@ func _refresh_phase() -> void:
 			_refresh_player_list()
 
 		Phase.JOINING:
-			_status_label.text = "正在连接 %s:%d ..." % [_ip_address, Lobby.PORT]
-			_ip_input.visible = true
-			_build_item_labels(MENU_ITEMS_CLIENT)
+			_status_label.text = "输入 Host IP 地址后选择连接"
+			_build_item_labels(MENU_ITEMS_JOINING)
 			_cursor_idx = 0
 			_cursor_rect.visible = true
 
@@ -246,7 +245,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _handle_main_input(event: InputEvent) -> void:
-	var item_count: int = MENU_ITEMS_HOST.size()
+	var item_count: int = MENU_ITEMS_MAIN.size()
 
 	if event.is_action_pressed("上"):
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
@@ -263,14 +262,17 @@ func _handle_main_input(event: InputEvent) -> void:
 					_refresh_phase()
 				else:
 					_status_label.text = "创建房间失败 (err=%d)" % err
-			1:  # 返回
+			1:  # 加入房间 → 进入 JOINING 阶段
+				_phase = Phase.JOINING
+				_refresh_phase()
+			2:  # 返回
 				_go_back_to_title()
 	elif event.is_action_pressed("取消键"):
 		_go_back_to_title()
 
 
 func _handle_joining_input(event: InputEvent) -> void:
-	var item_count: int = MENU_ITEMS_CLIENT.size()
+	var item_count: int = MENU_ITEMS_JOINING.size()
 
 	if event.is_action_pressed("上"):
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
@@ -280,16 +282,15 @@ func _handle_joining_input(event: InputEvent) -> void:
 		_refresh_cursor()
 	elif event.is_action_pressed("确定键"):
 		match _cursor_idx:
-			0:  # 输入 IP
+			0:  # 输入 IP → 弹出输入框
 				_in_ip_edit = true
 				_ip_input.visible = true
 				_ip_input.grab_focus()
 				_cursor_rect.visible = false
-			1:  # 加入房间
+			1:  # 连接
 				var err: Error = Lobby.join_game(_ip_address)
 				if err == OK:
-					# 连接成功会触发 connected_to_server → _on_connected_ok
-					pass
+					_status_label.text = "正在连接 %s:%d ..." % [_ip_address, Lobby.PORT]
 				else:
 					_status_label.text = "连接失败 (err=%d)" % err
 			2:  # 返回
