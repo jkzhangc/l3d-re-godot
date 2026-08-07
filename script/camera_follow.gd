@@ -129,12 +129,18 @@ func _calc_bounds() -> void:
 # 跟随
 # ═══════════════════════════════════════
 
+var _found_own_player: bool = false   ## 是否已找到自己的玩家（联机模式）
+
 func _process(delta: float) -> void:
-	# 联机模式下玩家延迟生成，持续重试查找
-	if not _target:
-		_target = _find_player()
-		if _target:
-			print("[Camera] 延迟找到玩家: %s" % _target.name)
+	# 联机模式下玩家延迟生成，持续重试直到找到自己的玩家
+	if not _found_own_player:
+		var candidate: Node2D = _find_player()
+		if candidate:
+			var my_id: int = multiplayer.get_unique_id()
+			if candidate.get_multiplayer_authority() == my_id:
+				_found_own_player = true
+			_target = candidate
+			print("[Camera] 延迟找到玩家: %s (authority=%d, my_id=%d)" % [candidate.name, candidate.get_multiplayer_authority(), my_id])
 
 	if not follow_enabled or not _target:
 		return
