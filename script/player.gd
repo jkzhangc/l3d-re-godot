@@ -382,7 +382,9 @@ func _start_puppet_attack_anim() -> void:
 
 ## puppet: 启动放下动画（举起序列反向播放）
 func _start_puppet_lower_anim() -> void:
+	print("[Puppet] LOWER called: weapon_mode=%s weapon_data=%s" % [_weapon_mode, "有" if _puppet_weapon_data else "无"])
 	if not _puppet_weapon_data:
+		exit_weapon_mode()
 		return
 	var seq: Array[int] = _puppet_weapon_data.get_raise_char_sequence().duplicate()
 	seq.reverse()
