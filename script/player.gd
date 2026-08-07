@@ -171,23 +171,33 @@ func _init_singleplayer() -> void:
 	if player_data:
 		player_data.current_hp = current_hp
 
-	# 配置 MultiplayerSynchronizer（联机时同步位置/朝向/移动状态）
-	_setup_multiplayer_sync()
+
+# ═══════════════════════════════════════
+# 联机同步（Authority → Puppets）
+# ═══════════════════════════════════════
+const NET_SYNC_INTERVAL: float = 0.1    ## 10Hz 位置同步
+var _net_sync_timer: float = 0.0
 
 
-func _setup_multiplayer_sync() -> void:
-	var sync: MultiplayerSynchronizer = get_node_or_null("MultiplayerSynchronizer") as MultiplayerSynchronizer
-	if not sync:
-		return
-	# 仅在联机模式下配置同步属性
-	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
-		return
-	var config := SceneReplicationConfig.new()
-	config.add_property(NodePath("position"))
-	config.add_property(NodePath("_facing"))
-	config.add_property(NodePath("_moving"))
-	sync.replication_config = config
-	print("[Player] MultiplayerSynchronizer 已配置: position, _facing, _moving")
+func _process(delta: float) -> void:
+	if _is_dying:
+		_process_death(delta)
+
+	# 联机模式：Authority 定时广播状态给其他 peer
+	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
+		if get_multiplayer_authority() == multiplayer.get_unique_id():
+			_net_sync_timer += delta
+			if _net_sync_timer >= NET_SYNC_INTERVAL:
+				_net_sync_timer = 0.0
+				_sync_state.rpc(global_position, _facing, _moving)
+
+
+## Authority 调用 → 远程 puppet 接收位置/朝向/移动状态
+@rpc("authority", "unreliable")
+func _sync_state(pos: Vector2, facing: int, moving: bool) -> void:
+	global_position = pos
+	_facing = facing    ## setter 自动触发 _refresh_sprite()
+	_moving = moving    ## setter 自动启停 animation_timer
 
 
 func _init_puppet() -> void:
@@ -279,11 +289,6 @@ func _setup_hurt_area() -> Area2D:
 
 	add_child(area)
 	return area
-
-
-func _process(delta: float) -> void:
-	if _is_dying:
-		_process_death(delta)
 
 
 func _on_animation_timer_timeout() -> void:

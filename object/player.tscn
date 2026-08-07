@@ -75,6 +75,3 @@ script = ExtResource("8")
 
 [node name="RifleAttack" type="Node" parent="StateMachine" unique_id=577506374]
 script = ExtResource("10")
-
-[node name="MultiplayerSynchronizer" type="MultiplayerSynchronizer" parent="."]
-replication_interval = 0.05
