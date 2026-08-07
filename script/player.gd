@@ -127,8 +127,11 @@ var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(fals
 								enter_weapon_mode(_puppet_weapon_data)
 							_start_puppet_attack_anim()
 						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 播放放下动画
+							_puppet_anim_playing = false
 							if _weapon_mode and _puppet_weapon_data:
 								_start_puppet_lower_anim()
+							else:
+								exit_weapon_mode()
 							if _weapon_mode:
 								exit_weapon_mode()
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
