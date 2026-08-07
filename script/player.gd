@@ -97,14 +97,14 @@ var _anim_step: int = 0
 					_anim_step = 0
 					_refresh_sprite()
 var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(false)，setter 供 puppet 同步
-## 当前状态枚举（供联机 puppet 推断动画）
-## 0=Idle 1=Walk 2=Run 3=Weapon 4=Attack 5=Reload 6=Downed
-@export var state_enum: int = 0
 	set(v):
 		if _is_walking != v:
 			_is_walking = v
 			if not _is_dying:
 				_refresh_sprite()
+## 当前状态枚举（供联机 puppet 推断动画）
+## 0=Idle 1=Walk 2=Run 3=Weapon 4=Attack 5=Reload 6=Downed
+@export var state_enum: int = 0
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
