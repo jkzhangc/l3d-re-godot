@@ -71,6 +71,7 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 @export_group("动画特效")
 ## 攻击命中时的特效场景，拖入 anim/ 目录下的 .tscn 文件
 @export var attack_effect_anim: PackedScene = null
+@export var hit_effect_anim: PackedScene = preload("res://anim/anim_effect_hit.tscn")
 ## 攻击特效是否跟随玩家实体移动（开启后特效每帧跟随玩家位置）
 @export var attack_effect_follow: bool = false
 ## 攻击特效位置偏移覆盖（非零时替换 .tscn 内置的 position_offset）

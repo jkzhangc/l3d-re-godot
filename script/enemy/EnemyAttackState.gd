@@ -160,4 +160,3 @@ func _get_attack_effect_path(effect_scene: PackedScene) -> String:
 	if not effect_scene:
 		return ""
 	return effect_scene.resource_path
-					print("[敵人] 友军伤害！命中其他敌人 伤害=%d" % int(dmg))
