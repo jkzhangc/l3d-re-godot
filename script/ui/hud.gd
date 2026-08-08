@@ -1,13 +1,14 @@
 extends CanvasLayer
-## 战斗 HUD — HP 血条（左上）+ 5 槽位横排快捷栏（右下角）。
+## 战斗 HUD — HP 血条（左上）+ 5 槽位横排快捷栏（右下角）+ 队友血条。
 ##
 ## 在 scene/main.tscn 中作为子节点添加（layer=10）。
-## 每帧从 Global autoload 读取数据刷新显示。
+## 联机模式：从 Player 节点读取 current_hp（已通过 _sync_hp RPC 同步），不使用 Global.player_hp。
 ##
 ## 布局（1280×960）：
 ##   ┌──────────────────────────────────────┐
 ##   │ ♥ [████████░░░░] 150/200            │ ← HP 血条（左上）
-##   │                                      │
+##   │ 队友1 [████░░] 80/200               │ ← 队友血条（联机模式）
+##   │ 队友2 [██████] 120/200              │
 ##   │                                      │
 ##   │           ┌────┬────┬────┬────┬────┐ │
 ##   │           │ 1  │ 2  │ 3  │ 4  │ 5  │ │ ← 槽位栏（右下角横排）
@@ -19,8 +20,8 @@ extends CanvasLayer
 # 常量
 # ═══════════════════════════════════════
 
-const HP_BAR_WIDTH: int = 100
-const HP_BAR_HEIGHT: int = 14
+const HP_BAR_WIDTH: int = 160
+const HP_BAR_HEIGHT: int = 20
 const SLOT_W: int = 104    ## 单个槽位宽度（与 hud_slot.gd 一致）
 const SLOT_H: int = 52     ## 单个槽位高度（与 hud_slot.gd 一致）
 const SLOT_GAP: int = 3    ## 槽位间距
@@ -33,6 +34,12 @@ const VIEW_H: int = 960
 const HP_FRAME_TEX := preload("res://art/Ui/ＨＰバー.png")
 const HP_FILL_TEX  := preload("res://art/Ui/ＨＰメーター.png")
 const SLOT_SCRIPT  := preload("res://script/ui/hud_slot.gd")
+
+## 队友迷你血条尺寸
+const TEAM_BAR_WIDTH: int = 130
+const TEAM_BAR_HEIGHT: int = 12
+const TEAM_BAR_GAP: int = 2
+const MAX_TEAMMATE_BARS: int = 3
 
 
 # ═══════════════════════════════════════
@@ -62,7 +69,7 @@ const SLOT_SCRIPT  := preload("res://script/ui/hud_slot.gd")
 		if _hp_row:
 			_hp_row.position = v
 ## HP 数值标签屏幕坐标（直接挂 CanvasLayer，不受布局容器限制）
-@export var hp_label_offset: Vector2 = Vector2(108, 7):
+@export var hp_label_offset: Vector2 = Vector2(168, 8):
 	set(v):
 		hp_label_offset = v
 		if _hp_label:
@@ -94,6 +101,10 @@ var _slots: Array[Control] = []
 
 var _player_ref: CharacterBody2D = null
 
+## 队友血条节点（联机模式动态创建）
+var _teammate_bar_container: Control = null
+var _teammate_bars: Array[Dictionary] = []  ## [{name_label, bar_fill, frame, hp_label}]
+
 
 # ═══════════════════════════════════════
 # 初始化
@@ -108,23 +119,34 @@ func _ready() -> void:
 
 
 func _find_player() -> CharacterBody2D:
+	## 查找本地玩家节点（联机模式：匹配 authority；单机模式：第一个找到的）
 	var tree := get_tree()
-	if tree:
-		for node: Node in tree.root.get_children():
-			var found := _find_player_recursive(node)
-			if found:
-				return found
-	return null
+	if not tree:
+		return null
+	var all_players: Array[Node] = []
+	_find_all_players(tree.root, all_players)
+
+	if all_players.is_empty():
+		return null
+
+	# 联机模式：返回 authority 匹配的节点
+	if Lobby.is_online():
+		var my_id: int = multiplayer.get_unique_id()
+		for p: Node in all_players:
+			if p.get_multiplayer_authority() == my_id:
+				return p as CharacterBody2D
+		# 回退（Host 的本地玩家）
+		return all_players[0] as CharacterBody2D
+
+	# 单机模式：返回第一个
+	return all_players[0] as CharacterBody2D
 
 
-func _find_player_recursive(node: Node) -> CharacterBody2D:
+func _find_all_players(node: Node, result: Array[Node]) -> void:
 	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node as CharacterBody2D
+		result.append(node)
 	for child: Node in node.get_children():
-		var found := _find_player_recursive(child)
-		if found:
-			return found
-	return null
+		_find_all_players(child, result)
 
 
 # ═══════════════════════════════════════
@@ -173,7 +195,7 @@ func _build_hp_bar() -> void:
 	_hp_label.position = hp_label_offset
 	_hp_label.visible = hp_label_visible
 	_hp_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
-	_hp_label.add_theme_font_size_override("font_size", 10)
+	_hp_label.add_theme_font_size_override("font_size", 14)
 	_hp_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_hp_label.add_theme_constant_override("outline_size", 2)
 	add_child(_hp_label)  ## 直接加到 CanvasLayer，不受 HBox 布局控制
@@ -183,10 +205,16 @@ func _build_hp_bar() -> void:
 	_team_label.name = "TeamLabel"
 	_team_label.position = Vector2(hp_bar_pos.x, hp_bar_pos.y + HP_BAR_HEIGHT + 4)
 	_team_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.9, 0.8))
-	_team_label.add_theme_font_size_override("font_size", 10)
+	_team_label.add_theme_font_size_override("font_size", 12)
 	_team_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
 	_team_label.add_theme_constant_override("outline_size", 1)
 	add_child(_team_label)
+
+	# 队友血条容器（联机模式动态填充）
+	_teammate_bar_container = Control.new()
+	_teammate_bar_container.name = "TeammateBars"
+	_teammate_bar_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_teammate_bar_container)
 
 
 # ═══════════════════════════════════════
@@ -248,6 +276,7 @@ func _process(_delta: float) -> void:
 		return
 	if hp_bar_visible:
 		_update_hp_bar()
+		_update_teammate_bars()
 	if slot_bar_visible:
 		_update_slots()
 
@@ -259,6 +288,8 @@ func _apply_visibility() -> void:
 		_slot_bg.visible = hud_visible and slot_bar_visible
 	if _slot_hbox:
 		_slot_hbox.visible = hud_visible and slot_bar_visible
+	if _teammate_bar_container:
+		_teammate_bar_container.visible = hud_visible and hp_bar_visible
 
 
 func _reposition_slot_bar() -> void:
@@ -284,10 +315,14 @@ func _update_hp_bar() -> void:
 	if not _hp_bar_fill or not _hp_label:
 		return
 
+	# 优先从 Player 节点读取 current_hp（联机模式通过 _sync_hp RPC 同步）
+	# 回退到 Global.player_hp（单机模式 / Host 本地）
 	var hp: float = Global.player_hp
 	var max_hp: float = 200.0
 	if _player_ref and _player_ref.has_method("get_weapon_data"):
 		max_hp = _player_ref.max_hp
+		# 联机模式：从节点读取（已通过 RPC 同步），单机模式也是实时值
+		hp = _player_ref.current_hp
 
 	var ratio: float = clamp(hp / max_hp, 0.0, 1.0)
 	_hp_bar_fill.size.x = floor(float(HP_BAR_WIDTH) * ratio)
@@ -307,6 +342,128 @@ func _update_hp_bar() -> void:
 		_hp_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3, 0.9))
 	else:
 		_hp_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.9))
+
+
+## 队友迷你血条（联机模式）
+func _update_teammate_bars() -> void:
+	if not Lobby.is_online():
+		if _teammate_bar_container:
+			_teammate_bar_container.visible = false
+		return
+
+	var tree := get_tree()
+	if not tree:
+		return
+
+	# 收集所有 Player 节点
+	var all_players: Array[Node] = tree.get_nodes_in_group("player")
+	var my_id: int = multiplayer.get_unique_id()
+	var teammates: Array[Node] = []
+	for p: Node in all_players:
+		if not is_instance_valid(p):
+			continue
+		var auth: int = p.get_multiplayer_authority()
+		if auth != my_id:
+			teammates.append(p)
+
+	if teammates.is_empty():
+		if _teammate_bar_container:
+			_teammate_bar_container.visible = false
+		return
+
+	if _teammate_bar_container:
+		_teammate_bar_container.visible = true
+
+	# 确保队友血条节点足够
+	while _teammate_bars.size() < teammates.size() and _teammate_bars.size() < MAX_TEAMMATE_BARS:
+		_create_teammate_bar(_teammate_bars.size())
+
+	# 更新每个队友血条
+	var start_y: float = hp_bar_pos.y + HP_BAR_HEIGHT + 28  # 队伍标签之下
+	for i: int in range(min(teammates.size(), _teammate_bars.size())):
+		var p: Node = teammates[i]
+		var bar_data: Dictionary = _teammate_bars[i]
+		var y: float = start_y + i * (TEAM_BAR_HEIGHT + TEAM_BAR_GAP + 16)
+
+		# 队友名字
+		var name_str: String = p.name
+		# 尝试从 Lobby.players 获取玩家名字
+		var auth: int = p.get_multiplayer_authority()
+		if Lobby.players.has(auth):
+			var info: Dictionary = Lobby.players[auth]
+			if info.has("name"):
+				name_str = info["name"]
+		bar_data["name_label"].text = name_str
+		bar_data["name_label"].position = Vector2(hp_bar_pos.x, y)
+
+		# HP 血条
+		var hp: float = p.get("current_hp")
+		var max_hp: float = p.get("max_hp") if p.get("max_hp") != null else 200.0
+		var ratio: float = clamp(hp / max_hp, 0.0, 1.0)
+
+		var bar_x: float = hp_bar_pos.x + 60  # 名字之后
+		bar_data["bar_fill"].position = Vector2(bar_x, y + 2)
+		bar_data["bar_fill"].size.x = floor(float(TEAM_BAR_WIDTH) * ratio)
+		bar_data["bar_frame"].position = Vector2(bar_x, y + 2)
+
+		# HP 数值
+		bar_data["hp_label"].text = "%d" % int(hp)
+		bar_data["hp_label"].position = Vector2(bar_x + TEAM_BAR_WIDTH + 4, y)
+		if ratio < 0.3:
+			bar_data["hp_label"].add_theme_color_override("font_color", Color(1, 0.3, 0.3, 0.9))
+		else:
+			bar_data["hp_label"].add_theme_color_override("font_color", Color(0.7, 1.0, 0.7, 0.8))
+
+
+func _create_teammate_bar(index: int) -> void:
+	## 创建一个队友迷你血条
+	if not _teammate_bar_container:
+		return
+
+	var bar_data: Dictionary = {}
+
+	# 名字标签
+	var name_label := Label.new()
+	name_label.name = "TeammateName%d" % index
+	name_label.add_theme_font_size_override("font_size", 11)
+	name_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.9, 0.8))
+	name_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	name_label.add_theme_constant_override("outline_size", 1)
+	_teammate_bar_container.add_child(name_label)
+	bar_data["name_label"] = name_label
+
+	# 血条填充
+	var bar_fill := TextureRect.new()
+	bar_fill.name = "TeammateFill%d" % index
+	bar_fill.texture = HP_FILL_TEX
+	bar_fill.size = Vector2(TEAM_BAR_WIDTH, TEAM_BAR_HEIGHT)
+	bar_fill.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar_fill.stretch_mode = TextureRect.STRETCH_KEEP
+	_teammate_bar_container.add_child(bar_fill)
+	bar_data["bar_fill"] = bar_fill
+
+	# 血条边框
+	var bar_frame := TextureRect.new()
+	bar_frame.name = "TeammateFrame%d" % index
+	bar_frame.texture = HP_FRAME_TEX
+	bar_frame.size = Vector2(TEAM_BAR_WIDTH, TEAM_BAR_HEIGHT)
+	bar_frame.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar_frame.stretch_mode = TextureRect.STRETCH_KEEP
+	bar_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_teammate_bar_container.add_child(bar_frame)
+	bar_data["bar_frame"] = bar_frame
+
+	# HP 数值标签
+	var hp_label := Label.new()
+	hp_label.name = "TeammateHP%d" % index
+	hp_label.add_theme_font_size_override("font_size", 11)
+	hp_label.add_theme_color_override("font_color", Color(0.7, 1.0, 0.7, 0.8))
+	hp_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
+	hp_label.add_theme_constant_override("outline_size", 1)
+	_teammate_bar_container.add_child(hp_label)
+	bar_data["hp_label"] = hp_label
+
+	_teammate_bars.append(bar_data)
 
 
 func _update_slots() -> void:

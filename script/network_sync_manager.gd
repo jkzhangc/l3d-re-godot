@@ -16,6 +16,7 @@ const ENEMY_SYNC_INTERVAL: float = 0.1  ## 敌人状态批量同步频率（10Hz
 # ═══════════════════════════════════════
 var _enemy_sync_timer: float = 0.0
 var _enemy_name_counter: int = 0  ## 敌人唯一名称计数器
+var _prev_enemy_states: Dictionary = {}  ## 上一帧敌人状态（检测 Attack 状态变化）
 
 
 func _process(delta: float) -> void:
@@ -47,11 +48,15 @@ func request_attack(peer_id: int, weapon_item_id: String) -> void:
 	if player.has_method("_execute_attack"):
 		player._execute_attack(weapon_item_id)
 		print("[NetSync] Host 执行 Player%d 的攻击 (武器=%s)" % [peer_id, weapon_item_id])
+		# 同步弹药变化回请求方 Client
+		_sync_ammo_back(peer_id, player, weapon_item_id)
+		# 广播攻击特效给其他 Client（排除攻击者，攻击者已有本地预测）
+		_broadcast_attack_to_others(peer_id, player, weapon_item_id)
 
 
 ## Client 请求 Host 代为执行近战攻击判定
 @rpc("any_peer", "reliable")
-func request_melee(peer_id: int) -> void:
+func request_melee(peer_id: int, weapon_item_id: String = "") -> void:
 	if not multiplayer.is_server():
 		return
 	var player: Node = _find_player(peer_id)
@@ -59,13 +64,24 @@ func request_melee(peer_id: int) -> void:
 		print("[NetSync] request_melee: 未找到 Player%d" % peer_id)
 		return
 	if player.has_method("_execute_melee"):
-		player._execute_melee()
-		print("[NetSync] Host 执行 Player%d 的近战判定" % peer_id)
+		player._execute_melee(weapon_item_id)
+		print("[NetSync] Host 执行 Player%d 的近战判定 (武器=%s)" % [peer_id, weapon_item_id])
+		# 广播近战特效给其他 Client
+		if weapon_item_id.is_empty():
+			var pd = player.get("player_data")
+			if pd:
+				var wd: WeaponData = pd.get_active_weapon()
+				if wd:
+					weapon_item_id = wd.item_id
+		if not weapon_item_id.is_empty():
+			_broadcast_attack_to_others(peer_id, player, weapon_item_id)
 
 
 ## Client 请求 Host 代为装填
+## shell_count: -1=全部装填(NORMAL模式), 1=装一发(霰弹枪模式)
+## reserve_count: Client 端的当前备弹数量（Host 端 player_data.inventory 可能不同步）
 @rpc("any_peer", "reliable")
-func request_reload(peer_id: int) -> void:
+func request_reload(peer_id: int, weapon_item_id: String = "", shell_count: int = -1, reserve_count: int = 0) -> void:
 	if not multiplayer.is_server():
 		return
 	var player: Node = _find_player(peer_id)
@@ -73,8 +89,17 @@ func request_reload(peer_id: int) -> void:
 		print("[NetSync] request_reload: 未找到 Player%d" % peer_id)
 		return
 	if player.has_method("_execute_reload"):
-		player._execute_reload()
-		print("[NetSync] Host 执行 Player%d 的装填" % peer_id)
+		player._execute_reload(weapon_item_id, shell_count, reserve_count)
+		print("[NetSync] Host 执行 Player%d 的装填 (武器=%s shells=%d reserve=%d)" % [peer_id, weapon_item_id, shell_count, reserve_count])
+		# 同步弹药变化回请求方 Client
+		if weapon_item_id.is_empty():
+			var pd = player.get("player_data")
+			if pd:
+				var wd = pd.get_active_weapon()
+				if wd:
+					weapon_item_id = wd.item_id
+		if not weapon_item_id.is_empty():
+			_sync_ammo_back(peer_id, player, weapon_item_id)
 
 
 ## Client 通知 Host：枪声惊动了某个敌人
@@ -250,6 +275,63 @@ func broadcast_attack_effects(peer_id: int, weapon_item_id: String, pos: Vector2
 				get_tree().current_scene.add_child(bullet)
 
 
+## Host → Client: 同步玩家弹药（reliable，攻击/装填后触发）
+@rpc("authority", "reliable")
+func sync_player_ammo(peer_id: int, weapon_id: String, magazine_ammo: int) -> void:
+	var player: Node = _find_player(peer_id)
+	if not player:
+		return
+	var pd = player.get("player_data")
+	if pd:
+		pd.set_magazine_ammo(weapon_id, magazine_ammo)
+	# 同步到 Global（驱动 HUD 刷新）
+	Global.set_magazine_ammo(weapon_id, magazine_ammo)
+
+
+## Host → Client: 同步玩家备弹数量（reliable，装填后触发）
+@rpc("authority", "reliable")
+func sync_player_reserve_ammo(peer_id: int, ammo_item_id: String, count: int) -> void:
+	# 接收端：更新 Global inventory 中的备弹数量，使 HUD 刷新正确
+	# 注意：count 是 Host 端的 player_data.count_ammo_item() 结果
+	# Client 端直接从 player_data 同步更准确，此处作为辅助
+	var player: Node = _find_player(peer_id)
+	if not player:
+		return
+	var pd = player.get("player_data")
+	if not pd:
+		return
+	# 计算差值并调整 inventory
+	var current_count: int = pd.count_ammo_item(ammo_item_id)
+	var diff: int = count - current_count
+	if diff > 0:
+		# 需要添加弹药物品
+		var ammo_res := _find_ammo_resource(ammo_item_id)
+		if ammo_res:
+			for _i: int in range(diff):
+				pd.inventory.append(ammo_res.duplicate())
+	elif diff < 0:
+		# 需要移除弹药物品
+		pd.consume_ammo_item(ammo_item_id, -diff)
+	# 同步到 Global
+	Global.weapon_magazines = pd.weapon_magazines.duplicate()
+	Global.inventory = pd.inventory.duplicate()
+
+
+## Host → Clients: 敌人进入 Attack 状态（reliable，立即通知）
+@rpc("authority", "call_local", "reliable")
+func sync_enemy_attack(enemy_name: String, facing: int) -> void:
+	if multiplayer.is_server():
+		return  # Host 不需要 puppet 动画
+	var enemy: Node = _find_enemy(enemy_name)
+	if not enemy:
+		return
+	# 标记敌人进入攻击状态，触发 puppet 攻击动画
+	enemy.set_meta("synced_attack", true)
+	enemy.set_meta("synced_attack_facing", facing)
+	# 设置状态为 Attack 以便 puppet 驱动
+	enemy.set_meta("synced_state", "Attack")
+
+
 # ═══════════════════════════════════════
 # 内部工具方法
 # ═══════════════════════════════════════
@@ -267,6 +349,9 @@ func _broadcast_enemy_states() -> void:
 	for enemy: Node in enemies:
 		if not is_instance_valid(enemy):
 			continue
+		# 跳过已死亡的敌人（死亡精灵已显示，不再更新状态）
+		if enemy.get("_is_dead") == true:
+			continue
 		# 获取当前状态名
 		var state_name: String = ""
 		var sm: Node = enemy.get_node_or_null("StateMachine")
@@ -280,8 +365,38 @@ func _broadcast_enemy_states() -> void:
 		}
 		data[enemy.name] = state
 
+		# 检测 Attack 状态变化 → 立即发送可靠 RPC
+		var prev_state: String = _prev_enemy_states.get(enemy.name, "")
+		if state_name == "Attack" and prev_state != "Attack":
+			sync_enemy_attack.rpc(enemy.name, enemy.get("_facing"))
+			print("[NetSync] 敌人 Attack 状态变化: %s → 立即广播" % enemy.name)
+
 	if not data.is_empty():
 		sync_enemies_batch.rpc(data)
+		# 保存本帧状态供下次比较
+		_prev_enemy_states.clear()
+		for enemy_name: String in data:
+			_prev_enemy_states[enemy_name] = data[enemy_name]["state"]
+
+
+## 攻击/装填后同步弹夹弹药回请求方 Client
+## 注意：不同步备弹 — Client 端本地管理备弹（乐观扣除），Host 端 player_data.inventory 未同步
+func _sync_ammo_back(peer_id: int, player: Node, weapon_item_id: String) -> void:
+	var pd = player.get("player_data")
+	if not pd:
+		return
+	var mag: int = pd.get_magazine_ammo(weapon_item_id)
+	sync_player_ammo.rpc_id(peer_id, peer_id, weapon_item_id, mag)
+
+
+## 广播攻击特效给除攻击者外的所有 Client
+func _broadcast_attack_to_others(attacker_id: int, player: Node, weapon_item_id: String) -> void:
+	if not Lobby.is_online() or not multiplayer.is_server():
+		return
+	for pid: int in Lobby.players:
+		if pid == 1 or pid == attacker_id:
+			continue  # 跳过 Host（已本地播放）和攻击者（已有本地预测）
+		broadcast_attack_effects.rpc_id(pid, attacker_id, weapon_item_id, player.global_position, player.get("facing"))
 
 
 ## 通过 peer_id 查找 Player 节点
@@ -341,6 +456,21 @@ func _facing_to_vector(facing: int) -> Vector2:
 		2: return Vector2(1, 0)    # RIGHT
 		3: return Vector2(0, -1)   # UP
 	return Vector2(0, 1)
+
+
+## 查找弹药 ItemData 资源
+func _find_ammo_resource(ammo_item_id: String) -> Resource:
+	var derived := "res://object/item_%s_ammo.tres" % ammo_item_id.trim_prefix("ammo_")
+	if ResourceLoader.exists(derived):
+		var res: Resource = load(derived)
+		if res is ItemData and res.item_id == ammo_item_id:
+			return res
+	var direct := "res://object/item_%s.tres" % ammo_item_id
+	if direct != derived and ResourceLoader.exists(direct):
+		var res: Resource = load(direct)
+		if res is ItemData and res.item_id == ammo_item_id:
+			return res
+	return null
 
 
 ## 销毁命中点附近的视觉子弹（Client 端，模拟穿透检测）

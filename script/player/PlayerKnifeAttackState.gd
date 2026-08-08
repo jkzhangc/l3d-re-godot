@@ -139,7 +139,7 @@ func _create_melee_hitbox() -> void:
 
 	# 联机模式：Client 不本地创建判定区域，通过 RPC 让 Host 代为执行
 	if Lobby.is_online() and not multiplayer.is_server():
-		NetworkSyncManager.request_melee.rpc_id(1, multiplayer.get_unique_id())
+		NetworkSyncManager.request_melee.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id)
 		_hit_done = true  # 标记完成，避免 physics_update 中重复触发
 		return
 

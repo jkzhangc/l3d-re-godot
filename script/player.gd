@@ -871,8 +871,13 @@ func _execute_attack(weapon_item_id: String = "") -> void:
 
 
 ## Host 收到 Client 的近战请求后调用，执行近战判定
-func _execute_melee() -> void:
-	var wd := Global.get_active_weapon()
+## weapon_item_id: Client 当前使用的武器 ID（不是 Host 的武器）
+func _execute_melee(weapon_item_id: String = "") -> void:
+	var wd: WeaponData = null
+	if not weapon_item_id.is_empty():
+		wd = _find_weapon_by_id(weapon_item_id)
+	if not wd:
+		wd = Global.get_active_weapon()
 	if not wd or wd.is_ranged:
 		return
 
@@ -939,36 +944,80 @@ func _execute_melee() -> void:
 
 
 ## Host 收到 Client 的装填请求后调用，执行装填
-func _execute_reload() -> void:
+## weapon_item_id: Client 当前使用的武器 ID
+## shell_count: -1=全部装填(NORMAL模式), 1=装一发(霰弹枪模式)
+## reserve_count: Client 端的备弹数量（Host 端 player_data.inventory 可能没同步）
+func _execute_reload(weapon_item_id: String = "", shell_count: int = -1, reserve_count: int = 0) -> void:
 	var pd = player_data
 	var wd: WeaponData = null
-	if pd:
+	if not weapon_item_id.is_empty():
+		wd = _find_weapon_by_id(weapon_item_id)
+	if not wd and pd:
 		wd = pd.get_active_weapon()
 	if not wd:
 		wd = Global.get_active_weapon()
 	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
 		return
 
+	# 弹夹弹药：首次自动初始化（与 _execute_attack 一致）
 	var current: int = pd.get_magazine_ammo(wd.item_id) if pd else Global.get_magazine_ammo(wd.item_id)
+	if current <= 0 and shell_count < 0:
+		# NORMAL 模式首次装填：弹夹可能未初始化，设为 0
+		pass
+
+	# 备弹数量：优先用 Client 传来的 reserve_count（联机模式数据源），回退到 player_data
+	var available: int = reserve_count
+	if available <= 0:
+		available = pd.count_ammo_item(wd.ammo_item_id) if pd else Global.count_ammo_item(wd.ammo_item_id)
+	if available <= 0:
+		print("[Player] _execute_reload: 无备弹可用 (reserve_count=%d)" % reserve_count)
+		return
+
 	if current >= wd.magazine_capacity:
 		return
 
-	var need: int = wd.magazine_capacity - current
-	var available: int = pd.count_ammo_item(wd.ammo_item_id) if pd else Global.count_ammo_item(wd.ammo_item_id)
-	if available <= 0:
-		return
+	# 确定装填数量：-1=全装，否则装 shell_count 发
+	var to_load: int
+	if shell_count <= 0:
+		var need: int = wd.magazine_capacity - current
+		to_load = mini(need, available)
+	else:
+		to_load = mini(shell_count, available)
 
-	var to_load: int = mini(need, available)
-	var consumed: int = pd.consume_ammo_item(wd.ammo_item_id, to_load) if pd else Global.consume_ammo_item(wd.ammo_item_id, to_load)
+	# 从 player_data 消耗备弹（注意 player_data.inventory 可能不同步，先尝试消耗）
+	var consumed: int = 0
+	if pd:
+		consumed = pd.consume_ammo_item(wd.ammo_item_id, to_load)
+	if consumed <= 0:
+		# player_data 没有弹药 → 直接从 Global 消耗（Host 本地玩家的弹药）
+		consumed = Global.consume_ammo_item(wd.ammo_item_id, to_load)
+
 	if consumed > 0:
 		if pd:
 			pd.set_magazine_ammo(wd.item_id, current + consumed)
 		else:
 			Global.set_magazine_ammo(wd.item_id, current + consumed)
-		print("[Player] _execute_reload: %d → %d / %d" % [current, current + consumed, wd.magazine_capacity])
+		print("[Player] _execute_reload: %d → %d / %d (装了%d发 reserve=%d)" % [current, current + consumed, wd.magazine_capacity, consumed, available])
 
 	if wd.reload_sound:
 		Global.play_sfx_managed(wd.reload_sound, get_tree().current_scene)
+
+
+## 根据 weapon_item_id 查找 WeaponData 资源（联机 _execute_* 共用）
+func _find_weapon_by_id(weapon_item_id: String) -> WeaponData:
+	var known: Array[String] = [
+		"res://object/weapon_pistol.tres",
+		"res://object/weapon_knife.tres",
+		"res://object/weapon_shotgun.tres",
+		"res://object/weapon_rifle.tres",
+		"res://object/weapon_smg.tres",
+	]
+	for path: String in known:
+		if ResourceLoader.exists(path):
+			var res: WeaponData = load(path) as WeaponData
+			if res and res.item_id == weapon_item_id:
+				return res
+	return null
 
 
 ## 枪声惊动范围内敌人（由 _execute_attack 调用）

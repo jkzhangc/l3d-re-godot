@@ -15,6 +15,8 @@ var _seq_idx: int = 0
 var _timer: float = 0.0
 var _reload_done: bool = false   ## 弹药是否已装入（NORMAL 模式下动画结束后设为 true）
 var _was_facing_locked: bool = false  ## 进入装填前朝向是否已锁定
+var _shells_needed: int = 0     ## 霰弹枪需要装填的总发数
+var _shells_loaded: int = 0     ## 霰弹枪已装填的发数（本地计数器，不依赖 RPC 返回值）
 
 
 func enter() -> void:
@@ -137,10 +139,18 @@ func _process_anim(delta: float) -> void:
 
 func _start_shotgun_loop() -> void:
 	_seq_idx = 0
+	# 预先计算需要装填的发数（避免循环中依赖异步 RPC 返回值导致死循环）
+	var current: int = Global.get_magazine_ammo(_wd.item_id)
+	var available: int = Global.count_ammo_item(_wd.ammo_item_id)
+	_shells_needed = mini(_wd.magazine_capacity - current, available)
+	_shells_loaded = 0
+	print("[霰弹枪装填] 需要装 %d 发 (当前=%d/%d 备弹=%d)" % [_shells_needed, current, _wd.magazine_capacity, available])
+
 	var seq: Array[int] = _wd.get_shotgun_loop_char_sequence()
-	if seq.size() == 0:
-		# 没有循环动画帧 → 直接装弹然后结束
-		_load_one_shell()
+	if seq.size() == 0 or _shells_needed <= 0:
+		# 没有循环动画帧或无需装填 → 直接结束
+		if _shells_needed > 0:
+			_load_one_shell()
 		_enter_shotgun_end()
 		return
 	_timer = _wd.get_shotgun_loop_frame_duration(0)
@@ -157,10 +167,8 @@ func _process_shotgun_loop(delta: float) -> void:
 		if _seq_idx >= seq.size():
 			# 循环动画播放完一轮 → 装一发子弹
 			_load_one_shell()
-			# 检查是否继续循环
-			var current: int = Global.get_magazine_ammo(_wd.item_id)
-			var available: int = Global.count_ammo_item(_wd.ammo_item_id)
-			if current >= _wd.magazine_capacity or available <= 0:
+			# 用本地计数器判断是否继续（不依赖异步 RPC 返回的 Global 值）
+			if _shells_loaded >= _shells_needed:
 				_enter_shotgun_end()
 				return
 			# 继续循环
@@ -221,9 +229,15 @@ func _process_wait(delta: float) -> void:
 
 ## NORMAL 模式：一次性装入所有可用的弹药
 func _do_reload() -> void:
-	# 联机模式：Client 不本地操作弹药，通过 RPC 让 Host 代为执行
+	# 联机模式：Client 发 RPC + 本地乐观扣除备弹（Host 只确认弹夹数）
 	if Lobby.is_online() and not multiplayer.is_server():
-		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id())
+		var reserve: int = Global.count_ammo_item(_wd.ammo_item_id)
+		var cur: int = Global.get_magazine_ammo(_wd.item_id)
+		var need: int = _wd.magazine_capacity - cur
+		var local_load: int = mini(need, reserve)
+		if local_load > 0:
+			Global.consume_ammo_item(_wd.ammo_item_id, local_load)
+		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id, -1, reserve)
 		return
 
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
@@ -245,9 +259,14 @@ func _do_reload() -> void:
 
 ## SHOTGUN 模式：装入一发子弹
 func _load_one_shell() -> void:
-	# 联机模式：Client 不本地操作弹药，通过 RPC 让 Host 代为执行
+	# 联机模式：Client 只发 RPC + 本地计数，不直接操作 Global（避免与 RPC 返回值冲突）
 	if Lobby.is_online() and not multiplayer.is_server():
-		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id())
+		_shells_loaded += 1
+		var reserve: int = Global.count_ammo_item(_wd.ammo_item_id)
+		# 本地乐观扣除 1 发备弹
+		if reserve > 0:
+			Global.consume_ammo_item(_wd.ammo_item_id, 1)
+		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id, 1, reserve)
 		return
 
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
@@ -260,6 +279,7 @@ func _load_one_shell() -> void:
 
 	var consumed: int = Global.consume_ammo_item(_wd.ammo_item_id, 1)
 	if consumed > 0:
+		_shells_loaded += 1
 		Global.set_magazine_ammo(_wd.item_id, current + 1)
 		print("[霰弹枪装填] +1 → %d / %d (背包剩余: %d)" % [
 			Global.get_magazine_ammo(_wd.item_id),
