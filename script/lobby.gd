@@ -28,6 +28,8 @@ const DEFAULT_SERVER_IP: String = "127.0.0.1"
 var players: Dictionary = {}         ## peer_id → player_info
 var player_info: Dictionary = {"name": "Player"}
 var players_loaded: int = 0
+var _ready_players: Dictionary = {}  ## peer_id -> true；ready RPC 幂等
+var _game_started: bool = false
 
 
 func _ready() -> void:
@@ -44,6 +46,9 @@ func _ready() -> void:
 
 ## 创建游戏房间（作为 Host）
 func create_game() -> Error:
+	players.clear()
+	_ready_players.clear()
+	_game_started = false
 	var peer := ENetMultiplayerPeer.new()
 	var error: Error = peer.create_server(PORT, MAX_CONNECTIONS)
 	if error != OK:
@@ -58,6 +63,10 @@ func create_game() -> Error:
 
 ## 加入游戏房间（作为 Client）
 func join_game(address: String = DEFAULT_SERVER_IP) -> Error:
+	players.clear()
+	_ready_players.clear()
+	players_loaded = 0
+	_game_started = false
 	var peer := ENetMultiplayerPeer.new()
 	var error: Error = peer.create_client(address, PORT)
 	if error != OK:
@@ -73,6 +82,8 @@ func remove_multiplayer_peer() -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	players.clear()
 	players_loaded = 0
+	_ready_players.clear()
+	_game_started = false
 	print("[Lobby] 网络已断开")
 
 
@@ -88,6 +99,12 @@ func is_online() -> bool:
 ## Host 调用：通知所有 peer 加载指定场景
 @rpc("call_local", "reliable")
 func load_game(game_scene_path: String) -> void:
+	if game_scene_path.is_empty() or not game_scene_path.begins_with("res://scene/maps/"):
+		printerr("[Lobby] 拒绝加载非法场景路径: %s" % game_scene_path)
+		return
+	_ready_players.clear()
+	players_loaded = 0
+	_game_started = false
 	print("[Lobby] 加载游戏场景: %s" % game_scene_path)
 	get_tree().change_scene_to_file(game_scene_path)
 
@@ -95,15 +112,24 @@ func load_game(game_scene_path: String) -> void:
 ## 每个 peer 加载完场景后调用：通知 Host 自己就绪
 @rpc("any_peer", "call_local", "reliable")
 func player_loaded() -> void:
-	if multiplayer.is_server():
-		players_loaded += 1
-		print("[Lobby] 玩家就绪: %d/%d" % [players_loaded, players.size()])
-		if players_loaded == players.size():
-			_start_game()
-			players_loaded = 0
+	if not multiplayer.is_server() or _game_started:
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	if not players.has(sender_id) or _ready_players.has(sender_id):
+		return
+	_ready_players[sender_id] = true
+	players_loaded = _ready_players.size()
+	print("[Lobby] 玩家就绪: %d/%d" % [players_loaded, players.size()])
+	if players_loaded >= players.size() and players.size() > 0:
+		_start_game()
 
 
 func _start_game() -> void:
+	if _game_started:
+		return
+	_game_started = true
 	print("[Lobby] 所有玩家就绪，开始游戏！")
 	start_game.rpc()
 
@@ -135,7 +161,13 @@ func _register_player(new_player_info: Dictionary) -> void:
 func _on_player_disconnected(id: int) -> void:
 	print("[Lobby] 玩家已断开: %d" % id)
 	players.erase(id)
+	_ready_players.erase(id)
+	players_loaded = _ready_players.size()
+	if id == 1:
+		_game_started = false
 	player_disconnected.emit(id)
+	if multiplayer.is_server() and not _game_started and players.size() > 0 and _ready_players.size() >= players.size():
+		_start_game()
 
 
 func _on_connected_ok() -> void:

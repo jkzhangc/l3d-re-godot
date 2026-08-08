@@ -237,7 +237,9 @@ func _do_reload() -> void:
 		var local_load: int = mini(need, reserve)
 		if local_load > 0:
 			Global.consume_ammo_item(_wd.ammo_item_id, local_load)
-		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id, -1, reserve)
+			# 先更新本地弹夹显示，Host 回包会再次校正为权威值。
+			Global.set_magazine_ammo(_wd.item_id, cur + local_load)
+		NetworkSyncManager.request_reload.rpc_id(1, _wd.item_id, -1, reserve)
 		return
 
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
@@ -266,7 +268,9 @@ func _load_one_shell() -> void:
 		# 本地乐观扣除 1 发备弹
 		if reserve > 0:
 			Global.consume_ammo_item(_wd.ammo_item_id, 1)
-		NetworkSyncManager.request_reload.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id, 1, reserve)
+			# 本地预测一发装填；Host 回包负责最终校正。
+			Global.set_magazine_ammo(_wd.item_id, Global.get_magazine_ammo(_wd.item_id) + 1)
+		NetworkSyncManager.request_reload.rpc_id(1, _wd.item_id, 1, reserve)
 		return
 
 	var current: int = Global.get_magazine_ammo(_wd.item_id)
