@@ -126,14 +126,14 @@ func _do_attack_hit() -> void:
 				# Player HP 由 Host 权威处理；take_damage 内部会回传至目标玩家的 authority。
 				player.take_damage(dmg, 120.0, dir, false, 0.0, 0.0, enemy.get_instance_id())
 				if Lobby.is_online() and multiplayer.is_server():
-					var effect_path := _get_attack_effect_path(enemy.attack_effect_anim)
+					var effect_path := _get_attack_effect_path(enemy.hit_effect_anim)
 					NetworkSyncManager.sync_player_hit_effect.rpc(player.name, effect_path, player.global_position)
 				# 播放攻击音效
 				enemy._play_sound(enemy.attack_sound)
 				# 播放攻击特效
-				if enemy.attack_effect_anim:
+				if enemy.hit_effect_anim:
 					var efollow: Node2D = player if enemy.attack_effect_follow else null
-					VXAnimSprite.play_scene(enemy.attack_effect_anim, player.global_position, enemy.get_tree().current_scene, 10.0, efollow, enemy.attack_effect_offset_override)
+					VXAnimSprite.play_scene(enemy.hit_effect_anim, player.global_position, enemy.get_tree().current_scene, 10.0, efollow, enemy.attack_effect_offset_override)
 				print("[敵人] 攻击命中玩家！伤害=%d" % int(dmg))
 			else:
 				print("[敵人] 攻击！目标无 take_damage 方法")
