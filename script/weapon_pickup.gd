@@ -110,7 +110,7 @@ func _process(delta: float) -> void:
 			_step_idx = (_step_idx + 1) % pickup_step_frames.size()
 			_refresh_sprite()
 
-	# 拾取逻辑
+	# 拾取逻辑（联机时每人各自处理，移除时通过 RPC 广播）
 	if not _player_in_range or not _player_ref:
 		_hold_timer = 0.0
 		_update_hold_indicator(delta, false)
@@ -132,7 +132,7 @@ func _process(delta: float) -> void:
 		_update_hold_indicator(delta, false)
 		return
 
-	if Input.is_action_pressed("确定键"):
+	if _player_ref._player_input.is_action_pressed("确定键"):
 		_hold_timer += delta
 		_update_hold_indicator(delta, true)
 		if _hold_timer >= hold_time:
@@ -184,6 +184,9 @@ func _indicator_draw(node: Node2D) -> void:
 
 
 func _do_pickup() -> void:
+	# 联机：广播掉落物已消失
+	if NetworkManager.is_online():
+		NetworkManager.remove_pickup.rpc(str(get_path()))
 	if not weapon_data:
 		return
 

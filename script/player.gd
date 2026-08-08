@@ -13,7 +13,6 @@ extends CharacterBody2D
 ##
 ## VX Ace 角色精灵布局（576×512, 4×2共8角色, 每角色3帧×4方向）
 
-
 # ═══════════════════════════════════════
 # 角色参数（行走图/HP/音效 → 由 CharacterData 驱动）
 # ═══════════════════════════════════════
@@ -76,75 +75,23 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 # ═══════════════════════════════════════
 # 内部状态
 # ═══════════════════════════════════════
-@export var _facing: int = FaceDir.DOWN:    ## @export 以暴露给 MultiplayerSynchronizer
-	set(v):
-		if _facing != v:
-			_facing = v
-			if not _is_dying:
-				_refresh_sprite()
+var _facing: int = FaceDir.DOWN
 var _facing_locked: bool = false
 var _locked_facing: int = FaceDir.DOWN
 var _anim_step: int = 0
-@export var _moving: bool = false:           ## @export 以暴露给 MultiplayerSynchronizer
-	set(v):
-		if _moving != v:
-			_moving = v
-			if animation_timer:
-				if _moving:
-					animation_timer.start()
-				else:
-					animation_timer.stop()
-					_anim_step = 0
-					_refresh_sprite()
-var _is_walking: bool = false:   ## 当前外观是行走(true)还是跑步(false)，setter 供 puppet 同步
-	set(v):
-		if _is_walking != v:
-			_is_walking = v
-			if not _is_dying:
-				_refresh_sprite()
-## 当前状态枚举（供联机 puppet 推断动画）
-## 0=Idle 1=Walk 2=Run 3=Weapon 4=Attack 5=Reload 6=Downed
-@export var state_enum: int = 0:
-	set(v):
-		if state_enum != v:
-			state_enum = v
-			# Puppet 模式：根据状态切换武器外观
-			if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
-				if get_multiplayer_authority() != multiplayer.get_unique_id():
-					match v:
-						3:  # Weapon → 播放举起动画
-							_puppet_anim_playing = false
-							if not _weapon_mode and _puppet_weapon_data:
-								enter_weapon_mode(_puppet_weapon_data)
-								_start_puppet_raise_anim()
-						5:  # Reload → 显示武器就绪帧（跳过动画）
-							_puppet_anim_playing = false
-							if not _weapon_mode and _puppet_weapon_data:
-								enter_weapon_mode(_puppet_weapon_data)
-							set_weapon_ready_frame()
-						4:  # Attack → 开始攻击动画
-							if not _weapon_mode and _puppet_weapon_data:
-								enter_weapon_mode(_puppet_weapon_data)
-							_start_puppet_attack_anim()
-						0, 1, 2, 6:  # Idle / Walk / Run / Downed → 播放放下动画
-							_puppet_anim_playing = false
-							if _weapon_mode and _puppet_weapon_data:
-								_start_puppet_lower_anim()
-							else:
-								exit_weapon_mode()
+var _moving: bool = false
+var _is_walking: bool = false   ## 当前外观是行走(true)还是跑步(false)
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
-var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
+var _near_pickup: bool = false
+var _net_sync_timer: float = 0.0  ## 网络位置同步计时器            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
 
-## 玩家数据容器（联机准备：从 Global 分离玩家状态）
-## 类型实际为 PlayerData，不标注类型以避免 Godot 4.6 跨文件 class_name 解析顺序问题
-var player_data = null
-## 网络归属 ID：1 = 本地玩家/Host，其他值 = 远程 peer ID
-var owner_id: int = 1
+## 输入抽象层（单机用 LocalPlayerInput，联机远程玩家用 NetworkPlayerInput）
+var _player_input: PlayerInput = LocalPlayerInput.new()
 
 ## 死亡相关
 var _is_dying: bool = false
@@ -161,23 +108,9 @@ var facing: int:
 
 func _ready() -> void:
 	add_to_group("player")
-
-	# 判断运行模式
-	var is_puppet: bool = false
-	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
-		# Host 需要模拟所有玩家（包括 Client 玩家）的碰撞、受击和被敌人索敌逻辑。
-		# 只有非 Host 上的远程玩家才是纯视觉 puppet；此前 Host 会错误禁用 Player2 的碰撞体。
-		if not multiplayer.is_server() and get_multiplayer_authority() != multiplayer.get_unique_id():
-			is_puppet = true
-
-	if is_puppet:
-		_init_puppet()
-	else:
-		_init_singleplayer()
-
-
-func _init_singleplayer() -> void:
-	## 单机 / Authority 模式的完整初始化
+	# TODO Phase 3: 联机位置同步
+	# if NetworkManager.is_online():
+	# 	_setup_network_sync()
 	# 从 CharacterData 资源读取外观/HP 参数（覆盖本地 @export 默认值）
 	_apply_character_data()
 
@@ -190,283 +123,43 @@ func _init_singleplayer() -> void:
 	motion_mode = MOTION_MODE_FLOATING
 
 	animation_timer.wait_time = walk_frame_duration
-	var cb: Callable = _on_animation_timer_timeout
-	animation_timer.timeout.connect(cb)
+	animation_timer.timeout.connect(_on_animation_timer_timeout)
 	animation_timer.start()
 	_refresh_sprite()
-
-	# 初始化 PlayerData 容器（从 Global 同步初始状态）
-	_init_player_data()
 
 	# 从 Global 恢复 HP（用于存档加载后）
 	if Global.player_hp > 0.0:
 		current_hp = Global.player_hp
 	else:
 		current_hp = max_hp
-	# 同步到 PlayerData
-	if player_data:
-		player_data.current_hp = current_hp
 
 
-# ═══════════════════════════════════════
-# 联机同步（Authority → Puppets）
-# ═══════════════════════════════════════
-const NET_SYNC_INTERVAL: float = 0.05   ## 20Hz 位置同步
-var _net_sync_timer: float = 0.0
+func _physics_process(_delta: float) -> void:
+	# 每帧开头刷新输入状态（联机远程玩家会被替换为 NetworkPlayerInput）
+	if _player_input is LocalPlayerInput:
+		(_player_input as LocalPlayerInput).read()
+	# 联机：定期同步位置到自己的 NetworkPlayer 节点
+	if NetworkManager.is_online() and _player_input is LocalPlayerInput:
+		_net_sync_timer += _delta
+		if _net_sync_timer > 0.033:
+			_net_sync_timer = 0.0  # 30Hz
+			_sync_to_network_player()
 
-
-func _process(delta: float) -> void:
-	if _is_dying:
-		_process_death(delta)
+func _setup_network_sync() -> void:
+	# 防止重复创建
+	if has_node("NetworkSync"):
 		return
-
-	# Puppet 动画驱动（举起/攻击）
-	if _puppet_anim_playing:
-		_process_puppet_anim(delta)
-
-	# 联机模式：Authority 定时广播状态给其他 peer
-	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
-		if get_multiplayer_authority() == multiplayer.get_unique_id():
-			_net_sync_timer += delta
-			if _net_sync_timer >= NET_SYNC_INTERVAL:
-				_net_sync_timer = 0.0
-				var weapon_id: String = ""
-				var wd := Global.get_active_weapon()
-				if wd:
-					weapon_id = wd.item_id
-				_sync_state.rpc(global_position, _facing, _moving, _is_walking, state_enum, weapon_id)
+	var sync := MultiplayerSynchronizer.new()
+	sync.name = "NetworkSync"
+	sync.replication_interval = 0.05  # 20Hz
+	# 在 Inspector 中配置要同步的属性：添加 position
+	add_child(sync)
 
 
-## Authority 调用 → 远程 puppet 接收位置/朝向/移动/行走状态 + 状态枚举 + 武器ID
-@rpc("authority", "unreliable")
-func _sync_state(pos: Vector2, facing: int, moving: bool, is_walking: bool, st_enum: int, weapon_id: String) -> void:
-	global_position = pos
-	_facing = facing        ## setter 自动触发 _refresh_sprite()
-	_is_walking = is_walking  ## setter 自动触发 _refresh_sprite()
-	_moving = moving        ## setter 自动启停 animation_timer（放最后避免重复刷新）
-	# 更新 puppet 武器外观
-	_update_puppet_weapon(weapon_id)
-	state_enum = st_enum
-
-
-## Authority 调用 → 远程 puppet 接收 HP 变化（reliable, HP 变化时触发）
-@rpc("authority", "reliable")
-func _sync_hp(hp: float) -> void:
-	current_hp = hp
-
-
-func _init_puppet() -> void:
-	## 远程玩家 puppet 模式 — 禁用逻辑，只做视觉渲染
-	print("[Player] Puppet 模式 — peer_id=%d authority=%d" % [multiplayer.get_unique_id(), get_multiplayer_authority()])
-
-	# 禁用状态机
-	var sm: Node = get_node_or_null("StateMachine")
-	if sm:
-		sm.set_process(false)
-		sm.set_physics_process(false)
-
-	# 禁用碰撞
-	if $CollisionShape2D:
-		$CollisionShape2D.set_deferred("disabled", true)
-
-	# 禁用受击碰撞体
-	if hurt_area:
-		hurt_area.set_deferred("monitoring", false)
-		hurt_area.set_deferred("monitorable", false)
-
-	# 俯视角模式
-	motion_mode = MOTION_MODE_FLOATING
-
-	# 基本外观
-	_apply_character_data()
-	if walk_texture == null:
-		walk_texture = load("res://art/Characters/のび太セット.png") as Texture2D
-	if run_texture == null:
-		run_texture = load("res://art/Characters/のび太歩行セット.png") as Texture2D
-
-	# 初始化 PlayerData（从 Global 复制初始状态，供 Host 端 _execute_attack 使用）
-	_init_player_data()
-
-	# 启动简单动画 timer（只用于 puppet 本地视觉）
-	animation_timer.wait_time = walk_frame_duration
-	var cb: Callable = _on_animation_timer_timeout
-	animation_timer.timeout.connect(cb)
-	animation_timer.start()
-
-	# 半透明标记为远程玩家
-	if sprite:
-		sprite.modulate = Color(1, 1, 1, 0.7)
-
-	print("[Player] Puppet 初始化完成")
-
-
-## puppet: 根据同步的 weapon_id 更新武器外观
-var _puppet_weapon_id: String = ""
-var _puppet_weapon_data: WeaponData = null
-## puppet: 本地动画驱动（攻击 + 举起/放下）
-var _puppet_anim_seq_idx: int = 0
-var _puppet_anim_timer: float = 0.0
-var _puppet_anim_playing: bool = false
-enum PuppetAnimType { NONE, RAISE, ATTACK, LOWER }
-var _puppet_anim_type: int = PuppetAnimType.NONE
-
-func _update_puppet_weapon(weapon_id: String) -> void:
-	if weapon_id.is_empty():
-		return
-	if weapon_id == _puppet_weapon_id:
-		return
-	_puppet_weapon_id = weapon_id
-	# 查找 WeaponData 资源（遍历 Global.equipment 和已知武器路径）
-	var wd: WeaponData = null
-	# 尝试从 Global 查找（Host 端 puppet 有完整装备数据）
-	for slot: String in ["primary", "secondary"]:
-		var eq: WeaponData = Global.get_equipped_weapon(slot) as WeaponData
-		if eq and eq.item_id == weapon_id:
-			wd = eq
-			break
-	if not wd:
-		# 回退：尝试加载已知武器资源
-		var known_weapons: Array[String] = [
-			"res://object/weapon_pistol.tres",
-			"res://object/weapon_knife.tres",
-			"res://object/weapon_shotgun.tres",
-			"res://object/weapon_rifle.tres",
-			"res://object/weapon_smg.tres",
-		]
-		for path: String in known_weapons:
-			if ResourceLoader.exists(path):
-				var res: WeaponData = load(path) as WeaponData
-				if res and res.item_id == weapon_id:
-					wd = res
-					break
-	if wd:
-		_puppet_weapon_data = wd
-		print("[Player] Puppet 武器缓存: %s" % weapon_id)
-		# 如果当前已处于武器状态，立即切换武器外观
-		if _weapon_mode:
-			exit_weapon_mode()
-			enter_weapon_mode(wd)
-
-
-## puppet: 启动举起动画
-func _start_puppet_raise_anim() -> void:
-	if not _puppet_weapon_data:
-		return
-	var seq: Array[int] = _puppet_weapon_data.get_raise_char_sequence()
-	if seq.is_empty():
-		set_weapon_ready_frame()
-		return
-	_puppet_anim_type = PuppetAnimType.RAISE
-	_puppet_anim_seq_idx = 0
-	_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(0)
-	_puppet_anim_playing = true
-	_current_weapon_char_idx = seq[0]
-	_refresh_sprite()
-
-
-## puppet: 启动攻击动画
-func _start_puppet_attack_anim() -> void:
-	if not _puppet_weapon_data:
-		return
-	var seq: Array[int] = _puppet_weapon_data.attack_char_sequence
-	if seq.is_empty():
-		return
-	_puppet_anim_type = PuppetAnimType.ATTACK
-	_puppet_anim_seq_idx = 0
-	_puppet_anim_timer = _puppet_weapon_data.get_attack_frame_duration(0)
-	_puppet_anim_playing = true
-	_current_weapon_char_idx = seq[0]
-	_refresh_sprite()
-
-
-## puppet: 启动放下动画（举起序列反向播放）
-func _start_puppet_lower_anim() -> void:
-	if not _puppet_weapon_data:
-		exit_weapon_mode()
-		return
-	var seq: Array[int] = _puppet_weapon_data.get_raise_char_sequence().duplicate()
-	seq.reverse()
-	if seq.is_empty():
-		exit_weapon_mode()
-		return
-	_puppet_anim_type = PuppetAnimType.LOWER
-	_puppet_anim_seq_idx = 0
-	# 反向动画的时长：原序列的反向帧时长
-	_puppet_anim_timer = _puppet_weapon_data.get_raise_frame_duration(seq.size() - 1 - 0)
-	_puppet_anim_playing = true
-	_current_weapon_char_idx = seq[0]
-	_refresh_sprite()
-
-
-## puppet: 统一动画驱动（_process 中调用）
-func _process_puppet_anim(delta: float) -> void:
-	if not _puppet_anim_playing or not _puppet_weapon_data:
-		return
-	_puppet_anim_timer -= delta
-	if _puppet_anim_timer <= 0.0:
-		_puppet_anim_seq_idx += 1
-		var seq: Array[int] = []
-		var dur: float = 0.1
-		var orig_size: int = _puppet_weapon_data.get_raise_char_sequence().size()
-		match _puppet_anim_type:
-			PuppetAnimType.RAISE:
-				seq = _puppet_weapon_data.get_raise_char_sequence()
-			PuppetAnimType.LOWER:
-				seq = _puppet_weapon_data.get_raise_char_sequence().duplicate()
-				seq.reverse()
-			PuppetAnimType.ATTACK:
-				seq = _puppet_weapon_data.attack_char_sequence
-		if _puppet_anim_seq_idx >= seq.size():
-			_puppet_anim_playing = false
-			var finished_type: int = _puppet_anim_type
-			_puppet_anim_type = PuppetAnimType.NONE
-			match finished_type:
-				PuppetAnimType.LOWER:
-					exit_weapon_mode()
-				_:
-					set_weapon_ready_frame()
-			return
-		# 获取当前帧时长
-		match _puppet_anim_type:
-			PuppetAnimType.RAISE:
-				dur = _puppet_weapon_data.get_raise_frame_duration(_puppet_anim_seq_idx)
-			PuppetAnimType.LOWER:
-				dur = _puppet_weapon_data.get_raise_frame_duration(orig_size - 1 - _puppet_anim_seq_idx)
-			PuppetAnimType.ATTACK:
-				dur = _puppet_weapon_data.get_attack_frame_duration(_puppet_anim_seq_idx)
-		_puppet_anim_timer = dur
-		_current_weapon_char_idx = seq[_puppet_anim_seq_idx]
-		_refresh_sprite()
-
-
-func _init_player_data() -> void:
-	## 创建 PlayerData 并从 Global 同步初始状态
-	var pd_script: Script = load("res://script/player_data.gd") as Script
-	player_data = pd_script.new()
-	player_data.character = Global.player_character as CharacterData
-	player_data.current_hp = current_hp
-	player_data.equipment = Global.equipment.duplicate()
-	player_data.weapon_magazines = Global.weapon_magazines.duplicate()
-	player_data.active_weapon_slot = Global.active_weapon_slot
-	player_data.healing_item = Global.healing_item
-	player_data.support_item = Global.support_item
-	player_data.inventory = Global.inventory.duplicate()
-	player_data.gold = Global.gold
-
-
-## 将 PlayerData 同步回 Global（保持向后兼容）
-func _sync_player_data_to_global() -> void:
-	if not player_data:
-		return
-	Global.player_hp = player_data.current_hp
-	Global.player_character = player_data.character
-	Global.equipment = player_data.equipment.duplicate()
-	Global.weapon_magazines = player_data.weapon_magazines.duplicate()
-	Global.active_weapon_slot = player_data.active_weapon_slot
-	Global.healing_item = player_data.healing_item
-	Global.support_item = player_data.support_item
-	Global.inventory = player_data.inventory.duplicate()
-	Global.gold = player_data.gold
+func _sync_to_network_player() -> void:
+	## 通过 RPC 广播自己的位置到所有 peer
+	var my_id: int = multiplayer.get_unique_id()
+	NetworkManager.broadcast_player_state.rpc(my_id, global_position.x, global_position.y, _facing, current_hp, _moving, _weapon_data.item_id if _weapon_data else "")
 
 
 func _setup_hurt_area() -> Area2D:
@@ -486,6 +179,11 @@ func _setup_hurt_area() -> Area2D:
 
 	add_child(area)
 	return area
+
+
+func _process(delta: float) -> void:
+	if _is_dying:
+		_process_death(delta)
 
 
 func _on_animation_timer_timeout() -> void:
@@ -622,25 +320,6 @@ func is_facing_locked() -> bool:
 
 
 # ═══════════════════════════════════════
-# 输入抽象层（联机准备）
-# ═══════════════════════════════════════
-
-## 获取移动输入向量。当前代理到 Input 单例；联机时改为读取网络输入。
-func get_input_vector() -> Vector2:
-	return Input.get_vector("左", "右", "上", "下")
-
-
-## 检查指定动作是否被按下。当前代理到 Input 单例；联机时改为读取网络输入。
-func is_input_action_pressed(action: String) -> bool:
-	return Input.is_action_pressed(action)
-
-
-## 检查指定动作是否刚被按下（单次触发）。
-func is_input_action_just_pressed(action: String) -> bool:
-	return Input.is_action_just_pressed(action)
-
-
-# ═══════════════════════════════════════
 # HP 系统
 # ═══════════════════════════════════════
 
@@ -699,10 +378,6 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	if _is_dying:
 		return
 
-	# 联机模式：只有 Host 处理伤害
-	if Lobby.is_online() and not multiplayer.is_server():
-		return
-
 	# 源头去重：同一伤害源 1 秒内不会对玩家重复判定
 	if source_id != 0:
 		var now: int = Time.get_ticks_msec()
@@ -731,12 +406,6 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	if not member.is_empty():
 		member["current_hp"] = current_hp
 
-	# 联机模式：广播 HP 变化给所有 peer
-	if Lobby.is_online() and multiplayer.is_server():
-		# Player 节点的 authority 属于目标 peer，Host 直接调用其 authority RPC 会被拒绝。
-		# 通过 Host 权威的 NetworkSyncManager 广播，所有端按 player_name 更新对应实例。
-		NetworkSyncManager.sync_player_hp.rpc(name, current_hp)
-
 	if current_hp <= 0.0:
 		_die()
 
@@ -744,9 +413,6 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 
 func heal(amount: float) -> void:
-	# 联机模式：只有 Host 处理治疗
-	if Lobby.is_online() and not multiplayer.is_server():
-		return
 	current_hp = minf(max_hp, current_hp + amount)
 	Global.player_hp = current_hp
 	# 同步到队伍成员数据
@@ -754,297 +420,6 @@ func heal(amount: float) -> void:
 	if not member.is_empty():
 		member["current_hp"] = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
-	# 联机模式：广播 HP 变化
-	if Lobby.is_online() and multiplayer.is_server():
-		NetworkSyncManager.sync_player_hp.rpc(name, current_hp)
-
-
-# ═══════════════════════════════════════
-# 联机战斗方法（由 NetworkSyncManager RPC 调用）
-# ═══════════════════════════════════════
-
-## Host 收到 Client 的攻击请求后调用，生成子弹实体
-## weapon_item_id: Client 当前使用的武器 ID（不是 Host 的武器）
-## 弹药 = player_data（独立弹药池，首次自动初始化）
-func _execute_attack(weapon_item_id: String = "") -> void:
-	var wd: WeaponData = null
-	# 根据 weapon_item_id 查找 WeaponData
-	if not weapon_item_id.is_empty():
-		# 先查 Global.equipment（Host 本地装备）
-		for slot: String in ["primary", "secondary"]:
-			var eq: WeaponData = Global.get_equipped_weapon(slot) as WeaponData
-			if eq and eq.item_id == weapon_item_id:
-				wd = eq
-				break
-		# 回退：加载已知武器资源
-		if not wd:
-			var known: Array[String] = [
-				"res://object/weapon_pistol.tres",
-				"res://object/weapon_knife.tres",
-				"res://object/weapon_shotgun.tres",
-				"res://object/weapon_rifle.tres",
-				"res://object/weapon_smg.tres",
-			]
-			for path: String in known:
-				if ResourceLoader.exists(path):
-					var res: WeaponData = load(path) as WeaponData
-					if res and res.item_id == weapon_item_id:
-						wd = res
-						break
-	if not wd:
-		wd = Global.get_active_weapon()  # 最终回退
-	if not wd or not wd.is_ranged:
-		return
-
-	# 弹药：使用 player_data 独立管理（每个玩家的 puppet 有独立弹药池）
-	var current: int = 0
-	if player_data:
-		current = player_data.get_magazine_ammo(wd.item_id)
-		if current <= 0:
-			# 首次攻击：自动初始化为满弹夹
-			current = wd.magazine_capacity
-			player_data.set_magazine_ammo(wd.item_id, current)
-	else:
-		current = Global.get_magazine_ammo(wd.item_id)
-
-	if current <= 0:
-		if wd.empty_fire_sound:
-			Global.play_sfx_managed(wd.empty_fire_sound, get_tree().current_scene)
-		return
-
-	# 消耗弹药
-	if player_data:
-		player_data.set_magazine_ammo(wd.item_id, current - 1)
-	else:
-		Global.set_magazine_ammo(wd.item_id, current - 1)
-	var bullet_count: int = wd.bullet_list.size()
-	print("[Player] _execute_attack: 弹夹剩余 %d/%d | 子弹数 %d | 数据源=%s" % [current - 1, wd.magazine_capacity, bullet_count, "player_data" if player_data else "Global"])
-
-	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
-	if not bullet_scene:
-		return
-
-	var base_dir: Vector2 = get_facing_vector()
-	var base_pos: Vector2 = global_position
-
-	for bd: BulletData in wd.bullet_list:
-		var bullet: Node2D = bullet_scene.instantiate()
-		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
-		var damage: float = bd.get_effective_damage(wd.attack_power)
-
-		if bullet.has_method("setup"):
-			bullet.setup({
-				"direction": dir_vec,
-				"speed": bd.speed,
-				"max_range": bd.max_range,
-				"damage": damage,
-				"destroy_on_hit": bd.destroy_on_hit,
-				"penetration": bd.penetration,
-				"critical_rate": wd.critical_rate,
-				"hit_effect_anim": wd.get_hit_effect_anim(),
-				"hit_effect_follow": wd.hit_effect_follow,
-				"hit_effect_offset_override": wd.hit_effect_offset_override,
-				"hit_sound": wd.hit_sound,
-				"texture": bd.bullet_texture,
-				"anim_frames": bd.bullet_anim_frames,
-				"frame_duration": bd.bullet_frame_duration,
-				"collision_size": bd.collision_size,
-				"collision_offset": bd.collision_offset,
-				"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
-				"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
-				"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else wd.hitstun_duration,
-				"shooter": self,
-			})
-
-		var extra: Vector2 = bd.get_extra_offset(facing)
-		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
-		get_tree().current_scene.add_child(bullet)
-
-	# 播放攻击特效和音效
-	var effect_scene: PackedScene = wd.get_attack_effect_anim(facing)
-	if effect_scene:
-		var follow: Node2D = self if wd.attack_effect_follow else null
-		VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene, 10.0, follow, wd.attack_effect_offset_override)
-	if wd.attack_sound:
-		Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
-
-	# 枪声惊敌
-	if wd.gunshot_range > 0.0:
-		_alert_enemies_by_gunshot(wd.gunshot_range)
-
-
-## Host 收到 Client 的近战请求后调用，执行近战判定
-## weapon_item_id: Client 当前使用的武器 ID（不是 Host 的武器）
-func _execute_melee(weapon_item_id: String = "") -> void:
-	var wd: WeaponData = null
-	if not weapon_item_id.is_empty():
-		wd = _find_weapon_by_id(weapon_item_id)
-	if not wd:
-		wd = Global.get_active_weapon()
-	if not wd or wd.is_ranged:
-		return
-
-	var is_headshot: bool = false
-	if wd.critical_rate > 0.0:
-		is_headshot = randf() * 100.0 < wd.critical_rate
-
-	# 创建近战判定区域
-	var hitbox := Area2D.new()
-	hitbox.collision_layer = 0
-	hitbox.collision_mask = 24  # 层4+5
-
-	var shape := CollisionShape2D.new()
-	var rect := RectangleShape2D.new()
-	rect.size = wd.melee_range_size
-	shape.shape = rect
-	hitbox.add_child(shape)
-
-	var offset: Vector2 = get_facing_vector() * wd.melee_range_forward_offset
-	hitbox.global_position = global_position + offset
-	get_tree().current_scene.add_child(hitbox)
-
-	# 检测命中
-	var bodies: Array[Node2D] = hitbox.get_overlapping_bodies()
-	var areas: Array[Area2D] = hitbox.get_overlapping_areas()
-	var damage: float = wd.get_effective_damage()
-	var hit_ids: Array[int] = []
-
-	for body: Node2D in bodies:
-		if body == self: continue
-		if body.get("_is_dead") == true or body.get("_is_dying") == true: continue
-		if body.has_method("take_damage"):
-			var bid: int = body.get_instance_id()
-			if bid in hit_ids: continue
-			hit_ids.append(bid)
-			body.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
-			var hit_effect := wd.get_hit_effect_anim()
-			if hit_effect:
-				VXAnimSprite.play_scene(hit_effect, body.global_position, get_tree().current_scene)
-			if wd.hit_sound:
-				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
-
-	for area: Area2D in areas:
-		var parent: Node = area.get_parent()
-		if parent == self: continue
-		if parent.get("_is_dead") == true or parent.get("_is_dying") == true: continue
-		if parent and parent.has_method("take_damage"):
-			var pid: int = parent.get_instance_id()
-			if pid in hit_ids: continue
-			hit_ids.append(pid)
-			parent.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
-			var hit_effect_parent := wd.get_hit_effect_anim()
-			if hit_effect_parent:
-				VXAnimSprite.play_scene(hit_effect_parent, parent.global_position, get_tree().current_scene)
-			if wd.hit_sound:
-				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
-
-	hitbox.queue_free()
-
-	# 播放攻击特效
-	var effect_scene: PackedScene = wd.get_attack_effect_anim(facing)
-	if effect_scene:
-		VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene)
-	if wd.attack_sound:
-		Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
-
-
-## Host 收到 Client 的装填请求后调用，执行装填
-## weapon_item_id: Client 当前使用的武器 ID
-## shell_count: -1=全部装填(NORMAL模式), 1=装一发(霰弹枪模式)
-## reserve_count: Client 端的备弹数量（Host 端 player_data.inventory 可能没同步）
-func _execute_reload(weapon_item_id: String = "", shell_count: int = -1, reserve_count: int = 0) -> void:
-	var pd = player_data
-	var wd: WeaponData = null
-	if not weapon_item_id.is_empty():
-		wd = _find_weapon_by_id(weapon_item_id)
-	if not wd and pd:
-		wd = pd.get_active_weapon()
-	if not wd:
-		wd = Global.get_active_weapon()
-	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
-		return
-
-	# 弹夹弹药：首次自动初始化（与 _execute_attack 一致）
-	var current: int = pd.get_magazine_ammo(wd.item_id) if pd else Global.get_magazine_ammo(wd.item_id)
-	if current <= 0 and shell_count < 0:
-		# NORMAL 模式首次装填：弹夹可能未初始化，设为 0
-		pass
-
-	# 备弹数量：优先用 Client 传来的 reserve_count（联机模式数据源），回退到 player_data
-	var available: int = reserve_count
-	if available <= 0:
-		available = pd.count_ammo_item(wd.ammo_item_id) if pd else Global.count_ammo_item(wd.ammo_item_id)
-	if available <= 0:
-		print("[Player] _execute_reload: 无备弹可用 (reserve_count=%d)" % reserve_count)
-		return
-
-	if current >= wd.magazine_capacity:
-		return
-
-	# 确定装填数量：-1=全装，否则装 shell_count 发
-	var to_load: int
-	if shell_count <= 0:
-		var need: int = wd.magazine_capacity - current
-		to_load = mini(need, available)
-	else:
-		to_load = mini(shell_count, available)
-
-	# 从 player_data 消耗备弹（注意 player_data.inventory 可能不同步，先尝试消耗）
-	var consumed: int = 0
-	if pd:
-		consumed = pd.consume_ammo_item(wd.ammo_item_id, to_load)
-	if consumed <= 0:
-		# 单机/Host 本地玩家从 Global 消耗；远程 puppet 的库存尚未完全同步时，
-		# 使用经过范围校验的 reserve_count 作为临时权威结果，避免 Client 备弹减少但弹夹不增加。
-		if Lobby.is_online() and reserve_count > 0:
-			consumed = mini(to_load, reserve_count)
-		else:
-			consumed = Global.consume_ammo_item(wd.ammo_item_id, to_load)
-
-	if consumed > 0:
-		if pd:
-			pd.set_magazine_ammo(wd.item_id, current + consumed)
-		else:
-			Global.set_magazine_ammo(wd.item_id, current + consumed)
-		print("[Player] _execute_reload: %d → %d / %d (装了%d发 reserve=%d)" % [current, current + consumed, wd.magazine_capacity, consumed, available])
-
-	if wd.reload_sound:
-		Global.play_sfx_managed(wd.reload_sound, get_tree().current_scene)
-
-
-## 根据 weapon_item_id 查找 WeaponData 资源（联机 _execute_* 共用）
-func _find_weapon_by_id(weapon_item_id: String) -> WeaponData:
-	var known: Array[String] = [
-		"res://object/weapon_pistol.tres",
-		"res://object/weapon_knife.tres",
-		"res://object/weapon_shotgun.tres",
-		"res://object/weapon_rifle.tres",
-		"res://object/weapon_smg.tres",
-	]
-	for path: String in known:
-		if ResourceLoader.exists(path):
-			var res: WeaponData = load(path) as WeaponData
-			if res and res.item_id == weapon_item_id:
-				return res
-	return null
-
-
-## 枪声惊动范围内敌人（由 _execute_attack 调用）
-func _alert_enemies_by_gunshot(gunshot_range: float) -> void:
-	var tree := get_tree()
-	if not tree: return
-	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
-	var shoot_pos: Vector2 = global_position
-	var count: int = 0
-	for enemy: Node in enemies:
-		if not is_instance_valid(enemy): continue
-		if enemy.global_position.distance_to(shoot_pos) > gunshot_range: continue
-		# 联机模式下由 Host 直接调用 enemy.alert_by_gunshot
-		if enemy.has_method("alert_by_gunshot"):
-			enemy.alert_by_gunshot(self)
-			count += 1
-	if count > 0:
-		print("[枪声] 惊动 %d 个敌人（范围 %.0fpx）" % [count, gunshot_range])
 
 
 # ═══════════════════════════════════════
@@ -1287,12 +662,12 @@ func _refresh_sprite() -> void:
 
 	# 武器模式下使用武器纹理和角色索引
 	if _weapon_mode and _weapon_data:
+		if not _weapon_data.weapon_walk_texture:
+			return
 		# 优先使用角色专属武器行走图，回退到武器默认行走图
 		var char_walk_tex: Texture2D = null
 		if current_character and _weapon_data:
 			char_walk_tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
-		if not char_walk_tex and not _weapon_data.weapon_walk_texture:
-			return  # 无任何武器纹理可用
 		sprite.texture = char_walk_tex if char_walk_tex else _weapon_data.weapon_walk_texture
 		var char_idx: int = _current_weapon_char_idx
 		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]

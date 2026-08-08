@@ -90,7 +90,7 @@ func process_update(delta: float) -> void:
 
 func physics_update(_delta: float) -> void:
 	# 装填期间允许移动（朝向锁定，仅位移）
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	character.velocity = character._player_input.get_move_vector() * character.run_speed
 	character.move_and_slide()
 
 

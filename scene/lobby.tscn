@@ -1,6 +1,14 @@
-[gd_scene format=3 uid="uid://clobby000001"]
+[gd_scene format=3 uid="uid://blobbymain001"]
 
-[ext_resource type="Script" path="res://script/lobby_ui.gd" id="1"]
+[ext_resource type="Script" path="res://script/lobby.gd" id="1_lobby"]
+
+[sub_resource type="StyleBoxFlat" id="1_panel_style"]
+bg_color = Color(0.05, 0.05, 0.1, 0.92)
+border_width_left = 2
+border_width_right = 2
+border_width_top = 2
+border_width_bottom = 2
+border_color = Color(0.4, 0.4, 0.6, 1)
 
 [node name="Lobby" type="Control"]
 layout_mode = 3
@@ -9,4 +17,88 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1")
+script = ExtResource("1_lobby")
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -180.0
+offset_right = 200.0
+offset_bottom = 180.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("1_panel_style")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="TitleLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = "联机大厅"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 24
+
+[node name="StatusLabel" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = "选择模式"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+
+[node name="PlayerList" type="Label" parent="Panel/VBox"]
+layout_mode = 2
+text = ""
+visible = false
+theme_override_font_sizes/font_size = 12
+
+[node name="ServerList" type="ItemList" parent="Panel/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+visible = false
+theme_override_font_sizes/font_size = 12
+
+[node name="IPInput" type="LineEdit" parent="Panel/VBox"]
+layout_mode = 2
+placeholder_text = "IP 地址（留空=127.0.0.1）"
+text = ""
+theme_override_font_sizes/font_size = 12
+
+[node name="PortInput" type="LineEdit" parent="Panel/VBox"]
+layout_mode = 2
+placeholder_text = "端口"
+text = "9999"
+theme_override_font_sizes/font_size = 12
+
+[node name="HostBtn" type="Button" parent="Panel/VBox"]
+layout_mode = 2
+text = "创建房间 (Host)"
+theme_override_font_sizes/font_size = 14
+
+[node name="JoinBtn" type="Button" parent="Panel/VBox"]
+layout_mode = 2
+text = "加入游戏 (Join)"
+theme_override_font_sizes/font_size = 14
+
+[node name="StartBtn" type="Button" parent="Panel/VBox"]
+layout_mode = 2
+text = "开始游戏"
+visible = false
+theme_override_font_sizes/font_size = 16
+
+[node name="BackBtn" type="Button" parent="Panel/VBox"]
+layout_mode = 2
+text = "返回标题"
+theme_override_font_sizes/font_size = 14

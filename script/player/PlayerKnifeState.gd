@@ -61,23 +61,23 @@ func process_update(delta: float) -> void:
 			# --- 固定朝向输入处理 ---
 			if Global.facing_lock_mode == 0:
 				# 切换式：按取消键切换朝向锁定
-				if Input.is_action_just_pressed("取消键"):
+				if character._player_input.is_action_just_pressed("取消键"):
 					character.toggle_facing_lock()
 			else:
 				# 按住式：按住取消键锁定朝向，松开解锁
-				if Input.is_action_pressed("取消键"):
+				if character._player_input.is_action_pressed("取消键"):
 					if not character.is_facing_locked():
 						character.lock_facing()
 				elif character.is_facing_locked():
 					character.unlock_facing()
 
-			var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+			var move_dir: Vector2 = character._player_input.get_move_vector()
 			character.update_appearance(move_dir != Vector2.ZERO, false)
 			if move_dir != Vector2.ZERO:
 				character.update_facing(move_dir)
 
 			# 切换到主武器
-			if Input.is_action_just_pressed("主武器键"):
+			if character._player_input.is_action_just_pressed("主武器键"):
 				if Global.switch_to_slot("primary"):
 					var state_name: String = Global.get_active_weapon_state_name()
 					if not state_name.is_empty():
@@ -85,7 +85,7 @@ func process_update(delta: float) -> void:
 					return
 
 			# 切换到副武器（已是副武器 → 重进举起状态刷新）
-			if Input.is_action_just_pressed("副武器键"):
+			if character._player_input.is_action_just_pressed("副武器键"):
 				if Global.switch_to_slot("secondary"):
 					var new_state: String = Global.get_active_weapon_state_name()
 					if not new_state.is_empty():
@@ -96,17 +96,17 @@ func process_update(delta: float) -> void:
 				return
 
 			# 使用消耗品
-			if Input.is_action_just_pressed("治疗品键"):
+			if character._player_input.is_action_just_pressed("治疗品键"):
 				Global.use_healing_item()
 				return
-			if Input.is_action_just_pressed("辅助品键"):
+			if character._player_input.is_action_just_pressed("辅助品键"):
 				Global.use_support_item()
 				return
 
-			if Input.is_action_just_pressed("举起放下武器键"):
+			if character._player_input.is_action_just_pressed("举起放下武器键"):
 				_begin_lower()
 
-			if Input.is_action_just_pressed("确定键"):
+			if character._player_input.is_action_just_pressed("确定键"):
 				# 在拾取物范围内时不攻击，让拾取物处理按住替换
 				if not character._near_pickup:
 					transition_requested.emit("KnifeAttack")
@@ -125,7 +125,7 @@ func process_update(delta: float) -> void:
 
 func physics_update(delta: float) -> void:
 	if _phase == Phase.READY:
-		character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+		character.velocity = character._player_input.get_move_vector() * character.run_speed
 	else:
 		character.velocity = Vector2.ZERO
 	character.move_and_slide()

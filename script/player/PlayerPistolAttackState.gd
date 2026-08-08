@@ -105,7 +105,7 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	character.velocity = character._player_input.get_move_vector() * character.run_speed
 	character.move_and_slide()
 
 
@@ -255,7 +255,7 @@ func _spawn_visual_bullets() -> void:
 func _try_continue_attack() -> bool:
 	## HOLD 模式下按住确定键 → 重新开始一轮攻击。
 	## 返回 true 表示已重新开始攻击。
-	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
+	if _wd.fire_mode == WeaponData.FireMode.HOLD and character._player_input.is_action_pressed("确定键"):
 		# HOLD 模式下检查弹药（空弹则终止连发）
 		if _wd.is_ranged and _wd.magazine_capacity > 0:
 			if Global.get_magazine_ammo(_wd.item_id) <= 0:
@@ -282,7 +282,7 @@ func _get_weapon() -> WeaponData:
 
 ## 通知枪声范围内的敌人（仅影响 Idle 状态的敌人）
 func _alert_nearby_enemies() -> void:
-	var tree := character.get_tree()
+	var tree: SceneTree = character.get_tree()
 	if not tree:
 		return
 	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")

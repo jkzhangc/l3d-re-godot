@@ -620,6 +620,12 @@ func _update_all_settings_volume_display() -> void:
 	_update_settings_volume_display(1)
 
 
+
+func _go_to_lobby() -> void:
+	print("[标题画面] 联机游戏 → 大厅")
+	var err: Error = get_tree().change_scene_to_file(lobby_scene)
+	if err != OK:
+		printerr("[标题画面] 场景切换失败: %s (err=%d)" % [lobby_scene, err])
 func _go_to_campaign_select() -> void:
 	print("[标题画面] 开始游戏 → 战役选择")
 	var err: Error = get_tree().change_scene_to_file(campaign_select_scene)
