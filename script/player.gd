@@ -165,8 +165,9 @@ func _ready() -> void:
 	# 判断运行模式
 	var is_puppet: bool = false
 	if not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer):
-		# 联机模式：检查 authority
-		if get_multiplayer_authority() != multiplayer.get_unique_id():
+		# Host 需要模拟所有玩家（包括 Client 玩家）的碰撞、受击和被敌人索敌逻辑。
+		# 只有非 Host 上的远程玩家才是纯视觉 puppet；此前 Host 会错误禁用 Player2 的碰撞体。
+		if not multiplayer.is_server() and get_multiplayer_authority() != multiplayer.get_unique_id():
 			is_puppet = true
 
 	if is_puppet:
@@ -732,7 +733,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 	# 联机模式：广播 HP 变化给所有 peer
 	if Lobby.is_online() and multiplayer.is_server():
-		_sync_hp.rpc(current_hp)
+		# Player 节点的 authority 属于目标 peer，Host 直接调用其 authority RPC 会被拒绝。
+		# 通过 Host 权威的 NetworkSyncManager 广播，所有端按 player_name 更新对应实例。
+		NetworkSyncManager.sync_player_hp.rpc(name, current_hp)
 
 	if current_hp <= 0.0:
 		_die()
@@ -753,7 +756,7 @@ func heal(amount: float) -> void:
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
 	# 联机模式：广播 HP 变化
 	if Lobby.is_online() and multiplayer.is_server():
-		_sync_hp.rpc(current_hp)
+		NetworkSyncManager.sync_player_hp.rpc(name, current_hp)
 
 
 # ═══════════════════════════════════════
@@ -913,7 +916,7 @@ func _execute_melee(weapon_item_id: String = "") -> void:
 			var bid: int = body.get_instance_id()
 			if bid in hit_ids: continue
 			hit_ids.append(bid)
-			body.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
+			body.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
 			if wd.hit_effect_anim:
 				VXAnimSprite.play_scene(wd.hit_effect_anim, body.global_position, get_tree().current_scene)
 			if wd.hit_sound:
@@ -927,7 +930,7 @@ func _execute_melee(weapon_item_id: String = "") -> void:
 			var pid: int = parent.get_instance_id()
 			if pid in hit_ids: continue
 			hit_ids.append(pid)
-			parent.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
+			parent.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
 			if wd.hit_effect_anim:
 				VXAnimSprite.play_scene(wd.hit_effect_anim, parent.global_position, get_tree().current_scene)
 			if wd.hit_sound:
@@ -989,8 +992,12 @@ func _execute_reload(weapon_item_id: String = "", shell_count: int = -1, reserve
 	if pd:
 		consumed = pd.consume_ammo_item(wd.ammo_item_id, to_load)
 	if consumed <= 0:
-		# player_data 没有弹药 → 直接从 Global 消耗（Host 本地玩家的弹药）
-		consumed = Global.consume_ammo_item(wd.ammo_item_id, to_load)
+		# 单机/Host 本地玩家从 Global 消耗；远程 puppet 的库存尚未完全同步时，
+		# 使用经过范围校验的 reserve_count 作为临时权威结果，避免 Client 备弹减少但弹夹不增加。
+		if Lobby.is_online() and reserve_count > 0:
+			consumed = mini(to_load, reserve_count)
+		else:
+			consumed = Global.consume_ammo_item(wd.ammo_item_id, to_load)
 
 	if consumed > 0:
 		if pd:

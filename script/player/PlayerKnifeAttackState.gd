@@ -139,7 +139,7 @@ func _create_melee_hitbox() -> void:
 
 	# 联机模式：Client 不本地创建判定区域，通过 RPC 让 Host 代为执行
 	if Lobby.is_online() and not multiplayer.is_server():
-		NetworkSyncManager.request_melee.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id)
+		NetworkSyncManager.request_melee.rpc_id(1, _wd.item_id)
 		_hit_done = true  # 标记完成，避免 physics_update 中重复触发
 		return
 
@@ -193,7 +193,7 @@ func _check_melee_hits() -> void:
 			if bid in hit_ids:
 				continue
 			hit_ids.append(bid)
-			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.hit_effect_anim)
 			if _wd.hit_effect_anim:
 				var hf: Node2D = body if _wd.hit_effect_follow else null
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, _wd.hit_effect_offset_override)
@@ -215,7 +215,7 @@ func _check_melee_hits() -> void:
 			if pid in hit_ids:
 				continue
 			hit_ids.append(pid)
-			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.hit_effect_anim)
 			if _wd.hit_effect_anim:
 				var hf2: Node2D = parent if _wd.hit_effect_follow else null
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, _wd.hit_effect_offset_override)

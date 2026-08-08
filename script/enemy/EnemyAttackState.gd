@@ -123,7 +123,11 @@ func _do_attack_hit() -> void:
 			var dmg: float = enemy.attack_damage
 			var dir: Vector2 = (player.global_position - enemy.global_position).normalized()
 			if player.has_method("take_damage"):
-				player.take_damage(dmg, 120.0, dir)
+				# Player HP 由 Host 权威处理；take_damage 内部会回传至目标玩家的 authority。
+				player.take_damage(dmg, 120.0, dir, false, 0.0, 0.0, enemy.get_instance_id())
+				if Lobby.is_online() and multiplayer.is_server():
+					var effect_path := _get_attack_effect_path(enemy.attack_effect_anim)
+					NetworkSyncManager.sync_player_hit_effect.rpc(player.name, effect_path, player.global_position)
 				# 播放攻击音效
 				enemy._play_sound(enemy.attack_sound)
 				# 播放攻击特效
@@ -149,5 +153,11 @@ func _do_attack_hit() -> void:
 				if _is_target_in_hit_rect(to_other, fv, half_w, half_h):
 					var dmg: float = enemy.attack_damage
 					var dir: Vector2 = (other.global_position - enemy.global_position).normalized()
-					other.take_damage(dmg, 120.0, dir)
+					other.take_damage(dmg, 120.0, dir, false, 0.0, 0.0, enemy.get_instance_id())
+
+
+func _get_attack_effect_path(effect_scene: PackedScene) -> String:
+	if not effect_scene:
+		return ""
+	return effect_scene.resource_path
 					print("[敵人] 友军伤害！命中其他敌人 伤害=%d" % int(dmg))

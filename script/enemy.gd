@@ -207,6 +207,12 @@ func _init_enemy_puppet() -> void:
 
 
 func _process(delta: float) -> void:
+	# 死亡状态拥有最高优先级：puppet 攻击动画不能在尸体上继续驱动精灵。
+	# 即使死亡 RPC 与批量状态同步在同一帧交错到达，也必须保持尸体表现稳定。
+	if _is_dead:
+		_puppet_anim_playing = false
+		return
+
 	if Global.debug_visuals:
 		queue_redraw()
 
@@ -237,6 +243,10 @@ func _start_puppet_attack() -> void:
 
 func _process_puppet_attack_anim(delta: float) -> void:
 	## 驱动 puppet 攻击动画帧
+	if _is_dead:
+		_puppet_anim_playing = false
+		return
+
 	_puppet_anim_timer -= delta
 	if _puppet_anim_timer <= 0.0:
 		_puppet_anim_seq_idx += 1
@@ -293,6 +303,8 @@ func guard_dead() -> bool:
 
 
 func _on_animation_timer_timeout() -> void:
+	if _is_dead:
+		return
 	if _moving:
 		_anim_step = (_anim_step + 1) % WALK_SEQUENCE.size()
 	_refresh_sprite()
@@ -352,7 +364,7 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 # 伤害
 # ═══════════════════════════════════════
 
-func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0) -> void:
+func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, hit_effect_anim: PackedScene = null) -> void:
 	if _is_dead:
 		return
 
@@ -375,7 +387,7 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 
 	# 联机模式：Host 广播敌人 HP 变化
 	if Lobby.is_online() and multiplayer.is_server():
-		NetworkSyncManager.sync_enemy_hp.rpc(name, current_hp, current_hp <= 0.0)
+		NetworkSyncManager.sync_enemy_hp.rpc(name, current_hp, current_hp <= 0.0, is_headshot, hit_effect_anim.resource_path if hit_effect_anim else "")
 
 	# 弹出伤害数字（白/金色调，爆头用亮黄色）
 	var tree := get_tree()
@@ -453,6 +465,11 @@ func _clean_expired_damage_sources(now: int) -> void:
 ## 网络 puppet 端：显示死亡精灵（由 sync_enemy_hp RPC 触发）
 func _show_death_sprite() -> void:
 	print("[Enemy] Puppet 显示死亡精灵: %s" % name)
+	_puppet_anim_playing = false
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = 0.0
+	_puppet_prev_synced_state = "Death"
+	set_meta("synced_state", "Death")
 	# 停止动画
 	if animation_timer:
 		animation_timer.stop()
@@ -464,6 +481,19 @@ func _show_death_sprite() -> void:
 	if hurt_area:
 		hurt_area.set_deferred("monitoring", false)
 		hurt_area.set_deferred("monitorable", false)
+
+
+## Client puppet：直接应用 Host 已确认的死亡结果。
+func _apply_network_death(is_headshot: bool = false) -> void:
+	if _is_dead:
+		return
+	_is_dead = true
+	_puppet_anim_playing = false
+	_puppet_anim_seq_idx = 0
+	_puppet_anim_timer = 0.0
+	_puppet_prev_synced_state = "Death"
+	set_meta("synced_state", "Death")
+	_become_corpse(is_headshot)
 
 
 func _die(is_headshot: bool) -> void:

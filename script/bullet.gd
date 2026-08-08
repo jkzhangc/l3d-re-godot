@@ -162,7 +162,7 @@ func _hit(target: Node2D) -> void:
 	# 尝试对目标造成伤害
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(damage)])
-	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration, get_instance_id())
+	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration, get_instance_id(), _hit_effect_anim)
 
 	# 播放命中特效（联机模式由 sync_enemy_hp RPC 统一提供，避免重复）
 	if _hit_effect_anim and not (Lobby.is_online() and multiplayer.is_server()):
