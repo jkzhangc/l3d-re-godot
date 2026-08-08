@@ -132,7 +132,7 @@ func _fire_bullet() -> void:
 	var is_client_peer: bool = Lobby.is_online() and not multiplayer.is_server()
 	if is_client_peer:
 		_spawn_visual_bullets()
-		NetworkSyncManager.request_attack.rpc_id(1, multiplayer.get_unique_id(), _wd.item_id)
+		NetworkSyncManager.request_attack.rpc_id(1, _wd.item_id)
 		return
 
 	# 消耗弹药
@@ -171,7 +171,7 @@ func _fire_bullet() -> void:
 				"destroy_on_hit": bd.destroy_on_hit,
 				"penetration": bd.penetration,
 				"critical_rate": _wd.critical_rate,
-				"hit_effect_anim": _wd.hit_effect_anim,
+				"hit_effect_anim": _wd.get_hit_effect_anim(),
 				"hit_effect_follow": _wd.hit_effect_follow,
 				"hit_effect_offset_override": _wd.hit_effect_offset_override,
 				"hit_sound": _wd.hit_sound,

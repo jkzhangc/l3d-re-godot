@@ -174,14 +174,29 @@ func get_raise_char_sequence() -> Array[int]:
 ## 根据朝向获取攻击特效场景
 ## facing: FaceDir 枚举值（DOWN=0, LEFT=1, RIGHT=2, UP=3）
 func get_attack_effect_anim(facing: int) -> PackedScene:
-	var dir_anims: Array[PackedScene] = [
+	var dir_anims: Array = [
 		attack_effect_anim_down,
 		attack_effect_anim_left,
 		attack_effect_anim_right,
 		attack_effect_anim_up,
 	]
 	if facing >= 0 and facing < dir_anims.size():
-		return dir_anims[facing]
+		return _resolve_scene(dir_anims[facing])
+	return null
+
+
+func get_hit_effect_anim() -> PackedScene:
+	return _resolve_scene(hit_effect_anim)
+
+
+func _resolve_scene(value: Variant) -> PackedScene:
+	if value is PackedScene:
+		return value as PackedScene
+	if value is String and not (value as String).is_empty():
+		var path := value as String
+		if not path.begins_with("res://"):
+			path = "res://anim/" + path
+		return load(path) as PackedScene
 	return null
 
 

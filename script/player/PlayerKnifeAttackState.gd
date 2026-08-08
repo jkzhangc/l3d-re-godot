@@ -194,9 +194,9 @@ func _check_melee_hits() -> void:
 				continue
 			hit_ids.append(bid)
 			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.hit_effect_anim)
-			if _wd.hit_effect_anim:
+			if _wd.get_hit_effect_anim():
 				var hf: Node2D = body if _wd.hit_effect_follow else null
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, _wd.hit_effect_offset_override)
+				VXAnimSprite.play_scene(_wd.get_hit_effect_anim(), body.global_position, character.get_tree().current_scene, 10.0, hf, _wd.hit_effect_offset_override)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound)
 			print("[小刀] 击中 body: %s | 伤害=%d | 爆头=%s" % [body.name, int(damage), str(_is_headshot)])
@@ -216,9 +216,9 @@ func _check_melee_hits() -> void:
 				continue
 			hit_ids.append(pid)
 			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.hit_effect_anim)
-			if _wd.hit_effect_anim:
+			if _wd.get_hit_effect_anim():
 				var hf2: Node2D = parent if _wd.hit_effect_follow else null
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, _wd.hit_effect_offset_override)
+				VXAnimSprite.play_scene(_wd.get_hit_effect_anim(), parent.global_position, character.get_tree().current_scene, 10.0, hf2, _wd.hit_effect_offset_override)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound)
 			print("[小刀] 击中 area: %s | 伤害=%d | 爆头=%s" % [parent.name, int(damage), str(_is_headshot)])

@@ -841,7 +841,7 @@ func _execute_attack(weapon_item_id: String = "") -> void:
 				"destroy_on_hit": bd.destroy_on_hit,
 				"penetration": bd.penetration,
 				"critical_rate": wd.critical_rate,
-				"hit_effect_anim": wd.hit_effect_anim,
+				"hit_effect_anim": wd.get_hit_effect_anim(),
 				"hit_effect_follow": wd.hit_effect_follow,
 				"hit_effect_offset_override": wd.hit_effect_offset_override,
 				"hit_sound": wd.hit_sound,
@@ -917,8 +917,9 @@ func _execute_melee(weapon_item_id: String = "") -> void:
 			if bid in hit_ids: continue
 			hit_ids.append(bid)
 			body.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
-			if wd.hit_effect_anim:
-				VXAnimSprite.play_scene(wd.hit_effect_anim, body.global_position, get_tree().current_scene)
+			var hit_effect := wd.get_hit_effect_anim()
+			if hit_effect:
+				VXAnimSprite.play_scene(hit_effect, body.global_position, get_tree().current_scene)
 			if wd.hit_sound:
 				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
 
@@ -931,8 +932,9 @@ func _execute_melee(weapon_item_id: String = "") -> void:
 			if pid in hit_ids: continue
 			hit_ids.append(pid)
 			parent.take_damage(damage, 0.0, get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.hit_effect_anim)
-			if wd.hit_effect_anim:
-				VXAnimSprite.play_scene(wd.hit_effect_anim, parent.global_position, get_tree().current_scene)
+			var hit_effect_parent := wd.get_hit_effect_anim()
+			if hit_effect_parent:
+				VXAnimSprite.play_scene(hit_effect_parent, parent.global_position, get_tree().current_scene)
 			if wd.hit_sound:
 				Global.play_sfx_managed(wd.hit_sound, get_tree().current_scene)
 
