@@ -57,6 +57,7 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
 @export var gunshot_range: float = 500.0         ## 枪声传播范围（像素）。0=静音武器（近战），>0=开火时范围内敌人会被惊动
+@export var shove_sound: AudioStream = null     ## 推击音效
 
 
 @export_group("装填/装弹")
@@ -136,6 +137,25 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 @export var melee_hit_at_sequence_idx: int = 1  ## 在此序列索引创建近战判定区域
 
 
+@export_group("近战推击")
+## 推击动画：角色索引序列（在推击行走图上的 char_idx）
+@export var shove_char_sequence: Array[int] = [3, 2]
+## 推击动画每帧持续时间（秒）。所有帧统一时长（与踏步动画模式相同）
+@export var shove_frame_duration: float = 0.1
+## 推击行走图精灵表。空→回退 CharacterData.shove_walk_texture → 回退 weapon_walk_texture
+@export var shove_walk_texture: Texture2D
+## 推击判定矩形（宽×高）
+@export var shove_range_size: Vector2 = Vector2(48, 32)
+## 推击判定前方偏移量（以角色方向为准）
+@export var shove_range_forward_offset: float = 24.0
+## 在此序列索引创建推击判定区域
+@export var shove_hit_at_sequence_idx: int = 1
+## 推击击退力度（像素/秒，作为初始推力速度）
+@export var shove_knockback_force: float = 400.0
+## 推击击退/硬直时长（秒），默认 5 秒
+@export var shove_knockback_duration: float = 5.0
+
+
 func _init() -> void:
 	item_type = ItemType.WEAPON
 
@@ -197,6 +217,13 @@ func get_melee_attack_frame_duration(seq_idx: int) -> float:
 	if melee_attack_frame_durations.size() > seq_idx:
 		return melee_attack_frame_durations[seq_idx]
 	return get_attack_frame_duration(seq_idx)
+
+
+## 获取推击动画的角色序列
+func get_shove_char_sequence() -> Array[int]:
+	if shove_char_sequence.size() > 0:
+		return shove_char_sequence
+	return [3, 2]
 
 
 ## 获取装填动画每帧持续时间（秒）

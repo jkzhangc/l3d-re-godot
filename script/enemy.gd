@@ -47,6 +47,12 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 @export_group("友军伤害")
 @export var can_damage_enemies: bool = false       ## 是否可对其他敌人造成伤害（默认关闭）
 
+@export_group("受击反馈")
+## 受击反馈模式：0=闪（瞬间变色→逐渐恢复），1=渐隐（变色→渐渐消失）
+@export var hit_feedback_mode: int = 0
+## 受击反馈持续时间（秒）
+@export var hit_feedback_duration: float = 0.5
+
 @export_group("攻击动画")
 @export var attack_char_sequence: Array[int] = [1, 2, 3, 1, 0]  ## 攻击动画序列
 ## 攻击动画每帧持续时间（秒），长度应与 attack_char_sequence 一致
@@ -247,17 +253,23 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 		_recent_damage_sources[source_id] = _now
 
 	current_hp = maxf(0.0, current_hp - damage)
-	print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
+	if damage > 0.0:
+		print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
+		_play_hit_feedback(Color.RED)
+	else:
+		print("[敵人] 被推击 | HP: %.0f/%.0f" % [current_hp, max_hp])
+		_play_hit_feedback(Color(3, 3, 3, 1), 0.08)
 
-	# 弹出伤害数字（白/金色调，爆头用亮黄色）
-	var tree := get_tree()
-	if tree and tree.current_scene:
-		var dmg_color: Color = Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
-		print("[敵人] ▼▼▼ 弹出伤害数字！damage=%d source_id=%d 帧=%d ▼▼▼" % [int(damage), source_id, Engine.get_physics_frames()])
-		DamageNumber.spawn(global_position, damage, tree.current_scene, 0, dmg_color)
+	# 弹出伤害数字（0 伤害如推击不弹出）
+	if damage > 0.0:
+		var tree := get_tree()
+		if tree and tree.current_scene:
+			var dmg_color: Color = Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
+			DamageNumber.spawn(global_position, damage, tree.current_scene, 0, dmg_color)
 
-	# 播放受伤音效
-	_play_sound(hurt_sound)
+	# 播放受伤音效（0 伤害不播放）
+	if damage > 0.0:
+		_play_sound(hurt_sound)
 
 	var sm: Node = get_node_or_null("StateMachine")
 	var current_state: String = sm.current_state.name if sm and sm.current_state else ""
@@ -321,6 +333,34 @@ func _clean_expired_damage_sources(now: int) -> void:
 			to_erase.append(sid)
 	for sid: int in to_erase:
 		_recent_damage_sources.erase(sid)
+
+## 播放受击反馈（闪红/渐隐/闪白）
+## hit_color: 变色目标颜色（受击=红，推击=亮白）
+## duration: 持续时间（秒），<0 则使用节点默认 hit_feedback_duration
+func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) -> void:
+	if duration < 0.0:
+		duration = hit_feedback_duration
+	if not sprite:
+		return
+	# 终止已有的反馈 tween
+	if has_meta("_hf_tween"):
+		var old: Tween = get_meta("_hf_tween")
+		if old and old.is_valid():
+			old.kill()
+	if hit_feedback_mode == 0:
+		# 闪模式：瞬间变色 → 渐变恢复
+		var tween := create_tween()
+		set_meta("_hf_tween", tween)
+		tween.tween_property(sprite, "modulate", hit_color, 0.0)
+		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+	else:
+		# 渐隐模式：变色 → 颜色渐渐消失
+		sprite.modulate = hit_color
+		var tween := create_tween()
+		set_meta("_hf_tween", tween)
+		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+	print("[受击反馈] color=%s duration=%.2fs mode=%d" % [hit_color, duration, hit_feedback_mode])
+
 
 func _die(is_headshot: bool) -> void:
 	_is_dead = true

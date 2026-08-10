@@ -43,6 +43,14 @@ class_name CharacterData extends Resource
 ## 允许使用的副武器 item_id 列表。空数组=所有副武器允许
 @export var allowed_secondary_weapons: Array[String] = []
 
+@export_group("推击行走图")
+## 角色通用的推击行走图精灵表（武器 shove_walk_texture 和 shove_walk_textures 都为空时回退到这里）
+@export var shove_walk_texture: Texture2D
+## 每个武器状态名 → 该角色在此武器下的推击行走图精灵表
+## 键=weapon_state_name（如 "Pistol"/"Knife"），值=Texture2D
+## 若某武器的键不存在，回退到 shove_walk_texture
+@export var shove_walk_textures: Dictionary = {}
+
 @export_group("选择界面")
 ## 角色选择界面使用的小头像（如未设置则用 portrait）
 @export var select_portrait: Texture2D
@@ -97,6 +105,13 @@ func get_weapon_walk_texture(weapon_state_name: String) -> Texture2D:
 	if weapon_walk_textures.has(weapon_state_name):
 		return weapon_walk_textures[weapon_state_name] as Texture2D
 	return null
+
+
+## 获取该角色的推击行走图纹理（按武器状态名查找，回退到通用推击图）
+func get_shove_walk_texture(weapon_state_name: String) -> Texture2D:
+	if shove_walk_textures.has(weapon_state_name):
+		return shove_walk_textures[weapon_state_name] as Texture2D
+	return shove_walk_texture
 
 
 ## 检查该角色是否可以使用指定武器

@@ -43,6 +43,12 @@ var death_sound: AudioStream = null
 @export var hurtbox_size: Vector2 = Vector2(28, 44)  ## 受击碰撞体尺寸
 @export var hurtbox_offset: Vector2 = Vector2(0, -8)  ## 受击碰撞体偏移（相对角色原点）
 
+@export_group("受击反馈")
+## 受击反馈模式：0=闪（瞬间变色→逐渐恢复），1=渐隐（变色→渐渐消失）
+@export var hit_feedback_mode: int = 0
+## 受击反馈持续时间（秒）
+@export var hit_feedback_duration: float = 0.5
+
 # ═══════════════════════════════════════
 # 死亡（黑屏时长参数见 Global 单例：death_fade_duration / death_black_hold）
 # ═══════════════════════════════════════
@@ -88,6 +94,10 @@ var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
+
+## 推击相关
+var _shove_mode: bool = false           ## 是否处于推击模式（使用推击行走图）
+var _shove_texture: Texture2D = null    ## 当前推击行走图（角色优先，回退武器）
 
 ## 死亡相关
 var _is_dying: bool = false
@@ -236,6 +246,25 @@ func get_weapon_data() -> WeaponData:
 	return _weapon_data
 
 
+## 进入推击模式：切换推击行走图。
+## 优先级：角色按武器查找 > 角色通用推击图 > 武器推击图 > 回退普通武器纹理
+func enter_shove_mode() -> void:
+	_shove_mode = true
+	_shove_texture = null
+	if current_character and _weapon_data:
+		_shove_texture = current_character.get_shove_walk_texture(_weapon_data.weapon_state_name)
+	if not _shove_texture and _weapon_data and _weapon_data.shove_walk_texture:
+		_shove_texture = _weapon_data.shove_walk_texture
+	_refresh_sprite()
+
+
+## 退出推击模式：恢复武器行走图
+func exit_shove_mode() -> void:
+	_shove_mode = false
+	_shove_texture = null
+	_refresh_sprite()
+
+
 # ═══════════════════════════════════════
 # 方向向量工具
 # ═══════════════════════════════════════
@@ -355,6 +384,7 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 	current_hp = maxf(0.0, current_hp - damage)
 	print("[玩家] 受到伤害: %d | HP: %.0f/%.0f | source=%d" % [int(damage), current_hp, max_hp, source_id])
+	_play_hit_feedback(Color.RED)
 
 	# 弹出伤害数字（红色调，表示玩家受伤）
 	var tree := get_tree()
@@ -375,6 +405,26 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 		_die()
 
 
+## 播放受击反馈（闪红/渐隐）
+func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) -> void:
+	if duration < 0.0:
+		duration = hit_feedback_duration
+	if not sprite:
+		return
+	if has_meta("_hf_tween"):
+		var old: Tween = get_meta("_hf_tween")
+		if old and old.is_valid():
+			old.kill()
+	if hit_feedback_mode == 0:
+		var tween := create_tween()
+		set_meta("_hf_tween", tween)
+		tween.tween_property(sprite, "modulate", hit_color, 0.0)
+		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+	else:
+		sprite.modulate = hit_color
+		var tween := create_tween()
+		set_meta("_hf_tween", tween)
+		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
 
 
 func heal(amount: float) -> void:
@@ -452,6 +502,8 @@ func _die() -> void:
 	player_in_weapon_state = false
 	velocity = Vector2.ZERO
 	_weapon_mode = false
+	_shove_mode = false
+	_shove_texture = null
 	if animation_timer:
 		animation_timer.stop()
 
@@ -627,13 +679,20 @@ func _refresh_sprite() -> void:
 
 	# 武器模式下使用武器纹理和角色索引
 	if _weapon_mode and _weapon_data:
-		if not _weapon_data.weapon_walk_texture:
-			return
-		# 优先使用角色专属武器行走图，回退到武器默认行走图
-		var char_walk_tex: Texture2D = null
-		if current_character and _weapon_data:
-			char_walk_tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
-		sprite.texture = char_walk_tex if char_walk_tex else _weapon_data.weapon_walk_texture
+		# 推击模式：优先推击行走图（运行时设置 > 武器字段 > 角色字段 > 回退普通武器纹理）
+		if _shove_mode and _shove_texture:
+			sprite.texture = _shove_texture
+		else:
+			var tex: Texture2D = null
+			# 角色专属武器行走图
+			if current_character:
+				tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
+			# 回退到武器默认行走图
+			if not tex:
+				tex = _weapon_data.weapon_walk_texture
+			if not tex:
+				return
+			sprite.texture = tex
 		var char_idx: int = _current_weapon_char_idx
 		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
 

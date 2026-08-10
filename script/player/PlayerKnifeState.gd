@@ -106,6 +106,9 @@ func process_update(delta: float) -> void:
 			if Input.is_action_just_pressed("举起放下武器键"):
 				_begin_lower()
 
+			if Input.is_action_just_pressed("推击键"):
+				transition_requested.emit("Shove")
+
 			if Input.is_action_just_pressed("确定键"):
 				# 在拾取物范围内时不攻击，让拾取物处理按住替换
 				if not character._near_pickup:
