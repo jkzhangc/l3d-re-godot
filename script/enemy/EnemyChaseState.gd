@@ -521,7 +521,7 @@ func _is_walkable(gp: Vector2i) -> bool:
 
 
 # ═══════════════════════════════════════
-# 实体障碍检测（敌人 + 多人玩家接口）
+# 实体障碍检测（仅多人玩家接口，敌人间通过物理推挤）
 # ═══════════════════════════════════════
 
 ## 多人模式接口：外部注册的障碍节点（如其他玩家的 CharacterBody2D）
@@ -530,21 +530,8 @@ var extra_obstacle_nodes: Array[Node2D] = []
 
 
 func _is_cell_blocked_by_entity(gp: Vector2i) -> bool:
-	## 检查格子上是否有其他敌人或外部注册的障碍实体
-	# 遍历所有敌人，检查是否有其他敌人占据此格子
-	var tree: SceneTree = character.get_tree()
-	if tree:
-		for other in tree.get_nodes_in_group("enemy"):
-			if other == character or not is_instance_valid(other):
-				continue
-			# 跳过已死亡的敌人（尸体不阻挡寻路）
-			if other.get("_is_dead") == true:
-				continue
-			# 检查其他敌人的格子坐标
-			if _world_to_grid(other.global_position) == gp:
-				return true
-
-	# 检查外部注册的障碍节点（多人模式玩家等）
+	## 检查格子上是否有外部注册的障碍实体（多人模式玩家等）
+	## 注意：不再检查其他敌人作为障碍 — 敌人之间通过 move_and_collide 物理推挤
 	var world: Vector2 = _grid_to_world(gp)
 	for node in extra_obstacle_nodes:
 		if not is_instance_valid(node):

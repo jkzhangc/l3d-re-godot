@@ -252,13 +252,19 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				return
 		_recent_damage_sources[source_id] = _now
 
+	# 提前获取当前状态（用于推击闪白判定）
+	var sm: Node = get_node_or_null("StateMachine")
+	var current_state: String = sm.current_state.name if sm and sm.current_state else ""
+
 	current_hp = maxf(0.0, current_hp - damage)
 	if damage > 0.0:
 		print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
 		_play_hit_feedback(Color.RED)
 	else:
 		print("[敵人] 被推击 | HP: %.0f/%.0f" % [current_hp, max_hp])
-		_play_hit_feedback(Color(3, 3, 3, 1), 0.08)
+		# 已在击退/硬直状态中，不重复播放闪白
+		if current_state != "Knockback" and current_state != "Hitstun":
+			_play_hit_feedback(Color(3, 3, 3, 1), 0.08)
 
 	# 弹出伤害数字（0 伤害如推击不弹出）
 	if damage > 0.0:
@@ -270,9 +276,6 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 播放受伤音效（0 伤害不播放）
 	if damage > 0.0:
 		_play_sound(hurt_sound)
-
-	var sm: Node = get_node_or_null("StateMachine")
-	var current_state: String = sm.current_state.name if sm and sm.current_state else ""
 
 	# 设置击退参数（所有状态统一设置，包括 Idle）
 	var has_knockback: bool = knockback_force > 0.0 and knockback_stun > 0.0

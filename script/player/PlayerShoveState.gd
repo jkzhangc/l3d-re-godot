@@ -152,12 +152,69 @@ func _check_shove_hits() -> void:
 
 	if hit_any:
 		_hit_done = true
+		# 溅射击退：命中目标周围的敌人也受影响
+		_apply_splash_knockback(hit_ids)
 
 
 func _is_target_dead(target: Node) -> bool:
 	if target == null:
 		return true
 	return target.get("_is_dead") == true or target.get("_is_dying") == true
+
+
+## 溅射击退：对被推中目标周围的敌人施加击退效果
+## @param hit_ids: 已直接命中的目标 instance_id 列表（跳过这些，避免重复）
+func _apply_splash_knockback(hit_ids: Array[int]) -> void:
+	if not _wd or _wd.shove_splash_radius <= 0.0:
+		return
+
+	# 溅射中心 = 角色前方（推击判定区域位置）
+	var splash_center: Vector2 = character.global_position + character.get_facing_vector() * _wd.shove_range_forward_offset
+	var splash_radius: float = _wd.shove_splash_radius
+
+	var tree: SceneTree = character.get_tree()
+	if not tree:
+		return
+
+	# 遍历场景中所有敌人
+	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+	var splash_count: int = 0
+
+	for enemy in enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if enemy == character:
+			continue
+		# 跳过已直接命中的目标
+		if enemy.get_instance_id() in hit_ids:
+			continue
+		# 跳过已死亡的敌人
+		if enemy.get("_is_dead") == true:
+			continue
+
+		# 检查是否在溅射范围内
+		var dist: float = enemy.global_position.distance_to(splash_center)
+		if dist > splash_radius:
+			continue
+
+		if not enemy.has_method("take_damage"):
+			continue
+
+		# 溅射击退方向和力度（从溅射中心向外推开）
+		var splash_dir: Vector2 = (enemy.global_position - splash_center).normalized()
+		if splash_dir == Vector2.ZERO:
+			splash_dir = character.get_facing_vector()
+
+		# 溅射击退力度衰减：边缘=50%，中心=100%
+		var falloff: float = 1.0 - (dist / splash_radius) * 0.5
+		var splash_force: float = _wd.shove_knockback_force * falloff
+
+		enemy.take_damage(0.0, splash_force, splash_dir, false, _wd.shove_knockback_duration * falloff, 0.0)
+		splash_count += 1
+		print("[推击] 溅射命中: %s | 距离=%.0f | 力度=%.0f" % [enemy.name, dist, splash_force])
+
+	if splash_count > 0:
+		print("[推击] 溅射影响 %d 个敌人 | 半径=%.0f" % [splash_count, splash_radius])
 
 
 func _cleanup_hitbox() -> void:

@@ -139,9 +139,9 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 
 @export_group("近战推击")
 ## 推击动画：角色索引序列（在推击行走图上的 char_idx）
-@export var shove_char_sequence: Array[int] = [3, 2]
+@export var shove_char_sequence: Array[int] = [0, 1, 1]
 ## 推击动画每帧持续时间（秒）。所有帧统一时长（与踏步动画模式相同）
-@export var shove_frame_duration: float = 0.1
+@export var shove_frame_duration: float = 0.05
 ## 推击行走图精灵表。空→回退 CharacterData.shove_walk_texture → 回退 weapon_walk_texture
 @export var shove_walk_texture: Texture2D
 ## 推击判定矩形（宽×高）
@@ -151,9 +151,11 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 ## 在此序列索引创建推击判定区域
 @export var shove_hit_at_sequence_idx: int = 1
 ## 推击击退力度（像素/秒，作为初始推力速度）
-@export var shove_knockback_force: float = 400.0
-## 推击击退/硬直时长（秒），默认 5 秒
-@export var shove_knockback_duration: float = 5.0
+@export var shove_knockback_force: float = 300.0
+## 推击击退/硬直时长（秒）
+@export var shove_knockback_duration: float = 2.0
+## 推击溅射半径（像素）。推中敌人时，此范围内的其他敌人也会被击退。0=仅命中目标
+@export var shove_splash_radius: float = 64.0
 
 
 func _init() -> void:
