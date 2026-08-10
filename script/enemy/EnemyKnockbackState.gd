@@ -51,17 +51,17 @@ func physics_update(delta: float) -> void:
 		enemy.move_and_collide(motion)
 		# 线性减速
 		_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, DECELERATION * delta)
-		# 连锁推挤：被击退的敌人碰撞到附近敌人时，也推开它们
+		# 连锁推挤（仅一级）：被击退的敌人推开附近敌人，但被推开的不再连锁
 		_chain_push_nearby_enemies(enemy, _knockback_velocity)
 	else:
 		_knockback_velocity = Vector2.ZERO
 
 
-## 连锁推挤：被击退的敌人碰到附近敌人时，也会推开它们
-const CHAIN_PUSH_RADIUS: float = 32.0   ## 连锁推挤检测半径
-const CHAIN_PUSH_FACTOR: float = 0.6    ## 连锁推挤力度系数（小于1，衰减传递）
-const CHAIN_PUSH_FORCE_THRESHOLD: float = 5.0   ## 最小推挤力度（低于此值不传递）
-const CHAIN_PUSH_STUN: float = 0.25     ## 连锁推挤硬直时长（秒）
+## 连锁推挤：被击退的敌人碰到附近敌人时推开它们，无级数限制
+const CHAIN_PUSH_RADIUS: float = 36.0   ## 连锁推挤检测半径
+const CHAIN_PUSH_FACTOR: float = 0.85   ## 连锁推挤力度系数（高值=远距离传递）
+const CHAIN_PUSH_FORCE_THRESHOLD: float = 2.0   ## 最小推挤力度（低于此值不传递）
+const CHAIN_PUSH_STUN: float = 0.2      ## 连锁推挤硬直时长（秒）
 
 func _chain_push_nearby_enemies(enemy: Node2D, knockback_vel: Vector2) -> void:
 	var tree: SceneTree = enemy.get_tree()
@@ -71,7 +71,7 @@ func _chain_push_nearby_enemies(enemy: Node2D, knockback_vel: Vector2) -> void:
 	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
 	var my_pos: Vector2 = enemy.global_position
 	var vel_mag: float = knockback_vel.length()
-	if vel_mag < 10.0:
+	if vel_mag < 5.0:
 		return
 
 	var pushed_count: int = 0
@@ -82,8 +82,7 @@ func _chain_push_nearby_enemies(enemy: Node2D, knockback_vel: Vector2) -> void:
 			continue
 		if other.get("_is_dead") == true:
 			continue
-		# 跳过已经处于击退中的敌人（它们已经在处理自己的连锁推挤）
-		# 注意：硬直中的敌人不跳过 — 允许击退打断硬直（重置硬直计时）
+		# 跳过已经处于击退中的敌人（避免互相无限弹）
 		var sm: Node = other.get_node_or_null("StateMachine")
 		if sm and sm.current_state:
 			var sname: String = sm.current_state.name
@@ -103,7 +102,6 @@ func _chain_push_nearby_enemies(enemy: Node2D, knockback_vel: Vector2) -> void:
 			# 推开方向混合：70% 径向推开 + 30% 击退方向传递
 			var chain_dir: Vector2 = (push_dir * 0.7 + knockback_vel.normalized() * 0.3).normalized()
 			if other.has_method("take_damage"):
-				# 0 伤害 + 连锁推挤力度（作为击退初速）+ 短硬直
 				other.take_damage(0.0, chain_force, chain_dir, false, CHAIN_PUSH_STUN, 0.0)
 				pushed_count += 1
 

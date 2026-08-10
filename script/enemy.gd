@@ -110,6 +110,7 @@ var _debug_end_walkable: bool = false
 var _debug_astar_iters: int = 0
 var _debug_walk_cache: Dictionary = {}
 var _debug_path_idx: int = 0
+var _debug_cell_size: float = 32.0  ## 由 EnemyChaseState 在 enter() 中设置
 
 # ═══════════════════════════════════════
 # 节点引用
@@ -688,9 +689,9 @@ func _draw_debug_path() -> void:
 		draw_circle(target, 6.0, Color.YELLOW, false, 2.0)
 
 	# 起点/终点标记（格子坐标 → 世界坐标）
-	var cell_half: float = 16.0
-	var start_wp: Vector2 = Vector2(_debug_start_grid.x * 32.0 + cell_half, _debug_start_grid.y * 32.0 + cell_half) - global_position
-	var end_wp: Vector2 = Vector2(_debug_end_grid.x * 32.0 + cell_half, _debug_end_grid.y * 32.0 + cell_half) - global_position
+	var cell_half: float = _debug_cell_size / 2.0
+	var start_wp: Vector2 = Vector2(_debug_start_grid.x * _debug_cell_size + cell_half, _debug_start_grid.y * _debug_cell_size + cell_half) - global_position
+	var end_wp: Vector2 = Vector2(_debug_end_grid.x * _debug_cell_size + cell_half, _debug_end_grid.y * _debug_cell_size + cell_half) - global_position
 	draw_rect(Rect2(start_wp - Vector2(6, 6), Vector2(12, 12)), Color.BLUE, false, 2.0)
 	draw_rect(Rect2(end_wp - Vector2(6, 6), Vector2(12, 12)), Color.RED, false, 2.0)
 
@@ -703,12 +704,13 @@ func _draw_debug_walk_grid() -> void:
 	if _debug_walk_cache.is_empty():
 		return
 
-	var cell_half: float = 16.0
+	var cell_half: float = _debug_cell_size / 2.0
+	var cs: float = _debug_cell_size
 
-	# 只绘制敌人周围 10 格范围内的格子（性能）
+	# 只绘制敌人周围 200px 范围内的格子（性能）
 	for gp in _debug_walk_cache:
 		var gv: Vector2i = gp
-		var world: Vector2 = Vector2(gv.x * 32.0 + cell_half, gv.y * 32.0 + cell_half)
+		var world: Vector2 = Vector2(gv.x * cs + cell_half, gv.y * cs + cell_half)
 		var local: Vector2 = world - global_position
 
 		if abs(local.x) > 200 or abs(local.y) > 200:
@@ -716,8 +718,8 @@ func _draw_debug_walk_grid() -> void:
 
 		var walkable: bool = _debug_walk_cache[gp]
 		if walkable:
-			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(32, 32)), Color(0, 1, 0, 0.08), true)
+			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(0, 1, 0, 0.08), true)
 		else:
-			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(32, 32)), Color(1, 0, 0, 0.15), true)
+			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(1, 0, 0, 0.15), true)
 			draw_line(local + Vector2(-4, -4), local + Vector2(4, 4), Color.RED, 1.0)
 			draw_line(local + Vector2(-4, 4), local + Vector2(4, -4), Color.RED, 1.0)

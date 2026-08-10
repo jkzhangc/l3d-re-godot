@@ -168,7 +168,7 @@ func _check_shove_hits() -> void:
 
 	if hit_any:
 		_hit_done = true
-		# 溅射击退：命中目标周围的敌人也受影响
+		# 溅射击退：命中目标周围的敌人也受影响（仅一级，不连锁）
 		_apply_splash_knockback(hit_ids)
 
 
@@ -178,7 +178,7 @@ func _is_target_dead(target: Node) -> bool:
 	return target.get("_is_dead") == true or target.get("_is_dying") == true
 
 
-## 溅射击退：对被推中目标周围的敌人施加击退效果
+## 溅射击退：对被推中目标周围的敌人施加击退效果（仅一级，不连锁）
 ## @param hit_ids: 已直接命中的目标 instance_id 列表（跳过这些，避免重复）
 func _apply_splash_knockback(hit_ids: Array[int]) -> void:
 	if not _wd or _wd.shove_splash_radius <= 0.0:
