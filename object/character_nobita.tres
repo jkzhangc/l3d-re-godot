@@ -5,6 +5,7 @@
 [ext_resource type="AudioStream" uid="uid://hxsig6yy65wp" path="res://sound/死んだ.wav" id="1_dgx65"]
 [ext_resource type="Texture2D" uid="uid://j0u8qai8kpvk" path="res://art/Characters/のび太歩行セット.png" id="2_dd21q"]
 [ext_resource type="AudioStream" uid="uid://dkyb13a361614" path="res://sound/のび太[6].wav" id="3_o5s41"]
+[ext_resource type="Texture2D" uid="uid://b8xq3152r8cpm" path="res://art/Characters/のび太反撃セット.png" id="6_o5s41"]
 
 [resource]
 script = ExtResource("1")
@@ -17,5 +18,7 @@ walk_texture = ExtResource("1_8a3k1")
 run_texture = ExtResource("2_dd21q")
 death_texture = ExtResource("1_8a3k1")
 death_char_index = 6
+shove_walk_texture = ExtResource("6_o5s41")
+shove_fatigue_limit = 10
 hurt_sound = ExtResource("3_o5s41")
 death_sound = ExtResource("1_dgx65")

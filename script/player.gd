@@ -99,6 +99,11 @@ var current_hp: float = 200.0
 var _shove_mode: bool = false           ## 是否处于推击模式（使用推击行走图）
 var _shove_texture: Texture2D = null    ## 当前推击行走图（角色优先，回退武器）
 
+## 推击疲劳（L4D2 风格：连续推击 N 次→冷却 2 秒）
+var _shove_fatigue_count: int = 0       ## 连续推击计数
+var _shove_cooldown_timer: float = 0.0  ## 冷却倒计时（>0=冷却中）
+var _shove_idle_timer: float = 0.0      ## 自上次推击以来的空闲时间
+
 ## 死亡相关
 var _is_dying: bool = false
 var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
@@ -159,6 +164,7 @@ func _setup_hurt_area() -> Area2D:
 func _process(delta: float) -> void:
 	if _is_dying:
 		_process_death(delta)
+	_update_shove_fatigue(delta)
 
 
 func _on_animation_timer_timeout() -> void:
@@ -311,6 +317,69 @@ func toggle_facing_lock() -> void:
 ## 返回当前朝向是否锁定
 func is_facing_locked() -> bool:
 	return _facing_locked
+
+
+# ═══════════════════════════════════════
+# 推击疲劳系统（L4D2 风格）
+# ═══════════════════════════════════════
+
+## 每帧更新推击疲劳计时器
+func _update_shove_fatigue(delta: float) -> void:
+	var cd: CharacterData = current_character
+	if not cd:
+		return
+	# 疲劳系统禁用（limit=0）
+	if cd.shove_fatigue_limit <= 0:
+		_shove_fatigue_count = 0
+		_shove_cooldown_timer = 0.0
+		_shove_idle_timer = 0.0
+		return
+
+	# 冷却倒计时
+	if _shove_cooldown_timer > 0.0:
+		_shove_cooldown_timer -= delta
+		if _shove_cooldown_timer <= 0.0:
+			_shove_cooldown_timer = 0.0
+			print("[推击疲劳] 冷却结束，可以推击了")
+
+	# 空闲计时器（不在推击状态时累加，用于重置疲劳计数）
+	if not player_in_weapon_state or not _shove_mode:
+		_shove_idle_timer += delta
+		if _shove_idle_timer >= cd.shove_fatigue_reset_time and _shove_fatigue_count > 0:
+			_shove_fatigue_count = 0
+			print("[推击疲劳] 空闲 %.1fs，疲劳计数已重置" % cd.shove_fatigue_reset_time)
+
+
+## 检查是否可以推击（疲劳冷却检查）
+## 返回 true 表示可以推击
+func can_shove() -> bool:
+	var cd: CharacterData = current_character
+	if not cd:
+		return true
+	# 禁用疲劳系统
+	if cd.shove_fatigue_limit <= 0:
+		return true
+	# 冷却中
+	if _shove_cooldown_timer > 0.0:
+		print("[推击疲劳] 冷却中！剩余 %.1fs" % _shove_cooldown_timer)
+		return false
+	return true
+
+
+## 推击执行后调用：增加疲劳计数，必要时启动冷却
+func on_shove_performed() -> void:
+	var cd: CharacterData = current_character
+	if not cd or cd.shove_fatigue_limit <= 0:
+		return
+
+	_shove_idle_timer = 0.0
+	_shove_fatigue_count += 1
+	print("[推击疲劳] 推击次数: %d / %d" % [_shove_fatigue_count, cd.shove_fatigue_limit])
+
+	if _shove_fatigue_count >= cd.shove_fatigue_limit:
+		_shove_cooldown_timer = cd.shove_cooldown_duration
+		_shove_fatigue_count = 0
+		print("[推击疲劳] 达到上限！冷却 %.1fs" % cd.shove_cooldown_duration)
 
 
 # ═══════════════════════════════════════

@@ -92,8 +92,8 @@ tile_set = ExtResource("4_5gk8a")
 [node name="Menu" parent="." unique_id=1067404182 instance=ExtResource("6_57ke7")]
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=627066447]
+zoom = Vector2(2, 2)
 script = ExtResource("7_oc1v5")
 follow_speed = 6.0
 bounds_margin = 0.0
 bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-zoom = Vector2(2, 2)

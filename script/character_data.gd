@@ -51,6 +51,14 @@ class_name CharacterData extends Resource
 ## 若某武器的键不存在，回退到 shove_walk_texture
 @export var shove_walk_textures: Dictionary = {}
 
+@export_group("推击疲劳")
+## 连续推击多少次后进入冷却（0=禁用疲劳系统）
+@export var shove_fatigue_limit: int = 3
+## 疲劳冷却时长（秒）
+@export var shove_cooldown_duration: float = 2.0
+## 停止推击多久后重置疲劳计数（秒）
+@export var shove_fatigue_reset_time: float = 3.0
+
 @export_group("选择界面")
 ## 角色选择界面使用的小头像（如未设置则用 portrait）
 @export var select_portrait: Texture2D

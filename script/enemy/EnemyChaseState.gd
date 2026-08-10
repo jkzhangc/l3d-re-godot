@@ -24,6 +24,8 @@ const WAYPOINT_RADIUS: float = 10.0
 const MAX_ASTAR_ITERATIONS: int = 2000
 const NO_PATH_STOP: int = 5       ## 连续无路径多少次后停止移动
 const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模式
+const PUSH_APART_RADIUS: float = 28.0   ## 敌人推开检测半径
+const PUSH_APART_FORCE: float = 80.0    ## 推开速度（像素/秒）
 
 
 func enter() -> void:
@@ -166,6 +168,7 @@ func physics_update(delta: float) -> void:
 
 	character.update_facing_from_direction(move_dir)
 	_move_with_stuck_recovery(character, move_dir, speed, delta)
+	_push_apart_from_other_enemies(character, delta)
 
 # 移动工具
 # ═══════════════════════════════════════
@@ -175,6 +178,7 @@ func _move_direct(enemy: Node2D, to_player: Vector2, speed: float, delta: float)
 	var move_dir: Vector2 = to_player.normalized()
 	character.update_facing_from_direction(move_dir)
 	_move_with_stuck_recovery(character, move_dir, speed, delta)
+	_push_apart_from_other_enemies(character, delta)
 
 func _move_with_stuck_recovery(body: CharacterBody2D, move_dir: Vector2, speed: float, delta: float) -> void:
 	## 以撒风格：move_and_collide 滑墙（全速），卡住检测恢复
@@ -194,6 +198,42 @@ func _move_with_stuck_recovery(body: CharacterBody2D, move_dir: Vector2, speed: 
 			body.move_and_collide(move_dir * speed * delta)
 			if body.global_position.distance_to(prev_pos) > 1.5:
 				break
+
+
+func _push_apart_from_other_enemies(enemy: Node2D, delta: float) -> void:
+	## 推开附近敌人：当两个敌人靠得太近时，互相推开
+	## 只影响处于 Chase/Idle/Discover 状态的敌人（不推开已在击退/硬直中的敌人）
+	var tree: SceneTree = enemy.get_tree()
+	if not tree:
+		return
+
+	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+	var my_pos: Vector2 = enemy.global_position
+
+	for other in enemies:
+		if other == enemy:
+			continue
+		if not is_instance_valid(other):
+			continue
+		if other.get("_is_dead") == true:
+			continue
+		# 不推开正在击退/硬直中的敌人
+		var sm: Node = other.get_node_or_null("StateMachine")
+		if sm and sm.current_state:
+			var sname: String = sm.current_state.name
+			if sname == "Knockback" or sname == "Hitstun":
+				continue
+
+		var other_pos: Vector2 = other.global_position
+		var dist: float = my_pos.distance_to(other_pos)
+		if dist < PUSH_APART_RADIUS and dist > 0.01:
+			var push_dir: Vector2 = (my_pos - other_pos).normalized()
+			var push_strength: float = (1.0 - dist / PUSH_APART_RADIUS) * PUSH_APART_FORCE
+			var motion: Vector2 = push_dir * push_strength * delta
+			if other is CharacterBody2D:
+				other.move_and_collide(motion)
+			else:
+				other.global_position += motion
 
 
 # ═══════════════════════════════════════
@@ -531,7 +571,7 @@ var extra_obstacle_nodes: Array[Node2D] = []
 
 func _is_cell_blocked_by_entity(gp: Vector2i) -> bool:
 	## 检查格子上是否有外部注册的障碍实体（多人模式玩家等）
-	## 注意：不再检查其他敌人作为障碍 — 敌人之间通过 move_and_collide 物理推挤
+	## 也检查其他敌人，避免 A* 路径穿过拥挤的敌人堆
 	var world: Vector2 = _grid_to_world(gp)
 	for node in extra_obstacle_nodes:
 		if not is_instance_valid(node):
@@ -539,5 +579,20 @@ func _is_cell_blocked_by_entity(gp: Vector2i) -> bool:
 		var dist: float = world.distance_to(node.global_position)
 		if dist < _cell_size * 0.8:  # 在格子范围内
 			return true
+
+	# 检测其他敌人：跳过自身，跳过已死亡的敌人
+	var tree: SceneTree = character.get_tree()
+	if tree:
+		var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+		for other in enemies:
+			if other == character:
+				continue
+			if not is_instance_valid(other):
+				continue
+			if other.get("_is_dead") == true:
+				continue
+			var dist: float = world.distance_to(other.global_position)
+			if dist < _cell_size * 0.8:
+				return true
 
 	return false

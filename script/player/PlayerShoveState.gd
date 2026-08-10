@@ -19,6 +19,15 @@ func enter() -> void:
 		transition_requested.emit("Idle")
 		return
 
+	# 推击疲劳检查：冷却中则拒绝推击
+	if not character.can_shove():
+		var state_name: String = _wd.weapon_state_name
+		if not state_name.is_empty():
+			transition_requested.emit(state_name)
+		else:
+			transition_requested.emit("Idle")
+		return
+
 	_seq_idx = 0
 	_timer = _wd.shove_frame_duration
 	_hit_done = false
@@ -29,6 +38,9 @@ func enter() -> void:
 	character.player_in_weapon_state = true
 	# 切换推击行走图
 	character.enter_shove_mode()
+
+	# 记录推击（疲劳计数）
+	character.on_shove_performed()
 
 	_set_shove_frame(0)
 
@@ -76,8 +88,12 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	character.velocity = move_dir * character.run_speed
 	character.move_and_slide()
+	# 推击中允许转向
+	if move_dir != Vector2.ZERO:
+		character.update_facing(move_dir)
 
 	# 推击判定区域存在时检测命中（只检测一次）
 	if _hitbox and not _hit_done:

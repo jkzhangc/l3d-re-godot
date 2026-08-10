@@ -10,6 +10,7 @@
 [ext_resource type="AudioStream" uid="uid://c11squ08m07gm" path="res://sound/ゾンビ声4.wav" id="5_vunvt"]
 [ext_resource type="Script" uid="uid://bkt3kjrwayuvt" path="res://script/enemy/EnemyAttackState.gd" id="6"]
 [ext_resource type="AudioStream" uid="uid://drrv03o6v83yp" path="res://sound/ゾンビ声.wav" id="6_jpigs"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7_p667r"]
 [ext_resource type="Script" uid="uid://bmxnep8cisr8o" path="res://script/enemy/EnemyDeathState.gd" id="8"]
 [ext_resource type="Script" uid="uid://bs3edidsf88gt" path="res://script/enemy/EnemyHeadshotDeathState.gd" id="9"]
 [ext_resource type="Texture2D" uid="uid://c1dyjxewy0ldj" path="res://art/Characters/男性ゾンビ1.png" id="10"]
@@ -39,6 +40,7 @@ hurt_sound = ExtResource("3_vfd3m")
 death_sound = ExtResource("4_jpigs")
 attack_sound = ExtResource("5_vunvt")
 discover_sound = ExtResource("6_jpigs")
+attack_effect_anim = ExtResource("7_p667r")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=797700597]
 position = Vector2(0, -16)

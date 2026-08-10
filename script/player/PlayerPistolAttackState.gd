@@ -105,8 +105,12 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	character.velocity = move_dir * character.run_speed
 	character.move_and_slide()
+	# 攻击中允许转向
+	if move_dir != Vector2.ZERO:
+		character.update_facing(move_dir)
 
 
 func _set_attack_frame(seq_idx: int) -> void:

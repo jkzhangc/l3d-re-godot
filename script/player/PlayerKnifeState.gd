@@ -136,6 +136,8 @@ func physics_update(delta: float) -> void:
 
 func _begin_lower() -> void:
 	## 开始放下动画：从序列倒数第二帧开始（最后一帧 = 就绪帧已在显示）
+	# 放下武器时取消固定朝向
+	character.unlock_facing()
 	var seq: Array[int] = _wd.get_raise_char_sequence()
 	_seq_idx = seq.size() - 2
 	_phase = Phase.LOWER
