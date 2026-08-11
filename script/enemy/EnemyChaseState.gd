@@ -3,7 +3,7 @@ extends State
 ##
 ## 网格分辨率：32×32 像素（原生图块分辨率）
 ## 碰撞体感知：Decor/Upper 层通过图块中心点碰撞多边形检测判定阻挡
-## 敌人互不绕路：A* 不把其他敌人视为障碍，通过物理推挤处理
+## 敌人互为障碍：寻路时将其他敌人格子临时标记为不可行走，避免互相穿过
 
 # ── 路径跟踪 ──
 var _path: Array[Vector2] = []
@@ -316,6 +316,43 @@ func _ensure_astar_grid() -> bool:
 	return true
 
 
+func _mark_enemy_obstacles() -> Array[Vector2i]:
+	## 将其他敌人占用的格子临时标记为障碍物，返回被标记的格子列表
+	var blocked: Array[Vector2i] = []
+	if not _astar_grid:
+		return blocked
+
+	var tree: SceneTree = character.get_tree()
+	if not tree:
+		return blocked
+
+	var enemies: Array[Node] = tree.get_nodes_in_group("enemy")
+	var my_grid: Vector2i = _world_to_grid(character.global_position)
+
+	for other in enemies:
+		if other == character:
+			continue
+		if not is_instance_valid(other):
+			continue
+		if other.get("_is_dead") == true:
+			continue
+
+		var gp: Vector2i = _world_to_grid(other.global_position)
+		if gp == my_grid:
+			continue
+		# 只标记当前可行走的格子（已经是墙的不用重复标记）
+		if not _astar_grid.is_point_solid(gp):
+			_astar_grid.set_point_solid(gp, true)
+			blocked.append(gp)
+
+	return blocked
+
+
+func _clear_enemy_obstacles(cells: Array[Vector2i]) -> void:
+	for gp in cells:
+		_astar_grid.set_point_solid(gp, false)
+
+
 func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	var start: Vector2i = _world_to_grid(from)
 	var end: Vector2i = _world_to_grid(to)
@@ -365,8 +402,14 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 		_first_path = false
 		return []
 
+	# ── 标记其他敌人为临时障碍物 ──
+	var blocked_cells: Array[Vector2i] = _mark_enemy_obstacles()
+
 	# ── 使用 Godot 内置 AStarGrid2D 寻路 ──
 	var id_path: PackedVector2Array = _astar_grid.get_id_path(start, end)
+
+	# ── 清除临时障碍物 ──
+	_clear_enemy_obstacles(blocked_cells)
 
 	if id_path.is_empty():
 		print("[A*] ❌ 无路径！")

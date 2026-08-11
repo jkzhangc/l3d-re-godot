@@ -707,19 +707,23 @@ func _draw_debug_walk_grid() -> void:
 	var cell_half: float = _debug_cell_size / 2.0
 	var cs: float = _debug_cell_size
 
-	# 只绘制敌人周围 200px 范围内的格子（性能）
-	for gp in _debug_walk_cache:
-		var gv: Vector2i = gp
-		var world: Vector2 = Vector2(gv.x * cs + cell_half, gv.y * cs + cell_half)
-		var local: Vector2 = world - global_position
+	# 性能优化：按可见范围计算网格坐标遍历，而非遍历整个缓存字典
+	# 预构建后缓存可能包含全图数万格子，遍历字典每帧极卡
+	var view_range: int = 6  ## 格子数（约 192px @ 32px/cell）
+	var center_gp: Vector2i = Vector2i(floori(global_position.x / cs), floori(global_position.y / cs))
 
-		if abs(local.x) > 200 or abs(local.y) > 200:
-			continue
+	for dx in range(-view_range, view_range + 1):
+		for dy in range(-view_range, view_range + 1):
+			var gp: Vector2i = Vector2i(center_gp.x + dx, center_gp.y + dy)
+			if not _debug_walk_cache.has(gp):
+				continue
+			var world: Vector2 = Vector2(gp.x * cs + cell_half, gp.y * cs + cell_half)
+			var local: Vector2 = world - global_position
 
-		var walkable: bool = _debug_walk_cache[gp]
-		if walkable:
-			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(0, 1, 0, 0.08), true)
-		else:
-			draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(1, 0, 0, 0.15), true)
-			draw_line(local + Vector2(-4, -4), local + Vector2(4, 4), Color.RED, 1.0)
-			draw_line(local + Vector2(-4, 4), local + Vector2(4, -4), Color.RED, 1.0)
+			var walkable: bool = _debug_walk_cache[gp]
+			if walkable:
+				draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(0, 1, 0, 0.08), true)
+			else:
+				draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(1, 0, 0, 0.15), true)
+				draw_line(local + Vector2(-4, -4), local + Vector2(4, 4), Color.RED, 1.0)
+				draw_line(local + Vector2(-4, 4), local + Vector2(4, -4), Color.RED, 1.0)
