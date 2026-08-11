@@ -24,6 +24,7 @@ static var _grid_building: bool = false   ## 是否正在分帧构建网格
 static var _grid_build_y: int = 0         ## 当前构建到的行
 static var _grid_build_bounds: Rect2i = Rect2i()  ## 构建区域
 static var _grid_build_frame: int = -1    ## 当前帧已处理过（防同帧重复）
+static var _grid_build_solids: int = 0     ## 累计障碍物计数
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
 const BUILD_CHUNK: int = 1500  ## 每帧最多处理的格子数
@@ -325,6 +326,7 @@ func _ensure_astar_grid() -> bool:
 	_grid_build_y = bounds.position.y
 	_grid_build_bounds = bounds
 	_grid_build_frame = -1
+	_grid_build_solids = 0
 
 	return false  ## 构建中，稍后才就绪
 
@@ -342,14 +344,13 @@ func _build_step() -> void:
 
 	var bounds: Rect2i = _grid_build_bounds
 	var count: int = 0
-	var solid_count: int = 0
 
 	while _grid_build_y < bounds.position.y + bounds.size.y:
 		for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
 			var gp := Vector2i(x, _grid_build_y)
 			if not _is_walkable(gp):
 				_astar_grid.set_point_solid(gp, true)
-				solid_count += 1
+				_grid_build_solids += 1
 			count += 1
 			if count >= BUILD_CHUNK:
 				return  ## 下帧继续
@@ -358,7 +359,7 @@ func _build_step() -> void:
 	# 构建完成
 	_grid_building = false
 	var total: int = bounds.size.x * bounds.size.y
-	print("[A*] AStarGrid2D 构建完成: %d cells, 障碍物累计 %d" % [total, solid_count])
+	print("[A*] AStarGrid2D 构建完成: %d cells, 障碍物 %d (%.1f%%)" % [total, _grid_build_solids, float(_grid_build_solids) / float(total) * 100.0])
 
 
 func _mark_enemy_obstacles() -> Array[Vector2i]:
