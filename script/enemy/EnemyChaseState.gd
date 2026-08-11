@@ -1,5 +1,5 @@
 extends State
-## 追击玩家 — A* 寻路 + 调试输出 + 路径可视化
+## 追击玩家 — A* 寻路（Godot 内置 AStarGrid2D）+ 调试输出 + 路径可视化
 ##
 ## 网格分辨率：32×32 像素（原生图块分辨率）
 ## 碰撞体感知：Decor/Upper 层通过图块中心点碰撞多边形检测判定阻挡
@@ -19,13 +19,13 @@ var _fallback_mode: bool = false  ## 降级模式：连续失败后切到直接�
 static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格子缓存（32×32 分辨率）
 var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
+static var _astar_grid: AStarGrid2D = null  ## Godot 内置 A* 网格（静态，全图共享）
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
 const REPATH_INTERVAL: float = 0.5          ## 正常重算间隔
 const REPATH_FAIL_INTERVAL: float = 3.0     ## 寻路失败后重试间隔（避免卡顿）
 const REPATH_FAIL_MOVE_DIST: float = 48.0   ## 失败后玩家移动多远才重试
 const WAYPOINT_RADIUS: float = 10.0
-const MAX_ASTAR_ITERATIONS: int = 2000      ## 最大迭代数
 const NO_PATH_STOP: int = 5       ## 连续无路径多少次后停止移动
 const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模式
 const PUSH_APART_RADIUS: float = 36.0   ## 敌人推开检测半径
@@ -53,6 +53,7 @@ func enter() -> void:
 	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
 		_tilemaps.clear()
 		_tile_walk_cache.clear()
+		_astar_grid = null  ## 失效 AStarGrid2D，触发重建
 		_find_all_tilemaps()
 		var names: String = ""
 		for tm in _tilemaps:
@@ -260,8 +261,60 @@ func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vecto
 
 
 # ═══════════════════════════════════════
-# A* 寻路
+# A* 寻路（Godot 内置 AStarGrid2D）
 # ═══════════════════════════════════════
+
+func _ensure_astar_grid() -> bool:
+	## 确保 AStarGrid2D 已构建。返回 true 表示就绪。
+	if _astar_grid and not _tilemaps.is_empty() and is_instance_valid(_tilemaps[0]):
+		return true
+
+	# 重新发现 tilemaps
+	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
+		_tilemaps.clear()
+		_tile_walk_cache.clear()
+		_find_all_tilemaps()
+
+	if _tilemaps.is_empty():
+		return false
+
+	# 计算所有 tilemap 的合并边界
+	var bounds: Rect2i = Rect2i()
+	var first: bool = true
+	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
+		var rect: Rect2i = tm.get_used_rect()
+		if first:
+			bounds = rect
+			first = false
+		else:
+			bounds = bounds.merge(rect)
+
+	if first:
+		return false
+
+	var total_cells: int = bounds.size.x * bounds.size.y
+	print("[A*] 构建 AStarGrid2D: region=%s cells=%d" % [str(bounds), total_cells])
+
+	_astar_grid = AStarGrid2D.new()
+	_astar_grid.region = bounds
+	_astar_grid.cell_size = Vector2(_cell_size, _cell_size)
+	_astar_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER  ## 四方向（与旧实现一致）
+	_astar_grid.update()
+
+	# 标记障碍物（同时预热 _tile_walk_cache）
+	var solid_count: int = 0
+	for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
+		for y in range(bounds.position.y, bounds.position.y + bounds.size.y):
+			var gp := Vector2i(x, y)
+			if not _is_walkable(gp):
+				_astar_grid.set_point_solid(gp, true)
+				solid_count += 1
+
+	print("[A*] 障碍物: %d / %d 格 (%.1f%%)" % [solid_count, total_cells, float(solid_count) / float(total_cells) * 100.0])
+	return true
+
 
 func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	var start: Vector2i = _world_to_grid(from)
@@ -275,7 +328,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	character._debug_end_walkable = end_ok
 
 	if _first_path:
-		print("[A*] ═══ 寻路开始（%dpx 原生图块）═══" % int(_cell_size))
+		print("[A*] ═══ 寻路开始（AStarGrid2D, %dpx 格子）═══" % int(_cell_size))
 		print("[A*] 敌人世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [from.x, from.y, str(start), str(start_ok)])
 		print("[A*] 玩家世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [to.x, to.y, str(end), str(end_ok)])
 
@@ -304,69 +357,40 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 		_first_path = false
 		return [to]
 
-	# A*
-	var open_set: Array[Vector2i] = [start]
-	var came_from: Dictionary = {}
-	var g_score: Dictionary = {}
-	var f_score: Dictionary = {}
-	g_score[start] = 0.0
-	f_score[start] = _heuristic(start, end)
+	# ── 确保 AStarGrid2D 已构建 ──
+	if not _ensure_astar_grid():
+		print("[A*] ❌ 无法构建寻路网格！")
+		character._debug_path_found = false
+		character._debug_astar_iters = 0
+		_first_path = false
+		return []
 
-	var iterations: int = 0
-	var explored: int = 0
+	# ── 使用 Godot 内置 AStarGrid2D 寻路 ──
+	var id_path: PackedVector2Array = _astar_grid.get_id_path(start, end)
 
-	while open_set.size() > 0:
-		iterations += 1
-		if iterations > MAX_ASTAR_ITERATIONS:
-			print("[A*] ⚠ 达到最大迭代 %d，停止搜索" % MAX_ASTAR_ITERATIONS)
-			break
+	if id_path.is_empty():
+		print("[A*] ❌ 无路径！")
+		character._debug_path_found = false
+		character._debug_astar_iters = 0
+		_first_path = false
+		return []
 
-		var current: Vector2i = open_set[0]
-		var current_f: float = f_score.get(current, 1e9)
-		var best_idx: int = 0
-		for i in range(1, open_set.size()):
-			var f: float = f_score.get(open_set[i], 1e9)
-			if f < current_f:
-				current = open_set[i]
-				current_f = f
-				best_idx = i
-		open_set.remove_at(best_idx)
-		explored += 1
+	# 转换为 Array[Vector2i]（get_id_path 返回 PackedVector2Array，元素为浮点格子坐标）
+	var grid_path: Array[Vector2i] = []
+	for p: Vector2 in id_path:
+		grid_path.append(Vector2i(int(p.x), int(p.y)))
 
-		if current == end:
-			var raw_path: Array[Vector2i] = _reconstruct_path(came_from, current)
-			var smoothed: Array[Vector2] = _smooth_path(raw_path)
-			print("[A*] ✅ 找到路径！探索=%d 迭代=%d 原始=%d 平滑后=%d" % [explored, iterations, raw_path.size(), smoothed.size()])
-			if smoothed.size() > 0:
-				print("[A*]   起点: (%.0f, %.0f)  终点: (%.0f, %.0f)" % [smoothed[0].x, smoothed[0].y, smoothed[smoothed.size()-1].x, smoothed[smoothed.size()-1].y])
-			character._debug_path_found = true
-			character._debug_astar_iters = iterations
-			_first_path = false
-			return smoothed
+	# 平滑路径（共线简化 + 碰撞体感知推墙）
+	var smoothed: Array[Vector2] = _smooth_path(grid_path)
 
-		for neighbor in _get_neighbors(current):
-			var tent_g: float = g_score[current] + 1.0
+	print("[A*] ✅ 找到路径！原始=%d 平滑后=%d" % [grid_path.size(), smoothed.size()])
+	if smoothed.size() > 0:
+		print("[A*]   起点: (%.0f, %.0f)  终点: (%.0f, %.0f)" % [smoothed[0].x, smoothed[0].y, smoothed[smoothed.size()-1].x, smoothed[smoothed.size()-1].y])
 
-			if tent_g < g_score.get(neighbor, 1e9):
-				came_from[neighbor] = current
-				g_score[neighbor] = tent_g
-				f_score[neighbor] = tent_g + _heuristic(neighbor, end)
-				if neighbor not in open_set:
-					open_set.append(neighbor)
-
-	print("[A*] ❌ 无路径！探索=%d 迭代=%d open_set剩余=%d" % [explored, iterations, open_set.size()])
-	character._debug_path_found = false
-	character._debug_astar_iters = iterations
+	character._debug_path_found = true
+	character._debug_astar_iters = 0  ## AStarGrid2D 不暴露迭代数
 	_first_path = false
-	return []
-
-
-func _reconstruct_path(came_from: Dictionary, current: Vector2i) -> Array[Vector2i]:
-	var path: Array[Vector2i] = [current]
-	while current in came_from:
-		current = came_from[current]
-		path.insert(0, current)
-	return path
+	return smoothed
 
 
 func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
@@ -447,19 +471,6 @@ func _to_world_array(grid_path: Array[Vector2i]) -> Array[Vector2]:
 	return result
 
 
-func _heuristic(a: Vector2i, b: Vector2i) -> float:
-	return float(absi(a.x - b.x) + absi(a.y - b.y))
-
-
-func _get_neighbors(pos: Vector2i) -> Array[Vector2i]:
-	var neighbors: Array[Vector2i] = []
-	for d in [Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, -1), Vector2i(0, 1)]:
-		var n: Vector2i = pos + d
-		if _is_walkable(n):
-			neighbors.append(n)
-	return neighbors
-
-
 func _find_nearest_walkable(pos: Vector2i) -> Vector2i:
 	for r in range(1, 8):
 		for dx in range(-r, r + 1):
@@ -483,6 +494,7 @@ func _is_walkable(gp: Vector2i) -> bool:
 	if not _tilemaps.is_empty() and not is_instance_valid(_tilemaps[0]):
 		_tilemaps.clear()
 		_tile_walk_cache.clear()
+		_astar_grid = null  ## 场景重载 → 失效网格
 		_find_all_tilemaps()
 
 	var walkable: bool = false
