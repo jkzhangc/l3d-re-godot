@@ -199,6 +199,7 @@ func restore_checkpoint() -> void:
 		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "无",
 		str(weapon_magazines),
 		inventory.size(),
+		team.size(),
 	])
 
 # ═══════════════════════════════════════
