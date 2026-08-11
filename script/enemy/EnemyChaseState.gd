@@ -503,17 +503,24 @@ func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
 
 func _push_from_walls(world_path: Array[Vector2]) -> Array[Vector2]:
 	## 碰撞体感知推墙：按敌人碰撞体全尺寸推开，确保碰撞体不会被障碍物卡住
+	##
+	## 狭窄通道保护：如果格子在 2 面及以上有墙（如狭窄走廊），
+	## 限制推力不超出格子中心到边界的距离（cell_half - margin），
+	## 防止路径点被推出可行走格子。
 	if world_path.is_empty():
 		return world_path
 
 	# 使用碰撞体全尺寸（而非半尺寸）+ 额外余量确保不卡
 	var push_full_x := _collision_half.x + 6.0
 	var push_full_y := _collision_half.y + 6.0
+	var cell_half: float = _cell_size / 2.0
+	var max_push: float = cell_half - 2.0  ## 格内最大推力（留 2px 边距）
 	var result: Array[Vector2] = []
 
 	for wp in world_path:
 		var gp: Vector2i = _world_to_grid(wp)
 		var push := Vector2.ZERO
+		var wall_count: int = 0  ## 相邻墙体计数（仅计四正方向）
 		# 检测相邻8格（包括对角线），确保斜角也不卡
 		for dx in [-1, 0, 1]:
 			for dy in [-1, 0, 1]:
@@ -524,6 +531,14 @@ func _push_from_walls(world_path: Array[Vector2]) -> Array[Vector2]:
 					var weight: float = 1.0 if dx == 0 or dy == 0 else 0.7  # 对角线权重稍低
 					push.x -= dx * push_full_x * weight
 					push.y -= dy * push_full_y * weight
+					if dx == 0 or dy == 0:
+						wall_count += 1  # 只计正方向墙
+
+		# 狭窄通道保护：≥2 面正方向有墙 → 限制推力，防止推出格子
+		if wall_count >= 2:
+			push.x = clampf(push.x, -max_push, max_push)
+			push.y = clampf(push.y, -max_push, max_push)
+
 		result.append(wp + push)
 
 	return result
@@ -576,6 +591,15 @@ func _find_nearest_walkable(pos: Vector2i) -> Vector2i:
 
 func _is_walkable(gp: Vector2i) -> bool:
 	## 以实际图块碰撞体为准：Wall 层整块阻挡，Decor/Upper 按碰撞多边形判定
+	##
+	## 策略：
+	## - Ground/Floor 图块存在 → 基础可行走
+	## - Wall 层图块存在 → 强制阻挡
+	## - Decor/Upper 碰撞图块且中心在碰撞内 → 阻挡（墙体/柱子）
+	##   例外：狭窄通道豁免 — 如果该格被两面相对的墙夹在中间
+	##   （上下是墙+左右是地面，或左右是墙+上下是地面），
+	##   则判定为 autotile 边缘变体进入通道格 → 不阻挡，
+	##   让敌人能通过 32px（1 格）宽的狭窄通道。
 	if _tile_walk_cache.has(gp):
 		return _tile_walk_cache[gp]
 
@@ -587,7 +611,9 @@ func _is_walkable(gp: Vector2i) -> bool:
 		_grid_building = false  ## 中断分帧构建
 		_find_all_tilemaps()
 
-	var walkable: bool = false
+	var has_ground: bool = false
+	var has_wall_layer: bool = false
+	var blocked_by_decor_collision: bool = false
 	var found_layers: String = ""
 
 	for tm in _tilemaps:
@@ -601,26 +627,84 @@ func _is_walkable(gp: Vector2i) -> bool:
 
 		if "wall" in name_lower:
 			# Wall 层：无论碰撞多边形如何，整块 32×32 图块都阻挡
-			walkable = false; break
+			has_wall_layer = true
 
-		if "upper" in name_lower or "decor" in name_lower:
-			if _tile_has_collision(td):
-				# 以实际碰撞多边形为准：图块中心落入碰撞多边形才阻挡
-				if _tile_center_in_collision(td):
-					walkable = false; break
-				# 中心不在碰撞多边形内 → 小障碍物（如柱子），可通过
-			# 无碰撞体 → 纯装饰，不挡路
-			continue
+		elif "upper" in name_lower or "decor" in name_lower:
+			if _tile_has_collision(td) and _tile_center_in_collision(td):
+				# 碰撞覆盖中心 → 先标记为阻挡
+				blocked_by_decor_collision = true
 
-		if "ground" in name_lower or "floor" in name_lower:
-			walkable = true
+		elif "ground" in name_lower or "floor" in name_lower:
+			has_ground = true
+
+	# 狭窄通道豁免：被两面相对的墙夹住 + 另两面是地面 → 不阻挡
+	if blocked_by_decor_collision and has_ground:
+		if _is_sandwiched_passage(gp):
+			blocked_by_decor_collision = false
+
+	# 最终判定：有地面 且 没有被墙体阻挡 → 可行走
+	var walkable: bool = has_ground and not has_wall_layer and not blocked_by_decor_collision
 
 	_tile_walk_cache[gp] = walkable
 
 	if _tile_walk_cache.size() < 10:
-		print("[A* DEBUG] 图块 %s → layers=[%s] → walkable=%s" % [str(gp), found_layers, str(walkable)])
+		print("[A* DEBUG] 图块 %s → layers=[%s] → walkable=%s  ground=%s wall=%s decor_block=%s" % [str(gp), found_layers, str(walkable), str(has_ground), str(has_wall_layer), str(blocked_by_decor_collision)])
 
 	return walkable
+
+
+func _is_sandwiched_passage(gp: Vector2i) -> bool:
+	## 检查 gp 是否处于"两面墙夹中间"的狭窄通道中。
+	## 条件：上下是墙（decor 碰撞或 wall 层）+ 左右是地面（无阻挡）
+	##       或 左右是墙 + 上下是地面（无阻挡）
+	## 用简单层检测（不调 _is_walkable，避免递归依赖 _tile_walk_cache）。
+	## 注意：地面侧必须"有地面且无阻挡图块"，否则墙格本身也会被错误解封。
+
+	# 水平通道：上下被阻挡 + 左右是纯地面（有 ground 且 无 blocking）
+	var top_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(0, -1))
+	var bottom_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(0, 1))
+	var left_clear: bool = _cell_has_ground_tile(gp + Vector2i(-1, 0)) and not _cell_has_blocking_tile(gp + Vector2i(-1, 0))
+	var right_clear: bool = _cell_has_ground_tile(gp + Vector2i(1, 0)) and not _cell_has_blocking_tile(gp + Vector2i(1, 0))
+	if top_blocked and bottom_blocked and left_clear and right_clear:
+		return true
+
+	# 垂直通道：左右被阻挡 + 上下是纯地面
+	var left_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(-1, 0))
+	var right_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(1, 0))
+	var top_clear: bool = _cell_has_ground_tile(gp + Vector2i(0, -1)) and not _cell_has_blocking_tile(gp + Vector2i(0, -1))
+	var bottom_clear: bool = _cell_has_ground_tile(gp + Vector2i(0, 1)) and not _cell_has_blocking_tile(gp + Vector2i(0, 1))
+	if left_blocked and right_blocked and top_clear and bottom_clear:
+		return true
+
+	return false
+
+
+func _cell_has_blocking_tile(at: Vector2i) -> bool:
+	## 检查某格是否有 wall 层图块 或 decor/upper 层碰撞图块（中心在内）
+	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
+		var td: TileData = tm.get_cell_tile_data(at)
+		if td == null:
+			continue
+		var name_lower: String = tm.name.to_lower()
+		if "wall" in name_lower:
+			return true
+		if ("upper" in name_lower or "decor" in name_lower) and _tile_has_collision(td) and _tile_center_in_collision(td):
+			return true
+	return false
+
+
+func _cell_has_ground_tile(at: Vector2i) -> bool:
+	## 检查某格是否有 ground/floor 层图块
+	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
+		var name_lower: String = tm.name.to_lower()
+		if "ground" in name_lower or "floor" in name_lower:
+			if tm.get_cell_tile_data(at) != null:
+				return true
+	return false
 
 
 func _tile_has_collision(td: TileData) -> bool:
@@ -629,7 +713,6 @@ func _tile_has_collision(td: TileData) -> bool:
 
 func _tile_center_in_collision(td: TileData) -> bool:
 	## 检查图块中心 (16,16) 是否落入碰撞多边形内
-	## 用于判定 Decor/Upper 图块是否真正阻挡敌人
 	const CENTER: Vector2 = Vector2(16.0, 16.0)
 	var poly_count: int = td.get_collision_polygons_count(0)
 	for pi in range(poly_count):
