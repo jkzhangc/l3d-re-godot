@@ -1,0 +1,42 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://script/game.gd" id="1_game"]
+[ext_resource type="PackedScene" path="res://scene/hud.tscn" id="2_hud"]
+
+[sub_resource type="Gradient" id="Gradient1"]
+offsets = PackedFloat32Array(0, 1)
+colors = PackedColorArray(0.11, 0.11, 0.13, 1, 0.15, 0.15, 0.18, 1)
+
+[sub_resource type="GradientTexture2D" id="GroundTex"]
+gradient = SubResource("Gradient1")
+width = 64
+height = 64
+
+[node name="Game" type="Node2D"]
+script = ExtResource("1_game")
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Ground" type="Sprite2D" parent="World"]
+texture = SubResource("GroundTex")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position_smoothing_enabled = true
+position_smoothing_speed = 8.0
+
+[node name="Entities" type="Node2D" parent="."]
+
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="Entities"]
+spawn_path = NodePath("..")
+
+[node name="Enemies" type="Node2D" parent="."]
+
+[node name="EnemySpawner" type="MultiplayerSpawner" parent="Enemies"]
+spawn_path = NodePath("..")
+
+[node name="Bullets" type="Node2D" parent="."]
+
+[node name="BulletSpawner" type="MultiplayerSpawner" parent="Bullets"]
+spawn_path = NodePath("..")
+
+[node name="HUD" parent="." instance=ExtResource("2_hud")]

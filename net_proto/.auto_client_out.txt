@@ -1,0 +1,8 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+[Net] 正在加入 127.0.0.1:27015 ...
+[AUTO] client 已发起加入，等待 host 开始游戏 ...
+[Net] 已加入房间（我的 peer_id=1607071984，当前 2 人）
+[Net] 开始游戏：res://scene/game.tscn
+[AUTO] client 诊断: my_peer_id=1 Entities=["PlayerSpawner"]
+[AUTO] client FAIL: 自己的实体不存在（spawn_function / 同步链路未生效）

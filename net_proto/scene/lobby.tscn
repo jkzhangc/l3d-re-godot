@@ -1,0 +1,108 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/lobby.gd" id="1_lobby"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_lobby")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 22
+text = "net_proto — 联机原型（Host 全量模拟）"
+
+[node name="NameRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameTag" type="Label" parent="VBox/NameRow"]
+layout_mode = 2
+text = "昵称："
+
+[node name="NameEdit" type="LineEdit" parent="VBox/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "玩家"
+max_length = 16
+
+[node name="IpRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="IpTag" type="Label" parent="VBox/IpRow"]
+layout_mode = 2
+text = "IP："
+
+[node name="IpEdit" type="LineEdit" parent="VBox/IpRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "127.0.0.1"
+max_length = 45
+
+[node name="PortTag" type="Label" parent="VBox/IpRow"]
+layout_mode = 2
+text = "端口 27015"
+
+[node name="BtnRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CreateBtn" type="Button" parent="VBox/BtnRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "创建房间"
+
+[node name="JoinBtn" type="Button" parent="VBox/BtnRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "加入"
+
+[node name="StartBtn" type="Button" parent="VBox/BtnRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "开始游戏"
+
+[node name="LeaveBtn" type="Button" parent="VBox/BtnRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+text = "离开房间"
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "状态：未连接"
+
+[node name="PlayersLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+custom_minimum_size = Vector2(0, 100)
+text = "玩家列表（0）："
+vertical_alignment = 1
+
+[node name="LogLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "请创建房间或加入已有房间（默认 127.0.0.1:27015）"

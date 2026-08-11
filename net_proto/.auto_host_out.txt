@@ -1,0 +1,13 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+
+[Net] 已创建房间（端口 27015，我的 peer_id=1）
+[AUTO] host 房间已创建，等待 client 接入 ...
+[Net] peer 1607071984 连接（等待握手）
+[Net] peer 1607071984 握手成功：ClientAuto
+[AUTO] host 广播开始游戏
+[Net] 开始游戏：res://scene/game.tscn
+[Game] 已为 peer 1 生成玩家实体
+[Game] 已为 peer 1607071984 生成玩家实体
+[Game] 已向 peer 1607071984 发送快照
+[AUTO] host 诊断: Entities=["PlayerSpawner", "1", "1607071984"](3) Enemies=2
+[AUTO] host PASS
