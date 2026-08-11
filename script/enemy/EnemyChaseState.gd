@@ -20,7 +20,13 @@ static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格
 var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 static var _astar_grid: AStarGrid2D = null  ## Godot 内置 A* 网格（静态，全图共享）
+static var _grid_building: bool = false   ## 是否正在分帧构建网格
+static var _grid_build_y: int = 0         ## 当前构建到的行
+static var _grid_build_bounds: Rect2i = Rect2i()  ## 构建区域
+static var _grid_build_frame: int = -1    ## 当前帧已处理过（防同帧重复）
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
+
+const BUILD_CHUNK: int = 1500  ## 每帧最多处理的格子数
 
 const REPATH_INTERVAL: float = 0.5          ## 正常重算间隔
 const REPATH_FAIL_INTERVAL: float = 3.0     ## 寻路失败后重试间隔（避免卡顿）
@@ -54,6 +60,7 @@ func enter() -> void:
 		_tilemaps.clear()
 		_tile_walk_cache.clear()
 		_astar_grid = null  ## 失效 AStarGrid2D，触发重建
+		_grid_building = false  ## 中断分帧构建
 		_find_all_tilemaps()
 		var names: String = ""
 		for tm in _tilemaps:
@@ -94,6 +101,8 @@ func process_update(_delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
+	_build_step()  ## 持续分帧构建 AStarGrid2D（如在构建中）
+
 	var enemy: Node2D = character
 	var player: Node2D = enemy._player_ref
 	if not player:
@@ -265,9 +274,16 @@ func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vecto
 # ═══════════════════════════════════════
 
 func _ensure_astar_grid() -> bool:
-	## 确保 AStarGrid2D 已构建。返回 true 表示就绪。
+	## 确保 AStarGrid2D 已构建。返回 true 表示就绪（立即可用）。
+	## 如果尚未构建，启动分帧构建并返回 false（调用者应使用降级追击）。
 	if _astar_grid and not _tilemaps.is_empty() and is_instance_valid(_tilemaps[0]):
+		if _grid_building:
+			return false  ## 构建中，尚未就绪
 		return true
+
+	# 正在构建中，不要重启
+	if _grid_building:
+		return false
 
 	# 重新发现 tilemaps
 	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
@@ -295,25 +311,54 @@ func _ensure_astar_grid() -> bool:
 		return false
 
 	var total_cells: int = bounds.size.x * bounds.size.y
-	print("[A*] 构建 AStarGrid2D: region=%s cells=%d" % [str(bounds), total_cells])
+	var est_frames: int = ceili(float(total_cells) / float(BUILD_CHUNK))
+	print("[A*] 分帧构建 AStarGrid2D: region=%s cells=%d (约%d帧完成)" % [str(bounds), total_cells, est_frames])
 
 	_astar_grid = AStarGrid2D.new()
 	_astar_grid.region = bounds
 	_astar_grid.cell_size = Vector2(_cell_size, _cell_size)
-	_astar_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER  ## 四方向（与旧实现一致）
+	_astar_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	_astar_grid.update()
 
-	# 标记障碍物（同时预热 _tile_walk_cache）
+	# 启动分帧构建
+	_grid_building = true
+	_grid_build_y = bounds.position.y
+	_grid_build_bounds = bounds
+	_grid_build_frame = -1
+
+	return false  ## 构建中，稍后才就绪
+
+
+func _build_step() -> void:
+	## 每帧处理 BUILD_CHUNK 个格子，分帧完成障碍物标记。
+	## 可被多次调用，同帧内只执行一次。
+	if not _grid_building or not _astar_grid:
+		return
+
+	var cf: int = Engine.get_physics_frames()
+	if _grid_build_frame == cf:
+		return  ## 本帧已处理过
+	_grid_build_frame = cf
+
+	var bounds: Rect2i = _grid_build_bounds
+	var count: int = 0
 	var solid_count: int = 0
-	for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
-		for y in range(bounds.position.y, bounds.position.y + bounds.size.y):
-			var gp := Vector2i(x, y)
+
+	while _grid_build_y < bounds.position.y + bounds.size.y:
+		for x in range(bounds.position.x, bounds.position.x + bounds.size.x):
+			var gp := Vector2i(x, _grid_build_y)
 			if not _is_walkable(gp):
 				_astar_grid.set_point_solid(gp, true)
 				solid_count += 1
+			count += 1
+			if count >= BUILD_CHUNK:
+				return  ## 下帧继续
+		_grid_build_y += 1
 
-	print("[A*] 障碍物: %d / %d 格 (%.1f%%)" % [solid_count, total_cells, float(solid_count) / float(total_cells) * 100.0])
-	return true
+	# 构建完成
+	_grid_building = false
+	var total: int = bounds.size.x * bounds.size.y
+	print("[A*] AStarGrid2D 构建完成: %d cells, 障碍物累计 %d" % [total, solid_count])
 
 
 func _mark_enemy_obstacles() -> Array[Vector2i]:
@@ -538,6 +583,7 @@ func _is_walkable(gp: Vector2i) -> bool:
 		_tilemaps.clear()
 		_tile_walk_cache.clear()
 		_astar_grid = null  ## 场景重载 → 失效网格
+		_grid_building = false  ## 中断分帧构建
 		_find_all_tilemaps()
 
 	var walkable: bool = false
