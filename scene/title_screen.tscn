@@ -16,8 +16,8 @@ window_size = Vector2(120, 158)
 
 [node name="Background" type="TextureRect" parent="." unique_id=921359252]
 layout_mode = 0
-offset_right = 640.0
-offset_bottom = 480.0
+offset_right = 1280.0
+offset_bottom = 960.0
 mouse_filter = 2
 texture = ExtResource("1")
 expand_mode = 1
@@ -27,5 +27,4 @@ anchors_preset = 0
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1027434183]
 stream = ExtResource("3_2fir4")
-autoplay = true
 parameters/looping = true
