@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://d1idwrngv2tqq"]
+
+[ext_resource type="AudioStream" uid="uid://chctb16yd4dv8" path="res://sound/シグマ_断末魔.wav" id="1_4pvvf"]
+[ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="2_d74mw"]
+[ext_resource type="AudioStream" uid="uid://bop1va7h4ubnx" path="res://sound/シグマ_やぁっ.wav" id="3_w6m76"]
+[ext_resource type="Texture2D" uid="uid://b8bejwcsh2fga" path="res://art/Characters/ジャイアン歩行セット.png" id="4_lxnma"]
+[ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="5_lxnma"]
+[ext_resource type="Texture2D" uid="uid://bgeyjj388766l" path="res://art/Characters/ジャイアン反撃セット.png" id="6_3yr1j"]
+[ext_resource type="Texture2D" uid="uid://1vip3nbc5fay" path="res://art/Characters/ジャイアンセット.png" id="7_yottv"]
+
+[resource]
+script = ExtResource("5_lxnma")
+character_name = "ジャイ"
+max_hp = 200
+max_mp = 30
+base_attack = 12
+base_defense = 4
+mp_growth = 3
+walk_texture = ExtResource("7_yottv")
+run_texture = ExtResource("4_lxnma")
+death_texture = ExtResource("2_d74mw")
+death_char_index = 6
+weapon_walk_textures = {
+"Pistol": ExtResource("7_yottv")
+}
+shove_walk_texture = ExtResource("6_3yr1j")
+shove_fatigue_limit = 10
+hurt_sound = ExtResource("3_w6m76")
+death_sound = ExtResource("1_4pvvf")
