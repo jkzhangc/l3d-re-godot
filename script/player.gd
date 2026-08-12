@@ -392,11 +392,11 @@ func _init_hp() -> void:
 
 ## 从 CharacterData 资源读取外观/动画/HP 参数
 func _apply_character_data() -> void:
+	# 始终从 Global 同步角色数据（切换角色时必须更新 current_character）
+	if Global and Global.player_character:
+		current_character = Global.player_character as CharacterData
 	if not current_character:
-		if Global and Global.player_character:
-			current_character = Global.player_character as CharacterData
-		else:
-			return
+		return
 	var cd := current_character
 	if cd.walk_texture:   walk_texture = cd.walk_texture
 	walk_char_index = cd.walk_char_index

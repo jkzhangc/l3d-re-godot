@@ -3,12 +3,14 @@ class_name CharacterSwitchManager extends Node
 ##
 ## 添加到关卡场景根节点（由 GameInit 自动创建），管理:
 ##   1. Q/数字键切换
-##   2. 队友静态精灵的创建/更新/销毁
+##   2. 队友静态精灵的创建/更新/销毁（可选，默认关闭）
 ##   3. 切换时的镜头/状态迁移
 ##   4. 死亡后自动切换
 
 @export var switch_cooldown: float = 0.5
 @export var teammate_scene: PackedScene = preload("res://object/teammate_standin.tscn")
+## 是否在地图上显示未操控队友的站立精灵（L4D2 风格）
+@export var show_teammate_standins: bool = false
 
 var _player: CharacterBody2D = null
 var _camera: Camera2D = null
@@ -36,10 +38,11 @@ func _ready() -> void:
 		return
 	_player = _find_player()
 	_camera = _find_camera()
-	_create_teammate_sprites()
+	if show_teammate_standins:
+		_create_teammate_sprites()
 	set_process(true)
 	set_process_input(true)
-	print("[SwitchMgr] 就绪 team=%d player=%s camera=%s" % [_team_size, str(_player), str(_camera)])
+	print("[SwitchMgr] 就绪 team=%d player=%s camera=%s standins=%s" % [_team_size, str(_player), str(_camera), str(show_teammate_standins)])
 
 
 func _find_player() -> CharacterBody2D:
@@ -72,6 +75,8 @@ func _find_cameras_recursive(node: Node, out_arr: Array) -> void:
 # ═══════════════════════════════════════
 
 func _create_teammate_sprites() -> void:
+	if not show_teammate_standins:
+		return
 	var tree := get_tree()
 	if not tree or not tree.current_scene:
 		return
@@ -89,7 +94,11 @@ func _create_standin_node(index: int, parent: Node) -> Node2D:
 	standin.name = "TeammateStandin_%d" % index
 	standin.z_index = 1
 	var member: Dictionary = Global.team[index]
-	var pos: Vector2 = member.get("position", _get_default_spawn_pos())
+	# 位置同步到当前玩家位置（避免 Vector2.ZERO 导致出现在地图原点）
+	var pos: Vector2 = member.get("position", Vector2.ZERO)
+	if pos == Vector2.ZERO and _player:
+		pos = _player.global_position
+		member["position"] = pos
 	standin.position = pos
 	_apply_standin_appearance(standin, member)
 	parent.add_child(standin)
@@ -127,6 +136,8 @@ func _apply_standin_appearance(standin: Node2D, member: Dictionary) -> void:
 
 
 func _remove_teammate_standin(index: int) -> void:
+	if not show_teammate_standins:
+		return
 	if index < 0 or index >= _teammate_nodes.size():
 		return
 	var standin: Node2D = _teammate_nodes[index]
@@ -136,6 +147,8 @@ func _remove_teammate_standin(index: int) -> void:
 
 
 func _update_standin_from_player(old_index: int) -> void:
+	if not show_teammate_standins:
+		return
 	if old_index < 0 or old_index >= _teammate_nodes.size():
 		return
 	var standin: Node2D = _teammate_nodes[old_index]
@@ -149,6 +162,8 @@ func _update_standin_from_player(old_index: int) -> void:
 
 
 func _create_standin_for_index(index: int) -> void:
+	if not show_teammate_standins:
+		return
 	if index < 0 or index >= _team_size:
 		return
 	if index == Global.current_team_index:
@@ -244,14 +259,17 @@ func _do_switch(target_index: int) -> void:
 	# 5. 为刚才操控的队员创建站立精灵
 	_create_standin_for_index(old_index)
 
-	# 6. 刷新玩家外观和状态
+	# 6. 重置状态机为 Idle（防止切换时卡在攻击/武器状态）
+	_reset_player_state_machine()
+
+	# 7. 刷新玩家外观和状态
 	_player.refresh_after_switch()
 
-	# 7. 玩家跳到目标队员之前的位置
-	var saved_pos: Vector2 = Global.team[target_index].get("position", _player.global_position)
-	_player.global_position = saved_pos
+	# 8. 保持当前玩家位置（切换角色直接替换，不传送）
+	# 同时更新目标队员的位置为当前位置（保证数据一致）
+	Global.team[target_index]["position"] = _player.global_position
 
-	# 8. 镜头瞬切
+	# 9. 镜头瞬切
 	if _camera:
 		_camera.position = _player.global_position
 
@@ -266,6 +284,25 @@ func _save_current_player_state() -> void:
 		return
 	member["facing"] = _player.facing
 	member["position"] = _player.global_position
+
+
+func _reset_player_state_machine() -> void:
+	if not _player:
+		return
+	var sm: Node = _player.get_node_or_null("StateMachine")
+	if not sm:
+		return
+	if sm.current_state:
+		sm.current_state.exit()
+	# 尝试切换到 Idle 状态
+	var idle: State = null
+	if sm.get("states") is Dictionary:
+		idle = sm.states.get("Idle")
+	else:
+		idle = sm.get_node_or_null("Idle")
+	if idle:
+		sm.current_state = idle
+		idle.enter()
 
 
 # ═══════════════════════════════════════
@@ -302,15 +339,11 @@ func switch_after_death() -> bool:
 	_player._switch_on_death_attempted = false
 
 	# 恢复状态机
+	_reset_player_state_machine()
 	var sm: Node = _player.get_node_or_null("StateMachine")
 	if sm:
 		sm.set_process(true)
 		sm.set_physics_process(true)
-		var idle: State = sm.states.get("Idle") if sm.has_method("get") else sm.get_node_or_null("Idle")
-		if idle and sm.current_state:
-			sm.current_state.exit()
-			sm.current_state = idle
-			idle.enter()
 
 	# 恢复碰撞
 	var cs: CollisionShape2D = _player.get_node_or_null("CollisionShape2D")
@@ -326,8 +359,8 @@ func switch_after_death() -> bool:
 
 	# 刷新外观 & 镜头
 	_player.refresh_after_switch()
-	var saved_pos: Vector2 = Global.team[next_idx].get("position", _player.global_position)
-	_player.global_position = saved_pos
+	# 保持当前玩家位置（死亡切换不传送）
+	Global.team[next_idx]["position"] = _player.global_position
 	_player._moving = false
 	_player.velocity = Vector2.ZERO
 	_player.queue_redraw()
