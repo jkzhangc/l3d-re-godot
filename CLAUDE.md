@@ -34,6 +34,44 @@
 - **物理引擎**：Jolt Physics / **渲染器**：Mobile / **GPU**：Direct3D 12
 - **游戏分辨率**：1280×960（设计基准，HUD 布局以此为准）
 
+## Godot AI MCP 集成
+
+**编辑器已安装 Godot AI MCP 插件 (v3.1.5)**，提供对 Godot 编辑器的完整程序化控制。**操作 Godot 场景/节点/资源时，优先使用 MCP 工具，而非直接读写 .tscn/.tres 文件。**
+
+### MCP 优先原则
+
+| 场景 | 做法 |
+|------|------|
+| 创建/修改/删除节点 | ✅ 用 `node_create` / `node_set_property` / `node_manage` |
+| 编辑脚本 | ✅ 用 `script_create` / `script_patch` / `script_manage`（触发编辑器诊断） |
+| 场景层级查看 | ✅ 用 `scene_get_hierarchy` / `node_get_properties` |
+| 运行/测试游戏 | ✅ 用 `project_run` / `test_run` / `editor_screenshot` |
+| 查看 TileMap/TileSet | ✅ 用 `tilemap_manage` / `tileset_manage` |
+| UI 构建 | ✅ 用 `ui_manage`（`build_layout` / `set_anchor_preset` / `set_text`） |
+| 动画 | ✅ 用 `animation_create` / `animation_manage` |
+| 材质/着色器 | ✅ 用 `material_manage` / `node_set_property`（shader 赋值） |
+| 粒子/CSG/相机/音频 | ✅ 用对应的专用 MCP 工具 |
+| InputMap 配置 | ✅ 用 `input_map_manage` |
+| 项目管理/设置 | ✅ 用 `project_manage` / `filesystem_manage` |
+| 批量操作 | ✅ 用 `batch_execute`（失败自动回滚） |
+| 仅批量文本替换 | ⚠️ 用 `Edit` 工具（脚本内容大面积重写时） |
+| 读取纯数据文件 | ⚠️ 用 `Read` 工具（.md/.txt/.json 非 Godot 资源） |
+
+### 典型工作流
+
+1. **查看状态**：`editor_state` → `scene_get_hierarchy` → `node_get_properties`
+2. **修改场景**：`node_create` / `node_set_property` / `node_manage` / `ui_manage`
+3. **编写脚本**：`script_patch`（小改）或 `script_create`（新建）
+4. **验证**：`project_run` → `editor_screenshot(source="game")` → `logs_read(source="game")`
+5. **调试**：`logs_read` / `game_manage` / `game_eval`
+
+### 操作前检查
+
+- 编辑场景时先确认 `editor_state` 返回的 `current_scene` 是否正确
+- 写属性前先 `node_get_properties` 确认属性名（Godot 内部名称可能与直觉不同）
+- `project_run` 前先 `scene_save` 确保 MCP 修改已落盘
+- 编辑器未运行时，大部分 MCP 工具不可用——此时回退到文件操作
+
 ## 目录结构
 
 | 目录 | 用途 |

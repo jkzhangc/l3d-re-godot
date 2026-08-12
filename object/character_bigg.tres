@@ -1,12 +1,28 @@
 [gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://d1idwrngv2tqq"]
 
 [ext_resource type="AudioStream" uid="uid://chctb16yd4dv8" path="res://sound/シグマ_断末魔.wav" id="1_4pvvf"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="1_yottv"]
 [ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="2_d74mw"]
 [ext_resource type="AudioStream" uid="uid://bop1va7h4ubnx" path="res://sound/シグマ_やぁっ.wav" id="3_w6m76"]
 [ext_resource type="Texture2D" uid="uid://b8bejwcsh2fga" path="res://art/Characters/ジャイアン歩行セット.png" id="4_lxnma"]
 [ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="5_lxnma"]
 [ext_resource type="Texture2D" uid="uid://bgeyjj388766l" path="res://art/Characters/ジャイアン反撃セット.png" id="6_3yr1j"]
 [ext_resource type="Texture2D" uid="uid://1vip3nbc5fay" path="res://art/Characters/ジャイアンセット.png" id="7_yottv"]
+[ext_resource type="Texture2D" uid="uid://fmn2w2ipfx4k" path="res://art/Characters/ジャイアンセットハンドガン.png" id="8_d74mw"]
+[ext_resource type="Texture2D" uid="uid://bybbxf1d78dfm" path="res://art/Characters/ジャイアンセットショットガン.png" id="9_w6m76"]
+[ext_resource type="Texture2D" uid="uid://nu308684slfr" path="res://art/Characters/ジャイアンセットアサルトライフル.png" id="10_lxnma"]
+
+[sub_resource type="Resource" id="Resource_1lk36"]
+script = ExtResource("1_yottv")
+down = Vector2(0, -10)
+left = Vector2(0, -6)
+right = Vector2(0, -6)
+
+[sub_resource type="Resource" id="Resource_3yr1j"]
+script = ExtResource("1_yottv")
+down = Vector2(0, -10)
+left = Vector2(0, -6)
+right = Vector2(0, -6)
 
 [resource]
 script = ExtResource("5_lxnma")
@@ -21,9 +37,18 @@ run_texture = ExtResource("4_lxnma")
 death_texture = ExtResource("2_d74mw")
 death_char_index = 6
 weapon_walk_textures = {
-"Pistol": ExtResource("7_yottv")
+"Pistol": ExtResource("8_d74mw"),
+"Rifle": ExtResource("10_lxnma"),
+"Shotgun": ExtResource("9_w6m76"),
+"Smg": ExtResource("10_lxnma")
 }
+allowed_primary_weapons = Array[String](["shotgun_01", "rifle_01", "smg_01"])
+allowed_secondary_weapons = Array[String](["pistol_01"])
 shove_walk_texture = ExtResource("6_3yr1j")
 shove_fatigue_limit = 10
+attack_effect_offsets = {
+"Pistol": SubResource("Resource_1lk36"),
+"Shotgun": SubResource("Resource_3yr1j")
+}
 hurt_sound = ExtResource("3_w6m76")
 death_sound = ExtResource("1_4pvvf")

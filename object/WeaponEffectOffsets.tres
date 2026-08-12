@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="WeaponEffectOffsets" format=3 uid="uid://dv2pi0md2jtby"]
+
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="1_bpycl"]
+
+[resource]
+script = ExtResource("1_bpycl")
+down = Vector2(0, -10)
+left = Vector2(0, -6)
+right = Vector2(0, -6)

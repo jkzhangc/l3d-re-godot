@@ -418,14 +418,10 @@ func refresh_after_switch() -> void:
 		return
 	animation_timer.wait_time = walk_frame_duration
 	animation_timer.start()
-	# 切换到 idle 状态（放下武器）
+	# 保持 Idle 外观（非武器模式），仅记录武器数据引用
 	var wd: WeaponData = Global.get_active_weapon()
-	if wd and not wd.weapon_state_name.is_empty():
-		# 直接进入武器 ready 帧（跳过举起动画）
-		enter_weapon_mode(wd)
-		set_weapon_ready_frame()
-	else:
-		exit_weapon_mode()
+	_weapon_data = wd if wd and not wd.weapon_state_name.is_empty() else null
+	_weapon_mode = false
 	current_hp = Global.player_hp
 	_moving = false
 	_anim_step = 0
@@ -649,18 +645,11 @@ func _process_death(delta: float) -> void:
 
 
 func _reload_from_save() -> void:
-	# L4D2 风格：死亡后回到安全屋，武器清空（安全屋地上会刷新）
-	print("[玩家] 死亡，回到安全屋——武器清空...")
+	# 死亡后从 checkpoint 恢复所有状态（HP/装备/弹药/队伍），再清空 checkpoint 回到安全屋
+	print("[玩家] 死亡，从 checkpoint 恢复...")
 	var safehouse: String = Global.get_checkpoint_scene()
-	# 清空 checkpoint 标记 + 装备，让安全屋场景以全新状态启动
+	Global.restore_checkpoint()
 	Global.checkpoint.clear()
-	Global.equipment["primary"] = null
-	Global.equipment["secondary"] = null
-	Global.weapon_magazines.clear()
-	Global.player_hp = 200.0
-	Global.inventory.clear()
-	Global.healing_item = null
-	Global.support_item = null
 	var tree: SceneTree = get_tree()
 	if not tree:
 		return

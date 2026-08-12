@@ -186,8 +186,9 @@ func _fire_bullet() -> void:
 	# 播放开枪特效
 	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
 	if effect_scene:
+		var effect_offset: Vector2 = character.current_character.get_attack_effect_offset(_wd.weapon_state_name, character.facing, _wd.attack_effect_offset_override) if character.current_character else _wd.attack_effect_offset_override
 		var follow: Node2D = character if _wd.attack_effect_follow else null
-		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, _wd.attack_effect_offset_override)
+		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, effect_offset)
 
 	if _wd.attack_sound:
 		_play_attack_sound(_wd.attack_sound)

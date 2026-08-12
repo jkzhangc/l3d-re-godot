@@ -63,6 +63,11 @@ class_name CharacterData extends Resource
 ## 角色选择界面使用的小头像（如未设置则用 portrait）
 @export var select_portrait: Texture2D
 
+@export_group("特效偏移")
+## 攻击特效偏移（按武器 × 方向）。键=weapon_state_name（如 "Pistol"/"Shotgun"），值=WeaponEffectOffsets 资源。
+## 某武器在此字典中没有条目时，回退到 WeaponData.attack_effect_offset_override。
+@export var attack_effect_offsets: Dictionary = {}
+
 @export_group("音效")
 @export var hurt_sound: AudioStream = null   ## 受伤音效
 @export var death_sound: AudioStream = null  ## 死亡音效
@@ -135,6 +140,16 @@ func can_use_weapon(wd: WeaponData) -> bool:
 	if restrictions.is_empty():
 		return true
 	return restrictions.has(wd.item_id)
+
+
+## 获取指定武器 + 朝向的攻击特效偏移。
+## 角色字典有此武器 → 从 WeaponEffectOffsets 按朝向取值；否则返回 fallback。
+func get_attack_effect_offset(weapon_state_name: String, facing: int, fallback: Vector2 = Vector2.ZERO) -> Vector2:
+	if attack_effect_offsets.has(weapon_state_name):
+		var off: WeaponEffectOffsets = attack_effect_offsets[weapon_state_name] as WeaponEffectOffsets
+		if off:
+			return off.get_offset(facing)
+	return fallback
 
 
 ## 序列化为字典（供存档系统使用）
