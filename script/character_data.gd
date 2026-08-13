@@ -6,6 +6,11 @@ class_name CharacterData extends Resource
 @export var level: int = 1
 @export var max_hp: int = 100
 @export var max_mp: int = 50
+@export var max_tp: int = 100                  ## TP（技能点/气力，后续技能系统使用）
+
+@export_group("TP 回复")
+@export var tp_regen_amount: int = 1           ## 每次自动回复的 TP 量
+@export var tp_regen_interval: float = 5.0     ## 每隔多少秒自动回复一次（0=不自动回复）
 
 @export_group("战斗属性")
 @export var base_attack: int = 15
@@ -72,15 +77,25 @@ class_name CharacterData extends Resource
 @export var hurt_sound: AudioStream = null   ## 受伤音效
 @export var death_sound: AudioStream = null  ## 死亡音效
 
+@export_group("技能")
+## 角色拥有的技能列表（SkillData 资源）
+@export var skills: Array[SkillData] = []
+
 # ═══════════════════════════════════════
 # 运行时 HP（不保存到 .tres，由存档系统管理）
 # ═══════════════════════════════════════
 var current_hp: float = 0.0
+var current_tp: int = 0
 
 
 ## 初始化运行时 HP 为最大 HP
 func init_runtime_hp() -> void:
 	current_hp = float(get_effective_max_hp())
+
+
+## 初始化运行时 TP 为最大 TP
+func init_runtime_tp() -> void:
+	current_tp = get_effective_max_tp()
 
 
 ## 受到伤害，返回是否死亡
@@ -109,6 +124,10 @@ func get_effective_max_hp() -> int:
 
 func get_effective_max_mp() -> int:
 	return max_mp + (level - 1) * mp_growth
+
+
+func get_effective_max_tp() -> int:
+	return max_tp
 
 
 ## 获取该角色的武器行走图纹理
@@ -159,4 +178,5 @@ func to_dict() -> Dictionary:
 		"character_name": character_name,
 		"level": level,
 		"current_hp": current_hp,
+		"current_tp": current_tp,
 	}

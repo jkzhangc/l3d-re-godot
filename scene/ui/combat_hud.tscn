@@ -4,6 +4,8 @@
 [ext_resource type="Texture2D" uid="uid://dr8abwp68b83l" path="res://art/Ui/ＨＰバーＴ.png" id="2_5nspm"]
 [ext_resource type="Texture2D" uid="uid://bn08w6gxd16qc" path="res://art/Ui/ＨＰメーターＴ.png" id="3_aeqfj"]
 [ext_resource type="Texture2D" uid="uid://chm1obiay2ndt" path="res://art/Ui/回復薬×０.png" id="4_q34ws"]
+[ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="5_5nspm"]
+[ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6_aeqfj"]
 
 [node name="CombatHUD" type="CanvasLayer" unique_id=410597860]
 script = ExtResource("1_708nl")
@@ -26,26 +28,40 @@ mouse_filter = 2
 texture = ExtResource("2_5nspm")
 
 [node name="MedkitCount" type="TextureRect" parent="." unique_id=306595916]
-offset_left = 10.0
-offset_top = 96.0
-offset_right = 10.0
-offset_bottom = 96.0
+offset_left = 156.0
+offset_top = 82.0
+offset_right = 208.0
+offset_bottom = 100.0
 mouse_filter = 2
 texture = ExtResource("4_q34ws")
-expand_mode = 1
-
-[node name="PrimaryWeaponIcon" type="TextureRect" parent="." unique_id=1987563237]
-offset_left = 1194.0
-offset_top = 6.0
-offset_right = 1194.0
-offset_bottom = 6.0
-mouse_filter = 2
-expand_mode = 1
 
 [node name="SecondaryWeaponIcon" type="TextureRect" parent="." unique_id=1922084394]
-offset_left = 1194.0
-offset_top = 56.0
-offset_right = 1194.0
-offset_bottom = 56.0
+offset_left = 1151.0
+offset_top = 107.0
+offset_right = 1311.0
+offset_bottom = 199.0
+scale = Vector2(0.8, 0.8)
 mouse_filter = 2
-expand_mode = 1
+texture = ExtResource("5_5nspm")
+
+[node name="PrimaryWeaponIcon" type="TextureRect" parent="." unique_id=1987563237]
+offset_left = 1135.0
+offset_top = 13.0
+offset_right = 1295.0
+offset_bottom = 105.0
+mouse_filter = 2
+texture = ExtResource("5_5nspm")
+
+[node name="TPLabel" type="Control" parent="." unique_id=918184148]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 51.0
+offset_top = 84.0
+offset_right = 67.0
+offset_bottom = 116.0
+script = ExtResource("6_aeqfj")
+text = "0"
+text_font_size = 32
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+color_shader_path_override = "res://shader/text_color.gdshader"

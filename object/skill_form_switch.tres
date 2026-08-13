@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/skill_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+skill_id = "skill_form_switch_01"
+skill_name = "切换形态"
+description = "空壳子技能：切换形态（待设计）。"
+tp_cost = 20
+cooldown = 10.0
+command_trigger = "取消键"

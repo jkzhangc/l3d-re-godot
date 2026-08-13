@@ -35,21 +35,6 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 @export var post_press_wait_frames: int = 0   ## 按下后等待帧数（攻击完成后多少帧不检测按键。0=立即响应）
 
 
-@export_group("地面显示")
-## 武器掉落在地面时的精灵表（用于生成 WeaponPickup）
-@export var pickup_texture: Texture2D
-## 精灵表中的角色索引
-@export var pickup_char_idx: int = 0
-## 朝向（0=下, 1=左, 2=右, 3=上）
-@export var pickup_direction: int = 0
-## 地面踏步帧序列（空=使用 WeaponPickup 默认序列 [1, 0, 1, 2]）
-@export var pickup_step_frames: Array[int] = []
-## 地面踏步每帧持续时间，秒（0=使用默认 0.25s）
-@export var pickup_step_duration: float = 0.0
-## 地面是否启用踏步动画
-@export var pickup_animated: bool = true
-
-
 @export_group("音效")
 @export var attack_sound: AudioStream = null    ## 攻击音效（远程/近战共用）
 @export var empty_fire_sound: AudioStream = null  ## 空弹音效（弹夹为空时播放）

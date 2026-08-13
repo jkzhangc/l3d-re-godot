@@ -27,13 +27,16 @@ const MEDKIT_TEXTS: Array[Texture2D] = [
 @onready var medkit_count: TextureRect = $MedkitCount
 @onready var primary_icon: TextureRect = $PrimaryWeaponIcon
 @onready var secondary_icon: TextureRect = $SecondaryWeaponIcon
+@onready var tp_label: GradientLabel = $TPLabel
 
 var _player_ref: CharacterBody2D = null
+var _last_tp: int = -1
 
 
 func _ready() -> void:
 	layer = 10
 	_player_ref = _find_player()
+	_configure_tp_label()
 	# HP 填充用 scale.x 横向缩放（配合 HPFill expand_mode=IGNORE_SIZE 自动贴合纹理）
 	refresh()
 
@@ -44,6 +47,7 @@ func _process(_delta: float) -> void:
 
 func refresh() -> void:
 	_update_hp()
+	_update_tp()
 	_update_medkit()
 	_update_weapons()
 
@@ -65,6 +69,26 @@ func _update_hp() -> void:
 	var ratio: float = clampf(hp / max_hp, 0.0, 1.0)
 	if hp_fill:
 		hp_fill.scale = Vector2(ratio, 1.0)
+
+
+func _configure_tp_label() -> void:
+	# TP 数值标签（场景节点 $TPLabel）—— 与伤害数字同款字体/着色器
+	# 资源路径/字号/位置在场景里设置；这里只设效果属性（_ready 阶段覆盖 _enter_tree 的 Global 默认值）
+	tp_label.use_gradient = true
+	tp_label.color_index = 1
+	tp_label.color_row = 0
+	tp_label.bold = false
+	tp_label.shadow = true
+	tp_label.shadow_color = Color(0, 0, 0, 0.6)
+	tp_label.shadow_offset = Vector2(2, 2)
+	tp_label.outline = false
+
+
+func _update_tp() -> void:
+	var tp: int = Global.player_tp
+	if tp != _last_tp:
+		_last_tp = tp
+		tp_label.text = "%d" % tp
 
 
 func _update_medkit() -> void:

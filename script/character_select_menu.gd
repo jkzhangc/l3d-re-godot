@@ -288,9 +288,11 @@ func _confirm_team() -> void:
 		var cd: CharacterData = _available_characters[idx]
 		var cd_copy: CharacterData = cd.duplicate()
 		cd_copy.init_runtime_hp()
+		cd_copy.init_runtime_tp()
 		var member: Dictionary = {
 			"character": cd_copy,
 			"current_hp": float(cd_copy.get_effective_max_hp()),
+			"current_tp": cd_copy.get_effective_max_tp(),
 			"equipment": {"primary": null, "secondary": null},
 			"weapon_magazines": {},
 			"active_weapon_slot": "primary",

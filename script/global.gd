@@ -64,6 +64,7 @@ func get_cached_color_image() -> Image:
 var player_character: Resource = null
 var inventory: Array = []
 var player_hp: float = 200.0
+var player_tp: int = 0                        ## 当前队员 TP（技能点）
 var gold: int = 0
 
 # ═══════════════════════════════════════
@@ -150,6 +151,7 @@ func capture_checkpoint() -> void:
 	checkpoint = {
 		"scene_path": scene_path,
 		"player_hp": player_hp,
+		"player_tp": player_tp,
 		"equipment_primary": equipment.get("primary"),
 		"equipment_secondary": equipment.get("secondary"),
 		"active_weapon_slot": active_weapon_slot,
@@ -181,6 +183,7 @@ func restore_checkpoint() -> void:
 		print("[Checkpoint] 无 checkpoint，保持当前状态")
 		return
 	player_hp = checkpoint.get("player_hp", 200.0)
+	player_tp = checkpoint.get("player_tp", 0)
 	equipment["primary"] = checkpoint.get("equipment_primary")
 	equipment["secondary"] = checkpoint.get("equipment_secondary")
 	active_weapon_slot = checkpoint.get("active_weapon_slot", "primary")
@@ -216,6 +219,7 @@ func _apply_team_member_to_global(index: int) -> void:
 	var member: Dictionary = team[index]
 	player_character = member.get("character")
 	player_hp = member.get("current_hp", 200.0)
+	player_tp = member.get("current_tp", 0)
 	equipment = member.get("equipment", {"primary": null, "secondary": null}).duplicate()
 	weapon_magazines = member.get("weapon_magazines", {}).duplicate()
 	active_weapon_slot = member.get("active_weapon_slot", "primary")
@@ -234,6 +238,7 @@ func _save_global_to_team_member(index: int) -> void:
 	var member: Dictionary = team[index]
 	member["character"] = player_character
 	member["current_hp"] = player_hp
+	member["current_tp"] = player_tp
 	member["equipment"] = equipment.duplicate()
 	member["weapon_magazines"] = weapon_magazines.duplicate()
 	member["active_weapon_slot"] = active_weapon_slot
@@ -489,6 +494,7 @@ func use_healing_item() -> bool:
 		return false
 	healing_item_count -= 1
 	print("[Global] 使用治疗品: %s 剩余 %d" % [healing_item.item_name, healing_item_count])
+	_apply_item_effects(healing_item)
 	if healing_item_count <= 0:
 		healing_item = null
 		healing_item_count = 0
@@ -499,8 +505,31 @@ func use_support_item() -> bool:
 	if not support_item:
 		return false
 	print("[Global] 使用辅助品: %s" % support_item.item_name)
+	_apply_item_effects(support_item)
 	support_item = null
 	return true
+
+
+## 应用物品的使用效果（HP/TP 回复）
+func _apply_item_effects(item: ItemData) -> void:
+	if not item:
+		return
+	var player := _find_player_node()
+	if not player:
+		return
+	if item.hp_restore > 0 and player.has_method("heal"):
+		player.heal(item.hp_restore)
+	if item.tp_restore > 0 and player.has_method("restore_tp"):
+		player.restore_tp(item.tp_restore)
+
+
+## 查找当前玩家节点（group "player"）
+func _find_player_node() -> Node:
+	var nodes := get_tree().get_nodes_in_group("player")
+	for n: Node in nodes:
+		if n is CharacterBody2D:
+			return n
+	return null
 
 
 func pickup_consumable(item: ItemData) -> void:
@@ -584,6 +613,7 @@ func init_new_game() -> void:
 	weapon_magazines.clear()
 	gold = 0
 	player_hp = 200.0
+	player_tp = (player_character as CharacterData).get_effective_max_tp()
 	corpse_list.clear()
 	print("[Global] 新游戏初始化完成（单角色回退模式）")
 

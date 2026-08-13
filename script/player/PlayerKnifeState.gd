@@ -58,6 +58,15 @@ func process_update(delta: float) -> void:
 					character.set_weapon_frame(_seq_idx)
 
 		Phase.READY:
+			# 技能搓招：按住技能键 + 按触发键（确定键=攻击 / 取消键）释放对应技能（优先于其它输入）
+			if Input.is_action_pressed("技能键"):
+				if Input.is_action_just_pressed("确定键"):
+					character.use_skill("确定键")
+					return
+				if Input.is_action_just_pressed("取消键"):
+					character.use_skill("取消键")
+					return
+
 			# --- 固定朝向输入处理 ---
 			if Global.facing_lock_mode == 0:
 				# 切换式：按取消键切换朝向锁定

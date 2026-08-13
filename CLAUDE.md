@@ -262,6 +262,20 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 | 物品投放 | ✅ | HP<50%/弹药<30% 决策 |
 | 安全门/传送点 | ✅ | SafeDoor/TeleportPoint + 踏步动画 |
 
+### 技能与 TP 系统
+
+| 系统 | 状态 | 说明 |
+|------|------|------|
+| 角色 TP | ✅ | `CharacterData.max_tp` + 运行时 `current_tp`，随队伍切换/存档同步 |
+| TP 自动回复 | ✅ | 每角色 `tp_regen_amount`/`tp_regen_interval`（回复量/间隔各不相同） |
+| TP 恢复品 | ✅ | `ItemData.tp_restore` + `hp_restore`，`use_healing/support_item` 应用效果 |
+| 物品掉落行走图 | ✅ | `ItemData`「地面显示」组，`healing_pickup` 支持 VX Ace 行走图 + 踏步动画 |
+| 技能数据 | ✅ | `SkillData` 资源（`tp_cost`/`cooldown`/`command_trigger`/`command_motion`） |
+| 技能搓招 | ✅ | 举起武器 + 按住技能键(5) + 触发键（确定/取消键）→ `player.use_skill(trigger)` |
+| 方向指令 | ✅ | `command_motion` 方向序列（上/下/左/右），`_match_motion` 匹配 |
+
+详见 **`技能与搓招系统.md`**。
+
 ---
 
 ## 核心系统速查

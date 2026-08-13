@@ -22,6 +22,26 @@ enum ItemType {
 @export var stackable: bool = false           ## 可否堆叠
 @export var max_stack: int = 99               ## 最大堆叠数
 
+@export_group("地面显示")
+## 物品掉落在地面时的精灵表（VX Ace 行走图格式，用于生成拾取物）
+@export var pickup_texture: Texture2D
+## 精灵表中的角色索引
+@export var pickup_char_idx: int = 0
+## 朝向（0=下, 1=左, 2=右, 3=上）
+@export var pickup_direction: int = 0
+## 地面踏步帧序列（空=使用默认序列 [1, 0, 1, 2]）
+@export var pickup_step_frames: Array[int] = []
+## 地面踏步每帧持续时间，秒（0=使用默认 0.25s）
+@export var pickup_step_duration: float = 0.0
+## 地面是否启用踏步动画
+@export var pickup_animated: bool = true
+
+@export_group("使用效果")
+## 使用时回复的 HP 量（0=不回复）
+@export var hp_restore: int = 0
+## 使用时回复的 TP 量（0=不回复）
+@export var tp_restore: int = 0
+
 
 func get_type_name() -> String:
 	match item_type:

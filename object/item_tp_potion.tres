@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "tp_potion_01"
+item_name = "TP恢复品"
+item_type = 7
+description = "恢复 TP（技能点）。"
+effect_text = "回复 +30 TP"
+tp_restore = 30
+sell_price = 30
+stackable = false
+max_stack = 1

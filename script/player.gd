@@ -94,6 +94,12 @@ var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
+var _tp_regen_timer: float = 0.0
+
+## 搓招方向输入缓冲
+const MOTION_DIRS: Array[String] = ["上", "下", "左", "右"]
+const MOTION_BUFFER_MAX: int = 8
+var _motion_buffer: Array[String] = []
 
 ## 推击相关
 var _shove_mode: bool = false           ## 是否处于推击模式（使用推击行走图）
@@ -165,6 +171,8 @@ func _process(delta: float) -> void:
 	if _is_dying:
 		_process_death(delta)
 	_update_shove_fatigue(delta)
+	_update_tp_regen(delta)
+	_update_motion_input()
 
 
 func _on_animation_timer_timeout() -> void:
@@ -500,6 +508,104 @@ func heal(amount: float) -> void:
 	if not member.is_empty():
 		member["current_hp"] = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
+
+
+## 回复 TP（技能点）。供物品使用效果与自动回复共用。
+func restore_tp(amount: int) -> void:
+	if amount <= 0:
+		return
+	var max_tp: int = _get_max_tp()
+	var before: int = Global.player_tp
+	Global.player_tp = mini(max_tp, before + amount)
+	if Global.player_tp > before:
+		print("[玩家] 回复 TP: +%d | TP: %d/%d" % [Global.player_tp - before, Global.player_tp, max_tp])
+
+
+## 当前角色的 TP 上限
+func _get_max_tp() -> int:
+	if current_character:
+		return current_character.get_effective_max_tp()
+	if Global and Global.player_character:
+		return (Global.player_character as CharacterData).get_effective_max_tp()
+	return 100
+
+
+## 每帧更新 TP 自动回复（恢复量/间隔由 CharacterData 决定）
+func _update_tp_regen(delta: float) -> void:
+	if _is_dying or not current_character:
+		return
+	var interval: float = current_character.tp_regen_interval
+	if interval <= 0.0:
+		return
+	if Global.player_tp >= _get_max_tp():
+		_tp_regen_timer = 0.0
+		return
+	_tp_regen_timer += delta
+	if _tp_regen_timer >= interval:
+		_tp_regen_timer -= interval
+		restore_tp(current_character.tp_regen_amount)
+
+
+## 按搓招触发键释放技能（空壳子：只扣 TP，实际效果待技能系统设计）
+## trigger: 触发键的输入动作名（如 "确定键"/"取消键"），匹配 SkillData.command_trigger
+func use_skill(trigger: String = "") -> void:
+	if not current_character:
+		return
+	var skills: Array[SkillData] = current_character.skills
+	if skills.is_empty():
+		print("[技能] 当前角色没有技能")
+		return
+	var skill: SkillData = _find_skill_by_trigger(skills, trigger)
+	if not skill:
+		print("[技能] 没有绑定触发键 %s 的技能" % trigger)
+		return
+	if not _match_motion(skill.command_motion):
+		print("[技能] 搓招失败：%s 需要方向指令 [%s]" % [skill.skill_name, skill.command_motion])
+		return
+	if skill.tp_cost > 0 and Global.player_tp < skill.tp_cost:
+		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, Global.player_tp])
+		return
+	Global.player_tp -= skill.tp_cost
+	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, Global.player_tp])
+	# TODO: 实际技能效果（伤害/治疗/增益/切换形态/召唤等），并接入 cooldown
+
+
+## 按触发键查找技能（command_trigger 匹配；无匹配时回退到第一个未绑定触发键的技能）
+func _find_skill_by_trigger(skills: Array[SkillData], trigger: String) -> SkillData:
+	for s: SkillData in skills:
+		if s.command_trigger == trigger:
+			return s
+	for s: SkillData in skills:
+		if s.command_trigger.is_empty():
+			return s
+	return null
+
+
+## 每帧记录方向键输入到搓招缓冲
+func _update_motion_input() -> void:
+	for d: String in MOTION_DIRS:
+		if Input.is_action_just_pressed(d):
+			_record_motion(d)
+
+
+func _record_motion(direction: String) -> void:
+	_motion_buffer.append(direction)
+	if _motion_buffer.size() > MOTION_BUFFER_MAX:
+		_motion_buffer.pop_front()
+
+
+## 检查最近方向输入是否以指定指令序列结尾（如 "下右"）
+func _match_motion(motion: String) -> bool:
+	if motion.is_empty():
+		return true
+	var n: int = motion.length()
+	if n > _motion_buffer.size():
+		return false
+	var start: int = _motion_buffer.size() - n
+	for i: int in range(n):
+		if _motion_buffer[start + i] != motion[i]:
+			return false
+	return true
 
 
 # ═══════════════════════════════════════
