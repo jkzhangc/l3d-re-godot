@@ -76,6 +76,7 @@ var active_weapon_slot: String = "primary"
 # 消耗品装备
 # ═══════════════════════════════════════
 var healing_item: ItemData = null
+var healing_item_count: int = 0  ## 治疗品数量（医疗包 UI 显示）
 var support_item: ItemData = null
 
 # ═══════════════════════════════════════
@@ -155,6 +156,7 @@ func capture_checkpoint() -> void:
 		"weapon_magazines": weapon_magazines.duplicate(),
 		"inventory": inventory.duplicate(),
 		"healing_item": healing_item,
+		"healing_item_count": healing_item_count,
 		"support_item": support_item,
 		"gold": gold,
 		"team": team.duplicate(true),
@@ -185,6 +187,7 @@ func restore_checkpoint() -> void:
 	weapon_magazines = checkpoint.get("weapon_magazines", {}).duplicate()
 	inventory = checkpoint.get("inventory", []).duplicate()
 	healing_item = checkpoint.get("healing_item")
+	healing_item_count = checkpoint.get("healing_item_count", 0)
 	support_item = checkpoint.get("support_item")
 	gold = checkpoint.get("gold", 0)
 	# 恢复队伍
@@ -219,6 +222,7 @@ func _apply_team_member_to_global(index: int) -> void:
 	if active_weapon_slot not in equipment:
 		active_weapon_slot = "primary"
 	healing_item = member.get("healing_item")
+	healing_item_count = member.get("healing_item_count", 0)
 	support_item = member.get("support_item")
 	inventory = member.get("inventory", []).duplicate()
 
@@ -234,6 +238,7 @@ func _save_global_to_team_member(index: int) -> void:
 	member["weapon_magazines"] = weapon_magazines.duplicate()
 	member["active_weapon_slot"] = active_weapon_slot
 	member["healing_item"] = healing_item
+	member["healing_item_count"] = healing_item_count
 	member["support_item"] = support_item
 	member["inventory"] = inventory.duplicate()
 
@@ -480,10 +485,13 @@ func get_active_weapon_state_name() -> String:
 # ═══════════════════════════════════════
 
 func use_healing_item() -> bool:
-	if not healing_item:
+	if not healing_item or healing_item_count <= 0:
 		return false
-	print("[Global] 使用治疗品: %s" % healing_item.item_name)
-	healing_item = null
+	healing_item_count -= 1
+	print("[Global] 使用治疗品: %s 剩余 %d" % [healing_item.item_name, healing_item_count])
+	if healing_item_count <= 0:
+		healing_item = null
+		healing_item_count = 0
 	return true
 
 
@@ -498,10 +506,12 @@ func use_support_item() -> bool:
 func pickup_consumable(item: ItemData) -> void:
 	match item.item_type:
 		ItemData.ItemType.HEALING:
-			if healing_item:
+			if healing_item and healing_item.item_id != item.item_id:
 				print("[Global] 替换治疗品: %s → %s" % [healing_item.item_name, item.item_name])
+				healing_item_count = 0
 			healing_item = item
-			print("[Global] 装备治疗品: %s" % item.item_name)
+			healing_item_count += 1
+			print("[Global] 拾取治疗品: %s ×%d" % [item.item_name, healing_item_count])
 		ItemData.ItemType.SUPPORT:
 			if support_item:
 				print("[Global] 替换辅助品: %s → %s" % [support_item.item_name, item.item_name])
@@ -569,6 +579,7 @@ func init_new_game() -> void:
 	equipment["secondary"] = null
 	active_weapon_slot = "primary"
 	healing_item = null
+	healing_item_count = 0
 	support_item = null
 	weapon_magazines.clear()
 	gold = 0

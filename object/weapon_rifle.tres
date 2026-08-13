@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_lg75x"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_oiymr"]
 [ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="7_2b1o8"]
+[ext_resource type="Texture2D" uid="uid://d3krstbwy7w1a" path="res://art/Ui/装備アイコンアサルトライフル.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_tdlcb"]
 script = ExtResource("2_lg75x")
@@ -47,5 +48,6 @@ item_id = "rifle_01"
 item_name = "步枪"
 item_type = 3
 description = "一把普通的手枪。远程攻击。"
+icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1

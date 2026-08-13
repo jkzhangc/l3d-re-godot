@@ -8,12 +8,12 @@ func enter() -> void:
 
 
 func process_update(_delta: float) -> void:
-	# 切换武器
+	# 直接举起武器
 	if Input.is_action_just_pressed("主武器键"):
-		_try_switch_weapon("primary")
+		_try_raise_weapon("primary")
 		return
 	if Input.is_action_just_pressed("副武器键"):
-		_try_switch_weapon("secondary")
+		_try_raise_weapon("secondary")
 		return
 
 	# 使用消耗品
@@ -44,10 +44,12 @@ func _try_weapon_state() -> void:
 		transition_requested.emit(wd.weapon_state_name)
 
 
-func _try_switch_weapon(slot: String) -> void:
-	if Global.switch_to_slot(slot):
-		# 切换成功，无其他操作（下次举起武器会用新武器）
-		pass
+func _try_raise_weapon(slot: String) -> void:
+	var wd: WeaponData = Global.get_equipped_weapon(slot)
+	if not wd or wd.weapon_state_name.is_empty():
+		return
+	Global.active_weapon_slot = slot
+	transition_requested.emit(wd.weapon_state_name)
 
 
 func physics_update(delta: float) -> void:

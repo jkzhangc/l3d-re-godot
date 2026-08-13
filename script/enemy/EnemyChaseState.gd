@@ -1,4 +1,4 @@
-extends State
+class_name EnemyChaseState extends State
 ## 追击玩家 — A* 寻路（Godot 内置 AStarGrid2D）+ 调试输出 + 路径可视化
 ##
 ## 网格分辨率：32×32 像素（原生图块分辨率）
@@ -17,7 +17,7 @@ var _fallback_mode: bool = false  ## 降级模式：连续失败后切到直接�
 
 # ── A* 网格缓存（静态：所有敌人共享，只查一次）──
 static var _tile_walk_cache: Dictionary = {}  ## Vector2i → bool — 地图格子缓存（32×32 分辨率）
-var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
+static var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 static var _astar_grid: AStarGrid2D = null  ## Godot 内置 A* 网格（静态，全图共享）
 static var _grid_building: bool = false   ## 是否正在分帧构建网格
@@ -274,7 +274,21 @@ func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vecto
 # A* 寻路（Godot 内置 AStarGrid2D）
 # ═══════════════════════════════════════
 
-func _ensure_astar_grid() -> bool:
+static func prebuild() -> void:
+	## 场景加载后立即启动网格构建（由 GameInit 延迟调用）。
+	## 避免首个敌人进入追击时才同步创建 AStarGrid2D（update() 为一次性同步开销，
+	## 大图会卡一帧），把一次性成本前移到加载阶段。
+	## _ensure_astar_grid 内部已处理：已就绪直接返回、场景切换后自动重新发现图块。
+	_ensure_astar_grid()
+
+
+static func tick_build() -> void:
+	## 每物理帧驱动网格分帧构建（由 GameInit 调用）。
+	## 敌人尚未追击时也能推进构建；闲置时仅一次布尔判断，开销可忽略。
+	_build_step()
+
+
+static func _ensure_astar_grid() -> bool:
 	## 确保 AStarGrid2D 已构建。返回 true 表示就绪（立即可用）。
 	## 如果尚未构建，启动分帧构建并返回 false（调用者应使用降级追击）。
 	if _astar_grid and not _tilemaps.is_empty() and is_instance_valid(_tilemaps[0]):
@@ -331,7 +345,7 @@ func _ensure_astar_grid() -> bool:
 	return false  ## 构建中，稍后才就绪
 
 
-func _build_step() -> void:
+static func _build_step() -> void:
 	## 每帧处理 BUILD_CHUNK 个格子，分帧完成障碍物标记。
 	## 可被多次调用，同帧内只执行一次。
 	if not _grid_building or not _astar_grid:
@@ -458,7 +472,8 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	_clear_enemy_obstacles(blocked_cells)
 
 	if id_path.is_empty():
-		print("[A*] ❌ 无路径！")
+		if Global.debug_visuals:
+			print("[A*] ❌ 无路径！")
 		character._debug_path_found = false
 		character._debug_astar_iters = 0
 		_first_path = false
@@ -472,9 +487,10 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	# 平滑路径（共线简化 + 碰撞体感知推墙）
 	var smoothed: Array[Vector2] = _smooth_path(grid_path)
 
-	print("[A*] ✅ 找到路径！原始=%d 平滑后=%d" % [grid_path.size(), smoothed.size()])
-	if smoothed.size() > 0:
-		print("[A*]   起点: (%.0f, %.0f)  终点: (%.0f, %.0f)" % [smoothed[0].x, smoothed[0].y, smoothed[smoothed.size()-1].x, smoothed[smoothed.size()-1].y])
+	if Global.debug_visuals:
+		print("[A*] ✅ 找到路径！原始=%d 平滑后=%d" % [grid_path.size(), smoothed.size()])
+		if smoothed.size() > 0:
+			print("[A*]   起点: (%.0f, %.0f)  终点: (%.0f, %.0f)" % [smoothed[0].x, smoothed[0].y, smoothed[smoothed.size()-1].x, smoothed[smoothed.size()-1].y])
 
 	character._debug_path_found = true
 	character._debug_astar_iters = 0  ## AStarGrid2D 不暴露迭代数
@@ -548,12 +564,12 @@ func _push_from_walls(world_path: Array[Vector2]) -> Array[Vector2]:
 # 网格工具
 # ═══════════════════════════════════════
 
-func _find_all_tilemaps() -> void:
-	var tree: SceneTree = character.get_tree()
-	if tree:
-		_search_tilemaps(tree.root)
+static func _find_all_tilemaps() -> void:
+	var main_loop := Engine.get_main_loop()
+	if main_loop is SceneTree:
+		_search_tilemaps((main_loop as SceneTree).root)
 
-func _search_tilemaps(node: Node) -> void:
+static func _search_tilemaps(node: Node) -> void:
 	if node is TileMapLayer:
 		_tilemaps.append(node)
 	for child in node.get_children():
@@ -589,13 +605,13 @@ func _find_nearest_walkable(pos: Vector2i) -> Vector2i:
 # 可行走性检测（32×32 原生图块 + 碰撞多边形中心检测）
 # ═══════════════════════════════════════
 
-func _is_walkable(gp: Vector2i) -> bool:
+static func _is_walkable(gp: Vector2i) -> bool:
 	## 以实际图块碰撞体为准：Wall 层整块阻挡，Decor/Upper 按碰撞多边形判定
 	##
 	## 策略：
 	## - Ground/Floor 图块存在 → 基础可行走
 	## - Wall 层图块存在 → 强制阻挡
-	## - Decor/Upper 碰撞图块且中心在碰撞内 → 阻挡（墙体/柱子）
+	## - Decor/Upper 有碰撞体 → 阻挡（墙体/柱子，含半格边缘变体）
 	##   例外：狭窄通道豁免 — 如果该格被两面相对的墙夹在中间
 	##   （上下是墙+左右是地面，或左右是墙+上下是地面），
 	##   则判定为 autotile 边缘变体进入通道格 → 不阻挡，
@@ -630,8 +646,8 @@ func _is_walkable(gp: Vector2i) -> bool:
 			has_wall_layer = true
 
 		elif "upper" in name_lower or "decor" in name_lower:
-			if _tile_has_collision(td) and _tile_center_in_collision(td):
-				# 碰撞覆盖中心 → 先标记为阻挡
+			if _tile_has_collision(td):
+				# 有碰撞体即阻挡（含半格边缘变体，避免敌人穿过墙边）
 				blocked_by_decor_collision = true
 
 		elif "ground" in name_lower or "floor" in name_lower:
@@ -653,33 +669,82 @@ func _is_walkable(gp: Vector2i) -> bool:
 	return walkable
 
 
-func _is_sandwiched_passage(gp: Vector2i) -> bool:
-	## 检查 gp 是否处于"两面墙夹中间"的狭窄通道中。
-	## 条件：上下是墙（decor 碰撞或 wall 层）+ 左右是地面（无阻挡）
-	##       或 左右是墙 + 上下是地面（无阻挡）
-	## 用简单层检测（不调 _is_walkable，避免递归依赖 _tile_walk_cache）。
-	## 注意：地面侧必须"有地面且无阻挡图块"，否则墙格本身也会被错误解封。
+const ORIENT_NONE: int = 0
+const ORIENT_HORIZONTAL: int = 1  ## 水平细条：宽度满、高度薄（上下墙漏进来的边）
+const ORIENT_VERTICAL: int = 2    ## 垂直细条：高度满、宽度薄（左右墙漏出来的边）
+const ORIENT_FULL: int = 3        ## 满格/整块/角落碰撞
+
+
+static func _collision_orientation(gp: Vector2i) -> int:
+	## 返回该格自身 decor/upper 碰撞体的方向分类，用于区分「通道漏边」与「薄墙本身」。
+	var found: bool = false
+	var minx := 1e9
+	var maxx := -1e9
+	var miny := 1e9
+	var maxy := -1e9
+	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
+		var td: TileData = tm.get_cell_tile_data(gp)
+		if td == null:
+			continue
+		var name_lower: String = tm.name.to_lower()
+		if not ("upper" in name_lower or "decor" in name_lower):
+			continue
+		for pi in range(td.get_collision_polygons_count(0)):
+			found = true
+			for p in td.get_collision_polygon_points(0, pi):
+				minx = minf(minx, p.x)
+				maxx = maxf(maxx, p.x)
+				miny = minf(miny, p.y)
+				maxy = maxf(maxy, p.y)
+	if not found:
+		return ORIENT_NONE
+	var w: float = maxx - minx
+	var h: float = maxy - miny
+	if w >= 28.0 and h >= 28.0:
+		return ORIENT_FULL
+	if w >= 28.0 and h < 20.0:
+		return ORIENT_HORIZONTAL
+	if h >= 28.0 and w < 20.0:
+		return ORIENT_VERTICAL
+	return ORIENT_FULL
+
+
+static func _is_sandwiched_passage(gp: Vector2i) -> bool:
+	## 检查 gp 是否处于"两面墙夹中间"的狭窄通道中（1 格宽通道豁免）。
+	##
+	## 关键：只有当该格自身碰撞体是「垂直于通道方向的细条」（autotile 边缘变体
+	## 漏进通道格）时才豁免；若碰撞体是「沿通道方向的细条」（薄墙本身），则不豁免。
+	## 例：上下是墙、左右是地面（水平通道）→ 该格碰撞体必须是"水平细条"（上下墙漏进来的边）；
+	## 若该格碰撞体是"垂直细条"（如 x=25 的竖向薄墙），则是墙本身，保持阻挡。
 
 	# 水平通道：上下被阻挡 + 左右是纯地面（有 ground 且 无 blocking）
 	var top_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(0, -1))
 	var bottom_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(0, 1))
 	var left_clear: bool = _cell_has_ground_tile(gp + Vector2i(-1, 0)) and not _cell_has_blocking_tile(gp + Vector2i(-1, 0))
 	var right_clear: bool = _cell_has_ground_tile(gp + Vector2i(1, 0)) and not _cell_has_blocking_tile(gp + Vector2i(1, 0))
-	if top_blocked and bottom_blocked and left_clear and right_clear:
-		return true
 
 	# 垂直通道：左右被阻挡 + 上下是纯地面
 	var left_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(-1, 0))
 	var right_blocked: bool = _cell_has_blocking_tile(gp + Vector2i(1, 0))
 	var top_clear: bool = _cell_has_ground_tile(gp + Vector2i(0, -1)) and not _cell_has_blocking_tile(gp + Vector2i(0, -1))
 	var bottom_clear: bool = _cell_has_ground_tile(gp + Vector2i(0, 1)) and not _cell_has_blocking_tile(gp + Vector2i(0, 1))
-	if left_blocked and right_blocked and top_clear and bottom_clear:
+
+	var orient: int = _collision_orientation(gp)
+
+	# 水平通道：上下墙夹 → 该格碰撞体应为水平细条（上下墙漏进来的边）
+	if top_blocked and bottom_blocked and left_clear and right_clear and orient == ORIENT_HORIZONTAL:
+		return true
+
+	# 垂直通道：左右墙夹 → 该格碰撞体应为垂直细条（左右墙漏出来的边）
+	if left_blocked and right_blocked and top_clear and bottom_clear and orient == ORIENT_VERTICAL:
 		return true
 
 	return false
 
 
-func _cell_has_blocking_tile(at: Vector2i) -> bool:
+static func _cell_has_blocking_tile(at: Vector2i) -> bool:
 	## 检查某格是否有 wall 层图块 或 decor/upper 层碰撞图块（中心在内）
 	for tm in _tilemaps:
 		if not is_instance_valid(tm):
@@ -690,12 +755,12 @@ func _cell_has_blocking_tile(at: Vector2i) -> bool:
 		var name_lower: String = tm.name.to_lower()
 		if "wall" in name_lower:
 			return true
-		if ("upper" in name_lower or "decor" in name_lower) and _tile_has_collision(td) and _tile_center_in_collision(td):
+		if ("upper" in name_lower or "decor" in name_lower) and _tile_has_collision(td):
 			return true
 	return false
 
 
-func _cell_has_ground_tile(at: Vector2i) -> bool:
+static func _cell_has_ground_tile(at: Vector2i) -> bool:
 	## 检查某格是否有 ground/floor 层图块
 	for tm in _tilemaps:
 		if not is_instance_valid(tm):
@@ -707,16 +772,5 @@ func _cell_has_ground_tile(at: Vector2i) -> bool:
 	return false
 
 
-func _tile_has_collision(td: TileData) -> bool:
+static func _tile_has_collision(td: TileData) -> bool:
 	return td.get_collision_polygons_count(0) > 0
-
-
-func _tile_center_in_collision(td: TileData) -> bool:
-	## 检查图块中心 (16,16) 是否落入碰撞多边形内
-	const CENTER: Vector2 = Vector2(16.0, 16.0)
-	var poly_count: int = td.get_collision_polygons_count(0)
-	for pi in range(poly_count):
-		var points: PackedVector2Array = td.get_collision_polygon_points(0, pi)
-		if Geometry2D.is_point_in_polygon(CENTER, points):
-			return true
-	return false

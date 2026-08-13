@@ -1,0 +1,51 @@
+[gd_scene format=3 uid="uid://djp51qjxkq3w4"]
+
+[ext_resource type="Script" uid="uid://dsirg67uxuqei" path="res://script/ui/combat_hud.gd" id="1_708nl"]
+[ext_resource type="Texture2D" uid="uid://dr8abwp68b83l" path="res://art/Ui/ＨＰバーＴ.png" id="2_5nspm"]
+[ext_resource type="Texture2D" uid="uid://bn08w6gxd16qc" path="res://art/Ui/ＨＰメーターＴ.png" id="3_aeqfj"]
+[ext_resource type="Texture2D" uid="uid://chm1obiay2ndt" path="res://art/Ui/回復薬×０.png" id="4_q34ws"]
+
+[node name="CombatHUD" type="CanvasLayer" unique_id=410597860]
+script = ExtResource("1_708nl")
+
+[node name="HPFill" type="TextureRect" parent="." unique_id=1592456375]
+offset_left = 8.0
+offset_top = 42.0
+offset_right = 218.0
+offset_bottom = 126.0
+mouse_filter = 2
+texture = ExtResource("3_aeqfj")
+expand_mode = 1
+
+[node name="HPFrame" type="TextureRect" parent="." unique_id=330565773]
+offset_left = 6.0
+offset_top = 6.0
+offset_right = 6.0
+offset_bottom = 6.0
+mouse_filter = 2
+texture = ExtResource("2_5nspm")
+
+[node name="MedkitCount" type="TextureRect" parent="." unique_id=306595916]
+offset_left = 10.0
+offset_top = 96.0
+offset_right = 10.0
+offset_bottom = 96.0
+mouse_filter = 2
+texture = ExtResource("4_q34ws")
+expand_mode = 1
+
+[node name="PrimaryWeaponIcon" type="TextureRect" parent="." unique_id=1987563237]
+offset_left = 1194.0
+offset_top = 6.0
+offset_right = 1194.0
+offset_bottom = 6.0
+mouse_filter = 2
+expand_mode = 1
+
+[node name="SecondaryWeaponIcon" type="TextureRect" parent="." unique_id=1922084394]
+offset_left = 1194.0
+offset_top = 56.0
+offset_right = 1194.0
+offset_bottom = 56.0
+mouse_filter = 2
+expand_mode = 1

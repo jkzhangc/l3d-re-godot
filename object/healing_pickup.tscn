@@ -1,0 +1,19 @@
+[gd_scene format=3 uid="uid://wkq6jtn2ewvb"]
+
+[ext_resource type="Script" uid="uid://34kj0v461dqe" path="res://script/healing_pickup.gd" id="1_se1gw"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_g0v8u"]
+radius = 24.0
+
+[node name="HealingPickup" type="Node2D" unique_id=1138821195]
+script = ExtResource("1_se1gw")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1216217114]
+position = Vector2(0, -8)
+
+[node name="Area2D" type="Area2D" parent="." unique_id=424990390]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D" unique_id=791555126]
+shape = SubResource("CircleShape2D_g0v8u")

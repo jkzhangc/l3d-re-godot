@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="3_ewivl"]
 [ext_resource type="AudioStream" uid="uid://ct6wqa836p8ov" path="res://sound/ナイフ.wav" id="3_idirh"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_kp675"]
+[ext_resource type="Texture2D" uid="uid://dmjow6qlmi38s" path="res://art/Ui/装備アイコンナイフ.png" id="icon"]
 
 [resource]
 script = ExtResource("1")
@@ -29,13 +30,10 @@ hit_effect_anim = ExtResource("3_ewivl")
 attack_char_sequence = Array[int]([3, 4, 1, 2])
 melee_attack_char_sequence = Array[int]([3, 4, 5, 2])
 melee_attack_frame_durations = Array[float]([0.1, 0.1, 0.2, 0.1])
-shove_char_sequence = Array[int]([0, 1, 1])
-shove_frame_duration = 0.05
-shove_knockback_force = 300.0
-shove_knockback_duration = 2.0
 item_id = "knife_01"
 item_name = "小刀"
 item_type = 3
 description = "一把锋利的小刀。近战攻击。"
+icon = ExtResource("icon")
 sell_price = 50
 max_stack = 1

@@ -12,6 +12,7 @@
 [ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_oxqje"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_dijym"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_kl6un"]
+[ext_resource type="Texture2D" uid="uid://8wg5txttqrg3" path="res://art/Ui/装備アイコンハンドガン.png" id="icon"]
 
 [resource]
 script = ExtResource("1")
@@ -41,5 +42,6 @@ item_id = "pistol_01"
 item_name = "手枪"
 item_type = 3
 description = "一把普通的手枪。远程攻击。"
+icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1

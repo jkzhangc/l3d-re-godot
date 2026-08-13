@@ -1,7 +1,6 @@
 [gd_scene format=4 uid="uid://c3berb5en8a0a"]
 
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="1_8yfgv"]
-[ext_resource type="Script" uid="uid://mlviemy774o1" path="res://script/ui/hud.gd" id="1_i6egx"]
 [ext_resource type="TileSet" uid="uid://bxrd7uaa3llxi" path="res://tres/街道A5.tres" id="1_lnfbi"]
 [ext_resource type="TileSet" uid="uid://b4cei0e6of7ya" path="res://tres/街道B.tres" id="2_wtyt8"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="3_wtyt8"]
@@ -16,12 +15,9 @@
 [ext_resource type="Texture2D" uid="uid://bn08w6gxd16qc" path="res://art/Ui/ＨＰメーターＴ.png" id="9_03brr"]
 [ext_resource type="Texture2D" uid="uid://dr8abwp68b83l" path="res://art/Ui/ＨＰバーＴ.png" id="9_oqc8j"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="10_cam"]
+[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="16_1a117"]
 
 [node name="Test" type="Node2D" unique_id=1940995351]
-
-[node name="HUD" type="CanvasLayer" parent="." unique_id=1183092489]
-script = ExtResource("1_i6egx")
-hp_label_offset = Vector2(67, 7)
 
 [node name="GameInit" type="Node" parent="." unique_id=441372598]
 script = ExtResource("1_8yfgv")
@@ -111,11 +107,11 @@ position = Vector2(236, 47)
 [node name="Menu" parent="." unique_id=1067404182 instance=ExtResource("4_gh60l")]
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=627066447]
+zoom = Vector2(2, 2)
 script = ExtResource("10_cam")
 follow_speed = 6.0
 bounds_margin = 0.0
 bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-zoom = Vector2(2, 2)
 
 [node name="UI" type="Control" parent="Camera2D" unique_id=1069130550]
 visible = false
@@ -137,3 +133,5 @@ offset_top = -240.0
 offset_right = -106.0
 offset_bottom = -84.0
 texture = ExtResource("9_oqc8j")
+
+[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("16_1a117")]

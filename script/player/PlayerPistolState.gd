@@ -76,24 +76,21 @@ func process_update(delta: float) -> void:
 			if move_dir != Vector2.ZERO:
 				character.update_facing(move_dir)
 
-			# 切换到主武器（已是主武器 → 重进举起状态刷新）
+			# 主武器键：同槽位→放下；不同槽位→切换并举起
 			if Input.is_action_just_pressed("主武器键"):
-				if Global.switch_to_slot("primary"):
-					var new_state: String = Global.get_active_weapon_state_name()
-					if not new_state.is_empty():
-						transition_requested.emit(new_state)
+				if Global.active_weapon_slot == "primary":
+					_begin_lower()
 				else:
-					# 已在主武器槽 → 重新进入举起状态
-					transition_requested.emit("Pistol")
+					_try_raise_weapon("primary")
 				return
 
-			# 切换到副武器
+			# 副武器键：同槽位→放下；不同槽位→切换并举起
 			if Input.is_action_just_pressed("副武器键"):
-				if Global.switch_to_slot("secondary"):
-					var state_name: String = Global.get_active_weapon_state_name()
-					if not state_name.is_empty():
-						transition_requested.emit(state_name)
-					return
+				if Global.active_weapon_slot == "secondary":
+					_begin_lower()
+				else:
+					_try_raise_weapon("secondary")
+				return
 
 			# 使用消耗品
 			if Input.is_action_just_pressed("治疗品键"):
@@ -161,3 +158,11 @@ func _play_sound(stream: AudioStream) -> void:
 
 func _get_weapon() -> WeaponData:
 	return Global.get_active_weapon()
+
+
+func _try_raise_weapon(slot: String) -> void:
+	var wd: WeaponData = Global.get_equipped_weapon(slot)
+	if not wd or wd.weapon_state_name.is_empty():
+		return
+	Global.active_weapon_slot = slot
+	transition_requested.emit(wd.weapon_state_name)

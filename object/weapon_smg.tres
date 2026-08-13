@@ -12,6 +12,7 @@
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="7_nmfdk"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
+[ext_resource type="Texture2D" uid="uid://drdndudt6q038" path="res://art/Ui/装備アイコンサブマシンガン.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_o8qhj"]
 script = ExtResource("2_a1cwu")
@@ -54,5 +55,6 @@ item_id = "smg_01"
 item_name = "冲锋枪"
 item_type = 3
 description = "一把普通的手枪。远程攻击。"
+icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1

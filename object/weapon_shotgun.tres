@@ -14,6 +14,7 @@
 [ext_resource type="AudioStream" uid="uid://8dyndnamhh5n" path="res://sound/ジッポライター1.ogg" id="8_45qvp"]
 [ext_resource type="AudioStream" uid="uid://j81banot3gk0" path="res://sound/ショットガン_pomp.ogg" id="8_juw25"]
 [ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="8_sw0ir"]
+[ext_resource type="Texture2D" uid="uid://cmvvyglu8tiua" path="res://art/Ui/装備アイコンショットガン.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_8fi51"]
 script = ExtResource("2_sw0ir")
@@ -83,5 +84,6 @@ item_id = "shotgun_01"
 item_name = "霰弹枪"
 item_type = 3
 description = "一把普通的霰弹枪。远程攻击。"
+icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1

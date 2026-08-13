@@ -3,12 +3,9 @@
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="1"]
 [ext_resource type="PackedScene" path="res://scene/menu.tscn" id="3"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="4"]
-[ext_resource type="Script" path="res://script/ui/hud.gd" id="5_hud"]
+[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="4_brvut"]
 
 [node name="Main" type="Node2D" unique_id=797713950]
-
-[node name="HUD" type="CanvasLayer" parent="."]
-script = ExtResource("5_hud")
 
 [node name="GroundLayer" type="TileMapLayer" parent="." unique_id=1925468537]
 
@@ -27,3 +24,5 @@ position = Vector2(160, 160)
 position = Vector2(160, 160)
 
 [node name="Menu" parent="." unique_id=382467553 instance=ExtResource("3")]
+
+[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("4_brvut")]

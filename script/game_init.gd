@@ -14,6 +14,9 @@ func _ready() -> void:
 		"有" if not Global.checkpoint.is_empty() else "无"
 	])
 	_spawn_switch_manager()
+	# 预构建 A* 寻路网格（延迟到本帧节点就绪后），
+	# 避免首个敌人追击时才同步创建 AStarGrid2D 造成卡顿
+	call_deferred("_prebuild_astar")
 
 
 func _spawn_switch_manager() -> void:
@@ -35,3 +38,13 @@ func _spawn_switch_manager() -> void:
 	tree.current_scene.call_deferred("add_child", mgr)
 	var log_cb: Callable = func(): print("[GameInit] CharacterSwitchManager 已创建 team=%d" % Global.get_team_size())
 	log_cb.call_deferred()
+
+
+func _prebuild_astar() -> void:
+	## 场景树就绪后启动 A* 网格构建（一次性同步 update() 前移到加载阶段）
+	EnemyChaseState.prebuild()
+
+
+func _physics_process(_delta: float) -> void:
+	## 每物理帧驱动 A* 网格分帧构建，敌人未追击时也能推进；闲置时开销可忽略
+	EnemyChaseState.tick_build()
