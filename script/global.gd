@@ -79,6 +79,7 @@ var active_weapon_slot: String = "primary"
 var healing_item: ItemData = null
 var healing_item_count: int = 0  ## 治疗品数量（医疗包 UI 显示）
 var support_item: ItemData = null
+var throwable: ThrowableData = null           ## 当前投掷物（单槽位，数字5键使用）
 
 # ═══════════════════════════════════════
 # 弹药 & 弹夹
@@ -160,6 +161,7 @@ func capture_checkpoint() -> void:
 		"healing_item": healing_item,
 		"healing_item_count": healing_item_count,
 		"support_item": support_item,
+		"throwable": throwable,
 		"gold": gold,
 		"team": team.duplicate(true),
 		"current_team_index": current_team_index,
@@ -192,6 +194,7 @@ func restore_checkpoint() -> void:
 	healing_item = checkpoint.get("healing_item")
 	healing_item_count = checkpoint.get("healing_item_count", 0)
 	support_item = checkpoint.get("support_item")
+	throwable = checkpoint.get("throwable")
 	gold = checkpoint.get("gold", 0)
 	# 恢复队伍
 	if checkpoint.has("team"):
@@ -228,6 +231,7 @@ func _apply_team_member_to_global(index: int) -> void:
 	healing_item = member.get("healing_item")
 	healing_item_count = member.get("healing_item_count", 0)
 	support_item = member.get("support_item")
+	throwable = member.get("throwable")
 	inventory = member.get("inventory", []).duplicate()
 
 
@@ -245,6 +249,7 @@ func _save_global_to_team_member(index: int) -> void:
 	member["healing_item"] = healing_item
 	member["healing_item_count"] = healing_item_count
 	member["support_item"] = support_item
+	member["throwable"] = throwable
 	member["inventory"] = inventory.duplicate()
 
 
@@ -546,6 +551,11 @@ func pickup_consumable(item: ItemData) -> void:
 				print("[Global] 替换辅助品: %s → %s" % [support_item.item_name, item.item_name])
 			support_item = item
 			print("[Global] 装备辅助品: %s" % item.item_name)
+		ItemData.ItemType.THROWABLE:
+			if throwable:
+				print("[Global] 替换投掷物: %s → %s" % [throwable.item_name, item.item_name])
+			throwable = item as ThrowableData
+			print("[Global] 装备投掷物: %s" % item.item_name)
 
 
 # ═══════════════════════════════════════
@@ -610,6 +620,7 @@ func init_new_game() -> void:
 	healing_item = null
 	healing_item_count = 0
 	support_item = null
+	throwable = null
 	weapon_magazines.clear()
 	gold = 0
 	player_hp = 200.0

@@ -12,6 +12,7 @@
 [ext_resource type="Script" uid="uid://byyfyvj4w6c1e" path="res://script/player/PlayerKnifeAttackState.gd" id="11"]
 [ext_resource type="Script" uid="uid://dsglyhws4ejp8" path="res://script/player/PlayerReloadState.gd" id="12"]
 [ext_resource type="Script" uid="uid://cctexj4rv8a0c" path="res://script/player/PlayerShoveState.gd" id="13"]
+[ext_resource type="Script" path="res://script/player/PlayerThrowableState.gd" id="15"]
 
 [sub_resource type="RectangleShape2D" id="5_shape"]
 size = Vector2(24, 29)
@@ -85,3 +86,6 @@ script = ExtResource("8")
 
 [node name="SmgAttack" type="Node" parent="StateMachine" unique_id=846857311]
 script = ExtResource("10")
+
+[node name="Throwable" type="Node" parent="StateMachine" unique_id=3015754556]
+script = ExtResource("15")

@@ -24,6 +24,11 @@ func process_update(_delta: float) -> void:
 		Global.use_support_item()
 		return
 
+	# 投掷物
+	if Input.is_action_just_pressed("投掷物键"):
+		_try_throwable()
+		return
+
 	if Input.is_action_just_pressed("举起放下武器键"):
 		_try_weapon_state()
 		return
@@ -50,6 +55,11 @@ func _try_raise_weapon(slot: String) -> void:
 		return
 	Global.active_weapon_slot = slot
 	transition_requested.emit(wd.weapon_state_name)
+
+
+func _try_throwable() -> void:
+	if Global.throwable:
+		transition_requested.emit("Throwable")
 
 
 func physics_update(delta: float) -> void:

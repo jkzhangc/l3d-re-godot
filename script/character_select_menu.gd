@@ -300,6 +300,7 @@ func _confirm_team() -> void:
 			"position": Vector2.ZERO,
 			"healing_item": null,
 			"support_item": null,
+			"throwable": null,
 			"inventory": [],
 		}
 		Global.team.append(member)

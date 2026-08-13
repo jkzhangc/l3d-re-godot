@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ThrowableData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/throwable_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン手榴弾.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+icon = ExtResource("2")
+item_id = "grenade_01"
+item_name = "手雷"
+item_type = 8
+description = "投掷后爆炸，对范围内敌人造成伤害。"
+effect_text = "爆炸伤害"
+sell_price = 50
+explosion_radius = 2
+damage = 50.0

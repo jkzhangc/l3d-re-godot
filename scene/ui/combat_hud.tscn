@@ -61,7 +61,6 @@ offset_right = 67.0
 offset_bottom = 116.0
 script = ExtResource("6_aeqfj")
 text = "0"
-text_font_size = 32
 font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 color_shader_path_override = "res://shader/text_color.gdshader"

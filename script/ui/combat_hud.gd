@@ -73,7 +73,8 @@ func _update_hp() -> void:
 
 func _configure_tp_label() -> void:
 	# TP 数值标签（场景节点 $TPLabel）—— 与伤害数字同款字体/着色器
-	# 资源路径/字号/位置在场景里设置；这里只设效果属性（_ready 阶段覆盖 _enter_tree 的 Global 默认值）
+	# 资源路径/位置在场景里设置；字号和效果属性在代码里设置（_ready 阶段覆盖 _enter_tree 的 Global 默认值）
+	tp_label.text_font_size = 32
 	tp_label.use_gradient = true
 	tp_label.color_index = 1
 	tp_label.color_row = 0

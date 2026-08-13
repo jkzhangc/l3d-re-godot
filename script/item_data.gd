@@ -10,6 +10,7 @@ enum ItemType {
 	AMMO,         ## 弹药
 	HEALING,      ## 治疗品（医疗包等，数字3键使用）
 	SUPPORT,      ## 辅助品（药品等，数字4键使用）
+	THROWABLE,    ## 投掷物（手雷/燃烧瓶，数字5键使用）
 }
 
 @export var item_id: String = ""              ## 唯一标识
@@ -53,4 +54,5 @@ func get_type_name() -> String:
 		ItemType.AMMO:       return "弹药"
 		ItemType.HEALING:    return "治疗品"
 		ItemType.SUPPORT:    return "辅助品"
+		ItemType.THROWABLE:  return "投掷物"
 	return "未知"
