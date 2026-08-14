@@ -3,7 +3,7 @@ extends CanvasLayer
 ##
 ## 每个 UI 图都是一个 TextureRect 子节点，可在编辑器里直接拖动改位置。
 
-const MEDKIT_TEXTS: Array[Texture2D] = [
+const SPRAY_TEXTS: Array[Texture2D] = [
 	preload("res://art/Ui/回復薬×０.png"),
 	preload("res://art/Ui/回復薬×１.png"),
 	preload("res://art/Ui/回復薬×２.png"),
@@ -24,7 +24,7 @@ const MEDKIT_TEXTS: Array[Texture2D] = [
 
 @onready var hp_frame: TextureRect = $HPFrame
 @onready var hp_fill: TextureRect = $HPFill
-@onready var medkit_count: TextureRect = $MedkitCount
+@onready var spray_count: TextureRect = $SprayCount
 @onready var primary_icon: TextureRect = $PrimaryWeaponIcon
 @onready var secondary_icon: TextureRect = $SecondaryWeaponIcon
 @onready var tp_label: GradientLabel = $TPLabel
@@ -48,7 +48,7 @@ func _process(_delta: float) -> void:
 func refresh() -> void:
 	_update_hp()
 	_update_tp()
-	_update_medkit()
+	_update_spray()
 	_update_weapons()
 
 
@@ -92,11 +92,11 @@ func _update_tp() -> void:
 		tp_label.text = "%d" % tp
 
 
-func _update_medkit() -> void:
-	var n: int = clampi(Global.healing_item_count, 0, MEDKIT_TEXTS.size() - 1)
-	if medkit_count:
-		medkit_count.texture = MEDKIT_TEXTS[n]
-		medkit_count.size = MEDKIT_TEXTS[n].get_size()
+func _update_spray() -> void:
+	var n: int = clampi(Global.healing_item_count, 0, SPRAY_TEXTS.size() - 1)
+	if spray_count:
+		spray_count.texture = SPRAY_TEXTS[n]
+		spray_count.size = SPRAY_TEXTS[n].get_size()
 
 
 func _update_weapons() -> void:
