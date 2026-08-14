@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1")
-item_id = "medkit_01"
+item_id = "first_aid_spray"
 item_name = "急救喷雾"
 item_type = 6
 description = "急救喷雾。恢复大量生命值。"
