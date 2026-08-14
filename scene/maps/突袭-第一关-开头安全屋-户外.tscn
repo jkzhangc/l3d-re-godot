@@ -12,7 +12,7 @@
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="7_vqqwu"]
 [ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="8_57ke7"]
 [ext_resource type="PackedScene" uid="uid://wkq6jtn2ewvb" path="res://object/healing_pickup.tscn" id="10_wqyqx"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_medkit.tres" id="11_60l2m"]
+[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="11_60l2m"]
 [ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="11_caxuo"]
 [ext_resource type="Resource" path="res://object/item_tp_potion.tres" id="12_60l2m"]
 [ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="12_bktjj"]
