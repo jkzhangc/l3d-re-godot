@@ -12,11 +12,11 @@
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="7_vqqwu"]
 [ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="8_57ke7"]
 [ext_resource type="PackedScene" uid="uid://wkq6jtn2ewvb" path="res://object/healing_pickup.tscn" id="10_wqyqx"]
-[ext_resource type="Resource" uid="uid://ca3lag5iq3hd" path="res://object/item_first_aid_spray.tres" id="11_60l2m"]
+[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_medkit.tres" id="11_60l2m"]
 [ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="11_caxuo"]
 [ext_resource type="Resource" path="res://object/item_tp_potion.tres" id="12_60l2m"]
 [ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="12_bktjj"]
-[ext_resource type="Resource" path="res://object/item_grenade.tres" id="13_60l2m"]
+[ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="13_60l2m"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="14_caxuo"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="15_60l2m"]
 
@@ -75,7 +75,7 @@ walk_char_index = 6
 walk_direction = 2
 
 [node name="急救喷雾" parent="GroundLayer" unique_id=1138821195 instance=ExtResource("10_wqyqx")]
-position = Vector2(200, 47)
+position = Vector2(-70, 83)
 item = ExtResource("11_60l2m")
 
 [node name="TP恢复品" parent="GroundLayer" unique_id=1726534897 instance=ExtResource("10_wqyqx")]
@@ -83,11 +83,11 @@ position = Vector2(160, 47)
 item = ExtResource("12_60l2m")
 
 [node name="手雷" parent="GroundLayer" unique_id=1726534898 instance=ExtResource("10_wqyqx")]
-position = Vector2(120, 47)
+position = Vector2(97, 100)
 item = ExtResource("13_60l2m")
 
 [node name="燃烧瓶" parent="GroundLayer" unique_id=1726534899 instance=ExtResource("10_wqyqx")]
-position = Vector2(240, 47)
+position = Vector2(155, 98)
 item = ExtResource("15_60l2m")
 
 [node name="DecorLayer" type="TileMapLayer" parent="." unique_id=1677088665]

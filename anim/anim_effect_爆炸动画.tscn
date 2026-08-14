@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://bg4606rwevqu5"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_nfbnn"]
+[ext_resource type="Texture2D" uid="uid://c81kvnu17mp51" path="res://art/Animations/爆発リメイク.png" id="2_w3yvr"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
+script = ExtResource("1_nfbnn")
+texture = ExtResource("2_w3yvr")
+fps = 21.5
+animation_scale = Vector2(0.5, 0.5)
+frame_sequence = Array[int]([0, 1, 2, 3, 4])

@@ -3,8 +3,8 @@ extends State
 ##
 ## 「投掷物键」(5) 进入；再次按 5 或按主/副武器键放下。
 ## 按住「确定键」瞄准，松开投掷；按住时按「取消键」取消瞄准。
-## 「投掷加格键」(W) / 「投掷减格键」(E) 调终点格数（0 ~ throw_range_max）。
-## 瞄准时朝向锁定，但可移动。
+## 「投掷加格键」(A) / 「投掷减格键」(S) 调终点格数（0 ~ throw_range_max）。
+## 举起时朝向跟随移动；按住「确定键」瞄准时朝向锁定，可移动。
 
 const TILE_SIZE: int = 32
 const DEFAULT_RANGE: int = 3
@@ -25,7 +25,6 @@ func enter() -> void:
 		transition_requested.emit("Idle")
 		return
 	character.player_in_weapon_state = true
-	character.lock_facing()
 	_phase = Phase.RAISE
 	_range = DEFAULT_RANGE
 	# 配置了举起行走图 → 切投掷物行走图；否则不显示持物外观
@@ -62,16 +61,20 @@ func _process_ready() -> void:
 		transition_requested.emit("Idle")
 		return
 	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	if move_dir != Vector2.ZERO:
+		character.update_facing(move_dir)
 	character.update_appearance(move_dir != Vector2.ZERO, false)
-	# 确定键 → 进入瞄准
+	# 确定键 → 锁定朝向并进入瞄准
 	if Input.is_action_just_pressed("确定键"):
+		character.lock_facing()
 		_phase = Phase.AIM
 		_create_aim_indicator()
 
 
 func _process_aim() -> void:
-	# 按住攻击键时按取消键 → 取消瞄准
+	# 按住攻击键时按取消键 → 取消瞄准（解锁朝向）
 	if Input.is_action_just_pressed("取消键"):
+		character.unlock_facing()
 		_phase = Phase.READY
 		_remove_aim_indicator()
 		return
