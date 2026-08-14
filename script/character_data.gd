@@ -42,6 +42,10 @@ class_name CharacterData extends Resource
 ## 若某武器的键不存在，渲染时回退到 WeaponData.weapon_walk_texture
 @export var weapon_walk_textures: Dictionary = {}
 
+@export_group("投掷物行走图")
+## 该角色在投掷物举起行走图（ThrowableData.held_walk_texture）中的角色索引
+@export var throwable_walk_char_idx: int = 0
+
 @export_group("武器限制")
 ## 允许使用的主武器 item_id 列表。空数组=所有主武器允许
 @export var allowed_primary_weapons: Array[String] = []

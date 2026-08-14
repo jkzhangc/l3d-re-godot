@@ -9,7 +9,7 @@ extends Node
 @export var check_interval: float = 10.0          ## 检查间隔（秒）
 @export var fail_safe_cooldown: float = 180.0     ## 降级投放冷却（秒）
 
-@export var hp_medkit_threshold: float = 0.5      ## HP < 50% 触发医疗包投放
+@export var hp_medkit_threshold: float = 0.5      ## HP < 50% 触发急救喷雾投放
 @export var hp_pills_threshold: float = 0.3       ## HP < 30% 触发药品投放
 @export var ammo_threshold: float = 0.3           ## 弹药 < 30% 触发弹药投放
 @export var no_secondary_threshold: float = 0.8   ## 无副武器时投放概率（80%）
@@ -72,7 +72,7 @@ func _evaluate_and_spawn(player: Node2D) -> void:
 		item = "药品"
 		probability = 0.4
 	elif hp_ratio < hp_medkit_threshold and not _has_healing_item():
-		item = "医疗包"
+		item = "急救喷雾"
 		probability = 0.6
 	elif ammo_ratio < ammo_threshold:
 		item = "弹药堆"

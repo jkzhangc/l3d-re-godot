@@ -16,7 +16,6 @@ enum Phase { RAISE, READY, AIM }
 var _phase: int = Phase.RAISE
 var _td: ThrowableData = null
 var _range: int = DEFAULT_RANGE
-var _held_sprite: Sprite2D = null
 var _aim_indicator: Node2D = null
 
 
@@ -29,7 +28,9 @@ func enter() -> void:
 	character.lock_facing()
 	_phase = Phase.RAISE
 	_range = DEFAULT_RANGE
-	_create_held_sprite()
+	# 配置了举起行走图 → 切投掷物行走图；否则不显示持物外观
+	if _td.held_walk_texture:
+		character.enter_throwable_mode(_td)
 	character.velocity = Vector2.ZERO
 	character.update_appearance(false, false)
 
@@ -37,7 +38,7 @@ func enter() -> void:
 func exit() -> void:
 	character.player_in_weapon_state = false
 	character.unlock_facing()
-	_remove_held_sprite()
+	character.exit_throwable_mode()
 	_remove_aim_indicator()
 
 
@@ -101,28 +102,8 @@ func _throw() -> void:
 	var end: Vector2 = start + dir * (_range * TILE_SIZE)
 	ThrowableProjectile.spawn(_td, start, end, character)
 	Global.throwable = null
-	_remove_held_sprite()
 	_remove_aim_indicator()
 	transition_requested.emit("Idle")
-
-
-func _create_held_sprite() -> void:
-	if not _td:
-		return
-	_held_sprite = Sprite2D.new()
-	_held_sprite.name = "HeldThrowable"
-	_held_sprite.z_index = 2
-	var tex: Texture2D = _td.projectile_texture if _td.projectile_texture else _td.icon
-	if tex:
-		_held_sprite.texture = tex
-	_held_sprite.position = Vector2(0, -28)
-	character.add_child(_held_sprite)
-
-
-func _remove_held_sprite() -> void:
-	if _held_sprite and is_instance_valid(_held_sprite):
-		_held_sprite.queue_free()
-	_held_sprite = null
 
 
 func _create_aim_indicator() -> void:

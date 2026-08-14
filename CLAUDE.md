@@ -283,9 +283,10 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 | 投掷物数据 | ✅ | `ThrowableData extends ItemData`（投掷/爆炸/燃烧参数），ItemType.THROWABLE |
 | 投掷物掉落物 | ✅ | 单槽位 `Global.throwable`，复用 healing_pickup，地图放置手雷/燃烧瓶 |
 | 投掷物使用 | ✅ | 数字5举起 → 按住确定键瞄准（路径+终点）→ 松开投掷；取消键取消 |
+| 举起行走图 | ✅ | `held_walk_texture` + 每角色 `throwable_walk_char_idx`（留空不显示），跟随朝向+踏步 |
 | 调格数 | ✅ | W/E 调节终点格数（0~8，默认3），瞄准时朝向锁定、可移动 |
 | 手雷爆炸 | ✅ | 爆炸半径范围伤害+击退 |
-| 燃烧瓶火海 | ✅ | `FirePatch` 火精灵（天罰キャラチップ.png）填充范围 + 持续灼烧 |
+| 燃烧瓶火海 | ✅ | `FirePatch` 火精灵（天罰キャラチップ.png）填充范围 + 持续灼烧，12 帧完整动画（4方向×3踏步） |
 
 详见 **`投掷物系统.md`**。
 

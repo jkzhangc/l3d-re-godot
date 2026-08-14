@@ -8,7 +8,7 @@ enum ItemType {
 	WEAPON,       ## 武器
 	ARMOR,        ## 防具
 	AMMO,         ## 弹药
-	HEALING,      ## 治疗品（医疗包等，数字3键使用）
+	HEALING,      ## 治疗品（急救喷雾等，数字3键使用）
 	SUPPORT,      ## 辅助品（药品等，数字4键使用）
 	THROWABLE,    ## 投掷物（手雷/燃烧瓶，数字5键使用）
 }

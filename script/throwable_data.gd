@@ -5,6 +5,10 @@ class_name ThrowableData extends ItemData
 @export var throw_range_max: int = 8        ## 最大投掷格数（默认 3 格）
 @export var projectile_texture: Texture2D   ## 飞行中的投掷物精灵（可选，回退 pickup_texture/icon）
 
+@export_group("举起显示")
+## 举起投掷物时的角色行走图精灵表（包含各角色的持物外观）。留空则不显示持物外观
+@export var held_walk_texture: Texture2D
+
 @export_group("爆炸（手雷）")
 @export var explosion_radius: int = 0       ## 爆炸半径（格，0=不爆炸）
 @export var damage: float = 50.0            ## 伤害（爆炸瞬间 / 火焰灼烧）

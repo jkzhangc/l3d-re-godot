@@ -91,6 +91,9 @@ var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
+var _throwable_mode: bool = false           ## 是否处于投掷物举起模式（使用投掷物行走图）
+var _throwable_texture: Texture2D = null    ## 投掷物举起行走图精灵表
+var _throwable_char_idx: int = 0            ## 投掷物举起行走图角色索引
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
@@ -276,6 +279,22 @@ func enter_shove_mode() -> void:
 func exit_shove_mode() -> void:
 	_shove_mode = false
 	_shove_texture = null
+	_refresh_sprite()
+
+
+## 进入投掷物举起模式：切换投掷物行走图（完整持物外观，跟随朝向+踏步）
+func enter_throwable_mode(td: ThrowableData) -> void:
+	_throwable_mode = true
+	_throwable_texture = td.held_walk_texture if td else null
+	_throwable_char_idx = current_character.throwable_walk_char_idx if current_character else 0
+	_refresh_sprite()
+
+
+## 退出投掷物举起模式：恢复普通行走图
+func exit_throwable_mode() -> void:
+	_throwable_mode = false
+	_throwable_texture = null
+	_throwable_char_idx = 0
 	_refresh_sprite()
 
 
@@ -839,6 +858,19 @@ func _refresh_sprite() -> void:
 	if not sprite:
 		return
 	if _is_dying:   ## 死亡后拒绝一切刷新，防止覆盖 _die() 设置的死亡帧
+		return
+
+	# 投掷物举起模式：使用投掷物行走图（跟随朝向+踏步）
+	if _throwable_mode and _throwable_texture:
+		sprite.texture = _throwable_texture
+		var char_idx: int = _throwable_char_idx
+		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
+		var char_col: int = char_idx % CHARS_PER_ROW
+		var char_row: int = char_idx / CHARS_PER_ROW
+		var dir_row: int = DIR_ROWS[_facing]
+		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
+		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
+		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
 		return
 
 	# 武器模式下使用武器纹理和角色索引

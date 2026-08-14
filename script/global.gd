@@ -77,7 +77,7 @@ var active_weapon_slot: String = "primary"
 # 消耗品装备
 # ═══════════════════════════════════════
 var healing_item: ItemData = null
-var healing_item_count: int = 0  ## 治疗品数量（医疗包 UI 显示）
+var healing_item_count: int = 0  ## 治疗品数量（急救喷雾 UI 显示）
 var support_item: ItemData = null
 var throwable: ThrowableData = null           ## 当前投掷物（单槽位，数字5键使用）
 

@@ -7,7 +7,9 @@ const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 const TICK_INTERVAL: float = 1.0    ## 灼烧判定间隔（秒）
-const FRAME_DURATION: float = 0.15  ## 火精灵动画帧间隔
+const FRAME_DURATION: float = 0.1   ## 火精灵动画帧间隔
+const STEP_FRAMES: int = 3          ## 每个方向的踏步帧数（VX Ace 3 列）
+const TOTAL_FRAMES: int = STEP_FRAMES * DIRECTIONS  ## 4方向 × 3帧 = 12 帧完整动画
 
 var _radius: int = 1
 var _duration: float = 5.0
@@ -43,16 +45,19 @@ func _build_fire() -> void:
 			s.region_enabled = true
 			s.position = Vector2(dx * 32 + randf_range(-6.0, 6.0), dy * 32 + randf_range(-6.0, 6.0))
 			s.z_index = 4
-			s.region_rect = _fire_region(randi() % 3)
+			s.region_rect = _fire_region(randi() % TOTAL_FRAMES)
 			add_child(s)
 			_fire_sprites.append(s)
 
 
-func _fire_region(frame: int) -> Rect2:
+func _fire_region(flat: int) -> Rect2:
+	# 完整动画：按帧数先切方向（每 3 帧换一行），再切踏步列
+	var dir: int = flat / STEP_FRAMES
+	var col: int = flat % STEP_FRAMES
 	var char_col: int = 0
 	var char_row: int = 0
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS)  # 朝下那一行
+	var x: int = char_col * (FRAME_W * 3) + col * FRAME_W
+	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir * FRAME_H
 	return Rect2(x, y, FRAME_W, FRAME_H)
 
 
@@ -63,7 +68,7 @@ func _process(delta: float) -> void:
 	_frame_timer += delta
 	if _frame_timer >= FRAME_DURATION:
 		_frame_timer = 0.0
-		_frame = (_frame + 1) % 3
+		_frame = (_frame + 1) % TOTAL_FRAMES
 		for s: Sprite2D in _fire_sprites:
 			s.region_rect = _fire_region(_frame)
 

@@ -1,15 +1,20 @@
 [gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://ca3lag5iq3hd"]
 
 [ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://djh03jwcthe8x" path="res://art/misc/!地面掉落物整合.png" id="2_w7kbw"]
 [ext_resource type="Texture2D" uid="uid://bv8py2fch3op4" path="res://art/Ui/装備アイコン救急箱.png" id="icon"]
 
 [resource]
 script = ExtResource("1")
 item_id = "medkit_01"
-item_name = "医疗包"
+item_name = "急救喷雾"
 item_type = 6
-description = "急救医疗包。恢复大量生命值。"
+description = "急救喷雾。恢复大量生命值。"
 icon = ExtResource("icon")
 effect_text = "回复 +80 HP"
 sell_price = 50
 max_stack = 1
+pickup_texture = ExtResource("2_w7kbw")
+pickup_char_idx = 7
+pickup_direction = 2
+pickup_step_frames = Array[int]([2])

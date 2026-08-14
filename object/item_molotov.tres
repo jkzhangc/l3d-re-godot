@@ -1,17 +1,19 @@
-[gd_resource type="Resource" script_class="ThrowableData" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="ThrowableData" format=3 uid="uid://cffmcbg60hetr"]
 
-[ext_resource type="Script" path="res://script/throwable_data.gd" id="1"]
-[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン火炎瓶.png" id="2"]
+[ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://78tourmhww5x" path="res://art/Ui/装備アイコン火炎瓶.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://b03tvwwyemq4h" path="res://art/Weapon/[2K-VX]-A武器セット１１.png" id="2_q0fks"]
 
 [resource]
 script = ExtResource("1")
-icon = ExtResource("2")
+damage = 10.0
+fire_radius = 2
 item_id = "molotov_01"
 item_name = "燃烧瓶"
 item_type = 8
 description = "投掷后碎裂，在地面燃起一片火海。"
+icon = ExtResource("2")
 effect_text = "火焰灼烧"
 sell_price = 60
-fire_radius = 2
-fire_duration = 5.0
-damage = 10.0
+pickup_texture = ExtResource("2_q0fks")
+pickup_char_idx = 2
