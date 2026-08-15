@@ -1,8 +1,18 @@
 extends Camera2D
 ## 相机跟随 + 地图边界限制。
 ##
-## 以玩家为中心平滑跟随，根据 GroundLayer / DecorLayer 的 tile 范围
-## 自动计算边界，防止镜头移出地图。
+## 基于 Phantom Camera 插件实现：
+##   - 运行时动态创建 PhantomCameraHost + PhantomCamera2D 子节点
+##   - SIMPLE 跟随模式 + 阻尼平滑 + 地图边界限制（显式 limit 四边）
+## 保留原有 @export 接口，外部脚本（character_switch_manager 等）无感切换。
+
+
+# ═══════════════════════════════════════
+# Phantom Camera 脚本（preload，避免依赖全局 class_name 缓存）
+# ═══════════════════════════════════════
+
+const PhantomCameraHostScript := preload("res://addons/phantom_camera/scripts/phantom_camera_host/phantom_camera_host.gd")
+const PhantomCamera2DScript := preload("res://addons/phantom_camera/scripts/phantom_camera/phantom_camera_2d.gd")
 
 
 # ═══════════════════════════════════════
@@ -11,7 +21,7 @@ extends Camera2D
 
 @export_group("Follow")
 @export var follow_enabled: bool = true
-## 平滑跟随速度（越大越快，1=瞬间跟随）
+## 平滑跟随速度（越大越快，1=瞬间跟随）。映射为 Phantom 阻尼值 1/follow_speed。
 @export var follow_speed: float = 5.0
 ## 默认缩放（所有地图场景统一 2x）
 @export var default_zoom: Vector2 = Vector2(2, 2)
@@ -20,7 +30,7 @@ extends Camera2D
 @export var limit_to_map: bool = true
 ## 边界缓冲（像素，正数=镜头可以略超出地图边缘）
 @export var bounds_margin: float = 32.0
-## 用于计算边界的 TileMapLayer 节点路径
+## 用于计算边界的 TileMapLayer 节点路径（计算并集）
 @export var bound_layers: Array[NodePath] = []
 
 
@@ -29,8 +39,8 @@ extends Camera2D
 # ═══════════════════════════════════════
 
 var _target: Node2D = null
-var _map_rect: Rect2 = Rect2()  ## 地图像素边界
-var _has_bounds: bool = false
+var _pcam_host: Node = null
+var _pcam: Node2D = null
 
 
 # ═══════════════════════════════════════
@@ -42,8 +52,111 @@ func _ready() -> void:
 	zoom = default_zoom
 	# 自动查找玩家
 	_target = _find_player()
-	print(_target)
-	_calc_bounds()
+	if follow_enabled:
+		_setup_phantom_camera()
+
+
+## 运行时创建 PhantomCameraHost + PhantomCamera2D，接管本相机的跟随逻辑。
+func _setup_phantom_camera() -> void:
+	# 1. Host（必须是 Camera2D 的子节点）
+	_pcam_host = PhantomCameraHostScript.new()
+	_pcam_host.name = "PhantomCameraHost"
+	add_child(_pcam_host)
+
+	# 2. PhantomCamera2D（SIMPLE 跟随玩家）
+	_pcam = PhantomCamera2DScript.new()
+	_pcam.name = "PhantomCamera2D"
+	_pcam.follow_mode = PhantomCamera2DScript.FollowMode.SIMPLE
+	_pcam.zoom = default_zoom
+	_pcam.follow_damping = follow_speed > 0.0
+	if follow_speed > 0.0:
+		_pcam.follow_damping_value = Vector2(1.0 / follow_speed, 1.0 / follow_speed)
+	# 跳过载入时的默认 1s 过渡，直接吸附玩家
+	_pcam.tween_on_load = false
+	_pcam.follow_target = _target
+	# 初始位置对齐玩家，避免首帧从 (0,0) 飞入
+	if _target:
+		_pcam.position = _target.global_position
+	add_child(_pcam)
+
+	# 3. 地图边界限制
+	if limit_to_map:
+		_setup_map_limits()
+
+
+## 计算地图边界（bound_layers 各层 used rect 的并集）并应用到 pcam 的显式 limit 四边。
+func _setup_map_limits() -> void:
+	var rect := _calc_map_rect()
+	if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+		return
+
+	var vs: Vector2 = get_viewport_rect().size / default_zoom
+	var center: Vector2 = rect.get_center()
+	var half_vs: Vector2 = vs * 0.5
+
+	# 限制边界 = 地图边界 + 缓冲（bounds_margin 正数=镜头可略超出地图）
+	var l: float = rect.position.x - bounds_margin
+	var t: float = rect.position.y - bounds_margin
+	var r: float = rect.end.x + bounds_margin
+	var b: float = rect.end.y + bounds_margin
+
+	# 地图小于视口时，扩展到视口大小并居中（避免 phantom 钳制失效）
+	if r - l < vs.x:
+		l = center.x - half_vs.x
+		r = center.x + half_vs.x
+	if b - t < vs.y:
+		t = center.y - half_vs.y
+		b = center.y + half_vs.y
+
+	_pcam.limit_left = roundi(l)
+	_pcam.limit_top = roundi(t)
+	_pcam.limit_right = roundi(r)
+	_pcam.limit_bottom = roundi(b)
+
+
+## 计算 bound_layers（默认全部 TileMapLayer）used rect 的并集（像素坐标）。
+func _calc_map_rect() -> Rect2:
+	var min_x := INF
+	var min_y := INF
+	var max_x := -INF
+	var max_y := -INF
+
+	var layers: Array[TileMapLayer] = []
+	for np: NodePath in bound_layers:
+		var node := get_node_or_null(np)
+		if node is TileMapLayer:
+			layers.append(node as TileMapLayer)
+
+	# 若未配置路径，自动查找根节点下所有 TileMapLayer
+	if layers.is_empty():
+		var tree := get_tree()
+		if tree:
+			for child: Node in tree.root.get_children():
+				if child is TileMapLayer:
+					layers.append(child as TileMapLayer)
+
+	for layer: TileMapLayer in layers:
+		var used: Rect2i = layer.get_used_rect()
+		if used.size.x <= 0 or used.size.y <= 0:
+			continue
+		var ts: Vector2i = layer.tile_set.tile_size
+		min_x = min(min_x, float(used.position.x) * ts.x)
+		min_y = min(min_y, float(used.position.y) * ts.y)
+		max_x = max(max_x, float(used.position.x + used.size.x) * ts.x)
+		max_y = max(max_y, float(used.position.y + used.size.y) * ts.y)
+
+	if min_x == INF:
+		return Rect2()
+
+	return Rect2(min_x, min_y, max_x - min_x, max_y - min_y)
+
+
+## 切换角色/死亡切换后，把镜头瞬切到玩家当前位置（绕过阻尼）。
+func teleport_to_player() -> void:
+	if is_instance_valid(_pcam):
+		_pcam.teleport_position()
+	elif _target:
+		position = _target.global_position
 
 
 ## 在整个场景树中查找 Player 节点。
@@ -66,90 +179,3 @@ func _find_player_recursive(node: Node) -> Node2D:
 		if found:
 			return found
 	return null
-
-
-## 根据 TileMapLayer 计算地图像素边界。
-func _calc_bounds() -> void:
-	var min_x: float = INF
-	var min_y: float = INF
-	var max_x: float = -INF
-	var max_y: float = -INF
-
-	# 从 bound_layers 路径列表获取图层
-	var layers: Array[TileMapLayer] = []
-	for np: NodePath in bound_layers:
-		var node := get_node_or_null(np)
-		if node is TileMapLayer:
-			layers.append(node as TileMapLayer)
-
-	# 如果未配置路径，自动查找根节点下的所有 TileMapLayer
-	if layers.is_empty():
-		var tree := get_tree()
-		if tree:
-			for child: Node in tree.root.get_children():
-				if child is TileMapLayer:
-					layers.append(child as TileMapLayer)
-
-	for layer: TileMapLayer in layers:
-		var used: Rect2i = layer.get_used_rect()
-		if used.size.x <= 0 or used.size.y <= 0:
-			continue
-
-		var ts: Vector2i = layer.tile_set.tile_size
-		var pixel_rect := Rect2(
-			Vector2(used.position) * Vector2(ts),
-			Vector2(used.size) * Vector2(ts)
-		)
-
-		min_x = min(min_x, pixel_rect.position.x)
-		min_y = min(min_y, pixel_rect.position.y)
-		max_x = max(max_x, pixel_rect.end.x)
-		max_y = max(max_y, pixel_rect.end.y)
-
-	if min_x == INF:
-		_has_bounds = false
-		return
-
-	_has_bounds = true
-	_map_rect = Rect2(min_x, min_y, max_x - min_x, max_y - min_y)
-
-
-# ═══════════════════════════════════════
-# 跟随
-# ═══════════════════════════════════════
-
-func _process(delta: float) -> void:
-	if not follow_enabled or not _target:
-		return
-
-	var target_pos: Vector2 = _target.global_position
-	var new_pos: Vector2 = position
-
-	if follow_speed > 0.0:
-		# 平滑插值
-		var t: float = clamp(follow_speed * delta, 0.0, 1.0)
-		new_pos = position.lerp(target_pos, t)
-	else:
-		new_pos = target_pos
-
-	# 边界限制
-	if limit_to_map and _has_bounds:
-		var vs: Vector2 = get_viewport_rect().size / zoom
-		var half_vs: Vector2 = vs * 0.5
-
-		# 允许镜头边界 = 地图边界 + 缓冲
-		var cam_min: Vector2 = _map_rect.position - Vector2(bounds_margin, bounds_margin) + half_vs
-		var cam_max: Vector2 = _map_rect.end + Vector2(bounds_margin, bounds_margin) - half_vs
-
-		# 如果地图小于视口，居中
-		if cam_min.x > cam_max.x:
-			new_pos.x = _map_rect.position.x + _map_rect.size.x * 0.5
-		else:
-			new_pos.x = clamp(new_pos.x, cam_min.x, cam_max.x)
-
-		if cam_min.y > cam_max.y:
-			new_pos.y = _map_rect.position.y + _map_rect.size.y * 0.5
-		else:
-			new_pos.y = clamp(new_pos.y, cam_min.y, cam_max.y)
-
-	position = new_pos

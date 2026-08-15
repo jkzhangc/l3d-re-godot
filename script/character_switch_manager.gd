@@ -271,7 +271,10 @@ func _do_switch(target_index: int) -> void:
 
 	# 9. 镜头瞬切
 	if _camera:
-		_camera.position = _player.global_position
+		if _camera.has_method("teleport_to_player"):
+			_camera.call("teleport_to_player")
+		else:
+			_camera.position = _player.global_position
 
 	print("[SwitchMgr] 切换 %d→%d pos=%s" % [old_index, target_index, str(_player.global_position)])
 
@@ -366,7 +369,10 @@ func switch_after_death() -> bool:
 	_player.queue_redraw()
 
 	if _camera:
-		_camera.position = _player.global_position
+		if _camera.has_method("teleport_to_player"):
+			_camera.call("teleport_to_player")
+		else:
+			_camera.position = _player.global_position
 
 	print("[SwitchMgr] 死亡切换 %d→%d" % [old_index, next_idx])
 	return true

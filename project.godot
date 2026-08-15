@@ -20,6 +20,7 @@ config/icon="res://icon.svg"
 Global="*res://script/global.gd"
 Director="*res://script/director/director.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
+PhantomCameraManager="*res://addons/phantom_camera/scripts/managers/phantom_camera_manager.gd"
 
 [display]
 
@@ -31,7 +32,7 @@ window/stretch/scale_mode="integer"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/vx_anim_editor/plugin.cfg", "res://addons/vx_tilemap/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/vx_anim_editor/plugin.cfg", "res://addons/vx_tilemap/plugin.cfg", "res://addons/phantom_camera/plugin.cfg")
 
 [input]
 
