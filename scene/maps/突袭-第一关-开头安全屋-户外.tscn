@@ -32,39 +32,24 @@ tile_set = ExtResource("3_oygib")
 [node name="手枪" parent="GroundLayer" unique_id=857466232 instance=ExtResource("4_oygib")]
 position = Vector2(-17, 44)
 weapon_data = ExtResource("5_5gk8a")
-pickup_char_idx = null
-pickup_direction = null
-pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="霰弹枪" parent="GroundLayer" unique_id=864820333 instance=ExtResource("4_oygib")]
 position = Vector2(36, 43)
 weapon_data = ExtResource("6_5gk8a")
-pickup_char_idx = null
 pickup_direction = 1
 pickup_reserve_ammo = 280
-pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="冲锋枪" parent="GroundLayer" unique_id=1233783021 instance=ExtResource("4_oygib")]
 position = Vector2(88, 47)
 weapon_data = ExtResource("7_vqqwu")
-pickup_char_idx = null
 pickup_direction = 2
-pickup_magazine_ammo = null
 pickup_step_frames = Array[int]([2])
-pickup_step_duration = null
 
 [node name="小刀" parent="GroundLayer" unique_id=248018633 instance=ExtResource("4_oygib")]
 position = Vector2(142, 47)
 weapon_data = ExtResource("8_57ke7")
 pickup_char_idx = 2
 pickup_direction = 3
-pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="TeleportPoint" type="Node2D" parent="GroundLayer" unique_id=1267413586]
 position = Vector2(294, 126)
