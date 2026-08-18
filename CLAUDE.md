@@ -343,7 +343,7 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 ### 相机跟随
 
-**`script/camera_follow.gd`** — Camera2D 扩展，底层已接入 **Phantom Camera 插件**（`addons/phantom_camera/`）。运行时在 `_ready()` 动态创建 `PhantomCameraHost` + `PhantomCamera2D` 子节点：SIMPLE 跟随模式 + `follow_damping`（阻尼值 `1/follow_speed`）+ 显式 limit 四边。保留原 `@export` 接口（`follow_speed=5.0`、`default_zoom=(2,2)`、`bounds_margin`、`bound_layers`）——边界仍由 `bound_layers` 各层 `get_used_rect()` 的**并集**计算（地图小于视口时自动扩展居中）。切换角色/死亡切换用 `teleport_to_player()`（绕过阻尼瞬切）。
+**`script/camera_follow.gd`** — Camera2D 扩展，底层已接入 **Phantom Camera 插件**（`addons/phantom_camera/`）。运行时在 `_ready()` 动态创建 `PhantomCameraHost` + `PhantomCamera2D` 子节点：SIMPLE 跟随模式 + `follow_damping`（阻尼值 `1/follow_speed`）+ 显式 limit 四边。保留原 `@export` 接口（`follow_speed=5.0`、`default_zoom=(2,2)`、`bounds_margin`、`bound_layers`）——边界仍由 `bound_layers` 各层 `get_used_rect()` 的**并集**计算（地图小于视口时自动扩展居中）。`teleport_to_player()` 方法保留供场景切换/真正传送用，但**切换角色/死亡切换不再调用它**——切换不改玩家位置（不传送），相机继续阻尼跟随即可；旧实现瞬切会在玩家移动时把阻尼滞后的相机拉到玩家位置造成可见跳变（见开发日志 2026-08-18）。
 
 **Phantom Camera 依赖**：`PhantomCameraManager` autoload（project.godot）+ 插件已启用（`[editor_plugins]`）。插件编辑器面板/自定义节点类型需**重启编辑器**后完全生效（运行时无需）。
 

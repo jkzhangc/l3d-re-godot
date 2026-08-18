@@ -269,13 +269,9 @@ func _do_switch(target_index: int) -> void:
 	# 同时更新目标队员的位置为当前位置（保证数据一致）
 	Global.team[target_index]["position"] = _player.global_position
 
-	# 9. 镜头瞬切
-	if _camera:
-		if _camera.has_method("teleport_to_player"):
-			_camera.call("teleport_to_player")
-		else:
-			_camera.position = _player.global_position
-
+	# 9. 镜头不瞬切：切换角色不改玩家位置（设计上不传送），相机继续阻尼跟随即可。
+	#    旧实现调 teleport_to_player()，玩家移动时会把阻尼滞后的相机瞬拉到玩家位置，
+	#    造成可见跳变（小地图下还会与 limit 居中钳制冲突）。仅当未来切换改为传送玩家时才需恢复瞬切。
 	print("[SwitchMgr] 切换 %d→%d pos=%s" % [old_index, target_index, str(_player.global_position)])
 
 
@@ -368,11 +364,6 @@ func switch_after_death() -> bool:
 	_player.velocity = Vector2.ZERO
 	_player.queue_redraw()
 
-	if _camera:
-		if _camera.has_method("teleport_to_player"):
-			_camera.call("teleport_to_player")
-		else:
-			_camera.position = _player.global_position
-
+	# 镜头不瞬切（同 _do_switch）：死亡切换保持玩家位置不变，相机继续阻尼跟随。
 	print("[SwitchMgr] 死亡切换 %d→%d" % [old_index, next_idx])
 	return true
