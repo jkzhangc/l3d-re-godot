@@ -462,24 +462,7 @@ func _try_find_player() -> void:
 
 
 func _find_player_in_scene() -> CharacterBody2D:
-	var tree: SceneTree = get_tree()
-	if not tree:
-		return null
-	var root: Window = tree.root
-	if not root:
-		return null
-	return _find_player_recursive(root)
-
-
-func _find_player_recursive(node: Node) -> CharacterBody2D:
-	if _is_player_body(node):
-		if node.collision_layer & 4:
-			return node
-	for child: Node in node.get_children():
-		var found: CharacterBody2D = _find_player_recursive(child)
-		if found:
-			return found
-	return null
+	return Players.nearest_entity_to(global_position) as CharacterBody2D
 
 
 ## 被枪声惊动（由玩家开火时调用）。

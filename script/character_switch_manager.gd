@@ -36,21 +36,13 @@ func _ready() -> void:
 		set_process(false)
 		set_process_input(false)
 		return
-	_player = _find_player()
+	_player = Players.get_local_entity() as CharacterBody2D
 	_camera = _find_camera()
 	if show_teammate_standins:
 		_create_teammate_sprites()
 	set_process(true)
 	set_process_input(true)
 	print("[SwitchMgr] 就绪 team=%d player=%s camera=%s standins=%s" % [_team_size, str(_player), str(_camera), str(show_teammate_standins)])
-
-
-func _find_player() -> CharacterBody2D:
-	var nodes: Array[Node] = get_tree().get_nodes_in_group("player")
-	for node: Node in nodes:
-		if node is CharacterBody2D and is_instance_valid(node):
-			return node as CharacterBody2D
-	return null
 
 
 func _find_camera() -> Camera2D:
@@ -233,7 +225,7 @@ func _find_next_living_member() -> int:
 
 func _do_switch(target_index: int) -> void:
 	if not _player:
-		_player = _find_player()
+		_player = Players.get_local_entity() as CharacterBody2D
 	if not _player:
 		return
 
@@ -322,7 +314,7 @@ func switch_after_death() -> bool:
 	_create_standin_for_index(old_index)
 
 	if not _player:
-		_player = _find_player()
+		_player = Players.get_local_entity() as CharacterBody2D
 	if not _player:
 		return false
 

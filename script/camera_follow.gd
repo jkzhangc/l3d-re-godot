@@ -50,8 +50,8 @@ var _pcam: Node2D = null
 func _ready() -> void:
 	# 应用默认缩放
 	zoom = default_zoom
-	# 自动查找玩家
-	_target = _find_player()
+	# 从注册表获取本地玩家
+	_target = Players.get_local_entity()
 	if follow_enabled:
 		_setup_phantom_camera()
 
@@ -157,25 +157,3 @@ func teleport_to_player() -> void:
 		_pcam.teleport_position()
 	elif _target:
 		position = _target.global_position
-
-
-## 在整个场景树中查找 Player 节点。
-func _find_player() -> Node2D:
-	var tree := get_tree()
-	if not tree:
-		return null
-	for node: Node in tree.root.get_children():
-		var found := _find_player_recursive(node)
-		if found:
-			return found
-	return null
-
-
-func _find_player_recursive(node: Node) -> Node2D:
-	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node as Node2D
-	for child: Node in node.get_children():
-		var found := _find_player_recursive(child)
-		if found:
-			return found
-	return null

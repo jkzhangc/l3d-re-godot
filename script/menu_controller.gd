@@ -339,9 +339,7 @@ func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> La
 
 
 func _is_player_in_weapon_state() -> bool:
-	for node in get_tree().get_nodes_in_group("player"):
-		if not is_instance_valid(node):
-			continue
-		if node.has_method("is_facing_locked"):
-			return node.player_in_weapon_state
+	var player: Node2D = Players.get_local_entity()
+	if player and player.has_method("is_facing_locked"):
+		return player.player_in_weapon_state
 	return false

@@ -1,6 +1,6 @@
 # Global → PlayerState 重构方案与进度
 
-> **状态**：S1 ✅ / S2 ✅ 已完成并实测通过 · S3–S6 待做
+> **状态**：S1 ✅ / S2 ✅ / S3 ✅ 已完成并实测通过 · S4–S6 待做
 > **最后更新**：2026-08-19
 > 本文是这轮重构的唯一执行依据。联机总体设计见 `联机系统架构设计.md`（v2 仍有效，仅 §8 原型章节作废）。
 
@@ -135,42 +135,37 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 3. **双份真相源** —— `CharacterData.current_hp/current_tp` 与 `Global.player_hp`/`team[i]["current_hp"]` 两边都在写。现在**明确 PlayerState 为唯一真相源**，CharacterData 运行时字段只作 `init_from_character()` 的初始化来源
 4. **JSON int→float 漂移** —— 弹夹值读档后变成 `5.0`。`from_dict()` 现在强制 `int()` 回收
 
-### ⬜ S3 · 注册表接线（待做）
+### ✅ S3 · 注册表接线（已完成并实测通过）
 
-- `player.gd:_ready()` 调 `Players.register_entity(self)`
-- 7 处重复的 `_find_player()` 全部改走注册表：
+- `player.gd` 在 `_ready()` 注册实体、`_exit_tree()` 注销实体。
+- HUD、角色切换、菜单武器状态、相机、Director、物品管理、传送点、敌人索敌统一通过 `Players.get_local_entity()` / `all_entities()` / `nearest_entity_to()` 取玩家；删除重复的分组扫描与递归场景树查找。
+- 消耗品效果施加移到玩家节点的 `use_healing_item()` / `use_support_item()` / `apply_item_effects()`；`PlayerState` 只负责扣除数据，`Global._apply_item_effects()` 已删除。S4 前保留 `Global.use_*` 兼容 shim，但它只经注册表转发到本地玩家实体。
+- `enemy.gd` 仍保留 VisionArea 的当前目标快速路径，fallback 改为注册表最近实体；多目标仇恨属 §9.3 P1，不在本轮。
 
-| 文件 | 改成 |
-|------|------|
-| `ui/combat_hud.gd:55-60` | `Players.get_local_entity()` |
-| `character_switch_manager.gd:48-53` | `Players.get_local_entity()` |
-| `menu_controller.gd:341-347` | `Players.get_local_entity()` |
-| `camera_follow.gd:163-181` | `Players.get_local_entity()`（删 `_find_player_recursive`） |
-| `director/director.gd:385-404` | `Players.all_entities()` / `nearest_entity_to()` |
-| `director/item_manager.gd:160-174` | 同上 |
-| `director/teleport_point.gd:175-189` | `Players.nearest_entity_to(global_position)` |
+**实测验证结果**（Godot 4.6.3，MCP `project_run` + `game_eval`）：
 
-- 消耗品效果施加移到玩家节点自己（`apply_item_effects()`），删掉 `Global._apply_item_effects()`
-- `enemy.gd:448-482` 的单 `_player_ref` 只改取数来源为 `Players.nearest_entity_to()`；多目标仇恨属 §9.3 P1，不在本轮
+| 项 | 结果 |
+|----|------|
+| 启动与注册 | ✅ 安全屋启动无 S3 脚本错误，日志出现 `Player → 座位 0`，本地/全部/最近实体均返回同一玩家 |
+| HUD / 相机 / 菜单 / 传送点 | ✅ HUD 与相机引用注册实体；菜单武器状态结果一致；传送点从注册表取得玩家 |
+| 注销与时序兜底 | ✅ 主动注销后 group fallback 可恢复注册，实体数仍为 1；真实退树由 `_exit_tree()` 注销 |
+| 治疗品 / 辅助品 | ✅ 治疗品扣到 0 并恢复 25 HP；辅助品清空并恢复 30 TP；测试后状态完整还原 |
+| Director / 敌人 | ✅ Director 正常启动；Director/ItemManager 查找包装与敌人 fallback 已静态确认只读 `Players`；本图未放置敌人节点 |
 
-验证：相机跟随、HUD、菜单屏蔽、Director 紧张度、传送点、敌人索敌逐项确认行为不变。
+运行期仅见既有文字色表 `Image.load_from_file()` 导出警告，与 S3 无关。
 
 ### ⬜ S4 · 去 shim（待做）
 
-当前还有 **59 处** `Global.<per-player>` 引用，按文件分批迁移到 `Players.get_active_state().xxx`（玩家节点/状态脚本内可用 `character.state.xxx`）：
+当前静态统计还有 **56 处 per-player 属性引用 + 56 处转发方法引用**，按文件分批迁移到 `Players.get_active_state().xxx`（玩家节点/状态脚本内可直接持有对应 `PlayerState`）：
 
-| 文件 | 引用数 |
-|------|-------|
-| `script/player.gd` | 20 |
-| `script/weapon_pickup.gd` | 7 |
-| `script/director/item_manager.gd` | 4 |
-| `script/ui/combat_hud.gd` | 3 |
-| `script/player/PlayerPistolState.gd` | 3 |
-| `script/player/PlayerKnifeState.gd` | 3 |
-| `script/healing_pickup.gd` | 3 |
-| `script/player/PlayerWalkState.gd` / `RunState` / `IdleState` / `ThrowableState` | 2 each |
-| `script/director/intensity_tracker.gd` | 2 |
-| `script/director/safe_door.gd` / `game_init.gd` / `global.gd` / `weapon_data.gd`(注释) | 1 each |
+| 批次 | 主要文件 | 当前引用概况 |
+|------|----------|--------------|
+| 玩家实体 | `script/player.gd` | 20 属性 + 1 方法 |
+| 玩家状态机 | `script/player/*.gd` | 12 属性 + 45 方法（其中 `PlayerReloadState.gd` 17 处） |
+| 拾取物 | `weapon_pickup.gd` / `healing_pickup.gd` | 10 属性 + 7 方法 |
+| HUD | `ui/combat_hud.gd` | 3 属性 + 2 方法 |
+| Director | `director/*.gd` | 9 属性 + 2 方法 |
+| 其他 | `game_init.gd` / `weapon_data.gd` 注释 | 2 属性 |
 
 建议批次：`player.gd` → `player/*State.gd` → 拾取物 → HUD → Director，每批单独 `project_run` 验证。
 

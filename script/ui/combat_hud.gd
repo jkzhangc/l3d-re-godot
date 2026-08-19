@@ -35,7 +35,7 @@ var _last_tp: int = -1
 
 func _ready() -> void:
 	layer = 10
-	_player_ref = _find_player()
+	_player_ref = Players.get_local_entity() as CharacterBody2D
 	_configure_tp_label()
 	# HP 填充用 scale.x 横向缩放（配合 HPFill expand_mode=IGNORE_SIZE 自动贴合纹理）
 	refresh()
@@ -50,14 +50,6 @@ func refresh() -> void:
 	_update_tp()
 	_update_spray()
 	_update_weapons()
-
-
-func _find_player() -> CharacterBody2D:
-	var nodes := get_tree().get_nodes_in_group("player")
-	for n: Node in nodes:
-		if n is CharacterBody2D:
-			return n as CharacterBody2D
-	return null
 
 
 func _update_hp() -> void:

@@ -128,6 +128,7 @@ var facing: int:
 
 func _ready() -> void:
 	add_to_group("player")
+	Players.register_entity(self)
 	# 从 CharacterData 资源读取外观/HP 参数（覆盖本地 @export 默认值）
 	_apply_character_data()
 
@@ -149,6 +150,10 @@ func _ready() -> void:
 		current_hp = Global.player_hp
 	else:
 		current_hp = max_hp
+
+
+func _exit_tree() -> void:
+	Players.unregister_entity(self)
 
 
 func _setup_hurt_area() -> Area2D:
@@ -520,6 +525,34 @@ func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	Global.player_hp = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
+
+
+## 使用当前座位的治疗品；数据扣除由 PlayerState 负责，效果施加在实体自身。
+func use_healing_item() -> bool:
+	var used: ItemData = Players.get_active_state().use_healing_item()
+	if not used:
+		return false
+	apply_item_effects(used)
+	return true
+
+
+## 使用当前座位的辅助品。
+func use_support_item() -> bool:
+	var used: ItemData = Players.get_active_state().use_support_item()
+	if not used:
+		return false
+	apply_item_effects(used)
+	return true
+
+
+## 将物品效果施加到本玩家实体，避免 Global 持有“本地玩家”假设。
+func apply_item_effects(item: ItemData) -> void:
+	if not item:
+		return
+	if item.hp_restore > 0:
+		heal(item.hp_restore)
+	if item.tp_restore > 0:
+		restore_tp(item.tp_restore)
 
 
 ## 回复 TP（技能点）。供物品使用效果与自动回复共用。

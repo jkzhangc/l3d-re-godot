@@ -158,17 +158,5 @@ func _find_spawn_pos(player: Node2D) -> Vector2:
 
 
 func _find_player() -> Node2D:
-	var tree: SceneTree = get_tree()
-	if not tree:
-		return null
-	return _find_player_recursive(tree.root)
-
-
-func _find_player_recursive(node: Node) -> Node2D:
-	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node as Node2D
-	for child: Node in node.get_children():
-		var found: Node2D = _find_player_recursive(child)
-		if found:
-			return found
-	return null
+	var players: Array[Node2D] = Players.all_entities()
+	return players[0] if not players.is_empty() else null

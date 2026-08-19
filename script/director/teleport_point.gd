@@ -173,17 +173,4 @@ func _do_teleport() -> void:
 
 
 func _find_player() -> CharacterBody2D:
-	var tree: SceneTree = get_tree()
-	if not tree:
-		return null
-	return _find_player_recursive(tree.root)
-
-
-func _find_player_recursive(node: Node) -> CharacterBody2D:
-	if node is CharacterBody2D and node.has_method("get_weapon_data"):
-		return node as CharacterBody2D
-	for child: Node in node.get_children():
-		var found: CharacterBody2D = _find_player_recursive(child)
-		if found:
-			return found
-	return null
+	return Players.nearest_entity_to(global_position) as CharacterBody2D

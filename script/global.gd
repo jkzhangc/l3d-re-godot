@@ -406,35 +406,15 @@ func get_active_weapon_state_name() -> String:
 # 消耗品管理 —— 实现已迁至 PlayerState（同为过渡期转发）
 # ═══════════════════════════════════════
 
-## PlayerState 只负责扣数量并返回被消耗的物品；效果由这里施加到本地玩家实体。
-## S3 会把效果施加移到玩家节点自己身上（apply_item_effects），届时本函数删除。
+## 过渡期 shim：使用行为由注册表定位到本地玩家实体，效果在 player.gd 内施加。
 func use_healing_item() -> bool:
-	var used: ItemData = Players.get_active_state().use_healing_item()
-	if not used:
-		return false
-	_apply_item_effects(used)
-	return true
+	var player: Node2D = Players.get_local_entity()
+	return player != null and player.has_method("use_healing_item") and player.use_healing_item()
 
 
 func use_support_item() -> bool:
-	var used: ItemData = Players.get_active_state().use_support_item()
-	if not used:
-		return false
-	_apply_item_effects(used)
-	return true
-
-
-## 应用物品的使用效果（HP/TP 回复）
-func _apply_item_effects(item: ItemData) -> void:
-	if not item:
-		return
 	var player: Node2D = Players.get_local_entity()
-	if not player:
-		return
-	if item.hp_restore > 0 and player.has_method("heal"):
-		player.heal(item.hp_restore)
-	if item.tp_restore > 0 and player.has_method("restore_tp"):
-		player.restore_tp(item.tp_restore)
+	return player != null and player.has_method("use_support_item") and player.use_support_item()
 
 
 func pickup_consumable(item: ItemData) -> void:
