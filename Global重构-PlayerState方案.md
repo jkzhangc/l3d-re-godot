@@ -1,6 +1,6 @@
 # Global → PlayerState 重构方案与进度
 
-> **状态**：S1 ✅ / S2 ✅ / S3 ✅ / S4 ✅ 已完成并实测通过 · S5–S6 待做
+> **状态**：S1 ✅ / S2 ✅ / S3 ✅ / S4 ✅ / S5 ✅ 已完成并实测通过 · S6 待做
 > **最后更新**：2026-08-19
 > 本文是这轮重构的唯一执行依据。联机总体设计见 `联机系统架构设计.md`（v2 仍有效，仅 §8 原型章节作废）。
 
@@ -69,7 +69,7 @@
 
 **关键契约**：
 - `get_active_state()` **保证非 null** —— 座位表为空时懒创建座位 0（のび太）。安全屋户外地图是单角色回退模式，依赖这个兜底。这同时**统一了 `init_new_game()` 原来那两条分岔的初始化路径**
-- `seats_authored` 表示座位表是否由「菜单/存档/checkpoint」正式填充过。`try_load_or_init()` 必须用它判断，**不能用 `seat_count()==0`** —— 因为任何一次读 Global per-player shim 都会触发懒创建
+- `seats_authored` 表示座位表是否由「菜单/存档/checkpoint」正式填充过。`try_load_or_init()` 必须用它判断，**不能用 `seat_count()==0`** —— 因为其他游戏流程调用 `Players.get_active_state()` 时仍可能触发懒创建
 
 ### ItemCodec（`script/item_codec.gd`）— 打断循环依赖
 
@@ -77,7 +77,7 @@
 
 依赖方向：`ItemCodec` ← `PlayerState` ← `SaveManager`
 
-### Global 兼容策略：先加 shim，最后删
+### Global 兼容策略：迁移期加 shim，S5 后删除
 
 per-player 字段改为**转发属性**，方法改为**转发调用**，指向 `Players.get_active_state()`。
 
@@ -86,7 +86,7 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 - 只有 `=` 整体赋值走 setter，也正确
 - 59 处调用点**一行都不用改**就能跑起来 → 第一步就能全流程验证
 
-`team` 不做 shim，**一次性替换**为 `Players.seats`（`Global.team[i]["position"] = ...` 这种下标写法没法代理）。
+`team` 不做 shim，**一次性替换**为 `Players.seats`（`Global.team[i]["position"] = ...` 这种下标写法没法代理）。其余 per-player shim 仅在调用侧迁移期间保留，已于 S5 删除。
 
 切换语义的变化：
 ```
@@ -110,7 +110,7 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 
 | 文件 | 改动 |
 |------|------|
-| `script/global.gd` | per-player 字段 → 转发 shim；删除 `_apply_team_member_to_global` / `_save_global_to_team_member` / `get_current_team_member` / `set_active_team_index` / `_find_player_node`；`get_team_size()` 保留为 shim；装备/消耗品/弹药/背包方法 → 转发；checkpoint 改存 `seats`（`PlayerState.clone()`），消除旧的「顶层单值 + team 数组」重复；`init_new_game()` / `try_load_or_init()` 统一初始化路径 |
+| `script/global.gd` | 迁移期以 per-player 转发 shim 过渡；删除 `_apply_team_member_to_global` / `_save_global_to_team_member` / `get_current_team_member` / `set_active_team_index` / `_find_player_node`；`get_team_size()` 保留为队伍级兼容入口；checkpoint 改存 `seats`（`PlayerState.clone()`），消除旧的「顶层单值 + team 数组」重复；`init_new_game()` / `try_load_or_init()` 统一初始化路径。S5 已删除全部 per-player shim。 |
 | `script/save_manager.gd` | 重写为 seats 序列化 + `save_version: 2`；保留 v1 旧存档读取（`_load_legacy`）；物品编解码移出到 `ItemCodec` |
 | `script/item_codec.gd` | **新建** —— 打断 PlayerState ↔ SaveManager 循环依赖 |
 | `script/character_select_menu.gd` | `_confirm_team()` 构造 `PlayerState` 而非 Dictionary |
@@ -139,7 +139,7 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 
 - `player.gd` 在 `_ready()` 注册实体、`_exit_tree()` 注销实体。
 - HUD、角色切换、菜单武器状态、相机、Director、物品管理、传送点、敌人索敌统一通过 `Players.get_local_entity()` / `all_entities()` / `nearest_entity_to()` 取玩家；删除重复的分组扫描与递归场景树查找。
-- 消耗品效果施加移到玩家节点的 `use_healing_item()` / `use_support_item()` / `apply_item_effects()`；`PlayerState` 只负责扣除数据，`Global._apply_item_effects()` 已删除。S4 前保留 `Global.use_*` 兼容 shim，但它只经注册表转发到本地玩家实体。
+- 消耗品效果施加移到玩家节点的 `use_healing_item()` / `use_support_item()` / `apply_item_effects()`；`PlayerState` 只负责扣除数据，`Global._apply_item_effects()` 已删除。迁移期的 `Global.use_*` 转发已在 S5 与其余 per-player shim 一并删除。
 - `enemy.gd` 仍保留 VisionArea 的当前目标快速路径，fallback 改为注册表最近实体；多目标仇恨属 §9.3 P1，不在本轮。
 
 **实测验证结果**（Godot 4.6.3，MCP `project_run` + `game_eval`）：
@@ -171,15 +171,13 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 
 运行期仍只见既有的文字色表导出警告和编辑器外树绝对路径警告，均与本阶段无关。
 
-### ⬜ S5 · 删 shim（待做）
+### ✅ S5 · 删除 Global per-player shim（已完成）
 
-删掉 `global.gd` 的 per-player 转发属性和方法。验证：
+- 删除 `script/global.gd` 内全部 per-player 转发属性：角色、HP/TP、背包、装备、武器槽/弹夹、治疗品、辅助品和投掷物。
+- 删除全部 per-player 转发方法：背包、武器装备、消耗品和弹药 API；`PlayerState` / 注册实体现在是这些状态与行为的唯一入口。
+- `Global.gold`、checkpoint、场景、音频和调试配置继续保留；`get_team_size()` 仍是队伍级兼容入口，不属于 per-player shim。
 
-```bash
-grep -rn "Global\.\(player_hp\|player_tp\|player_character\|equipment\|active_weapon_slot\|weapon_magazines\|healing_item\|support_item\|throwable\|inventory\)" script/ --include="*.gd"
-```
-应为空。
-
+**验证**：对整个 `script/` 扫描 `Global.<per-player>` 调用及 `global.gd` 内旧属性/方法定义均为 **0**。本阶段没有加入 RPC、peer、`MultiplayerSpawner`、`MultiplayerSynchronizer`、房间或大厅代码。
 ### ⬜ S6 · 3 → 4 人（待做）
 
 - `character_select_menu.gd:7` `max_team_size` 3 → 4

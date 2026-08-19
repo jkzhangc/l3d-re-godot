@@ -59,66 +59,10 @@ func get_cached_color_image() -> Image:
 
 
 # ═══════════════════════════════════════
-# 玩家数据 —— per-player 状态已迁至 PlayerState（script/player_state.gd）
+# 全队共享数据
 # ═══════════════════════════════════════
-## ⚠️ 以下属性是**过渡期兼容层（shim）**：全部转发到 Players.get_active_state()。
-## 新代码请直接写 Players.get_active_state().xxx —— 这些转发属性在迁移完成后会删除。
-##
-## 为什么能安全转发：
-##   · getter 返回的是 PlayerState 里那个 Dictionary/Array 的**同一引用**，
-##     所以 `Global.equipment[slot] = wd` / `Global.inventory.append(x)` 这类
-##     原地修改语义不变；
-##   · 只有 `=` 整体赋值走 setter，也正确。
-##
-## gold 不在 shim 之列 —— 它是全队共享资源，仍是 Global 的真字段。
+## gold 为全队共享资源；每名玩家状态由 Players / PlayerState 管理。
 var gold: int = 0
-
-var player_character: Resource:
-	get: return Players.get_active_state().character
-	set(v): Players.get_active_state().character = v as CharacterData
-
-var player_hp: float:
-	get: return Players.get_active_state().current_hp
-	set(v): Players.get_active_state().current_hp = v
-
-var player_tp: int:
-	get: return Players.get_active_state().current_tp
-	set(v): Players.get_active_state().current_tp = v
-
-var inventory: Array:
-	get: return Players.get_active_state().inventory
-	set(v): Players.get_active_state().inventory = v
-
-var equipment: Dictionary:
-	get: return Players.get_active_state().equipment
-	set(v): Players.get_active_state().equipment = v
-
-var active_weapon_slot: String:
-	get: return Players.get_active_state().active_weapon_slot
-	set(v): Players.get_active_state().active_weapon_slot = v
-
-var healing_item: ItemData:
-	get: return Players.get_active_state().healing_item
-	set(v): Players.get_active_state().healing_item = v
-
-## 治疗品数量（急救喷雾 UI 显示）
-var healing_item_count: int:
-	get: return Players.get_active_state().healing_item_count
-	set(v): Players.get_active_state().healing_item_count = v
-
-var support_item: ItemData:
-	get: return Players.get_active_state().support_item
-	set(v): Players.get_active_state().support_item = v
-
-## 当前投掷物（单槽位，数字5键使用）
-var throwable: ThrowableData:
-	get: return Players.get_active_state().throwable
-	set(v): Players.get_active_state().throwable = v
-
-var weapon_magazines: Dictionary:
-	get: return Players.get_active_state().weapon_magazines
-	set(v): Players.get_active_state().weapon_magazines = v
-
 # ═══════════════════════════════════════
 # 战役 / 难度
 # ═══════════════════════════════════════
@@ -362,83 +306,6 @@ func _cleanup_corpses() -> void:
 		if corpse and is_instance_valid(corpse):
 			corpse.queue_free()
 	corpse_list = corpse_list.slice(remove_count)
-
-
-# ═══════════════════════════════════════
-# 背包 / 武器装备 / 消耗品 / 弹药 —— 实现已迁至 PlayerState
-# ═══════════════════════════════════════
-## 以下全是**过渡期转发（shim）**，只是把调用打到 Players.get_active_state()。
-## 新代码请直接写 Players.get_active_state().xxx() —— 这些转发会在迁移完成后删除。
-
-func add_item(item: Resource) -> void:
-	Players.get_active_state().add_item(item)
-
-
-func remove_item(idx: int) -> void:
-	Players.get_active_state().remove_item(idx)
-
-
-func get_active_weapon() -> WeaponData:
-	return Players.get_active_state().get_active_weapon()
-
-
-func get_equipped_weapon(slot: String) -> WeaponData:
-	return Players.get_active_state().get_equipped_weapon(slot)
-
-
-func equip_weapon_in_slot(wd: WeaponData, slot: String) -> void:
-	Players.get_active_state().equip_weapon_in_slot(wd, slot)
-
-
-func unequip_slot(slot: String) -> WeaponData:
-	return Players.get_active_state().unequip_slot(slot)
-
-
-func switch_to_slot(slot: String) -> bool:
-	return Players.get_active_state().switch_to_slot(slot)
-
-
-func get_active_weapon_state_name() -> String:
-	return Players.get_active_state().get_active_weapon_state_name()
-
-
-# ═══════════════════════════════════════
-# 消耗品管理 —— 实现已迁至 PlayerState（同为过渡期转发）
-# ═══════════════════════════════════════
-
-## 过渡期 shim：使用行为由注册表定位到本地玩家实体，效果在 player.gd 内施加。
-func use_healing_item() -> bool:
-	var player: Node2D = Players.get_local_entity()
-	return player != null and player.has_method("use_healing_item") and player.use_healing_item()
-
-
-func use_support_item() -> bool:
-	var player: Node2D = Players.get_local_entity()
-	return player != null and player.has_method("use_support_item") and player.use_support_item()
-
-
-func pickup_consumable(item: ItemData) -> void:
-	Players.get_active_state().pickup_consumable(item)
-
-
-# ═══════════════════════════════════════
-# 弹药管理 —— 实现已迁至 PlayerState（同为过渡期转发）
-# ═══════════════════════════════════════
-
-func get_magazine_ammo(weapon_id: String) -> int:
-	return Players.get_active_state().get_magazine_ammo(weapon_id)
-
-
-func set_magazine_ammo(weapon_id: String, count: int) -> void:
-	Players.get_active_state().set_magazine_ammo(weapon_id, count)
-
-
-func count_ammo_item(ammo_item_id: String) -> int:
-	return Players.get_active_state().count_ammo_item(ammo_item_id)
-
-
-func consume_ammo_item(ammo_item_id: String, count: int) -> int:
-	return Players.get_active_state().consume_ammo_item(ammo_item_id, count)
 
 
 # ═══════════════════════════════════════
