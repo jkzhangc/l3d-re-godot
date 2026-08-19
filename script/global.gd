@@ -59,49 +59,65 @@ func get_cached_color_image() -> Image:
 
 
 # ═══════════════════════════════════════
-# 玩家数据
+# 玩家数据 —— per-player 状态已迁至 PlayerState（script/player_state.gd）
 # ═══════════════════════════════════════
-var player_character: Resource = null
-var inventory: Array = []
-var player_hp: float = 200.0
-var player_tp: int = 0                        ## 当前队员 TP（技能点）
+## ⚠️ 以下属性是**过渡期兼容层（shim）**：全部转发到 Players.get_active_state()。
+## 新代码请直接写 Players.get_active_state().xxx —— 这些转发属性在迁移完成后会删除。
+##
+## 为什么能安全转发：
+##   · getter 返回的是 PlayerState 里那个 Dictionary/Array 的**同一引用**，
+##     所以 `Global.equipment[slot] = wd` / `Global.inventory.append(x)` 这类
+##     原地修改语义不变；
+##   · 只有 `=` 整体赋值走 setter，也正确。
+##
+## gold 不在 shim 之列 —— 它是全队共享资源，仍是 Global 的真字段。
 var gold: int = 0
 
-# ═══════════════════════════════════════
-# 武器装备
-# ═══════════════════════════════════════
-var equipment: Dictionary = {"primary": null, "secondary": null}
-var active_weapon_slot: String = "primary"
+var player_character: Resource:
+	get: return Players.get_active_state().character
+	set(v): Players.get_active_state().character = v as CharacterData
 
-# ═══════════════════════════════════════
-# 消耗品装备
-# ═══════════════════════════════════════
-var healing_item: ItemData = null
-var healing_item_count: int = 0  ## 治疗品数量（急救喷雾 UI 显示）
-var support_item: ItemData = null
-var throwable: ThrowableData = null           ## 当前投掷物（单槽位，数字5键使用）
+var player_hp: float:
+	get: return Players.get_active_state().current_hp
+	set(v): Players.get_active_state().current_hp = v
 
-# ═══════════════════════════════════════
-# 弹药 & 弹夹
-# ═══════════════════════════════════════
-var weapon_magazines: Dictionary = {}
+var player_tp: int:
+	get: return Players.get_active_state().current_tp
+	set(v): Players.get_active_state().current_tp = v
 
-# ═══════════════════════════════════════
-# 队伍数据（角色切换系统）
-# ═══════════════════════════════════════
-## 队伍成员列表，每个是一个 Dictionary:
-##   character: CharacterData       — 角色资源
-##   current_hp: float              — 当前 HP
-##   equipment: Dictionary          — {primary: WeaponData, secondary: WeaponData}
-##   weapon_magazines: Dictionary   — item_id → 弹夹子弹数
-##   active_weapon_slot: String     — "primary" 或 "secondary"
-##   facing: int                    — 最后朝向 (FaceDir)
-##   position: Vector2              — 场景位置
-##   healing_item: ItemData         — 消耗品
-##   support_item: ItemData         — 消耗品
-##   inventory: Array               — 背包物品
-var team: Array[Dictionary] = []
-var current_team_index: int = 0
+var inventory: Array:
+	get: return Players.get_active_state().inventory
+	set(v): Players.get_active_state().inventory = v
+
+var equipment: Dictionary:
+	get: return Players.get_active_state().equipment
+	set(v): Players.get_active_state().equipment = v
+
+var active_weapon_slot: String:
+	get: return Players.get_active_state().active_weapon_slot
+	set(v): Players.get_active_state().active_weapon_slot = v
+
+var healing_item: ItemData:
+	get: return Players.get_active_state().healing_item
+	set(v): Players.get_active_state().healing_item = v
+
+## 治疗品数量（急救喷雾 UI 显示）
+var healing_item_count: int:
+	get: return Players.get_active_state().healing_item_count
+	set(v): Players.get_active_state().healing_item_count = v
+
+var support_item: ItemData:
+	get: return Players.get_active_state().support_item
+	set(v): Players.get_active_state().support_item = v
+
+## 当前投掷物（单槽位，数字5键使用）
+var throwable: ThrowableData:
+	get: return Players.get_active_state().throwable
+	set(v): Players.get_active_state().throwable = v
+
+var weapon_magazines: Dictionary:
+	get: return Players.get_active_state().weapon_magazines
+	set(v): Players.get_active_state().weapon_magazines = v
 
 # ═══════════════════════════════════════
 # 战役 / 难度
@@ -148,31 +164,20 @@ func capture_checkpoint() -> void:
 	if get_tree() and get_tree().current_scene:
 		scene_path = get_tree().current_scene.scene_file_path
 
-	_save_global_to_team_member(current_team_index)
+	var seat_clones: Array[PlayerState] = []
+	for s: PlayerState in Players.seats:
+		seat_clones.append(s.clone())
+
 	checkpoint = {
 		"scene_path": scene_path,
-		"player_hp": player_hp,
-		"player_tp": player_tp,
-		"equipment_primary": equipment.get("primary"),
-		"equipment_secondary": equipment.get("secondary"),
-		"active_weapon_slot": active_weapon_slot,
-		"weapon_magazines": weapon_magazines.duplicate(),
-		"inventory": inventory.duplicate(),
-		"healing_item": healing_item,
-		"healing_item_count": healing_item_count,
-		"support_item": support_item,
-		"throwable": throwable,
+		"seats": seat_clones,
+		"active_seat_index": Players.active_seat_index,
 		"gold": gold,
-		"team": team.duplicate(true),
-		"current_team_index": current_team_index,
 		"selected_campaign": selected_campaign,
 		"selected_difficulty": selected_difficulty,
 	}
-	print("[Checkpoint] 已捕获: 场景=%s HP=%.0f 主武器=%s 弹夹=%s 物品=%d" % [
-		scene_path, player_hp,
-		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "无",
-		str(weapon_magazines),
-		inventory.size(),
+	print("[Checkpoint] 已捕获: 场景=%s 座位=%d %s" % [
+		scene_path, seat_clones.size(), Players.get_active_state().describe(),
 	])
 
 ## 返回 checkpoint 中的安全屋场景路径（用于死亡后切回安全屋）
@@ -184,94 +189,29 @@ func restore_checkpoint() -> void:
 	if checkpoint.is_empty():
 		print("[Checkpoint] 无 checkpoint，保持当前状态")
 		return
-	player_hp = checkpoint.get("player_hp", 200.0)
-	player_tp = checkpoint.get("player_tp", 0)
-	equipment["primary"] = checkpoint.get("equipment_primary")
-	equipment["secondary"] = checkpoint.get("equipment_secondary")
-	active_weapon_slot = checkpoint.get("active_weapon_slot", "primary")
-	weapon_magazines = checkpoint.get("weapon_magazines", {}).duplicate()
-	inventory = checkpoint.get("inventory", []).duplicate()
-	healing_item = checkpoint.get("healing_item")
-	healing_item_count = checkpoint.get("healing_item_count", 0)
-	support_item = checkpoint.get("support_item")
-	throwable = checkpoint.get("throwable")
+	var seat_clones: Array = checkpoint.get("seats", [])
+	if not seat_clones.is_empty():
+		Players.clear_seats()
+		for s: PlayerState in seat_clones:
+			Players.add_seat(s.clone())
+		Players.seats_authored = true
+		Players.active_seat_index = clampi(
+			checkpoint.get("active_seat_index", 0), 0, Players.seat_count() - 1
+		)
 	gold = checkpoint.get("gold", 0)
-	# 恢复队伍
-	if checkpoint.has("team"):
-		team = checkpoint["team"].duplicate(true)
-		current_team_index = checkpoint.get("current_team_index", 0)
-		_apply_team_member_to_global(current_team_index)
 	selected_campaign = checkpoint.get("selected_campaign")
 	selected_difficulty = checkpoint.get("selected_difficulty", 0)
-	print("[Checkpoint] 已恢复: HP=%.0f 主武器=%s 弹夹=%s 物品=%d 队伍=%d" % [
-		player_hp,
-		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "无",
-		str(weapon_magazines),
-		inventory.size(),
-		team.size(),
+	print("[Checkpoint] 已恢复: 座位=%d %s" % [
+		Players.seat_count(), Players.get_active_state().describe(),
 	])
 
 # ═══════════════════════════════════════
-# 队伍管理
+# 队伍管理 —— 已迁至 Players（script/player_registry.gd）
 # ═══════════════════════════════════════
 
-## 将指定索引的队员数据加载到当前 Global 读写字段
-func _apply_team_member_to_global(index: int) -> void:
-	if index < 0 or index >= team.size():
-		return
-	var member: Dictionary = team[index]
-	player_character = member.get("character")
-	player_hp = member.get("current_hp", 200.0)
-	player_tp = member.get("current_tp", 0)
-	equipment = member.get("equipment", {"primary": null, "secondary": null}).duplicate()
-	weapon_magazines = member.get("weapon_magazines", {}).duplicate()
-	active_weapon_slot = member.get("active_weapon_slot", "primary")
-	if active_weapon_slot not in equipment:
-		active_weapon_slot = "primary"
-	healing_item = member.get("healing_item")
-	healing_item_count = member.get("healing_item_count", 0)
-	support_item = member.get("support_item")
-	throwable = member.get("throwable")
-	inventory = member.get("inventory", []).duplicate()
-
-
-## 从当前 Global 字段保存到指定索引的队员数据
-func _save_global_to_team_member(index: int) -> void:
-	if index < 0 or index >= team.size():
-		return
-	var member: Dictionary = team[index]
-	member["character"] = player_character
-	member["current_hp"] = player_hp
-	member["current_tp"] = player_tp
-	member["equipment"] = equipment.duplicate()
-	member["weapon_magazines"] = weapon_magazines.duplicate()
-	member["active_weapon_slot"] = active_weapon_slot
-	member["healing_item"] = healing_item
-	member["healing_item_count"] = healing_item_count
-	member["support_item"] = support_item
-	member["throwable"] = throwable
-	member["inventory"] = inventory.duplicate()
-
-
-## 获取当前队员数据字典（先保存再返回）
-func get_current_team_member() -> Dictionary:
-	if team.size() == 0:
-		return {}
-	_save_global_to_team_member(current_team_index)
-	return team[current_team_index]
-
-
-## 队伍总人数
+## 过渡期 shim：队伍规模。新代码请直接用 Players.seat_count()。
 func get_team_size() -> int:
-	return team.size()
-
-
-## 切换到队伍中指定索引的成员
-func set_active_team_index(index: int) -> void:
-	if index < 0 or index >= team.size():
-		return
-	current_team_index = index
-	_apply_team_member_to_global(index)
+	return Players.seat_count()
 
 
 func _input(event: InputEvent) -> void:
@@ -425,93 +365,62 @@ func _cleanup_corpses() -> void:
 
 
 # ═══════════════════════════════════════
-# 背包
+# 背包 / 武器装备 / 消耗品 / 弹药 —— 实现已迁至 PlayerState
 # ═══════════════════════════════════════
+## 以下全是**过渡期转发（shim）**，只是把调用打到 Players.get_active_state()。
+## 新代码请直接写 Players.get_active_state().xxx() —— 这些转发会在迁移完成后删除。
 
 func add_item(item: Resource) -> void:
-	inventory.append(item)
-	print("[Global] 获得物品: %s" % item.get("item_name") if item else "?")
+	Players.get_active_state().add_item(item)
 
 
 func remove_item(idx: int) -> void:
-	if idx >= 0 and idx < inventory.size():
-		var item: Resource = inventory[idx]
-		inventory.remove_at(idx)
-		print("[Global] 移除物品: %s" % item.get("item_name") if item else "?")
+	Players.get_active_state().remove_item(idx)
 
-
-# ═══════════════════════════════════════
-# 武器装备管理
-# ═══════════════════════════════════════
 
 func get_active_weapon() -> WeaponData:
-	return equipment.get(active_weapon_slot) as WeaponData
+	return Players.get_active_state().get_active_weapon()
 
 
 func get_equipped_weapon(slot: String) -> WeaponData:
-	return equipment.get(slot) as WeaponData
+	return Players.get_active_state().get_equipped_weapon(slot)
 
 
 func equip_weapon_in_slot(wd: WeaponData, slot: String) -> void:
-	if not slot in equipment:
-		return
-	var old: WeaponData = equipment[slot] as WeaponData
-	if old:
-		inventory.append(old)
-		print("[Global] 卸下 %s 槽: %s" % [slot, old.item_name])
-	equipment[slot] = wd
-	print("[Global] 装备到 %s 槽: %s" % [slot, wd.item_name])
+	Players.get_active_state().equip_weapon_in_slot(wd, slot)
 
 
 func unequip_slot(slot: String) -> WeaponData:
-	var old: WeaponData = equipment.get(slot) as WeaponData
-	if old:
-		equipment[slot] = null
-	return old
+	return Players.get_active_state().unequip_slot(slot)
 
 
 func switch_to_slot(slot: String) -> bool:
-	if slot == active_weapon_slot:
-		return false
-	if not equipment.has(slot):
-		return false
-	var wd: WeaponData = equipment[slot] as WeaponData
-	if not wd:
-		return false
-	active_weapon_slot = slot
-	print("[Global] 切换到 %s 槽: %s" % [slot, wd.item_name])
-	return true
+	return Players.get_active_state().switch_to_slot(slot)
 
 
 func get_active_weapon_state_name() -> String:
-	var wd: WeaponData = get_active_weapon()
-	if wd and not wd.weapon_state_name.is_empty():
-		return wd.weapon_state_name
-	return ""
+	return Players.get_active_state().get_active_weapon_state_name()
 
 
 # ═══════════════════════════════════════
-# 消耗品管理
+# 消耗品管理 —— 实现已迁至 PlayerState（同为过渡期转发）
 # ═══════════════════════════════════════
 
+## PlayerState 只负责扣数量并返回被消耗的物品；效果由这里施加到本地玩家实体。
+## S3 会把效果施加移到玩家节点自己身上（apply_item_effects），届时本函数删除。
 func use_healing_item() -> bool:
-	if not healing_item or healing_item_count <= 0:
+	var used: ItemData = Players.get_active_state().use_healing_item()
+	if not used:
 		return false
-	healing_item_count -= 1
-	print("[Global] 使用治疗品: %s 剩余 %d" % [healing_item.item_name, healing_item_count])
-	_apply_item_effects(healing_item)
-	if healing_item_count <= 0:
-		healing_item = null
-		healing_item_count = 0
+	_apply_item_effects(used)
 	return true
 
 
 func use_support_item() -> bool:
-	if not support_item:
+	var used: ItemData = Players.get_active_state().use_support_item()
+	if not used:
 		return false
-	print("[Global] 使用辅助品: %s" % support_item.item_name)
-	_apply_item_effects(support_item)
-	support_item = null
+	_apply_item_effects(used)
 	return true
 
 
@@ -519,7 +428,7 @@ func use_support_item() -> bool:
 func _apply_item_effects(item: ItemData) -> void:
 	if not item:
 		return
-	var player := _find_player_node()
+	var player: Node2D = Players.get_local_entity()
 	if not player:
 		return
 	if item.hp_restore > 0 and player.has_method("heal"):
@@ -528,75 +437,28 @@ func _apply_item_effects(item: ItemData) -> void:
 		player.restore_tp(item.tp_restore)
 
 
-## 查找当前玩家节点（group "player"）
-func _find_player_node() -> Node:
-	var nodes := get_tree().get_nodes_in_group("player")
-	for n: Node in nodes:
-		if n is CharacterBody2D:
-			return n
-	return null
-
-
 func pickup_consumable(item: ItemData) -> void:
-	match item.item_type:
-		ItemData.ItemType.HEALING:
-			if healing_item and healing_item.item_id != item.item_id:
-				print("[Global] 替换治疗品: %s → %s" % [healing_item.item_name, item.item_name])
-				healing_item_count = 0
-			healing_item = item
-			healing_item_count += 1
-			print("[Global] 拾取治疗品: %s ×%d" % [item.item_name, healing_item_count])
-		ItemData.ItemType.SUPPORT:
-			if support_item:
-				print("[Global] 替换辅助品: %s → %s" % [support_item.item_name, item.item_name])
-			support_item = item
-			print("[Global] 装备辅助品: %s" % item.item_name)
-		ItemData.ItemType.THROWABLE:
-			if throwable:
-				print("[Global] 替换投掷物: %s → %s" % [throwable.item_name, item.item_name])
-			throwable = item as ThrowableData
-			print("[Global] 装备投掷物: %s" % item.item_name)
+	Players.get_active_state().pickup_consumable(item)
 
 
 # ═══════════════════════════════════════
-# 弹药管理
+# 弹药管理 —— 实现已迁至 PlayerState（同为过渡期转发）
 # ═══════════════════════════════════════
 
 func get_magazine_ammo(weapon_id: String) -> int:
-	return weapon_magazines.get(weapon_id, 0)
+	return Players.get_active_state().get_magazine_ammo(weapon_id)
 
 
 func set_magazine_ammo(weapon_id: String, count: int) -> void:
-	weapon_magazines[weapon_id] = clampi(count, 0, 999)
+	Players.get_active_state().set_magazine_ammo(weapon_id, count)
 
 
 func count_ammo_item(ammo_item_id: String) -> int:
-	var total: int = 0
-	for item: Resource in inventory:
-		var it: ItemData = item as ItemData
-		if it and it.item_type == ItemData.ItemType.AMMO and it.item_id == ammo_item_id:
-			total += 1
-	return total
+	return Players.get_active_state().count_ammo_item(ammo_item_id)
 
 
 func consume_ammo_item(ammo_item_id: String, count: int) -> int:
-	var consumed: int = 0
-	var indices_to_remove: Array[int] = []
-	for i: int in range(inventory.size()):
-		if consumed >= count:
-			break
-		var it: ItemData = inventory[i] as ItemData
-		if it and it.item_type == ItemData.ItemType.AMMO and it.item_id == ammo_item_id:
-			indices_to_remove.append(i)
-			consumed += 1
-	if consumed < count:
-		print("[Global] 弹药不足: 需要 %d, 仅有 %d" % [count, consumed])
-		return 0
-	indices_to_remove.reverse()
-	for idx: int in indices_to_remove:
-		inventory.remove_at(idx)
-	print("[Global] 消耗弹药: %s ×%d" % [ammo_item_id, consumed])
-	return consumed
+	return Players.get_active_state().consume_ammo_item(ammo_item_id, count)
 
 
 # ═══════════════════════════════════════
@@ -604,47 +466,31 @@ func consume_ammo_item(ammo_item_id: String, count: int) -> int:
 # ═══════════════════════════════════════
 
 func init_new_game() -> void:
-	# 如果队伍非空（由角色选择界面设置），初始化第一个队员
-	if team.size() > 0:
-		current_team_index = 0
-		_apply_team_member_to_global(0)
-		corpse_list.clear()
-		print("[Global] 新游戏初始化完成 队伍=%d人 HP=%.0f" % [team.size(), player_hp])
-		return
-	# 回退：单角色模式
-	player_character = load("res://object/character_nobita.tres") as CharacterData
-	inventory.clear()
-	equipment["primary"] = null
-	equipment["secondary"] = null
-	active_weapon_slot = "primary"
-	healing_item = null
-	healing_item_count = 0
-	support_item = null
-	throwable = null
-	weapon_magazines.clear()
+	# 座位表为空时 Players.get_active_state() 会懒创建座位 0（のび太，单角色回退模式），
+	# 所以旧实现那条独立的「回退分支」不再需要 —— 两条初始化路径已统一。
+	Players.get_active_state()
+	Players.active_seat_index = 0
 	gold = 0
-	player_hp = 200.0
-	player_tp = (player_character as CharacterData).get_effective_max_tp()
 	corpse_list.clear()
-	print("[Global] 新游戏初始化完成（单角色回退模式）")
+	print("[Global] 新游戏初始化完成 座位=%d %s" % [
+		Players.seat_count(), Players.get_active_state().describe(),
+	])
 
 
 func try_load_or_init() -> void:
-	if not player_character:
-		player_character = load("res://object/character_nobita.tres") as CharacterData
-
 	if not checkpoint.is_empty():
 		# 有 checkpoint → 恢复（死亡重载 / 回到安全屋）
 		restore_checkpoint()
-		print("[Global] checkpoint 恢复完成 | HP=%.0f | 队伍=%d" % [player_hp, team.size()])
+		print("[Global] checkpoint 恢复完成 | 座位=%d" % Players.seat_count())
 		return
 
-	# 无 checkpoint。仅首次启动（装备为空 且 队伍为空）时初始化新游戏；
-	# 否则保留当前内存状态（死亡重载但从未进入过安全屋）
-	if equipment.get("primary") == null and equipment.get("secondary") == null and team.size() == 0:
+	# 无 checkpoint。座位表不是「菜单/存档/checkpoint 填出来的」才初始化新游戏；
+	# 否则保留当前内存状态（从菜单流程过来 / 死亡重载但从未进入过安全屋）。
+	# 用 seats_authored 而不是 seat_count()==0 判断 —— 因为任何一次对 Global
+	# per-player shim 属性的读取都会触发座位懒创建，seat_count() 不可靠。
+	if not Players.seats_authored:
 		init_new_game()
 	else:
-		# 有队伍数据（从菜单流程过来），应用第一个队员
-		if team.size() > 0:
-			_apply_team_member_to_global(current_team_index)
-		print("[Global] try_load_or_init: 保留当前状态 | HP=%.0f | 队伍=%d" % [player_hp, team.size()])
+		print("[Global] try_load_or_init: 保留当前状态 | 座位=%d %s" % [
+			Players.seat_count(), Players.get_active_state().describe(),
+		])

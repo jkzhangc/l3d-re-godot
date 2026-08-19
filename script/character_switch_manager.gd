@@ -31,7 +31,7 @@ const DIR_ROWS: Array[int] = [0, 1, 2, 3]
 
 func _ready() -> void:
 	add_to_group("character_switch_manager")
-	_team_size = Global.get_team_size()
+	_team_size = Players.seat_count()
 	if _team_size <= 1:
 		set_process(false)
 		set_process_input(false)
@@ -82,7 +82,7 @@ func _create_teammate_sprites() -> void:
 		return
 	var decor: Node = tree.current_scene.find_child("DecorLayer", true, false)
 	for i: int in range(_team_size):
-		if i == Global.current_team_index:
+		if i == Players.active_seat_index:
 			_teammate_nodes.append(null)
 			continue
 		var standin: Node2D = _create_standin_node(i, decor if decor else tree.current_scene)
@@ -93,14 +93,15 @@ func _create_standin_node(index: int, parent: Node) -> Node2D:
 	var standin: Node2D = teammate_scene.instantiate()
 	standin.name = "TeammateStandin_%d" % index
 	standin.z_index = 1
-	var member: Dictionary = Global.team[index]
+	var st: PlayerState = Players.get_seat(index)
 	# 位置同步到当前玩家位置（避免 Vector2.ZERO 导致出现在地图原点）
-	var pos: Vector2 = member.get("position", Vector2.ZERO)
+	var pos: Vector2 = st.position if st else Vector2.ZERO
 	if pos == Vector2.ZERO and _player:
 		pos = _player.global_position
-		member["position"] = pos
+		if st:
+			st.position = pos
 	standin.position = pos
-	_apply_standin_appearance(standin, member)
+	_apply_standin_appearance(standin, st)
 	parent.add_child(standin)
 	return standin
 
@@ -116,8 +117,10 @@ func _get_default_spawn_pos() -> Vector2:
 	return Vector2(160, 160)
 
 
-func _apply_standin_appearance(standin: Node2D, member: Dictionary) -> void:
-	var cd: CharacterData = member.get("character") as CharacterData
+func _apply_standin_appearance(standin: Node2D, st: PlayerState) -> void:
+	if not st:
+		return
+	var cd: CharacterData = st.character
 	if not cd or not cd.walk_texture:
 		return
 	var sprite: Sprite2D = standin.get_node_or_null("Sprite2D")
@@ -125,7 +128,7 @@ func _apply_standin_appearance(standin: Node2D, member: Dictionary) -> void:
 		return
 	sprite.texture = cd.walk_texture
 	sprite.region_enabled = true
-	var facing: int = member.get("facing", 0)
+	var facing: int = st.facing
 	var char_idx: int = cd.walk_char_index
 	var char_col: int = char_idx % CHARS_PER_ROW
 	var char_row: int = char_idx / CHARS_PER_ROW
@@ -157,8 +160,7 @@ func _update_standin_from_player(old_index: int) -> void:
 		return
 	if _player:
 		standin.position = _player.global_position
-	var member: Dictionary = Global.team[old_index]
-	_apply_standin_appearance(standin, member)
+	_apply_standin_appearance(standin, Players.get_seat(old_index))
 
 
 func _create_standin_for_index(index: int) -> void:
@@ -166,7 +168,7 @@ func _create_standin_for_index(index: int) -> void:
 		return
 	if index < 0 or index >= _team_size:
 		return
-	if index == Global.current_team_index:
+	if index == Players.active_seat_index:
 		return
 	while _teammate_nodes.size() <= index:
 		_teammate_nodes.append(null)
@@ -206,10 +208,10 @@ func _input(event: InputEvent) -> void:
 
 	if target_index < 0 or target_index >= _team_size:
 		return
-	if target_index == Global.current_team_index:
+	if target_index == Players.active_seat_index:
 		return
-	var member: Dictionary = Global.team[target_index]
-	if member.get("current_hp", 0.0) <= 0.0:
+	var target_state: PlayerState = Players.get_seat(target_index)
+	if not target_state or not target_state.is_alive():
 		return
 
 	_do_switch(target_index)
@@ -222,13 +224,7 @@ func _process(delta: float) -> void:
 
 
 func _find_next_living_member() -> int:
-	var size: int = _team_size
-	for offset: int in range(1, size):
-		var idx: int = (Global.current_team_index + offset) % size
-		var member: Dictionary = Global.team[idx]
-		if member.get("current_hp", 0.0) > 0.0:
-			return idx
-	return -1
+	return Players.next_living_seat(Players.active_seat_index)
 
 
 # ═══════════════════════════════════════
@@ -241,17 +237,16 @@ func _do_switch(target_index: int) -> void:
 	if not _player:
 		return
 
-	var old_index: int = Global.current_team_index
+	var old_index: int = Players.active_seat_index
 
-	# 1. 保存当前队员状态
+	# 1. 把玩家节点上的位姿写回当前座位
 	_save_current_player_state()
 
 	# 2. 更新当前队员的站立精灵 / 位置
 	_update_standin_from_player(old_index)
 
-	# 3. 加载目标队员
-	Global._save_global_to_team_member(old_index)
-	Global.set_active_team_index(target_index)
+	# 3. 换绑到目标座位（不再逐字段拷贝 —— 座位本身就是那份状态）
+	Players.set_active_seat(target_index)
 
 	# 4. 销毁目标队员的站立精灵（他变成了 Player）
 	_remove_teammate_standin(target_index)
@@ -266,8 +261,10 @@ func _do_switch(target_index: int) -> void:
 	_player.refresh_after_switch()
 
 	# 8. 保持当前玩家位置（切换角色直接替换，不传送）
-	# 同时更新目标队员的位置为当前位置（保证数据一致）
-	Global.team[target_index]["position"] = _player.global_position
+	# 同时更新目标座位的位置为当前位置（保证数据一致）
+	var target_state: PlayerState = Players.get_seat(target_index)
+	if target_state:
+		target_state.position = _player.global_position
 
 	# 9. 镜头不瞬切：切换角色不改玩家位置（设计上不传送），相机继续阻尼跟随即可。
 	#    旧实现调 teleport_to_player()，玩家移动时会把阻尼滞后的相机瞬拉到玩家位置，
@@ -278,11 +275,9 @@ func _do_switch(target_index: int) -> void:
 func _save_current_player_state() -> void:
 	if not _player:
 		return
-	var member: Dictionary = Global.get_current_team_member()
-	if member.is_empty():
-		return
-	member["facing"] = _player.facing
-	member["position"] = _player.global_position
+	var st: PlayerState = Players.get_active_state()
+	st.facing = _player.facing
+	st.position = _player.global_position
 
 
 func _reset_player_state_machine() -> void:
@@ -314,15 +309,14 @@ func switch_after_death() -> bool:
 	if next_idx < 0:
 		return false
 
-	var old_index: int = Global.current_team_index
+	var old_index: int = Players.active_seat_index
 
 	# 保存死亡队员位置
 	_save_current_player_state()
 	# 更新站立精灵（当前队员已死到此位置）
 	_update_standin_from_player(old_index)
 
-	Global._save_global_to_team_member(old_index)
-	Global.set_active_team_index(next_idx)
+	Players.set_active_seat(next_idx)
 
 	_remove_teammate_standin(next_idx)
 	_create_standin_for_index(old_index)
@@ -359,7 +353,9 @@ func switch_after_death() -> bool:
 	# 刷新外观 & 镜头
 	_player.refresh_after_switch()
 	# 保持当前玩家位置（死亡切换不传送）
-	Global.team[next_idx]["position"] = _player.global_position
+	var next_state: PlayerState = Players.get_seat(next_idx)
+	if next_state:
+		next_state.position = _player.global_position
 	_player._moving = false
 	_player.velocity = Vector2.ZERO
 	_player.queue_redraw()

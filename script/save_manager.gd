@@ -1,8 +1,18 @@
 class_name SaveManager extends RefCounted
 ## 存档管理器 — 保存/加载游戏数据到 JSON 文件
+##
+## 存档格式 v2：per-player 状态全部收在 seats 数组里（每项 = PlayerState.to_dict()），
+## 顶层只放真正全局的东西（gold / 场景 / 战役 / 难度）。
+##
+## v1（无 save_version 字段）是旧格式：顶层单值 + 一个残缺的 team 数组。
+## 旧格式仍可读入（见 _load_legacy），但只写 v2。
+## 注意 v1 的 team 数组漏存了 current_tp / healing_item / support_item / throwable /
+## inventory，旧 loader 还会用 team 里的空值覆盖顶层字段 —— 迁移时反过来把顶层的
+## inventory/治疗品/辅助品叠加回激活座位，尽量救回这些数据。
 
 const SAVE_DIR: String = "res://saves/"
 const SAVE_FILE: String = "save_data.json"
+const SAVE_VERSION: int = 2
 
 
 ## 保存当前游戏状态
@@ -13,19 +23,16 @@ static func save_game() -> void:
 	if Global.get_tree() and Global.get_tree().current_scene:
 		scene_path = Global.get_tree().current_scene.scene_file_path
 
+	var seat_dicts: Array = []
+	for s: PlayerState in Players.seats:
+		seat_dicts.append(s.to_dict())
+
 	var data: Dictionary = {
+		"save_version": SAVE_VERSION,
 		"gold": Global.gold,
-		"inventory": _serialize_inventory(),
-		"equipment": _serialize_equipment(),
-		"active_weapon_slot": Global.active_weapon_slot,
-		"healing_item": _serialize_consumable(Global.healing_item),
-		"support_item": _serialize_consumable(Global.support_item),
-		"player": _serialize_character(),
-		"player_hp": Global.player_hp,
 		"scene_path": scene_path,
-		"weapon_magazines": Global.weapon_magazines.duplicate(),
-		"team": _serialize_team(),
-		"current_team_index": Global.current_team_index,
+		"seats": seat_dicts,
+		"active_seat_index": Players.active_seat_index,
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
 		"timestamp": Time.get_datetime_string_from_system(),
@@ -35,7 +42,7 @@ static func save_game() -> void:
 	if f:
 		f.store_string(JSON.stringify(data, "\t"))
 		f.close()
-		print("[存档] 已保存: %s | 弹夹=%s" % [SAVE_DIR + SAVE_FILE, str(Global.weapon_magazines)])
+		print("[存档] 已保存: %s | 座位=%d" % [SAVE_DIR + SAVE_FILE, seat_dicts.size()])
 
 
 ## 加载存档
@@ -56,29 +63,132 @@ static func load_game() -> Dictionary:
 	if data.is_empty():
 		return {}
 
-	print("[存档] 已加载: %s (time=%s)" % [path, data.get("timestamp", "?")])
+	var version: int = int(data.get("save_version", 1))
+	print("[存档] 已加载: %s (time=%s, v%d)" % [path, data.get("timestamp", "?"), version])
 
-	# 恢复到 Global
+	if version >= 2:
+		_load_v2(data)
+	else:
+		_load_legacy(data)
+
+	# 全局字段（两个版本共用）
 	Global.gold = data.get("gold", 0)
-	Global.player_hp = data.get("player_hp", 200.0)
-	_deserialize_inventory(data.get("inventory", []))
-	_deserialize_equipment(data.get("equipment", {}))
-	Global.active_weapon_slot = data.get("active_weapon_slot", "primary")
-	Global.healing_item = _deserialize_consumable(data.get("healing_item", {}))
-	Global.support_item = _deserialize_consumable(data.get("support_item", {}))
-	Global.weapon_magazines = data.get("weapon_magazines", {}).duplicate()
-	# 恢复队伍
-	_deserialize_team(data.get("team", []))
-	Global.current_team_index = data.get("current_team_index", 0)
-	if Global.team.size() > 0:
-		Global._apply_team_member_to_global(Global.current_team_index)
-	# 恢复战役/难度
 	var campaign_path: String = data.get("selected_campaign", "")
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData
 	Global.selected_difficulty = data.get("selected_difficulty", 0)
-	print("[存档] 弹夹数据已恢复: %s | 队伍=%d" % [str(Global.weapon_magazines), Global.team.size()])
+
+	print("[存档] 恢复完成 | 座位=%d %s" % [
+		Players.seat_count(), Players.get_active_state().describe(),
+	])
 	return data
+
+
+static func _load_v2(data: Dictionary) -> void:
+	Players.clear_seats()
+	for elem: Variant in data.get("seats", []):
+		var sd: Dictionary = elem as Dictionary
+		if not sd:
+			continue
+		var st: PlayerState = PlayerState.new()
+		st.from_dict(sd)
+		Players.add_seat(st)
+	if Players.seat_count() > 0:
+		Players.seats_authored = true
+		Players.active_seat_index = clampi(
+			data.get("active_seat_index", 0), 0, Players.seat_count() - 1
+		)
+
+
+## 读取 v1 旧存档并归一化为座位表
+static func _load_legacy(data: Dictionary) -> void:
+	Players.clear_seats()
+
+	var team_arr: Array = data.get("team", [])
+	if team_arr.is_empty():
+		# 旧的「单角色」存档：只有顶层单值
+		var st: PlayerState = PlayerState.new()
+		_apply_legacy_top_level(st, data)
+		Players.add_seat(st)
+	else:
+		for elem: Variant in team_arr:
+			var md: Dictionary = elem as Dictionary
+			if not md:
+				continue
+			Players.add_seat(_seat_from_legacy_member(md))
+		# 顶层的 inventory / 治疗品 / 辅助品 是 v1 的 team 数组没存的，
+		# 叠加回激活座位（旧 loader 会用 team 里的空值把它们冲掉，这里救回来）
+		var active: int = clampi(data.get("current_team_index", 0), 0, Players.seat_count() - 1)
+		var st: PlayerState = Players.get_seat(active)
+		if st:
+			_apply_legacy_consumables(st, data)
+
+	Players.seats_authored = true
+	Players.active_seat_index = clampi(
+		data.get("current_team_index", 0), 0, maxi(Players.seat_count() - 1, 0)
+	)
+	print("[存档] v1 旧存档已迁移为 %d 个座位" % Players.seat_count())
+
+
+static func _seat_from_legacy_member(md: Dictionary) -> PlayerState:
+	var st: PlayerState = PlayerState.new()
+	var resource_path: String = md.get("resource_path", "")
+	if not resource_path.is_empty() and ResourceLoader.exists(resource_path):
+		var res: Resource = load(resource_path)
+		if res is CharacterData:
+			# duplicate()：v1 的 _deserialize_team 少了这一步，导致同角色的多个队员
+			# 共享同一实例、并污染资源缓存里的 .tres 母本
+			st.character = (res as CharacterData).duplicate() as CharacterData
+			st.character_path = resource_path
+	st.current_hp = md.get("current_hp", st.get_max_hp())
+	st.current_tp = md.get("current_tp", st.get_max_tp())
+	st.facing = md.get("facing", 0)
+	st.position = Vector2(md.get("position_x", 0.0), md.get("position_y", 0.0))
+	var eq: Dictionary = md.get("equipment", {})
+	for slot: String in ["primary", "secondary"]:
+		var sd: Dictionary = eq.get(slot, {})
+		if not sd.is_empty():
+			st.equipment[slot] = ItemCodec.from_dict(sd)
+	st.weapon_magazines = md.get("weapon_magazines", {}).duplicate()
+	st.active_weapon_slot = md.get("active_weapon_slot", "primary")
+	return st
+
+
+static func _apply_legacy_top_level(st: PlayerState, data: Dictionary) -> void:
+	var cd_path: String = "res://object/character_nobita.tres"
+	if ResourceLoader.exists(cd_path):
+		var res: Resource = load(cd_path)
+		if res is CharacterData:
+			st.character = (res as CharacterData).duplicate() as CharacterData
+			st.character_path = cd_path
+	st.current_hp = data.get("player_hp", st.get_max_hp())
+	st.current_tp = st.get_max_tp()
+	var eq: Dictionary = data.get("equipment", {})
+	for slot: String in ["primary", "secondary"]:
+		var sd: Dictionary = eq.get(slot, {})
+		if not sd.is_empty():
+			st.equipment[slot] = ItemCodec.from_dict(sd)
+	st.active_weapon_slot = data.get("active_weapon_slot", "primary")
+	st.weapon_magazines = data.get("weapon_magazines", {}).duplicate()
+	_apply_legacy_consumables(st, data)
+
+
+static func _apply_legacy_consumables(st: PlayerState, data: Dictionary) -> void:
+	var hd: Dictionary = data.get("healing_item", {})
+	if not hd.is_empty():
+		st.healing_item = ItemCodec.from_dict(hd)
+		if st.healing_item_count <= 0:
+			st.healing_item_count = 1
+	var sd: Dictionary = data.get("support_item", {})
+	if not sd.is_empty():
+		st.support_item = ItemCodec.from_dict(sd)
+	for elem: Variant in data.get("inventory", []):
+		var d: Dictionary = elem as Dictionary
+		if not d:
+			continue
+		var it: ItemData = ItemCodec.from_dict(d)
+		if it:
+			st.inventory.append(it)
 
 
 ## 获取存档中的场景路径（用于死亡后重载）
@@ -106,200 +216,3 @@ static func auto_load_on_start() -> bool:
 ## 检查存档是否存在
 static func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_DIR + SAVE_FILE)
-
-
-# ═══════════════════════════════════════
-# 序列化
-# ═══════════════════════════════════════
-
-static func _serialize_inventory() -> Array:
-	var arr: Array = []
-	for item: Resource in Global.inventory:
-		var it: ItemData = item as ItemData
-		if it:
-			arr.append(_item_to_dict(it))
-	return arr
-
-
-static func _serialize_equipment() -> Dictionary:
-	var d: Dictionary = {}
-	var primary: WeaponData = Global.equipment.get("primary") as WeaponData
-	if primary:
-		d["primary"] = _item_to_dict(primary)
-	var secondary: WeaponData = Global.equipment.get("secondary") as WeaponData
-	if secondary:
-		d["secondary"] = _item_to_dict(secondary)
-	return d
-
-
-static func _serialize_consumable(item: ItemData) -> Dictionary:
-	if not item:
-		return {}
-	return _item_to_dict(item)
-
-
-static func _serialize_character() -> Dictionary:
-	var cd: CharacterData = Global.player_character as CharacterData
-	if not cd:
-		return {}
-	return {
-		"name": cd.character_name,
-		"level": cd.level,
-	}
-
-
-static func _serialize_team() -> Array:
-	var arr: Array = []
-	for member: Dictionary in Global.team:
-		var cd: CharacterData = member.get("character") as CharacterData
-		var md: Dictionary = {
-			"resource_path": cd.resource_path if cd else "",
-			"current_hp": member.get("current_hp", 200.0),
-			"facing": member.get("facing", 0),
-			"position_x": (member.get("position") as Vector2).x if member.get("position") else 0.0,
-			"position_y": (member.get("position") as Vector2).y if member.get("position") else 0.0,
-			"equipment": _serialize_member_equipment(member.get("equipment", {})),
-			"weapon_magazines": member.get("weapon_magazines", {}),
-			"active_weapon_slot": member.get("active_weapon_slot", "primary"),
-		}
-		arr.append(md)
-	return arr
-
-
-static func _serialize_member_equipment(eq: Dictionary) -> Dictionary:
-	var d: Dictionary = {}
-	var primary: WeaponData = eq.get("primary") as WeaponData
-	if primary:
-		d["primary"] = _item_to_dict(primary)
-	var secondary: WeaponData = eq.get("secondary") as WeaponData
-	if secondary:
-		d["secondary"] = _item_to_dict(secondary)
-	return d
-
-
-static func _deserialize_team(team_arr: Array) -> void:
-	Global.team.clear()
-	for member_v: Variant in team_arr:
-		var md: Dictionary = member_v as Dictionary
-		if not md:
-			continue
-		var resource_path: String = md.get("resource_path", "")
-		var cd: CharacterData = null
-		if not resource_path.is_empty() and ResourceLoader.exists(resource_path):
-			var res: Resource = load(resource_path)
-			if res is CharacterData:
-				cd = res as CharacterData
-				cd.current_hp = md.get("current_hp", float(cd.get_effective_max_hp()))
-		# 反序列化装备
-		var eq_dict: Dictionary = md.get("equipment", {})
-		var equipment: Dictionary = {"primary": null, "secondary": null}
-		var pd: Dictionary = eq_dict.get("primary", {})
-		if not pd.is_empty():
-			equipment["primary"] = _item_from_dict(pd)
-		var sd: Dictionary = eq_dict.get("secondary", {})
-		if not sd.is_empty():
-			equipment["secondary"] = _item_from_dict(sd)
-		var member: Dictionary = {
-			"character": cd,
-			"current_hp": md.get("current_hp", 200.0),
-			"facing": md.get("facing", 0),
-			"position": Vector2(md.get("position_x", 0.0), md.get("position_y", 0.0)),
-			"equipment": equipment,
-			"weapon_magazines": md.get("weapon_magazines", {}).duplicate(),
-			"active_weapon_slot": md.get("active_weapon_slot", "primary"),
-			"healing_item": null,
-			"support_item": null,
-			"inventory": [],
-		}
-		Global.team.append(member)
-
-
-static func _deserialize_inventory(arr: Array) -> void:
-	Global.inventory.clear()
-	for elem: Variant in arr:
-		var d: Dictionary = elem as Dictionary
-		if not d:
-			continue
-		var item: ItemData = _item_from_dict(d)
-		if item:
-			Global.inventory.append(item)
-
-
-static func _deserialize_equipment(d: Dictionary) -> void:
-	Global.equipment["primary"] = null
-	Global.equipment["secondary"] = null
-	var pdict: Dictionary = d.get("primary", {})
-	if not pdict.is_empty():
-		var w: WeaponData = _item_from_dict(pdict) as WeaponData
-		if w:
-			Global.equipment["primary"] = w
-	var sdict: Dictionary = d.get("secondary", {})
-	if not sdict.is_empty():
-		var w: WeaponData = _item_from_dict(sdict) as WeaponData
-		if w:
-			Global.equipment["secondary"] = w
-
-
-static func _deserialize_consumable(d: Dictionary) -> ItemData:
-	if d.is_empty():
-		return null
-	return _item_from_dict(d)
-
-
-static func _item_to_dict(item: ItemData) -> Dictionary:
-	var d: Dictionary = {
-		"item_id": item.item_id,
-		"item_name": item.item_name,
-		"item_type": item.item_type,
-		"description": item.description,
-		"sell_price": item.sell_price,
-	}
-	# 保存资源路径，加载时从 .tres 恢复完整数据
-	if item.resource_path and not item.resource_path.is_empty():
-		d["resource_path"] = item.resource_path
-	if item is WeaponData:
-		var w: WeaponData = item as WeaponData
-		d["attack_power"] = w.attack_power
-		d["attack_speed"] = w.attack_speed
-		d["attack_range"] = w.attack_range
-		d["critical_rate"] = w.critical_rate
-		d["weapon_slot"] = w.weapon_slot
-	return d
-
-
-static func _item_from_dict(d: Dictionary) -> ItemData:
-	var itype: int = d.get("item_type", 0)
-	var resource_path: String = d.get("resource_path", "")
-
-	# 优先从 .tres 文件加载（保留完整精灵/动画/音效数据）
-	if not resource_path.is_empty() and ResourceLoader.exists(resource_path):
-		var loaded: Resource = ResourceLoader.load(resource_path)
-		if loaded is ItemData:
-			return loaded as ItemData
-
-	# 回退：手动构造（缺失精灵/动画数据，仅用于兼容旧存档）
-	if itype == ItemData.ItemType.WEAPON:
-		var w: WeaponData = WeaponData.new()
-		w.attack_power = d.get("attack_power", 10)
-		w.attack_speed = d.get("attack_speed", 1.0)
-		w.attack_range = d.get("attack_range", 48.0)
-		w.critical_rate = d.get("critical_rate", 0.0)
-		var ws = d.get("weapon_slot", 0)
-		if ws is String:
-			w.weapon_slot = 0 if ws == "primary" else 1
-		else:
-			w.weapon_slot = ws as int
-		_fill_item_data(w, d)
-		return w
-	else:
-		var item: ItemData = ItemData.new()
-		_fill_item_data(item, d)
-		return item
-
-
-static func _fill_item_data(item: ItemData, d: Dictionary) -> void:
-	item.item_id = d.get("item_id", "")
-	item.item_name = d.get("item_name", "?")
-	item.item_type = d.get("item_type", 0)
-	item.description = d.get("description", "")
-	item.sell_price = d.get("sell_price", 0)

@@ -283,30 +283,20 @@ func _on_cursor_blink() -> void:
 
 
 func _confirm_team() -> void:
-	Global.team.clear()
+	Players.clear_seats()
 	for idx: int in _team_selection:
 		var cd: CharacterData = _available_characters[idx]
+		# duplicate() 让每个座位独占一份 CharacterData 实例，
+		# 否则同角色的多个座位会共享运行时字段、并污染资源缓存里的 .tres 母本
 		var cd_copy: CharacterData = cd.duplicate()
 		cd_copy.init_runtime_hp()
 		cd_copy.init_runtime_tp()
-		var member: Dictionary = {
-			"character": cd_copy,
-			"current_hp": float(cd_copy.get_effective_max_hp()),
-			"current_tp": cd_copy.get_effective_max_tp(),
-			"equipment": {"primary": null, "secondary": null},
-			"weapon_magazines": {},
-			"active_weapon_slot": "primary",
-			"facing": 0,
-			"position": Vector2.ZERO,
-			"healing_item": null,
-			"support_item": null,
-			"throwable": null,
-			"inventory": [],
-		}
-		Global.team.append(member)
-	Global.current_team_index = 0
-	Global._apply_team_member_to_global(0)
-	print("[角色选择] 确认队伍: %d人" % Global.team.size())
+		var st: PlayerState = PlayerState.new()
+		st.init_from_character(cd_copy, cd.resource_path)
+		Players.add_seat(st)
+	Players.seats_authored = true
+	Players.active_seat_index = 0
+	print("[角色选择] 确认队伍: %d人" % Players.seat_count())
 	var err: Error = get_tree().change_scene_to_file(difficulty_select_scene)
 	if err != OK:
 		printerr("[角色选择] 场景切换失败: %s" % difficulty_select_scene)

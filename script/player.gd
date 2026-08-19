@@ -486,12 +486,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	# 播放受伤音效
 	_play_sound(hurt_sound)
 
-	# 同步 HP 到 Global
+	# 同步 HP 到当前座位（Global.player_hp 现在就是座位上的 current_hp，
+	# 旧实现额外那步「同步到队伍成员数据」已成冗余）
 	Global.player_hp = current_hp
-	# 同步到队伍成员数据
-	var member := Global.get_current_team_member()
-	if not member.is_empty():
-		member["current_hp"] = current_hp
 
 	if current_hp <= 0.0:
 		_die()
@@ -522,10 +519,6 @@ func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) ->
 func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
 	Global.player_hp = current_hp
-	# 同步到队伍成员数据
-	var member := Global.get_current_team_member()
-	if not member.is_empty():
-		member["current_hp"] = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
 
 
@@ -637,7 +630,6 @@ func _try_switch_on_death() -> bool:
 	if _switch_on_death_attempted:
 		return false
 	_switch_on_death_attempted = true
-	Global._save_global_to_team_member(Global.current_team_index)
 	var mgr: Node = null
 	var tree := get_tree()
 	if tree:
@@ -646,10 +638,8 @@ func _try_switch_on_death() -> bool:
 			mgr = nodes[0]
 	if not mgr:
 		return false
-	# 把当前队员标记为死亡
-	var member := Global.get_current_team_member()
-	if not member.is_empty():
-		member["current_hp"] = 0.0
+	# 把当前座位标记为死亡（否则 next_living_seat 还会把它算作存活）
+	Players.get_active_state().current_hp = 0.0
 	# 尝试切换
 	var switched: bool = mgr.switch_after_death()
 	if switched:
