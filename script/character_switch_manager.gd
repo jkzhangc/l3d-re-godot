@@ -1,5 +1,5 @@
 class_name CharacterSwitchManager extends Node
-## 角色切换管理器 — 处理 Q/Ctrl+1-3 切换、队友静态精灵、死亡切换
+## 角色切换管理器 — 处理 Q/Ctrl+1-4 切换、队友静态精灵、死亡切换
 ##
 ## 添加到关卡场景根节点（由 GameInit 自动创建），管理:
 ##   1. Q/数字键切换
@@ -189,14 +189,13 @@ func _input(event: InputEvent) -> void:
 
 	if event.is_action_pressed("切换角色键"):
 		target_index = _find_next_living_member()
-	elif event.is_action_pressed("选择队员1键"):
-		target_index = 0
-	elif event.is_action_pressed("选择队员2键"):
-		target_index = 1
-	elif event.is_action_pressed("选择队员3键"):
-		target_index = 2
 	else:
-		return
+		for i: int in range(_team_size):
+			if event.is_action_pressed("选择队员%d键" % (i + 1)):
+				target_index = i
+				break
+		if target_index < 0:
+			return
 
 	if target_index < 0 or target_index >= _team_size:
 		return

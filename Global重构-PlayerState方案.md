@@ -1,6 +1,6 @@
 # Global → PlayerState 重构方案与进度
 
-> **状态**：S1 ✅ / S2 ✅ / S3 ✅ / S4 ✅ / S5 ✅ 已完成并实测通过 · S6 待做
+> **状态**：S1–S6 ✅ 已完成并实测通过
 > **最后更新**：2026-08-19
 > 本文是这轮重构的唯一执行依据。联机总体设计见 `联机系统架构设计.md`（v2 仍有效，仅 §8 原型章节作废）。
 
@@ -178,14 +178,15 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 - `Global.gold`、checkpoint、场景、音频和调试配置继续保留；`get_team_size()` 仍是队伍级兼容入口，不属于 per-player shim。
 
 **验证**：对整个 `script/` 扫描 `Global.<per-player>` 调用及 `global.gd` 内旧属性/方法定义均为 **0**。本阶段没有加入 RPC、peer、`MultiplayerSpawner`、`MultiplayerSynchronizer`、房间或大厅代码。
-### ⬜ S6 · 3 → 4 人（待做）
 
-- `character_select_menu.gd:7` `max_team_size` 3 → 4
-- `_build_team_slots()`（164-175）：第 4 槽位 y = `70+3*42 = 196`，**需截图确认不与其他窗口元素重叠**，必要时收窄行距（当前布局 `Vector2(348, 70.0 + i*42)`，无溢出处理）
-- InputMap 加 `选择队员4键` = Ctrl+4：`input_map_manage(op="ensure_action")` + `input_map_manage(op="ensure_binding", event_type="key", keycode="4", ctrl=true)`
-- `character_switch_manager.gd:196-204`：3 个硬编码 `elif` 改为按 `Players.seat_count()` 循环匹配 `选择队员N键`
-- 顺带：删 `character_data.gd:to_dict()` 死代码（已确认无调用方）
+### ✅ S6 · 队伍 3 → 4 人（已完成）
 
+- `character_select_menu.gd` 的 `max_team_size` 调整为 4；队伍面板按该值生成 4 个槽位。实机截图确认第 4 槽位位于 y=196，未与窗口底部提示或其他控件重叠、未越界。
+- InputMap 新增 `选择队员4键` = Ctrl+4。
+- `character_switch_manager.gd` 去除 1–3 人的硬编码 `elif`，改为按当前 `_team_size` 循环匹配 `选择队员N键`；因此已有 1–4 输入均按真实座位数生效。
+- 删除 `character_data.gd:to_dict()` 死代码；全项目 `.to_dict()` 调用只由 `PlayerState` / `ItemCodec` 的存档路径提供。
+
+**验证**（Godot 4.6.3，2026-08-19）：角色选择场景启动正常；第 4 个队伍槽位可见且布局无重叠。S6 没有引入 RPC、peer、`MultiplayerSpawner`、`MultiplayerSynchronizer`、房间或大厅代码。
 ---
 
 ## 6. 踩过的坑（务必记住）

@@ -173,14 +173,3 @@ func get_attack_effect_offset(weapon_state_name: String, facing: int, fallback: 
 		if off:
 			return off.get_offset(facing)
 	return fallback
-
-
-## 序列化为字典（供存档系统使用）
-func to_dict() -> Dictionary:
-	return {
-		"resource_path": resource_path,
-		"character_name": character_name,
-		"level": level,
-		"current_hp": current_hp,
-		"current_tp": current_tp,
-	}

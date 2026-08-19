@@ -21,7 +21,7 @@ var seats: Array[PlayerState] = []
 var active_seat_index: int = 0
 ## 座位表是否由「角色选择菜单 / 磁盘存档 / checkpoint」正式填充过。
 ## 懒创建的默认座位不算。Global.try_load_or_init() 用它判断是否要初始化新游戏 ——
-## 不能用 seat_count()==0，因为任何一次读 Global per-player shim 都会触发懒创建。
+## 不能用 seat_count()==0，因为其他游戏流程调用 get_active_state() 时也可能触发懒创建。
 var seats_authored: bool = false
 
 # ═══════════════════════════════════════

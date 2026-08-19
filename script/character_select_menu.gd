@@ -4,7 +4,7 @@ extends Control
 @export_group("场景路由")
 @export var campaign_select_scene: String = "res://scene/campaign_select.tscn"
 @export var difficulty_select_scene: String = "res://scene/difficulty_select.tscn"
-@export var max_team_size: int = 3
+@export var max_team_size: int = 4
 
 @export_group("窗口布局")
 @export var window_size: Vector2 = Vector2(500, 360)
