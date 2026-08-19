@@ -181,6 +181,22 @@ func get_entity_for_seat(i: int) -> Node2D:
 	return null
 
 
+## 取得场景实体对应的座位状态。不要把「本地/激活座位」当作调用方实体的状态：
+## 单人角色切换时实体会跟随 active_seat 重新绑定；未来联机时每个实体各自映射一个座位。
+func get_state_for_entity(node: Node2D) -> PlayerState:
+	if not node or not is_instance_valid(node):
+		return null
+	_prune_invalid()
+	var seat_index: int = _seat_of_entity.get(node.get_instance_id(), -1)
+	if seat_index < 0:
+		# 兼容 _ready() / group 扫描的时序：首次查询时注册到当前激活座位。
+		register_entity(node)
+		seat_index = _seat_of_entity.get(node.get_instance_id(), active_seat_index)
+	if seats.is_empty():
+		_create_default_seat()
+	return get_seat(seat_index)
+
+
 ## 全部在场玩家实体。exclude_dying=true 时跳过正在死亡的（对应旧 _find_player 里
 ## 的 `_is_dying` 跳过逻辑，见 director.gd）。
 func all_entities(exclude_dying: bool = true) -> Array[Node2D]:

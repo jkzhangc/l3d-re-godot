@@ -18,10 +18,10 @@ func process_update(_delta: float) -> void:
 
 	# 使用消耗品
 	if Input.is_action_just_pressed("治疗品键"):
-		Global.use_healing_item()
+		character.use_healing_item()
 		return
 	if Input.is_action_just_pressed("辅助品键"):
-		Global.use_support_item()
+		character.use_support_item()
 		return
 
 	# 投掷物
@@ -44,21 +44,21 @@ func process_update(_delta: float) -> void:
 
 
 func _try_weapon_state() -> void:
-	var wd: WeaponData = Global.get_active_weapon()
+	var wd: WeaponData = get_player_state().get_active_weapon()
 	if wd and not wd.weapon_state_name.is_empty():
 		transition_requested.emit(wd.weapon_state_name)
 
 
 func _try_raise_weapon(slot: String) -> void:
-	var wd: WeaponData = Global.get_equipped_weapon(slot)
+	var wd: WeaponData = get_player_state().get_equipped_weapon(slot)
 	if not wd or wd.weapon_state_name.is_empty():
 		return
-	Global.active_weapon_slot = slot
+	get_player_state().active_weapon_slot = slot
 	transition_requested.emit(wd.weapon_state_name)
 
 
 func _try_throwable() -> void:
-	if Global.throwable:
+	if get_player_state().throwable:
 		transition_requested.emit("Throwable")
 
 

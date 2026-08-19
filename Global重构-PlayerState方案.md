@@ -1,6 +1,6 @@
 # Global → PlayerState 重构方案与进度
 
-> **状态**：S1 ✅ / S2 ✅ / S3 ✅ 已完成并实测通过 · S4–S6 待做
+> **状态**：S1 ✅ / S2 ✅ / S3 ✅ / S4 ✅ 已完成并实测通过 · S5–S6 待做
 > **最后更新**：2026-08-19
 > 本文是这轮重构的唯一执行依据。联机总体设计见 `联机系统架构设计.md`（v2 仍有效，仅 §8 原型章节作废）。
 
@@ -154,22 +154,22 @@ per-player 字段改为**转发属性**，方法改为**转发调用**，指向 
 
 运行期仅见既有文字色表 `Image.load_from_file()` 导出警告，与 S3 无关。
 
-### ⬜ S4 · 去 shim（待做）
+### ✅ S4 · 去 shim（已完成并实测通过）
 
-当前静态统计还有 **56 处 per-player 属性引用 + 56 处转发方法引用**，按文件分批迁移到 `Players.get_active_state().xxx`（玩家节点/状态脚本内可直接持有对应 `PlayerState`）：
+- 所有调用侧均已脱离 `Global` 的 per-player 转发层：玩家实体与状态机用实体绑定的 `PlayerState`，HUD 用本地激活座位，拾取物按交互中的玩家实体取状态。
+- 新增 `Players.get_state_for_entity(node)`，将场景玩家实体反查为其座位状态；这避免 Director、拾取物和未来多实体场景误读 `Players.get_active_state()`。
+- `weapon_pickup.gd` / `healing_pickup.gd` 现在按交互者的状态处理装备、弹夹、备弹、治疗品和投掷物替换。
+- HUD 已直接读取 `PlayerState.current_hp/current_tp`、治疗品与装备数据。
+- Director 的弹药压力和物品投放条件均改为读取传入玩家实体对应的状态，修复先前 HP 读实体、弹药却读 Global 顶层的不一致。
+- SafeDoor 回血同时写玩家实体镜像与该实体的 `PlayerState.current_hp`。
 
-| 批次 | 主要文件 | 当前引用概况 |
-|------|----------|--------------|
-| 玩家实体 | `script/player.gd` | 20 属性 + 1 方法 |
-| 玩家状态机 | `script/player/*.gd` | 12 属性 + 45 方法（其中 `PlayerReloadState.gd` 17 处） |
-| 拾取物 | `weapon_pickup.gd` / `healing_pickup.gd` | 10 属性 + 7 方法 |
-| HUD | `ui/combat_hud.gd` | 3 属性 + 2 方法 |
-| Director | `director/*.gd` | 9 属性 + 2 方法 |
-| 其他 | `game_init.gd` / `weapon_data.gd` 注释 | 2 属性 |
+**验证**（Godot 4.6.3，2026-08-19）：
 
-建议批次：`player.gd` → `player/*State.gd` → 拾取物 → HUD → Director，每批单独 `project_run` 验证。
+1. 静态扫描 per-player Global 字段和方法，在 `script/` 中仅剩 `global.gd` 内的 shim 说明注释；调用侧为 **0**。
+2. 运行 `res://scene/maps/突袭-第一关-开头安全屋-户外.tscn` 成功进入 live；实体、seat 0、HP/TP 与绑定状态一致。
+3. 运行时直接调用 Director 的弹药/补给查询，均返回当前传入玩家的 `PlayerState` 数据，无脚本错误。
 
-顺带修 **Director 取数不一致**：`intensity_tracker.gd` 的 HP 因子读玩家节点属性，弹药因子却读 Global 顶层（传入的 `player` 参数根本不用）；`item_manager.gd` 同样。改为都读「传入实体对应的 state」，为将来「取全队最低血/最缺弹」留接口。
+运行期仍只见既有的文字色表导出警告和编辑器外树绝对路径警告，均与本阶段无关。
 
 ### ⬜ S5 · 删 shim（待做）
 

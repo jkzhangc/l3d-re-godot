@@ -270,4 +270,4 @@ func _play_attack_sound(stream: AudioStream) -> void:
 
 
 func _get_weapon() -> WeaponData:
-	return Global.get_active_weapon()
+	return get_player_state().get_active_weapon()

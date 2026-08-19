@@ -145,11 +145,14 @@ func _ready() -> void:
 	animation_timer.start()
 	_refresh_sprite()
 
-	# 从 Global 恢复 HP（用于存档加载后）
-	if Global.player_hp > 0.0:
-		current_hp = Global.player_hp
+	# 从本实体对应座位恢复 HP（用于存档加载后）
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state and state.current_hp > 0.0:
+		current_hp = state.current_hp
 	else:
 		current_hp = max_hp
+		if state:
+			state.current_hp = current_hp
 
 
 func _exit_tree() -> void:
@@ -424,9 +427,10 @@ func _init_hp() -> void:
 
 ## 从 CharacterData 资源读取外观/动画/HP 参数
 func _apply_character_data() -> void:
-	# 始终从 Global 同步角色数据（切换角色时必须更新 current_character）
-	if Global and Global.player_character:
-		current_character = Global.player_character as CharacterData
+	# 始终从本实体对应座位同步角色数据（切换角色时必须更新 current_character）
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state and state.character:
+		current_character = state.character
 	if not current_character:
 		return
 	var cd := current_character
@@ -451,10 +455,11 @@ func refresh_after_switch() -> void:
 	animation_timer.wait_time = walk_frame_duration
 	animation_timer.start()
 	# 保持 Idle 外观（非武器模式），仅记录武器数据引用
-	var wd: WeaponData = Global.get_active_weapon()
+	var state: PlayerState = Players.get_state_for_entity(self)
+	var wd: WeaponData = state.get_active_weapon() if state else null
 	_weapon_data = wd if wd and not wd.weapon_state_name.is_empty() else null
 	_weapon_mode = false
-	current_hp = Global.player_hp
+	current_hp = state.current_hp if state else max_hp
 	_moving = false
 	_anim_step = 0
 	velocity = Vector2.ZERO
@@ -491,9 +496,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	# 播放受伤音效
 	_play_sound(hurt_sound)
 
-	# 同步 HP 到当前座位（Global.player_hp 现在就是座位上的 current_hp，
-	# 旧实现额外那步「同步到队伍成员数据」已成冗余）
-	Global.player_hp = current_hp
+	# 同步 HP 到本实体对应座位。
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = current_hp
 
 	if current_hp <= 0.0:
 		_die()
@@ -523,13 +529,16 @@ func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) ->
 
 func heal(amount: float) -> void:
 	current_hp = minf(max_hp, current_hp + amount)
-	Global.player_hp = current_hp
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = current_hp
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
 
 
 ## 使用当前座位的治疗品；数据扣除由 PlayerState 负责，效果施加在实体自身。
 func use_healing_item() -> bool:
-	var used: ItemData = Players.get_active_state().use_healing_item()
+	var state: PlayerState = Players.get_state_for_entity(self)
+	var used: ItemData = state.use_healing_item() if state else null
 	if not used:
 		return false
 	apply_item_effects(used)
@@ -538,7 +547,8 @@ func use_healing_item() -> bool:
 
 ## 使用当前座位的辅助品。
 func use_support_item() -> bool:
-	var used: ItemData = Players.get_active_state().use_support_item()
+	var state: PlayerState = Players.get_state_for_entity(self)
+	var used: ItemData = state.use_support_item() if state else null
 	if not used:
 		return false
 	apply_item_effects(used)
@@ -559,20 +569,22 @@ func apply_item_effects(item: ItemData) -> void:
 func restore_tp(amount: int) -> void:
 	if amount <= 0:
 		return
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if not state:
+		return
 	var max_tp: int = _get_max_tp()
-	var before: int = Global.player_tp
-	Global.player_tp = mini(max_tp, before + amount)
-	if Global.player_tp > before:
-		print("[玩家] 回复 TP: +%d | TP: %d/%d" % [Global.player_tp - before, Global.player_tp, max_tp])
+	var before: int = state.current_tp
+	state.current_tp = mini(max_tp, before + amount)
+	if state.current_tp > before:
+		print("[玩家] 回复 TP: +%d | TP: %d/%d" % [state.current_tp - before, state.current_tp, max_tp])
 
 
 ## 当前角色的 TP 上限
 func _get_max_tp() -> int:
 	if current_character:
 		return current_character.get_effective_max_tp()
-	if Global and Global.player_character:
-		return (Global.player_character as CharacterData).get_effective_max_tp()
-	return 100
+	var state: PlayerState = Players.get_state_for_entity(self)
+	return state.get_max_tp() if state else 100
 
 
 ## 每帧更新 TP 自动回复（恢复量/间隔由 CharacterData 决定）
@@ -582,7 +594,10 @@ func _update_tp_regen(delta: float) -> void:
 	var interval: float = current_character.tp_regen_interval
 	if interval <= 0.0:
 		return
-	if Global.player_tp >= _get_max_tp():
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if not state:
+		return
+	if state.current_tp >= _get_max_tp():
 		_tp_regen_timer = 0.0
 		return
 	_tp_regen_timer += delta
@@ -607,11 +622,14 @@ func use_skill(trigger: String = "") -> void:
 	if not _match_motion(skill.command_motion):
 		print("[技能] 搓招失败：%s 需要方向指令 [%s]" % [skill.skill_name, skill.command_motion])
 		return
-	if skill.tp_cost > 0 and Global.player_tp < skill.tp_cost:
-		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, Global.player_tp])
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if not state:
 		return
-	Global.player_tp -= skill.tp_cost
-	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, Global.player_tp])
+	if skill.tp_cost > 0 and state.current_tp < skill.tp_cost:
+		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, state.current_tp])
+		return
+	state.current_tp -= skill.tp_cost
+	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, state.current_tp])
 	# TODO: 实际技能效果（伤害/治疗/增益/切换形态/召唤等），并接入 cooldown
 
 
@@ -671,8 +689,10 @@ func _try_switch_on_death() -> bool:
 			mgr = nodes[0]
 	if not mgr:
 		return false
-	# 把当前座位标记为死亡（否则 next_living_seat 还会把它算作存活）
-	Players.get_active_state().current_hp = 0.0
+	# 把本实体对应座位标记为死亡（否则 next_living_seat 还会把它算作存活）
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = 0.0
 	# 尝试切换
 	var switched: bool = mgr.switch_after_death()
 	if switched:
@@ -701,8 +721,10 @@ func _die() -> void:
 	# 播放死亡音效
 	_play_sound(death_sound)
 
-	# 更新 Global HP
-	Global.player_hp = 0.0
+	# 更新本实体对应座位的 HP。
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = 0.0
 
 	# 停止状态机
 	var sm: Node = get_node_or_null("StateMachine")

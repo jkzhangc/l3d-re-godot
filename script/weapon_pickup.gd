@@ -118,8 +118,11 @@ func _process(delta: float) -> void:
 	if not weapon_data:
 		return
 
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if not state:
+		return
 	var slot: String = weapon_data.get_slot_key()
-	var current: WeaponData = Global.get_equipped_weapon(slot)
+	var current: WeaponData = state.get_equipped_weapon(slot)
 
 	# 该槽位为空 → 自动拾取装备
 	if current == null:
@@ -187,15 +190,19 @@ func _do_pickup() -> void:
 	if not weapon_data:
 		return
 
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if not state:
+		return
+
 	# 检查当前角色是否可以使用此武器
-	var player_character: CharacterData = Global.player_character as CharacterData
+	var player_character: CharacterData = state.character
 	if player_character and not player_character.can_use_weapon(weapon_data):
 		print("[拾取] 角色 %s 无法使用 %s，拾取拒绝" % [player_character.character_name, weapon_data.item_name])
 		_hold_timer = 0.0
 		return
 
 	var slot: String = weapon_data.get_slot_key()
-	var old: WeaponData = Global.get_equipped_weapon(slot)
+	var old: WeaponData = state.get_equipped_weapon(slot)
 
 	if old:
 		_drop_weapon(old, slot)
@@ -203,24 +210,24 @@ func _do_pickup() -> void:
 	else:
 		print("[拾取] 装备到 %s 槽: %s" % [slot, weapon_data.item_name])
 
-	Global.equipment[slot] = weapon_data
+	state.equip_weapon_in_slot(weapon_data, slot)
 
 	# —— 弹药处理 ——
 	# 弹夹子弹
 	if weapon_data.is_ranged and weapon_data.magazine_capacity > 0:
 		if pickup_magazine_ammo >= 0:
 			# 使用指定的弹夹子弹数
-			Global.set_magazine_ammo(weapon_data.item_id, clampi(pickup_magazine_ammo, 0, weapon_data.magazine_capacity))
+			state.set_magazine_ammo(weapon_data.item_id, clampi(pickup_magazine_ammo, 0, weapon_data.magazine_capacity))
 		else:
 			# -1 = 自动填满弹夹
-			Global.set_magazine_ammo(weapon_data.item_id, weapon_data.magazine_capacity)
+			state.set_magazine_ammo(weapon_data.item_id, weapon_data.magazine_capacity)
 
 	# 备弹（库存弹药物品）
 	if pickup_reserve_ammo > 0 and not weapon_data.ammo_item_id.is_empty():
-		var ammo_res := _find_ammo_resource(weapon_data.ammo_item_id)
+		var ammo_res: ItemData = _find_ammo_resource(state, weapon_data.ammo_item_id)
 		if ammo_res:
 			for _i: int in range(pickup_reserve_ammo):
-				Global.inventory.append(ammo_res.duplicate())
+				state.add_item(ammo_res.duplicate())
 			print("[拾取] 给予备弹: %s ×%d" % [weapon_data.ammo_item_id, pickup_reserve_ammo])
 		else:
 			push_warning("[拾取] 找不到弹药资源: %s" % weapon_data.ammo_item_id)
@@ -233,6 +240,9 @@ func _drop_weapon(wd: WeaponData, slot: String) -> void:
 	## 将旧武器生成为地面拾取物，掉落在玩家脚下。
 	## 远程武器的弹夹子弹和备弹一并转移到拾取物上。
 	if not _player_ref:
+		return
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if not state:
 		return
 
 	var pickup: Node2D = PICKUP_SCENE.instantiate()
@@ -259,15 +269,15 @@ func _drop_weapon(wd: WeaponData, slot: String) -> void:
 	# —— 远程武器：转移弹药到拾取物 ——
 	if wd.is_ranged and wd.magazine_capacity > 0:
 		# 弹夹子弹
-		var mag: int = Global.weapon_magazines.get(wd.item_id, 0)
+		var mag: int = state.get_magazine_ammo(wd.item_id)
 		pickup.pickup_magazine_ammo = mag
-		Global.weapon_magazines.erase(wd.item_id)
+		state.weapon_magazines.erase(wd.item_id)
 
 		# 备弹：从背包取出全部对应弹药，写入拾取物
-		var reserve: int = Global.count_ammo_item(wd.ammo_item_id)
+		var reserve: int = state.count_ammo_item(wd.ammo_item_id)
 		if reserve > 0:
 			pickup.pickup_reserve_ammo = reserve
-			Global.consume_ammo_item(wd.ammo_item_id, reserve)
+			state.consume_ammo_item(wd.ammo_item_id, reserve)
 
 	# 掉落在玩家脚下
 	pickup.position = _player_ref.global_position
@@ -294,9 +304,9 @@ func _find_ground_layer() -> Node:
 	return tree.current_scene.find_child("GroundLayer", true, false)
 
 
-func _find_ammo_resource(ammo_item_id: String) -> ItemData:
+func _find_ammo_resource(state: PlayerState, ammo_item_id: String) -> ItemData:
 	## 根据 ammo_item_id 找到对应的 ItemData 资源。
-	## 先在 object/ 目录搜索 .tres 文件，回退到遍历已加载资源。
+	## 先在 object/ 目录搜索 .tres 文件，回退到遍历该玩家背包。
 
 	# 方案1：按命名规则推导路径
 	var derived := "res://object/item_%s_ammo.tres" % ammo_item_id.trim_prefix("ammo_")
@@ -312,8 +322,8 @@ func _find_ammo_resource(ammo_item_id: String) -> ItemData:
 		if res is ItemData and res.item_id == ammo_item_id:
 			return res as ItemData
 
-	# 方案3：从 Global.inventory 或已装备中找已有的弹药实例
-	for it: Resource in Global.inventory:
+	# 方案3：从该玩家背包中找已有的弹药实例
+	for it: Resource in state.inventory:
 		if it is ItemData and it.item_id == ammo_item_id:
 			return it as ItemData
 

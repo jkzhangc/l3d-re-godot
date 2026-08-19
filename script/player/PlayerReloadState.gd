@@ -29,14 +29,14 @@ func enter() -> void:
 		return
 
 	# 弹夹已满
-	var current: int = Global.get_magazine_ammo(_wd.item_id)
+	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	if current >= _wd.magazine_capacity:
 		print("[装填] 弹夹已满 (%d/%d)" % [current, _wd.magazine_capacity])
 		_return_to_weapon()
 		return
 
 	# 没有备用弹药
-	var available: int = Global.count_ammo_item(_wd.ammo_item_id)
+	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
 	if available <= 0:
 		print("[装填] 没有可用弹药！(%s)" % _wd.ammo_item_id)
 		_return_to_weapon()
@@ -158,8 +158,8 @@ func _process_shotgun_loop(delta: float) -> void:
 			# 循环动画播放完一轮 → 装一发子弹
 			_load_one_shell()
 			# 检查是否继续循环
-			var current: int = Global.get_magazine_ammo(_wd.item_id)
-			var available: int = Global.count_ammo_item(_wd.ammo_item_id)
+			var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
+			var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
 			if current >= _wd.magazine_capacity or available <= 0:
 				_enter_shotgun_end()
 				return
@@ -221,40 +221,40 @@ func _process_wait(delta: float) -> void:
 
 ## NORMAL 模式：一次性装入所有可用的弹药
 func _do_reload() -> void:
-	var current: int = Global.get_magazine_ammo(_wd.item_id)
+	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	var capacity: int = _wd.magazine_capacity
 	var need: int = capacity - current
-	var available: int = Global.count_ammo_item(_wd.ammo_item_id)
+	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
 	var to_load: int = mini(need, available)
-	var consumed: int = Global.consume_ammo_item(_wd.ammo_item_id, to_load)
+	var consumed: int = get_player_state().consume_ammo_item(_wd.ammo_item_id, to_load)
 
 	if consumed > 0:
-		Global.set_magazine_ammo(_wd.item_id, current + consumed)
+		get_player_state().set_magazine_ammo(_wd.item_id, current + consumed)
 		print("[装填] 完成: %d → %d / %d (背包剩余: %d)" % [
 			current,
-			Global.get_magazine_ammo(_wd.item_id),
+			get_player_state().get_magazine_ammo(_wd.item_id),
 			capacity,
-			Global.count_ammo_item(_wd.ammo_item_id)
+			get_player_state().count_ammo_item(_wd.ammo_item_id)
 		])
 
 
 ## SHOTGUN 模式：装入一发子弹
 func _load_one_shell() -> void:
-	var current: int = Global.get_magazine_ammo(_wd.item_id)
+	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	if current >= _wd.magazine_capacity:
 		return
 
-	var available: int = Global.count_ammo_item(_wd.ammo_item_id)
+	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
 	if available <= 0:
 		return
 
-	var consumed: int = Global.consume_ammo_item(_wd.ammo_item_id, 1)
+	var consumed: int = get_player_state().consume_ammo_item(_wd.ammo_item_id, 1)
 	if consumed > 0:
-		Global.set_magazine_ammo(_wd.item_id, current + 1)
+		get_player_state().set_magazine_ammo(_wd.item_id, current + 1)
 		print("[霰弹枪装填] +1 → %d / %d (背包剩余: %d)" % [
-			Global.get_magazine_ammo(_wd.item_id),
+			get_player_state().get_magazine_ammo(_wd.item_id),
 			_wd.magazine_capacity,
-			Global.count_ammo_item(_wd.ammo_item_id)
+			get_player_state().count_ammo_item(_wd.ammo_item_id)
 		])
 
 
@@ -289,4 +289,4 @@ func _play_sound(stream: AudioStream) -> void:
 
 
 func _get_weapon() -> WeaponData:
-	return Global.get_active_weapon()
+	return get_player_state().get_active_weapon()

@@ -21,7 +21,7 @@ func enter() -> void:
 
 	# 远程武器：弹夹为空则播放空弹音效，不进入攻击动画
 	if _wd.is_ranged and _wd.magazine_capacity > 0:
-		var current: int = Global.get_magazine_ammo(_wd.item_id)
+		var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 		if current <= 0:
 			print("[手枪] 弹夹为空！咔嚓——")
 			if _wd.empty_fire_sound:
@@ -125,12 +125,12 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 
 func _fire_bullet() -> void:
 	# 消耗弹药
-	var current: int = Global.get_magazine_ammo(_wd.item_id)
+	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	if current <= 0:
 		print("[手枪] 弹夹为空！咔嚓——")
 		return
 
-	Global.set_magazine_ammo(_wd.item_id, current - 1)
+	get_player_state().set_magazine_ammo(_wd.item_id, current - 1)
 	var bullet_count: int = _wd.bullet_list.size()
 	print("[手枪] 发射！弹夹剩余: %d / %d | 子弹数: %d" % [current - 1, _wd.magazine_capacity, bullet_count])
 
@@ -215,7 +215,7 @@ func _try_continue_attack() -> bool:
 	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
 		# HOLD 模式下检查弹药（空弹则终止连发）
 		if _wd.is_ranged and _wd.magazine_capacity > 0:
-			if Global.get_magazine_ammo(_wd.item_id) <= 0:
+			if get_player_state().get_magazine_ammo(_wd.item_id) <= 0:
 				if _wd.empty_fire_sound:
 					_play_attack_sound(_wd.empty_fire_sound)
 				return false
@@ -234,7 +234,7 @@ func _play_attack_sound(stream: AudioStream) -> void:
 
 
 func _get_weapon() -> WeaponData:
-	return Global.get_active_weapon()
+	return get_player_state().get_active_weapon()
 
 
 ## 通知枪声范围内的敌人（仅影响 Idle 状态的敌人）

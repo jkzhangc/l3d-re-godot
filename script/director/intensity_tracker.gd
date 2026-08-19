@@ -18,7 +18,7 @@ var _raw_intensity: float = 0.0
 ## 每帧调用，返回平滑后的紧张度
 func evaluate(player: Node2D, delta: float) -> float:
 	var hp_factor: float = _calc_hp_factor(player)
-	var ammo_factor: float = _calc_ammo_factor()
+	var ammo_factor: float = _calc_ammo_factor(player)
 	var proximity_factor: float = _calc_proximity_factor(player)
 	var progress_factor: float = _calc_progress_factor(player)
 	var combat_factor: float = _calc_combat_factor()
@@ -67,19 +67,22 @@ func _calc_hp_factor(player: Node2D) -> float:
 # 弹药因子（权重 20%）
 # 取主武器+副武器平均弹药比例，弹药越少越紧张
 # ═══════════════════════════════════════
-func _calc_ammo_factor() -> float:
+func _calc_ammo_factor(player: Node2D) -> float:
+	var state: PlayerState = Players.get_state_for_entity(player)
+	if not state:
+		return 0.0
 	var ammo_ratios: Array[float] = []
 	var count: int = 0
 
 	for slot: String in ["primary", "secondary"]:
-		var wd: WeaponData = Global.equipment.get(slot) as WeaponData
+		var wd: WeaponData = state.equipment.get(slot) as WeaponData
 		if not wd:
 			continue
 		var ratio: float = 1.0
 		if wd.is_ranged and wd.magazine_capacity > 0:
 			# 弹药比例 = (弹夹 + 备弹) / (弹夹容量 * 2)
-			var mag_current: int = Global.weapon_magazines.get(wd.item_id, 0)
-			var reserve: int = Global.count_ammo_item(wd.ammo_item_id)
+			var mag_current: int = state.get_magazine_ammo(wd.item_id)
+			var reserve: int = state.count_ammo_item(wd.ammo_item_id)
 			ratio = float(mag_current + reserve) / float(wd.magazine_capacity * 2)
 			ratio = clampf(ratio, 0.0, 1.0)
 		ammo_ratios.append(ratio)

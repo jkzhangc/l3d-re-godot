@@ -20,7 +20,7 @@ var _aim_indicator: Node2D = null
 
 
 func enter() -> void:
-	_td = Global.throwable
+	_td = get_player_state().throwable
 	if not _td:
 		transition_requested.emit("Idle")
 		return
@@ -104,7 +104,7 @@ func _throw() -> void:
 	var start: Vector2 = character.global_position
 	var end: Vector2 = start + dir * (_range * TILE_SIZE)
 	ThrowableProjectile.spawn(_td, start, end, character)
-	Global.throwable = null
+	get_player_state().throwable = null
 	_remove_aim_indicator()
 	transition_requested.emit("Idle")
 

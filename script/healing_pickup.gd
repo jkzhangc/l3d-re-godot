@@ -101,8 +101,12 @@ func _process_pickup(delta: float) -> void:
 	if Time.get_ticks_msec() - _spawn_msec < PICKUP_DELAY_MSEC:
 		return
 
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if not state:
+		return
+
 	# 仅投掷物且已持有 → 需按住确定键替换；其余自动拾取
-	var needs_hold: bool = item.item_type == ItemData.ItemType.THROWABLE and Global.throwable != null
+	var needs_hold: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
 	if not needs_hold:
 		_do_pickup()
 		return
@@ -126,16 +130,20 @@ func _process_pickup(delta: float) -> void:
 func _do_pickup() -> void:
 	if not item:
 		return
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if not state:
+		return
+
 	# 投掷物单槽位：已持有则先掉落旧的（同副武器替换逻辑）
-	if item.item_type == ItemData.ItemType.THROWABLE and Global.throwable:
-		_drop_old_throwable(_player_ref)
-	Global.pickup_consumable(item)
+	if item.item_type == ItemData.ItemType.THROWABLE and state.throwable:
+		_drop_old_throwable(_player_ref, state)
+	state.pickup_consumable(item)
 	queue_free()
 
 
-func _drop_old_throwable(body: Node2D) -> void:
+func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 	## 将旧的投掷物生成为地面拾取物，掉落在玩家脚下。
-	var old: ThrowableData = Global.throwable
+	var old: ThrowableData = state.throwable
 	if not old:
 		return
 	var drop: Node2D = PICKUP_SCENE.instantiate()

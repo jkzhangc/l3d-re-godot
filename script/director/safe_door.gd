@@ -50,7 +50,9 @@ func _on_body_entered(body: Node2D) -> void:
 	if heal_on_enter:
 		var max_hp: float = body.get("max_hp") if body.get("max_hp") != null else 200.0
 		body.set("current_hp", max_hp)
-		Global.player_hp = max_hp
+		var state: PlayerState = Players.get_state_for_entity(body)
+		if state:
+			state.current_hp = max_hp
 		print("[SafeDoor] 回血至: %.0f" % max_hp)
 
 	if save_on_enter:

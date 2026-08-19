@@ -62,16 +62,16 @@ func update(delta: float, phase: StringName, alive_count: int) -> void:
 
 func _evaluate_and_spawn(player: Node2D) -> void:
 	var hp_ratio: float = _get_hp_ratio(player)
-	var ammo_ratio: float = _get_ammo_ratio()
-	var has_secondary: bool = _has_secondary_weapon()
+	var ammo_ratio: float = _get_ammo_ratio(player)
+	var has_secondary: bool = _has_secondary_weapon(player)
 
 	var item: String = ""
 	var probability: float = 0.0
 
-	if hp_ratio < hp_pills_threshold and not _has_healing_item():
+	if hp_ratio < hp_pills_threshold and not _has_healing_item(player):
 		item = "药品"
 		probability = 0.4
-	elif hp_ratio < hp_spray_threshold and not _has_healing_item():
+	elif hp_ratio < hp_spray_threshold and not _has_healing_item(player):
 		item = "急救喷雾"
 		probability = 0.6
 	elif ammo_ratio < ammo_threshold:
@@ -111,16 +111,19 @@ func _get_hp_ratio(player: Node2D) -> float:
 	return current_hp / max_hp
 
 
-func _get_ammo_ratio() -> float:
+func _get_ammo_ratio(player: Node2D) -> float:
+	var state: PlayerState = Players.get_state_for_entity(player)
+	if not state:
+		return 1.0
 	var ratios: Array[float] = []
 	for slot: String in ["primary", "secondary"]:
-		var wd: WeaponData = Global.equipment.get(slot) as WeaponData
+		var wd: WeaponData = state.equipment.get(slot) as WeaponData
 		if not wd or not wd.is_ranged:
 			continue
 		var ratio: float = 1.0
 		if wd.magazine_capacity > 0:
-			var mag_current: int = Global.weapon_magazines.get(wd.item_id, 0)
-			var reserve: int = Global.count_ammo_item(wd.ammo_item_id)
+			var mag_current: int = state.get_magazine_ammo(wd.item_id)
+			var reserve: int = state.count_ammo_item(wd.ammo_item_id)
 			ratio = float(mag_current + reserve) / float(wd.magazine_capacity * 2)
 			ratio = clampf(ratio, 0.0, 1.0)
 		ratios.append(ratio)
@@ -132,13 +135,14 @@ func _get_ammo_ratio() -> float:
 	return sum / float(ratios.size())
 
 
-func _has_healing_item() -> bool:
-	return Global.healing_item != null
+func _has_healing_item(player: Node2D) -> bool:
+	var state: PlayerState = Players.get_state_for_entity(player)
+	return state != null and state.healing_item != null
 
 
-func _has_secondary_weapon() -> bool:
-	var wd: WeaponData = Global.equipment.get("secondary") as WeaponData
-	return wd != null
+func _has_secondary_weapon(player: Node2D) -> bool:
+	var state: PlayerState = Players.get_state_for_entity(player)
+	return state != null and state.get_equipped_weapon("secondary") != null
 
 
 # ═══════════════════════════════════════

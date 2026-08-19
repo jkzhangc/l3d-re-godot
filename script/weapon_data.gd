@@ -147,7 +147,7 @@ func _init() -> void:
 	item_type = ItemType.WEAPON
 
 
-## 获取槽位键名（用于 Global.equipment 字典查找）
+## 获取槽位键名（用于 PlayerState.equipment 字典查找）
 func get_slot_key() -> String:
 	return "primary" if weapon_slot == WeaponSlot.PRIMARY else "secondary"
 

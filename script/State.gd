@@ -10,6 +10,12 @@ class_name State extends Node
 var character: CharacterBody2D
 var last_state: State
 
+
+## 玩家状态机的 per-player 数据入口。敌人状态不会调用本方法。
+## 通过实体反查座位，避免未来联机时误读本地 active state。
+func get_player_state() -> PlayerState:
+	return Players.get_state_for_entity(character)
+
 signal transition_requested(nxt_state: String)
 
 

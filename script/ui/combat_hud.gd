@@ -29,13 +29,11 @@ const SPRAY_TEXTS: Array[Texture2D] = [
 @onready var secondary_icon: TextureRect = $SecondaryWeaponIcon
 @onready var tp_label: GradientLabel = $TPLabel
 
-var _player_ref: CharacterBody2D = null
 var _last_tp: int = -1
 
 
 func _ready() -> void:
 	layer = 10
-	_player_ref = Players.get_local_entity() as CharacterBody2D
 	_configure_tp_label()
 	# HP 填充用 scale.x 横向缩放（配合 HPFill expand_mode=IGNORE_SIZE 自动贴合纹理）
 	refresh()
@@ -53,11 +51,9 @@ func refresh() -> void:
 
 
 func _update_hp() -> void:
-	var hp: float = Global.player_hp
-	var max_hp: float = 200.0
-	if _player_ref:
-		hp = _player_ref.current_hp
-		max_hp = _player_ref.max_hp
+	var state: PlayerState = Players.get_active_state()
+	var hp: float = state.current_hp
+	var max_hp: float = state.get_max_hp()
 	var ratio: float = clampf(hp / max_hp, 0.0, 1.0)
 	if hp_fill:
 		hp_fill.scale = Vector2(ratio, 1.0)
@@ -78,22 +74,25 @@ func _configure_tp_label() -> void:
 
 
 func _update_tp() -> void:
-	var tp: int = Global.player_tp
+	var state: PlayerState = Players.get_active_state()
+	var tp: int = state.current_tp
 	if tp != _last_tp:
 		_last_tp = tp
 		tp_label.text = "%d" % tp
 
 
 func _update_spray() -> void:
-	var n: int = clampi(Global.healing_item_count, 0, SPRAY_TEXTS.size() - 1)
+	var state: PlayerState = Players.get_active_state()
+	var n: int = clampi(state.healing_item_count, 0, SPRAY_TEXTS.size() - 1)
 	if spray_count:
 		spray_count.texture = SPRAY_TEXTS[n]
 		spray_count.size = SPRAY_TEXTS[n].get_size()
 
 
 func _update_weapons() -> void:
-	var primary: WeaponData = Global.get_equipped_weapon("primary")
-	var secondary: WeaponData = Global.get_equipped_weapon("secondary")
+	var state: PlayerState = Players.get_active_state()
+	var primary: WeaponData = state.get_equipped_weapon("primary")
+	var secondary: WeaponData = state.get_equipped_weapon("secondary")
 	if primary_icon:
 		if primary and primary.icon:
 			primary_icon.texture = primary.icon
