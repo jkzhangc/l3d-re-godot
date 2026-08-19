@@ -1,228 +1,673 @@
 extends Node2D
-## 游戏场景根 —— Host 权威世界 / 客户端纯渲染视图。
-##
-## Host：
-##   - 玩家/敌人/子弹的生成、模拟、销毁全部发生在这里（或子实体节点上）
-##   - 通过 MultiplayerSpawner.spawn(data) 广播生成事件
-## Client：
-##   - 只接收 spawn 广播（spawn_function 实例化）与同步器属性更新
-##   - 上发输入（player.gd 的 RPC），不做任何世界模拟
+## 最小 Host-authoritative 游戏世界。
+## 生命周期使用 reliable RPC，运行状态使用显式 unreliable 快照。
+## 刻意不依赖 MultiplayerSpawner/MultiplayerSynchronizer，避免动态属性路径问题。
 
 const PLAYER_SCENE := preload("res://object/player.tscn")
 const ENEMY_SCENE := preload("res://object/enemy.tscn")
 const BULLET_SCENE := preload("res://object/bullet.tscn")
 
 const ARENA_RECT := Rect2(-900.0, -550.0, 1800.0, 1100.0)
-const ENEMY_SPAWN_INTERVAL := 4.0
+const PLAYER_SPEED := 220.0
+const ENEMY_SPEED := 72.0
+const BULLET_SPEED := 620.0
+const SNAPSHOT_INTERVAL := 0.05
+const ENEMY_SPAWN_INTERVAL := 2.5
+const FIRE_COOLDOWN := 0.25
+const PLAYER_MAX_HP := 100.0
+const READY_RETRY_INTERVAL := 0.5
 
-@onready var entities: Node2D = $Entities
-@onready var enemies: Node2D = $Enemies
-@onready var bullets: Node2D = $Bullets
-@onready var player_spawner: MultiplayerSpawner = $Entities/PlayerSpawner
-@onready var enemy_spawner: MultiplayerSpawner = $Enemies/EnemySpawner
-@onready var bullet_spawner: MultiplayerSpawner = $Bullets/BulletSpawner
+@onready var players_root: Node2D = $Players
+@onready var enemies_root: Node2D = $Enemies
+@onready var bullets_root: Node2D = $Bullets
 @onready var camera: Camera2D = $Camera2D
 
-var wave := 0
-var kills := 0
+var _players: Dictionary = {}
+var _enemies: Dictionary = {}
+var _bullets: Dictionary = {}
+var _ready_peers: Dictionary = {}
+var _enemy_counter := 1
+var _bullet_counter := 1
+var _enemy_spawn_timer := 0.35
+var _snapshot_timer := 0.0
+var _world_time := 0.0
+var _initial_snapshot_applied := false
+var _ready_retry_timer := 0.0
+var _ready_attempts := 0
 
-var _enemy_counter := 0
-var _enemy_spawn_timer := 2.0
-var _auto_test := ""
+var _test_mode := ""
+var _test_enemy_spawned := false
+var _test_enemy_despawned := false
+var _test_bullet_spawned := false
+var _test_client_seen_enemy := false
+var _test_client_seen_bullet := false
+var _test_sent_result := false
+var _test_damage_applied := false
 
 
 func _ready() -> void:
-	# 背景 64×64 拉伸铺满 3600×2200 竞技场
-	$World/Ground.scale = Vector2(3600.0 / 64.0, 2200.0 / 64.0)
-	player_spawner.spawn_function = _spawn_player_entity
-	enemy_spawner.spawn_function = _spawn_enemy_entity
-	bullet_spawner.spawn_function = _spawn_bullet_entity
-
-	if Net.is_host:
-		Net.peer_left.connect(_on_peer_left)
-		# 只生成 Host 自己；其他玩家等各自 request_game_ready 再生成
-		# （保证 spawn 广播在客户端进入场景、spawner 就绪之后才发出，避免丢失）
-		_spawn_player_for(Net.my_peer_id)
-	else:
-		# 客户端：向 Host 报告就绪（Host 幂等处理）并请求快照
-		if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
-			# 无网络时仅用于无头自检（不会真正进入联机）
-			print("[Game] 未连接网络，进入观察模式（仅无头自检）")
-		else:
-			request_game_ready.rpc_id(1)
-
-	# 无头自动联机测试的诊断入口（-- --net-test=host/client）
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
-		_auto_test = "host"
+		_test_mode = "host"
 	elif "--net-test=client" in user_args:
-		_auto_test = "client"
-	if not _auto_test.is_empty():
-		_run_auto_test()
+		_test_mode = "client"
+	$World/Ground.scale = Vector2(1800.0 / 64.0, 1100.0 / 64.0)
+	if Net.is_host:
+		Net.peer_left.connect(_on_peer_left)
+		Net.game_scene_ready_received.connect(_on_game_scene_ready_received)
+		_add_player(Net.my_peer_id, Vector2(-250.0, 0.0), false)
+		call_deferred("_consume_pending_scene_ready")
+		if _test_mode == "host":
+			_spawn_enemy(Vector2(80.0, 0.0))
+			_test_enemy_spawned = true
+	else:
+		if Net.has_network():
+			call_deferred("_request_ready")
+		else:
+			print("[Game] offline observation mode")
 
 
 func _exit_tree() -> void:
-	if Net.is_host:
+	if Net.peer_left.is_connected(_on_peer_left):
 		Net.peer_left.disconnect(_on_peer_left)
+	if Net.game_scene_ready_received.is_connected(_on_game_scene_ready_received):
+		Net.game_scene_ready_received.disconnect(_on_game_scene_ready_received)
+
+
+func _request_ready() -> void:
+	if Net.is_host or not Net.has_network() or _initial_snapshot_applied:
+		return
+	_ready_attempts += 1
+	_ready_retry_timer = READY_RETRY_INTERVAL
+	Net.report_game_scene_ready.rpc_id(1, scene_file_path)
+	print("[Game] GAME_READY sent attempt=%d via=/root/Net" % _ready_attempts)
 
 
 func _process(delta: float) -> void:
-	# 相机跟随本地玩家（所有端各自跟随自己）
-	var me := entities.get_node_or_null(str(Net.my_peer_id)) as Node2D
+	_world_time += delta
+	var me := players_root.get_node_or_null(str(Net.my_peer_id)) as Node2D
 	if me:
 		camera.global_position = me.global_position
+	if Net.is_host:
+		_host_process(delta)
+	else:
+		_client_process(delta)
+	if not _test_mode.is_empty():
+		_run_test_checks()
 
-	if not Net.is_host:
-		return
-	# ---- 仅 Host：世界模拟 ----
+
+# ---------------------------------------------------------------- host simulation
+
+func _host_process(delta: float) -> void:
+	if _players.has(Net.my_peer_id):
+		var host_dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+		var host_fire := Input.is_action_pressed("fire")
+		if _test_mode == "host":
+			host_dir = Vector2.RIGHT
+			host_fire = true
+		_set_input(Net.my_peer_id, host_dir, host_fire)
+	for peer_id in _players.keys():
+		_simulate_player(int(peer_id), delta)
+	for enemy_id in _enemies.keys().duplicate():
+		_simulate_enemy(int(enemy_id), delta)
+	for bullet_id in _bullets.keys().duplicate():
+		_simulate_bullet(int(bullet_id), delta)
 	_enemy_spawn_timer -= delta
-	if _enemy_spawn_timer <= 0.0:
+	if _test_mode != "host" and _enemy_spawn_timer <= 0.0:
 		_enemy_spawn_timer = ENEMY_SPAWN_INTERVAL
-		_spawn_enemy()
+		_spawn_enemy(_random_spawn_position())
+	_snapshot_timer -= delta
+	if _snapshot_timer <= 0.0:
+		_snapshot_timer = SNAPSHOT_INTERVAL
+		_broadcast_state_snapshot()
 
 
-# ---------------------------------------------------------------- spawn_function（两端执行）
-
-func _spawn_player_entity(data: Variant) -> Node:
-	var p: Node2D = PLAYER_SCENE.instantiate()
-	p.name = str(data)
-	return p
-
-
-func _spawn_enemy_entity(data: Variant) -> Node:
-	var e: Node2D = ENEMY_SCENE.instantiate()
-	e.name = "E_%s" % str(data)
-	return e
-
-
-func _spawn_bullet_entity(data: Variant) -> Node:
-	var b: Node2D = BULLET_SCENE.instantiate()
-	if data is Dictionary:
-		b.setup(
-			data.get("origin", Vector2.ZERO),
-			data.get("dir", Vector2.RIGHT),
-			float(data.get("speed", 0.0)),
-			int(data.get("owner", 1)),
-		)
-	return b
+func _client_process(delta: float) -> void:
+	if not Net.has_network():
+		return
+	if not _initial_snapshot_applied:
+		_ready_retry_timer -= delta
+		if _ready_retry_timer <= 0.0:
+			_request_ready()
+		return
+	if not _players.has(Net.my_peer_id):
+		return
+	var dir := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var firing := Input.is_action_pressed("fire")
+	if _test_mode == "client":
+		dir = Vector2.RIGHT
+		firing = true
+	submit_input.rpc_id(1, dir, firing)
 
 
-# ---------------------------------------------------------------- Host：生成 / 清理
+func _set_input(peer_id: int, dir: Vector2, firing: bool) -> void:
+	if not _players.has(peer_id):
+		return
+	var state: Dictionary = _players[peer_id]
+	state["input"] = dir.limit_length(1.0)
+	state["firing"] = firing
+	_players[peer_id] = state
 
-func _spawn_player_for(peer_id: int) -> void:
+
+func _simulate_player(peer_id: int, delta: float) -> void:
+	var state: Dictionary = _players[peer_id]
+	if not bool(state["alive"]):
+		if float(state["respawn_at"]) > 0.0 and _world_time >= float(state["respawn_at"]):
+			state["alive"] = true
+			state["hp"] = PLAYER_MAX_HP
+			state["pos"] = Vector2(-250.0, 0.0)
+			state["respawn_at"] = 0.0
+			print("[Game] PLAYER_RESPAWN peer=%d" % peer_id)
+		else:
+			_players[peer_id] = state
+			return
+	var dir: Vector2 = state["input"]
+	state["pos"] = (state["pos"] + dir * PLAYER_SPEED * delta).clamp(ARENA_RECT.position, ARENA_RECT.end)
+	state["fire_cd"] = maxf(0.0, float(state["fire_cd"]) - delta)
+	if bool(state["firing"]) and float(state["fire_cd"]) <= 0.0:
+		state["fire_cd"] = FIRE_COOLDOWN
+		_spawn_bullet(peer_id, state["pos"], _aim_direction(state["pos"], dir))
+	_players[peer_id] = state
+	_apply_player_node(peer_id, state)
+
+
+func _simulate_enemy(enemy_id: int, delta: float) -> void:
+	if not _enemies.has(enemy_id):
+		return
+	var state: Dictionary = _enemies[enemy_id]
+	var target_id := _nearest_alive_player(state["pos"])
+	if target_id < 0:
+		return
+	var target: Dictionary = _players[target_id]
+	var to_target: Vector2 = target["pos"] - state["pos"]
+	if to_target.length() > 30.0:
+		state["pos"] += to_target.normalized() * ENEMY_SPEED * delta
+	else:
+		state["attack_cd"] = maxf(0.0, float(state["attack_cd"]) - delta)
+		if float(state["attack_cd"]) <= 0.0:
+			state["attack_cd"] = 1.0
+			_damage_player(target_id, 12.0)
+	_enemies[enemy_id] = state
+	_apply_enemy_node(enemy_id, state)
+
+
+func _simulate_bullet(bullet_id: int, delta: float) -> void:
+	if not _bullets.has(bullet_id):
+		return
+	var state: Dictionary = _bullets[bullet_id]
+	state["ttl"] = float(state["ttl"]) - delta
+	state["pos"] += state["dir"] * float(state["speed"]) * delta
+	var hit_enemy := -1
+	for enemy_id in _enemies.keys():
+		var enemy: Dictionary = _enemies[enemy_id]
+		if state["pos"].distance_to(enemy["pos"]) < 22.0:
+			hit_enemy = int(enemy_id)
+			break
+	if hit_enemy >= 0:
+		var enemy: Dictionary = _enemies[hit_enemy]
+		enemy["hp"] = float(enemy["hp"]) - 25.0
+		if float(enemy["hp"]) <= 0.0:
+			_enemy_despawn(hit_enemy)
+		else:
+			_enemies[hit_enemy] = enemy
+		_remove_bullet(bullet_id)
+		return
+	if float(state["ttl"]) <= 0.0 or not ARENA_RECT.grow(100.0).has_point(state["pos"]):
+		_remove_bullet(bullet_id)
+		return
+	_bullets[bullet_id] = state
+	_apply_bullet_node(bullet_id, state)
+
+
+func _damage_player(peer_id: int, damage: float) -> void:
+	var state: Dictionary = _players[peer_id]
+	state["hp"] = maxf(0.0, float(state["hp"]) - damage)
+	if float(state["hp"]) <= 0.0:
+		state["alive"] = false
+		state["respawn_at"] = _world_time + 3.0
+		print("[Game] PLAYER_DOWN peer=%d" % peer_id)
+	_players[peer_id] = state
+	_apply_player_node(peer_id, state)
+
+
+# ---------------------------------------------------------------- entity lifecycle
+
+func _add_player(peer_id: int, pos: Vector2, broadcast: bool = true) -> void:
+	if _players.has(peer_id):
+		return
+	_players[peer_id] = {"id": peer_id, "name": Net.get_player_name(peer_id), "pos": pos, "hp": PLAYER_MAX_HP, "alive": true, "input": Vector2.ZERO, "firing": false, "fire_cd": 0.0, "respawn_at": 0.0}
+	_ensure_player_node(peer_id, _players[peer_id])
+	if broadcast:
+		_broadcast_spawn_player(peer_id, _players[peer_id])
+	print("[Game] SPAWN_PLAYER peer=%d" % peer_id)
+
+
+func _ensure_player_node(peer_id: int, state: Dictionary) -> void:
+	_players[peer_id] = _merge_player_state(_players.get(peer_id, {}), state)
+	var merged: Dictionary = _players[peer_id]
+	var node := players_root.get_node_or_null(str(peer_id)) as Node2D
+	if node == null:
+		node = PLAYER_SCENE.instantiate()
+		node.name = str(peer_id)
+		players_root.add_child(node)
+	node.setup(peer_id, str(merged["name"]), merged["pos"], float(merged["hp"]), bool(merged["alive"]))
+
+
+func _apply_player_node(peer_id: int, state: Dictionary) -> void:
+	var node := players_root.get_node_or_null(str(peer_id))
+	if node:
+		node.setup(peer_id, str(state["name"]), state["pos"], float(state["hp"]), bool(state["alive"]))
+
+
+func _merge_player_state(old: Dictionary, incoming: Dictionary) -> Dictionary:
+	var result := old.duplicate()
+	for key in incoming.keys():
+		result[key] = incoming[key]
+	if not result.has("input"):
+		result["input"] = Vector2.ZERO
+	if not result.has("firing"):
+		result["firing"] = false
+	if not result.has("fire_cd"):
+		result["fire_cd"] = 0.0
+	if not result.has("respawn_at"):
+		result["respawn_at"] = 0.0
+	return result
+
+
+func _spawn_enemy(pos: Vector2) -> void:
 	if not Net.is_host:
 		return
-	if entities.get_node_or_null(str(peer_id)) != null:
-		return  # 幂等：中途加入的客户端可能重复请求
-	player_spawner.spawn(peer_id)
-	print("[Game] 已为 peer %d 生成玩家实体" % peer_id)
-
-
-func _spawn_enemy() -> void:
-	enemy_spawner.spawn(_enemy_counter)
+	var enemy_id := _enemy_counter
 	_enemy_counter += 1
-	wave += 1
+	_enemies[enemy_id] = {"id": enemy_id, "pos": pos, "hp": 100.0, "alive": true, "attack_cd": 0.0}
+	_ensure_enemy_node(enemy_id, _enemies[enemy_id])
+	_broadcast_spawn_enemy(enemy_id, _enemies[enemy_id])
+	print("[Game] SPAWN_ENEMY id=%d" % enemy_id)
+
+
+func _ensure_enemy_node(enemy_id: int, state: Dictionary) -> void:
+	var old: Dictionary = _enemies.get(enemy_id, {"attack_cd": 0.0})
+	for key in state.keys():
+		old[key] = state[key]
+	_enemies[enemy_id] = old
+	var node := enemies_root.get_node_or_null("E_%d" % enemy_id) as Node2D
+	if node == null:
+		node = ENEMY_SCENE.instantiate()
+		node.name = "E_%d" % enemy_id
+		enemies_root.add_child(node)
+	node.setup(enemy_id, old["pos"], float(old["hp"]), bool(old["alive"]))
+	if not Net.is_host:
+		_test_client_seen_enemy = true
+
+
+func _apply_enemy_node(enemy_id: int, state: Dictionary) -> void:
+	var node := enemies_root.get_node_or_null("E_%d" % enemy_id)
+	if node:
+		node.setup(enemy_id, state["pos"], float(state["hp"]), bool(state["alive"]))
+
+
+func _enemy_despawn(enemy_id: int) -> void:
+	_enemies.erase(enemy_id)
+	var node := enemies_root.get_node_or_null("E_%d" % enemy_id)
+	if node:
+		node.queue_free()
+	_broadcast_despawn_enemy(enemy_id)
+	_test_enemy_despawned = true
+	print("[Game] DESPAWN_ENEMY id=%d" % enemy_id)
+
+
+func _spawn_bullet(owner_id: int, pos: Vector2, dir: Vector2) -> void:
+	var bullet_id := _bullet_counter
+	_bullet_counter += 1
+	var state := {"id": bullet_id, "owner": owner_id, "pos": pos, "dir": dir.normalized(), "speed": BULLET_SPEED, "ttl": 2.0}
+	_bullets[bullet_id] = state
+	_ensure_bullet_node(bullet_id, state)
+	_broadcast_spawn_bullet(bullet_id, state)
+	_test_bullet_spawned = true
+	print("[Game] SPAWN_BULLET id=%d owner=%d" % [bullet_id, owner_id])
+
+
+func _ensure_bullet_node(bullet_id: int, state: Dictionary) -> void:
+	_bullets[bullet_id] = state.duplicate()
+	var node := bullets_root.get_node_or_null("B_%d" % bullet_id) as Node2D
+	if node == null:
+		node = BULLET_SCENE.instantiate()
+		node.name = "B_%d" % bullet_id
+		bullets_root.add_child(node)
+	node.setup(bullet_id, int(state["owner"]), state["pos"], state["dir"])
+	if not Net.is_host:
+		_test_client_seen_bullet = true
+
+
+func _apply_bullet_node(bullet_id: int, state: Dictionary) -> void:
+	var node := bullets_root.get_node_or_null("B_%d" % bullet_id)
+	if node:
+		node.setup(bullet_id, int(state["owner"]), state["pos"], state["dir"])
+
+
+func _remove_bullet(bullet_id: int) -> void:
+	_bullets.erase(bullet_id)
+	var node := bullets_root.get_node_or_null("B_%d" % bullet_id)
+	if node:
+		node.queue_free()
+	_broadcast_despawn_bullet(bullet_id)
+	print("[Game] DESPAWN_BULLET id=%d" % bullet_id)
 
 
 func _on_peer_left(peer_id: int) -> void:
-	var p := entities.get_node_or_null(str(peer_id))
-	if p:
-		entities.remove_child(p)
-		p.queue_free()
-		print("[Game] 玩家 %d 掉线，删除实体" % peer_id)
+	_ready_peers.erase(peer_id)
+	_players.erase(peer_id)
+	var node := players_root.get_node_or_null(str(peer_id))
+	if node:
+		node.queue_free()
+	_broadcast_despawn_player(peer_id)
+	print("[Game] DESPAWN_PLAYER peer=%d" % peer_id)
 
 
-## 玩家主动发起的子弹生成入口（player.gd 调用，仅 Host 生效）。
-func add_bullet(origin: Vector2, dir: Vector2, speed: float, owner: int) -> void:
-	if not Net.is_host:
-		return
-	bullet_spawner.spawn({
-		"origin": origin,
-		"dir": dir,
-		"speed": speed,
-		"owner": owner,
-	})
+# ---------------------------------------------------------------- client to host RPC
 
-
-## 敌人死亡入口（enemy.gd 调用，仅 Host 生效）。
-func on_enemy_killed(e: Node2D) -> void:
-	if not Net.is_host:
-		return
-	kills += 1
-	enemies.remove_child(e)
-	e.queue_free()
-
-
-func arena_contains(pos: Vector2) -> bool:
-	return ARENA_RECT.has_point(pos)
-
-
-# ---------------------------------------------------------------- 无头自动联机测试
-
-## 自动测试诊断：Host 先退（6s），Client 后退（8s），避免 Host 把掉线客户端的实体清掉。
-func _run_auto_test() -> void:
-	var delay := 8.0 if _auto_test == "client" else 6.0
-	await get_tree().create_timer(delay).timeout
-	if _auto_test == "client":
-		var me := entities.get_node_or_null(str(Net.my_peer_id))
-		var names: Array[String] = []
-		for c in entities.get_children():
-			names.append(str(c.name))
-		print("[AUTO] client 诊断: my_peer_id=%d Entities=%s" % [Net.my_peer_id, names])
-		if me == null:
-			print("[AUTO] client FAIL: 自己的实体不存在（spawn_function / 同步链路未生效）")
-			get_tree().quit(1)
-			return
-		print("[AUTO] client 诊断: 实体=%s hp=%s position=%s" % [me.name, me.get("hp"), me.position])
-		print("[AUTO] client PASS")
-		get_tree().quit(0)
-	else:
-		var players := entities.get_child_count()
-		var enemy_count: int = enemies.get_child_count()
-		var names: Array[String] = []
-		for c in entities.get_children():
-			names.append(str(c.name))
-		print("[AUTO] host 诊断: Entities=%s(%d) Enemies=%d" % [names, players, enemy_count])
-		var ok := players >= 2 and enemy_count >= 1
-		print("[AUTO] host %s" % ("PASS" if ok else "FAIL"))
-		get_tree().quit(0 if ok else 1)
-
-
-# ---------------------------------------------------------------- RPC
-
-## 客户端 → Host：我进入游戏场景了，请确保已为我生成实体 + 发快照。
 @rpc("any_peer", "call_remote", "reliable")
-func request_game_ready() -> void:
+func game_ready() -> void:
+	# v2 兼容入口。v3 Client 改为向常驻 /root/Net 上报，避免 Host 切场景期间丢 RPC。
 	if not Net.is_host:
 		return
-	var sender: int = multiplayer.get_remote_sender_id()
-	_spawn_player_for(sender)
-	var snapshot := {
-		"wave": wave,
-		"kills": kills,
-		"message": "欢迎，%s！当前波次 %d" % [Net.get_player_name(sender), wave],
-	}
-	receive_snapshot.rpc_id(sender, snapshot)
-	print("[Game] 已向 peer %d 发送快照" % sender)
+	_accept_ready_peer(multiplayer.get_remote_sender_id())
 
 
-## Host → 指定客户端：加入快照。
+func _on_game_scene_ready_received(peer_id: int, ready_scene_path: String) -> void:
+	if not Net.is_host or ready_scene_path != scene_file_path:
+		return
+	Net.clear_pending_scene_ready(peer_id)
+	_accept_ready_peer(peer_id)
+
+
+func _consume_pending_scene_ready() -> void:
+	if not Net.is_host:
+		return
+	for peer_id in Net.take_pending_scene_ready(scene_file_path):
+		_accept_ready_peer(peer_id)
+
+
+func _accept_ready_peer(peer_id: int) -> void:
+	if peer_id <= 1 or not Net.get_player_names().has(peer_id):
+		return
+	_ready_peers[peer_id] = true
+	if not _players.has(peer_id):
+		_add_player(peer_id, Vector2(-250.0, 100.0 + 60.0 * (_players.size() - 1)))
+	world_snapshot.rpc_id(peer_id, _build_snapshot())
+	print("[Game] SNAPSHOT_SENT peer=%d players=%d enemies=%d bullets=%d" % [peer_id, _players.size(), _enemies.size(), _bullets.size()])
+
+
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_input(dir: Vector2, firing: bool) -> void:
+	if not Net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender > 1 and _ready_peers.has(sender) and _players.has(sender):
+		_set_input(sender, dir, firing)
+
+
+# ---------------------------------------------------------------- host to client RPC
+
 @rpc("authority", "call_remote", "reliable")
-func receive_snapshot(snapshot: Dictionary) -> void:
-	wave = int(snapshot.get("wave", 0))
-	kills = int(snapshot.get("kills", 0))
-	var msg: String = str(snapshot.get("message", ""))
-	if not msg.is_empty():
-		announce_local(msg)
+func spawn_player(peer_id: int, state: Dictionary) -> void:
+	if not Net.is_host:
+		_ensure_player_node(peer_id, state)
+		print("[Game] REMOTE_SPAWN_PLAYER peer=%d" % peer_id)
 
 
-## Host → 所有端：系统消息（call_local 保证 Host 自己也能看到）。
-@rpc("authority", "call_local", "reliable")
-func announce(text: String) -> void:
-	announce_local(text)
+@rpc("authority", "call_remote", "reliable")
+func despawn_player(peer_id: int) -> void:
+	if Net.is_host:
+		return
+	_players.erase(peer_id)
+	var node := players_root.get_node_or_null(str(peer_id))
+	if node:
+		node.queue_free()
+	print("[Game] REMOTE_DESPAWN_PLAYER peer=%d" % peer_id)
 
 
-func announce_local(text: String) -> void:
-	var hud := get_node_or_null("HUD")
-	if hud:
-		hud.show_message(text)
+@rpc("authority", "call_remote", "reliable")
+func spawn_enemy(enemy_id: int, state: Dictionary) -> void:
+	if not Net.is_host:
+		_ensure_enemy_node(enemy_id, state)
+		print("[Game] REMOTE_SPAWN_ENEMY id=%d" % enemy_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_enemy(enemy_id: int) -> void:
+	if Net.is_host:
+		return
+	_enemies.erase(enemy_id)
+	var node := enemies_root.get_node_or_null("E_%d" % enemy_id)
+	if node:
+		node.queue_free()
+	print("[Game] REMOTE_DESPAWN_ENEMY id=%d" % enemy_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func spawn_bullet(bullet_id: int, state: Dictionary) -> void:
+	if not Net.is_host:
+		_ensure_bullet_node(bullet_id, state)
+		print("[Game] REMOTE_SPAWN_BULLET id=%d" % bullet_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_bullet(bullet_id: int) -> void:
+	if Net.is_host:
+		return
+	_bullets.erase(bullet_id)
+	var node := bullets_root.get_node_or_null("B_%d" % bullet_id)
+	if node:
+		node.queue_free()
+	print("[Game] REMOTE_DESPAWN_BULLET id=%d" % bullet_id)
+
+
+@rpc("authority", "call_remote", "unreliable_ordered")
+func state_snapshot(snapshot: Dictionary) -> void:
+	if not Net.is_host:
+		_apply_snapshot(snapshot)
+
+
+@rpc("authority", "call_remote", "reliable")
+func world_snapshot(snapshot: Dictionary) -> void:
+	if not Net.is_host:
+		_apply_snapshot(snapshot)
+		_initial_snapshot_applied = _players.has(Net.my_peer_id)
+		print("[Game] SNAPSHOT_APPLIED local_player=%s attempts=%d" % [_initial_snapshot_applied, _ready_attempts])
+
+
+func _broadcast_spawn_player(peer_id: int, state: Dictionary) -> void:
+	for ready_id in _ready_peers.keys():
+		spawn_player.rpc_id(int(ready_id), peer_id, _player_public_state(state))
+
+
+func _broadcast_despawn_player(peer_id: int) -> void:
+	for ready_id in _ready_peers.keys():
+		despawn_player.rpc_id(int(ready_id), peer_id)
+
+
+func _broadcast_spawn_enemy(enemy_id: int, state: Dictionary) -> void:
+	for ready_id in _ready_peers.keys():
+		spawn_enemy.rpc_id(int(ready_id), enemy_id, _enemy_public_state(state))
+
+
+func _broadcast_despawn_enemy(enemy_id: int) -> void:
+	for ready_id in _ready_peers.keys():
+		despawn_enemy.rpc_id(int(ready_id), enemy_id)
+
+
+func _broadcast_spawn_bullet(bullet_id: int, state: Dictionary) -> void:
+	for ready_id in _ready_peers.keys():
+		spawn_bullet.rpc_id(int(ready_id), bullet_id, _bullet_public_state(state))
+
+
+func _broadcast_despawn_bullet(bullet_id: int) -> void:
+	for ready_id in _ready_peers.keys():
+		despawn_bullet.rpc_id(int(ready_id), bullet_id)
+
+
+func _broadcast_state_snapshot() -> void:
+	if _ready_peers.is_empty():
+		return
+	var snapshot := _build_state_snapshot()
+	for ready_id in _ready_peers.keys():
+		state_snapshot.rpc_id(int(ready_id), snapshot)
+
+
+# ---------------------------------------------------------------- snapshots
+
+func _apply_snapshot(snapshot: Dictionary) -> void:
+	if snapshot.has("players"):
+		var player_ids := {}
+		for value in snapshot["players"]:
+			var state: Dictionary = value
+			var entity_id := int(state["id"])
+			player_ids[entity_id] = true
+			_ensure_player_node(entity_id, state)
+		_remove_missing_nodes(players_root, player_ids, "", _players)
+	if snapshot.has("enemies"):
+		var enemy_ids := {}
+		for value in snapshot["enemies"]:
+			var state: Dictionary = value
+			var entity_id := int(state["id"])
+			enemy_ids[entity_id] = true
+			_ensure_enemy_node(entity_id, state)
+		_remove_missing_nodes(enemies_root, enemy_ids, "E_", _enemies)
+	if snapshot.has("bullets"):
+		var bullet_ids := {}
+		for value in snapshot["bullets"]:
+			var state: Dictionary = value
+			var entity_id := int(state["id"])
+			bullet_ids[entity_id] = true
+			_ensure_bullet_node(entity_id, state)
+		_remove_missing_nodes(bullets_root, bullet_ids, "B_", _bullets)
+
+
+func _remove_missing_nodes(root: Node2D, live_ids: Dictionary, prefix: String, state_store: Dictionary) -> void:
+	for node in root.get_children():
+		if node is not Node2D:
+			continue
+		var entity_id := str(node.name).trim_prefix(prefix).to_int()
+		if not live_ids.has(entity_id):
+			state_store.erase(entity_id)
+			node.queue_free()
+
+
+func _build_snapshot() -> Dictionary:
+	var snapshot := _build_state_snapshot()
+	snapshot["bullets"] = []
+	for state in _bullets.values():
+		snapshot["bullets"].append(_bullet_public_state(state))
+	return snapshot
+
+
+func _build_state_snapshot() -> Dictionary:
+	var snapshot := {"players": [], "enemies": []}
+	for state in _players.values():
+		snapshot["players"].append(_player_public_state(state))
+	for state in _enemies.values():
+		snapshot["enemies"].append(_enemy_public_state(state))
+	return snapshot
+
+
+func _player_public_state(state: Dictionary) -> Dictionary:
+	return {"id": state["id"], "name": state["name"], "pos": state["pos"], "hp": state["hp"], "alive": state["alive"]}
+
+
+func _enemy_public_state(state: Dictionary) -> Dictionary:
+	return {"id": state["id"], "pos": state["pos"], "hp": state["hp"], "alive": state["alive"]}
+
+
+func _bullet_public_state(state: Dictionary) -> Dictionary:
+	return {"id": state["id"], "owner": state["owner"], "pos": state["pos"], "dir": state["dir"], "speed": state["speed"], "ttl": state["ttl"]}
+
+
+func get_network_sync_status() -> String:
+	if Net.is_host:
+		return "Host 权威世界已启动"
+	if _initial_snapshot_applied:
+		return "世界快照已同步"
+	return "等待 Host 世界快照（ready 重试 %d）" % _ready_attempts
+
+
+# ---------------------------------------------------------------- helpers / test
+
+func _nearest_alive_player(pos: Vector2) -> int:
+	var result := -1
+	var best := INF
+	for peer_id in _players.keys():
+		var state: Dictionary = _players[peer_id]
+		if bool(state["alive"]):
+			var distance := pos.distance_squared_to(state["pos"])
+			if distance < best:
+				best = distance
+				result = int(peer_id)
+	return result
+
+
+func _aim_direction(pos: Vector2, fallback: Vector2) -> Vector2:
+	var target_id := _nearest_alive_enemy(pos)
+	if target_id >= 0:
+		return (_enemies[target_id]["pos"] - pos).normalized()
+	return fallback.normalized() if fallback != Vector2.ZERO else Vector2.RIGHT
+
+
+func _nearest_alive_enemy(pos: Vector2) -> int:
+	var result := -1
+	var best := INF
+	for enemy_id in _enemies.keys():
+		var state: Dictionary = _enemies[enemy_id]
+		var distance := pos.distance_squared_to(state["pos"])
+		if distance < best:
+			best = distance
+			result = int(enemy_id)
+	return result
+
+
+func _random_spawn_position() -> Vector2:
+	return Vector2(randf_range(-750.0, 750.0), randf_range(-400.0, 400.0))
+
+
+func _run_test_checks() -> void:
+	if _test_mode == "host" and not _test_damage_applied and _world_time >= 1.5:
+		var damage_target := _first_client_id()
+		if damage_target > 1:
+			_damage_player(damage_target, 10.0)
+			_test_damage_applied = true
+	if _test_mode == "host" and not _test_sent_result and _world_time >= 5.0:
+		_test_sent_result = true
+		var client_state: Dictionary = _players.get(_first_client_id(), {})
+		var moved := not client_state.is_empty() and float(client_state["pos"].x) > -220.0
+		var hp_changed := not client_state.is_empty() and float(client_state["hp"]) < PLAYER_MAX_HP
+		var ok := _players.size() >= 2 and moved and hp_changed and _test_enemy_spawned and _test_bullet_spawned and _test_enemy_despawned
+		var message := "players=%d moved=%s hp_sync_source=%s enemy_spawn=%s bullet_spawn=%s enemy_despawn=%s" % [_players.size(), moved, hp_changed, _test_enemy_spawned, _test_bullet_spawned, _test_enemy_despawned]
+		print("[AUTO] host %s %s" % ["PASS" if ok else "FAIL", message])
+		for ready_id in _ready_peers.keys():
+			test_result.rpc_id(int(ready_id), ok, message)
+		await get_tree().create_timer(0.5).timeout
+		get_tree().quit(0 if ok else 1)
+	elif _test_mode == "client" and not _test_sent_result and _world_time >= 10.0:
+		_test_sent_result = true
+		printerr("[AUTO] client TIMEOUT players=%d enemy=%s bullet=%s" % [_players.size(), _test_client_seen_enemy, _test_client_seen_bullet])
+		get_tree().quit(1)
+
+
+@rpc("authority", "call_remote", "reliable")
+func test_result(ok: bool, message: String) -> void:
+	if Net.is_host:
+		return
+	_test_sent_result = true
+	var my_state: Dictionary = _players.get(Net.my_peer_id, {})
+	var moved := not my_state.is_empty() and float(my_state["pos"].x) > -220.0
+	var hp_synced := not my_state.is_empty() and float(my_state["hp"]) < PLAYER_MAX_HP
+	var client_ok := ok and _players.size() >= 2 and moved and hp_synced and _test_client_seen_enemy and _test_client_seen_bullet
+	print("[AUTO] client %s host_ok=%s local_players=%d moved=%s hp_synced=%s enemy=%s bullet=%s %s" % ["PASS" if client_ok else "FAIL", ok, _players.size(), moved, hp_synced, _test_client_seen_enemy, _test_client_seen_bullet, message])
+	get_tree().quit(0 if client_ok else 1)
+
+
+func _first_client_id() -> int:
+	for peer_id in _players.keys():
+		if int(peer_id) != 1:
+			return int(peer_id)
+	return -1

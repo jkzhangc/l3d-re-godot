@@ -1,9 +1,8 @@
 extends Control
-## 大厅：创建房间 / 加入房间 / 开始游戏 / 玩家列表 / 日志。
-##
-## 连接逻辑全部委托给 Net 单例，这里只做 UI 呈现。
+## 大厅：只负责连接 UI 和自动测试入口；握手/玩家名单由 Net 单例维护。
 
 const GAME_SCENE := "res://scene/game.tscn"
+const AUTO_HOST_TIMEOUT := 8.0
 
 @onready var name_edit: LineEdit = %NameEdit
 @onready var ip_edit: LineEdit = %IpEdit
@@ -25,6 +24,8 @@ func _ready() -> void:
 	Net.server_disconnected.connect(_on_server_disconnected)
 	Net.peer_joined.connect(_on_peer_joined)
 	Net.peer_left.connect(_on_peer_left)
+	Net.handshake_completed.connect(_on_handshake_completed)
+	Net.player_list_changed.connect(_refresh_ui)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
@@ -33,7 +34,6 @@ func _ready() -> void:
 	leave_btn.disabled = true
 	_log("请创建房间或加入已有房间（默认 127.0.0.1:27015）")
 
-	# 无头自动联机测试（-- --net-test=host / client）
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
 		_run_auto_host()
@@ -41,40 +41,39 @@ func _ready() -> void:
 		_run_auto_client()
 
 
-func _exit_tree() -> void:
-	# 节点销毁时信号连接自动清理，无需手动 disconnect
-	pass
-
-
 # ---------------------------------------------------------------- 无头自动联机测试
 
-## Host 端：建房间 → 等 Client → 广播开始。诊断在 game.gd（切场景后 lobby 会被销毁）。
 func _run_auto_host() -> void:
 	Net.player_name = "HostAuto"
-	create_btn.disabled = true
-	join_btn.disabled = true
-	leave_btn.disabled = true
-	start_btn.disabled = true
+	_set_connect_buttons_disabled(true)
 	var err := Net.host_game()
 	if err != OK:
-		print("[AUTO] host 创建房间失败: ", error_string(err))
+		printerr("[AUTO] host 创建房间失败: ", error_string(err))
 		get_tree().quit(1)
 		return
-	print("[AUTO] host 房间已创建，等待 client 接入 ...")
-	await get_tree().create_timer(1.5).timeout
-	print("[AUTO] host 广播开始游戏")
+	_connected = true
+	_refresh_ui()
+	print("[AUTO] host 房间已创建，等待完成握手的 client ...")
+	var deadline := Time.get_ticks_msec() + int(AUTO_HOST_TIMEOUT * 1000.0)
+	while Net.get_player_names().size() < 2 and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if Net.get_player_names().size() < 2:
+		printerr("[AUTO] host 等待 client 握手超时")
+		get_tree().quit(1)
+		return
+	print("[AUTO] host 握手完成，广播开始游戏")
 	Net.start_game.rpc(GAME_SCENE)
 
 
-## Client 端：加入。诊断在 game.gd。
 func _run_auto_client() -> void:
 	Net.player_name = "ClientAuto"
+	_set_connect_buttons_disabled(true)
 	var err := Net.join_game("127.0.0.1")
 	if err != OK:
-		print("[AUTO] client 加入失败: ", error_string(err))
+		printerr("[AUTO] client 加入失败: ", error_string(err))
 		get_tree().quit(1)
 		return
-	print("[AUTO] client 已发起加入，等待 host 开始游戏 ...")
+	print("[AUTO] client 已发起加入，等待握手和 host 开始游戏 ...")
 
 
 # ---------------------------------------------------------------- 按钮
@@ -97,15 +96,13 @@ func _on_join_pressed() -> void:
 		_log("加入失败：%s" % error_string(err))
 		return
 	_log("正在加入 %s ..." % ip_edit.text)
-	create_btn.disabled = true
-	join_btn.disabled = true
+	_set_connect_buttons_disabled(true)
 
 
 func _on_start_pressed() -> void:
-	if not Net.is_host:
-		return
-	_log("广播开始游戏 ...")
-	Net.start_game.rpc(GAME_SCENE)
+	if Net.is_host and Net.handshake_ok:
+		_log("广播开始游戏 ...")
+		Net.start_game.rpc(GAME_SCENE)
 
 
 func _on_leave_pressed() -> void:
@@ -119,7 +116,13 @@ func _on_leave_pressed() -> void:
 
 func _on_connection_established() -> void:
 	_connected = true
-	_log("TCP 连接成功，等待 Host 握手回执 ...")
+	_log("ENet 传输已连接，等待 Host 握手回执 ...")
+	_refresh_ui()
+
+
+func _on_handshake_completed() -> void:
+	_connected = true
+	_log("协议握手完成")
 	_refresh_ui()
 
 
@@ -137,7 +140,7 @@ func _on_server_disconnected() -> void:
 
 func _on_peer_joined(_peer_id: int) -> void:
 	if Net.is_host:
-		_log("有玩家接入，等待握手 ...")
+		_log("有玩家接入，等待协议握手 ...")
 
 
 func _on_peer_left(_peer_id: int) -> void:
@@ -146,14 +149,19 @@ func _on_peer_left(_peer_id: int) -> void:
 	_refresh_ui()
 
 
-# ---------------------------------------------------------------- UI 刷新
+# ---------------------------------------------------------------- UI
 
 func _refresh_ui() -> void:
+	if not is_node_ready():
+		return
 	if Net.is_host:
 		status_label.text = "状态：主机（端口 %d）" % Net.DEFAULT_PORT
-		start_btn.disabled = not _connected
+		start_btn.disabled = not Net.handshake_ok
 	else:
-		status_label.text = "状态：%s" % ("已连接（等待主机开始游戏）" if _connected else "未连接")
+		var text := "未连接"
+		if _connected:
+			text = "已握手，等待主机开始" if Net.handshake_ok else "传输已连接，握手中"
+		status_label.text = "状态：%s" % text
 		start_btn.disabled = true
 	create_btn.disabled = _connected
 	join_btn.disabled = _connected
@@ -166,8 +174,15 @@ func _refresh_ui() -> void:
 	players_label.text = "\n".join(lines)
 
 
+func _set_connect_buttons_disabled(value: bool) -> void:
+	create_btn.disabled = value
+	join_btn.disabled = value
+	start_btn.disabled = true
+	leave_btn.disabled = value
+
+
 func _log(msg: String) -> void:
 	_log_lines.append("[%s] %s" % [Time.get_time_string_from_system(), msg])
-	if _log_lines.size() > 30:
+	if _log_lines.size() > 14:
 		_log_lines.pop_front()
 	log_label.text = "\n".join(_log_lines)

@@ -1,0 +1,4 @@
+.smoke_*
+.static_test_godot.log
+/*.exe
+/*.pck
