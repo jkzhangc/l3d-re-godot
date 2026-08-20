@@ -24,4 +24,5 @@ shove_walk_texture = ExtResource("6_o5s41")
 shove_fatigue_limit = 10
 hurt_sound = ExtResource("3_o5s41")
 death_sound = ExtResource("1_dgx65")
+safehouse_lines = ["呼……暂时安全了。", "终于能喘口气了。", "大家都没事吧？", "先在这里休息一下。"]
 skills = [ExtResource("7_skill"), ExtResource("8_skill")]

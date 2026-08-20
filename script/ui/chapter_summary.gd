@@ -10,6 +10,9 @@ signal seat_confirmed(seat_index: int)
 @export var pause_game: bool = true
 @export var auto_show: bool = true
 @export var force_multiplayer_preview: bool = false
+@export_group("音频")
+@export var summary_music: AudioStream
+@export var summary_music_volume_db: float = 0.0
 
 const FONT_PATH: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
 const GOLD: Color = Color("e8c44b")
@@ -27,6 +30,7 @@ var _players_box: VBoxContainer
 var _status_label: Label
 var _prompt_label: Label
 var _font: Font
+var _music_player: AudioStreamPlayer
 
 
 func _ready() -> void:
@@ -48,6 +52,7 @@ func show_summary() -> void:
 	_required_seats = _collect_required_seats()
 	_rebuild_player_rows()
 	_refresh_status()
+	_play_summary_music()
 	if pause_game:
 		get_tree().paused = true
 	# 避免安全门的同一次确定键被总结页接收。
@@ -132,6 +137,8 @@ func _finish_summary() -> void:
 		return
 	_finishing = true
 	visible = false
+	if _music_player:
+		_music_player.stop()
 	if pause_game:
 		get_tree().paused = false
 	summary_finished.emit()
@@ -168,6 +175,8 @@ func _build_ui() -> void:
 	content.add_theme_constant_override("separation", 12)
 	background.add_child(content)
 
+	var safe := _make_label("暂时安全了", 25, GOLD)
+	content.add_child(safe)
 	var campaign := _make_label(campaign_title.to_upper(), 24, MUTED)
 	content.add_child(campaign)
 	var complete := _make_label("章节完成", 54, GOLD)
@@ -203,8 +212,12 @@ func _build_ui() -> void:
 	content.add_child(_players_box)
 
 	var spacer := Control.new()
-	spacer.custom_minimum_size.y = 18
+	spacer.custom_minimum_size.y = 48
 	content.add_child(spacer)
+	var quote := _make_label(_get_active_character_safehouse_line(), 24, PALE)
+	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quote.custom_minimum_size = Vector2(980, 56)
+	content.add_child(quote)
 	_status_label = _make_label("", 25, PALE)
 	content.add_child(_status_label)
 	_prompt_label = _make_label("", 22, GOLD)
@@ -216,20 +229,26 @@ func _rebuild_player_rows() -> void:
 		return
 	for child: Node in _players_box.get_children():
 		child.queue_free()
+	if not _multiplayer_mode:
+		_add_stats_row("全队合计", _get_total_stats(), "-", MUTED)
+		return
 	var count: int = maxi(Players.seat_count(), 1)
 	for seat_index: int in range(count):
-		var row := HBoxContainer.new()
-		row.custom_minimum_size.y = 48
-		row.add_theme_constant_override("separation", 8)
-		_players_box.add_child(row)
-
 		var state: PlayerState = Players.get_seat(seat_index)
 		var player_name: String = state.get_character_name() if state else "玩家 %d" % (seat_index + 1)
 		var stats: Dictionary = _stats_for_seat(seat_index)
 		var ready: bool = _confirmed.get(seat_index, false)
 		var status_text: String = "已准备" if ready else ("等待" if _multiplayer_mode else "-")
 		var status_color: Color = GREEN if ready else MUTED
-		var values: Array = [
+		_add_stats_row(player_name, stats, status_text, status_color)
+
+
+func _add_stats_row(player_name: String, stats: Dictionary, status_text: String, status_color: Color) -> void:
+	var row := HBoxContainer.new()
+	row.custom_minimum_size.y = 48
+	row.add_theme_constant_override("separation", 8)
+	_players_box.add_child(row)
+	var values: Array = [
 			[player_name, 300, PALE],
 			[str(int(stats.get("kills", 0))), 120, PALE],
 			[str(int(stats.get("headshots", 0))), 120, PALE],
@@ -237,9 +256,9 @@ func _rebuild_player_rows() -> void:
 			[str(roundi(float(stats.get("damage_taken", 0.0)))), 140, PALE],
 			[str(int(stats.get("healing_items", 0))), 140, PALE],
 			[status_text, 140, status_color],
-		]
-		for value: Array in values:
-			row.add_child(_make_label(value[0], 21, value[2], Vector2(value[1], 42)))
+	]
+	for value: Array in values:
+		row.add_child(_make_label(value[0], 21, value[2], Vector2(value[1], 42)))
 
 
 func _refresh_status() -> void:
@@ -262,6 +281,34 @@ func _stats_for_seat(seat_index: int) -> Dictionary:
 	if stats_node and stats_node.has_method("get_stats_for_seat"):
 		return stats_node.get_stats_for_seat(seat_index)
 	return {}
+
+
+func _get_total_stats() -> Dictionary:
+	var stats_node: Node = get_node_or_null("/root/ChapterStats")
+	if stats_node and stats_node.has_method("get_totals"):
+		return stats_node.get_totals()
+	return {}
+
+
+func _get_active_character_safehouse_line() -> String:
+	var state: PlayerState = Players.get_active_state()
+	if state and state.character and not state.character.safehouse_lines.is_empty():
+		return "「%s」" % state.character.safehouse_lines.pick_random()
+	return "「……」"
+
+
+func _play_summary_music() -> void:
+	if not summary_music:
+		return
+	if not _music_player:
+		_music_player = AudioStreamPlayer.new()
+		_music_player.name = "SummaryMusic"
+		_music_player.bus = &"Music"
+		add_child(_music_player)
+	_music_player.stop()
+	_music_player.stream = summary_music
+	_music_player.volume_db = summary_music_volume_db
+	_music_player.play()
 
 
 func _make_label(text_value: String, font_size: int, color: Color, minimum: Vector2 = Vector2.ZERO) -> Label:

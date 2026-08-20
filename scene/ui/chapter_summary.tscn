@@ -1,6 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://script/ui/chapter_summary.gd" id="1_summary"]
+[ext_resource type="AudioStream" path="res://sound/セーフハウス到達.wav" id="2_arrival"]
 
 [node name="ChapterSummary" type="CanvasLayer"]
 script = ExtResource("1_summary")
+summary_music = ExtResource("2_arrival")

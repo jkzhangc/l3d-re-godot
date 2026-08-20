@@ -81,6 +81,10 @@ class_name CharacterData extends Resource
 @export var hurt_sound: AudioStream = null   ## 受伤音效
 @export var death_sound: AudioStream = null  ## 死亡音效
 
+@export_group("安全屋台词")
+## 到达安全屋后的随机台词。章节总结会显示当前操作角色的一句。
+@export var safehouse_lines: Array[String] = []
+
 @export_group("技能")
 ## 角色拥有的技能列表（SkillData 资源）
 @export var skills: Array[SkillData] = []
