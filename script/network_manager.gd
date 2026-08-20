@@ -134,6 +134,32 @@ func start_game(scene_path: String) -> void:
 	print("[Net] START_GAME %s" % scene_path)
 	call_deferred("_change_scene_safely", scene_path)
 
+func request_scene_change(scene_path: String) -> void:
+	## 游戏内场景切换入口：联机时由 Host 广播，客户端只向 Host 请求。
+	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+		printerr("[Net] CHANGE_SCENE_INVALID path=%s" % scene_path)
+		return
+	if not is_online_session():
+		call_deferred("_change_scene_safely", scene_path)
+		return
+	if is_host:
+		start_game.rpc(scene_path)
+	else:
+		request_scene_change_rpc.rpc_id(1, scene_path)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_scene_change_rpc(scene_path: String) -> void:
+	if not is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _player_names.has(sender):
+		return
+	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+		printerr("[Net] CHANGE_SCENE_INVALID peer=%d path=%s" % [sender, scene_path])
+		return
+	print("[Net] SCENE_CHANGE_REQUEST peer=%d path=%s" % [sender, scene_path])
+	start_game.rpc(scene_path)
+
 func _change_scene_safely(scene_path: String) -> void:
 	var err := get_tree().change_scene_to_file(scene_path)
 	if err != OK:

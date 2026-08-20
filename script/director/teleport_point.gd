@@ -162,6 +162,15 @@ func _do_teleport() -> void:
 		printerr("[TeleportPoint] target_scene 为空，无法传送")
 		return
 
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("is_online_session") and net.is_online_session():
+		# 联机时场景由 Host 权威广播；客户端不能自行切图。
+		if net.is_host and capture_checkpoint:
+			Global.capture_checkpoint()
+		if net.has_method("request_scene_change"):
+			net.request_scene_change(target_scene)
+		return
+
 	print("[TeleportPoint] 传送至: %s" % target_scene)
 	if capture_checkpoint:
 		Global.capture_checkpoint()

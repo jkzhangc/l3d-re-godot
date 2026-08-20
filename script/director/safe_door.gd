@@ -133,6 +133,14 @@ func _enter_safe_room() -> void:
 	_transitioning = true
 	_can_interact = false
 	_update_label()
+	var net: Node = get_node_or_null("/root/Net")
+	var online := net and net.has_method("is_online_session") and net.is_online_session()
+	if online and not net.is_host:
+		# 客户端只向 Host 请求切图，不在本地修改章节/回血状态。
+		if net.has_method("request_scene_change"):
+			net.request_scene_change(target_scene)
+		return
+
 	_apply_entry_effects()
 
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
@@ -140,6 +148,11 @@ func _enter_safe_room() -> void:
 		chapter_stats.finish_chapter()
 
 	print("[SafeDoor] 进入安全屋: %s" % target_scene)
+	if online:
+		# 联机时由 Host 广播场景切换，避免客户端停留在旧 NetworkWorld。
+		if net.has_method("request_scene_change"):
+			net.request_scene_change(target_scene)
+		return
 	get_tree().change_scene_to_file.call_deferred(target_scene)
 
 
