@@ -11,7 +11,7 @@ signal handshake_completed
 signal player_list_changed
 signal game_scene_ready_received(peer_id: int, scene_path: String)
 
-const PROTOCOL_VERSION := "l3d_main_v1_explicit_rpc"
+const PROTOCOL_VERSION := "l3d_main_v2_combat_rpc"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 

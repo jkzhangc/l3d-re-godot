@@ -104,6 +104,7 @@ var network_owner_peer_id: int = 0
 var network_controlled: bool = false
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
+var _network_attack_token: int = 0
 
 var _tp_regen_timer: float = 0.0
 
@@ -330,6 +331,36 @@ func set_weapon_ready_frame() -> void:
 func set_attack_char_index(char_idx: int) -> void:
 	_current_weapon_char_idx = char_idx
 	_refresh_sprite()
+
+
+## 联机攻击只负责本地表现；子弹、弹药和伤害均由 NetworkWorld 的 Host 权威处理。
+func play_network_fire_presentation(wd: WeaponData) -> void:
+	if not wd:
+		return
+	_network_attack_token += 1
+	var token := _network_attack_token
+	enter_weapon_mode(wd)
+	player_in_weapon_state = true
+	call_deferred("_run_network_fire_presentation", token, wd)
+
+
+func _run_network_fire_presentation(token: int, wd: WeaponData) -> void:
+	for index: int in range(wd.attack_char_sequence.size()):
+		if token != _network_attack_token or not is_instance_valid(self):
+			return
+		set_attack_char_index(wd.attack_char_sequence[index])
+		if index == wd.fire_at_sequence_idx:
+			if wd.attack_sound:
+				Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
+			var effect_scene := wd.get_attack_effect_anim(facing)
+			if effect_scene:
+				var offset := current_character.get_attack_effect_offset(wd.weapon_state_name, facing, wd.attack_effect_offset_override) if current_character else wd.attack_effect_offset_override
+				var follow: Node2D = self if wd.attack_effect_follow else null
+				VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene, 10.0, follow, offset)
+		await get_tree().create_timer(wd.get_attack_frame_duration(index)).timeout
+	if token == _network_attack_token and is_instance_valid(self):
+		set_weapon_ready_frame()
+		player_in_weapon_state = false
 
 
 func get_weapon_data() -> WeaponData:

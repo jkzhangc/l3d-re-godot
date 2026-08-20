@@ -1,5 +1,7 @@
 extends Node2D
 ## 子弹实体 — 由远程武器射击生成
+
+signal finished(network_entity_id: int)
 ##
 ## 使用单张水平帧条图片渲染：
 ##   图片被均分为 bullet_anim_frames 列，每帧宽 = 图宽 / 帧数，高 = 图高
@@ -37,6 +39,9 @@ var _collision_offset: Vector2 = Vector2.ZERO
 # ═══════════════════════════════════════
 # 内部状态
 # ═══════════════════════════════════════
+var network_entity_id: int = 0
+var network_visual_only: bool = false
+var _finished: bool = false
 var _distance_traveled: float = 0.0
 var _hits: int = 0
 var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防止重复命中同一目标）
@@ -56,8 +61,15 @@ var _hit_sound: AudioStream = null  ## 命中时播放的音效
 
 func _ready() -> void:
 	if _area:
-		_area.area_entered.connect(_on_area_entered)
-		_area.body_entered.connect(_on_body_entered)
+		if network_visual_only:
+			# Client 只外推视觉子弹，绝不参与共享碰撞或伤害判定。
+			_area.monitoring = false
+			_area.monitorable = false
+			_area.collision_layer = 0
+			_area.collision_mask = 0
+		else:
+			_area.area_entered.connect(_on_area_entered)
+			_area.body_entered.connect(_on_body_entered)
 	_refresh_sprite()
 	_update_area_rotation()
 
@@ -71,6 +83,8 @@ func setup(params: Dictionary) -> void:
 	destroy_on_hit = params.get("destroy_on_hit", true)
 	penetration = params.get("penetration", 0)
 	critical_rate = params.get("critical_rate", 0.0)
+	network_entity_id = int(params.get("network_entity_id", 0))
+	network_visual_only = bool(params.get("network_visual_only", false))
 	_bullet_texture = params.get("texture", null)
 	_bullet_anim_frames = params.get("anim_frames", 1)
 	_bullet_frame_duration = params.get("frame_duration", 1)
@@ -111,7 +125,7 @@ func _physics_process(delta: float) -> void:
 			_refresh_sprite()
 
 	if _distance_traveled >= max_range:
-		queue_free()
+		_finish()
 
 
 func _on_area_entered(area: Area2D) -> void:
@@ -177,7 +191,15 @@ func _hit(target: Node2D) -> void:
 	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(damage), str(is_headshot), penetration - _hits + 1])
 
 	if destroy_on_hit and _hits > penetration:
-		queue_free()
+		_finish()
+
+
+func _finish() -> void:
+	if _finished:
+		return
+	_finished = true
+	finished.emit(network_entity_id)
+	queue_free()
 
 
 func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool) -> void:
