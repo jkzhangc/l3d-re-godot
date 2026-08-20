@@ -9,6 +9,10 @@ func _ready() -> void:
 		if "安全屋" in scene_path or "safe" in scene_path.to_lower():
 			Global.capture_checkpoint()
 			print("[GameInit] 安全屋自动存档: %s" % scene_path)
+		else:
+			var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+			if chapter_stats and chapter_stats.has_method("ensure_chapter"):
+				chapter_stats.ensure_chapter(scene_path)
 	var state: PlayerState = Players.get_active_state()
 	print("[GameInit] 初始化完成 | debug=%s | HP=%.0f | team=%d | checkpoint=%s" % [
 		Global.debug_enabled, state.current_hp, Global.get_team_size(),

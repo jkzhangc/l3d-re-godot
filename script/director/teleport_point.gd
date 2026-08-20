@@ -77,16 +77,14 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if not animated:
-		return
+	if animated:
+		_step_timer -= delta
+		if _step_timer <= 0.0:
+			_step_timer += maxf(step_duration, 0.02)
+			_step_index = (_step_index + 1) % step_frames.size()
+			_refresh_sprite()
 
-	_step_timer -= delta
-	if _step_timer <= 0.0:
-		_step_timer += step_duration
-		_step_index = (_step_index + 1) % step_frames.size()
-		_refresh_sprite()
-
-	# 检查玩家是否在范围内
+	# 静态行走图同样需要持续检测玩家是否在范围内。
 	_check_player_proximity()
 
 

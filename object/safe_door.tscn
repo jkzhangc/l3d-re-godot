@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/director/safe_door.gd" id="1_door"]
+[ext_resource type="Texture2D" path="res://art/misc/!オブジェクト1.png" id="2_door_tex"]
+
+[node name="SafeDoor" type="Node2D"]
+script = ExtResource("1_door")
+walk_texture = ExtResource("2_door_tex")
+step_frames = Array[int]([1])
+animated = false
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="HintLabel" type="Label" parent="."]
+offset_left = -72.0
+offset_top = -62.0
+offset_right = 72.0
+offset_bottom = -34.0
+horizontal_alignment = 1

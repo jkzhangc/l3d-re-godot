@@ -161,7 +161,10 @@ func _hit(target: Node2D) -> void:
 	# 尝试对目标造成伤害
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(damage)])
+	var hp_before: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else 0.0
 	damageable.take_damage(damage, _knockback_force, direction, is_headshot, _knockback_stun, _hitstun_duration, get_instance_id())
+	var hp_after: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else hp_before
+	_record_chapter_damage(hp_before, hp_after, is_headshot)
 
 	# 播放命中特效
 	if _hit_effect_anim:
@@ -175,6 +178,22 @@ func _hit(target: Node2D) -> void:
 
 	if destroy_on_hit and _hits > penetration:
 		queue_free()
+
+
+func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool) -> void:
+	if not _shooter:
+		return
+	var shooter_state: PlayerState = Players.get_state_for_entity(_shooter)
+	if not shooter_state:
+		return
+	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+	if not chapter_stats:
+		return
+	var actual_damage: float = maxf(0.0, hp_before - hp_after)
+	if chapter_stats.has_method("record_damage_dealt"):
+		chapter_stats.record_damage_dealt(shooter_state.seat_index, actual_damage)
+	if hp_before > 0.0 and hp_after <= 0.0 and chapter_stats.has_method("record_kill"):
+		chapter_stats.record_kill(shooter_state.seat_index, is_headshot)
 
 
 func _refresh_sprite() -> void:

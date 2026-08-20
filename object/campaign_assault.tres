@@ -7,4 +7,4 @@ script = ExtResource("1")
 campaign_id = "assault"
 campaign_name = "突袭"
 description = "穿越被感染的城市街道，在丧尸浪潮中求生。"
-level_scenes = Array[String](["res://scene/maps/突袭-第一关-开头安全屋-户外.tscn", "res://scene/maps/突袭-第一关-街道.tscn"])
+level_scenes = Array[String](["res://scene/maps/突袭-第一关-开头安全屋-户外.tscn", "res://scene/maps/突袭-第一关-街道.tscn", "res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn"])

@@ -188,7 +188,10 @@ func _check_melee_hits() -> void:
 			if bid in hit_ids:
 				continue
 			hit_ids.append(bid)
+			var hp_before: float = float(body.get("current_hp")) if body.get("current_hp") != null else 0.0
 			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			var hp_after: float = float(body.get("current_hp")) if body.get("current_hp") != null else hp_before
+			_record_chapter_hit(hp_before, hp_after)
 			if _wd.hit_effect_anim:
 				var hf: Node2D = body if _wd.hit_effect_follow else null
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, _wd.hit_effect_offset_override)
@@ -210,7 +213,10 @@ func _check_melee_hits() -> void:
 			if pid in hit_ids:
 				continue
 			hit_ids.append(pid)
+			var hp_before: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else 0.0
 			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			var hp_after: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else hp_before
+			_record_chapter_hit(hp_before, hp_after)
 			if _wd.hit_effect_anim:
 				var hf2: Node2D = parent if _wd.hit_effect_follow else null
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, _wd.hit_effect_offset_override)
@@ -222,6 +228,23 @@ func _check_melee_hits() -> void:
 	# 只在真正命中时标记完成，避免物理服务器延迟导致空判
 	if hit_any:
 		_hit_done = true
+
+
+func _record_chapter_hit(hp_before: float, hp_after: float) -> void:
+	var player: Node2D = character as Node2D
+	if not player:
+		return
+	var player_state: PlayerState = Players.get_state_for_entity(player)
+	if not player_state:
+		return
+	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+	if not chapter_stats:
+		return
+	var actual_damage: float = maxf(0.0, hp_before - hp_after)
+	if chapter_stats.has_method("record_damage_dealt"):
+		chapter_stats.record_damage_dealt(player_state.seat_index, actual_damage)
+	if hp_before > 0.0 and hp_after <= 0.0 and chapter_stats.has_method("record_kill"):
+		chapter_stats.record_kill(player_state.seat_index, _is_headshot)
 
 
 func _is_target_dead(target: Node) -> bool:

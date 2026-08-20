@@ -484,7 +484,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 				return
 		_recent_damage_sources[source_id] = now
 
+	var hp_before: float = current_hp
 	current_hp = maxf(0.0, current_hp - damage)
+	var actual_damage: float = maxf(0.0, hp_before - current_hp)
 	print("[玩家] 受到伤害: %d | HP: %.0f/%.0f | source=%d" % [int(damage), current_hp, max_hp, source_id])
 	_play_hit_feedback(Color.RED)
 
@@ -500,6 +502,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	var state: PlayerState = Players.get_state_for_entity(self)
 	if state:
 		state.current_hp = current_hp
+		var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+		if chapter_stats and chapter_stats.has_method("record_damage_taken"):
+			chapter_stats.record_damage_taken(state.seat_index, actual_damage)
 
 	if current_hp <= 0.0:
 		_die()
@@ -542,6 +547,9 @@ func use_healing_item() -> bool:
 	if not used:
 		return false
 	apply_item_effects(used)
+	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+	if chapter_stats and chapter_stats.has_method("record_healing_item"):
+		chapter_stats.record_healing_item(state.seat_index)
 	return true
 
 
