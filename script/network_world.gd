@@ -337,7 +337,13 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		state.current_hp = float(public_state.get("hp", state.current_hp))
 		state.position = _packet_position(public_state)
 		state.facing = int(public_state.get("facing", state.facing))
-	node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), _packet_position(public_state), int(public_state.get("facing", 0)), snap)
+	# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
+	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
+	# 客户端角色会永远停在同一张行走帧上。
+	if snap:
+		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), _packet_position(public_state), int(public_state.get("facing", 0)), true)
+	else:
+		node.current_hp = clampf(float(public_state.get("hp", node.current_hp)), 0.0, node.max_hp)
 	node.apply_network_presentation(_packet_position(public_state), int(public_state.get("facing", 0)), bool(public_state.get("moving", false)), bool(public_state.get("walking", false)), snap)
 	entry["moving"] = bool(public_state.get("moving", false))
 	entry["walking"] = bool(public_state.get("walking", false))
@@ -367,12 +373,27 @@ func _run_auto_client_input_test() -> void:
 		printerr("[NetworkWorld] AUTO_CLIENT_INPUT_TIMEOUT")
 		return
 	Input.action_press("右")
-	await get_tree().create_timer(0.65).timeout
+	var animation_frames: Dictionary = {}
+	for _sample: int in range(8):
+		await get_tree().create_timer(0.08).timeout
+		var sample_entry: Dictionary = _players.get(int(net.my_peer_id), {})
+		var sample_node := sample_entry.get("node") as CharacterBody2D
+		if is_instance_valid(sample_node):
+			var sample_sprite := sample_node.get_node_or_null("Sprite2D") as Sprite2D
+			if sample_sprite:
+				animation_frames[sample_sprite.region_rect.position.x] = true
 	Input.action_release("右")
 	await get_tree().create_timer(0.35).timeout
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := entry.get("node") as CharacterBody2D
-	print("[NetworkWorld] AUTO_CLIENT_INPUT_COMPLETE pos=%s" % [node.global_position if is_instance_valid(node) else Vector2.ZERO])
+	var animation_advanced := animation_frames.size() > 1
+	print("[NetworkWorld] AUTO_CLIENT_INPUT_COMPLETE pos=%s animation_advanced=%s frames=%d" % [
+		node.global_position if is_instance_valid(node) else Vector2.ZERO,
+		animation_advanced,
+		animation_frames.size(),
+	])
+	if not animation_advanced:
+		printerr("[NetworkWorld] AUTO_CLIENT_ANIMATION_FAILED")
 	net.leave()
 	get_tree().quit()
 
