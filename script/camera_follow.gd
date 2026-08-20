@@ -84,6 +84,15 @@ func _setup_phantom_camera() -> void:
 		_setup_map_limits()
 
 
+## 网络实体在场景加载后才创建时，由 NetworkWorld 重新绑定镜头目标。
+func set_follow_target(target: Node2D) -> void:
+	_target = target if target and is_instance_valid(target) else null
+	if is_instance_valid(_pcam):
+		_pcam.follow_target = _target
+		if _target:
+			_pcam.position = _target.global_position
+	teleport_to_player()
+
 ## 计算地图边界（bound_layers 各层 used rect 的并集）并应用到 pcam 的显式 limit 四边。
 func _setup_map_limits() -> void:
 	var rect := _calc_map_rect()

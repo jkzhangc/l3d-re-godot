@@ -111,3 +111,15 @@ metadata:
 3. **添加更多角色** — 创建 `character_*.tres`，配置专属武器行走图和武器限制
 
 **Why:** 角色切换系统和完整菜单流程已完成。导演系统 Phase 3 可用。下一步需要特殊感染者逻辑来支撑导演系统的 Boss/Crescendo 事件类型。
+
+## 多人联机 Phase 1（2026-08-20）✅ 完成核心闭环
+
+- 架构：Host 全权威模拟；Client 仅上传输入、接收并插值快照。
+- 新增：`script/network_manager.gd`、`script/network_lobby.gd`、`script/network_world.gd`、`scene/network_lobby.tscn`。
+- 接入：标题菜单新增“联机游戏”，`Net` 与 `Players` 注册为 Autoload。
+- 联机流程：Host 建房 → Client 加入 → 协议握手 → 开始游戏 → 双端切换安全屋地图 → Host 权威移动 → Client 输入上传与插值 → Client 离开 → Host Despawn。
+- RPC 约定：输入与移动快照使用 `unreliable_ordered`；握手、场景切换、Spawn/Despawn、初始 World Snapshot 使用 `reliable`。
+- 明确未使用：`MultiplayerSpawner`、`MultiplayerSynchronizer`、`SceneReplicationConfig`。
+- 单机保护：在线会话跳过存档加载、Checkpoint、角色切换管理器、A* 预构建和 Director gameplay 入口。
+- 验证：Godot 4.6.3 无头扫描通过；双端本地烟测通过，Client exit code=0；`git diff --check` 通过。
+- 已知噪声：headless Dummy 渲染器会触发 `TextGradientRenderer` 空纹理错误，属于既有 UI 渲染问题，不影响联机闭环。

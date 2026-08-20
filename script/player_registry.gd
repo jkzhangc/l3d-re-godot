@@ -148,6 +148,11 @@ func register_entity(node: Node2D, seat_index: int = -1) -> void:
 	print("[Players] 实体注册: %s → 座位 %d" % [node.name, seat_index])
 
 
+## 明确指定当前客户端的本地实体（联机由 NetworkWorld 在快照落地后调用）。
+func set_local_entity(node: Node2D) -> void:
+	_local_entity = node if node and is_instance_valid(node) else null
+
+
 func unregister_entity(node: Node2D) -> void:
 	if not node:
 		return

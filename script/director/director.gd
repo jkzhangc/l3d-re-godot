@@ -95,6 +95,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	# Phase 1 联机只验证 Host 权威玩家同步；导演、敌人、物品和战斗必须完全停用。
+	if _is_phase1_online_session():
+		return
 	var player: Node2D = _find_player()
 	if not player or not is_instance_valid(player):
 		return
@@ -162,10 +165,16 @@ func _on_phase_changed(phase: StringName) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not allow_manual_spawn:
+	if _is_phase1_online_session() or not allow_manual_spawn:
 		return
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F2:
 		_debug_spawn()
+
+
+func _is_phase1_online_session() -> bool:
+	# 用节点路径而非 Autoload 标识符，兼容编辑器脚本热重载期间的全局类刷新时序。
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and net.is_online_session()
 
 
 # ═══════════════════════════════════════

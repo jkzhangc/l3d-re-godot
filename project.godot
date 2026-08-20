@@ -22,6 +22,7 @@ Director="*res://script/director/director.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 PhantomCameraManager="*res://addons/phantom_camera/scripts/managers/phantom_camera_manager.gd"
 Players="*res://script/player_registry.gd"
+Net="*res://script/network_manager.gd"
 ChapterStats="*res://script/chapter_stats.gd"
 
 [display]

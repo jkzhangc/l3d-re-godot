@@ -97,6 +97,14 @@ var _throwable_char_idx: int = 0            ## 投掷物举起行走图角色索
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
+
+## 联机阶段 1：NetworkWorld 持有世界权威，Player 仅负责碰撞与表现。
+var network_entity_id: int = 0
+var network_owner_peer_id: int = 0
+var network_controlled: bool = false
+var _network_target_position: Vector2 = Vector2.ZERO
+var _network_has_target: bool = false
+
 var _tp_regen_timer: float = 0.0
 
 ## 搓招方向输入缓冲
@@ -128,9 +136,14 @@ var facing: int:
 
 func _ready() -> void:
 	add_to_group("player")
-	Players.register_entity(self)
-	# 从 CharacterData 资源读取外观/HP 参数（覆盖本地 @export 默认值）
-	_apply_character_data()
+	# NetworkWorld 会在实体加入场景前预先标记动态玩家；此处绝不能把它们
+	# 错绑到单人 active_seat。
+	if not network_controlled:
+		Players.register_entity(self)
+		_apply_character_data()
+	else:
+		_apply_current_character_data(current_character)
+		_disable_network_state_machine()
 
 	if walk_texture == null:
 		walk_texture = load("res://art/Characters/のび太セット.png") as Texture2D
@@ -145,14 +158,18 @@ func _ready() -> void:
 	animation_timer.start()
 	_refresh_sprite()
 
-	# 从本实体对应座位恢复 HP（用于存档加载后）
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state and state.current_hp > 0.0:
-		current_hp = state.current_hp
+	# 从本实体对应座位恢复 HP（用于存档加载后）。联机实体的状态由
+	# NetworkWorld 在 spawn / snapshot 时写入，不能在这里触碰 Players 映射。
+	if not network_controlled:
+		var state: PlayerState = Players.get_state_for_entity(self)
+		if state and state.current_hp > 0.0:
+			current_hp = state.current_hp
+		else:
+			current_hp = max_hp
+			if state:
+				state.current_hp = current_hp
 	else:
 		current_hp = max_hp
-		if state:
-			state.current_hp = current_hp
 
 
 func _exit_tree() -> void:
@@ -179,6 +196,10 @@ func _setup_hurt_area() -> Area2D:
 
 
 func _process(delta: float) -> void:
+	if network_controlled:
+		if _network_has_target:
+			global_position = global_position.lerp(_network_target_position, minf(delta * 16.0, 1.0))
+		return
 	if _is_dying:
 		_process_death(delta)
 	_update_shove_fatigue(delta)
@@ -191,6 +212,50 @@ func _on_animation_timer_timeout() -> void:
 		_anim_step = (_anim_step + 1) % WALK_SEQUENCE.size()
 	_refresh_sprite()
 
+
+# ═══════════════════════════════════════
+# 联机表现接口（由 NetworkWorld 调用）
+# ═══════════════════════════════════════
+
+## 在加入场景前或场景运行时将此 Player 切换为 Host 权威实体。
+func configure_network_entity(entity_id: int, owner_peer_id: int) -> void:
+	network_entity_id = entity_id
+	network_owner_peer_id = owner_peer_id
+	network_controlled = true
+	velocity = Vector2.ZERO
+	if is_node_ready():
+		_disable_network_state_machine()
+
+
+## 写入可靠 spawn / world snapshot 的初始表现数据。
+func apply_network_spawn_state(character: CharacterData, hp: float, new_position: Vector2, new_facing: int, snap: bool = true) -> void:
+	if character:
+		current_character = character
+		_apply_current_character_data(current_character)
+	current_hp = clampf(hp, 0.0, max_hp)
+	apply_network_presentation(new_position, new_facing, false, false, snap)
+
+
+## 仅更新客户端可见状态。Host 传 snap=true，客户端由 _process 平滑插值。
+func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, walking: bool, snap: bool = false) -> void:
+	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
+	update_appearance(moving, walking)
+	if snap:
+		global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = false
+	else:
+		if not _network_has_target:
+			global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = true
+
+
+func _disable_network_state_machine() -> void:
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm:
+		sm.set_process(false)
+		sm.set_physics_process(false)
 
 # ═══════════════════════════════════════
 # 供 State 调用的公开方法
@@ -431,9 +496,12 @@ func _apply_character_data() -> void:
 	var state: PlayerState = Players.get_state_for_entity(self)
 	if state and state.character:
 		current_character = state.character
-	if not current_character:
+	_apply_current_character_data(current_character)
+
+
+func _apply_current_character_data(cd: CharacterData) -> void:
+	if not cd:
 		return
-	var cd := current_character
 	if cd.walk_texture:   walk_texture = cd.walk_texture
 	walk_char_index = cd.walk_char_index
 	walk_frame_duration = cd.walk_frame_duration

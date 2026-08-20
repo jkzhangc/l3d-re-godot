@@ -2,6 +2,11 @@ extends Node
 ## 游戏启动器 — 场景加载时初始化玩家数据 + 创建 CharacterSwitchManager
 
 func _ready() -> void:
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("is_online_session") and net.is_online_session():
+		_start_network_world()
+		return
+
 	Global.try_load_or_init()
 	# 安全屋场景加载时自动存档（确保死亡后回到这里时的状态一致）
 	if get_tree() and get_tree().current_scene:
@@ -23,6 +28,22 @@ func _ready() -> void:
 	# 避免首个敌人追击时才同步创建 AStarGrid2D 造成卡顿
 	call_deferred("_prebuild_astar")
 
+func _start_network_world() -> void:
+	## 当前场景仍在执行 _ready()，直接 add_child 会被 Godot 拒绝；延后到下一帧创建。
+	call_deferred("_create_network_world")
+
+
+func _create_network_world() -> void:
+	## Phase 1 联机只启用 Host 权威移动世界；跳过单机存档、队友切换和 Director 初始化。
+	var tree := get_tree()
+	if not tree or not tree.current_scene:
+		return
+	if tree.current_scene.get_node_or_null("NetworkWorld"):
+		return
+	var world := preload("res://script/network_world.gd").new()
+	world.name = "NetworkWorld"
+	tree.current_scene.add_child(world)
+	print("[GameInit] 已进入 Phase 1 Host 权威联机世界")
 
 func _spawn_switch_manager() -> void:
 	## 如果队伍 > 1人且场景中不存在，自动创建 CharacterSwitchManager
