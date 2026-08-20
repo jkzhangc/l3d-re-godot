@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://b7i7kpp78wjwq" path="res://script/director/spawn_zone.gd" id="6_cfssa"]
 [ext_resource type="PackedScene" path="res://scene/menu.tscn" id="6_pyprm"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="7_46uuh"]
-[ext_resource type="PackedScene" path="res://object/safe_door.tscn" id="7_o1ord"]
+[ext_resource type="PackedScene" uid="uid://om55cuudhhrx" path="res://object/safe_door.tscn" id="7_o1ord"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="8_gameinit"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="9_vjhe4"]
 
@@ -60,7 +60,7 @@ position = Vector2(1029, 3139)
 script = ExtResource("6_cfssa")
 
 [node name="SafeDoor" parent="DecorLayer" unique_id=711957885 instance=ExtResource("7_o1ord")]
-position = Vector2(-960, -1040)
+position = Vector2(1519, -453)
 target_scene = "res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1543960742]

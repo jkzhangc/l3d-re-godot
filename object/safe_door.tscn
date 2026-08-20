@@ -1,17 +1,16 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://om55cuudhhrx"]
 
-[ext_resource type="Script" path="res://script/director/safe_door.gd" id="1_door"]
-[ext_resource type="Texture2D" path="res://art/misc/!オブジェクト1.png" id="2_door_tex"]
+[ext_resource type="Script" uid="uid://c4k5fv36wlxy2" path="res://script/director/safe_door.gd" id="1_door"]
+[ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="2_q75ds"]
 
-[node name="SafeDoor" type="Node2D"]
+[node name="SafeDoor" type="Node2D" unique_id=1761535125]
 script = ExtResource("1_door")
-walk_texture = ExtResource("2_door_tex")
-step_frames = Array[int]([1])
-animated = false
+walk_texture = ExtResource("2_q75ds")
+walk_char_index = 2
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=459378036]
 
-[node name="HintLabel" type="Label" parent="."]
+[node name="HintLabel" type="Label" parent="." unique_id=1242997944]
 offset_left = -72.0
 offset_top = -62.0
 offset_right = 72.0
