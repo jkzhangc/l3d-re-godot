@@ -10,10 +10,14 @@ signal server_disconnected
 signal handshake_completed
 signal player_list_changed
 signal game_scene_ready_received(peer_id: int, scene_path: String)
+## 场景内 NetworkWorld 必须在真正换图前立即停止发送 RPC，避免旧节点路径的在途包命中已释放场景。
+signal scene_transition_started(scene_path: String)
 
 const PROTOCOL_VERSION := "l3d_main_v2_combat_rpc"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
+## 给 LAN 上已发送的 scene-RPC 一小段排空时间；切图时双方仍保留旧 NetworkWorld，随后再同时释放。
+const SCENE_TRANSITION_FLUSH_SECONDS := 0.25
 
 var is_host := false
 var my_peer_id := 1
@@ -23,6 +27,9 @@ var active_scene_path := ""
 
 var _player_names: Dictionary = {}
 var _pending_scene_ready: Dictionary = {}
+## 跨地图持续存在的权威玩家数据。只有 Host 写入；客户端仅缓存 Host 快照用于表现。
+## 绝不能把这些数据放进 NetworkWorld，因为场景切换会释放 NetworkWorld。
+var _session_player_states: Dictionary = {} # peer_id -> PlayerState
 var _signals_connected := false
 
 func _ready() -> void:
@@ -45,6 +52,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	my_peer_id = multiplayer.get_unique_id()
 	handshake_ok = true
 	_player_names = {my_peer_id: _sanitize_name(player_name)}
+	_session_player_states.clear()
 	_connect_multiplayer_signals()
 	player_list_changed.emit()
 	print("[Net] HOST listening port=%d peer_id=%d protocol=%s" % [port, my_peer_id, PROTOCOL_VERSION])
@@ -60,6 +68,7 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	is_host = false
 	my_peer_id = multiplayer.get_unique_id()
 	handshake_ok = false
+	_session_player_states.clear()
 	_connect_multiplayer_signals()
 	print("[Net] CLIENT connecting %s:%d" % [address, port])
 	return OK
@@ -74,6 +83,7 @@ func leave() -> void:
 	active_scene_path = ""
 	_player_names.clear()
 	_pending_scene_ready.clear()
+	_session_player_states.clear()
 	player_list_changed.emit()
 
 func get_player_name(peer_id: int) -> String:
@@ -88,6 +98,19 @@ func get_peer_ids() -> Array[int]:
 		result.append(int(key))
 	result.sort()
 	return result
+
+func get_session_player_state(peer_id: int) -> PlayerState:
+	return _session_player_states.get(peer_id) as PlayerState
+
+
+func set_session_player_state(peer_id: int, state: PlayerState) -> void:
+	if peer_id <= 0 or not state:
+		return
+	_session_player_states[peer_id] = state
+
+
+func remove_session_player_state(peer_id: int) -> void:
+	_session_player_states.erase(peer_id)
 
 # ---------------------------------------------------------------- handshake
 
@@ -131,8 +154,22 @@ func player_list(names: Dictionary) -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game(scene_path: String) -> void:
 	active_scene_path = scene_path
-	print("[Net] START_GAME %s" % scene_path)
-	call_deferred("_change_scene_safely", scene_path)
+	## 先通知当前场景停止所有 NetworkWorld RPC；否则一端先释放旧场景时，另一端的在途快照会按旧节点路径报错。
+	scene_transition_started.emit(scene_path)
+	print("[Net] START_GAME %s (flush=%.2fs)" % [scene_path, SCENE_TRANSITION_FLUSH_SECONDS])
+	call_deferred("_change_scene_after_flush", scene_path)
+
+
+func _change_scene_after_flush(scene_path: String) -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if not tree:
+		return
+	await tree.create_timer(SCENE_TRANSITION_FLUSH_SECONDS).timeout
+	if not is_inside_tree():
+		return
+	_change_scene_safely(scene_path)
 
 func request_scene_change(scene_path: String) -> void:
 	## 游戏内场景切换入口：联机时由 Host 广播，客户端只向 Host 请求。
@@ -242,6 +279,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		return
 	_player_names.erase(peer_id)
 	_pending_scene_ready.erase(peer_id)
+	remove_session_player_state(peer_id)
 	print("[Net] PEER_DISCONNECTED peer=%d" % peer_id)
 	player_list.rpc(_player_names.duplicate())
 	player_list_changed.emit()

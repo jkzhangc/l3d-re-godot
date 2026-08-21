@@ -32,6 +32,11 @@ const PICKUP_SCENE := preload("res://object/weapon_pickup.tscn")
 ## 拾取时弹夹内的子弹数（-1=自动填满弹夹容量，0=空弹夹）
 @export var pickup_magazine_ammo: int = -1
 
+## 在线联机中由 NetworkWorld 分配；0 表示离线旧逻辑。
+var network_pickup_id: int = 0
+var network_presentation_only: bool = false
+var _network_pickup_request_pending: bool = false
+
 
 # ═══════════════════════════════════════
 # 踏步动画
@@ -102,13 +107,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# 踏步动画
-	if pickup_animated and pickup_step_frames.size() > 0:
-		_step_timer += delta
-		if _step_timer >= pickup_step_duration:
-			_step_timer -= pickup_step_duration
-			_step_idx = (_step_idx + 1) % pickup_step_frames.size()
-			_refresh_sprite()
+	if _is_online_network_pickup():
+		_process_network_pickup(delta)
+		_process_step_animation(delta)
+		return
+	_process_step_animation(delta)
 
 	# 拾取逻辑
 	if not _player_in_range or not _player_ref:
@@ -144,6 +147,72 @@ func _process(delta: float) -> void:
 		_hold_timer = 0.0
 		_update_hold_indicator(delta, false)
 
+
+
+func _process_step_animation(delta: float) -> void:
+	if pickup_animated and pickup_step_frames.size() > 0:
+		_step_timer += delta
+		if _step_timer >= pickup_step_duration:
+			_step_timer -= pickup_step_duration
+			_step_idx = (_step_idx + 1) % pickup_step_frames.size()
+			_refresh_sprite()
+
+
+func _is_online_network_pickup() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net and net.has_method("is_online_session") and bool(net.is_online_session())
+
+
+func _process_network_pickup(delta: float) -> void:
+	# 尚未收到 Host 的可靠 pickup_snapshot 前只能展示，不能执行本地拾取。
+	if network_pickup_id <= 0:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+		return
+	var local_player := Players.get_local_entity() as CharacterBody2D
+	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
+	_player_ref = local_player if in_range else null
+	_player_in_range = in_range
+	if not in_range or not weapon_data:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+		return
+	var state: PlayerState = Players.get_state_for_entity(local_player)
+	var current: WeaponData = state.get_equipped_weapon(weapon_data.get_slot_key()) if state else null
+	if current == null:
+		_request_network_pickup()
+		return
+	if Input.is_action_pressed("确定键"):
+		_hold_timer += delta
+		_update_hold_indicator(delta, true)
+		if _hold_timer >= hold_time:
+			_request_network_pickup()
+	else:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+
+
+func _request_network_pickup() -> void:
+	if _network_pickup_request_pending:
+		return
+	_network_pickup_request_pending = true
+	_hold_timer = 0.0
+	var scene := get_tree().current_scene
+	var world := scene.find_child("NetworkWorld", true, false) if scene else null
+	if world and world.has_method("request_pickup"):
+		world.request_pickup(network_pickup_id)
+	else:
+		_network_pickup_request_pending = false
+
+
+func configure_network_pickup(pickup_id: int, presentation_only: bool = false) -> void:
+	network_pickup_id = pickup_id
+	network_presentation_only = presentation_only
+	_network_pickup_request_pending = false
+
+
+func reset_network_pickup_request() -> void:
+	_network_pickup_request_pending = false
 
 func _can_hold_pickup() -> bool:
 	## 玩家在范围内即可拾取（不再限制武器举起/攻击状态）

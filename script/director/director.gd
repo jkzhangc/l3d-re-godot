@@ -95,8 +95,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	# Phase 1 联机只验证 Host 权威玩家同步；导演、敌人、物品和战斗必须完全停用。
-	if _is_phase1_online_session():
+	# 联机采用 Host 权威：Host 继续运行导演并生成实体，Client 只接收 NetworkWorld 快照。
+	if _is_network_client_session():
 		return
 	var player: Node2D = _find_player()
 	if not player or not is_instance_valid(player):
@@ -165,16 +165,20 @@ func _on_phase_changed(phase: StringName) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if _is_phase1_online_session() or not allow_manual_spawn:
+	# F2 调试生成也必须只在 Host / 单机执行，避免 Client 本地生成未同步实体。
+	if _is_network_client_session() or not allow_manual_spawn:
 		return
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_F2:
 		_debug_spawn()
 
 
-func _is_phase1_online_session() -> bool:
+func _is_network_client_session() -> bool:
 	# 用节点路径而非 Autoload 标识符，兼容编辑器脚本热重载期间的全局类刷新时序。
 	var net: Node = get_node_or_null("/root/Net")
-	return net != null and net.has_method("is_online_session") and net.is_online_session()
+	return net != null \
+		and net.has_method("is_online_session") \
+		and net.is_online_session() \
+		and not bool(net.get("is_host"))
 
 
 # ═══════════════════════════════════════
@@ -204,6 +208,9 @@ func is_scripted_event_active() -> bool:
 # ═══════════════════════════════════════
 
 func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
+	# 事件/调试入口也不能绕过 Client 侧的生成禁令。
+	if _is_network_client_session():
+		return null
 	if not _enemy_scene:
 		printerr("[Director] enemy scene not loaded")
 		return null

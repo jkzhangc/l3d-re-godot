@@ -93,7 +93,14 @@ func clear_seats() -> void:
 	seats.clear()
 	active_seat_index = 0
 	seats_authored = false
+	clear_entity_bindings()
+
+
+## 场景切换时只清除已释放的玩家节点绑定；保留座位和跨图 PlayerState。
+func clear_entity_bindings() -> void:
+	_entities.clear()
 	_seat_of_entity.clear()
+	_local_entity = null
 
 
 ## 追加一个座位，返回其索引。会同步写入 state.seat_index。

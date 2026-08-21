@@ -1,8 +1,6 @@
 class_name SafeDoor extends Node2D
 ## 安全门实体：使用 VX Ace 行走图显示，玩家靠近并按“确定键”后进入目标安全屋。
-##
-## 与 TeleportPoint 的区别是它明确代表章节终点：传送前冻结章节统计，
-## 目标安全屋可放置 ChapterSummary，在载入后显示 L4D2 风格章节总结。
+## 联机时由 NetworkWorld 验证所有已连接玩家都在同一扇门附近且分别确认，才统一切图。
 
 const FRAME_W: int = 48
 const FRAME_H: int = 64
@@ -32,6 +30,9 @@ var _can_interact: bool = false
 var _transitioning: bool = false
 var _step_index: int = 0
 var _step_timer: float = 0.0
+var _network_ready_count: int = 0
+var _network_total_count: int = 0
+var _local_network_ready: bool = false
 
 
 func _ready() -> void:
@@ -105,13 +106,19 @@ func _refresh_sprite() -> void:
 	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
 
 
+func _is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net and net.has_method("is_online_session") and bool(net.is_online_session())
+
+
 func _check_player_proximity() -> void:
-	var nearest: Node2D = Players.nearest_entity_to(global_position)
-	_player_ref = nearest
+	# 联机提示只能基于本机操控的角色，不能因远端玩家靠近而在本机显示可交互。
+	var candidate: Node2D = Players.get_local_entity() if _is_online_session() else Players.nearest_entity_to(global_position)
+	_player_ref = candidate
 	_can_interact = (
-		nearest != null
-		and is_instance_valid(nearest)
-		and nearest.global_position.distance_to(global_position) <= interact_range
+		candidate != null
+		and is_instance_valid(candidate)
+		and candidate.global_position.distance_to(global_position) <= interact_range
 		and not _transitioning
 	)
 	_update_label()
@@ -121,8 +128,29 @@ func _update_label() -> void:
 	var label: Label = get_node_or_null("HintLabel") as Label
 	if not label:
 		return
-	label.text = "%s  [确定键]" % interact_label
+	if _is_online_session() and _network_total_count > 0:
+		label.text = "%s  [确定键]  (%d/%d 已准备)" % [interact_label, _network_ready_count, _network_total_count]
+	else:
+		label.text = "%s  [确定键]" % interact_label
 	label.visible = _can_interact and not _transitioning
+
+
+func get_network_door_key() -> String:
+	var scene := get_tree().current_scene
+	return str(scene.get_path_to(self)) if scene else ""
+
+
+func apply_network_ready_status(ready_count: int, total_count: int, local_ready: bool) -> void:
+	_network_ready_count = maxi(0, ready_count)
+	_network_total_count = maxi(0, total_count)
+	_local_network_ready = local_ready
+	_update_label()
+
+
+func begin_network_transition() -> void:
+	_transitioning = true
+	_can_interact = false
+	_update_label()
 
 
 func _enter_safe_room() -> void:
@@ -130,30 +158,44 @@ func _enter_safe_room() -> void:
 		printerr("[SafeDoor] 无法进入安全屋，目标场景不存在: %s" % target_scene)
 		return
 
-	_transitioning = true
-	_can_interact = false
-	_update_label()
 	var net: Node = get_node_or_null("/root/Net")
-	var online := net and net.has_method("is_online_session") and net.is_online_session()
-	if online and not net.is_host:
-		# 客户端只向 Host 请求切图，不在本地修改章节/回血状态。
-		if net.has_method("request_scene_change"):
-			net.request_scene_change(target_scene)
+	var online: bool = false
+	if net and net.has_method("is_online_session"):
+		online = bool(net.is_online_session())
+	if online:
+		var scene := get_tree().current_scene
+		var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
+		if world and world.has_method("request_safe_door_ready"):
+			# 不在本地切图/冻结；只登记本玩家对这一扇门的准备意图。
+			world.request_safe_door_ready(get_network_door_key())
+			return
+		push_warning("[SafeDoor] 联机世界未就绪，忽略安全门请求")
 		return
 
+	begin_network_transition()
 	_apply_entry_effects()
+	_finish_chapter()
+	print("[SafeDoor] 进入安全屋: %s" % target_scene)
+	get_tree().change_scene_to_file.call_deferred(target_scene)
 
+
+func commit_host_network_entry() -> void:
+	## 只由 Host 的 NetworkWorld 在验证所有玩家到位后调用。
+	if _transitioning:
+		return
+	begin_network_transition()
+	_apply_entry_effects()
+	_finish_chapter()
+	print("[SafeDoor] Host 统一进入安全屋: %s" % target_scene)
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("request_scene_change"):
+		net.request_scene_change(target_scene)
+
+
+func _finish_chapter() -> void:
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("finish_chapter"):
 		chapter_stats.finish_chapter()
-
-	print("[SafeDoor] 进入安全屋: %s" % target_scene)
-	if online:
-		# 联机时由 Host 广播场景切换，避免客户端停留在旧 NetworkWorld。
-		if net.has_method("request_scene_change"):
-			net.request_scene_change(target_scene)
-		return
-	get_tree().change_scene_to_file.call_deferred(target_scene)
 
 
 func _apply_entry_effects() -> void:

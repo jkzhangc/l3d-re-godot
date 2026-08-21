@@ -83,25 +83,52 @@ func confirm_seat(seat_index: int) -> void:
 
 
 func _submit_local_confirmation() -> void:
-	var seat_index: int = Players.active_seat_index
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
-		_server_confirm.rpc_id(1, seat_index)
-	else:
-		_server_confirm(seat_index)
-
-
-@rpc("any_peer", "call_remote", "reliable")
-func _server_confirm(seat_index: int) -> void:
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		# 客户端不得上传本地 seat 编号：每台机器的 active_seat_index 不是网络身份。
+		_server_confirm.rpc_id(1)
 		return
-	var sender_id: int = multiplayer.get_remote_sender_id()
-	var state: PlayerState = Players.get_seat(seat_index)
-	if sender_id > 0 and state and state.owner_peer_id > 0 and state.owner_peer_id != sender_id:
-		push_warning("[ChapterSummary] peer %d 不能确认座位 %d" % [sender_id, seat_index])
+	var local_peer_id := _get_local_peer_id()
+	var seat_index := _find_seat_owned_by_peer(local_peer_id)
+	if seat_index < 0:
+		seat_index = Players.active_seat_index
+	_server_confirm_local(seat_index)
+
+
+func _server_confirm_local(seat_index: int) -> void:
+	if seat_index < 0:
 		return
 	confirm_seat(seat_index)
 	if multiplayer.has_multiplayer_peer():
 		_apply_remote_confirmation.rpc(seat_index)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func _server_confirm() -> void:
+	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+		return
+	var sender_id: int = multiplayer.get_remote_sender_id()
+	var seat_index := _find_seat_owned_by_peer(sender_id)
+	if sender_id <= 1 or seat_index < 0:
+		push_warning("[ChapterSummary] peer %d 没有可确认的座位" % sender_id)
+		return
+	_server_confirm_local(seat_index)
+
+
+func _get_local_peer_id() -> int:
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("is_online_session") and bool(net.is_online_session()):
+		return int(net.get("my_peer_id"))
+	return 1
+
+
+func _find_seat_owned_by_peer(peer_id: int) -> int:
+	if peer_id <= 0:
+		return -1
+	for seat_index: int in range(Players.seat_count()):
+		var state: PlayerState = Players.get_seat(seat_index)
+		if state and state.owner_peer_id == peer_id:
+			return seat_index
+	return -1
 
 
 @rpc("authority", "call_remote", "reliable")

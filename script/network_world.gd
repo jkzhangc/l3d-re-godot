@@ -7,6 +7,7 @@ extends Node
 const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
 const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
+const PICKUP_SCENE: PackedScene = preload("res://object/weapon_pickup.tscn")
 const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
 const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
 const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
@@ -27,6 +28,11 @@ const SPAWN_SEPARATION := 56.0
 var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
 var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
+var _pickups: Dictionary = {} # pickup_id -> WeaponPickup
+var _next_pickup_id := 1
+## safe-door path -> { peer_id: true }; the Host owns readiness.
+var _safe_door_ready: Dictionary = {}
+var _door_ready_status: Dictionary = {}
 var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
 var _next_bullet_id := 1
 ## 攻击冷却按「玩家 + Host 当前武器」独立记录，避免切换武器后互相影响。
@@ -36,6 +42,8 @@ var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
 var _initial_world_received := false
+## Net 在双方真正换图前发出的过渡信号；置位后本场景不再发送任何 RPC，避免旧节点路径的在途包。
+var _scene_transitioning := false
 var _last_logged_remote_input: Dictionary = {}
 var _auto_client_fire_confirmed := false
 var _auto_client_bullet_seen := false
@@ -60,6 +68,7 @@ func _ready() -> void:
 
 	net.peer_left.connect(_on_peer_left)
 	net.game_scene_ready_received.connect(_on_game_scene_ready_received)
+	net.scene_transition_started.connect(_on_scene_transition_started)
 
 	if net.is_host:
 		_host_initialize_world()
@@ -80,16 +89,29 @@ func _exit_tree() -> void:
 		net.peer_left.disconnect(_on_peer_left)
 	if net.game_scene_ready_received.is_connected(_on_game_scene_ready_received):
 		net.game_scene_ready_received.disconnect(_on_game_scene_ready_received)
+	if net.scene_transition_started.is_connected(_on_scene_transition_started):
+		net.scene_transition_started.disconnect(_on_scene_transition_started)
+
+
+func _on_scene_transition_started(target_scene_path: String) -> void:
+	## 两端在同一可靠 start_game RPC 内进入静默期，保留旧树短暂排空此前的 RPC。
+	if _scene_transitioning:
+		return
+	_scene_transitioning = true
+	print("[NetworkWorld] SCENE_TRANSITION_QUIET current=%s target=%s" % [_scene_path, target_scene_path])
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(net):
+	if not is_instance_valid(net) or _scene_transitioning:
 		return
 	_capture_weapon_switch_input()
+	_capture_weapon_raise_input()
 	_capture_fire_input()
 	if net.is_host:
 		_capture_host_input()
 		_simulate_host_players(delta)
+		_register_untracked_host_enemies()
+		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
@@ -102,32 +124,46 @@ func _physics_process(delta: float) -> void:
 # ---------------------------------------------------------------- Host simulation
 
 func _host_initialize_world() -> void:
-	Players.clear_seats()
+	# Scene switching must only discard old node bindings. Persistent PlayerState lives in Net.
+	Players.clear_entity_bindings()
 	var local_id: int = int(net.my_peer_id)
 	var host_node := _find_preplaced_player()
 	if host_node:
 		_register_host_player(local_id, host_node, true)
 	else:
-		_register_host_player(local_id, _instantiate_player(_spawn_position(0), net.my_peer_id), true)
+		_register_host_player(local_id, _instantiate_player(_spawn_position(0), local_id), true)
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			_register_host_player(peer_id, _instantiate_player(_spawn_position(_players.size()), peer_id), false)
+	# 若本轮 start_game 前客户端已报告 ready，先把其权威实体在 Host 场景里重建出来。
+	for peer_id: int in net.take_pending_scene_ready(_scene_path):
+		_add_host_peer(peer_id)
+	# Enemy/Pickup joins its groups from _ready(), so scan after the scene is completely ready.
+	call_deferred("_finish_host_world_initialization")
+
+
+func _finish_host_world_initialization() -> void:
+	if not is_instance_valid(self) or not net.is_host:
+		return
 	_register_initial_host_enemies()
+	_register_initial_host_pickups()
 	_consume_pending_scene_ready()
 
 
 func _client_initialize_world() -> void:
-	# 地图预置 Player 的 _ready() 已按离线流程运行过；清空其座位映射后，
-	# 将它复用为本客户端自己的网络表现实体，避免首个快照再生成一个 Player。
-	Players.clear_seats()
+	# Keep snapshot data during map loads, only invalidate scene-node bindings.
+	Players.clear_entity_bindings()
 	var local_id: int = int(net.my_peer_id)
 	var local_node := _find_preplaced_player()
 	if not local_node:
 		local_node = _instantiate_player(_spawn_position(0), local_id)
-	var state := _make_player_state("", local_node.current_hp)
+	var state := _find_or_create_player_state(local_id, "", local_node.current_hp)
 	state.owner_peer_id = local_id
 	state.position = local_node.global_position
 	state.facing = local_node.facing
-	var seat_index := Players.add_seat(state)
+	var seat_index := _ensure_player_state_seat(state)
 	local_node.configure_network_entity(local_id, local_id)
-	_configure_network_loadout(state, local_node)
+	local_node.exit_weapon_mode()
 	Players.register_entity(local_node, seat_index)
 	_players[local_id] = {
 		"node": local_node,
@@ -138,6 +174,7 @@ func _client_initialize_world() -> void:
 	}
 	_set_local_player(local_node, seat_index)
 	_prepare_client_preplaced_enemies()
+	_prepare_client_preplaced_pickups()
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
 
 
@@ -146,6 +183,15 @@ func _capture_weapon_switch_input() -> void:
 		_request_weapon_switch("primary")
 	elif Input.is_action_just_pressed("副武器键"):
 		_request_weapon_switch("secondary")
+
+
+func _capture_weapon_raise_input() -> void:
+	if not Input.is_action_just_pressed("举起放下武器键"):
+		return
+	if net.is_host:
+		_try_host_toggle_weapon(int(net.my_peer_id))
+	elif _initial_world_received:
+		weapon_toggle_request.rpc_id(1)
 
 
 func _request_weapon_switch(slot: String) -> void:
@@ -234,15 +280,18 @@ func _sync_state_from_node(peer_id: int, node: CharacterBody2D, moving: bool, wa
 
 
 func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bool) -> void:
-	if not is_instance_valid(node):
+	if not is_instance_valid(node) or _players.has(peer_id):
 		return
-	var state := _make_player_state("", node.current_hp)
+	var state := _find_or_create_player_state(peer_id, "", node.current_hp)
 	state.owner_peer_id = peer_id
 	state.position = node.global_position
 	state.facing = node.facing
 	node.configure_network_entity(peer_id, peer_id)
-	_configure_network_loadout(state, node)
-	var seat_index := Players.add_seat(state)
+	if _is_network_regression_loadout():
+		_configure_network_loadout(state, node)
+	else:
+		node.exit_weapon_mode()
+	var seat_index := _ensure_player_state_seat(state)
 	if not is_preplaced:
 		node.global_position = _spawn_position(_players.size())
 	Players.register_entity(node, seat_index)
@@ -271,6 +320,10 @@ func _add_host_peer(peer_id: int) -> void:
 
 # ---------------------------------------------------------------- Host-authoritative combat
 
+func _is_network_regression_loadout() -> bool:
+	return "--net-test=host" in OS.get_cmdline_user_args() and _get_network_primary_loadout_weapon() != null
+
+
 func _configure_network_loadout(state: PlayerState, node: CharacterBody2D) -> void:
 	var primary_weapon := _get_network_primary_loadout_weapon()
 	if not state or not is_instance_valid(node) or not primary_weapon or not NETWORK_KNIFE:
@@ -294,7 +347,7 @@ func _get_network_primary_loadout_weapon() -> WeaponData:
 		if requested and requested.is_ranged:
 			return requested
 		push_warning("[NetworkWorld] 忽略无效的联机回归主武器: %s" % weapon_id)
-	return NETWORK_PISTOL
+	return null
 
 
 func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
@@ -328,9 +381,27 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	if not wd or state.active_weapon_slot == slot:
 		return
 	state.active_weapon_slot = slot
-	node.enter_weapon_mode(wd)
-	node.set_weapon_ready_frame()
+	if node.is_weapon_mode_active():
+		node.enter_weapon_mode(wd)
+		node.set_weapon_ready_frame()
 	print("[NetworkWorld] HOST_WEAPON_SWITCH peer=%d slot=%s weapon=%s" % [peer_id, slot, wd.item_id])
+
+
+func _try_host_toggle_weapon(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var wd: WeaponData = state.get_active_weapon() if state else null
+	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0:
+		return
+	if node.is_weapon_mode_active():
+		node.exit_weapon_mode()
+	else:
+		node.enter_weapon_mode(wd)
+		node.set_weapon_ready_frame()
+	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d raised=%s" % [peer_id, node.is_weapon_mode_active()])
 
 
 func _try_host_attack(peer_id: int) -> void:
@@ -343,7 +414,7 @@ func _try_host_attack(peer_id: int) -> void:
 		return
 	# 武器完全从 Host 当前 PlayerState 读取，客户端 RPC 不携带 weapon_id/目标/伤害等参数。
 	var wd := state.get_active_weapon()
-	if not wd:
+	if not wd or not node.is_weapon_mode_active():
 		return
 	var now := Time.get_ticks_msec()
 	var cooldown_msec := _get_attack_cooldown_msec(wd)
@@ -380,12 +451,18 @@ func _try_host_attack(peer_id: int) -> void:
 
 
 func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
+	# 避免切图释放 NetworkWorld 后，旧协程再访问空的 SceneTree。
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if not tree:
+		return
 	var delay := 0.0
 	for index: int in range(mini(wd.melee_hit_at_sequence_idx, wd.get_melee_attack_char_sequence().size())):
 		delay += wd.get_melee_attack_frame_duration(index)
 	if delay > 0.0:
-		await get_tree().create_timer(delay).timeout
-	if is_instance_valid(node):
+		await tree.create_timer(delay).timeout
+	if is_inside_tree() and is_instance_valid(node) and node.is_inside_tree():
 		_perform_host_melee_attack(node, wd, is_headshot)
 
 
@@ -487,6 +564,16 @@ func weapon_switch_request(slot: String) -> void:
 
 
 @rpc("any_peer", "call_remote", "reliable")
+func weapon_toggle_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_toggle_weapon(sender)
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func fire_request() -> void:
 	if not net.is_host:
 		return
@@ -515,7 +602,12 @@ func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) ->
 	var state := entry.get("state") as PlayerState
 	if not state or not is_instance_valid(node):
 		return
-	var wd := _apply_client_weapon_snapshot(state, node, weapon_id)
+	var wd := _apply_client_weapon_snapshot(state, node, {
+		"primary_weapon_id": weapon_id,
+		"secondary_weapon_id": _weapon_id_for_slot(state, "secondary"),
+		"active_weapon_slot": _find_network_weapon_slot(state, weapon_id),
+		"weapon_raised": true,
+	})
 	if not wd:
 		return
 	if wd.is_ranged and magazine_ammo >= 0:
@@ -592,11 +684,12 @@ func despawn_player(peer_id: int) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func world_snapshot(player_states: Array, enemy_states: Array) -> void:
+func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
 	if net.is_host:
 		return
 	_apply_client_snapshot(player_states, true)
 	_apply_client_enemy_snapshot(enemy_states, true)
+	_apply_client_pickup_snapshot(pickup_states)
 	_initial_world_received = _players.has(net.my_peer_id)
 	print("[NetworkWorld] WORLD_SNAPSHOT players=%d enemies=%d local_ready=%s" % [player_states.size(), enemy_states.size(), _initial_world_received])
 
@@ -628,7 +721,7 @@ func _accept_ready_peer(peer_id: int) -> void:
 		return
 	_add_host_peer(peer_id)
 	# 首次世界快照是可靠的，保留字典格式及预置敌人的场景路径。
-	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false))
+	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
 
@@ -639,6 +732,7 @@ func _on_peer_left(peer_id: int) -> void:
 		_remove_player(peer_id)
 		despawn_player.rpc(peer_id)
 		print("[NetworkWorld] HOST_DESPAWN peer=%d" % peer_id)
+	_clear_host_safe_door_ready_for_peer(peer_id)
 
 
 func _broadcast_spawn_player(peer_id: int) -> void:
@@ -662,19 +756,26 @@ func _find_network_weapon_slot(state: PlayerState, weapon_id: String) -> String:
 	return ""
 
 
-func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, weapon_id: String) -> WeaponData:
-	if not state or not is_instance_valid(node) or weapon_id.is_empty():
+func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, public_state: Dictionary) -> WeaponData:
+	## 装备和举枪状态一律由 Host 的公开快照收敛；客户端绝不自行补默认手枪/小刀。
+	if not state or not is_instance_valid(node):
 		return null
-	var remote_weapon := _get_network_weapon_data_by_id(weapon_id)
-	if not remote_weapon:
-		return null
-	var slot := _find_network_weapon_slot(state, weapon_id)
-	if slot.is_empty():
-		return null
-	if state.active_weapon_slot != slot:
-		state.active_weapon_slot = slot
-		node.enter_weapon_mode(remote_weapon)
-		node.set_weapon_ready_frame()
+	var primary := _get_network_weapon_data_by_id(str(public_state.get("primary_weapon_id", "")))
+	var secondary := _get_network_weapon_data_by_id(str(public_state.get("secondary_weapon_id", "")))
+	state.equipment["primary"] = primary
+	state.equipment["secondary"] = secondary
+	var requested_slot := str(public_state.get("active_weapon_slot", "primary"))
+	state.active_weapon_slot = requested_slot if requested_slot == "primary" or requested_slot == "secondary" else "primary"
+	var packet_magazines: Variant = public_state.get("weapon_magazines", {})
+	if packet_magazines is Dictionary:
+		state.weapon_magazines = (packet_magazines as Dictionary).duplicate()
+	var remote_weapon := state.get_active_weapon()
+	if bool(public_state.get("weapon_raised", false)) and remote_weapon:
+		if not node.is_weapon_mode_active() or node.get_network_weapon_id() != remote_weapon.item_id:
+			node.enter_weapon_mode(remote_weapon)
+			node.set_weapon_ready_frame()
+	else:
+		node.exit_weapon_mode()
 	return remote_weapon
 
 
@@ -705,8 +806,8 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		var state := _make_player_state(str(public_state.get("character_path", "")), float(public_state.get("hp", 1.0)))
 		state.owner_peer_id = peer_id
 		node.configure_network_entity(peer_id, peer_id)
-		_configure_network_loadout(state, node)
-		var seat_index := Players.add_seat(state)
+		node.exit_weapon_mode()
+		var seat_index: int = _ensure_player_state_seat(state)
 		Players.register_entity(node, seat_index)
 		entry = {"node": node, "state": state, "input": Vector2.ZERO, "moving": false, "walking": false}
 		_players[peer_id] = entry
@@ -724,8 +825,7 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		state.facing = int(public_state.get("facing", state.facing))
 		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
 		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
-		var weapon_id := str(public_state.get("weapon_id", ""))
-		var remote_weapon := _apply_client_weapon_snapshot(state, node, weapon_id)
+		var remote_weapon := _apply_client_weapon_snapshot(state, node, public_state)
 		if remote_weapon and remote_weapon.is_ranged:
 			state.set_magazine_ammo(
 				remote_weapon.item_id,
@@ -844,6 +944,346 @@ func _remove_player(peer_id: int) -> void:
 	_players.erase(peer_id)
 	if is_instance_valid(node):
 		node.queue_free()
+
+
+# ---------------------------------------------------------------- Host-authoritative pickups
+
+func _register_initial_host_pickups() -> void:
+	_pickups.clear()
+	_next_pickup_id = 1
+	var candidates: Array[Node2D] = []
+	_collect_weapon_pickups(get_tree().current_scene, candidates)
+	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool: return str(a.get_path()) < str(b.get_path()))
+	for pickup: Node2D in candidates:
+		_register_host_pickup(pickup)
+	print("[NetworkWorld] HOST_PICKUPS_REGISTERED count=%d" % _pickups.size())
+
+
+func _collect_weapon_pickups(root: Node, out: Array[Node2D]) -> void:
+	if not is_instance_valid(root):
+		return
+	if root is Node2D and root.has_method("configure_network_pickup") and root.get("weapon_data") is WeaponData:
+		out.append(root as Node2D)
+	for child: Node in root.get_children():
+		_collect_weapon_pickups(child, out)
+
+
+func _register_host_pickup(pickup: Node2D) -> int:
+	if not is_instance_valid(pickup):
+		return 0
+	for existing_id: Variant in _pickups.keys():
+		if _pickups[existing_id] == pickup:
+			return int(existing_id)
+	var pickup_id: int = _next_pickup_id
+	_next_pickup_id += 1
+	pickup.call("configure_network_pickup", pickup_id, false)
+	_pickups[pickup_id] = pickup
+	return pickup_id
+
+
+func _prepare_client_preplaced_pickups() -> void:
+	var candidates: Array[Node2D] = []
+	_collect_weapon_pickups(get_tree().current_scene, candidates)
+	for pickup: Node2D in candidates:
+		pickup.call("configure_network_pickup", 0, true)
+		# 等 Host 的可靠快照分配稳定 ID，防止客户端在首帧走到预置物品旁时本地拾取。
+		pickup.visible = false
+
+
+func _build_pickup_snapshot() -> Array:
+	var packets: Array = []
+	for value: Variant in _pickups.keys():
+		var pickup_id: int = int(value)
+		var pickup := _pickups[pickup_id] as Node2D
+		if not is_instance_valid(pickup):
+			continue
+		var weapon := pickup.get("weapon_data") as WeaponData
+		if not weapon:
+			continue
+		var scene := get_tree().current_scene
+		packets.append({
+			"pickup_id": pickup_id,
+			"scene_path": str(scene.get_path_to(pickup)) if scene else "",
+			"position": pickup.global_position,
+			"weapon_id": weapon.item_id,
+			"reserve_ammo": int(pickup.get("pickup_reserve_ammo")),
+			"magazine_ammo": int(pickup.get("pickup_magazine_ammo")),
+			"char_idx": int(pickup.get("pickup_char_idx")),
+			"direction": int(pickup.get("pickup_direction")),
+		})
+	packets.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["pickup_id"]) < int(b["pickup_id"]))
+	return packets
+
+
+func request_pickup(pickup_id: int) -> void:
+	if net.is_host:
+		_try_host_pickup(int(net.my_peer_id), pickup_id)
+	elif _initial_world_received:
+		pickup_request.rpc_id(1, pickup_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func pickup_request(pickup_id: int) -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_pickup(sender, pickup_id)
+
+
+func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id) or not _pickups.has(pickup_id):
+		return
+	var pickup := _pickups[pickup_id] as Node2D
+	var entry: Dictionary = _players[peer_id]
+	var player := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
+	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state or not weapon:
+		return
+	if player.global_position.distance_to(pickup.global_position) > 40.0:
+		return
+	if state.character and not state.character.can_use_weapon(weapon):
+		return
+	var slot: String = weapon.get_slot_key()
+	var old: WeaponData = state.get_equipped_weapon(slot)
+	if old:
+		_spawn_host_dropped_weapon(old, player.global_position, state)
+	state.equipment[slot] = weapon
+	if weapon.is_ranged:
+		var mag: int = int(pickup.get("pickup_magazine_ammo"))
+		state.set_magazine_ammo(weapon.item_id, clampi(weapon.magazine_capacity if mag < 0 else mag, 0, weapon.magazine_capacity))
+		_add_host_reserve_ammo(state, weapon, int(pickup.get("pickup_reserve_ammo")))
+	if state.active_weapon_slot == slot and player.is_weapon_mode_active():
+		player.enter_weapon_mode(weapon)
+		player.set_weapon_ready_frame()
+	_pickups.erase(pickup_id)
+	pickup.queue_free()
+	pickup_snapshot.rpc(_build_pickup_snapshot())
+	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
+
+
+func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: PlayerState) -> void:
+	var pickup := PICKUP_SCENE.instantiate() as Node2D
+	if not is_instance_valid(pickup):
+		return
+	pickup.set("weapon_data", weapon)
+	pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
+	pickup.set("pickup_char_idx", weapon.pickup_char_idx)
+	pickup.set("pickup_direction", weapon.pickup_direction)
+	if weapon.is_ranged:
+		pickup.set("pickup_magazine_ammo", state.get_magazine_ammo(weapon.item_id))
+		state.weapon_magazines.erase(weapon.item_id)
+		var reserve: int = state.count_ammo_item(weapon.ammo_item_id)
+		pickup.set("pickup_reserve_ammo", reserve)
+		if reserve > 0:
+			state.consume_ammo_item(weapon.ammo_item_id, reserve)
+	pickup.global_position = position
+	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
+	(parent if parent else get_tree().current_scene).add_child(pickup)
+	_register_host_pickup(pickup)
+
+
+func _add_host_reserve_ammo(state: PlayerState, weapon: WeaponData, amount: int) -> void:
+	if amount <= 0 or weapon.ammo_item_id.is_empty():
+		return
+	var resource: ItemData = _find_ammo_resource_for_weapon(state, weapon.ammo_item_id)
+	if not resource:
+		return
+	for index: int in range(amount):
+		state.add_item(resource.duplicate())
+
+
+func _find_ammo_resource_for_weapon(state: PlayerState, ammo_item_id: String) -> ItemData:
+	var path := "res://object/item_%s_ammo.tres" % ammo_item_id.trim_prefix("ammo_")
+	if ResourceLoader.exists(path):
+		var resource := load(path)
+		if resource is ItemData:
+			return resource as ItemData
+	for item: Resource in state.inventory:
+		if item is ItemData and (item as ItemData).item_id == ammo_item_id:
+			return item as ItemData
+	return null
+
+
+@rpc("authority", "call_remote", "reliable")
+func pickup_snapshot(states: Array) -> void:
+	if net.is_host:
+		return
+	_apply_client_pickup_snapshot(states)
+
+
+func _apply_client_pickup_snapshot(states: Array) -> void:
+	var seen: Dictionary = {}
+	for packet_value: Variant in states:
+		if not packet_value is Dictionary:
+			continue
+		var packet := packet_value as Dictionary
+		var pickup_id: int = int(packet.get("pickup_id", 0))
+		if pickup_id <= 0:
+			continue
+		seen[pickup_id] = true
+		var pickup := _pickups.get(pickup_id) as Node2D
+		if not is_instance_valid(pickup):
+			var path := str(packet.get("scene_path", ""))
+			if not path.is_empty():
+				pickup = get_tree().current_scene.get_node_or_null(NodePath(path)) as Node2D
+			if not is_instance_valid(pickup):
+				pickup = PICKUP_SCENE.instantiate() as Node2D
+				var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
+				(parent if parent else get_tree().current_scene).add_child(pickup)
+			_pickups[pickup_id] = pickup
+		var weapon := _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
+		if not weapon:
+			continue
+		pickup.set("weapon_data", weapon)
+		pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
+		pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", 0)))
+		pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
+		pickup.set("pickup_char_idx", int(packet.get("char_idx", 0)))
+		pickup.set("pickup_direction", int(packet.get("direction", 0)))
+		pickup.global_position = _packet_position(packet)
+		pickup.call("_refresh_sprite")
+		pickup.call("configure_network_pickup", pickup_id, true)
+		pickup.visible = true
+		pickup.call("reset_network_pickup_request")
+	for old_id: Variant in _pickups.keys():
+		var id: int = int(old_id)
+		if not seen.has(id):
+			var stale := _pickups[id] as Node
+			_pickups.erase(id)
+			if is_instance_valid(stale):
+				stale.queue_free()
+
+# ---------------------------------------------------------------- Host-authoritative safe doors
+
+func request_safe_door_ready(door_key: String) -> void:
+	if door_key.is_empty():
+		return
+	if net.is_host:
+		_try_host_safe_door_ready(int(net.my_peer_id), door_key)
+	elif _initial_world_received:
+		safe_door_ready_request.rpc_id(1, door_key)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func safe_door_ready_request(door_key: String) -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_safe_door_ready(sender, door_key)
+
+
+func _try_host_safe_door_ready(peer_id: int, door_key: String) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var door := _find_safe_door(door_key)
+	if not is_instance_valid(door) or not _is_host_player_at_safe_door(peer_id, door):
+		return
+	var changed_keys: Dictionary = {}
+	for key: Variant in _safe_door_ready.keys():
+		var ready_by_peer := _safe_door_ready[key] as Dictionary
+		if ready_by_peer.erase(peer_id):
+			changed_keys[str(key)] = true
+		if ready_by_peer.is_empty():
+			_safe_door_ready.erase(key)
+	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
+	if not ready_here.get(peer_id, false):
+		ready_here[peer_id] = true
+		_safe_door_ready[door_key] = ready_here
+		changed_keys[door_key] = true
+	for changed_key: Variant in changed_keys.keys():
+		_broadcast_safe_door_ready_status(str(changed_key))
+	if _are_all_players_ready_at_safe_door(door_key, door):
+		door.call("commit_host_network_entry")
+
+
+func _find_safe_door(door_key: String) -> Node2D:
+	if door_key.is_empty() or not get_tree().current_scene:
+		return null
+	var node := get_tree().current_scene.get_node_or_null(NodePath(door_key)) as Node2D
+	if not is_instance_valid(node) or not node.has_method("commit_host_network_entry"):
+		return null
+	return node
+
+
+func _is_host_player_at_safe_door(peer_id: int, door: Node2D) -> bool:
+	if not _players.has(peer_id) or not is_instance_valid(door):
+		return false
+	var player := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(player):
+		return false
+	return player.global_position.distance_to(door.global_position) <= float(door.get("interact_range"))
+
+
+func _are_all_players_ready_at_safe_door(door_key: String, door: Node2D) -> bool:
+	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
+	for peer_id: int in net.get_peer_ids():
+		if not _players.has(peer_id) or not ready_here.get(peer_id, false):
+			return false
+		if not _is_host_player_at_safe_door(peer_id, door):
+			return false
+	return not ready_here.is_empty()
+
+
+func _clear_host_safe_door_ready_for_peer(peer_id: int) -> void:
+	if not net.is_host:
+		return
+	var changed_keys: Array[String] = []
+	for key: Variant in _safe_door_ready.keys():
+		var ready_by_peer := _safe_door_ready[key] as Dictionary
+		if ready_by_peer.erase(peer_id):
+			changed_keys.append(str(key))
+		if ready_by_peer.is_empty():
+			_safe_door_ready.erase(key)
+	for door_key: String in changed_keys:
+		_broadcast_safe_door_ready_status(door_key)
+
+
+func _refresh_host_safe_door_readiness() -> void:
+	if not net.is_host or _safe_door_ready.is_empty():
+		return
+	var changed_keys: Array[String] = []
+	for key: Variant in _safe_door_ready.keys():
+		var door_key: String = str(key)
+		var door := _find_safe_door(door_key)
+		var ready_by_peer := _safe_door_ready[key] as Dictionary
+		var stale_peers: Array[int] = []
+		for peer_value: Variant in ready_by_peer.keys():
+			var peer_id := int(peer_value)
+			if not is_instance_valid(door) or not _is_host_player_at_safe_door(peer_id, door):
+				stale_peers.append(peer_id)
+		for peer_id: int in stale_peers:
+			ready_by_peer.erase(peer_id)
+		if not stale_peers.is_empty():
+			changed_keys.append(door_key)
+		if ready_by_peer.is_empty():
+			_safe_door_ready.erase(key)
+	for door_key: String in changed_keys:
+		_broadcast_safe_door_ready_status(door_key)
+
+
+func _broadcast_safe_door_ready_status(door_key: String) -> void:
+	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
+	var ready_count: int = ready_here.size()
+	var total_count: int = net.get_peer_ids().size()
+	_apply_safe_door_ready_status(door_key, ready_count, total_count)
+	safe_door_ready_status.rpc(door_key, ready_count, total_count)
+
+
+func _apply_safe_door_ready_status(door_key: String, ready_count: int, total_count: int) -> void:
+	_door_ready_status[door_key] = {"ready_count": ready_count, "total_count": total_count}
+	var door := _find_safe_door(door_key)
+	if is_instance_valid(door) and door.has_method("apply_network_ready_status"):
+		door.call("apply_network_ready_status", ready_count, total_count, false)
+
+
+@rpc("authority", "call_remote", "reliable")
+func safe_door_ready_status(door_key: String, ready_count: int, total_count: int) -> void:
+	if net.is_host:
+		return
+	_apply_safe_door_ready_status(door_key, ready_count, total_count)
 
 
 # ---------------------------------------------------------------- Automated smoke input
@@ -1033,6 +1473,27 @@ func _register_initial_host_enemies() -> void:
 	print("[NetworkWorld] HOST_ENEMIES_REGISTERED count=%d" % _enemies.size())
 
 
+func _register_untracked_host_enemies() -> void:
+	## Director 可以在地图运行后动态生成感染者。新节点进入 enemy group 后在此被 Host 收编。
+	if not net.is_host:
+		return
+	var tracked_nodes: Dictionary = {}
+	for entry_value: Variant in _enemies.values():
+		var tracked := (entry_value as Dictionary).get("node") as CharacterBody2D
+		if is_instance_valid(tracked):
+			tracked_nodes[tracked.get_instance_id()] = true
+	var scene := get_tree().current_scene
+	for value: Node in get_tree().get_nodes_in_group("enemy"):
+		var enemy := value as CharacterBody2D
+		if not is_instance_valid(enemy) or tracked_nodes.has(enemy.get_instance_id()):
+			continue
+		var entity_id := _next_enemy_id
+		_next_enemy_id += 1
+		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
+		enemy.configure_network_entity(entity_id, false)
+		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+		print("[NetworkWorld] HOST_ENEMY_REGISTERED id=%d path=%s" % [entity_id, scene_path])
+
 func _prepare_client_preplaced_enemies() -> void:
 	for value: Node in get_tree().get_nodes_in_group("enemy"):
 		if value is CharacterBody2D:
@@ -1111,8 +1572,42 @@ func _public_state(peer_id: int) -> Dictionary:
 		"moving": bool(entry.get("moving", false)),
 		"walking": bool(entry.get("walking", false)),
 		"weapon_id": weapon.item_id if weapon else "",
+		"primary_weapon_id": _weapon_id_for_slot(state, "primary"),
+		"secondary_weapon_id": _weapon_id_for_slot(state, "secondary"),
+		"active_weapon_slot": state.active_weapon_slot if state else "primary",
+		"weapon_magazines": state.weapon_magazines.duplicate() if state else {},
+		"weapon_raised": node.is_weapon_mode_active() if is_instance_valid(node) else false,
 		"magazine_ammo": state.get_magazine_ammo(weapon.item_id) if state and weapon else 0,
 	}
+
+
+func _weapon_id_for_slot(state: PlayerState, slot: String) -> String:
+	var wd: WeaponData = state.get_equipped_weapon(slot) if state else null
+	return wd.item_id if wd else ""
+
+
+func _find_or_create_player_state(peer_id: int, character_path: String, hp: float) -> PlayerState:
+	var state: PlayerState = net.get_session_player_state(peer_id) if net and net.has_method("get_session_player_state") else null
+	if not state:
+		for index: int in range(Players.seat_count()):
+			var candidate := Players.get_seat(index)
+			if candidate and candidate.owner_peer_id == peer_id:
+				state = candidate
+				break
+	if not state:
+		state = _make_player_state(character_path, hp)
+		state.owner_peer_id = peer_id
+	if net and net.has_method("set_session_player_state"):
+		net.set_session_player_state(peer_id, state)
+	return state
+
+
+func _ensure_player_state_seat(state: PlayerState) -> int:
+	for index: int in range(Players.seat_count()):
+		if Players.get_seat(index) == state:
+			state.seat_index = index
+			return index
+	return Players.add_seat(state)
 
 
 func _make_player_state(character_path: String, hp: float) -> PlayerState:

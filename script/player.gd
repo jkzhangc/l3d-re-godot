@@ -351,29 +351,45 @@ func play_network_fire_presentation(wd: WeaponData) -> void:
 
 
 func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
+	# 场景切换会先把旧 Player 从 SceneTree 移除；不要在已脱树的协程里创建 Timer。
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if not tree:
+		return
 	var sequence: Array[int] = wd.attack_char_sequence if wd.is_ranged else wd.get_melee_attack_char_sequence()
 	var impact_index := wd.fire_at_sequence_idx if wd.is_ranged else wd.melee_hit_at_sequence_idx
 	for index: int in range(sequence.size()):
-		if token != _network_attack_token or not is_instance_valid(self):
+		if token != _network_attack_token or not is_instance_valid(self) or not is_inside_tree():
 			return
 		set_attack_char_index(sequence[index])
 		if index == impact_index:
-			if wd.attack_sound:
-				Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
+			var scene := tree.current_scene
+			if wd.attack_sound and scene:
+				Global.play_sfx_managed(wd.attack_sound, scene)
 			var effect_scene := wd.get_attack_effect_anim(facing)
-			if effect_scene:
+			if effect_scene and scene:
 				var offset := current_character.get_attack_effect_offset(wd.weapon_state_name, facing, wd.attack_effect_offset_override) if current_character else wd.attack_effect_offset_override
 				var follow: Node2D = self if wd.attack_effect_follow else null
-				VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene, 10.0, follow, offset)
+				VXAnimSprite.play_scene(effect_scene, global_position, scene, 10.0, follow, offset)
 		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else wd.get_melee_attack_frame_duration(index)
-		await get_tree().create_timer(duration).timeout
-	if token == _network_attack_token and is_instance_valid(self):
+		await tree.create_timer(duration).timeout
+	if token == _network_attack_token and is_instance_valid(self) and is_inside_tree():
 		set_weapon_ready_frame()
 		player_in_weapon_state = false
 
 
 func get_weapon_data() -> WeaponData:
 	return _weapon_data
+
+
+## NetworkWorld 的只读接口：不要让联机层访问玩家私有武器状态。
+func is_weapon_mode_active() -> bool:
+	return _weapon_mode
+
+
+func get_network_weapon_id() -> String:
+	return _weapon_data.item_id if _weapon_data else ""
 
 
 ## 进入推击模式：切换推击行走图。
