@@ -1084,7 +1084,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 		player.set_weapon_ready_frame()
 	_pickups.erase(pickup_id)
 	pickup.queue_free()
-	pickup_snapshot.rpc(_build_pickup_snapshot())
+	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
+	# 不能只可靠发送 pickup 列表、再依赖并行 20Hz 不可靠玩家快照更新装备，否则会出现图标、主机状态和地面物不同步。
+	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
 
 
@@ -1132,10 +1134,12 @@ func _find_ammo_resource_for_weapon(state: PlayerState, ammo_item_id: String) ->
 
 
 @rpc("authority", "call_remote", "reliable")
-func pickup_snapshot(states: Array) -> void:
-	if net.is_host:
+func pickup_snapshot(player_states: Array, pickup_states: Array) -> void:
+	if net.is_host or _scene_transitioning:
 		return
-	_apply_client_pickup_snapshot(states)
+	# 与 Host 的 _try_host_pickup() 同包发送，先收敛装备/弹匣，再更新掉落物。
+	_apply_client_snapshot(player_states, false)
+	_apply_client_pickup_snapshot(pickup_states)
 
 
 func _apply_client_pickup_snapshot(states: Array) -> void:
@@ -1353,6 +1357,12 @@ func _run_auto_client_input_test() -> void:
 	])
 	if not animation_advanced:
 		printerr("[NetworkWorld] AUTO_CLIENT_ANIMATION_FAILED")
+	# 拾取/掉落物使用独立分支：从初始移动终点直接前往左侧手枪，避免战斗后被地图中部碰撞阻隔。
+	if "--net-test-pickup" in OS.get_cmdline_user_args():
+		await _run_auto_client_pickup_test()
+		net.leave()
+		get_tree().quit()
+		return
 
 	_auto_client_fire_confirmed = false
 	_auto_client_bullet_seen = false
@@ -1460,6 +1470,76 @@ func _run_auto_client_input_test() -> void:
 		])
 	net.leave()
 	get_tree().quit()
+
+
+## 回归 Client 按住确认键拾取武器：Host 替换装备、删除源掉落物、生成旧武器掉落物，再由可靠快照回写客户端。
+func _run_auto_client_pickup_test() -> void:
+	var source := _find_client_pickup_by_weapon_id(NETWORK_PISTOL.item_id)
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(source) or not is_instance_valid(node) or not state:
+		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED source=%s node=%s state=%s" % [is_instance_valid(source), is_instance_valid(node), state != null])
+		return
+	var target_weapon := NETWORK_PISTOL
+	var target_slot := target_weapon.get_slot_key()
+	var old_weapon := state.get_equipped_weapon(target_slot)
+	if not old_weapon or old_weapon.item_id == target_weapon.item_id:
+		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED slot=%s old_weapon=%s" % [target_slot, old_weapon.item_id if old_weapon else "<none>"])
+		return
+	# 仅用正常客户端输入接近测试图里的手枪；不直接调用 request_pickup()，以覆盖 Ground pickup 的按住交互。
+	Input.action_press("左")
+	var deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline and node.global_position.distance_to(source.global_position) > 18.0:
+		await get_tree().create_timer(0.05).timeout
+	Input.action_release("左")
+	await get_tree().create_timer(0.08).timeout
+	var in_range := node.global_position.distance_to(source.global_position) <= 28.0
+	if not in_range:
+		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_MOVE_FAILED player=%s source=%s" % [node.global_position, source.global_position])
+		return
+	Input.action_press("确定键")
+	await get_tree().create_timer(1.45).timeout
+	Input.action_release("确定键")
+	deadline = Time.get_ticks_msec() + 3000
+	var primary_swapped := false
+	var dropped_old_seen := false
+	while Time.get_ticks_msec() < deadline:
+		entry = _players.get(int(net.my_peer_id), {})
+		state = entry.get("state") as PlayerState
+		primary_swapped = state != null and state.get_equipped_weapon(target_slot) == target_weapon
+		dropped_old_seen = _has_client_pickup_weapon_near(old_weapon.item_id, node.global_position, 64.0)
+		if primary_swapped and dropped_old_seen:
+			break
+		await get_tree().create_timer(0.05).timeout
+	print("[NetworkWorld] AUTO_CLIENT_PICKUP_COMPLETE slot=%s old=%s equipped=%s swapped=%s dropped_old_seen=%s pickups=%d" % [
+		target_slot,
+		old_weapon.item_id,
+		state.get_equipped_weapon(target_slot).item_id if state and state.get_equipped_weapon(target_slot) else "<none>",
+		primary_swapped,
+		dropped_old_seen,
+		_pickups.size(),
+	])
+	if not primary_swapped or not dropped_old_seen:
+		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_FAILED slot=%s old=%s swapped=%s dropped_old_seen=%s" % [target_slot, old_weapon.item_id, primary_swapped, dropped_old_seen])
+
+
+func _find_client_pickup_by_weapon_id(weapon_id: String) -> Node2D:
+	for value: Variant in _pickups.values():
+		var pickup := value as Node2D
+		var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
+		if weapon and weapon.item_id == weapon_id:
+			return pickup
+	return null
+
+
+func _has_client_pickup_weapon_near(weapon_id: String, position: Vector2, max_distance: float) -> bool:
+	for value: Variant in _pickups.values():
+		var pickup := value as Node2D
+		var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
+		if weapon and weapon.item_id == weapon_id and pickup.global_position.distance_to(position) <= max_distance:
+			return true
+	return false
 
 
 ## 自动双端烟测只从客户端已接收的 Host 敌人快照累计生命值；不读取或伪造 Host 命中结果。
