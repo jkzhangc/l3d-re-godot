@@ -89,7 +89,7 @@ func _run_auto_client() -> void:
 
 func _get_game_scene_for_launch() -> String:
 	var user_args := OS.get_cmdline_user_args()
-	if "--net-test-scene=safe-door" in user_args:
+	if "--net-test-scene=safe-door" in user_args or "--net-test-scene=enemies" in user_args:
 		return AUTO_SAFE_DOOR_TEST_SCENE
 	return AUTO_TEST_SCENE if "--net-test-scene=test" in user_args else GAME_SCENE
 

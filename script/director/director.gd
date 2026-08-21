@@ -20,6 +20,9 @@ signal scripted_event_triggered(event: String)
 # ═══════════════════════════════════════
 const ENEMY_SCENE_PATH = "res://object/enemy.tscn"
 const DEBUG_SPAWN_COUNT = 5
+## 当地图里的作者生成点都离当前小队太远时，改为在玩家外围寻找可行走位置。
+## 这不是缩短 spawn_min_dist：仍会保持至少该距离，避免敌人直接刷在脸上。
+const PREFERRED_SPAWN_MAX_DISTANCE := 900.0
 
 @export var spawn_min_dist: float = 400.0       ## 生成点距玩家最小距离（px）
 @export var spawn_map_keywords: Array[String] = []  ## 允许生成的地图名关键字（空=全部允许）
@@ -245,13 +248,25 @@ func spawn_horde(count: int, decor_layer: Node) -> int:
 		return 0
 
 	var spawn_points: Array = _get_valid_spawn_points(player, decor_layer)
-	if spawn_points.is_empty():
-		printerr("[Director] no valid spawn points")
-		return 0
+	var nearby_spawn_points: Array = _get_nearby_spawn_points(player, spawn_points)
+	var use_near_player_fallback := nearby_spawn_points.is_empty()
+	if use_near_player_fallback:
+		# 地图作者的生成区可能在后续区域；若它们全在很远处，首批怪物既看不到也不会因
+		# 视野范围而主动靠近。优先在玩家外围找可行走格；找不到才退回作者生成区。
+		print("[Director] spawn candidates: total=%d nearby=0 fallback=near_player" % spawn_points.size())
+	elif nearby_spawn_points.size() != spawn_points.size():
+		print("[Director] spawn candidates: total=%d nearby=%d" % [spawn_points.size(), nearby_spawn_points.size()])
 
 	var spawned: int = 0
-	for i: int in range(count):
-		var pos: Vector2 = _pick_spawn_position(player, spawn_points, spawned)
+	for _i: int in range(count):
+		var pos := Vector2.ZERO
+		if not use_near_player_fallback:
+			pos = _pick_spawn_position(player, nearby_spawn_points, spawned)
+		else:
+			pos = _find_walkable_near_player(player)
+			if pos == Vector2.ZERO and not spawn_points.is_empty():
+				# 极少数出生点被墙完全包围的地图仍可使用原有生成区，不会因为回退策略而停刷。
+				pos = _pick_spawn_position(player, spawn_points, spawned)
 		if pos == Vector2.ZERO:
 			continue
 		pos = _add_spawn_scatter(pos)
@@ -259,6 +274,8 @@ func spawn_horde(count: int, decor_layer: Node) -> int:
 		if enemy:
 			spawned += 1
 
+	if spawned == 0 and spawn_points.is_empty():
+		printerr("[Director] no valid spawn points or nearby walkable fallback")
 	return spawned
 
 
@@ -273,12 +290,12 @@ func _pick_spawn_position(player: Node2D, spawn_points: Array, spawned_count: in
 
 
 func _add_spawn_scatter(pos: Vector2) -> Vector2:
-	## 散步 + 避开现有敌人碰撞体（间距 28px）
+	## 散步 + 避开现有敌人碰撞体（间距 28px）。若附近都不可用，保留已验证的原始位置。
 	for _attempt: int in range(20):
 		var scattered: Vector2 = pos + Vector2(randf_range(-36, 36), randf_range(-36, 36))
 		if _is_walkable(scattered) and not _is_occupied_by_enemy(scattered) and not _was_recently_used(scattered):
 			return scattered
-	return pos + Vector2(randf_range(-48, 48), randf_range(-48, 48))
+	return pos
 
 
 func _is_occupied_by_enemy(global_pos: Vector2) -> bool:
@@ -459,6 +476,17 @@ func _get_valid_spawn_points(player: Node2D, _decor_layer: Node) -> Array:
 
 	print("[Director] valid spawns: %d" % valid.size())
 	return valid
+
+
+func _get_nearby_spawn_points(player: Node2D, spawn_points: Array) -> Array:
+	var nearby: Array = []
+	var max_distance := maxf(PREFERRED_SPAWN_MAX_DISTANCE, spawn_min_dist + 240.0)
+	for sp: Node2D in spawn_points:
+		if is_instance_valid(sp) and player.global_position.distance_to(sp.global_position) <= max_distance:
+			nearby.append(sp)
+	if nearby.size() > 1:
+		_sort_spawn_points_by_priority(nearby)
+	return nearby
 
 
 func _sort_spawn_points_by_priority(arr: Array) -> void:
@@ -680,14 +708,12 @@ func _debug_spawn() -> void:
 
 
 func _find_walkable_near_player(player: Node2D) -> Vector2:
-	## 在玩家外围找一个可行走的位置
-	for _attempt: int in range(20):
+	## 在玩家外围找一个可行走的位置。失败时返回 ZERO，让调用方安全退回作者生成点。
+	for _attempt: int in range(36):
 		var angle: float = randf() * TAU
-		var dist: float = randf_range(spawn_min_dist, spawn_min_dist + 100.0)
+		var dist: float = randf_range(spawn_min_dist, spawn_min_dist + 320.0)
 		var pos: Vector2 = player.global_position + Vector2.RIGHT.rotated(angle) * dist
 		pos += Vector2(randf_range(-16, 16), randf_range(-16, 16))
-		if _is_walkable(pos):
+		if _is_walkable(pos) and not _is_occupied_by_enemy(pos) and not _was_recently_used(pos):
 			return pos
-	# 回退：直接返回 400px 外随机位置
-	var angle: float = randf() * TAU
-	return player.global_position + Vector2.RIGHT.rotated(angle) * spawn_min_dist
+	return Vector2.ZERO

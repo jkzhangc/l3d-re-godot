@@ -78,12 +78,17 @@ func _ready() -> void:
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
-			if _is_auto_safe_door_test_scene():
+			if _is_auto_enemy_test_scene():
+				call_deferred("_run_auto_client_enemy_test")
+			elif _is_auto_safe_door_test_scene():
 				call_deferred("_run_auto_client_safe_door_test")
 			elif "--net-test-safe-door" not in OS.get_cmdline_user_args():
 				call_deferred("_run_auto_client_input_test")
-	if net.is_host and _is_auto_safe_door_test_scene():
-		call_deferred("_run_auto_host_safe_door_test")
+	if net.is_host:
+		if _is_auto_enemy_test_scene():
+			call_deferred("_run_auto_host_enemy_test")
+		elif _is_auto_safe_door_test_scene():
+			call_deferred("_run_auto_host_safe_door_test")
 	print("[NetworkWorld] ready host=%s scene=%s" % [net.is_host, _scene_path])
 
 
@@ -1323,6 +1328,48 @@ func safe_door_ready_status(door_key: String, ready_count: int, total_count: int
 # ---------------------------------------------------------------- Automated smoke input
 
 ## 受控双端回归：生产安全门仍只接受真实本地按键请求；此逻辑只在显式无头测试参数下运行。
+func _is_auto_enemy_test_scene() -> bool:
+	return "--net-test-enemies" in OS.get_cmdline_user_args() and "突袭-第一关-街道" in _scene_path
+
+
+func _run_auto_host_enemy_test() -> void:
+	## Director 由 Host 运行。这里只验证它确实将动态敌人收编到网络实体表，
+	## Client 的独立断言会验证可靠 spawn 包创建了表现实体。
+	var deadline := Time.get_ticks_msec() + 30000
+	while _enemies.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.10).timeout
+	if not is_instance_valid(self) or _scene_transitioning or not net.is_host:
+		return
+	if _enemies.is_empty():
+		printerr("[NetworkWorld] AUTO_ENEMY_HOST_FAILED no_registered_enemy")
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_ENEMY_HOST_COMPLETE registered=%d" % _enemies.size())
+
+
+func _run_auto_client_enemy_test() -> void:
+	var deadline := Time.get_ticks_msec() + 35000
+	while (not _initial_world_received or _enemies.is_empty()) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.10).timeout
+	if not is_instance_valid(self) or _scene_transitioning:
+		return
+	var has_network_enemy := false
+	for entry_value: Variant in _enemies.values():
+		var enemy := (entry_value as Dictionary).get("node") as CharacterBody2D
+		if is_instance_valid(enemy) and int(enemy.get("network_entity_id")) > 0:
+			has_network_enemy = true
+			break
+	if not _initial_world_received or not has_network_enemy:
+		printerr("[NetworkWorld] AUTO_ENEMY_CLIENT_FAILED local_ready=%s enemies=%d network_enemy=%s" % [_initial_world_received, _enemies.size(), has_network_enemy])
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_ENEMY_CLIENT_COMPLETE received=%d" % _enemies.size())
+	net.leave()
+	get_tree().quit()
+
+
 func _is_auto_safe_door_test_scene() -> bool:
 	return "--net-test-safe-door" in OS.get_cmdline_user_args() and "突袭-第一关-街道" in _scene_path
 
