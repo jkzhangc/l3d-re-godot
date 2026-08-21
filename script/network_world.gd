@@ -78,7 +78,12 @@ func _ready() -> void:
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
-			call_deferred("_run_auto_client_input_test")
+			if _is_auto_safe_door_test_scene():
+				call_deferred("_run_auto_client_safe_door_test")
+			elif "--net-test-safe-door" not in OS.get_cmdline_user_args():
+				call_deferred("_run_auto_client_input_test")
+	if net.is_host and _is_auto_safe_door_test_scene():
+		call_deferred("_run_auto_host_safe_door_test")
 	print("[NetworkWorld] ready host=%s scene=%s" % [net.is_host, _scene_path])
 
 
@@ -1317,6 +1322,70 @@ func safe_door_ready_status(door_key: String, ready_count: int, total_count: int
 
 # ---------------------------------------------------------------- Automated smoke input
 
+## 受控双端回归：生产安全门仍只接受真实本地按键请求；此逻辑只在显式无头测试参数下运行。
+func _is_auto_safe_door_test_scene() -> bool:
+	return "--net-test-safe-door" in OS.get_cmdline_user_args() and "突袭-第一关-街道" in _scene_path
+
+
+func _get_auto_safe_door() -> Node2D:
+	if not get_tree().current_scene:
+		return null
+	var door := get_tree().current_scene.find_child("SafeDoor", true, false) as Node2D
+	return door if is_instance_valid(door) and door.has_method("get_network_door_key") else null
+
+
+func _set_auto_test_player_position(peer_id: int, position: Vector2) -> void:
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node):
+		return
+	node.global_position = position
+	if state:
+		state.position = position
+	_players[peer_id] = entry
+
+
+func _run_auto_host_safe_door_test() -> void:
+	## 先让 Host 单独确认。Client 保持在远处，因此绝不能触发切图。
+	await get_tree().create_timer(0.75).timeout
+	if not is_instance_valid(self) or _scene_transitioning or not net.is_host:
+		return
+	var door := _get_auto_safe_door()
+	if not is_instance_valid(door):
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_SETUP_FAILED missing_door")
+		return
+	var host_id := int(net.my_peer_id)
+	_set_auto_test_player_position(host_id, door.global_position + Vector2(-8.0, 0.0))
+	request_safe_door_ready(str(door.call("get_network_door_key")))
+	await get_tree().create_timer(0.30).timeout
+	if _scene_transitioning:
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_HOST_SOLO_FAILED transitioned=true")
+		return
+	print("[NetworkWorld] AUTO_SAFE_DOOR_HOST_SOLO_BLOCKED")
+	## 再由 Host 把 Client 的权威实体移到门旁。Client 接下来仍需独立发出请求，Host 会重新做距离校验。
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			_set_auto_test_player_position(peer_id, door.global_position + Vector2(8.0, 0.0))
+	print("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_STAGED")
+
+
+func _run_auto_client_safe_door_test() -> void:
+	var deadline := Time.get_ticks_msec() + 5000
+	while not _initial_world_received and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	await get_tree().create_timer(1.20).timeout
+	if not is_instance_valid(self) or _scene_transitioning or not _initial_world_received:
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_SETUP_FAILED world=%s transitioning=%s" % [_initial_world_received, _scene_transitioning])
+		return
+	var door := _get_auto_safe_door()
+	if not is_instance_valid(door):
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_SETUP_FAILED missing_door")
+		return
+	request_safe_door_ready(str(door.call("get_network_door_key")))
+	print("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_REQUESTED")
+
+
 func _run_auto_client_input_test() -> void:
 	var deadline := Time.get_ticks_msec() + 5000
 	while not _initial_world_received and Time.get_ticks_msec() < deadline:
@@ -1487,7 +1556,9 @@ func _run_auto_client_pickup_test() -> void:
 	if not old_weapon or old_weapon.item_id == target_weapon.item_id:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED slot=%s old_weapon=%s" % [target_slot, old_weapon.item_id if old_weapon else "<none>"])
 		return
-	# 仅用正常客户端输入接近测试图里的手枪；不直接调用 request_pickup()，以覆盖 Ground pickup 的按住交互。
+	# 先用正常客户端输入移动到测试图里的手枪范围内，使 Host 仍会执行距离校验。
+	# 随后按确定的 network_pickup_id 精确提交一次请求：测试图内相邻的多个掉落物都会监听同一个“确定键”，
+	# 长按自动化有概率先命中路过的另一个物品，导致回归用例误报；正式的按住交互仍由 weapon_pickup.gd 覆盖。
 	Input.action_press("左")
 	var deadline := Time.get_ticks_msec() + 3000
 	while Time.get_ticks_msec() < deadline and node.global_position.distance_to(source.global_position) > 18.0:
@@ -1498,9 +1569,7 @@ func _run_auto_client_pickup_test() -> void:
 	if not in_range:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_MOVE_FAILED player=%s source=%s" % [node.global_position, source.global_position])
 		return
-	Input.action_press("确定键")
-	await get_tree().create_timer(1.45).timeout
-	Input.action_release("确定键")
+	request_pickup(source.network_pickup_id)
 	deadline = Time.get_ticks_msec() + 3000
 	var primary_swapped := false
 	var dropped_old_seen := false

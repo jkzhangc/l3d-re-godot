@@ -25,6 +25,16 @@ var _required_seats: Array[int] = []
 var _multiplayer_mode: bool = false
 var _input_armed: bool = false
 var _finishing: bool = false
+## 切图到安全屋时，客户端的确认包可能比 Host 新场景的 PlayerState/seat 绑定早一帧抵达。
+## 暂存 peer 身份并在暂停状态下重试，绝不把客户端的本地 seat 编号当作网络身份。
+var _pending_peer_confirmations: Dictionary = {} # Host: peer_id -> expiry_msec
+## Client 也可能先收到 Host 的确认广播、后创建对应 PlayerState。
+var _pending_remote_confirmations: Dictionary = {} # Client: peer_id -> expiry_msec
+## Host 广播确认后，短暂保留节点让可靠 RPC 在关闭总结页前完成 flush。
+var _pending_local_confirmations: Dictionary = {} # seat_index -> true
+## 章节结算由 Host 汇总 peer_id；Client 只呈现确认状态，完成信号由 Host 可靠下发。
+var _confirmed_peer_ids: Dictionary = {}
+var _network_completion_started: bool = false
 var _root_control: Control
 var _players_box: VBoxContainer
 var _status_label: Label
@@ -47,9 +57,16 @@ func _ready() -> void:
 func show_summary() -> void:
 	visible = true
 	_confirmed.clear()
+	_pending_peer_confirmations.clear()
+	_pending_remote_confirmations.clear()
+	_pending_local_confirmations.clear()
+	_confirmed_peer_ids.clear()
+	_network_completion_started = false
 	_finishing = false
+	_input_armed = false
 	_multiplayer_mode = force_multiplayer_preview or _has_real_multiplayer_session()
 	_required_seats = _collect_required_seats()
+	_sync_required_multiplayer_seats()
 	_rebuild_player_rows()
 	_refresh_status()
 	_play_summary_music()
@@ -57,6 +74,8 @@ func show_summary() -> void:
 		get_tree().paused = true
 	# 避免安全门的同一次确定键被总结页接收。
 	get_tree().create_timer(0.35, true).timeout.connect(func(): _input_armed = true)
+	if _is_auto_safe_door_test():
+		call_deferred("_run_auto_safe_door_summary_test")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -72,14 +91,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## 供未来联机层或自动化测试直接提交某个座位的确认。
 func confirm_seat(seat_index: int) -> void:
+	_sync_required_multiplayer_seats()
 	if seat_index not in _required_seats or _confirmed.get(seat_index, false):
 		return
 	_confirmed[seat_index] = true
 	seat_confirmed.emit(seat_index)
 	_rebuild_player_rows()
 	_refresh_status()
-	if _all_players_confirmed():
+	if not _multiplayer_mode and _all_players_confirmed():
 		_finish_summary()
+	elif _multiplayer_mode and multiplayer.is_server():
+		_try_complete_network_summary()
 
 
 func _submit_local_confirmation() -> void:
@@ -95,11 +117,79 @@ func _submit_local_confirmation() -> void:
 
 
 func _server_confirm_local(seat_index: int) -> void:
-	if seat_index < 0:
+	if seat_index < 0 or _confirmed.get(seat_index, false) or _pending_local_confirmations.has(seat_index):
+		return
+	var state: PlayerState = Players.get_seat(seat_index)
+	var peer_id := state.owner_peer_id if state else 0
+	if peer_id <= 0:
+		return
+	_confirmed_peer_ids[peer_id] = true
+	if multiplayer.has_multiplayer_peer():
+		# 先可靠广播并留出一个网络轮询窗口；最后一名 Host 确认若立即关闭/释放
+		# 总结页，Client 可能永远收不到 Host 的最终确认。
+		_broadcast_remote_confirmation(peer_id)
+		_pending_local_confirmations[seat_index] = true
+		call_deferred("_confirm_local_after_network_flush", seat_index, peer_id)
 		return
 	confirm_seat(seat_index)
-	if multiplayer.has_multiplayer_peer():
-		_apply_remote_confirmation.rpc(seat_index)
+	print("[ChapterSummary] CONFIRM_APPLIED peer=%d seat=%d" % [peer_id, seat_index])
+
+
+func _confirm_local_after_network_flush(seat_index: int, peer_id: int) -> void:
+	var tree := get_tree()
+	if not tree:
+		_pending_local_confirmations.erase(seat_index)
+		return
+	await tree.create_timer(0.06, true).timeout
+	_pending_local_confirmations.erase(seat_index)
+	if not is_instance_valid(self) or _finishing or not visible:
+		return
+	confirm_seat(seat_index)
+	print("[ChapterSummary] CONFIRM_APPLIED peer=%d seat=%d" % [peer_id, seat_index])
+
+
+func _try_complete_network_summary() -> void:
+	if not _multiplayer_mode or not multiplayer.is_server() or _network_completion_started:
+		return
+	var expected := _get_expected_session_peer_ids()
+	if expected.is_empty():
+		return
+	for peer_id: int in expected:
+		if not _confirmed_peer_ids.get(peer_id, false):
+			return
+	_network_completion_started = true
+	call_deferred("_finish_network_summary_after_flush")
+
+
+func _finish_network_summary_after_flush() -> void:
+	var tree := get_tree()
+	if not tree:
+		return
+	# 让各 Client 先收到自己的确认行，再收到 Host 的最终完成决定。
+	await tree.create_timer(0.08, true).timeout
+	if not is_instance_valid(self) or _finishing:
+		return
+	for target_peer_id: int in _get_expected_session_peer_ids():
+		if target_peer_id > 1:
+			_network_summary_complete.rpc_id(target_peer_id)
+	await tree.create_timer(0.08, true).timeout
+	if is_instance_valid(self) and not _finishing:
+		_finish_summary()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _network_summary_complete() -> void:
+	# Host 是唯一完成裁决者；避免 Client 依据场景本地 seat 顺序提前或永久无法结束。
+	if _multiplayer_mode and not multiplayer.is_server():
+		_finish_summary()
+
+
+func _broadcast_remote_confirmation(confirmed_peer_id: int) -> void:
+	# 显式逐 peer 发送，避免场景切换后最后一次准备广播漏到 Client。
+	for target_peer_id: int in _get_expected_session_peer_ids():
+		if target_peer_id > 1:
+			_apply_remote_confirmation.rpc_id(target_peer_id, confirmed_peer_id)
+	print("[ChapterSummary] CONFIRM_BROADCAST peer=%d targets=%s" % [confirmed_peer_id, str(_get_expected_session_peer_ids())])
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -107,11 +197,70 @@ func _server_confirm() -> void:
 	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
+	if sender_id <= 1:
+		return
 	var seat_index := _find_seat_owned_by_peer(sender_id)
-	if sender_id <= 1 or seat_index < 0:
-		push_warning("[ChapterSummary] peer %d 没有可确认的座位" % sender_id)
+	if seat_index < 0:
+		# 可靠 RPC 可以在新场景 NetworkWorld 完成 PlayerState 绑定前抵达。
+		# 按真正的网络 peer 暂存，而不是错误地采用客户端本地 seat 编号。
+		_pending_peer_confirmations[sender_id] = Time.get_ticks_msec() + 2000
+		print("[ChapterSummary] CONFIRM_DEFER peer=%d" % sender_id)
 		return
 	_server_confirm_local(seat_index)
+
+
+func _process(_delta: float) -> void:
+	if not visible or _finishing:
+		return
+	_sync_required_multiplayer_seats()
+	var now := Time.get_ticks_msec()
+	if multiplayer.is_server():
+		for value: Variant in _pending_peer_confirmations.keys():
+			var peer_id := int(value)
+			var seat_index := _find_seat_owned_by_peer(peer_id)
+			if seat_index >= 0:
+				_pending_peer_confirmations.erase(peer_id)
+				print("[ChapterSummary] CONFIRM_RESOLVED peer=%d seat=%d" % [peer_id, seat_index])
+				_server_confirm_local(seat_index)
+				continue
+			if now >= int(_pending_peer_confirmations[peer_id]):
+				_pending_peer_confirmations.erase(peer_id)
+				push_warning("[ChapterSummary] CONFIRM_TIMEOUT peer=%d，等待玩家状态同步超时" % peer_id)
+	else:
+		for value: Variant in _pending_remote_confirmations.keys():
+			var peer_id := int(value)
+			var seat_index := _find_seat_owned_by_peer(peer_id)
+			if seat_index >= 0:
+				_pending_remote_confirmations.erase(peer_id)
+				print("[ChapterSummary] REMOTE_CONFIRM_RESOLVED peer=%d seat=%d" % [peer_id, seat_index])
+				confirm_seat(seat_index)
+				continue
+			if now >= int(_pending_remote_confirmations[peer_id]):
+				_pending_remote_confirmations.erase(peer_id)
+				push_warning("[ChapterSummary] REMOTE_CONFIRM_TIMEOUT peer=%d，等待玩家状态同步超时" % peer_id)
+
+
+## 无头回归专用：验证 Client 的准备 RPC 在安全屋新场景 PlayerState 绑定后确实被 Host 接收，
+## 并且 Host 的确认广播能回写到 Client。正式运行不会进入该分支。
+func _is_auto_safe_door_test() -> bool:
+	return "--net-test-safe-door" in OS.get_cmdline_user_args() and _multiplayer_mode
+
+
+func _run_auto_safe_door_summary_test() -> void:
+	var tree := get_tree()
+	if not tree:
+		return
+	if multiplayer.is_server():
+		# 留出 Client 先提交确认的窗口，专门覆盖此前“Client 无法准备”的失败时序。
+		await tree.create_timer(1.20, true).timeout
+		if visible and not _finishing:
+			print("[ChapterSummary] AUTO_HOST_CONFIRM_REQUESTED peer=%d" % _get_local_peer_id())
+			_submit_local_confirmation()
+	else:
+		await tree.create_timer(0.65, true).timeout
+		if visible and not _finishing:
+			print("[ChapterSummary] AUTO_CLIENT_CONFIRM_REQUESTED peer=%d" % _get_local_peer_id())
+			_submit_local_confirmation()
 
 
 func _get_local_peer_id() -> int:
@@ -132,8 +281,15 @@ func _find_seat_owned_by_peer(peer_id: int) -> int:
 
 
 @rpc("authority", "call_remote", "reliable")
-func _apply_remote_confirmation(seat_index: int) -> void:
-	confirm_seat(seat_index)
+func _apply_remote_confirmation(peer_id: int) -> void:
+	print("[ChapterSummary] REMOTE_CONFIRM_RX peer=%d" % peer_id)
+	var seat_index := _find_seat_owned_by_peer(peer_id)
+	if seat_index >= 0:
+		confirm_seat(seat_index)
+		return
+	# 可靠广播早于本机的新场景 PlayerState 绑定时，保留网络身份并在 _process 重试。
+	_pending_remote_confirmations[peer_id] = Time.get_ticks_msec() + 2000
+	print("[ChapterSummary] REMOTE_CONFIRM_DEFER peer=%d" % peer_id)
 
 
 func _has_real_multiplayer_session() -> bool:
@@ -143,16 +299,51 @@ func _has_real_multiplayer_session() -> bool:
 func _collect_required_seats() -> Array[int]:
 	var result: Array[int] = []
 	if _multiplayer_mode:
-		for i: int in range(Players.seat_count()):
-			result.append(i)
+		# 仅等待当前网络会话中的玩家；PlayerRegistry 的本地默认座位
+		# （owner_peer_id == 0）不是联机参与者，绝不能阻塞章节总结。
+		for seat_index: int in range(Players.seat_count()):
+			if _is_required_network_seat(seat_index):
+				result.append(seat_index)
 	else:
 		result.append(Players.active_seat_index)
-	if result.is_empty():
+	if result.is_empty() and not _multiplayer_mode:
 		result.append(0)
 	return result
 
 
+func _sync_required_multiplayer_seats() -> void:
+	if not _multiplayer_mode:
+		return
+	# 每帧从会话 peer 重建，不保留切图前遗留的默认/断线座位。
+	var required: Array[int] = []
+	for seat_index: int in range(Players.seat_count()):
+		if _is_required_network_seat(seat_index):
+			required.append(seat_index)
+	required.sort()
+	_required_seats = required
+
+
+func _is_required_network_seat(seat_index: int) -> bool:
+	var state: PlayerState = Players.get_seat(seat_index)
+	return state != null and state.owner_peer_id in _get_expected_session_peer_ids()
+
+
+func _get_expected_session_peer_ids() -> Array[int]:
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("get_peer_ids"):
+		return net.get_peer_ids()
+	return []
+
+
 func _all_players_confirmed() -> bool:
+	_sync_required_multiplayer_seats()
+	# 新安全屋 Summary 可能早于 NetworkWorld 完成 PlayerState/seat 重建。
+	# 即便 Host 已确认，也必须等每个已握手的连接玩家都绑定到一个 seat，
+	# 否则会在 Client 准备包抵达前错误地关闭界面。
+	if _multiplayer_mode:
+		for peer_id: int in _get_expected_session_peer_ids():
+			if _find_seat_owned_by_peer(peer_id) < 0:
+				return false
 	for seat_index: int in _required_seats:
 		if not _confirmed.get(seat_index, false):
 			return false
@@ -169,6 +360,26 @@ func _finish_summary() -> void:
 	if pause_game:
 		get_tree().paused = false
 	summary_finished.emit()
+	if _is_auto_safe_door_test():
+		var role := "host" if multiplayer.is_server() else "client"
+		print("[ChapterSummary] AUTO_SUMMARY_COMPLETE role=%s" % role)
+		var tree := get_tree()
+		if multiplayer.is_server():
+			# Host 必须给可靠确认包足够的 flush 时间，随后才结束无头回归。
+			tree.create_timer(1.0, true).timeout.connect(func():
+				var net: Node = get_node_or_null("/root/Net")
+				if net and net.has_method("leave"):
+					net.leave()
+				tree.quit()
+			)
+		else:
+			# Client 在收到 Host 最后一份确认并关闭自身总结页后主动退出。
+			tree.create_timer(0.12, true).timeout.connect(func():
+				var net: Node = get_node_or_null("/root/Net")
+				if net and net.has_method("leave"):
+					net.leave()
+				tree.quit()
+			)
 	queue_free()
 
 

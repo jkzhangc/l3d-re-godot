@@ -3,6 +3,8 @@ extends Control
 
 const GAME_SCENE := "res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"
 const AUTO_TEST_SCENE := "res://scene/maps/test.tscn"
+## 仅供无头双端回归：验证安全门全员确认、统一切图与章节总结准备链路。
+const AUTO_SAFE_DOOR_TEST_SCENE := "res://scene/maps/突袭-第一关-街道.tscn"
 ## 为显式授权、CI 排队和较慢机器保留足够的双进程启动窗口；不影响正常大厅连接。
 const AUTO_HOST_TIMEOUT := 30.0
 
@@ -86,7 +88,10 @@ func _run_auto_client() -> void:
 
 
 func _get_game_scene_for_launch() -> String:
-	return AUTO_TEST_SCENE if "--net-test-scene=test" in OS.get_cmdline_user_args() else GAME_SCENE
+	var user_args := OS.get_cmdline_user_args()
+	if "--net-test-scene=safe-door" in user_args:
+		return AUTO_SAFE_DOOR_TEST_SCENE
+	return AUTO_TEST_SCENE if "--net-test-scene=test" in user_args else GAME_SCENE
 
 
 # ---------------------------------------------------------------- 按钮

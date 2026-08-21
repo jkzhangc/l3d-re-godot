@@ -351,12 +351,8 @@ func play_network_fire_presentation(wd: WeaponData) -> void:
 
 
 func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
-	# 场景切换会先把旧 Player 从 SceneTree 移除；不要在已脱树的协程里创建 Timer。
-	if not is_inside_tree():
-		return
-	var tree := get_tree()
-	if not tree:
-		return
+	# 这个协程可能在 await 的下一帧遇到场景切换。不能缓存 SceneTree：节点离树后，
+	# 缓存的 tree 虽非 null，却不能再安全地用于 current_scene / create_timer。
 	var sequence: Array[int] = wd.attack_char_sequence if wd.is_ranged else wd.get_melee_attack_char_sequence()
 	var impact_index := wd.fire_at_sequence_idx if wd.is_ranged else wd.melee_hit_at_sequence_idx
 	for index: int in range(sequence.size()):
@@ -364,7 +360,10 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 			return
 		set_attack_char_index(sequence[index])
 		if index == impact_index:
-			var scene := tree.current_scene
+			var scene_tree := get_tree()
+			if not scene_tree:
+				return
+			var scene := scene_tree.current_scene
 			if wd.attack_sound and scene:
 				Global.play_sfx_managed(wd.attack_sound, scene)
 			var effect_scene := wd.get_attack_effect_anim(facing)
@@ -373,7 +372,12 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 				var follow: Node2D = self if wd.attack_effect_follow else null
 				VXAnimSprite.play_scene(effect_scene, global_position, scene, 10.0, follow, offset)
 		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else wd.get_melee_attack_frame_duration(index)
-		await tree.create_timer(duration).timeout
+		if not is_inside_tree():
+			return
+		var wait_tree := get_tree()
+		if not wait_tree:
+			return
+		await wait_tree.create_timer(duration).timeout
 	if token == _network_attack_token and is_instance_valid(self) and is_inside_tree():
 		set_weapon_ready_frame()
 		player_in_weapon_state = false

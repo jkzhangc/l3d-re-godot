@@ -27,6 +27,10 @@ var active_scene_path := ""
 
 var _player_names: Dictionary = {}
 var _pending_scene_ready: Dictionary = {}
+## 切图前由 Client 回传的静默确认。Host 等待此确认后才释放旧场景，
+## 防止客户端旧 NetworkWorld 的在途 RPC 命中 Host 已重建的新场景路径。
+var _pending_scene_transition_acks: Dictionary = {}
+var _scene_transition_serial: int = 0
 ## 跨地图持续存在的权威玩家数据。只有 Host 写入；客户端仅缓存 Host 快照用于表现。
 ## 绝不能把这些数据放进 NetworkWorld，因为场景切换会释放 NetworkWorld。
 var _session_player_states: Dictionary = {} # peer_id -> PlayerState
@@ -83,6 +87,8 @@ func leave() -> void:
 	active_scene_path = ""
 	_player_names.clear()
 	_pending_scene_ready.clear()
+	_pending_scene_transition_acks.clear()
+	_scene_transition_serial = 0
 	_session_player_states.clear()
 	player_list_changed.emit()
 
@@ -154,22 +160,75 @@ func player_list(names: Dictionary) -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game(scene_path: String) -> void:
 	active_scene_path = scene_path
-	## 先通知当前场景停止所有 NetworkWorld RPC；否则一端先释放旧场景时，另一端的在途快照会按旧节点路径报错。
+	_scene_transition_serial += 1
+	var transition_serial := _scene_transition_serial
+	_pending_scene_transition_acks.clear()
+	## 第一阶段：双方保留旧场景，但立即令旧 NetworkWorld 静默。
+	## Client 只能确认静默，不能自行提前切图；否则 Host 先后顺序不同仍会让旧 RPC 打到已释放的节点路径。
 	scene_transition_started.emit(scene_path)
-	print("[Net] START_GAME %s (flush=%.2fs)" % [scene_path, SCENE_TRANSITION_FLUSH_SECONDS])
-	call_deferred("_change_scene_after_flush", scene_path)
+	print("[Net] START_GAME %s serial=%d (flush=%.2fs)" % [scene_path, transition_serial, SCENE_TRANSITION_FLUSH_SECONDS])
+	if is_host:
+		call_deferred("_host_commit_scene_transition", scene_path, transition_serial)
+	else:
+		scene_transition_ack.rpc_id(1, transition_serial, scene_path)
 
 
-func _change_scene_after_flush(scene_path: String) -> void:
+func _host_commit_scene_transition(scene_path: String, transition_serial: int) -> void:
+	if not is_inside_tree():
+		return
+	var tree := get_tree()
+	if not tree:
+		return
+	var deadline := Time.get_ticks_msec() + 900
+	while is_inside_tree() and transition_serial == _scene_transition_serial and not _have_all_scene_transition_acks():
+		if Time.get_ticks_msec() >= deadline:
+			print("[Net] SCENE_TRANSITION_ACK_TIMEOUT serial=%d acked=%d expected=%d" % [transition_serial, _pending_scene_transition_acks.size(), multiplayer.get_peers().size()])
+			break
+		await tree.create_timer(0.02).timeout
+	if not is_inside_tree() or transition_serial != _scene_transition_serial:
+		return
+	## 第二阶段：同一个可靠 RPC 让所有同意静默的 peer 一起开始短暂 flush 后再释放旧场景。
+	print("[Net] SCENE_TRANSITION_COMMIT serial=%d" % transition_serial)
+	scene_transition_commit.rpc(scene_path, transition_serial)
+
+
+@rpc("authority", "call_local", "reliable")
+func scene_transition_commit(scene_path: String, transition_serial: int) -> void:
+	if transition_serial != _scene_transition_serial or scene_path != active_scene_path:
+		return
+	call_deferred("_change_scene_after_flush", scene_path, transition_serial)
+
+
+func _change_scene_after_flush(scene_path: String, transition_serial: int) -> void:
 	if not is_inside_tree():
 		return
 	var tree := get_tree()
 	if not tree:
 		return
 	await tree.create_timer(SCENE_TRANSITION_FLUSH_SECONDS).timeout
-	if not is_inside_tree():
+	if not is_inside_tree() or transition_serial != _scene_transition_serial:
 		return
 	_change_scene_safely(scene_path)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func scene_transition_ack(transition_serial: int, scene_path: String) -> void:
+	if not is_host or transition_serial != _scene_transition_serial or scene_path != active_scene_path:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _player_names.has(sender):
+		return
+	_pending_scene_transition_acks[sender] = true
+	print("[Net] SCENE_TRANSITION_ACK peer=%d serial=%d" % [sender, transition_serial])
+
+
+func _have_all_scene_transition_acks() -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	for peer_id: int in multiplayer.get_peers():
+		if not _pending_scene_transition_acks.get(peer_id, false):
+			return false
+	return true
 
 func request_scene_change(scene_path: String) -> void:
 	## 游戏内场景切换入口：联机时由 Host 广播，客户端只向 Host 请求。
