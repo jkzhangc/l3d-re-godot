@@ -683,6 +683,19 @@ func despawn_player(peer_id: int) -> void:
 	_remove_player(peer_id)
 
 
+## Director 在 Client 完成首次 world_snapshot 后才创建的感染者，必须走可靠 spawn 包。
+## 高频紧凑敌人快照不包含场景路径，不能用于创建一个此前未知的实体。
+@rpc("authority", "call_remote", "reliable")
+func spawn_network_enemy(public_state: Dictionary) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var entity_id := int(public_state.get("entity_id", 0))
+	if entity_id <= 0:
+		return
+	_ensure_client_enemy(entity_id, public_state, true)
+	print("[NetworkWorld] CLIENT_ENEMY_SPAWN id=%d" % entity_id)
+
+
 @rpc("authority", "call_remote", "reliable")
 func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
 	if net.is_host:
@@ -1492,7 +1505,15 @@ func _register_untracked_host_enemies() -> void:
 		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
 		enemy.configure_network_entity(entity_id, false)
 		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
-		print("[NetworkWorld] HOST_ENEMY_REGISTERED id=%d path=%s" % [entity_id, scene_path])
+		var public_state := _public_enemy_state(entity_id)
+		var ready_client_count := 0
+		for peer_id: int in net.get_peer_ids():
+			# 只向已完成本场景 world_snapshot 的 Client 发场景节点 RPC，
+			# 避免 Client 尚在切图时出现 "NetworkWorld not found" 在途包错误。
+			if peer_id > 1 and _players.has(peer_id):
+				spawn_network_enemy.rpc_id(peer_id, public_state)
+				ready_client_count += 1
+		print("[NetworkWorld] HOST_ENEMY_REGISTERED id=%d path=%s clients=%d" % [entity_id, scene_path, ready_client_count])
 
 func _prepare_client_preplaced_enemies() -> void:
 	for value: Node in get_tree().get_nodes_in_group("enemy"):

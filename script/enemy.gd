@@ -235,6 +235,16 @@ func is_network_headshot_dead() -> bool:
 	return _network_headshot_death
 
 
+## 在状态机读取目标前验证实例仍存活，处理断线/切图时 queue_free 的延迟释放边界。
+func has_valid_player_target() -> bool:
+	if is_instance_valid(_player_ref):
+		return true
+	_player_ref = null
+	_player_in_sight = false
+	velocity = Vector2.ZERO
+	return false
+
+
 ## Host 专用：断线玩家释放前清除追击目标，避免状态机读取已释放节点。
 func clear_target_if_matches(target: Node) -> void:
 	if _player_ref != target:

@@ -26,11 +26,15 @@ func enter() -> void:
 	if enemy.animation_timer:
 		enemy.animation_timer.stop()
 
-	# 面向玩家
+	# 断线/切图时目标可能已进入 queue_free；不要在攻击状态继续读取失效引用。
+	if not enemy.has_valid_player_target():
+		character.update_moving(false)
+		character.velocity = Vector2.ZERO
+		transition_requested.emit("Idle")
+		return
 	var player: Node2D = enemy._player_ref
-	if player:
-		var dir: Vector2 = player.global_position - enemy.global_position
-		character.update_facing_from_direction(dir)
+	var dir: Vector2 = player.global_position - enemy.global_position
+	character.update_facing_from_direction(dir)
 
 	character.update_moving(false)
 	character.velocity = Vector2.ZERO
@@ -54,6 +58,10 @@ func process_update(delta: float) -> void:
 		return
 
 	var enemy: Node2D = character
+	if not enemy.has_valid_player_target():
+		character.velocity = Vector2.ZERO
+		transition_requested.emit("Idle")
+		return
 
 	match _phase:
 		Phase.ANIM:

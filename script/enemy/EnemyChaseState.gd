@@ -87,10 +87,10 @@ func process_update(_delta: float) -> void:
 		return
 
 	var enemy: Node2D = character
-	var player: Node2D = enemy._player_ref
-	if not player:
+	if not enemy.has_valid_player_target():
 		transition_requested.emit("Idle")
 		return
+	var player: Node2D = enemy._player_ref
 
 	var fw: Vector2 = enemy.get_facing_vector()
 	var rect_center: Vector2 = enemy.global_position + fw * enemy.attack_range_forward_offset
@@ -105,9 +105,11 @@ func physics_update(delta: float) -> void:
 	_build_step()  ## 持续分帧构建 AStarGrid2D（如在构建中）
 
 	var enemy: Node2D = character
-	var player: Node2D = enemy._player_ref
-	if not player:
+	if not enemy.has_valid_player_target():
+		character.velocity = Vector2.ZERO
+		transition_requested.emit("Idle")
 		return
+	var player: Node2D = enemy._player_ref
 
 	var to_player: Vector2 = player.global_position - enemy.global_position
 	if to_player.length() < 1.0:
