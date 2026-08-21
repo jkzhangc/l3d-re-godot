@@ -746,6 +746,18 @@ func _on_peer_left(peer_id: int) -> void:
 		despawn_player.rpc(peer_id)
 		print("[NetworkWorld] HOST_DESPAWN peer=%d" % peer_id)
 	_clear_host_safe_door_ready_for_peer(peer_id)
+	# 仅无头双端回归收束：Client 完成输入验证并离开后，让 Host 自行干净退出。
+	# 正式房间继续保留 Host，不会走此分支。
+	if "--net-test=host" in OS.get_cmdline_user_args() and net.get_peer_ids().size() <= 1:
+		call_deferred("_finish_auto_host_after_client_leave")
+
+
+func _finish_auto_host_after_client_leave() -> void:
+	if not net or not net.is_host or net.get_peer_ids().size() > 1:
+		return
+	print("[NetworkWorld] AUTO_HOST_COMPLETE client_left=true")
+	net.leave()
+	get_tree().quit()
 
 
 func _broadcast_spawn_player(peer_id: int) -> void:
