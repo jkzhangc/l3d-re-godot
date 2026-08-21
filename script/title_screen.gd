@@ -109,6 +109,14 @@ const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定�
 # ═══════════════════════════════════════
 
 func _ready() -> void:
+	# 仅供双进程联机烟测使用：从默认标题场景直接进入联机大厅，
+	# 正常启动和玩家手动进入“联机游戏”菜单的流程不受影响。
+	var user_args := OS.get_cmdline_user_args()
+	if "--net-test=host" in user_args or "--net-test=client" in user_args:
+		print("[标题画面] 检测到联机自动测试参数，跳转到联机大厅")
+		call_deferred("_go_to_network_lobby")
+		return
+
 	_load_defaults_from_global()
 	_color_img = Image.load_from_file(color_sheet_path)
 	if _color_img:

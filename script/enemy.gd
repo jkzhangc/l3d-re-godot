@@ -98,6 +98,14 @@ var _knockback_stun: float = 0.0               ## 击退硬直时长
 var _hitstun_duration: float = 0.0             ## 命中硬直时长（无击退位移）
 var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
 
+## 联机表现层：Host 保持 AI 与伤害权威；Client 只接收并渲染快照。
+var network_entity_id: int = 0
+var network_presentation_only: bool = false
+var _network_target_position: Vector2 = Vector2.ZERO
+var _network_has_target: bool = false
+var _network_headshot_death: bool = false
+var _current_char_index: int = 0
+
 # ═══════════════════════════════════════
 # A* 调试字段（由 EnemyChaseState 写入，_draw() 读取）
 # ═══════════════════════════════════════
@@ -142,11 +150,120 @@ func _ready() -> void:
 		discover_label.hide()
 
 	_refresh_sprite()
+	if network_presentation_only:
+		_disable_network_simulation()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if network_presentation_only:
+		if _network_has_target:
+			global_position = global_position.lerp(_network_target_position, minf(delta * 16.0, 1.0))
+		if Global.debug_visuals:
+			queue_redraw()
+		return
 	if Global.debug_visuals:
 		queue_redraw()
+
+
+# ═══════════════════════════════════════
+# 联机表现接口（由 NetworkWorld 调用）
+# ═══════════════════════════════════════
+
+## entity_id 为 Host 分配的稳定实体 ID。presentation_only=true 时关闭本地 AI/判定。
+func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
+	network_entity_id = entity_id
+	network_presentation_only = presentation_only
+	velocity = Vector2.ZERO
+	if network_presentation_only and is_node_ready():
+		_disable_network_simulation()
+
+
+## Client 专用：应用 Host 快照；位置在 _process 中平滑，攻击/死亡帧由 Host 当前角色索引驱动。
+func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, hp: float, visual_char_index: int, is_dead: bool, is_headshot: bool, snap: bool = false) -> void:
+	if not network_presentation_only:
+		return
+	current_hp = clampf(hp, 0.0, max_hp)
+	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
+	_network_headshot_death = is_headshot
+	if snap:
+		global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = false
+	else:
+		if not _network_has_target:
+			global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = true
+
+	if is_dead:
+		_is_dead = true
+		_moving = false
+		_disable_network_simulation()
+		_refresh_sprite_with_index(visual_char_index if visual_char_index >= 0 else (headshot_char_index_2 if is_headshot else death_char_index))
+		return
+
+	_is_dead = false
+	update_moving(moving)
+	if visual_char_index >= 0 and visual_char_index != walk_char_index:
+		_refresh_sprite_with_index(visual_char_index)
+
+
+func get_network_facing() -> int:
+	return _facing
+
+
+func is_moving_for_network() -> bool:
+	return _moving
+
+
+func get_network_ai_state() -> String:
+	if _is_dead:
+		return "HeadshotDeath" if _network_headshot_death else "Death"
+	var sm: Node = get_node_or_null("StateMachine")
+	return sm.current_state.name if sm and sm.current_state else ""
+
+
+func get_network_visual_char_index() -> int:
+	return _current_char_index
+
+
+func is_network_dead() -> bool:
+	return _is_dead
+
+
+func is_network_headshot_dead() -> bool:
+	return _network_headshot_death
+
+
+## Host 专用：断线玩家释放前清除追击目标，避免状态机读取已释放节点。
+func clear_target_if_matches(target: Node) -> void:
+	if _player_ref != target:
+		return
+	_player_ref = null
+	_player_in_sight = false
+	velocity = Vector2.ZERO
+	if _is_dead:
+		return
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm and sm.get_node_or_null("Idle"):
+		sm._on_transition_requested("Idle")
+
+
+func _disable_network_simulation() -> void:
+	velocity = Vector2.ZERO
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", true)
+	if vision_area:
+		vision_area.set_deferred("monitoring", false)
+		vision_area.set_deferred("monitorable", false)
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", false)
+		hurt_area.set_deferred("monitorable", false)
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm:
+		sm.process_mode = Node.PROCESS_MODE_DISABLED
+	if discover_label:
+		discover_label.hide()
 
 
 func _setup_hurt_area() -> Area2D:
@@ -368,6 +485,7 @@ func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) ->
 
 func _die(is_headshot: bool) -> void:
 	_is_dead = true
+	_network_headshot_death = is_headshot
 	print("[敵人] 死亡！类型=%s" % ("爆头" if is_headshot else "普通"))
 
 	if is_headshot:
@@ -385,6 +503,7 @@ func _die(is_headshot: bool) -> void:
 
 
 func _become_corpse(is_headshot: bool) -> void:
+	_network_headshot_death = is_headshot
 	_disable_for_corpse()
 
 	if is_headshot:
@@ -522,6 +641,7 @@ func _refresh_sprite() -> void:
 		return
 	sprite.texture = walk_texture
 	var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
+	_current_char_index = walk_char_index
 	_draw_sprite_rect(walk_char_index, frame)
 
 
@@ -529,6 +649,7 @@ func _refresh_sprite_with_index(char_idx: int) -> void:
 	if not sprite or not walk_texture:
 		return
 	sprite.texture = walk_texture
+	_current_char_index = char_idx
 	_draw_sprite_rect(char_idx, STAND_FRAME)
 
 

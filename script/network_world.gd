@@ -6,15 +6,31 @@ extends Node
 
 const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
+const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
 const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
+const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
+const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
+const NETWORK_SMG: WeaponData = preload("res://object/weapon_smg.tres")
+const NETWORK_SHOTGUN: WeaponData = preload("res://object/weapon_shotgun.tres")
+## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
+const NETWORK_WEAPONS: Dictionary = {
+	"pistol_01": NETWORK_PISTOL,
+	"knife_01": NETWORK_KNIFE,
+	"rifle_01": NETWORK_RIFLE,
+	"smg_01": NETWORK_SMG,
+	"shotgun_01": NETWORK_SHOTGUN,
+}
 const SNAPSHOT_INTERVAL := 1.0 / 20.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 30.0
 const SPAWN_SEPARATION := 56.0
 
 var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
+var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
+var _next_enemy_id := 1
 var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
 var _next_bullet_id := 1
-var _last_fire_msec: Dictionary = {} # peer_id -> Time.get_ticks_msec()
+## 攻击冷却按「玩家 + Host 当前武器」独立记录，避免切换武器后互相影响。
+var _last_attack_msec: Dictionary = {}
 var _snapshot_accumulator := 0.0
 var _input_accumulator := 0.0
 var _scene_path := ""
@@ -23,6 +39,10 @@ var _initial_world_received := false
 var _last_logged_remote_input: Dictionary = {}
 var _auto_client_fire_confirmed := false
 var _auto_client_bullet_seen := false
+## 自动双端回归统计本次攻击由 Host 确认并生成的视觉弹丸数量。
+## 这会让单发步枪和多弹丸霰弹枪都能验证，而不是仅检查「至少看到一颗」。
+var _auto_client_bullets_seen := 0
+var _auto_client_attack_weapon_id := ""
 ## 避免依赖编辑器正在重载的全局 Autoload 标识符；运行时取常驻 Net 节点。
 var net: Variant = null
 
@@ -65,6 +85,7 @@ func _exit_tree() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(net):
 		return
+	_capture_weapon_switch_input()
 	_capture_fire_input()
 	if net.is_host:
 		_capture_host_input()
@@ -72,7 +93,8 @@ func _physics_process(delta: float) -> void:
 		_snapshot_accumulator += delta
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
-			player_snapshot.rpc(_build_snapshot())
+			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
+			player_snapshot.rpc(_build_snapshot(), _build_enemy_snapshot(true))
 	else:
 		_capture_client_input(delta)
 
@@ -87,6 +109,7 @@ func _host_initialize_world() -> void:
 		_register_host_player(local_id, host_node, true)
 	else:
 		_register_host_player(local_id, _instantiate_player(_spawn_position(0), net.my_peer_id), true)
+	_register_initial_host_enemies()
 	_consume_pending_scene_ready()
 
 
@@ -114,16 +137,32 @@ func _client_initialize_world() -> void:
 		"walking": false,
 	}
 	_set_local_player(local_node, seat_index)
+	_prepare_client_preplaced_enemies()
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
+
+
+func _capture_weapon_switch_input() -> void:
+	if Input.is_action_just_pressed("主武器键"):
+		_request_weapon_switch("primary")
+	elif Input.is_action_just_pressed("副武器键"):
+		_request_weapon_switch("secondary")
+
+
+func _request_weapon_switch(slot: String) -> void:
+	if net.is_host:
+		_try_host_weapon_switch(int(net.my_peer_id), slot)
+	elif _initial_world_received:
+		# Client 只提交槽位意图；Host 从自身 PlayerState 校验真实装备。
+		weapon_switch_request.rpc_id(1, slot)
 
 
 func _capture_fire_input() -> void:
 	if not Input.is_action_just_pressed("确定键"):
 		return
 	if net.is_host:
-		_try_host_fire(int(net.my_peer_id))
+		_try_host_attack(int(net.my_peer_id))
 	elif _initial_world_received:
-		# Client 只提交开火意图；位置、朝向、弹药和伤害全部由 Host 重建与校验。
+		# Client 只提交攻击意图；位置、朝向、武器、弹药和伤害均由 Host 重建与校验。
 		fire_request.rpc_id(1)
 
 
@@ -233,25 +272,68 @@ func _add_host_peer(peer_id: int) -> void:
 # ---------------------------------------------------------------- Host-authoritative combat
 
 func _configure_network_loadout(state: PlayerState, node: CharacterBody2D) -> void:
-	if not state or not is_instance_valid(node) or not NETWORK_PISTOL:
+	var primary_weapon := _get_network_primary_loadout_weapon()
+	if not state or not is_instance_valid(node) or not primary_weapon or not NETWORK_KNIFE:
 		return
-	var slot := NETWORK_PISTOL.get_slot_key()
-	state.equipment[slot] = NETWORK_PISTOL
-	state.active_weapon_slot = slot
-	state.set_magazine_ammo(NETWORK_PISTOL.item_id, NETWORK_PISTOL.magazine_capacity)
-	node.enter_weapon_mode(NETWORK_PISTOL)
+	# 不使用 WeaponData.weapon_slot：现有手枪和小刀资源都写成了 1。
+	# 正常联机默认手枪；无头回归可由本机启动参数选择白名单中的主武器，仍不接受 Client RPC 的武器数据。
+	state.equipment["primary"] = primary_weapon
+	state.equipment["secondary"] = NETWORK_KNIFE
+	state.active_weapon_slot = "primary"
+	state.set_magazine_ammo(primary_weapon.item_id, primary_weapon.magazine_capacity)
+	node.enter_weapon_mode(primary_weapon)
 	node.set_weapon_ready_frame()
 
 
-func _get_fire_cooldown_msec(wd: WeaponData) -> int:
+func _get_network_primary_loadout_weapon() -> WeaponData:
+	for argument: String in OS.get_cmdline_user_args():
+		if not argument.begins_with("--net-test-weapon="):
+			continue
+		var weapon_id := argument.trim_prefix("--net-test-weapon=")
+		var requested := _get_network_weapon_data_by_id(weapon_id)
+		if requested and requested.is_ranged:
+			return requested
+		push_warning("[NetworkWorld] 忽略无效的联机回归主武器: %s" % weapon_id)
+	return NETWORK_PISTOL
+
+
+func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
+	return NETWORK_WEAPONS.get(weapon_id) as WeaponData
+
+
+func _get_attack_cooldown_msec(wd: WeaponData) -> int:
 	var seconds := 0.0
-	for index: int in range(wd.attack_char_sequence.size()):
-		seconds += wd.get_attack_frame_duration(index)
+	if wd.is_ranged:
+		for index: int in range(wd.attack_char_sequence.size()):
+			seconds += wd.get_attack_frame_duration(index)
+	else:
+		var melee_sequence: Array[int] = wd.get_melee_attack_char_sequence()
+		for index: int in range(melee_sequence.size()):
+			seconds += wd.get_melee_attack_frame_duration(index)
 	seconds = maxf(0.1, seconds / maxf(0.01, wd.attack_speed))
 	return int(roundi(seconds * 1000.0))
 
 
-func _try_host_fire(peer_id: int) -> void:
+func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	if slot != "primary" and slot != "secondary":
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
+		return
+	var wd := state.get_equipped_weapon(slot)
+	if not wd or state.active_weapon_slot == slot:
+		return
+	state.active_weapon_slot = slot
+	node.enter_weapon_mode(wd)
+	node.set_weapon_ready_frame()
+	print("[NetworkWorld] HOST_WEAPON_SWITCH peer=%d slot=%s weapon=%s" % [peer_id, slot, wd.item_id])
+
+
+func _try_host_attack(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
@@ -259,28 +341,84 @@ func _try_host_fire(peer_id: int) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
 		return
+	# 武器完全从 Host 当前 PlayerState 读取，客户端 RPC 不携带 weapon_id/目标/伤害等参数。
 	var wd := state.get_active_weapon()
-	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0 or wd.bullet_list.is_empty():
-		return
-	var current := state.get_magazine_ammo(wd.item_id)
-	if current <= 0:
+	if not wd:
 		return
 	var now := Time.get_ticks_msec()
-	var cooldown_msec := _get_fire_cooldown_msec(wd)
-	if now - int(_last_fire_msec.get(peer_id, -cooldown_msec)) < cooldown_msec:
+	var cooldown_msec := _get_attack_cooldown_msec(wd)
+	var attack_key := "%d:%s" % [peer_id, wd.item_id]
+	if now - int(_last_attack_msec.get(attack_key, -cooldown_msec)) < cooldown_msec:
 		return
-	_last_fire_msec[peer_id] = now
-	state.set_magazine_ammo(wd.item_id, current - 1)
-	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
-	node.play_network_fire_presentation(wd)
-	fire_presentation.rpc(peer_id, current - 1)
-	var bullet_index := 0
-	for bd: BulletData in wd.bullet_list:
-		_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
-		bullet_index += 1
-	if wd.gunshot_range > 0.0:
-		_alert_host_enemies(node, wd.gunshot_range)
-	print("[NetworkWorld] HOST_FIRE peer=%d ammo=%d bullets=%d" % [peer_id, current - 1, wd.bullet_list.size()])
+	_last_attack_msec[attack_key] = now
+
+	if wd.is_ranged:
+		if wd.magazine_capacity <= 0 or wd.bullet_list.is_empty():
+			return
+		var current := state.get_magazine_ammo(wd.item_id)
+		if current <= 0:
+			return
+		state.set_magazine_ammo(wd.item_id, current - 1)
+		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
+		node.play_network_attack_presentation(wd)
+		attack_presentation.rpc(peer_id, wd.item_id, current - 1)
+		var bullet_index := 0
+		for bd: BulletData in wd.bullet_list:
+			_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
+			bullet_index += 1
+		if wd.gunshot_range > 0.0:
+			_alert_host_enemies(node, wd.gunshot_range)
+		print("[NetworkWorld] HOST_FIRE peer=%d ammo=%d bullets=%d" % [peer_id, current - 1, wd.bullet_list.size()])
+		return
+
+	var is_headshot := wd.critical_rate > 0.0 and randf() * 100.0 < wd.critical_rate
+	node.play_network_attack_presentation(wd)
+	# -1 表示近战无弹夹变化；客户端只播放 Host 确认的表现。
+	attack_presentation.rpc(peer_id, wd.item_id, -1)
+	_schedule_host_melee_hit(node, wd, is_headshot)
+	print("[NetworkWorld] HOST_MELEE peer=%d weapon=%s" % [peer_id, wd.item_id])
+
+
+func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
+	var delay := 0.0
+	for index: int in range(mini(wd.melee_hit_at_sequence_idx, wd.get_melee_attack_char_sequence().size())):
+		delay += wd.get_melee_attack_frame_duration(index)
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+	if is_instance_valid(node):
+		_perform_host_melee_attack(node, wd, is_headshot)
+
+
+func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
+	var shape := RectangleShape2D.new()
+	shape.size = wd.melee_range_size
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	query.transform = Transform2D(0.0, node.global_position + node.get_facing_vector() * wd.melee_range_forward_offset)
+	query.collision_mask = 24 # 敌人 body (layer 4) + hurtbox (layer 5)
+	query.exclude = [node.get_rid()]
+	query.collide_with_bodies = true
+	query.collide_with_areas = true
+	# NetworkWorld 是普通 Node；物理 World2D 应从挥刀者这个 CanvasItem 取得。
+	var results: Array[Dictionary] = node.get_world_2d().direct_space_state.intersect_shape(query, 64)
+	var hit_enemy_ids: Dictionary = {}
+	for result: Dictionary in results:
+		var collider := result.get("collider") as Node
+		if not is_instance_valid(collider):
+			continue
+		for enemy_entry: Dictionary in _enemies.values():
+			var enemy := enemy_entry.get("node") as CharacterBody2D
+			if not is_instance_valid(enemy) or enemy.get("_is_dead") == true:
+				continue
+			if collider != enemy and not enemy.is_ancestor_of(collider):
+				continue
+			var enemy_id := enemy.get_instance_id()
+			if hit_enemy_ids.has(enemy_id):
+				break
+			hit_enemy_ids[enemy_id] = true
+			enemy.take_damage(wd.get_effective_damage(), 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
+			print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s" % [enemy.name, int(wd.get_effective_damage()), is_headshot])
+			break
 
 
 func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, bd: BulletData, bullet_index: int) -> void:
@@ -319,7 +457,8 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	get_tree().current_scene.add_child(bullet)
 	_bullets[bullet_id] = bullet
 	bullet.finished.connect(_on_host_bullet_finished)
-	spawn_bullet.rpc(bullet_id, peer_id, start_position, direction, bullet_index)
+	# Client 只从 Host 确认的白名单 weapon_id + 弹丸索引还原视觉弹道，绝不接收伤害或子弹数据对象。
+	spawn_bullet.rpc(bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index)
 
 
 func _on_host_bullet_finished(bullet_id: int) -> void:
@@ -338,13 +477,23 @@ func _alert_host_enemies(shooter: CharacterBody2D, range: float) -> void:
 # ---------------------------------------------------------------- Explicit lifecycle and RPCs
 
 @rpc("any_peer", "call_remote", "reliable")
+func weapon_switch_request(slot: String) -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_weapon_switch(sender, slot)
+
+
+@rpc("any_peer", "call_remote", "reliable")
 func fire_request() -> void:
 	if not net.is_host:
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _players.has(sender):
 		return
-	_try_host_fire(sender)
+	_try_host_attack(sender)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
@@ -358,26 +507,30 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func fire_presentation(peer_id: int, magazine_ammo: int) -> void:
+func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	var wd := state.get_active_weapon() if state else null
-	if state and wd:
+	if not state or not is_instance_valid(node):
+		return
+	var wd := _apply_client_weapon_snapshot(state, node, weapon_id)
+	if not wd:
+		return
+	if wd.is_ranged and magazine_ammo >= 0:
 		state.set_magazine_ammo(wd.item_id, magazine_ammo)
-	if is_instance_valid(node) and wd:
-		node.play_network_fire_presentation(wd)
+	node.play_network_attack_presentation(wd)
 	if peer_id == int(net.my_peer_id):
 		_auto_client_fire_confirmed = true
+		_auto_client_attack_weapon_id = wd.item_id
 
 
 @rpc("authority", "call_remote", "reliable")
-func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2, direction: Vector2, bullet_index: int) -> void:
+func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2, direction: Vector2, weapon_id: String, bullet_index: int) -> void:
 	if net.is_host or bullet_id <= 0 or _bullets.has(bullet_id):
 		return
-	var bd: Variant = _get_network_bullet_data(bullet_index)
+	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
 	if not bd:
 		return
 	var bullet := BULLET_SCENE.instantiate() as Node2D
@@ -399,7 +552,8 @@ func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2,
 	_bullets[bullet_id] = bullet
 	bullet.connect("finished", _on_client_bullet_finished)
 	_auto_client_bullet_seen = true
-	print("[NetworkWorld] CLIENT_BULLET bullet=%d shooter=%d" % [bullet_id, shooter_peer_id])
+	_auto_client_bullets_seen += 1
+	print("[NetworkWorld] CLIENT_BULLET bullet=%d shooter=%d weapon=%s index=%d" % [bullet_id, shooter_peer_id, weapon_id, bullet_index])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -416,10 +570,11 @@ func _on_client_bullet_finished(bullet_id: int) -> void:
 	_bullets.erase(bullet_id)
 
 
-func _get_network_bullet_data(bullet_index: int) -> Variant:
-	if not NETWORK_PISTOL or bullet_index < 0 or bullet_index >= NETWORK_PISTOL.bullet_list.size():
+func _get_network_bullet_data(weapon_id: String, bullet_index: int) -> BulletData:
+	var weapon := _get_network_weapon_data_by_id(weapon_id)
+	if not weapon or not weapon.is_ranged or bullet_index < 0 or bullet_index >= weapon.bullet_list.size():
 		return null
-	return NETWORK_PISTOL.bullet_list[bullet_index]
+	return weapon.bullet_list[bullet_index] as BulletData
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -437,19 +592,21 @@ func despawn_player(peer_id: int) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func world_snapshot(states: Array) -> void:
+func world_snapshot(player_states: Array, enemy_states: Array) -> void:
 	if net.is_host:
 		return
-	_apply_client_snapshot(states, true)
+	_apply_client_snapshot(player_states, true)
+	_apply_client_enemy_snapshot(enemy_states, true)
 	_initial_world_received = _players.has(net.my_peer_id)
-	print("[NetworkWorld] WORLD_SNAPSHOT players=%d local_ready=%s" % [states.size(), _initial_world_received])
+	print("[NetworkWorld] WORLD_SNAPSHOT players=%d enemies=%d local_ready=%s" % [player_states.size(), enemy_states.size(), _initial_world_received])
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func player_snapshot(states: Array) -> void:
+func player_snapshot(player_states: Array, enemy_states: Array) -> void:
 	if net.is_host:
 		return
-	_apply_client_snapshot(states, false)
+	_apply_client_snapshot(player_states, false)
+	_apply_client_enemy_snapshot(enemy_states, false)
 
 
 func _on_game_scene_ready_received(peer_id: int, ready_scene_path: String) -> void:
@@ -470,8 +627,9 @@ func _accept_ready_peer(peer_id: int) -> void:
 	if peer_id <= 1 or not net.get_player_names().has(peer_id):
 		return
 	_add_host_peer(peer_id)
-	world_snapshot.rpc_id(peer_id, _build_snapshot())
-	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d" % peer_id)
+	# 首次世界快照是可靠的，保留字典格式及预置敌人的场景路径。
+	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false))
+	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -493,6 +651,32 @@ func _broadcast_spawn_player(peer_id: int) -> void:
 
 
 # ---------------------------------------------------------------- Client presentation
+
+func _find_network_weapon_slot(state: PlayerState, weapon_id: String) -> String:
+	if not state:
+		return ""
+	for slot: Variant in state.equipment.keys():
+		var equipped := state.equipment.get(slot) as WeaponData
+		if equipped and equipped.item_id == weapon_id:
+			return str(slot)
+	return ""
+
+
+func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, weapon_id: String) -> WeaponData:
+	if not state or not is_instance_valid(node) or weapon_id.is_empty():
+		return null
+	var remote_weapon := _get_network_weapon_data_by_id(weapon_id)
+	if not remote_weapon:
+		return null
+	var slot := _find_network_weapon_slot(state, weapon_id)
+	if slot.is_empty():
+		return null
+	if state.active_weapon_slot != slot:
+		state.active_weapon_slot = slot
+		node.enter_weapon_mode(remote_weapon)
+		node.set_weapon_ready_frame()
+	return remote_weapon
+
 
 func _apply_client_snapshot(states: Array, snap: bool) -> void:
 	var seen: Dictionary = {}
@@ -538,12 +722,14 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		state.current_hp = float(public_state.get("hp", state.current_hp))
 		state.position = _packet_position(public_state)
 		state.facing = int(public_state.get("facing", state.facing))
-		# 移动快照只收敛 Host 已确认的弹夹数，绝不重新装备或重置武器状态。
+		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
+		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
 		var weapon_id := str(public_state.get("weapon_id", ""))
-		if not weapon_id.is_empty():
+		var remote_weapon := _apply_client_weapon_snapshot(state, node, weapon_id)
+		if remote_weapon and remote_weapon.is_ranged:
 			state.set_magazine_ammo(
-				weapon_id,
-				int(public_state.get("magazine_ammo", state.get_magazine_ammo(weapon_id)))
+				remote_weapon.item_id,
+				int(public_state.get("magazine_ammo", state.get_magazine_ammo(remote_weapon.item_id)))
 			)
 	# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
 	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
@@ -558,6 +744,90 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	_players[peer_id] = entry
 
 
+# ---------------------------------------------------------------- Client enemy presentation
+
+func _apply_client_enemy_snapshot(states: Array, snap: bool) -> void:
+	var seen: Dictionary = {}
+	for value: Variant in states:
+		var public_state := _normalize_enemy_snapshot(value)
+		if public_state.is_empty():
+			continue
+		var entity_id := int(public_state.get("entity_id", 0))
+		if entity_id <= 0:
+			continue
+		seen[entity_id] = true
+		_ensure_client_enemy(entity_id, public_state, snap)
+	# 只有可靠完整快照才收敛动态实体；预置尸体不会被 Host 自动移除。
+	if snap:
+		for key: Variant in _enemies.keys():
+			var entity_id := int(key)
+			if not seen.has(entity_id):
+				_remove_client_enemy(entity_id)
+
+
+## 可靠 world_snapshot 使用字典（含预置场景路径）；20Hz 快照使用紧凑数组，减少 ENet 包尺寸。
+func _normalize_enemy_snapshot(value: Variant) -> Dictionary:
+	if value is Dictionary:
+		return value as Dictionary
+	if value is Array:
+		var packet := value as Array
+		if packet.size() < 8:
+			return {}
+		return {
+			"entity_id": int(packet[0]),
+			"position": packet[1],
+			"facing": int(packet[2]),
+			"hp": float(packet[3]),
+			"moving": bool(packet[4]),
+			"visual_char_index": int(packet[5]),
+			"dead": bool(packet[6]),
+			"headshot": bool(packet[7]),
+		}
+	return {}
+
+
+func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) -> void:
+	var entry: Dictionary = _enemies.get(entity_id, {})
+	var node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(node):
+		var scene_path := str(public_state.get("scene_path", ""))
+		# 紧凑不可靠包不带场景路径；在可靠 world_snapshot 建立实体前不创建未知敌人。
+		if scene_path.is_empty() and not snap:
+			return
+		if not scene_path.is_empty() and get_tree().current_scene:
+			node = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as CharacterBody2D
+		if not is_instance_valid(node):
+			node = ENEMY_SCENE.instantiate() as CharacterBody2D
+			if not is_instance_valid(node):
+				return
+			node.configure_network_entity(entity_id, true)
+			node.global_position = _packet_position(public_state)
+			get_tree().current_scene.add_child(node)
+		node.configure_network_entity(entity_id, true)
+		entry = {"node": node, "scene_path": scene_path}
+		_enemies[entity_id] = entry
+	node.apply_network_presentation(
+		_packet_position(public_state),
+		int(public_state.get("facing", 0)),
+		bool(public_state.get("moving", false)),
+		float(public_state.get("hp", node.current_hp)),
+		int(public_state.get("visual_char_index", -1)),
+		bool(public_state.get("dead", false)),
+		bool(public_state.get("headshot", false)),
+		snap
+	)
+
+
+func _remove_client_enemy(entity_id: int) -> void:
+	if not _enemies.has(entity_id):
+		return
+	var entry: Dictionary = _enemies[entity_id]
+	var node := entry.get("node") as Node
+	_enemies.erase(entity_id)
+	if is_instance_valid(node):
+		node.queue_free()
+
+
 func _remove_player(peer_id: int) -> void:
 	# 客户端在场景切换/丢失包期间绝不能因非完整快照销毁自己的预置实体。
 	if not net.is_host and peer_id == int(net.my_peer_id):
@@ -566,6 +836,11 @@ func _remove_player(peer_id: int) -> void:
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as Node
+	# Host 释放断线玩家前，先清除所有敌人的目标引用，防止 Chase 状态读取失效实例。
+	if net.is_host and is_instance_valid(node):
+		for enemy_node: Node in get_tree().get_nodes_in_group("enemy"):
+			if enemy_node.has_method("clear_target_if_matches"):
+				enemy_node.clear_target_if_matches(node)
 	_players.erase(peer_id)
 	if is_instance_valid(node):
 		node.queue_free()
@@ -581,11 +856,15 @@ func _run_auto_client_input_test() -> void:
 		printerr("[NetworkWorld] AUTO_CLIENT_INPUT_TIMEOUT")
 		return
 
+	var primary_weapon := _get_network_primary_loadout_weapon()
+	if not primary_weapon:
+		printerr("[NetworkWorld] AUTO_CLIENT_PRIMARY_WEAPON_MISSING")
+		return
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var state := entry.get("state") as PlayerState
-	var initial_ammo := state.get_magazine_ammo(NETWORK_PISTOL.item_id) if state else -1
-	if initial_ammo != NETWORK_PISTOL.magazine_capacity:
-		printerr("[NetworkWorld] AUTO_CLIENT_INITIAL_AMMO_FAILED ammo=%d expected=%d" % [initial_ammo, NETWORK_PISTOL.magazine_capacity])
+	var initial_ammo := state.get_magazine_ammo(primary_weapon.item_id) if state else -1
+	if initial_ammo != primary_weapon.magazine_capacity:
+		printerr("[NetworkWorld] AUTO_CLIENT_INITIAL_AMMO_FAILED weapon=%s ammo=%d expected=%d" % [primary_weapon.item_id, initial_ammo, primary_weapon.magazine_capacity])
 
 	Input.action_press("右")
 	var animation_frames: Dictionary = {}
@@ -612,32 +891,202 @@ func _run_auto_client_input_test() -> void:
 
 	_auto_client_fire_confirmed = false
 	_auto_client_bullet_seen = false
+	_auto_client_bullets_seen = 0
+	_auto_client_attack_weapon_id = ""
 	Input.action_press("确定键")
 	await get_tree().create_timer(0.12).timeout
 	Input.action_release("确定键")
 	deadline = Time.get_ticks_msec() + 3000
-	while (not _auto_client_fire_confirmed or not _auto_client_bullet_seen) and Time.get_ticks_msec() < deadline:
+	while (
+		(not _auto_client_fire_confirmed or _auto_client_bullets_seen < primary_weapon.bullet_list.size())
+		and Time.get_ticks_msec() < deadline
+	):
 		await get_tree().create_timer(0.05).timeout
 	entry = _players.get(int(net.my_peer_id), {})
 	state = entry.get("state") as PlayerState
-	var final_ammo := state.get_magazine_ammo(NETWORK_PISTOL.item_id) if state else -1
-	var fire_ok := _auto_client_fire_confirmed and _auto_client_bullet_seen and final_ammo == NETWORK_PISTOL.magazine_capacity - 1
-	print("[NetworkWorld] AUTO_CLIENT_FIRE_COMPLETE confirmed=%s bullet_seen=%s ammo=%d" % [
+	var final_ammo := state.get_magazine_ammo(primary_weapon.item_id) if state else -1
+	var fire_ok := (
+		_auto_client_fire_confirmed
+		and _auto_client_attack_weapon_id == primary_weapon.item_id
+		and _auto_client_bullets_seen == primary_weapon.bullet_list.size()
+		and final_ammo == primary_weapon.magazine_capacity - 1
+	)
+	print("[NetworkWorld] AUTO_CLIENT_FIRE_COMPLETE weapon=%s confirmed=%s bullets_seen=%d expected_bullets=%d ammo=%d" % [
+		_auto_client_attack_weapon_id,
 		_auto_client_fire_confirmed,
-		_auto_client_bullet_seen,
+		_auto_client_bullets_seen,
+		primary_weapon.bullet_list.size(),
 		final_ammo,
 	])
 	if not fire_ok:
-		printerr("[NetworkWorld] AUTO_CLIENT_FIRE_FAILED confirmed=%s bullet_seen=%s ammo=%d" % [
+		printerr("[NetworkWorld] AUTO_CLIENT_FIRE_FAILED expected_weapon=%s weapon=%s confirmed=%s bullets_seen=%d expected_bullets=%d ammo=%d" % [
+			primary_weapon.item_id,
+			_auto_client_attack_weapon_id,
 			_auto_client_fire_confirmed,
-			_auto_client_bullet_seen,
+			_auto_client_bullets_seen,
+			primary_weapon.bullet_list.size(),
 			final_ammo,
+		])
+
+	# 第二段：先通过正常的客户端输入移动到 Enemy2 的近战距离内。
+	# 不传送客户端坐标，确保本回归仍覆盖「Client 输入 → Host 模拟移动 → Host 判定」完整链路。
+	Input.action_press("右")
+	await get_tree().create_timer(0.72).timeout
+	Input.action_release("右")
+	await get_tree().create_timer(0.35).timeout
+	entry = _players.get(int(net.my_peer_id), {})
+	node = entry.get("node") as CharacterBody2D
+	print("[NetworkWorld] AUTO_CLIENT_KNIFE_POSITION pos=%s" % [node.global_position if is_instance_valid(node) else Vector2.ZERO])
+
+	# 第三段：验证客户端只提交切换/攻击意图，而 Host 以固定副武器（小刀）确认表现与伤害。
+	Input.action_press("副武器键")
+	await get_tree().create_timer(0.12).timeout
+	Input.action_release("副武器键")
+	deadline = Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline:
+		entry = _players.get(int(net.my_peer_id), {})
+		state = entry.get("state") as PlayerState
+		if state and state.active_weapon_slot == "secondary" and state.get_active_weapon() == NETWORK_KNIFE:
+			break
+		await get_tree().create_timer(0.05).timeout
+	entry = _players.get(int(net.my_peer_id), {})
+	state = entry.get("state") as PlayerState
+	var knife_switched := state != null and state.active_weapon_slot == "secondary" and state.get_active_weapon() == NETWORK_KNIFE
+	if not knife_switched:
+		printerr("[NetworkWorld] AUTO_CLIENT_KNIFE_SWITCH_FAILED slot=%s" % [state.active_weapon_slot if state else "<none>"])
+
+	# 小刀命中必须通过 Host 的物理查询和敌人权威 take_damage() 产生；客户端只通过敌人快照观察 HP 变化。
+	var enemy_hp_before: float = _get_client_live_enemy_hp_total()
+	_auto_client_fire_confirmed = false
+	_auto_client_bullet_seen = false
+	_auto_client_bullets_seen = 0
+	_auto_client_attack_weapon_id = ""
+	Input.action_press("确定键")
+	await get_tree().create_timer(0.12).timeout
+	Input.action_release("确定键")
+	deadline = Time.get_ticks_msec() + 3000
+	var melee_damage_seen := false
+	var enemy_hp_after := enemy_hp_before
+	while Time.get_ticks_msec() < deadline:
+		enemy_hp_after = _get_client_live_enemy_hp_total()
+		melee_damage_seen = enemy_hp_after <= enemy_hp_before - NETWORK_KNIFE.get_effective_damage() + 0.1
+		if _auto_client_fire_confirmed and melee_damage_seen:
+			break
+		await get_tree().create_timer(0.05).timeout
+	var knife_ok := knife_switched and _auto_client_fire_confirmed and _auto_client_attack_weapon_id == NETWORK_KNIFE.item_id and not _auto_client_bullet_seen and melee_damage_seen
+	print("[NetworkWorld] AUTO_CLIENT_KNIFE_COMPLETE switched=%s confirmed=%s weapon=%s bullet_seen=%s melee_damage_seen=%s enemy_hp_before=%.1f enemy_hp_after=%.1f" % [
+		knife_switched,
+		_auto_client_fire_confirmed,
+		_auto_client_attack_weapon_id,
+		_auto_client_bullet_seen,
+		melee_damage_seen,
+		enemy_hp_before,
+		enemy_hp_after,
+	])
+	if not knife_ok:
+		printerr("[NetworkWorld] AUTO_CLIENT_KNIFE_FAILED switched=%s confirmed=%s weapon=%s bullet_seen=%s melee_damage_seen=%s enemy_hp_before=%.1f enemy_hp_after=%.1f" % [
+			knife_switched,
+			_auto_client_fire_confirmed,
+			_auto_client_attack_weapon_id,
+			_auto_client_bullet_seen,
+			melee_damage_seen,
+			enemy_hp_before,
+			enemy_hp_after,
 		])
 	net.leave()
 	get_tree().quit()
 
 
+## 自动双端烟测只从客户端已接收的 Host 敌人快照累计生命值；不读取或伪造 Host 命中结果。
+func _get_client_live_enemy_hp_total() -> float:
+	var total := 0.0
+	for enemy_entry: Dictionary in _enemies.values():
+		var enemy := enemy_entry.get("node") as CharacterBody2D
+		if is_instance_valid(enemy) and not enemy.is_network_dead():
+			total += enemy.current_hp
+	return total
+
+
 # ---------------------------------------------------------------- State serialisation / scene helpers
+
+# ---------------------------------------------------------------- Enemy state serialisation / scene helpers
+
+func _register_initial_host_enemies() -> void:
+	_enemies.clear()
+	_next_enemy_id = 1
+	var candidates: Array[CharacterBody2D] = []
+	for value: Node in get_tree().get_nodes_in_group("enemy"):
+		if value is CharacterBody2D:
+			candidates.append(value as CharacterBody2D)
+	var scene := get_tree().current_scene
+	candidates.sort_custom(func(a: CharacterBody2D, b: CharacterBody2D) -> bool:
+		var path_a := str(scene.get_path_to(a)) if scene else str(a.get_path())
+		var path_b := str(scene.get_path_to(b)) if scene else str(b.get_path())
+		return path_a < path_b
+	)
+	for enemy: CharacterBody2D in candidates:
+		var entity_id := _next_enemy_id
+		_next_enemy_id += 1
+		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
+		enemy.configure_network_entity(entity_id, false)
+		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+	print("[NetworkWorld] HOST_ENEMIES_REGISTERED count=%d" % _enemies.size())
+
+
+func _prepare_client_preplaced_enemies() -> void:
+	for value: Node in get_tree().get_nodes_in_group("enemy"):
+		if value is CharacterBody2D:
+			(value as CharacterBody2D).configure_network_entity(0, true)
+
+
+func _build_enemy_snapshot(compact: bool = false) -> Array:
+	var states: Array = []
+	for key: Variant in _enemies.keys():
+		var entity_id := int(key)
+		var public_state := _public_enemy_state(entity_id)
+		if public_state.is_empty():
+			continue
+		if compact:
+			# 高频 ENet 包：只发送客户端表现必需的数据；场景路径只在可靠 world_snapshot 中发送。
+			states.append([
+				entity_id,
+				public_state["position"],
+				public_state["facing"],
+				public_state["hp"],
+				public_state["moving"],
+				public_state["visual_char_index"],
+				public_state["dead"],
+				public_state["headshot"],
+			])
+		else:
+			states.append(public_state)
+	if compact:
+		states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
+	else:
+		states.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["entity_id"]) < int(b["entity_id"]))
+	return states
+
+
+func _public_enemy_state(entity_id: int) -> Dictionary:
+	if not _enemies.has(entity_id):
+		return {}
+	var entry: Dictionary = _enemies[entity_id]
+	var enemy := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(enemy):
+		return {}
+	return {
+		"entity_id": entity_id,
+		"scene_path": str(entry.get("scene_path", "")),
+		"position": enemy.global_position,
+		"facing": enemy.get_network_facing(),
+		"hp": enemy.current_hp,
+		"moving": enemy.is_moving_for_network(),
+		"ai_state": enemy.get_network_ai_state(),
+		"visual_char_index": enemy.get_network_visual_char_index(),
+		"dead": enemy.is_network_dead(),
+		"headshot": enemy.is_network_headshot_dead(),
+	}
+
 
 func _build_snapshot() -> Array:
 	var states: Array = []

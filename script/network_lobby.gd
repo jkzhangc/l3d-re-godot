@@ -2,7 +2,9 @@ extends Control
 ## 正式联机大厅：连接 UI 和自动测试入口；握手/玩家名单由 net 单例维护。
 
 const GAME_SCENE := "res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"
-const AUTO_HOST_TIMEOUT := 8.0
+const AUTO_TEST_SCENE := "res://scene/maps/test.tscn"
+## 为显式授权、CI 排队和较慢机器保留足够的双进程启动窗口；不影响正常大厅连接。
+const AUTO_HOST_TIMEOUT := 30.0
 
 @onready var name_edit: LineEdit = %NameEdit
 @onready var ip_edit: LineEdit = %IpEdit
@@ -67,8 +69,9 @@ func _run_auto_host() -> void:
 		printerr("[AUTO] host 等待 client 握手超时")
 		get_tree().quit(1)
 		return
-	print("[AUTO] host 握手完成，广播开始游戏")
-	net.start_game.rpc(GAME_SCENE)
+	var game_scene := _get_game_scene_for_launch()
+	print("[AUTO] host 握手完成，广播开始游戏: %s" % game_scene)
+	net.start_game.rpc(game_scene)
 
 
 func _run_auto_client() -> void:
@@ -80,6 +83,10 @@ func _run_auto_client() -> void:
 		get_tree().quit(1)
 		return
 	print("[AUTO] client 已发起加入，等待握手和 host 开始游戏 ...")
+
+
+func _get_game_scene_for_launch() -> String:
+	return AUTO_TEST_SCENE if "--net-test-scene=test" in OS.get_cmdline_user_args() else GAME_SCENE
 
 
 # ---------------------------------------------------------------- 按钮

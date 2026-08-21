@@ -334,22 +334,30 @@ func set_attack_char_index(char_idx: int) -> void:
 
 
 ## 联机攻击只负责本地表现；子弹、弹药和伤害均由 NetworkWorld 的 Host 权威处理。
-func play_network_fire_presentation(wd: WeaponData) -> void:
+## 远程和近战共用此入口，命中时机则按对应 WeaponData 的配置播放效果。
+func play_network_attack_presentation(wd: WeaponData) -> void:
 	if not wd:
 		return
 	_network_attack_token += 1
 	var token := _network_attack_token
 	enter_weapon_mode(wd)
 	player_in_weapon_state = true
-	call_deferred("_run_network_fire_presentation", token, wd)
+	call_deferred("_run_network_attack_presentation", token, wd)
 
 
-func _run_network_fire_presentation(token: int, wd: WeaponData) -> void:
-	for index: int in range(wd.attack_char_sequence.size()):
+## 保留旧名称，避免外部调用点在逐步迁移期间失效。
+func play_network_fire_presentation(wd: WeaponData) -> void:
+	play_network_attack_presentation(wd)
+
+
+func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
+	var sequence: Array[int] = wd.attack_char_sequence if wd.is_ranged else wd.get_melee_attack_char_sequence()
+	var impact_index := wd.fire_at_sequence_idx if wd.is_ranged else wd.melee_hit_at_sequence_idx
+	for index: int in range(sequence.size()):
 		if token != _network_attack_token or not is_instance_valid(self):
 			return
-		set_attack_char_index(wd.attack_char_sequence[index])
-		if index == wd.fire_at_sequence_idx:
+		set_attack_char_index(sequence[index])
+		if index == impact_index:
 			if wd.attack_sound:
 				Global.play_sfx_managed(wd.attack_sound, get_tree().current_scene)
 			var effect_scene := wd.get_attack_effect_anim(facing)
@@ -357,7 +365,8 @@ func _run_network_fire_presentation(token: int, wd: WeaponData) -> void:
 				var offset := current_character.get_attack_effect_offset(wd.weapon_state_name, facing, wd.attack_effect_offset_override) if current_character else wd.attack_effect_offset_override
 				var follow: Node2D = self if wd.attack_effect_follow else null
 				VXAnimSprite.play_scene(effect_scene, global_position, get_tree().current_scene, 10.0, follow, offset)
-		await get_tree().create_timer(wd.get_attack_frame_duration(index)).timeout
+		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else wd.get_melee_attack_frame_duration(index)
+		await get_tree().create_timer(duration).timeout
 	if token == _network_attack_token and is_instance_valid(self):
 		set_weapon_ready_frame()
 		player_in_weapon_state = false
