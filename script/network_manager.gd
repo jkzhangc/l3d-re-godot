@@ -237,11 +237,7 @@ func _apply_host_character_selection(peer_id: int, character_path: String, notif
 	if not _allowed_character_paths.has(character_path):
 		_reject_character_selection(peer_id, "角色无效或当前不可用", notify_requester)
 		return false
-	for value: Variant in _player_character_paths.keys():
-		var other_peer_id := int(value)
-		if other_peer_id != peer_id and str(_player_character_paths[value]) == character_path:
-			_reject_character_selection(peer_id, "%s 已被其他玩家选择" % get_character_display_name(character_path), notify_requester)
-			return false
+	## 允许多个 peer 选择同一个白名单角色；仍由 Host 写入并广播完整角色表。
 	_player_character_paths[peer_id] = character_path
 	print("[Net] CHARACTER_SELECTED peer=%d character=%s" % [peer_id, character_path])
 	player_character_list_changed.emit()

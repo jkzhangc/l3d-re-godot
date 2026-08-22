@@ -23,8 +23,6 @@ const AUTO_HOST_TIMEOUT := 30.0
 var _connected := false
 var _log_lines: Array[String] = []
 var _refreshing_character_select := false
-## --net-test-character-select 专用：Client 必须确认 Host 拒绝了重复角色。
-var _auto_character_selection_rejected := false
 ## 通过节点路径读取 Autoload，避免 Godot 编辑器热重载期间短暂丢失 `Net` 全局标识符。
 var net: Variant = null
 
@@ -42,7 +40,6 @@ func _ready() -> void:
 	net.handshake_completed.connect(_on_handshake_completed)
 	net.player_list_changed.connect(_refresh_ui)
 	net.player_character_list_changed.connect(_refresh_ui)
-	net.player_character_selection_rejected.connect(_on_character_selection_rejected)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
@@ -118,12 +115,11 @@ func _run_auto_host_character_select_lobby_test() -> void:
 			client_id = peer_id
 			break
 	var client_path: String = str(net.get_player_character_path(client_id))
-	var expected_client_path := "res://object/character_bigg.tres"
-	if not net.are_all_players_character_selected() or host_path != net.DEFAULT_CHARACTER_PATH or client_id <= 1 or client_path != expected_client_path:
+	if not net.are_all_players_character_selected() or host_path != net.DEFAULT_CHARACTER_PATH or client_id <= 1 or client_path != net.DEFAULT_CHARACTER_PATH:
 		printerr("[AUTO] AUTO_CHARACTER_HOST_LOBBY_FAILED host=%s client=%d client_character=%s" % [host_path, client_id, client_path])
 		get_tree().quit(1)
 		return
-	print("[AUTO] AUTO_CHARACTER_HOST_LOBBY_COMPLETE host=%s client=%s" % [host_path.get_file(), client_path.get_file()])
+	print("[AUTO] AUTO_CHARACTER_HOST_LOBBY_COMPLETE duplicate_accepted=true host=%s client=%s" % [host_path.get_file(), client_path.get_file()])
 
 
 func _run_auto_client_character_select_lobby_test() -> void:
@@ -134,31 +130,18 @@ func _run_auto_client_character_select_lobby_test() -> void:
 		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED handshake_timeout")
 		get_tree().quit(1)
 		return
-	_auto_character_selection_rejected = false
 	if not net.request_local_character_selection(net.DEFAULT_CHARACTER_PATH):
 		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_request_not_sent")
 		get_tree().quit(1)
 		return
 	deadline = Time.get_ticks_msec() + 3000
-	while not _auto_character_selection_rejected and Time.get_ticks_msec() < deadline:
+	while str(net.get_player_character_path(int(net.my_peer_id))) != net.DEFAULT_CHARACTER_PATH and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
-	if not _auto_character_selection_rejected:
-		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_not_rejected")
+	if str(net.get_player_character_path(int(net.my_peer_id))) != net.DEFAULT_CHARACTER_PATH:
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_not_confirmed selected=%s" % str(net.get_player_character_path(int(net.my_peer_id))))
 		get_tree().quit(1)
 		return
-	var requested_path := "res://object/character_bigg.tres"
-	if not net.request_local_character_selection(requested_path):
-		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED alternate_request_not_sent")
-		get_tree().quit(1)
-		return
-	deadline = Time.get_ticks_msec() + 3000
-	while str(net.get_player_character_path(int(net.my_peer_id))) != requested_path and Time.get_ticks_msec() < deadline:
-		await get_tree().create_timer(0.05).timeout
-	if str(net.get_player_character_path(int(net.my_peer_id))) != requested_path:
-		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED alternate_not_confirmed selected=%s" % str(net.get_player_character_path(int(net.my_peer_id))))
-		get_tree().quit(1)
-		return
-	print("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_COMPLETE rejected_duplicate=true selected=%s" % requested_path.get_file())
+	print("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_COMPLETE duplicate_accepted=true selected=%s" % net.DEFAULT_CHARACTER_PATH.get_file())
 
 
 func _get_auto_expected_player_count() -> int:
@@ -245,7 +228,7 @@ func _on_connection_established() -> void:
 
 func _on_handshake_completed() -> void:
 	_connected = true
-	_log("协议握手完成，请选择未被占用的角色")
+	_log("协议握手完成，请选择角色（允许与其他玩家重复）")
 	_refresh_ui()
 
 
@@ -271,13 +254,6 @@ func _on_peer_left(_peer_id: int) -> void:
 		_log("有玩家离开")
 	_refresh_ui()
 
-
-func _on_character_selection_rejected(reason: String) -> void:
-	if _is_auto_character_select_test():
-		_auto_character_selection_rejected = true
-	_log("角色选择被主机拒绝：%s" % reason)
-	character_hint.text = "角色选择失败：%s" % reason
-	_refresh_ui()
 
 
 # ---------------------------------------------------------------- UI
@@ -317,19 +293,12 @@ func _refresh_character_select(selection_ready: bool) -> void:
 	_refreshing_character_select = true
 	character_select.clear()
 	var selected_path: String = str(net.get_player_character_path(int(net.my_peer_id)))
-	var all_paths: Dictionary = net.get_player_character_paths()
 	var available_paths: Array[String] = net.get_available_character_paths()
 	var selected_index := -1
 	for character_path: String in available_paths:
 		var item_index := character_select.item_count
 		character_select.add_item(net.get_character_display_name(character_path))
 		character_select.set_item_metadata(item_index, character_path)
-		var occupied_by_other := false
-		for value: Variant in all_paths.keys():
-			if int(value) != int(net.my_peer_id) and str(all_paths[value]) == character_path:
-				occupied_by_other = true
-				break
-		character_select.set_item_disabled(item_index, occupied_by_other)
 		if character_path == selected_path:
 			selected_index = item_index
 	if selected_index >= 0:
@@ -340,7 +309,7 @@ func _refresh_character_select(selection_ready: bool) -> void:
 	if not selection_ready:
 		character_hint.text = "连接并完成握手后可选择角色"
 	elif selected_path.is_empty():
-		character_hint.text = "请选择一名未被占用的角色；主机将在全员确认后才能开始。"
+		character_hint.text = "请选择角色（可与其他玩家重复）；主机将在全员确认后才能开始。"
 	elif net.is_host and not net.are_all_players_character_selected():
 		character_hint.text = "等待其他玩家选择角色。"
 	else:
