@@ -37,6 +37,8 @@ var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
 var _next_bullet_id := 1
 ## 攻击冷却按「玩家 + Host 当前武器」独立记录，避免切换武器后互相影响。
 var _last_attack_msec: Dictionary = {}
+## Host 记录会锁定攻击输入的短时战斗动作（目前用于装填，单位为 Time.get_ticks_msec）。
+var _combat_busy_until_msec: Dictionary = {}
 var _snapshot_accumulator := 0.0
 var _input_accumulator := 0.0
 var _scene_path := ""
@@ -118,6 +120,8 @@ func _physics_process(delta: float) -> void:
 	if not local_menu_open:
 		_capture_weapon_switch_input()
 		_capture_weapon_raise_input()
+		_capture_reload_input()
+		_capture_shove_input()
 		_capture_fire_input()
 	if net.is_host:
 		_capture_host_input(local_menu_open)
@@ -223,6 +227,25 @@ func _request_weapon_switch(slot: String) -> void:
 	elif _initial_world_received:
 		# Client 只提交槽位意图；Host 从自身 PlayerState 校验真实装备。
 		weapon_switch_request.rpc_id(1, slot)
+
+
+func _capture_reload_input() -> void:
+	if not Input.is_action_just_pressed("装填键"):
+		return
+	if net.is_host:
+		_try_host_reload(int(net.my_peer_id))
+	elif _initial_world_received:
+		# Client 仅请求装填；Host 校验库存并一次性提交权威弹药结果。
+		reload_request.rpc_id(1)
+
+
+func _capture_shove_input() -> void:
+	if not Input.is_action_just_pressed("推击键"):
+		return
+	if net.is_host:
+		_try_host_shove(int(net.my_peer_id))
+	elif _initial_world_received:
+		shove_request.rpc_id(1)
 
 
 func _capture_fire_input() -> void:
@@ -395,6 +418,10 @@ func _get_attack_cooldown_msec(wd: WeaponData) -> int:
 	return int(roundi(seconds * 1000.0))
 
 
+func _is_host_combat_busy(peer_id: int) -> bool:
+	return Time.get_ticks_msec() < int(_combat_busy_until_msec.get(peer_id, 0))
+
+
 func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
@@ -403,7 +430,7 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
 		return
 	var wd := state.get_equipped_weapon(slot)
 	if not wd or state.active_weapon_slot == slot:
@@ -422,7 +449,7 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
 	var wd: WeaponData = state.get_active_weapon() if state else null
-	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0:
+	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
 		return
 	if node.is_weapon_mode_active():
 		node.exit_weapon_mode()
@@ -434,13 +461,132 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d raised=%s" % [peer_id, node.is_weapon_mode_active()])
 
 
+## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
+## 这样客户端永远不能伪造备用弹药或通过重复 RPC 多扣/多装。
+func _try_host_reload(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active():
+		return
+	var wd := state.get_active_weapon()
+	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
+		return
+	var current := state.get_magazine_ammo(wd.item_id)
+	var missing := maxi(0, wd.magazine_capacity - current)
+	var available := state.count_ammo_item(wd.ammo_item_id)
+	var load_count := mini(missing, available)
+	if load_count <= 0:
+		return
+	if state.consume_ammo_item(wd.ammo_item_id, load_count) != load_count:
+		return
+	state.set_magazine_ammo(wd.item_id, current + load_count)
+	var duration := _get_network_reload_duration(wd, load_count)
+	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
+	node.play_network_reload_presentation(wd, load_count)
+	reload_presentation.rpc(peer_id, wd.item_id, current + load_count, load_count)
+	print("[NetworkWorld] HOST_RELOAD peer=%d weapon=%s loaded=%d ammo=%d" % [peer_id, wd.item_id, load_count, current + load_count])
+
+
+func _get_network_reload_duration(wd: WeaponData, load_count: int) -> float:
+	if not wd:
+		return 0.1
+	var duration := wd.reload_wait_duration
+	if wd.reload_mode == WeaponData.ReloadMode.SHOTGUN:
+		for index: int in range(wd.get_shotgun_loop_char_sequence().size()):
+			duration += wd.get_shotgun_loop_frame_duration(index) * load_count
+		for index: int in range(wd.get_shotgun_end_char_sequence().size()):
+			duration += wd.get_shotgun_end_frame_duration(index)
+	else:
+		for index: int in range(wd.get_reload_char_sequence().size()):
+			duration += wd.get_reload_frame_duration(index)
+	return maxf(0.1, duration)
+
+
+## Host 权威推击：客户端只发送一次意图；命中查询、击退和疲劳均只在 Host 执行。
+func _try_host_shove(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove():
+		return
+	var wd := state.get_active_weapon()
+	if not wd:
+		return
+	var duration := maxf(0.05, wd.shove_frame_duration * wd.get_shove_char_sequence().size())
+	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
+	var facing := node.get_facing_vector()
+	node.on_shove_performed()
+	node.play_network_shove_presentation(wd)
+	shove_presentation.rpc(peer_id, wd.item_id)
+	_schedule_host_shove_hit(node, wd, facing)
+	print("[NetworkWorld] HOST_SHOVE peer=%d weapon=%s" % [peer_id, wd.item_id])
+
+
+func _schedule_host_shove_hit(node: CharacterBody2D, wd: WeaponData, facing: Vector2) -> void:
+	if not is_inside_tree():
+		return
+	var delay := wd.shove_frame_duration * clampi(wd.shove_hit_at_sequence_idx, 0, wd.get_shove_char_sequence().size())
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+	if is_inside_tree() and is_instance_valid(node) and node.is_inside_tree():
+		_perform_host_shove(node, wd, facing)
+
+
+func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2) -> void:
+	var shape := RectangleShape2D.new()
+	shape.size = wd.shove_range_size
+	var query := PhysicsShapeQueryParameters2D.new()
+	query.shape = shape
+	var center := node.global_position + facing * wd.shove_range_forward_offset
+	query.transform = Transform2D(0.0, center)
+	query.collision_mask = 24
+	query.exclude = [node.get_rid()]
+	query.collide_with_bodies = true
+	query.collide_with_areas = true
+	var results: Array[Dictionary] = node.get_world_2d().direct_space_state.intersect_shape(query, 64)
+	var hit_enemies: Dictionary = {}
+	for result: Dictionary in results:
+		var collider := result.get("collider") as Node
+		if not is_instance_valid(collider):
+			continue
+		for enemy_entry: Dictionary in _enemies.values():
+			var enemy := enemy_entry.get("node") as CharacterBody2D
+			if not is_instance_valid(enemy) or enemy.get("_is_dead") == true or (collider != enemy and not enemy.is_ancestor_of(collider)):
+				continue
+			var enemy_id := enemy.get_instance_id()
+			if not hit_enemies.has(enemy_id):
+				hit_enemies[enemy_id] = true
+				enemy.take_damage(0.0, wd.shove_knockback_force, facing, false, wd.shove_knockback_duration, 0.0, int(Time.get_ticks_msec()))
+				print("[NetworkWorld] HOST_SHOVE_HIT enemy=%s" % enemy.name)
+			break
+	if hit_enemies.is_empty() or wd.shove_splash_radius <= 0.0:
+		return
+	for enemy_entry: Dictionary in _enemies.values():
+		var enemy := enemy_entry.get("node") as CharacterBody2D
+		if not is_instance_valid(enemy) or enemy.get("_is_dead") == true or hit_enemies.has(enemy.get_instance_id()):
+			continue
+		var distance := enemy.global_position.distance_to(center)
+		if distance > wd.shove_splash_radius:
+			continue
+		var splash_direction := (enemy.global_position - center).normalized()
+		if splash_direction.is_zero_approx():
+			splash_direction = facing
+		var falloff := 1.0 - (distance / wd.shove_splash_radius) * 0.5
+		enemy.take_damage(0.0, wd.shove_knockback_force * falloff, splash_direction, false, wd.shove_knockback_duration * falloff, 0.0, int(Time.get_ticks_msec()))
+
+
 func _try_host_attack(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
 		return
 	# 武器完全从 Host 当前 PlayerState 读取，客户端 RPC 不携带 weapon_id/目标/伤害等参数。
 	var wd := state.get_active_weapon()
@@ -611,6 +757,51 @@ func fire_request() -> void:
 	if sender <= 1 or not _players.has(sender):
 		return
 	_try_host_attack(sender)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func shove_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_shove(sender)
+
+
+@rpc("authority", "call_remote", "reliable")
+func shove_presentation(peer_id: int, weapon_id: String) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if is_instance_valid(node) and wd:
+		node.play_network_shove_presentation(wd)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func reload_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_reload(sender)
+
+
+@rpc("authority", "call_remote", "reliable")
+func reload_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, loaded_count: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if not state or not is_instance_valid(node) or not wd:
+		return
+	state.set_magazine_ammo(wd.item_id, magazine_ammo)
+	node.play_network_reload_presentation(wd, loaded_count)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")

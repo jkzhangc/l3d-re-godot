@@ -378,6 +378,70 @@ func play_network_fire_presentation(wd: WeaponData) -> void:
 	play_network_attack_presentation(wd)
 
 
+## 联机装填表现只由 Host 的确认事件触发；弹药真实值仍由 NetworkWorld 快照收敛。
+func play_network_reload_presentation(wd: WeaponData, loaded_count: int) -> void:
+	if not wd:
+		return
+	_network_attack_token += 1
+	var token := _network_attack_token
+	enter_weapon_mode(wd)
+	player_in_weapon_state = true
+	lock_facing()
+	call_deferred("_run_network_reload_presentation", token, wd, maxi(1, loaded_count))
+
+
+## 推击同样只由 Host 确认后播放；真实击退判定不在此节点执行。
+func play_network_shove_presentation(wd: WeaponData) -> void:
+	if not wd:
+		return
+	_network_attack_token += 1
+	var token := _network_attack_token
+	enter_weapon_mode(wd)
+	player_in_weapon_state = true
+	enter_shove_mode()
+	lock_facing()
+	call_deferred("_run_network_shove_presentation", token, wd)
+
+
+func _run_network_shove_presentation(token: int, wd: WeaponData) -> void:
+	for index: int in range(wd.get_shove_char_sequence().size()):
+		if token != _network_attack_token or not is_inside_tree():
+			return
+		set_attack_char_index(wd.get_shove_char_sequence()[index])
+		await get_tree().create_timer(wd.shove_frame_duration).timeout
+	if token == _network_attack_token and is_inside_tree():
+		exit_shove_mode()
+		set_weapon_ready_frame()
+		player_in_weapon_state = false
+
+
+func _run_network_reload_presentation(token: int, wd: WeaponData, loaded_count: int) -> void:
+	if wd.reload_mode == WeaponData.ReloadMode.SHOTGUN:
+		for _shell: int in range(loaded_count):
+			for index: int in range(wd.get_shotgun_loop_char_sequence().size()):
+				if token != _network_attack_token or not is_inside_tree():
+					return
+				set_attack_char_index(wd.get_shotgun_loop_char_sequence()[index])
+				await get_tree().create_timer(wd.get_shotgun_loop_frame_duration(index)).timeout
+		for index: int in range(wd.get_shotgun_end_char_sequence().size()):
+			if token != _network_attack_token or not is_inside_tree():
+				return
+			set_attack_char_index(wd.get_shotgun_end_char_sequence()[index])
+			await get_tree().create_timer(wd.get_shotgun_end_frame_duration(index)).timeout
+	else:
+		for index: int in range(wd.get_reload_char_sequence().size()):
+			if token != _network_attack_token or not is_inside_tree():
+				return
+			set_attack_char_index(wd.get_reload_char_sequence()[index])
+			await get_tree().create_timer(wd.get_reload_frame_duration(index)).timeout
+	if token != _network_attack_token or not is_inside_tree():
+		return
+	await get_tree().create_timer(wd.reload_wait_duration).timeout
+	if token == _network_attack_token and is_inside_tree():
+		set_weapon_ready_frame()
+		player_in_weapon_state = false
+
+
 func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 	# 这个协程可能在 await 的下一帧遇到场景切换。不能缓存 SceneTree：节点离树后，
 	# 缓存的 tree 虽非 null，却不能再安全地用于 current_scene / create_timer。
