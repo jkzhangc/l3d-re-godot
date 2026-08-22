@@ -341,9 +341,17 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	_pending_scene_transition_acks.erase(peer_id)
 	remove_session_player_state(peer_id)
 	print("[Net] PEER_DISCONNECTED peer=%d" % peer_id)
-	player_list.rpc(_player_names.duplicate())
 	player_list_changed.emit()
+	# ENet 刚触发断线时，其余连接也可能正处于关闭事件队列中；延后一帧，只对仍可用的连接广播。
+	call_deferred("_broadcast_player_list_after_peer_left")
 	peer_left.emit(peer_id)
+
+
+func _broadcast_player_list_after_peer_left() -> void:
+	if not is_host or not has_network() or multiplayer.get_peers().is_empty():
+		return
+	player_list.rpc(_player_names.duplicate())
+
 
 func _sanitize_name(value: String) -> String:
 	var result := value.strip_edges()
