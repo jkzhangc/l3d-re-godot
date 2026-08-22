@@ -13,6 +13,8 @@ const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
 const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
 const NETWORK_SMG: WeaponData = preload("res://object/weapon_smg.tres")
 const NETWORK_SHOTGUN: WeaponData = preload("res://object/weapon_shotgun.tres")
+const NETWORK_GRENADE: ThrowableData = preload("res://object/item_grenade.tres")
+const NETWORK_MOLOTOV: ThrowableData = preload("res://object/item_molotov.tres")
 ## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
 const NETWORK_WEAPONS: Dictionary = {
 	"pistol_01": NETWORK_PISTOL,
@@ -20,6 +22,11 @@ const NETWORK_WEAPONS: Dictionary = {
 	"rifle_01": NETWORK_RIFLE,
 	"smg_01": NETWORK_SMG,
 	"shotgun_01": NETWORK_SHOTGUN,
+}
+## 投掷物同样必须由 Host 的固定白名单解析；客户端 RPC 绝不能指定资源或伤害。
+const NETWORK_THROWABLES: Dictionary = {
+	"grenade_01": NETWORK_GRENADE,
+	"molotov_01": NETWORK_MOLOTOV,
 }
 const SNAPSHOT_INTERVAL := 1.0 / 20.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 30.0
@@ -39,6 +46,15 @@ var _next_bullet_id := 1
 var _last_attack_msec: Dictionary = {}
 ## Host 记录会锁定攻击输入的短时战斗动作（目前用于装填，单位为 Time.get_ticks_msec）。
 var _combat_busy_until_msec: Dictionary = {}
+## peer_id -> {"held": bool, "aiming": bool, "range": int}; Host 是唯一写入者。
+var _network_throwable_state: Dictionary = {}
+## reviver peer -> {"target": peer_id, "started_msec": int}; only Host advances or completes revives.
+var _revive_attempts: Dictionary = {}
+## peer_id -> "raising" / "lowering"; published so late snapshots never reset transition presentation.
+var _weapon_transition_state: Dictionary = {}
+const REVIVE_RANGE := 52.0
+const REVIVE_DURATION_MSEC := 3000
+const REVIVE_HP_RATIO := 0.30
 var _snapshot_accumulator := 0.0
 var _input_accumulator := 0.0
 var _scene_path := ""
@@ -80,14 +96,18 @@ func _ready() -> void:
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
-			if _is_auto_enemy_test_scene():
+			if _is_auto_network_feature_test():
+				call_deferred("_run_auto_client_feature_test")
+			elif _is_auto_enemy_test_scene():
 				call_deferred("_run_auto_client_enemy_test")
 			elif _is_auto_safe_door_test_scene():
 				call_deferred("_run_auto_client_safe_door_test")
 			elif "--net-test-safe-door" not in OS.get_cmdline_user_args():
 				call_deferred("_run_auto_client_input_test")
 	if net.is_host:
-		if _is_auto_enemy_test_scene():
+		if _is_auto_network_feature_test():
+			call_deferred("_run_auto_host_feature_test")
+		elif _is_auto_enemy_test_scene():
 			call_deferred("_run_auto_host_enemy_test")
 		elif _is_auto_safe_door_test_scene():
 			call_deferred("_run_auto_host_safe_door_test")
@@ -118,14 +138,19 @@ func _physics_process(delta: float) -> void:
 		return
 	var local_menu_open := _is_local_menu_open()
 	if not local_menu_open:
-		_capture_weapon_switch_input()
-		_capture_weapon_raise_input()
-		_capture_reload_input()
-		_capture_shove_input()
-		_capture_fire_input()
+		# 救援与投掷均占用确定键，必须在普通战斗输入前优先处理。
+		var revive_input_active := _capture_revive_input()
+		var throwable_input_active := false if revive_input_active else _capture_throwable_input()
+		if not revive_input_active and not throwable_input_active:
+			_capture_weapon_switch_input()
+			_capture_weapon_raise_input()
+			_capture_reload_input()
+			_capture_shove_input()
+			_capture_fire_input()
 	if net.is_host:
 		_capture_host_input(local_menu_open)
 		_simulate_host_players(delta)
+		_update_host_revives()
 		_register_untracked_host_enemies()
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
@@ -203,6 +228,140 @@ func _client_initialize_world() -> void:
 	_prepare_client_preplaced_enemies()
 	_prepare_client_preplaced_pickups()
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
+
+
+func _find_revive_target_for(peer_id: int) -> int:
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := entry.get("node") as Node2D
+	if not is_instance_valid(node) or node.is_network_dead():
+		return 0
+	var closest_id := 0
+	var closest_distance := REVIVE_RANGE
+	for value: Variant in _players.keys():
+		var target_id := int(value)
+		if target_id == peer_id:
+			continue
+		var target_node := (_players[target_id] as Dictionary).get("node") as Node2D
+		if is_instance_valid(target_node) and target_node.is_network_dead():
+			var distance := node.global_position.distance_to(target_node.global_position)
+			if distance <= closest_distance:
+				closest_distance = distance
+				closest_id = target_id
+	return closest_id
+
+
+func _capture_revive_input() -> bool:
+	var peer_id := int(net.my_peer_id)
+	if Input.is_action_just_pressed("确定键"):
+		var target_id := _find_revive_target_for(peer_id)
+		if target_id > 0:
+			if net.is_host:
+				_try_host_start_revive(peer_id, target_id)
+			elif _initial_world_received:
+				# 本地仅记录按键占用，Host 仍会重新验证目标和距离。
+				_revive_attempts[peer_id] = {"target": target_id, "started_msec": 0}
+				revive_start_request.rpc_id(1, target_id)
+			return true
+	if Input.is_action_just_released("确定键") and _revive_attempts.has(peer_id):
+		if net.is_host:
+			_cancel_host_revive(peer_id)
+		elif _initial_world_received:
+			_revive_attempts.erase(peer_id)
+			revive_cancel_request.rpc_id(1)
+		return true
+	return _revive_attempts.has(peer_id)
+
+
+func _try_host_start_revive(reviver_id: int, target_id: int) -> void:
+	if not net.is_host or reviver_id == target_id or not _players.has(reviver_id) or not _players.has(target_id):
+		return
+	if _is_host_combat_busy(reviver_id) or _find_revive_target_for(reviver_id) != target_id:
+		return
+	_revive_attempts[reviver_id] = {"target": target_id, "started_msec": Time.get_ticks_msec()}
+	print("[NetworkWorld] HOST_REVIVE_START reviver=%d target=%d" % [reviver_id, target_id])
+
+
+func _cancel_host_revive(reviver_id: int) -> void:
+	if _revive_attempts.erase(reviver_id):
+		print("[NetworkWorld] HOST_REVIVE_CANCEL reviver=%d" % reviver_id)
+
+
+func _update_host_revives() -> void:
+	if not net.is_host or _revive_attempts.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	for value: Variant in _revive_attempts.keys().duplicate():
+		var reviver_id := int(value)
+		var attempt: Dictionary = _revive_attempts[reviver_id]
+		var target_id := int(attempt.get("target", 0))
+		if _find_revive_target_for(reviver_id) != target_id:
+			_cancel_host_revive(reviver_id)
+			continue
+		if now - int(attempt.get("started_msec", now)) < REVIVE_DURATION_MSEC:
+			continue
+		var target_entry: Dictionary = _players.get(target_id, {})
+		var target_node := target_entry.get("node") as CharacterBody2D
+		var target_state := target_entry.get("state") as PlayerState
+		if not is_instance_valid(target_node) or not target_state or not target_node.is_network_dead():
+			_cancel_host_revive(reviver_id)
+			continue
+		var hp := maxf(1.0, target_node.max_hp * REVIVE_HP_RATIO)
+		target_state.current_hp = hp
+		target_node.apply_network_revive_state(hp)
+		_revive_attempts.erase(reviver_id)
+		revive_presentation.rpc(target_id, hp)
+		print("[NetworkWorld] HOST_REVIVE_COMPLETE reviver=%d target=%d hp=%.1f" % [reviver_id, target_id, hp])
+
+
+func _capture_throwable_input() -> bool:
+	var local_id := int(net.my_peer_id)
+	var local_throw_state: Dictionary = _network_throwable_state.get(local_id, {})
+	var held := bool(local_throw_state.get("held", false))
+	var aiming := bool(local_throw_state.get("aiming", false))
+	if Input.is_action_just_pressed("投掷物键"):
+		if net.is_host:
+			_try_host_set_throwable_held(local_id, not held)
+		elif _initial_world_received:
+			throwable_hold_request.rpc_id(1, not held)
+		return true
+	if not held:
+		return false
+	if Input.is_action_just_pressed("主武器键") or Input.is_action_just_pressed("副武器键"):
+		if net.is_host:
+			_try_host_set_throwable_held(local_id, false)
+		elif _initial_world_received:
+			throwable_hold_request.rpc_id(1, false)
+		return true
+	if not aiming and Input.is_action_just_pressed("确定键"):
+		if net.is_host:
+			_try_host_set_throwable_aiming(local_id, true)
+		elif _initial_world_received:
+			throwable_aim_request.rpc_id(1, true)
+		return true
+	if aiming:
+		if Input.is_action_just_pressed("取消键"):
+			if net.is_host:
+				_try_host_set_throwable_aiming(local_id, false)
+			elif _initial_world_received:
+				throwable_aim_request.rpc_id(1, false)
+		elif Input.is_action_just_pressed("投掷加格键"):
+			_request_throwable_range(1)
+		elif Input.is_action_just_pressed("投掷减格键"):
+			_request_throwable_range(-1)
+		elif Input.is_action_just_released("确定键"):
+			if net.is_host:
+				_try_host_throw_throwable(local_id)
+			elif _initial_world_received:
+				throwable_throw_request.rpc_id(1)
+		return true
+	return true
+
+
+func _request_throwable_range(delta: int) -> void:
+	if net.is_host:
+		_try_host_adjust_throwable_range(int(net.my_peer_id), delta)
+	elif _initial_world_received:
+		throwable_range_request.rpc_id(1, clampi(delta, -1, 1))
 
 
 func _capture_weapon_switch_input() -> void:
@@ -301,6 +460,7 @@ func _simulate_host_players(_delta: float) -> void:
 		if not is_instance_valid(node):
 			continue
 		if node.has_method("is_network_dead") and node.is_network_dead():
+			_clear_host_combat_state_for_dead_peer(peer_id)
 			node.velocity = Vector2.ZERO
 			_set_input(peer_id, Vector2.ZERO, false)
 			_sync_state_from_node(peer_id, node, false, false)
@@ -405,6 +565,114 @@ func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
 	return NETWORK_WEAPONS.get(weapon_id) as WeaponData
 
 
+func _get_network_throwable_data_by_id(item_id: String) -> ThrowableData:
+	return NETWORK_THROWABLES.get(item_id) as ThrowableData
+
+
+func _get_host_throwable_state(peer_id: int) -> Dictionary:
+	return _network_throwable_state.get(peer_id, {"held": false, "aiming": false, "range": 3}) as Dictionary
+
+
+func _is_host_throwable_held(peer_id: int) -> bool:
+	return bool(_get_host_throwable_state(peer_id).get("held", false))
+
+
+## 玩家死亡后取消其投掷、主动救援和举放过渡；保留其他队友对该倒地玩家的救援进度。
+func _clear_host_combat_state_for_dead_peer(peer_id: int) -> void:
+	if not net.is_host:
+		return
+	if _is_host_throwable_held(peer_id):
+		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+		_apply_host_throwable_presentation(peer_id)
+	_revive_attempts.erase(peer_id)
+	_weapon_transition_state.erase(peer_id)
+	_combat_busy_until_msec.erase(peer_id)
+
+
+func _apply_host_throwable_presentation(peer_id: int) -> void:
+	if not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node):
+		return
+	var throw_state := _get_host_throwable_state(peer_id)
+	var td: ThrowableData = state.throwable if state else null
+	node.apply_network_throwable_presentation(td, bool(throw_state.get("held", false)), bool(throw_state.get("aiming", false)), int(throw_state.get("range", 3)))
+
+
+func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
+	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
+		return
+	var td: ThrowableData = state.throwable
+	if held and not td:
+		return
+	_network_throwable_state[peer_id] = {"held": held, "aiming": false, "range": clampi(int(_get_host_throwable_state(peer_id).get("range", 3)), 0, td.throw_range_max if td else 0)}
+	if held:
+		node.exit_weapon_mode()
+		node.unlock_facing()
+	_apply_host_throwable_presentation(peer_id)
+	throwable_state_presentation.rpc(peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", 3)))
+
+
+func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
+	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var throw_state := _get_host_throwable_state(peer_id)
+	var td: ThrowableData = state.throwable if state else null
+	if not is_instance_valid(node) or not td or not bool(throw_state.get("held", false)) or node.current_hp <= 0.0:
+		return
+	throw_state["aiming"] = aiming
+	_network_throwable_state[peer_id] = throw_state
+	_apply_host_throwable_presentation(peer_id)
+	throwable_state_presentation.rpc(peer_id, td.item_id, true, aiming, int(throw_state.get("range", 3)))
+
+
+func _try_host_adjust_throwable_range(peer_id: int, delta: int) -> void:
+	if not net.is_host or not _players.has(peer_id) or abs(delta) > 1:
+		return
+	var entry: Dictionary = _players[peer_id]
+	var state := entry.get("state") as PlayerState
+	var throw_state := _get_host_throwable_state(peer_id)
+	var td: ThrowableData = state.throwable if state else null
+	if not td or not bool(throw_state.get("held", false)) or not bool(throw_state.get("aiming", false)):
+		return
+	throw_state["range"] = clampi(int(throw_state.get("range", 3)) + delta, 0, td.throw_range_max)
+	_network_throwable_state[peer_id] = throw_state
+	_apply_host_throwable_presentation(peer_id)
+	throwable_state_presentation.rpc(peer_id, td.item_id, true, true, int(throw_state["range"]))
+
+
+func _try_host_throw_throwable(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var throw_state := _get_host_throwable_state(peer_id)
+	var td: ThrowableData = state.throwable if state else null
+	if not is_instance_valid(node) or not td or node.current_hp <= 0.0 or not bool(throw_state.get("held", false)) or not bool(throw_state.get("aiming", false)):
+		return
+	var start := node.global_position
+	var landing_position: Vector2 = start + node.get_facing_vector() * (clampi(int(throw_state.get("range", 3)), 0, td.throw_range_max) * 32.0)
+	state.throwable = null
+	_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+	node.apply_network_throwable_presentation(null, false, false, 3)
+	ThrowableProjectile.spawn(td, start, landing_position, node, true, false)
+	throwable_presentation.rpc(peer_id, td.item_id, start, landing_position)
+	throwable_state_presentation.rpc(peer_id, "", false, false, 3)
+	print("[NetworkWorld] HOST_THROWABLE peer=%d item=%s" % [peer_id, td.item_id])
+
+
 func _get_attack_cooldown_msec(wd: WeaponData) -> int:
 	var seconds := 0.0
 	if wd.is_ranged:
@@ -422,6 +690,22 @@ func _is_host_combat_busy(peer_id: int) -> bool:
 	return Time.get_ticks_msec() < int(_combat_busy_until_msec.get(peer_id, 0))
 
 
+func _get_network_weapon_transition_duration(wd: WeaponData) -> float:
+	if not wd:
+		return 0.1
+	var duration := 0.0
+	for index: int in range(wd.get_raise_char_sequence().size()):
+		duration += wd.get_raise_frame_duration(index)
+	return maxf(0.1, duration)
+
+
+func _clear_host_weapon_transition_after(peer_id: int, duration: float) -> void:
+	if duration > 0.0 and is_inside_tree():
+		await get_tree().create_timer(duration).timeout
+	if is_inside_tree():
+		_weapon_transition_state.erase(peer_id)
+
+
 func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
@@ -430,7 +714,7 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
 	var wd := state.get_equipped_weapon(slot)
 	if not wd or state.active_weapon_slot == slot:
@@ -449,16 +733,16 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
 	var wd: WeaponData = state.get_active_weapon() if state else null
-	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
+	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
-	if node.is_weapon_mode_active():
-		node.exit_weapon_mode()
-		node.unlock_facing()
-	else:
-		node.enter_weapon_mode(wd)
-		node.set_weapon_ready_frame()
-		node.lock_facing()
-	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d raised=%s" % [peer_id, node.is_weapon_mode_active()])
+	var raising: bool = not node.is_weapon_mode_active()
+	var duration := _get_network_weapon_transition_duration(wd)
+	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
+	_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
+	node.play_network_weapon_transition(wd, raising)
+	weapon_transition_presentation.rpc(peer_id, wd.item_id, raising)
+	_clear_host_weapon_transition_after(peer_id, duration)
+	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 
 
 ## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
@@ -469,7 +753,7 @@ func _try_host_reload(peer_id: int) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active():
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_throwable_held(peer_id):
 		return
 	var wd := state.get_active_weapon()
 	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
@@ -512,14 +796,14 @@ func _try_host_shove(peer_id: int) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove():
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove() or _is_host_throwable_held(peer_id):
 		return
 	var wd := state.get_active_weapon()
 	if not wd:
 		return
 	var duration := maxf(0.05, wd.shove_frame_duration * wd.get_shove_char_sequence().size())
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
-	var facing := node.get_facing_vector()
+	var facing: Vector2 = node.get_facing_vector()
 	node.on_shove_performed()
 	node.play_network_shove_presentation(wd)
 	shove_presentation.rpc(peer_id, wd.item_id)
@@ -586,7 +870,7 @@ func _try_host_attack(peer_id: int) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id):
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
 	# 武器完全从 Host 当前 PlayerState 读取，客户端 RPC 不携带 weapon_id/目标/伤害等参数。
 	var wd := state.get_active_weapon()
@@ -780,6 +1064,19 @@ func shove_presentation(peer_id: int, weapon_id: String) -> void:
 		node.play_network_shove_presentation(wd)
 
 
+@rpc("authority", "call_remote", "reliable")
+func weapon_transition_presentation(peer_id: int, weapon_id: String, raising: bool) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if is_instance_valid(node) and wd:
+		_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
+		node.play_network_weapon_transition(wd, raising)
+		_clear_host_weapon_transition_after(peer_id, _get_network_weapon_transition_duration(wd))
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func reload_request() -> void:
 	if not net.is_host:
@@ -802,6 +1099,99 @@ func reload_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, lo
 		return
 	state.set_magazine_ammo(wd.item_id, magazine_ammo)
 	node.play_network_reload_presentation(wd, loaded_count)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func revive_start_request(target_peer_id: int) -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_try_host_start_revive(sender, target_peer_id)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func revive_cancel_request() -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_cancel_host_revive(sender)
+
+
+@rpc("authority", "call_remote", "reliable")
+func revive_presentation(target_peer_id: int, hp: float) -> void:
+	if net.is_host or not _players.has(target_peer_id):
+		return
+	var entry: Dictionary = _players[target_peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if state:
+		state.current_hp = hp
+	if is_instance_valid(node):
+		node.apply_network_revive_state(hp)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func throwable_hold_request(held: bool) -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_try_host_set_throwable_held(sender, held)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func throwable_aim_request(aiming: bool) -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_try_host_set_throwable_aiming(sender, aiming)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func throwable_range_request(delta: int) -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_try_host_adjust_throwable_range(sender, delta)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func throwable_throw_request() -> void:
+	if net.is_host:
+		var sender := multiplayer.get_remote_sender_id()
+		if sender > 1:
+			_try_host_throw_throwable(sender)
+
+
+@rpc("authority", "call_remote", "reliable")
+func throwable_state_presentation(peer_id: int, throwable_id: String, held: bool, aiming: bool, range_tiles: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	var td := _get_network_throwable_data_by_id(throwable_id)
+	# Host 永远只会发白名单 ID；客户端遇到无效包时安全降级为放下，不能保留旧持物状态。
+	var valid_held := held and td != null
+	if state:
+		# held 只描述表现；只要 Host 仍带着合法 throwable_id，背包中的投掷物就不能被错误清空。
+		state.throwable = td
+	_network_throwable_state[peer_id] = {"held": valid_held, "aiming": aiming and valid_held, "range": clampi(range_tiles, 0, td.throw_range_max if td else 0)}
+	if is_instance_valid(node):
+		node.apply_network_throwable_presentation(td, valid_held, aiming and valid_held, range_tiles)
+
+
+@rpc("authority", "call_remote", "reliable")
+func throwable_presentation(peer_id: int, throwable_id: String, start_position: Vector2, end_position: Vector2) -> void:
+	if net.is_host:
+		return
+	var td := _get_network_throwable_data_by_id(throwable_id)
+	if not td:
+		return
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := entry.get("node") as Node2D
+	if not is_instance_valid(node):
+		return
+	ThrowableProjectile.spawn(td, start_position, end_position, node, false, false)
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
@@ -1017,7 +1407,13 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 	if packet_magazines is Dictionary:
 		state.weapon_magazines = (packet_magazines as Dictionary).duplicate()
 	var remote_weapon := state.get_active_weapon()
-	if bool(public_state.get("weapon_raised", false)) and remote_weapon:
+	var transition := str(public_state.get("weapon_transition", ""))
+	if not transition.is_empty() and remote_weapon:
+		# 正常 Client 会先收到可靠表现 RPC；这里只服务于晚加入/丢包后的可见收敛。
+		if not _weapon_transition_state.has(node.network_entity_id):
+			_weapon_transition_state[node.network_entity_id] = transition
+			node.play_network_weapon_transition(remote_weapon, transition == "raising")
+	elif bool(public_state.get("weapon_raised", false)) and remote_weapon:
 		if not node.is_weapon_mode_active() or node.get_network_weapon_id() != remote_weapon.item_id:
 			node.enter_weapon_mode(remote_weapon)
 			node.set_weapon_ready_frame()
@@ -1082,6 +1478,13 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
 		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
 		var remote_weapon := _apply_client_weapon_snapshot(state, node, public_state)
+		var remote_throwable := _get_network_throwable_data_by_id(str(public_state.get("throwable_id", "")))
+		var throwable_held := bool(public_state.get("throwable_held", false)) and remote_throwable != null
+		var throwable_aiming := bool(public_state.get("throwable_aiming", false)) and throwable_held
+		var throwable_range := clampi(int(public_state.get("throw_range", 3)), 0, remote_throwable.throw_range_max if remote_throwable else 0)
+		state.throwable = remote_throwable
+		_network_throwable_state[peer_id] = {"held": throwable_held, "aiming": throwable_aiming, "range": throwable_range}
+		node.apply_network_throwable_presentation(remote_throwable, throwable_held, throwable_aiming, throwable_range)
 		if remote_weapon and remote_weapon.is_ranged:
 			state.set_magazine_ammo(
 				remote_weapon.item_id,
@@ -1184,6 +1587,12 @@ func _remove_client_enemy(entity_id: int) -> void:
 
 
 func _remove_player(peer_id: int) -> void:
+	_revive_attempts.erase(peer_id)
+	_network_throwable_state.erase(peer_id)
+	_weapon_transition_state.erase(peer_id)
+	for key: Variant in _revive_attempts.keys().duplicate():
+		if int((_revive_attempts[key] as Dictionary).get("target", 0)) == peer_id:
+			_revive_attempts.erase(key)
 	# 客户端在场景切换/丢失包期间绝不能因非完整快照销毁自己的预置实体。
 	if not net.is_host and peer_id == int(net.my_peer_id):
 		return
@@ -1548,6 +1957,137 @@ func safe_door_ready_status(door_key: String, ready_count: int, total_count: int
 # ---------------------------------------------------------------- Automated smoke input
 
 ## 受控双端回归：生产安全门仍只接受真实本地按键请求；此逻辑只在显式无头测试参数下运行。
+func _is_auto_network_feature_test() -> bool:
+	return "--net-test-features" in OS.get_cmdline_user_args()
+
+
+## 单一双端回归覆盖：客户端投掷物输入、Host 权威消费、死亡救援与举放武器过渡。
+## 测试只在明确 --net-test-features 下运行，正式游戏完全不会进入此分支。
+func _run_auto_host_feature_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while net.get_peer_ids().size() < 2 and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not is_inside_tree() or not net.is_host or net.get_peer_ids().size() < 2:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_SETUP_FAILED missing_client")
+		return
+	var client_id := 0
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			client_id = peer_id
+			break
+	var client_entry: Dictionary = _players.get(client_id, {})
+	var client_state := client_entry.get("state") as PlayerState
+	if client_id <= 1 or not client_state:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_SETUP_FAILED missing_client_state")
+		return
+	# 此测试不依赖常规回归启动参数：明确配置白名单内的有效主/副武器，
+	# 这样后续真实 toggle RPC 一定有可验证的 Host 权威武器状态。
+	client_state.equipment["primary"] = NETWORK_PISTOL
+	client_state.equipment["secondary"] = NETWORK_KNIFE
+	client_state.active_weapon_slot = "primary"
+	client_state.set_magazine_ammo(NETWORK_PISTOL.item_id, NETWORK_PISTOL.magazine_capacity)
+	client_state.throwable = NETWORK_GRENADE
+	world_snapshot.rpc_id(client_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	deadline = Time.get_ticks_msec() + 6000
+	while client_state.throwable != null and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if client_state.throwable != null:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_THROWABLE_FAILED not_consumed")
+		return
+	var host_entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var host_node := host_entry.get("node") as CharacterBody2D
+	var client_node := client_entry.get("node") as CharacterBody2D
+	if not is_instance_valid(host_node) or not is_instance_valid(client_node):
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_SETUP_FAILED missing_node")
+		return
+	_set_auto_test_player_position(client_id, host_node.global_position + Vector2(12.0, 0.0))
+	host_node.take_damage(host_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998801)
+	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 4000
+	while host_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if host_node.is_network_dead() or host_node.current_hp <= 0.0:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_FAILED hp=%.1f" % host_node.current_hp)
+		return
+	print("[NetworkWorld] AUTO_FEATURE_HOST_COMPLETE revived_hp=%.1f" % host_node.current_hp)
+	# Client 接下来还要完成两段武器过渡；避免无头 Host 留在场景中导致测试器超时。
+	await get_tree().create_timer(6.0).timeout
+	if is_inside_tree() and net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
+func _run_auto_client_feature_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while not _initial_world_received and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var local_id := int(net.my_peer_id)
+	var entry: Dictionary = _players.get(local_id, {})
+	var state := entry.get("state") as PlayerState
+	while (not state or state.throwable == null) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+		entry = _players.get(local_id, {})
+		state = entry.get("state") as PlayerState
+	if not state or state.throwable != NETWORK_GRENADE:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_THROWABLE_SETUP_FAILED item=%s" % [state.throwable.item_id if state and state.throwable else "<none>"])
+		return
+	throwable_hold_request.rpc_id(1, true)
+	await get_tree().create_timer(0.15).timeout
+	throwable_aim_request.rpc_id(1, true)
+	await get_tree().create_timer(0.15).timeout
+	throwable_range_request.rpc_id(1, 1)
+	await get_tree().create_timer(0.15).timeout
+	throwable_throw_request.rpc_id(1)
+	deadline = Time.get_ticks_msec() + 3500
+	while state.throwable != null and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if state.throwable != null:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_THROWABLE_FAILED not_consumed")
+		return
+	# Host 在投掷校验结束后会令自己倒地；客户端必须以真实 RPC 请求救援。
+	var host_entry: Dictionary = _players.get(1, {})
+	var host_node := host_entry.get("node") as CharacterBody2D
+	deadline = Time.get_ticks_msec() + 4000
+	while (not is_instance_valid(host_node) or not host_node.is_network_dead()) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+		host_entry = _players.get(1, {})
+		host_node = host_entry.get("node") as CharacterBody2D
+	if not is_instance_valid(host_node) or not host_node.is_network_dead():
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_REVIVE_SETUP_FAILED host_dead=%s" % [is_instance_valid(host_node) and host_node.is_network_dead()])
+		return
+	revive_start_request.rpc_id(1, 1)
+	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 2500
+	while host_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if host_node.is_network_dead() or host_node.current_hp <= 0.0:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_REVIVE_FAILED hp=%.1f" % [host_node.current_hp if is_instance_valid(host_node) else -1.0])
+		return
+	entry = _players.get(local_id, {})
+	state = entry.get("state") as PlayerState
+	var local_node := entry.get("node") as CharacterBody2D
+	var active_weapon: WeaponData = state.get_active_weapon() if state else null
+	if not is_instance_valid(local_node) or not active_weapon:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_TRANSITION_SETUP_FAILED node=%s weapon=%s" % [is_instance_valid(local_node), active_weapon != null])
+		return
+	var transition_wait := _get_network_weapon_transition_duration(active_weapon) + 0.30
+	# 先统一到放下状态；不假设客户端初始表现是否已由场景/快照切换为举起。
+	if local_node.is_weapon_mode_active():
+		weapon_toggle_request.rpc_id(1)
+		await get_tree().create_timer(transition_wait).timeout
+	weapon_toggle_request.rpc_id(1)
+	await get_tree().create_timer(transition_wait).timeout
+	var raised: bool = local_node.is_weapon_mode_active()
+	weapon_toggle_request.rpc_id(1)
+	await get_tree().create_timer(transition_wait).timeout
+	var lowered: bool = not local_node.is_weapon_mode_active()
+	if not raised or not lowered:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_TRANSITION_FAILED raised=%s lowered=%s" % [raised, lowered])
+		return
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_COMPLETE throwable=true revive=true transition=true")
+	await get_tree().create_timer(0.20).timeout
+	net.leave()
+	get_tree().quit()
+
+
 func _is_auto_enemy_test_scene() -> bool:
 	return "--net-test-enemies" in OS.get_cmdline_user_args() and "突袭-第一关-街道" in _scene_path
 
@@ -2028,6 +2568,11 @@ func _public_state(peer_id: int) -> Dictionary:
 		"active_weapon_slot": state.active_weapon_slot if state else "primary",
 		"weapon_magazines": state.weapon_magazines.duplicate() if state else {},
 		"weapon_raised": node.is_weapon_mode_active() if is_instance_valid(node) else false,
+		"weapon_transition": str(_weapon_transition_state.get(peer_id, "")),
+		"throwable_id": state.throwable.item_id if state and state.throwable else "",
+		"throwable_held": bool(_get_host_throwable_state(peer_id).get("held", false)),
+		"throwable_aiming": bool(_get_host_throwable_state(peer_id).get("aiming", false)),
+		"throw_range": int(_get_host_throwable_state(peer_id).get("range", 3)),
 		"dead": node.is_network_dead() if is_instance_valid(node) else true,
 		"magazine_ammo": state.get_magazine_ammo(weapon.item_id) if state and weapon else 0,
 	}

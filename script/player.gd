@@ -94,6 +94,8 @@ var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏
 var _throwable_mode: bool = false           ## 是否处于投掷物举起模式（使用投掷物行走图）
 var _throwable_texture: Texture2D = null    ## 投掷物举起行走图精灵表
 var _throwable_char_idx: int = 0            ## 投掷物举起行走图角色索引
+var _network_throw_aim_indicator: Node2D = null
+const THROW_AIM_INDICATOR_SCRIPT := preload("res://script/throw_aim_indicator.gd")
 var _near_pickup: bool = false            ## 玩家是否在武器拾取物范围内（由 weapon_pickup 设置）
 var _switch_on_death_attempted: bool = false  ## 是否已尝试死亡切换
 var current_hp: float = 200.0
@@ -270,7 +272,7 @@ func apply_network_health_state(new_hp: float, is_dead: bool, play_feedback: boo
 			_apply_network_death_state()
 		return
 	if _is_dying:
-		return
+		apply_network_revive_state(current_hp)
 	if play_feedback and current_hp < previous_hp:
 		var damage := previous_hp - current_hp
 		_play_hit_feedback(Color.RED)
@@ -278,6 +280,32 @@ func apply_network_health_state(new_hp: float, is_dead: bool, play_feedback: boo
 		if tree and tree.current_scene:
 			DamageNumber.spawn(global_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
 		_play_sound(hurt_sound)
+
+
+func apply_network_revive_state(hp: float) -> void:
+	if not network_controlled:
+		return
+	current_hp = clampf(hp, 1.0, max_hp)
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = current_hp
+	_is_dying = false
+	_death_phase = 0
+	_death_fade_timer = 0.0
+	_moving = false
+	player_in_weapon_state = false
+	velocity = Vector2.ZERO
+	exit_shove_mode()
+	exit_throwable_mode()
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", false)
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", true)
+		hurt_area.set_deferred("monitorable", true)
+	if animation_timer:
+		animation_timer.start()
+	_refresh_sprite()
+	print("[玩家] 联机救援复活 HP=%.1f" % current_hp)
 
 
 func _disable_network_state_machine() -> void:
@@ -359,6 +387,38 @@ func set_weapon_ready_frame() -> void:
 func set_attack_char_index(char_idx: int) -> void:
 	_current_weapon_char_idx = char_idx
 	_refresh_sprite()
+
+
+## 联机举起/放下必须由 Host 确认后播放，过渡期间 NetworkWorld 会锁住其他战斗输入。
+func play_network_weapon_transition(wd: WeaponData, raising: bool) -> void:
+	if not wd:
+		return
+	_network_attack_token += 1
+	var token := _network_attack_token
+	enter_weapon_mode(wd)
+	player_in_weapon_state = true
+	lock_facing()
+	call_deferred("_run_network_weapon_transition", token, wd, raising)
+
+
+func _run_network_weapon_transition(token: int, wd: WeaponData, raising: bool) -> void:
+	var sequence: Array[int] = wd.get_raise_char_sequence()
+	if not raising:
+		sequence.reverse()
+	for index: int in range(sequence.size()):
+		if token != _network_attack_token or not is_inside_tree():
+			return
+		set_attack_char_index(sequence[index])
+		var source_index := index if raising else wd.get_raise_char_sequence().size() - 1 - index
+		await get_tree().create_timer(wd.get_raise_frame_duration(source_index)).timeout
+	if token != _network_attack_token or not is_inside_tree():
+		return
+	if raising:
+		set_weapon_ready_frame()
+	else:
+		exit_weapon_mode()
+		unlock_facing()
+	player_in_weapon_state = false
 
 
 ## 联机攻击只负责本地表现；子弹、弹药和伤害均由 NetworkWorld 的 Host 权威处理。
@@ -508,6 +568,33 @@ func exit_shove_mode() -> void:
 
 
 ## 进入投掷物举起模式：切换投掷物行走图（完整持物外观，跟随朝向+踏步）
+func apply_network_throwable_presentation(td: ThrowableData, held: bool, aiming: bool, range_tiles: int) -> void:
+	if not held or not td:
+		exit_throwable_mode()
+		if _network_throw_aim_indicator and is_instance_valid(_network_throw_aim_indicator):
+			_network_throw_aim_indicator.queue_free()
+		_network_throw_aim_indicator = null
+		unlock_facing()
+		return
+	exit_weapon_mode()
+	enter_throwable_mode(td)
+	if aiming:
+		lock_facing()
+		if not _network_throw_aim_indicator or not is_instance_valid(_network_throw_aim_indicator):
+			_network_throw_aim_indicator = Node2D.new()
+			_network_throw_aim_indicator.name = "NetworkThrowAimIndicator"
+			_network_throw_aim_indicator.z_index = 5
+			_network_throw_aim_indicator.set_script(THROW_AIM_INDICATOR_SCRIPT)
+			add_child(_network_throw_aim_indicator)
+		_network_throw_aim_indicator.direction = get_facing_vector()
+		_network_throw_aim_indicator.range_tiles = clampi(range_tiles, 0, td.throw_range_max)
+	else:
+		unlock_facing()
+		if _network_throw_aim_indicator and is_instance_valid(_network_throw_aim_indicator):
+			_network_throw_aim_indicator.queue_free()
+		_network_throw_aim_indicator = null
+
+
 func enter_throwable_mode(td: ThrowableData) -> void:
 	_throwable_mode = true
 	_throwable_texture = td.held_walk_texture if td else null
@@ -947,6 +1034,7 @@ func _apply_network_death_state() -> void:
 	velocity = Vector2.ZERO
 	_weapon_mode = false
 	_weapon_data = null
+	apply_network_throwable_presentation(null, false, false, 0)
 	_shove_mode = false
 	_shove_texture = null
 	if animation_timer:

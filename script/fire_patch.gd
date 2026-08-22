@@ -21,9 +21,11 @@ var _tick_timer: float = 0.0
 var _frame: int = 0
 var _frame_timer: float = 0.0
 var _fire_sprites: Array[Sprite2D] = []
+var _authoritative: bool = true
+var _damage_players: bool = true
 
 
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node) -> void:
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -31,6 +33,8 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._tick_interval = tick_interval
 	patch._char_idx = char_idx
 	patch._ambient_sound = ambient_sound
+	patch._authoritative = authoritative
+	patch._damage_players = damage_players
 	patch.global_position = pos
 	parent.add_child(patch)
 	patch._build_fire()
@@ -92,11 +96,12 @@ func _process(delta: float) -> void:
 		for s: Sprite2D in _fire_sprites:
 			s.region_rect = _fire_region(_frame)
 
-	# 灼烧（敌人 + 玩家）
-	_tick_timer += delta
-	if _tick_timer >= _tick_interval:
-		_tick_timer = 0.0
-		_burn()
+	# 伤害只在权威端执行；客户端仅显示火焰和音效。
+	if _authoritative:
+		_tick_timer += delta
+		if _tick_timer >= _tick_interval:
+			_tick_timer = 0.0
+			_burn()
 
 	# 熄灭
 	if _elapsed >= _duration:
@@ -105,7 +110,7 @@ func _process(delta: float) -> void:
 
 func _burn() -> void:
 	var radius_px: float = _radius * 32.0 + 16.0
-	for group: StringName in [&"enemy", &"player"]:
+	for group: StringName in ([&"enemy", &"player"] if _damage_players else [&"enemy"]):
 		for n: Node in get_tree().get_nodes_in_group(group):
 			if n is Node2D and (n as Node2D).global_position.distance_to(global_position) <= radius_px:
 				if (n as Node2D).has_method("take_damage"):

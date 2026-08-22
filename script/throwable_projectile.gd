@@ -12,13 +12,17 @@ var _sprite: Sprite2D = null
 var _shadow: Sprite2D = null
 var _arc_height: float = 0.0   ## 抛物线最高点（像素）
 var _spin_speed: float = 0.0    ## 旋转速度（弧度/秒）
+var _authoritative: bool = true
+var _damage_players: bool = true
 
 
-static func spawn(td: ThrowableData, start: Vector2, end: Vector2, thrower: Node2D) -> void:
+static func spawn(td: ThrowableData, start: Vector2, end: Vector2, thrower: Node2D, authoritative: bool = true, damage_players: bool = true) -> void:
 	var proj := ThrowableProjectile.new()
 	proj._td = td
 	proj._start = start
 	proj._end = end
+	proj._authoritative = authoritative
+	proj._damage_players = damage_players
 	var scene := thrower.get_tree().current_scene
 	scene.add_child(proj)
 	proj.global_position = start
@@ -68,10 +72,10 @@ func _land() -> void:
 		Global.play_sfx_managed(_td.explode_sound, get_tree().current_scene)
 	if _td.explode_effect_anim:
 		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, get_tree().current_scene)
-	if _td.explosion_radius > 0:
+	if _authoritative and _td.explosion_radius > 0:
 		_explode()
 	if _td.fire_radius > 0:
-		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene)
+		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players)
 	queue_free()
 
 
