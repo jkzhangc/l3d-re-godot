@@ -156,7 +156,8 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(net) or _scene_transitioning:
 		return
 	var local_menu_open := _is_local_menu_open()
-	if not local_menu_open:
+	var local_player_alive := _is_local_player_alive()
+	if not local_menu_open and local_player_alive:
 		# 救援与投掷均占用确定键，必须在普通战斗输入前优先处理。
 		var revive_input_active := _capture_revive_input()
 		var throwable_input_active := false if revive_input_active else _capture_throwable_input()
@@ -168,7 +169,7 @@ func _physics_process(delta: float) -> void:
 			_capture_shove_input()
 			_capture_fire_input()
 	if net.is_host:
-		_capture_host_input(local_menu_open)
+		_capture_host_input(local_menu_open or not local_player_alive)
 		_simulate_host_players(delta)
 		_update_host_revives()
 		_register_untracked_host_enemies()
@@ -179,7 +180,7 @@ func _physics_process(delta: float) -> void:
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			player_snapshot.rpc(_build_snapshot(), _build_enemy_snapshot(true))
 	else:
-		_capture_client_input(delta, local_menu_open)
+		_capture_client_input(delta, local_menu_open or not local_player_alive)
 
 
 func _is_local_menu_open() -> bool:
@@ -196,6 +197,14 @@ func is_local_weapon_mode_active() -> bool:
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := entry.get("node") as CharacterBody2D
 	return is_instance_valid(node) and node.is_weapon_mode_active()
+
+
+func _is_local_player_alive() -> bool:
+	if not is_instance_valid(net):
+		return false
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	return is_instance_valid(node) and not node.is_network_dead() and node.current_hp > 0.0
 
 
 # ---------------------------------------------------------------- Host simulation
@@ -1345,6 +1354,11 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _players.has(sender):
 		return
+	var entry: Dictionary = _players.get(sender, {})
+	var node := entry.get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.is_network_dead():
+		_set_input(sender, Vector2.ZERO, false)
+		return
 	_set_input(sender, direction, walking)
 
 
@@ -1639,10 +1653,17 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	# 客户端角色会永远停在同一张行走帧上。
 	if snap:
 		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), _packet_position(public_state), int(public_state.get("facing", 0)), true)
-	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), bool(public_state.get("dead", false)), not snap)
-	node.apply_network_presentation(_packet_position(public_state), int(public_state.get("facing", 0)), bool(public_state.get("moving", false)), bool(public_state.get("walking", false)), snap)
-	entry["moving"] = bool(public_state.get("moving", false))
-	entry["walking"] = bool(public_state.get("walking", false))
+	var is_dead := bool(public_state.get("dead", false))
+	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
+	node.apply_network_presentation(
+		_packet_position(public_state),
+		int(public_state.get("facing", 0)),
+		false if is_dead else bool(public_state.get("moving", false)),
+		false if is_dead else bool(public_state.get("walking", false)),
+		snap
+	)
+	entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
+	entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
 	_players[peer_id] = entry
 
 
@@ -2211,6 +2232,29 @@ func _run_auto_host_feature_test() -> void:
 	if host_node.is_network_dead() or host_node.current_hp <= 0.0:
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_FAILED hp=%.1f" % host_node.current_hp)
 		return
+	# 接着验证 Client 自身倒地：Host 必须清空其陈旧输入，客户端必须冻结死亡位置。
+	client_node.take_damage(client_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998803)
+	deadline = Time.get_ticks_msec() + 2000
+	while not client_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not client_node.is_network_dead():
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_CLIENT_DEATH_SETUP_FAILED")
+		return
+	await get_tree().create_timer(0.90).timeout
+	var client_entry_after_death: Dictionary = _players.get(client_id, {})
+	var client_input: Vector2 = client_entry_after_death.get("input", Vector2.ZERO)
+	var client_marked_stopped := not bool(client_entry_after_death.get("moving", false)) and client_input.is_zero_approx()
+	_try_host_start_revive(int(net.my_peer_id), client_id)
+	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 2500
+	while client_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if client_node.is_network_dead() or client_node.current_hp <= 0.0:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_CLIENT_REVIVE_FAILED hp=%.1f" % client_node.current_hp)
+		return
+	print("[NetworkWorld] AUTO_FEATURE_HOST_CLIENT_DEATH_COMPLETE stopped=%s revived_hp=%.1f" % [client_marked_stopped, client_node.current_hp])
+	if not client_marked_stopped:
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_CLIENT_DEATH_FAILED stopped=false")
+		return
 	print("[NetworkWorld] AUTO_FEATURE_HOST_COMPLETE revived_hp=%.1f" % host_node.current_hp)
 	# Client 接下来还要完成武器举放与固定朝向回归；Host 必须持续在线直到请求已被权威处理。
 	await get_tree().create_timer(15.0).timeout
@@ -2286,6 +2330,36 @@ func _run_auto_client_feature_test() -> void:
 	entry = _players.get(local_id, {})
 	state = entry.get("state") as PlayerState
 	var local_node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(local_node):
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_SETUP_FAILED missing_local_node")
+		return
+	deadline = Time.get_ticks_msec() + 4000
+	while not local_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not local_node.is_network_dead():
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_SETUP_FAILED local_dead=false")
+		return
+	await get_tree().process_frame
+	var collision_shape := local_node.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	var collision_disabled := is_instance_valid(collision_shape) and collision_shape.disabled
+	# 直接提交死亡后的移动意图；Host 入口必须忽略它，客户端的位置也不能继续漂移。
+	await get_tree().create_timer(0.20).timeout
+	var death_position := local_node.global_position
+	submit_input.rpc_id(1, Vector2.RIGHT, false)
+	await get_tree().create_timer(0.40).timeout
+	var frozen := local_node.global_position.distance_to(death_position) <= 0.5
+	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 3500
+	while local_node.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if local_node.is_network_dead() or local_node.current_hp <= 0.0:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_REVIVE_FAILED hp=%.1f" % local_node.current_hp)
+		return
+	await get_tree().process_frame
+	var collision_restored := is_instance_valid(collision_shape) and not collision_shape.disabled
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_COMPLETE frozen=%s collision_disabled=%s collision_restored=%s revived=true" % [frozen, collision_disabled, collision_restored])
+	if not frozen or not collision_disabled or not collision_restored:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_FAILED frozen=%s collision_disabled=%s collision_restored=%s" % [frozen, collision_disabled, collision_restored])
+		return
 	var active_weapon: WeaponData = state.get_active_weapon() if state else null
 	if not is_instance_valid(local_node) or not active_weapon:
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_TRANSITION_SETUP_FAILED node=%s weapon=%s" % [is_instance_valid(local_node), active_weapon != null])

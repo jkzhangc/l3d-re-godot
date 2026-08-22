@@ -204,7 +204,8 @@ func _setup_hurt_area() -> Area2D:
 
 func _process(delta: float) -> void:
 	if network_controlled:
-		if _network_has_target:
+		# 死亡快照必须停在 Host 给出的死亡坐标，不能继续向旧移动目标插值。
+		if not _is_dying and _network_has_target:
 			global_position = global_position.lerp(_network_target_position, minf(delta * 16.0, 1.0))
 		return
 	if _is_dying:
@@ -247,6 +248,10 @@ func apply_network_spawn_state(character: CharacterData, hp: float, new_position
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, walking: bool, snap: bool = false) -> void:
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	if _is_dying:
+		# 对齐 Host 权威死亡坐标，并丢弃死亡前尚未完成的插值目标。
+		global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = false
 		return
 	update_appearance(moving, walking)
 	if snap:
@@ -299,6 +304,9 @@ func apply_network_revive_state(hp: float) -> void:
 	_moving = false
 	player_in_weapon_state = false
 	velocity = Vector2.ZERO
+	# 不继承死亡前的网络移动插值；下一个快照会重新建立有效目标。
+	_network_target_position = global_position
+	_network_has_target = false
 	exit_shove_mode()
 	exit_throwable_mode()
 	if $CollisionShape2D:
@@ -1046,6 +1054,9 @@ func _apply_network_death_state() -> void:
 	_is_dying = true
 	_death_phase = 3
 	_moving = false
+	# 冻结远端实体，避免延迟快照把死亡表现继续向旧目标位置拖动。
+	_network_target_position = global_position
+	_network_has_target = false
 	player_in_weapon_state = false
 	velocity = Vector2.ZERO
 	_weapon_mode = false
