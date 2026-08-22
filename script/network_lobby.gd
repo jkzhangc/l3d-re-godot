@@ -65,9 +65,9 @@ func _run_auto_host() -> void:
 	_refresh_ui()
 	print("[AUTO] host 房间已创建，等待完成握手的 client ...")
 	var deadline := Time.get_ticks_msec() + int(AUTO_HOST_TIMEOUT * 1000.0)
-	while net.get_player_names().size() < 2 and Time.get_ticks_msec() < deadline:
+	while net.get_player_names().size() < _get_auto_expected_player_count() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
-	if net.get_player_names().size() < 2:
+	if net.get_player_names().size() < _get_auto_expected_player_count():
 		printerr("[AUTO] host 等待 client 握手超时")
 		get_tree().quit(1)
 		return
@@ -77,7 +77,7 @@ func _run_auto_host() -> void:
 
 
 func _run_auto_client() -> void:
-	net.player_name = "ClientAuto"
+	net.player_name = _get_auto_client_name()
 	_set_connect_buttons_disabled(true)
 	var err: Error = net.join_game("127.0.0.1")
 	if err != OK:
@@ -85,6 +85,21 @@ func _run_auto_client() -> void:
 		get_tree().quit(1)
 		return
 	print("[AUTO] client 已发起加入，等待握手和 host 开始游戏 ...")
+
+
+func _get_auto_expected_player_count() -> int:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test-players="):
+			return clampi(int(argument.trim_prefix("--net-test-players=")), 2, 4)
+	return 2
+
+
+func _get_auto_client_name() -> String:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test-client-role="):
+			var role := argument.trim_prefix("--net-test-client-role=").strip_edges().capitalize()
+			return "Client" + (role if not role.is_empty() else "Auto")
+	return "ClientAuto"
 
 
 func _get_game_scene_for_launch() -> String:

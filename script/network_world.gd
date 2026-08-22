@@ -77,6 +77,8 @@ var _auto_client_attack_weapon_id := ""
 var _auto_client_player_hurt_presentations := 0
 var _auto_client_enemy_hurt_presentations := 0
 var _auto_client_ready_input_seen_by_host := false
+## --net-test-multi-disconnect 专用：Host 在玩家断线后通知留在房间的 Client 校验收敛。
+var _auto_multi_disconnect_complete := false
 ## 避免依赖编辑器正在重载的全局 Autoload 标识符；运行时取常驻 Net 节点。
 var net: Variant = null
 
@@ -110,7 +112,9 @@ func _ready() -> void:
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
-			if _is_auto_network_feature_test():
+			if _is_auto_multi_disconnect_test():
+				call_deferred("_run_auto_client_multi_disconnect_test")
+			elif _is_auto_network_feature_test():
 				call_deferred("_run_auto_client_feature_test")
 			elif _is_auto_client_ready_input_test():
 				call_deferred("_run_auto_client_ready_input_test")
@@ -121,7 +125,9 @@ func _ready() -> void:
 			elif "--net-test-safe-door" not in OS.get_cmdline_user_args():
 				call_deferred("_run_auto_client_input_test")
 	if net.is_host:
-		if _is_auto_network_feature_test():
+		if _is_auto_multi_disconnect_test():
+			call_deferred("_run_auto_host_multi_disconnect_test")
+		elif _is_auto_network_feature_test():
 			call_deferred("_run_auto_host_feature_test")
 		elif _is_auto_client_ready_input_test():
 			call_deferred("_run_auto_host_ready_input_test")
@@ -1503,8 +1509,22 @@ func _accept_ready_peer(peer_id: int) -> void:
 		return
 	_add_host_peer(peer_id)
 	# 首次世界快照是可靠的，保留字典格式及预置敌人的场景路径。
+	_send_reliable_world_snapshot(peer_id)
+
+
+func _send_reliable_world_snapshot(peer_id: int) -> void:
+	if not net.is_host or peer_id <= 1:
+		return
 	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
+
+
+func _broadcast_reliable_world_snapshot() -> void:
+	if not net.is_host:
+		return
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			_send_reliable_world_snapshot(peer_id)
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -1516,6 +1536,9 @@ func _on_peer_left(peer_id: int) -> void:
 		print("[NetworkWorld] HOST_DESPAWN peer=%d" % peer_id)
 	_reconcile_network_seats(net.get_peer_ids())
 	_clear_host_safe_door_ready_for_peer(peer_id)
+	# 断线是结构性状态变更，不能只依赖不可靠移动快照：
+	# 向每一名仍在线的 Client 可靠下发完整世界快照，让实体列表、座位和安全门人数立即收敛。
+	_broadcast_reliable_world_snapshot()
 	# 仅无头双端回归收束：Client 完成输入验证并离开后，让 Host 自行干净退出。
 	# 正式房间继续保留 Host，不会走此分支。
 	if "--net-test=host" in OS.get_cmdline_user_args() and net.get_peer_ids().size() <= 1:
@@ -2116,6 +2139,105 @@ func safe_door_ready_status(door_key: String, ready_count: int, total_count: int
 # ---------------------------------------------------------------- Automated smoke input
 
 ## 受控双端回归：生产安全门仍只接受真实本地按键请求；此逻辑只在显式无头测试参数下运行。
+func _is_auto_multi_disconnect_test() -> bool:
+	return "--net-test-multi-disconnect" in OS.get_cmdline_user_args()
+
+
+func _get_auto_client_role() -> String:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test-client-role="):
+			return argument.trim_prefix("--net-test-client-role=").strip_edges().to_lower()
+	return ""
+
+
+func _are_network_seats_reconciled(expected_peer_ids: Array[int]) -> bool:
+	if Players.seat_count() != expected_peer_ids.size():
+		return false
+	var expected := expected_peer_ids.duplicate()
+	expected.sort()
+	var owners: Array[int] = []
+	for seat_index: int in range(Players.seat_count()):
+		var state := Players.get_seat(seat_index)
+		if not state:
+			return false
+		owners.append(state.owner_peer_id)
+	return owners == expected
+
+
+@rpc("authority", "call_remote", "reliable")
+func multi_disconnect_complete() -> void:
+	if not net.is_host:
+		_auto_multi_disconnect_complete = true
+
+
+func _run_auto_host_multi_disconnect_test() -> void:
+	var deadline := Time.get_ticks_msec() + 12000
+	while (net.get_peer_ids().size() < 3 or _players.size() < 3 or not _are_network_seats_reconciled(net.get_peer_ids())) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not is_inside_tree() or not net.is_host:
+		return
+	if net.get_peer_ids().size() != 3 or _players.size() != 3:
+		printerr("[NetworkWorld] AUTO_MULTI_HOST_SETUP_FAILED peers=%d players=%d seats=%d" % [net.get_peer_ids().size(), _players.size(), Players.seat_count()])
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_MULTI_HOST_THREE_READY peers=3 players=3 seats=3")
+	deadline = Time.get_ticks_msec() + 12000
+	while (net.get_peer_ids().size() != 2 or _players.size() != 2 or not _are_network_seats_reconciled(net.get_peer_ids())) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not is_inside_tree() or not net.is_host:
+		return
+	if net.get_peer_ids().size() != 2 or _players.size() != 2 or not _are_network_seats_reconciled(net.get_peer_ids()):
+		printerr("[NetworkWorld] AUTO_MULTI_HOST_DISCONNECT_FAILED peers=%d players=%d seats=%d" % [net.get_peer_ids().size(), _players.size(), Players.seat_count()])
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_MULTI_HOST_DISCONNECT_COMPLETE peers=2 players=2 seats=2")
+	multi_disconnect_complete.rpc()
+	await get_tree().create_timer(1.25).timeout
+	if is_inside_tree() and net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
+func _run_auto_client_multi_disconnect_test() -> void:
+	var role := _get_auto_client_role()
+	var deadline := Time.get_ticks_msec() + 12000
+	while (_players.size() < 3 or not _are_network_seats_reconciled(net.get_peer_ids())) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not is_inside_tree() or net.is_host:
+		return
+	if _players.size() != 3 or Players.seat_count() != 3:
+		printerr("[NetworkWorld] AUTO_MULTI_CLIENT_SETUP_FAILED role=%s peers=%d players=%d seats=%d" % [role, net.get_peer_ids().size(), _players.size(), Players.seat_count()])
+		net.leave()
+		get_tree().quit(1)
+		return
+	if role == "drop":
+		print("[NetworkWorld] AUTO_MULTI_CLIENT_DROP_READY peers=3 players=3 seats=3")
+		await get_tree().create_timer(0.50).timeout
+		net.leave()
+		get_tree().quit()
+		return
+	if role != "stay":
+		printerr("[NetworkWorld] AUTO_MULTI_CLIENT_ROLE_FAILED role=%s" % role)
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_MULTI_CLIENT_STAY_READY peers=3 players=3 seats=3")
+	deadline = Time.get_ticks_msec() + 12000
+	while not _auto_multi_disconnect_complete and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var expected_peer_ids: Array[int] = net.get_peer_ids()
+	if not _auto_multi_disconnect_complete or expected_peer_ids.size() != 2 or _players.size() != 2 or not _are_network_seats_reconciled(expected_peer_ids):
+		printerr("[NetworkWorld] AUTO_MULTI_CLIENT_STAY_FAILED complete=%s peers=%d players=%d seats=%d" % [_auto_multi_disconnect_complete, expected_peer_ids.size(), _players.size(), Players.seat_count()])
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_MULTI_CLIENT_STAY_COMPLETE peers=2 players=2 seats=2")
+	net.leave()
+	get_tree().quit()
+
+
 func _is_auto_network_feature_test() -> bool:
 	return "--net-test-features" in OS.get_cmdline_user_args()
 

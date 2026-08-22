@@ -338,6 +338,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 		return
 	_player_names.erase(peer_id)
 	_pending_scene_ready.erase(peer_id)
+	_pending_scene_transition_acks.erase(peer_id)
 	remove_session_player_state(peer_id)
 	print("[Net] PEER_DISCONNECTED peer=%d" % peer_id)
 	player_list.rpc(_player_names.duplicate())
