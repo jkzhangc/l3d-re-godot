@@ -37,7 +37,7 @@ var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
 var _pickups: Dictionary = {} # pickup_id -> WeaponPickup
 var _next_pickup_id := 1
-## safe-door path -> { peer_id: true }; the Host owns readiness.
+## 已确认安全门路径 -> true；Host 只跟踪最后一次有效确认的门，并权威统计到门人数。
 var _safe_door_ready: Dictionary = {}
 var _door_ready_status: Dictionary = {}
 var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
@@ -2014,23 +2014,19 @@ func _try_host_safe_door_ready(peer_id: int, door_key: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var door := _find_safe_door(door_key)
+	# 任何请求都必须来自实际站在门边的玩家，不能信任客户端提交的门路径。
 	if not is_instance_valid(door) or not _is_host_player_at_safe_door(peer_id, door):
 		return
-	var changed_keys: Dictionary = {}
-	for key: Variant in _safe_door_ready.keys():
-		var ready_by_peer := _safe_door_ready[key] as Dictionary
-		if ready_by_peer.erase(peer_id):
-			changed_keys[str(key)] = true
-		if ready_by_peer.is_empty():
+	# 一次确认只针对一扇门；移除旧门状态，避免多个门的 UI 留下过期人数。
+	for key: Variant in _safe_door_ready.keys().duplicate():
+		var previous_key := str(key)
+		if previous_key != door_key:
 			_safe_door_ready.erase(key)
-	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
-	if not ready_here.get(peer_id, false):
-		ready_here[peer_id] = true
-		_safe_door_ready[door_key] = ready_here
-		changed_keys[door_key] = true
-	for changed_key: Variant in changed_keys.keys():
-		_broadcast_safe_door_ready_status(str(changed_key))
-	if _are_all_players_ready_at_safe_door(door_key, door):
+			_broadcast_safe_door_ready_status(previous_key, true)
+	_safe_door_ready[door_key] = true
+	_broadcast_safe_door_ready_status(door_key, true)
+	# 规则：全员到同一扇门附近后，任意一名到门玩家按确认即可统一转场。
+	if _are_all_players_at_safe_door(door):
 		door.call("commit_host_network_entry")
 
 
@@ -2052,59 +2048,55 @@ func _is_host_player_at_safe_door(peer_id: int, door: Node2D) -> bool:
 	return player.global_position.distance_to(door.global_position) <= float(door.get("interact_range"))
 
 
-func _are_all_players_ready_at_safe_door(door_key: String, door: Node2D) -> bool:
-	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
-	for peer_id: int in net.get_peer_ids():
-		if not _players.has(peer_id) or not ready_here.get(peer_id, false):
-			return false
+func _are_all_players_at_safe_door(door: Node2D) -> bool:
+	var peer_ids: Array[int] = net.get_peer_ids()
+	if peer_ids.is_empty():
+		return false
+	for peer_id: int in peer_ids:
 		if not _is_host_player_at_safe_door(peer_id, door):
 			return false
-	return not ready_here.is_empty()
+	return true
 
 
-func _clear_host_safe_door_ready_for_peer(peer_id: int) -> void:
-	if not net.is_host:
-		return
-	var changed_keys: Array[String] = []
-	for key: Variant in _safe_door_ready.keys():
-		var ready_by_peer := _safe_door_ready[key] as Dictionary
-		if ready_by_peer.erase(peer_id):
-			changed_keys.append(str(key))
-		if ready_by_peer.is_empty():
-			_safe_door_ready.erase(key)
-	for door_key: String in changed_keys:
-		_broadcast_safe_door_ready_status(door_key)
+func _get_safe_door_arrival_count(door: Node2D) -> int:
+	if not is_instance_valid(door):
+		return 0
+	var count := 0
+	for peer_id: int in net.get_peer_ids():
+		if _is_host_player_at_safe_door(peer_id, door):
+			count += 1
+	return count
+
+
+func _clear_host_safe_door_ready_for_peer(_peer_id: int) -> void:
+	# 断线会改变总人数；保留当前门的确认意图，仅刷新 Host 权威的人数显示。
+	if net.is_host:
+		_refresh_host_safe_door_readiness()
 
 
 func _refresh_host_safe_door_readiness() -> void:
 	if not net.is_host or _safe_door_ready.is_empty():
 		return
-	var changed_keys: Array[String] = []
-	for key: Variant in _safe_door_ready.keys():
-		var door_key: String = str(key)
+	for key: Variant in _safe_door_ready.keys().duplicate():
+		var door_key := str(key)
 		var door := _find_safe_door(door_key)
-		var ready_by_peer := _safe_door_ready[key] as Dictionary
-		var stale_peers: Array[int] = []
-		for peer_value: Variant in ready_by_peer.keys():
-			var peer_id := int(peer_value)
-			if not is_instance_valid(door) or not _is_host_player_at_safe_door(peer_id, door):
-				stale_peers.append(peer_id)
-		for peer_id: int in stale_peers:
-			ready_by_peer.erase(peer_id)
-		if not stale_peers.is_empty():
-			changed_keys.append(door_key)
-		if ready_by_peer.is_empty():
+		if not is_instance_valid(door):
 			_safe_door_ready.erase(key)
-	for door_key: String in changed_keys:
+			_broadcast_safe_door_ready_status(door_key, true)
+			continue
+		# 仅在到门人数或总人数变化时可靠广播，避免每帧网络噪声。
 		_broadcast_safe_door_ready_status(door_key)
 
 
-func _broadcast_safe_door_ready_status(door_key: String) -> void:
-	var ready_here: Dictionary = _safe_door_ready.get(door_key, {}) as Dictionary
-	var ready_count: int = ready_here.size()
+func _broadcast_safe_door_ready_status(door_key: String, force: bool = false) -> void:
+	var door := _find_safe_door(door_key)
+	var arrived_count := _get_safe_door_arrival_count(door)
 	var total_count: int = net.get_peer_ids().size()
-	_apply_safe_door_ready_status(door_key, ready_count, total_count)
-	safe_door_ready_status.rpc(door_key, ready_count, total_count)
+	var previous: Dictionary = _door_ready_status.get(door_key, {}) as Dictionary
+	if not force and int(previous.get("ready_count", -1)) == arrived_count and int(previous.get("total_count", -1)) == total_count:
+		return
+	_apply_safe_door_ready_status(door_key, arrived_count, total_count)
+	safe_door_ready_status.rpc(door_key, arrived_count, total_count)
 
 
 func _apply_safe_door_ready_status(door_key: String, ready_count: int, total_count: int) -> void:
@@ -2506,27 +2498,34 @@ func _run_auto_host_safe_door_test() -> void:
 		printerr("[NetworkWorld] AUTO_SAFE_DOOR_HOST_SOLO_FAILED transitioned=true")
 		return
 	print("[NetworkWorld] AUTO_SAFE_DOOR_HOST_SOLO_BLOCKED")
-	## 再由 Host 把 Client 的权威实体移到门旁。Client 接下来仍需独立发出请求，Host 会重新做距离校验。
+	## 再由 Host 把 Client 的权威实体移到门旁。全员到门后无需 Client 再确认。
 	for peer_id: int in net.get_peer_ids():
 		if peer_id > 1:
 			_set_auto_test_player_position(peer_id, door.global_position + Vector2(8.0, 0.0))
 	print("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_STAGED")
+	await get_tree().create_timer(0.30).timeout
+	# 验证此时只由 Host 再次确认也可统一切图。切图静默信号会立即发出，
+	# 不能 await 后再断言，因为旧 NetworkWorld 随后会随场景释放。
+	request_safe_door_ready(str(door.call("get_network_door_key")))
+	if not _scene_transitioning:
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_ALL_ARRIVED_FAILED transitioned=false")
+		return
+	print("[NetworkWorld] AUTO_SAFE_DOOR_HOST_CONFIRM_TRANSITIONED")
 
 
 func _run_auto_client_safe_door_test() -> void:
 	var deadline := Time.get_ticks_msec() + 5000
 	while not _initial_world_received and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
-	await get_tree().create_timer(1.20).timeout
-	if not is_instance_valid(self) or _scene_transitioning or not _initial_world_received:
-		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_SETUP_FAILED world=%s transitioning=%s" % [_initial_world_received, _scene_transitioning])
+	if not _initial_world_received:
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_SETUP_FAILED world=false")
 		return
-	var door := _get_auto_safe_door()
-	if not is_instance_valid(door):
-		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_SETUP_FAILED missing_door")
-		return
-	request_safe_door_ready(str(door.call("get_network_door_key")))
-	print("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_REQUESTED")
+	while is_instance_valid(self) and not _scene_transitioning and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _scene_transitioning:
+		print("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_HOST_CONFIRM_TRANSITIONED")
+	else:
+		printerr("[NetworkWorld] AUTO_SAFE_DOOR_CLIENT_TRANSITION_TIMEOUT")
 
 
 func _run_auto_client_input_test() -> void:

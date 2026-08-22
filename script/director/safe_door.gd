@@ -1,6 +1,6 @@
 class_name SafeDoor extends Node2D
 ## 安全门实体：使用 VX Ace 行走图显示，玩家靠近并按“确定键”后进入目标安全屋。
-## 联机时由 NetworkWorld 验证所有已连接玩家都在同一扇门附近且分别确认，才统一切图。
+## 联机时由 NetworkWorld 验证所有已连接玩家都在同一扇门附近；任一到门玩家确认后统一切图。
 
 const FRAME_W: int = 48
 const FRAME_H: int = 64
@@ -129,7 +129,7 @@ func _update_label() -> void:
 	if not label:
 		return
 	if _is_online_session() and _network_total_count > 0:
-		label.text = "%s  [确定键]  (%d/%d 已准备)" % [interact_label, _network_ready_count, _network_total_count]
+		label.text = "%s  [确定键]  (%d/%d 已到门)" % [interact_label, _network_ready_count, _network_total_count]
 	else:
 		label.text = "%s  [确定键]" % interact_label
 	label.visible = _can_interact and not _transitioning
@@ -166,7 +166,7 @@ func _enter_safe_room() -> void:
 		var scene := get_tree().current_scene
 		var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
 		if world and world.has_method("request_safe_door_ready"):
-			# 不在本地切图/冻结；只登记本玩家对这一扇门的准备意图。
+			# 不在本地切图/冻结；只向 Host 请求验证全员是否已经到门。
 			world.request_safe_door_ready(get_network_door_key())
 			return
 		push_warning("[SafeDoor] 联机世界未就绪，忽略安全门请求")
