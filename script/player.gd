@@ -265,13 +265,22 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		_network_has_target = false
 		return
 	update_appearance(moving, walking)
-	if snap and network_local_prediction and _network_has_target:
-		# 预测期间忽略小幅可靠快照回弹，严重偏差才纠正。
-		if global_position.distance_to(new_position) > 96.0:
-			global_position = new_position
-		_network_target_position = new_position
+	# 本地预测玩家的位置由本地输入驱动。普通高频快照只更新朝向/动画；
+	# 可靠重同步也只能做有限平滑纠正，不能每两秒把客户端拉回旧坐标。
+	if network_local_prediction:
+		if snap:
+			var correction := new_position - global_position
+			var correction_distance := correction.length()
+			# 大距离通常代表换图/复活等明确状态切换，必须立即对齐；普通网络
+			# 误差以最多 12px 的步进收敛，避免用户感受到回弹或脚滑。
+			if correction_distance > 192.0:
+				global_position = new_position
+			elif correction_distance > 1.0:
+				global_position += correction.limit_length(minf(12.0, correction_distance * 0.25))
+		_network_target_position = global_position
 		_network_has_target = false
-	elif snap:
+		return
+	if snap:
 		global_position = new_position
 		_network_target_position = new_position
 		_network_has_target = false
@@ -426,7 +435,7 @@ func play_network_weapon_transition(wd: WeaponData, raising: bool) -> void:
 	var token := _network_attack_token
 	enter_weapon_mode(wd)
 	player_in_weapon_state = true
-	lock_facing()
+	# 网络举放只改变武器动画，不修改玩家原本的朝向锁定状态。
 	call_deferred("_run_network_weapon_transition", token, wd, raising)
 
 
@@ -446,7 +455,6 @@ func _run_network_weapon_transition(token: int, wd: WeaponData, raising: bool) -
 		set_weapon_ready_frame()
 	else:
 		exit_weapon_mode()
-		unlock_facing()
 	player_in_weapon_state = false
 
 

@@ -56,6 +56,11 @@ var _hold_timer: float = 0.0
 var _indicator_alpha: float = 0.0
 var _indicator_node: Node2D = null
 
+## 在线联机中由 NetworkWorld 分配；0 表示尚未收到 Host 的权威快照。
+var network_pickup_id: int = 0
+var network_presentation_only: bool = false
+var _network_pickup_request_pending: bool = false
+
 
 func _ready() -> void:
 	_spawn_msec = Time.get_ticks_msec()
@@ -87,7 +92,82 @@ func _process(delta: float) -> void:
 			_step_idx = (_step_idx + 1) % frames.size()
 			_refresh_sprite()
 
-	_process_pickup(delta)
+	if _is_online_network_pickup() and item and item.item_type == ItemData.ItemType.THROWABLE:
+		_process_network_pickup(delta)
+	else:
+		_process_pickup(delta)
+
+
+func _is_online_network_pickup() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net and net.has_method("is_online_session") and bool(net.is_online_session())
+
+
+func _process_network_pickup(delta: float) -> void:
+	if network_pickup_id <= 0 or network_presentation_only:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+		return
+	var local_player := Players.get_local_entity() as CharacterBody2D
+	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
+	_player_ref = local_player if in_range else null
+	_player_in_range = in_range
+	if not in_range or not item:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+		return
+	var state: PlayerState = Players.get_state_for_entity(local_player)
+	if not state:
+		return
+	var needs_hold := state.throwable != null
+	if not needs_hold:
+		_request_network_pickup()
+		return
+	if local_player.get("player_in_weapon_state"):
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+		return
+	if Input.is_action_pressed("确定键"):
+		_hold_timer += delta
+		_update_hold_indicator(delta, true)
+		if _hold_timer >= hold_time:
+			_request_network_pickup()
+	else:
+		_hold_timer = 0.0
+		_update_hold_indicator(delta, false)
+
+
+func _request_network_pickup() -> void:
+	if _network_pickup_request_pending:
+		return
+	_network_pickup_request_pending = true
+	_hold_timer = 0.0
+	var scene := get_tree().current_scene
+	var world := scene.find_child("NetworkWorld", true, false) if scene else null
+	if world and world.has_method("request_pickup"):
+		world.request_pickup(network_pickup_id)
+	else:
+		_network_pickup_request_pending = false
+
+
+func configure_network_pickup(pickup_id: int, presentation_only: bool = false) -> void:
+	network_pickup_id = pickup_id
+	network_presentation_only = presentation_only
+	_network_pickup_request_pending = false
+
+
+func reset_network_pickup_request() -> void:
+	_network_pickup_request_pending = false
+
+
+func disable_network_pickup() -> void:
+	visible = false
+	_player_in_range = false
+	_player_ref = null
+	_hold_timer = 0.0
+	if _area:
+		_area.set_deferred("monitoring", false)
+		_area.set_deferred("monitorable", false)
 
 
 func _process_pickup(delta: float) -> void:

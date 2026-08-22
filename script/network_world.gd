@@ -8,6 +8,7 @@ const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
 const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://object/weapon_pickup.tscn")
+const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
 const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
 const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
 const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
@@ -28,16 +29,20 @@ const NETWORK_THROWABLES: Dictionary = {
 	"grenade_01": NETWORK_GRENADE,
 	"molotov_01": NETWORK_MOLOTOV,
 }
-const SNAPSHOT_INTERVAL := 1.0 / 20.0
-const LOCAL_INPUT_INTERVAL := 1.0 / 30.0
+## 高频快照缩短远端可见延迟；本地预测/平滑纠正仍负责吸收网络抖动。
+const SNAPSHOT_INTERVAL := 1.0 / 40.0
+const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
 
 var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
 var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
-var _pickups: Dictionary = {} # pickup_id -> WeaponPickup
+var _pickups: Dictionary = {} # pickup_id -> weapon/throwable pickup Node2D
 var _next_pickup_id := 1
+## 客户端预置掉落物按场景相对路径缓存，可靠快照必须复用原节点，
+## 否则主机删除后会留下未纳入 _pickups 的旧可见节点。
+var _client_preplaced_pickups_by_path: Dictionary = {}
 ## 已确认安全门路径 -> true；Host 只跟踪最后一次有效确认的门，并权威统计到门人数。
 var _safe_door_ready: Dictionary = {}
 var _door_ready_status: Dictionary = {}
@@ -1657,10 +1662,8 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 		if not node.is_weapon_mode_active() or node.get_network_weapon_id() != remote_weapon.item_id:
 			node.enter_weapon_mode(remote_weapon)
 			node.set_weapon_ready_frame()
-		node.lock_facing()
 	else:
 		node.exit_weapon_mode()
-		node.unlock_facing()
 	return remote_weapon
 
 
@@ -1736,7 +1739,13 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
 	# 客户端角色会永远停在同一张行走帧上。
 	if snap:
-		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), _packet_position(public_state), int(public_state.get("facing", 0)), true)
+		# 可靠世界重同步每隔一段时间会到达一次。对于已经开始本地预测的玩家，
+		# 只用当前位置刷新角色/H P 初始化，不把旧权威坐标立即写回；随后由
+		# apply_network_presentation 的小幅平滑纠正收敛，避免明显回弹。
+		var spawn_position := _packet_position(public_state)
+		if peer_id == int(net.my_peer_id) and node.network_local_prediction and _initial_world_received:
+			spawn_position = node.global_position
+		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
 	var is_dead := bool(public_state.get("dead", false))
 	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
 	node.apply_network_presentation(
@@ -1867,20 +1876,23 @@ func _register_initial_host_pickups() -> void:
 	_pickups.clear()
 	_next_pickup_id = 1
 	var candidates: Array[Node2D] = []
-	_collect_weapon_pickups(get_tree().current_scene, candidates)
+	_collect_network_pickups(get_tree().current_scene, candidates)
 	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool: return str(a.get_path()) < str(b.get_path()))
 	for pickup: Node2D in candidates:
 		_register_host_pickup(pickup)
 	print("[NetworkWorld] HOST_PICKUPS_REGISTERED count=%d" % _pickups.size())
 
 
-func _collect_weapon_pickups(root: Node, out: Array[Node2D]) -> void:
+func _collect_network_pickups(root: Node, out: Array[Node2D]) -> void:
 	if not is_instance_valid(root):
 		return
-	if root is Node2D and root.has_method("configure_network_pickup") and root.get("weapon_data") is WeaponData:
-		out.append(root as Node2D)
+	if root is Node2D and root.has_method("configure_network_pickup"):
+		var weapon := root.get("weapon_data") as WeaponData
+		var item := root.get("item") as ItemData
+		if weapon or (item and item.item_type == ItemData.ItemType.THROWABLE):
+			out.append(root as Node2D)
 	for child: Node in root.get_children():
-		_collect_weapon_pickups(child, out)
+		_collect_network_pickups(child, out)
 
 
 func _register_host_pickup(pickup: Node2D) -> int:
@@ -1897,9 +1909,14 @@ func _register_host_pickup(pickup: Node2D) -> int:
 
 
 func _prepare_client_preplaced_pickups() -> void:
+	_client_preplaced_pickups_by_path.clear()
+	var scene := get_tree().current_scene
 	var candidates: Array[Node2D] = []
-	_collect_weapon_pickups(get_tree().current_scene, candidates)
+	_collect_network_pickups(scene, candidates)
 	for pickup: Node2D in candidates:
+		var scene_path := str(scene.get_path_to(pickup)) if scene else ""
+		if not scene_path.is_empty():
+			_client_preplaced_pickups_by_path[scene_path] = pickup
 		pickup.call("configure_network_pickup", 0, true)
 		# 等 Host 的可靠快照分配稳定 ID，防止客户端在首帧走到预置物品旁时本地拾取。
 		pickup.visible = false
@@ -1913,19 +1930,24 @@ func _build_pickup_snapshot() -> Array:
 		if not is_instance_valid(pickup):
 			continue
 		var weapon := pickup.get("weapon_data") as WeaponData
-		if not weapon:
+		var item := pickup.get("item") as ItemData
+		var pickup_kind := "weapon" if weapon else "throwable" if item and item.item_type == ItemData.ItemType.THROWABLE else ""
+		if pickup_kind.is_empty():
 			continue
 		var scene := get_tree().current_scene
-		packets.append({
+		var packet := {
 			"pickup_id": pickup_id,
+			"pickup_kind": pickup_kind,
 			"scene_path": str(scene.get_path_to(pickup)) if scene else "",
 			"position": pickup.global_position,
-			"weapon_id": weapon.item_id,
+			"weapon_id": weapon.item_id if weapon else "",
+			"item_id": item.item_id if item else "",
 			"reserve_ammo": int(pickup.get("pickup_reserve_ammo")),
 			"magazine_ammo": int(pickup.get("pickup_magazine_ammo")),
 			"char_idx": int(pickup.get("pickup_char_idx")),
 			"direction": int(pickup.get("pickup_direction")),
-		})
+		}
+		packets.append(packet)
 	packets.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["pickup_id"]) < int(b["pickup_id"]))
 	return packets
 
@@ -1954,9 +1976,23 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 	var player := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
 	var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
-	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state or not weapon:
+	var throwable := pickup.get("item") as ThrowableData if is_instance_valid(pickup) else null
+	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state or (not weapon and not throwable):
 		return
 	if player.global_position.distance_to(pickup.global_position) > 40.0:
+		return
+	if throwable:
+		var old_throwable: ThrowableData = state.throwable
+		if old_throwable:
+			_spawn_host_dropped_throwable(old_throwable, player.global_position)
+		state.throwable = throwable
+		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+		_apply_host_throwable_presentation(peer_id)
+		_pickups.erase(pickup_id)
+		pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
+		pickup.queue_free()
+		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
 	if state.character and not state.character.can_use_weapon(weapon):
 		return
@@ -1973,9 +2009,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 		player.enter_weapon_mode(weapon)
 		player.set_weapon_ready_frame()
 	_pickups.erase(pickup_id)
+	pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 	pickup.queue_free()
 	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
-	# 不能只可靠发送 pickup 列表、再依赖并行 20Hz 不可靠玩家快照更新装备，否则会出现图标、主机状态和地面物不同步。
 	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
 
@@ -1995,6 +2031,19 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: Pl
 		pickup.set("pickup_reserve_ammo", reserve)
 		if reserve > 0:
 			state.consume_ammo_item(weapon.ammo_item_id, reserve)
+	pickup.global_position = position
+	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
+	(parent if parent else get_tree().current_scene).add_child(pickup)
+	_register_host_pickup(pickup)
+
+
+func _spawn_host_dropped_throwable(throwable: ThrowableData, position: Vector2) -> void:
+	if not throwable:
+		return
+	var pickup := HEALING_PICKUP_SCENE.instantiate() as Node2D
+	if not is_instance_valid(pickup):
+		return
+	pickup.set("item", throwable)
 	pickup.global_position = position
 	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 	(parent if parent else get_tree().current_scene).add_child(pickup)
@@ -2042,36 +2091,55 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 		if pickup_id <= 0:
 			continue
 		seen[pickup_id] = true
+		var pickup_kind := str(packet.get("pickup_kind", "weapon"))
 		var pickup := _pickups.get(pickup_id) as Node2D
+		var scene_path := str(packet.get("scene_path", ""))
 		if not is_instance_valid(pickup):
-			var path := str(packet.get("scene_path", ""))
-			if not path.is_empty():
-				pickup = get_tree().current_scene.get_node_or_null(NodePath(path)) as Node2D
+			# 首选客户端启动时缓存的预置节点。直接按路径查找不足以保证清理时
+			# 能识别旧节点，特别是在掉落物被重挂父节点或动态替换之后。
+			pickup = _client_preplaced_pickups_by_path.get(scene_path) as Node2D
+			if not is_instance_valid(pickup) and not scene_path.is_empty():
+				pickup = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as Node2D
 			if not is_instance_valid(pickup):
-				pickup = PICKUP_SCENE.instantiate() as Node2D
+				pickup = (HEALING_PICKUP_SCENE if pickup_kind == "throwable" else PICKUP_SCENE).instantiate() as Node2D
 				var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 				(parent if parent else get_tree().current_scene).add_child(pickup)
 			_pickups[pickup_id] = pickup
-		var weapon := _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
-		if not weapon:
-			continue
-		pickup.set("weapon_data", weapon)
-		pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
-		pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", 0)))
-		pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
-		pickup.set("pickup_char_idx", int(packet.get("char_idx", 0)))
-		pickup.set("pickup_direction", int(packet.get("direction", 0)))
+		if pickup_kind == "throwable":
+			var throwable := _get_network_throwable_data_by_id(str(packet.get("item_id", "")))
+			if not throwable:
+				continue
+			pickup.set("weapon_data", null)
+			pickup.set("item", throwable)
+		else:
+			var weapon := _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
+			if not weapon:
+				continue
+			pickup.set("item", null)
+			pickup.set("weapon_data", weapon)
+			pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
+			pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", 0)))
+			pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
+			pickup.set("pickup_char_idx", int(packet.get("char_idx", 0)))
+			pickup.set("pickup_direction", int(packet.get("direction", 0)))
 		pickup.global_position = _packet_position(packet)
 		pickup.call("_refresh_sprite")
 		pickup.call("configure_network_pickup", pickup_id, true)
 		pickup.visible = true
 		pickup.call("reset_network_pickup_request")
-	for old_id: Variant in _pickups.keys():
+	for old_id: Variant in _pickups.keys().duplicate():
 		var id: int = int(old_id)
 		if not seen.has(id):
 			var stale := _pickups[id] as Node
 			_pickups.erase(id)
 			if is_instance_valid(stale):
+				for path_value: Variant in _client_preplaced_pickups_by_path.keys().duplicate():
+					if _client_preplaced_pickups_by_path[path_value] == stale:
+						_client_preplaced_pickups_by_path.erase(path_value)
+				if stale.has_method("disable_network_pickup"):
+					stale.call("disable_network_pickup")
+				else:
+					stale.hide()
 				stale.queue_free()
 
 # ---------------------------------------------------------------- Host-authoritative safe doors
