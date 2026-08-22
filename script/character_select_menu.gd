@@ -81,25 +81,40 @@ func _sync_window() -> void:
 
 
 func _load_characters() -> void:
+	_available_characters.clear()
 	var dir := DirAccess.open("res://object/")
 	if not dir:
-		var nobita: Resource = load("res://object/character_nobita.tres")
-		if nobita is CharacterData:
-			_available_characters.append(nobita as CharacterData)
+		_load_fallback_nobita()
 		return
+
+	# DirAccess 的枚举顺序不保证稳定。先收集、排序再加载，保证角色列表
+	# 在每次启动时都有相同的顺序，避免光标默认位置对应的角色发生变化。
+	var character_paths: Array[String] = []
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
 		if file_name.begins_with("character_") and file_name.ends_with(".tres"):
-			var res: Resource = load("res://object/" + file_name)
-			if res is CharacterData:
-				_available_characters.append(res as CharacterData)
+			character_paths.append("res://object/" + file_name)
 		file_name = dir.get_next()
 	dir.list_dir_end()
+	character_paths.sort()
+
+	for character_path: String in character_paths:
+		var res: Resource = load(character_path)
+		if res is CharacterData:
+			_available_characters.append(res as CharacterData)
+			print("[角色选择] 已加载角色: %s (%s)" % [(res as CharacterData).character_name, character_path])
+
 	if _available_characters.is_empty():
-		var nobita: Resource = load("res://object/character_nobita.tres")
-		if nobita is CharacterData:
-			_available_characters.append(nobita as CharacterData)
+		_load_fallback_nobita()
+	print("[角色选择] 可选角色数量: %d" % _available_characters.size())
+
+
+func _load_fallback_nobita() -> void:
+	var nobita: Resource = load("res://object/character_nobita.tres")
+	if nobita is CharacterData:
+		_available_characters.append(nobita as CharacterData)
+		print("[角色选择] 角色目录不可用，回退加载: %s" % (nobita as CharacterData).character_name)
 
 
 func _build_list() -> void:
