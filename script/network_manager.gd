@@ -21,7 +21,7 @@ const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 ## 给 LAN 上已发送的 scene-RPC 一小段排空时间；切图时双方仍保留旧 NetworkWorld，随后再同时释放。
 const SCENE_TRANSITION_FLUSH_SECONDS := 0.25
-const DEFAULT_CHARACTER_PATH := "res://object/character_nobita.tres"
+const DEFAULT_CHARACTER_PATH := CharacterCatalog.DEFAULT_CHARACTER_PATH
 
 var is_host := false
 var my_peer_id := 1
@@ -257,24 +257,11 @@ func _reject_character_selection(peer_id: int, reason: String, notify_requester:
 func _ensure_character_whitelist() -> void:
 	if not _allowed_character_paths.is_empty():
 		return
-	var dir := DirAccess.open("res://object/")
-	if dir:
-		var filenames: Array[String] = []
-		dir.list_dir_begin()
-		var file_name := dir.get_next()
-		while not file_name.is_empty():
-			if file_name.begins_with("character_") and file_name.ends_with(".tres"):
-				filenames.append(file_name)
-			file_name = dir.get_next()
-		dir.list_dir_end()
-		filenames.sort()
-		for character_file_name: String in filenames:
-			var path := "res://object/" + character_file_name
-			var resource := load(path)
-			if resource is CharacterData:
-				_allowed_character_paths[path] = (resource as CharacterData).character_name
-	if _allowed_character_paths.is_empty() and ResourceLoader.exists(DEFAULT_CHARACTER_PATH):
-		_allowed_character_paths[DEFAULT_CHARACTER_PATH] = "のび太"
+	## 必须与单人角色选择共用目录：Host 白名单是客户端选择请求的唯一权威来源。
+	for character: CharacterData in CharacterCatalog.load_available_characters():
+		_allowed_character_paths[character.resource_path] = character.character_name
+	if _allowed_character_paths.is_empty():
+		push_error("[Net] 角色白名单为空；请检查 CharacterCatalog 的正式角色资源")
 
 
 func _get_default_character_path() -> String:

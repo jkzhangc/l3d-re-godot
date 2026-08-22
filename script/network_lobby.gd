@@ -105,6 +105,16 @@ func _is_auto_character_select_test() -> bool:
 
 
 func _run_auto_host_character_select_lobby_test() -> void:
+	var available_paths: Array[String] = net.get_available_character_paths()
+	if CharacterCatalog.DEFAULT_CHARACTER_PATH not in available_paths or CharacterCatalog.BIGG_CHARACTER_PATH not in available_paths:
+		printerr("[AUTO] AUTO_CHARACTER_HOST_LOBBY_FAILED catalog=%s" % str(available_paths))
+		get_tree().quit(1)
+		return
+	## 主机与客户端都选胖虎，验证白名单和重复角色选择均由 Host 正确接受。
+	if not net.request_local_character_selection(CharacterCatalog.BIGG_CHARACTER_PATH):
+		printerr("[AUTO] AUTO_CHARACTER_HOST_LOBBY_FAILED host_selection_not_applied")
+		get_tree().quit(1)
+		return
 	var deadline := Time.get_ticks_msec() + 8000
 	while not net.are_all_players_character_selected() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
@@ -115,11 +125,11 @@ func _run_auto_host_character_select_lobby_test() -> void:
 			client_id = peer_id
 			break
 	var client_path: String = str(net.get_player_character_path(client_id))
-	if not net.are_all_players_character_selected() or host_path != net.DEFAULT_CHARACTER_PATH or client_id <= 1 or client_path != net.DEFAULT_CHARACTER_PATH:
+	if not net.are_all_players_character_selected() or host_path != CharacterCatalog.BIGG_CHARACTER_PATH or client_id <= 1 or client_path != CharacterCatalog.BIGG_CHARACTER_PATH:
 		printerr("[AUTO] AUTO_CHARACTER_HOST_LOBBY_FAILED host=%s client=%d client_character=%s" % [host_path, client_id, client_path])
 		get_tree().quit(1)
 		return
-	print("[AUTO] AUTO_CHARACTER_HOST_LOBBY_COMPLETE duplicate_accepted=true host=%s client=%s" % [host_path.get_file(), client_path.get_file()])
+	print("[AUTO] AUTO_CHARACTER_HOST_LOBBY_COMPLETE catalog=true duplicate_accepted=true host=%s client=%s" % [host_path.get_file(), client_path.get_file()])
 
 
 func _run_auto_client_character_select_lobby_test() -> void:
@@ -130,19 +140,23 @@ func _run_auto_client_character_select_lobby_test() -> void:
 		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED handshake_timeout")
 		get_tree().quit(1)
 		return
-	if not net.request_local_character_selection(net.DEFAULT_CHARACTER_PATH):
+	var available_paths: Array[String] = net.get_available_character_paths()
+	if CharacterCatalog.DEFAULT_CHARACTER_PATH not in available_paths or CharacterCatalog.BIGG_CHARACTER_PATH not in available_paths:
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED catalog=%s" % str(available_paths))
+		get_tree().quit(1)
+		return
+	if not net.request_local_character_selection(CharacterCatalog.BIGG_CHARACTER_PATH):
 		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_request_not_sent")
 		get_tree().quit(1)
 		return
 	deadline = Time.get_ticks_msec() + 3000
-	while str(net.get_player_character_path(int(net.my_peer_id))) != net.DEFAULT_CHARACTER_PATH and Time.get_ticks_msec() < deadline:
+	while str(net.get_player_character_path(int(net.my_peer_id))) != CharacterCatalog.BIGG_CHARACTER_PATH and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
-	if str(net.get_player_character_path(int(net.my_peer_id))) != net.DEFAULT_CHARACTER_PATH:
+	if str(net.get_player_character_path(int(net.my_peer_id))) != CharacterCatalog.BIGG_CHARACTER_PATH:
 		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_not_confirmed selected=%s" % str(net.get_player_character_path(int(net.my_peer_id))))
 		get_tree().quit(1)
 		return
-	print("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_COMPLETE duplicate_accepted=true selected=%s" % net.DEFAULT_CHARACTER_PATH.get_file())
-
+	print("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_COMPLETE catalog=true duplicate_accepted=true selected=%s" % CharacterCatalog.BIGG_CHARACTER_PATH.get_file())
 
 func _get_auto_expected_player_count() -> int:
 	for argument: String in OS.get_cmdline_user_args():
