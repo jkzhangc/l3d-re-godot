@@ -283,12 +283,16 @@ func _find_seat_owned_by_peer(peer_id: int) -> int:
 @rpc("authority", "call_remote", "reliable")
 func _apply_remote_confirmation(peer_id: int) -> void:
 	print("[ChapterSummary] REMOTE_CONFIRM_RX peer=%d" % peer_id)
+	# 先按网络身份记录，避免广播比新场景 PlayerState/seat 绑定早到时界面仍显示未准备。
+	_confirmed_peer_ids[peer_id] = true
 	var seat_index := _find_seat_owned_by_peer(peer_id)
 	if seat_index >= 0:
 		confirm_seat(seat_index)
 		return
 	# 可靠广播早于本机的新场景 PlayerState 绑定时，保留网络身份并在 _process 重试。
 	_pending_remote_confirmations[peer_id] = Time.get_ticks_msec() + 2000
+	_rebuild_player_rows()
+	_refresh_status()
 	print("[ChapterSummary] REMOTE_CONFIRM_DEFER peer=%d" % peer_id)
 
 
@@ -367,7 +371,7 @@ func _finish_summary() -> void:
 		if multiplayer.is_server():
 			# Host 必须给可靠确认包足够的 flush 时间，随后才结束无头回归。
 			tree.create_timer(1.0, true).timeout.connect(func():
-				var net: Node = get_node_or_null("/root/Net")
+				var net: Node = tree.root.get_node_or_null("Net")
 				if net and net.has_method("leave"):
 					net.leave()
 				tree.quit()
@@ -375,11 +379,13 @@ func _finish_summary() -> void:
 		else:
 			# Client 在收到 Host 最后一份确认并关闭自身总结页后主动退出。
 			tree.create_timer(0.12, true).timeout.connect(func():
-				var net: Node = get_node_or_null("/root/Net")
+				var net: Node = tree.root.get_node_or_null("Net")
 				if net and net.has_method("leave"):
 					net.leave()
 				tree.quit()
 			)
+		# 自动回归必须保留节点，避免 queue_free 断开上面的退出计时器。
+		return
 	queue_free()
 
 
@@ -470,15 +476,43 @@ func _rebuild_player_rows() -> void:
 	if not _multiplayer_mode:
 		_add_stats_row("全队合计", _get_total_stats(), "-", MUTED)
 		return
-	var count: int = maxi(Players.seat_count(), 1)
-	for seat_index: int in range(count):
-		var state: PlayerState = Players.get_seat(seat_index)
-		var player_name: String = state.get_character_name() if state else "玩家 %d" % (seat_index + 1)
-		var stats: Dictionary = _stats_for_seat(seat_index)
-		var ready: bool = _confirmed.get(seat_index, false)
-		var status_text: String = "已准备" if ready else ("等待" if _multiplayer_mode else "-")
+	# 联机总结严格按当前会话 peer 建行，不能遍历可能残留的默认/断线座位。
+	var peer_ids := _get_expected_session_peer_ids()
+	if peer_ids.is_empty():
+		# 仅供多人预览或握手尚未建立的极短窗口使用。
+		for seat_index: int in range(Players.seat_count()):
+			var fallback_state: PlayerState = Players.get_seat(seat_index)
+			if fallback_state and fallback_state.owner_peer_id > 0 and fallback_state.owner_peer_id not in peer_ids:
+				peer_ids.append(fallback_state.owner_peer_id)
+	peer_ids.sort()
+	if peer_ids.is_empty():
+		_add_stats_row("等待玩家资料", {}, "等待", MUTED)
+		return
+	for peer_id: int in peer_ids:
+		var seat_index := _find_seat_owned_by_peer(peer_id)
+		var state: PlayerState = Players.get_seat(seat_index) if seat_index >= 0 else null
+		var stats: Dictionary = _stats_for_seat(seat_index) if seat_index >= 0 else {}
+		var ready := _is_peer_confirmed(peer_id, seat_index)
+		var status_text: String = "已准备" if ready else "等待"
 		var status_color: Color = GREEN if ready else MUTED
-		_add_stats_row(player_name, stats, status_text, status_color)
+		_add_stats_row(_get_network_player_name(peer_id, state), stats, status_text, status_color)
+
+
+func _get_network_player_name(peer_id: int, state: PlayerState) -> String:
+	if state:
+		var character_name := state.get_character_name()
+		if not character_name.is_empty():
+			return character_name
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("get_player_name"):
+		return str(net.get_player_name(peer_id))
+	return "玩家%d" % peer_id
+
+
+func _is_peer_confirmed(peer_id: int, seat_index: int = -1) -> bool:
+	if _confirmed_peer_ids.get(peer_id, false):
+		return true
+	return seat_index >= 0 and bool(_confirmed.get(seat_index, false))
 
 
 func _add_stats_row(player_name: String, stats: Dictionary, status_text: String, status_color: Color) -> void:
@@ -503,11 +537,18 @@ func _refresh_status() -> void:
 	if not _status_label or not _prompt_label:
 		return
 	if _multiplayer_mode:
+		var peer_ids := _get_expected_session_peer_ids()
 		var ready_count: int = 0
-		for seat_index: int in _required_seats:
-			if _confirmed.get(seat_index, false):
-				ready_count += 1
-		_status_label.text = "等待所有玩家    %d / %d" % [ready_count, _required_seats.size()]
+		if not peer_ids.is_empty():
+			for peer_id: int in peer_ids:
+				if _is_peer_confirmed(peer_id, _find_seat_owned_by_peer(peer_id)):
+					ready_count += 1
+		else:
+			# 多人预览兼容：真实联机始终以上面的会话 peer 数为准。
+			for seat_index: int in _required_seats:
+				if _confirmed.get(seat_index, false):
+					ready_count += 1
+		_status_label.text = "等待所有玩家    %d / %d" % [ready_count, peer_ids.size() if not peer_ids.is_empty() else _required_seats.size()]
 		_prompt_label.text = "按 确定键 准备"
 	else:
 		_status_label.text = "幸存者已抵达安全屋"

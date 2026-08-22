@@ -139,7 +139,7 @@ func _check_shove_hits() -> void:
 	for body: Node2D in bodies:
 		if body == character:
 			continue
-		if _is_target_dead(body):
+		if _is_target_dead(body) or body.is_in_group("player"):
 			continue
 		if body.has_method("take_damage"):
 			var bid: int = body.get_instance_id()
@@ -155,7 +155,7 @@ func _check_shove_hits() -> void:
 		var parent: Node = area.get_parent()
 		if parent == character or parent == _hitbox:
 			continue
-		if _is_target_dead(parent):
+		if _is_target_dead(parent) or (parent and parent.is_in_group("player")):
 			continue
 		if parent and parent.has_method("take_damage"):
 			var pid: int = parent.get_instance_id()

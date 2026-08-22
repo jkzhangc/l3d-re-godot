@@ -103,6 +103,17 @@ func clear_entity_bindings() -> void:
 	_local_entity = null
 
 
+## 按网络 owner 查座位；同一 peer 在联机座位表中只能出现一次。
+func find_seat_by_owner_peer_id(peer_id: int) -> int:
+	if peer_id <= 0:
+		return -1
+	for index: int in range(seats.size()):
+		var state: PlayerState = seats[index]
+		if state and state.owner_peer_id == peer_id:
+			return index
+	return -1
+
+
 ## 追加一个座位，返回其索引。会同步写入 state.seat_index。
 func add_seat(state: PlayerState) -> int:
 	if not state:
@@ -111,6 +122,58 @@ func add_seat(state: PlayerState) -> int:
 	state.seat_index = idx
 	seats.append(state)
 	return idx
+
+
+## 用新的权威 PlayerState 替换既有座位，保留该座位的实体绑定。
+func replace_seat(index: int, state: PlayerState) -> bool:
+	if index < 0 or index >= seats.size() or not state:
+		return false
+	seats[index] = state
+	state.seat_index = index
+	return true
+
+
+## 开始联机时优先接管当前本地/无主座位，保留角色、装备、弹药与 HP。
+func claim_active_seat_for_peer(peer_id: int) -> PlayerState:
+	if peer_id <= 0:
+		return null
+	var owned_index := find_seat_by_owner_peer_id(peer_id)
+	if owned_index >= 0:
+		active_seat_index = owned_index
+		return seats[owned_index]
+	var active_state := get_active_state()
+	if active_state and active_state.owner_peer_id == 0:
+		active_state.owner_peer_id = peer_id
+		active_state.seat_index = active_seat_index
+		return active_state
+	return null
+
+
+## 用当前会话 peer 重建稳定、连续的联机座位表，并移除默认/断线/重复座位。
+## 调用方若已经创建场景实体，应在调用后重新注册实体到新的 seat_index。
+func rebuild_network_seats(peer_ids: Array[int], states_by_peer: Dictionary = {}) -> void:
+	var sorted_peer_ids: Array[int] = []
+	for peer_id: int in peer_ids:
+		if peer_id > 0 and peer_id not in sorted_peer_ids:
+			sorted_peer_ids.append(peer_id)
+	sorted_peer_ids.sort()
+	var old_active_state: PlayerState = get_seat(active_seat_index)
+	var rebuilt: Array[PlayerState] = []
+	for peer_id: int in sorted_peer_ids:
+		var state := states_by_peer.get(peer_id) as PlayerState
+		if not state:
+			var old_index := find_seat_by_owner_peer_id(peer_id)
+			if old_index >= 0:
+				state = seats[old_index]
+		if not state:
+			continue
+		state.owner_peer_id = peer_id
+		state.seat_index = rebuilt.size()
+		rebuilt.append(state)
+	seats = rebuilt
+	active_seat_index = rebuilt.find(old_active_state)
+	if active_seat_index < 0:
+		active_seat_index = 0
 
 
 ## 切换激活座位。单人模式下本地实体随之换绑到新座位。

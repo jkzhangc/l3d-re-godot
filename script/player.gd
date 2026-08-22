@@ -240,6 +240,8 @@ func apply_network_spawn_state(character: CharacterData, hp: float, new_position
 ## 仅更新客户端可见状态。Host 传 snap=true，客户端由 _process 平滑插值。
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, walking: bool, snap: bool = false) -> void:
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
+	if _is_dying:
+		return
 	update_appearance(moving, walking)
 	if snap:
 		global_position = new_position
@@ -250,6 +252,32 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 			global_position = new_position
 		_network_target_position = new_position
 		_network_has_target = true
+
+
+func is_network_dead() -> bool:
+	return _is_dying
+
+
+func apply_network_health_state(new_hp: float, is_dead: bool, play_feedback: bool = true) -> void:
+	var previous_hp := current_hp
+	current_hp = clampf(new_hp, 0.0, max_hp)
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state:
+		state.current_hp = current_hp
+	if is_dead or current_hp <= 0.0:
+		current_hp = 0.0
+		if not _is_dying:
+			_apply_network_death_state()
+		return
+	if _is_dying:
+		return
+	if play_feedback and current_hp < previous_hp:
+		var damage := previous_hp - current_hp
+		_play_hit_feedback(Color.RED)
+		var tree := get_tree()
+		if tree and tree.current_scene:
+			DamageNumber.spawn(global_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
+		_play_sound(hurt_sound)
 
 
 func _disable_network_state_machine() -> void:
@@ -846,7 +874,37 @@ func _clean_expired_damage_sources(now: int) -> void:
 		_recent_damage_sources.erase(sid)
 
 
+func _apply_network_death_state() -> void:
+	print("[玩家] 联机死亡表现")
+	_is_dying = true
+	_death_phase = 3
+	_moving = false
+	player_in_weapon_state = false
+	velocity = Vector2.ZERO
+	_weapon_mode = false
+	_weapon_data = null
+	_shove_mode = false
+	_shove_texture = null
+	if animation_timer:
+		animation_timer.stop()
+	var tex: Texture2D = death_texture if death_texture else walk_texture
+	if tex:
+		sprite.texture = tex
+		var char_col: int = death_char_index % CHARS_PER_ROW
+		var char_row: int = death_char_index / CHARS_PER_ROW
+		var dir_row: int = DIR_ROWS[_facing]
+		sprite.region_rect = Rect2(char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W, char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H, FRAME_W, FRAME_H)
+	if $CollisionShape2D:
+		$CollisionShape2D.set_deferred("disabled", true)
+	if hurt_area:
+		hurt_area.set_deferred("monitoring", false)
+		hurt_area.set_deferred("monitorable", false)
+
+
 func _die() -> void:
+	if network_controlled:
+		_apply_network_death_state()
+		return
 	# 有其他存活队员 → 切换而非死亡
 	if _try_switch_on_death():
 		return

@@ -37,6 +37,7 @@ const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定�
 
 func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
+	add_to_group("local_pause_menu")
 	_create_menu()
 	hide()
 
@@ -44,34 +45,42 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	if not _menu_open:
 		if event.is_action_pressed("菜单键"):
+			# 联机角色举枪时 X 仍是菜单键；依据真实武器模式拦截，不能只看单机状态机标志。
 			if not _is_player_in_weapon_state():
 				_open_menu()
+			get_viewport().set_input_as_handled()
 		return
 
 	if _in_settings:
 		_handle_settings_input(event)
+		get_viewport().set_input_as_handled()
 		return
 
 	if event.is_action_pressed("菜单键") or event.is_action_pressed("取消键"):
 		_close_menu()
+		get_viewport().set_input_as_handled()
 		return
 
 	if event.is_action_pressed("确定键"):
 		_menu_confirm()
+		get_viewport().set_input_as_handled()
 		return
 
 	var item_count: int = _get_menu_item_count()
 	if event.is_action_pressed("上"):
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
 		_refresh_cursor()
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("下"):
 		_cursor_idx = (_cursor_idx + 1) % item_count
 		_refresh_cursor()
+		get_viewport().set_input_as_handled()
 
 
 func _open_menu() -> void:
 	_menu_open = true
-	get_tree().paused = true
+	if not _is_online_session():
+		get_tree().paused = true
 	_cursor_idx = 0
 	_refresh_cursor()
 	show()
@@ -80,7 +89,8 @@ func _open_menu() -> void:
 
 func _close_menu() -> void:
 	_menu_open = false
-	get_tree().paused = false
+	if not _is_online_session():
+		get_tree().paused = false
 	hide()
 	print("[菜单] 关闭")
 
@@ -338,8 +348,17 @@ func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> La
 	return lbl
 
 
+func is_menu_open() -> bool:
+	return _menu_open
+
+
+func _is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and net.is_online_session()
+
+
 func _is_player_in_weapon_state() -> bool:
 	var player: Node2D = Players.get_local_entity()
-	if player and player.has_method("is_facing_locked"):
-		return player.player_in_weapon_state
+	if player and player.has_method("is_weapon_mode_active"):
+		return player.is_weapon_mode_active()
 	return false

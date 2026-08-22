@@ -151,8 +151,10 @@ func _hit(target: Node2D) -> void:
 	if not damageable.has_method("take_damage"):
 		return
 
-	# 防止击中发射者自己
+	# 防止击中发射者自己，以及联机队友互相伤害。必须早于命中去重/穿透计数。
 	if _shooter and damageable == _shooter:
+		return
+	if _shooter and _shooter.is_in_group("player") and damageable.is_in_group("player"):
 		return
 
 	# 去重：永久标记已命中目标，绝不对同一目标重复判定

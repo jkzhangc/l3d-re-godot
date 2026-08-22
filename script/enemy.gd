@@ -182,7 +182,15 @@ func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, hp: float, visual_char_index: int, is_dead: bool, is_headshot: bool, snap: bool = false) -> void:
 	if not network_presentation_only:
 		return
+	var previous_hp := current_hp
 	current_hp = clampf(hp, 0.0, max_hp)
+	if not snap and not _is_dead and current_hp < previous_hp:
+		var damage := previous_hp - current_hp
+		_play_hit_feedback(Color.RED)
+		var tree := get_tree()
+		if tree and tree.current_scene:
+			DamageNumber.spawn(global_position, damage, tree.current_scene)
+		_play_sound(hurt_sound)
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	_network_headshot_death = is_headshot
 	if snap:

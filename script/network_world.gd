@@ -114,11 +114,13 @@ func _on_scene_transition_started(target_scene_path: String) -> void:
 func _physics_process(delta: float) -> void:
 	if not is_instance_valid(net) or _scene_transitioning:
 		return
-	_capture_weapon_switch_input()
-	_capture_weapon_raise_input()
-	_capture_fire_input()
+	var local_menu_open := _is_local_menu_open()
+	if not local_menu_open:
+		_capture_weapon_switch_input()
+		_capture_weapon_raise_input()
+		_capture_fire_input()
 	if net.is_host:
-		_capture_host_input()
+		_capture_host_input(local_menu_open)
 		_simulate_host_players(delta)
 		_register_untracked_host_enemies()
 		_refresh_host_safe_door_readiness()
@@ -128,7 +130,14 @@ func _physics_process(delta: float) -> void:
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			player_snapshot.rpc(_build_snapshot(), _build_enemy_snapshot(true))
 	else:
-		_capture_client_input(delta)
+		_capture_client_input(delta, local_menu_open)
+
+
+func _is_local_menu_open() -> bool:
+	for menu: Node in get_tree().get_nodes_in_group("local_pause_menu"):
+		if menu.has_method("is_menu_open") and menu.is_menu_open():
+			return true
+	return false
 
 
 # ---------------------------------------------------------------- Host simulation
@@ -136,6 +145,7 @@ func _physics_process(delta: float) -> void:
 func _host_initialize_world() -> void:
 	# Scene switching must only discard old node bindings. Persistent PlayerState lives in Net.
 	Players.clear_entity_bindings()
+	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var host_node := _find_preplaced_player()
 	if host_node:
@@ -148,6 +158,7 @@ func _host_initialize_world() -> void:
 	# 若本轮 start_game 前客户端已报告 ready，先把其权威实体在 Host 场景里重建出来。
 	for peer_id: int in net.take_pending_scene_ready(_scene_path):
 		_add_host_peer(peer_id)
+	_reconcile_network_seats(net.get_peer_ids())
 	# Enemy/Pickup joins its groups from _ready(), so scan after the scene is completely ready.
 	call_deferred("_finish_host_world_initialization")
 
@@ -163,6 +174,7 @@ func _finish_host_world_initialization() -> void:
 func _client_initialize_world() -> void:
 	# Keep snapshot data during map loads, only invalidate scene-node bindings.
 	Players.clear_entity_bindings()
+	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var local_node := _find_preplaced_player()
 	if not local_node:
@@ -183,6 +195,7 @@ func _client_initialize_world() -> void:
 		"walking": false,
 	}
 	_set_local_player(local_node, seat_index)
+	_reconcile_network_seats(net.get_peer_ids())
 	_prepare_client_preplaced_enemies()
 	_prepare_client_preplaced_pickups()
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
@@ -222,20 +235,20 @@ func _capture_fire_input() -> void:
 		fire_request.rpc_id(1)
 
 
-func _capture_host_input() -> void:
+func _capture_host_input(blocked: bool = false) -> void:
 	if not _players.has(net.my_peer_id):
 		return
-	_set_input(net.my_peer_id, _read_local_direction(), Input.is_action_pressed("行走键"))
+	_set_input(net.my_peer_id, Vector2.ZERO if blocked else _read_local_direction(), false if blocked else Input.is_action_pressed("行走键"))
 
 
-func _capture_client_input(delta: float) -> void:
+func _capture_client_input(delta: float, blocked: bool = false) -> void:
 	if not _initial_world_received:
 		return
 	_input_accumulator += delta
 	if _input_accumulator < LOCAL_INPUT_INTERVAL:
 		return
 	_input_accumulator = fmod(_input_accumulator, LOCAL_INPUT_INTERVAL)
-	submit_input.rpc_id(1, _read_local_direction(), Input.is_action_pressed("行走键"))
+	submit_input.rpc_id(1, Vector2.ZERO if blocked else _read_local_direction(), false if blocked else Input.is_action_pressed("行走键"))
 
 
 func _read_local_direction() -> Vector2:
@@ -263,6 +276,11 @@ func _simulate_host_players(_delta: float) -> void:
 		var entry: Dictionary = _players[peer_id]
 		var node := entry.get("node") as CharacterBody2D
 		if not is_instance_valid(node):
+			continue
+		if node.has_method("is_network_dead") and node.is_network_dead():
+			node.velocity = Vector2.ZERO
+			_set_input(peer_id, Vector2.ZERO, false)
+			_sync_state_from_node(peer_id, node, false, false)
 			continue
 		var direction: Vector2 = entry.get("input", Vector2.ZERO)
 		var walking: bool = bool(entry.get("walking", false))
@@ -408,9 +426,11 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 		return
 	if node.is_weapon_mode_active():
 		node.exit_weapon_mode()
+		node.unlock_facing()
 	else:
 		node.enter_weapon_mode(wd)
 		node.set_weapon_ready_frame()
+		node.lock_facing()
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d raised=%s" % [peer_id, node.is_weapon_mode_active()])
 
 
@@ -755,6 +775,7 @@ func _on_peer_left(peer_id: int) -> void:
 		_remove_player(peer_id)
 		despawn_player.rpc(peer_id)
 		print("[NetworkWorld] HOST_DESPAWN peer=%d" % peer_id)
+	_reconcile_network_seats(net.get_peer_ids())
 	_clear_host_safe_door_ready_for_peer(peer_id)
 	# 仅无头双端回归收束：Client 完成输入验证并离开后，让 Host 自行干净退出。
 	# 正式房间继续保留 Host，不会走此分支。
@@ -809,13 +830,16 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 		if not node.is_weapon_mode_active() or node.get_network_weapon_id() != remote_weapon.item_id:
 			node.enter_weapon_mode(remote_weapon)
 			node.set_weapon_ready_frame()
+		node.lock_facing()
 	else:
 		node.exit_weapon_mode()
+		node.unlock_facing()
 	return remote_weapon
 
 
 func _apply_client_snapshot(states: Array, snap: bool) -> void:
 	var seen: Dictionary = {}
+	var authoritative_peer_ids: Array[int] = []
 	for value: Variant in states:
 		if not (value is Dictionary):
 			continue
@@ -824,6 +848,7 @@ func _apply_client_snapshot(states: Array, snap: bool) -> void:
 		if peer_id <= 0:
 			continue
 		seen[peer_id] = true
+		authoritative_peer_ids.append(peer_id)
 		_ensure_client_player(peer_id, public_state, snap)
 	# 不可靠移动快照可能丢包或乱序；只允许可靠的 world_snapshot 收敛实体列表。
 	if snap:
@@ -831,6 +856,7 @@ func _apply_client_snapshot(states: Array, snap: bool) -> void:
 			var existing_id := int(key)
 			if not seen.has(existing_id):
 				_remove_player(existing_id)
+		_reconcile_network_seats(authoritative_peer_ids)
 
 
 func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
@@ -838,7 +864,11 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	var node := entry.get("node") as CharacterBody2D
 	if not is_instance_valid(node):
 		node = _instantiate_player(_packet_position(public_state), peer_id)
-		var state := _make_player_state(str(public_state.get("character_path", "")), float(public_state.get("hp", 1.0)))
+		var state := _find_or_create_player_state(
+			peer_id,
+			str(public_state.get("character_path", "")),
+			float(public_state.get("hp", 1.0))
+		)
 		state.owner_peer_id = peer_id
 		node.configure_network_entity(peer_id, peer_id)
 		node.exit_weapon_mode()
@@ -871,8 +901,7 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	# 客户端角色会永远停在同一张行走帧上。
 	if snap:
 		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), _packet_position(public_state), int(public_state.get("facing", 0)), true)
-	else:
-		node.current_hp = clampf(float(public_state.get("hp", node.current_hp)), 0.0, node.max_hp)
+	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), bool(public_state.get("dead", false)), not snap)
 	node.apply_network_presentation(_packet_position(public_state), int(public_state.get("facing", 0)), bool(public_state.get("moving", false)), bool(public_state.get("walking", false)), snap)
 	entry["moving"] = bool(public_state.get("moving", false))
 	entry["walking"] = bool(public_state.get("walking", false))
@@ -1366,6 +1395,8 @@ func _run_auto_client_enemy_test() -> void:
 		get_tree().quit(1)
 		return
 	print("[NetworkWorld] AUTO_ENEMY_CLIENT_COMPLETE received=%d" % _enemies.size())
+	# Give the Host smoke coroutine one network tick to record its own assertion before teardown.
+	await get_tree().create_timer(0.20).timeout
 	net.leave()
 	get_tree().quit()
 
@@ -1806,6 +1837,7 @@ func _public_state(peer_id: int) -> Dictionary:
 		"active_weapon_slot": state.active_weapon_slot if state else "primary",
 		"weapon_magazines": state.weapon_magazines.duplicate() if state else {},
 		"weapon_raised": node.is_weapon_mode_active() if is_instance_valid(node) else false,
+		"dead": node.is_network_dead() if is_instance_valid(node) else true,
 		"magazine_ammo": state.get_magazine_ammo(weapon.item_id) if state and weapon else 0,
 	}
 
@@ -1813,6 +1845,47 @@ func _public_state(peer_id: int) -> Dictionary:
 func _weapon_id_for_slot(state: PlayerState, slot: String) -> String:
 	var wd: WeaponData = state.get_equipped_weapon(slot) if state else null
 	return wd.item_id if wd else ""
+
+
+## Net 每次 host/join 会清空 session cache；把角色选择/上一场景的本地座位接管回来，
+## 避免联机开始或切图时重新创建默认的手枪+小刀状态。
+func _claim_local_network_state() -> void:
+	if not net or not net.has_method("get_session_player_state"):
+		return
+	var local_id := int(net.my_peer_id)
+	if local_id <= 0 or net.get_session_player_state(local_id):
+		return
+	var state := Players.claim_active_seat_for_peer(local_id)
+	if state and net.has_method("set_session_player_state"):
+		net.set_session_player_state(local_id, state)
+
+
+## 根据权威 peer 列表收敛座位，并重建实体到座位的映射。
+func _reconcile_network_seats(peer_ids: Array[int]) -> void:
+	var states_by_peer: Dictionary = {}
+	for peer_id: int in peer_ids:
+		var entry: Dictionary = _players.get(peer_id, {})
+		var state := entry.get("state") as PlayerState
+		if state:
+			states_by_peer[peer_id] = state
+	Players.clear_entity_bindings()
+	Players.rebuild_network_seats(peer_ids, states_by_peer)
+	for peer_id: int in peer_ids:
+		if not _players.has(peer_id):
+			continue
+		var entry: Dictionary = _players[peer_id]
+		var node := entry.get("node") as Node2D
+		var seat_index := Players.find_seat_by_owner_peer_id(peer_id)
+		if is_instance_valid(node) and seat_index >= 0:
+			Players.register_entity(node, seat_index)
+			if peer_id == int(net.my_peer_id):
+				_set_local_player(node, seat_index)
+	var owners: Array[int] = []
+	for seat_index: int in range(Players.seat_count()):
+		var state := Players.get_seat(seat_index)
+		if state:
+			owners.append(state.owner_peer_id)
+	print("[NetworkWorld] NETWORK_SEATS expected=%d actual=%d owners=%s" % [peer_ids.size(), Players.seat_count(), str(owners)])
 
 
 func _find_or_create_player_state(peer_id: int, character_path: String, hp: float) -> PlayerState:
@@ -1836,6 +1909,11 @@ func _ensure_player_state_seat(state: PlayerState) -> int:
 		if Players.get_seat(index) == state:
 			state.seat_index = index
 			return index
+	if state.owner_peer_id > 0:
+		var owned_index := Players.find_seat_by_owner_peer_id(state.owner_peer_id)
+		if owned_index >= 0:
+			Players.replace_seat(owned_index, state)
+			return owned_index
 	return Players.add_seat(state)
 
 
