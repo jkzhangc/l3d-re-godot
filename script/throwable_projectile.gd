@@ -16,14 +16,19 @@ var _authoritative: bool = true
 var _damage_players: bool = true
 
 
-static func spawn(td: ThrowableData, start: Vector2, end: Vector2, thrower: Node2D, authoritative: bool = true, damage_players: bool = true) -> void:
+static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context: Node, authoritative: bool = true, damage_players: bool = true) -> void:
+	if not is_instance_valid(scene_context):
+		return
+	var tree := scene_context.get_tree()
+	if tree == null or tree.current_scene == null:
+		return
 	var proj := ThrowableProjectile.new()
 	proj._td = td
 	proj._start = start
 	proj._end = end
 	proj._authoritative = authoritative
 	proj._damage_players = damage_players
-	var scene := thrower.get_tree().current_scene
+	var scene := tree.current_scene
 	scene.add_child(proj)
 	proj.global_position = start
 	proj._setup_sprite()

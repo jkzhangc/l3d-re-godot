@@ -1,4 +1,8 @@
 extends CharacterBody2D
+
+## Host 伤害判定完成后由 NetworkWorld 转发给客户端的纯表现事件。
+signal network_damage_applied(damage: float, position: Vector2, is_headshot: bool)
+
 ## 敵人 — CharacterBody2D + AI 状态机
 ##
 ## VX Ace 精灵渲染（与玩家相同逻辑）
@@ -392,7 +396,11 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	var sm: Node = get_node_or_null("StateMachine")
 	var current_state: String = sm.current_state.name if sm and sm.current_state else ""
 
+	var hp_before := current_hp
 	current_hp = maxf(0.0, current_hp - damage)
+	var actual_damage := maxf(0.0, hp_before - current_hp)
+	if actual_damage > 0.0:
+		network_damage_applied.emit(actual_damage, global_position, is_headshot)
 	if damage > 0.0:
 		print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
 		_play_hit_feedback(Color.RED)
@@ -462,6 +470,17 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				sm._on_transition_requested("Hitstun")
 			else:
 				print("[敵人] StateMachine 中未找到 Hitstun 状态节点")
+
+
+func play_network_hurt_presentation(damage: float, impact_position: Vector2 = global_position, is_headshot: bool = false) -> void:
+	if damage <= 0.0:
+		return
+	_play_hit_feedback(Color.RED)
+	var tree := get_tree()
+	if tree and tree.current_scene:
+		var dmg_color := Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
+		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, dmg_color)
+	_play_sound(hurt_sound)
 
 
 func _clean_expired_damage_sources(now: int) -> void:

@@ -1,4 +1,8 @@
 extends CharacterBody2D
+
+## Host 伤害判定完成后由 NetworkWorld 转发给客户端的纯表现事件。
+signal network_damage_applied(damage: float, position: Vector2, is_headshot: bool)
+
 ## 玩家角色 — CharacterBody2D + 状态机
 ##
 ## 状态机负责：移动输入、状态切换、物理速度
@@ -795,6 +799,8 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	current_hp = maxf(0.0, current_hp - damage)
 	var actual_damage: float = maxf(0.0, hp_before - current_hp)
 	print("[玩家] 受到伤害: %d | HP: %.0f/%.0f | source=%d" % [int(damage), current_hp, max_hp, source_id])
+	if actual_damage > 0.0:
+		network_damage_applied.emit(actual_damage, global_position, _is_headshot)
 	_play_hit_feedback(Color.RED)
 
 	# 弹出伤害数字（红色调，表示玩家受伤）
@@ -815,6 +821,16 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 	if current_hp <= 0.0:
 		_die()
+
+
+func play_network_hurt_presentation(damage: float, impact_position: Vector2 = global_position) -> void:
+	if damage <= 0.0:
+		return
+	_play_hit_feedback(Color.RED)
+	var tree := get_tree()
+	if tree and tree.current_scene:
+		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
+	_play_sound(hurt_sound)
 
 
 ## 播放受击反馈（闪红/渐隐）

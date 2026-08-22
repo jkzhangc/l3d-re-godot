@@ -60,6 +60,10 @@ var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
 var _initial_world_received := false
+## 本地预置玩家已被接管后即可发送输入和战斗请求；完整世界快照只负责补齐远端实体/掉落物。
+var _client_local_ready := false
+## 客户端长按连发的本地请求节流；Host 仍执行武器、弹药和射速的最终校验。
+var _last_client_fire_request_msec := 0
 ## Net 在双方真正换图前发出的过渡信号；置位后本场景不再发送任何 RPC，避免旧节点路径的在途包。
 var _scene_transitioning := false
 var _last_logged_remote_input: Dictionary = {}
@@ -69,6 +73,10 @@ var _auto_client_bullet_seen := false
 ## 这会让单发步枪和多弹丸霰弹枪都能验证，而不是仅检查「至少看到一颗」。
 var _auto_client_bullets_seen := 0
 var _auto_client_attack_weapon_id := ""
+## --net-test-features 专用：只统计 Client 收到的可靠受伤表现 RPC，不参与正式玩法。
+var _auto_client_player_hurt_presentations := 0
+var _auto_client_enemy_hurt_presentations := 0
+var _auto_client_ready_input_seen_by_host := false
 ## 避免依赖编辑器正在重载的全局 Autoload 标识符；运行时取常驻 Net 节点。
 var net: Variant = null
 
@@ -93,11 +101,19 @@ func _ready() -> void:
 	else:
 		# 先接管地图预置 Player，阻止其继续执行离线状态机；随后才告知 Host 场景已就绪。
 		_client_initialize_world()
+		# 专用回归在 scene-ready 上报前直接调用生产输入采集函数，
+		# 从而证明首图无需等待 world_snapshot 也能发出 submit_input。
+		if _is_auto_client_ready_input_test():
+			Input.action_press("右")
+			_capture_client_input(LOCAL_INPUT_INTERVAL)
+			print("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_SENT initial_world_received=%s" % _initial_world_received)
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
 			if _is_auto_network_feature_test():
 				call_deferred("_run_auto_client_feature_test")
+			elif _is_auto_client_ready_input_test():
+				call_deferred("_run_auto_client_ready_input_test")
 			elif _is_auto_enemy_test_scene():
 				call_deferred("_run_auto_client_enemy_test")
 			elif _is_auto_safe_door_test_scene():
@@ -107,6 +123,8 @@ func _ready() -> void:
 	if net.is_host:
 		if _is_auto_network_feature_test():
 			call_deferred("_run_auto_host_feature_test")
+		elif _is_auto_client_ready_input_test():
+			call_deferred("_run_auto_host_ready_input_test")
 		elif _is_auto_enemy_test_scene():
 			call_deferred("_run_auto_host_enemy_test")
 		elif _is_auto_safe_door_test_scene():
@@ -130,6 +148,7 @@ func _on_scene_transition_started(target_scene_path: String) -> void:
 	if _scene_transitioning:
 		return
 	_scene_transitioning = true
+	_client_local_ready = false
 	print("[NetworkWorld] SCENE_TRANSITION_QUIET current=%s target=%s" % [_scene_path, target_scene_path])
 
 
@@ -227,6 +246,7 @@ func _client_initialize_world() -> void:
 	_reconcile_network_seats(net.get_peer_ids())
 	_prepare_client_preplaced_enemies()
 	_prepare_client_preplaced_pickups()
+	_client_local_ready = true
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
 
 
@@ -257,7 +277,7 @@ func _capture_revive_input() -> bool:
 		if target_id > 0:
 			if net.is_host:
 				_try_host_start_revive(peer_id, target_id)
-			elif _initial_world_received:
+			elif _client_local_ready:
 				# 本地仅记录按键占用，Host 仍会重新验证目标和距离。
 				_revive_attempts[peer_id] = {"target": target_id, "started_msec": 0}
 				revive_start_request.rpc_id(1, target_id)
@@ -265,7 +285,7 @@ func _capture_revive_input() -> bool:
 	if Input.is_action_just_released("确定键") and _revive_attempts.has(peer_id):
 		if net.is_host:
 			_cancel_host_revive(peer_id)
-		elif _initial_world_received:
+		elif _client_local_ready:
 			_revive_attempts.erase(peer_id)
 			revive_cancel_request.rpc_id(1)
 		return true
@@ -321,7 +341,7 @@ func _capture_throwable_input() -> bool:
 	if Input.is_action_just_pressed("投掷物键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, not held)
-		elif _initial_world_received:
+		elif _client_local_ready:
 			throwable_hold_request.rpc_id(1, not held)
 		return true
 	if not held:
@@ -329,20 +349,20 @@ func _capture_throwable_input() -> bool:
 	if Input.is_action_just_pressed("主武器键") or Input.is_action_just_pressed("副武器键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, false)
-		elif _initial_world_received:
+		elif _client_local_ready:
 			throwable_hold_request.rpc_id(1, false)
 		return true
 	if not aiming and Input.is_action_just_pressed("确定键"):
 		if net.is_host:
 			_try_host_set_throwable_aiming(local_id, true)
-		elif _initial_world_received:
+		elif _client_local_ready:
 			throwable_aim_request.rpc_id(1, true)
 		return true
 	if aiming:
 		if Input.is_action_just_pressed("取消键"):
 			if net.is_host:
 				_try_host_set_throwable_aiming(local_id, false)
-			elif _initial_world_received:
+			elif _client_local_ready:
 				throwable_aim_request.rpc_id(1, false)
 		elif Input.is_action_just_pressed("投掷加格键"):
 			_request_throwable_range(1)
@@ -351,7 +371,7 @@ func _capture_throwable_input() -> bool:
 		elif Input.is_action_just_released("确定键"):
 			if net.is_host:
 				_try_host_throw_throwable(local_id)
-			elif _initial_world_received:
+			elif _client_local_ready:
 				throwable_throw_request.rpc_id(1)
 		return true
 	return true
@@ -360,7 +380,7 @@ func _capture_throwable_input() -> bool:
 func _request_throwable_range(delta: int) -> void:
 	if net.is_host:
 		_try_host_adjust_throwable_range(int(net.my_peer_id), delta)
-	elif _initial_world_received:
+	elif _client_local_ready:
 		throwable_range_request.rpc_id(1, clampi(delta, -1, 1))
 
 
@@ -376,14 +396,14 @@ func _capture_weapon_raise_input() -> void:
 		return
 	if net.is_host:
 		_try_host_toggle_weapon(int(net.my_peer_id))
-	elif _initial_world_received:
+	elif _client_local_ready:
 		weapon_toggle_request.rpc_id(1)
 
 
 func _request_weapon_switch(slot: String) -> void:
 	if net.is_host:
 		_try_host_weapon_switch(int(net.my_peer_id), slot)
-	elif _initial_world_received:
+	elif _client_local_ready:
 		# Client 只提交槽位意图；Host 从自身 PlayerState 校验真实装备。
 		weapon_switch_request.rpc_id(1, slot)
 
@@ -393,7 +413,7 @@ func _capture_reload_input() -> void:
 		return
 	if net.is_host:
 		_try_host_reload(int(net.my_peer_id))
-	elif _initial_world_received:
+	elif _client_local_ready:
 		# Client 仅请求装填；Host 校验库存并一次性提交权威弹药结果。
 		reload_request.rpc_id(1)
 
@@ -403,17 +423,27 @@ func _capture_shove_input() -> void:
 		return
 	if net.is_host:
 		_try_host_shove(int(net.my_peer_id))
-	elif _initial_world_received:
+	elif _client_local_ready:
 		shove_request.rpc_id(1)
 
 
 func _capture_fire_input() -> void:
-	if not Input.is_action_just_pressed("确定键"):
+	var local_id := int(net.my_peer_id)
+	var entry: Dictionary = _players.get(local_id, {})
+	var state := entry.get("state") as PlayerState
+	var weapon: WeaponData = state.get_active_weapon() if state else null
+	var held_fire := weapon != null and weapon.fire_mode == WeaponData.FireMode.HOLD
+	if (not held_fire and not Input.is_action_just_pressed("确定键")) or (held_fire and not Input.is_action_pressed("确定键")):
 		return
 	if net.is_host:
-		_try_host_attack(int(net.my_peer_id))
-	elif _initial_world_received:
+		_try_host_attack(local_id)
+	elif _client_local_ready:
 		# Client 只提交攻击意图；位置、朝向、武器、弹药和伤害均由 Host 重建与校验。
+		var now := Time.get_ticks_msec()
+		var interval := _get_attack_cooldown_msec(weapon) if weapon else 100
+		if now - _last_client_fire_request_msec < interval:
+			return
+		_last_client_fire_request_msec = now
 		fire_request.rpc_id(1)
 
 
@@ -424,7 +454,8 @@ func _capture_host_input(blocked: bool = false) -> void:
 
 
 func _capture_client_input(delta: float, blocked: bool = false) -> void:
-	if not _initial_world_received:
+	# 首图的本地预置玩家在 _client_initialize_world() 已安全接管；不必等待完整世界快照。
+	if not _client_local_ready:
 		return
 	_input_accumulator += delta
 	if _input_accumulator < LOCAL_INPUT_INTERVAL:
@@ -446,6 +477,8 @@ func _set_input(peer_id: int, direction: Vector2, walking: bool) -> void:
 	entry["walking"] = walking
 	_players[peer_id] = entry
 	if net.is_host and peer_id != int(net.my_peer_id):
+		if _is_auto_client_ready_input_test() and normalized.x > 0.5:
+			_auto_client_ready_input_seen_by_host = true
 		var previous: Vector2 = _last_logged_remote_input.get(peer_id, Vector2.INF)
 		if previous != normalized:
 			_last_logged_remote_input[peer_id] = normalized
@@ -518,7 +551,34 @@ func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bo
 		"walking": false,
 	}
 	_sync_state_from_node(peer_id, node, false, false)
+	_connect_host_player_damage_signal(peer_id, node)
 	print("[NetworkWorld] HOST_SPAWN peer=%d preplaced=%s" % [peer_id, is_preplaced])
+
+
+func _connect_host_player_damage_signal(peer_id: int, node: CharacterBody2D) -> void:
+	if not net.is_host or not is_instance_valid(node) or not node.has_signal("network_damage_applied"):
+		return
+	var callback := Callable(self, "_on_host_player_damage_applied").bind(peer_id)
+	if not node.is_connected("network_damage_applied", callback):
+		node.connect("network_damage_applied", callback)
+
+
+func _connect_host_enemy_damage_signal(entity_id: int, node: CharacterBody2D) -> void:
+	if not net.is_host or not is_instance_valid(node) or not node.has_signal("network_damage_applied"):
+		return
+	var callback := Callable(self, "_on_host_enemy_damage_applied").bind(entity_id)
+	if not node.is_connected("network_damage_applied", callback):
+		node.connect("network_damage_applied", callback)
+
+
+func _on_host_player_damage_applied(damage: float, position: Vector2, _is_headshot: bool, peer_id: int) -> void:
+	if net.is_host and damage > 0.0:
+		player_hurt_presentation.rpc(peer_id, damage, position)
+
+
+func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool, entity_id: int) -> void:
+	if net.is_host and damage > 0.0:
+		enemy_hurt_presentation.rpc(entity_id, damage, position, is_headshot)
 
 
 func _add_host_peer(peer_id: int) -> void:
@@ -1182,16 +1242,38 @@ func throwable_state_presentation(peer_id: int, throwable_id: String, held: bool
 
 @rpc("authority", "call_remote", "reliable")
 func throwable_presentation(peer_id: int, throwable_id: String, start_position: Vector2, end_position: Vector2) -> void:
-	if net.is_host:
+	if net.is_host or _scene_transitioning:
 		return
 	var td := _get_network_throwable_data_by_id(throwable_id)
 	if not td:
 		return
-	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as Node2D
-	if not is_instance_valid(node):
+	# 表现 RPC 不依赖远端玩家节点已建立，避免投掷者生成与投掷包竞争时丢失手雷。
+	ThrowableProjectile.spawn(td, start_position, end_position, self, false, false)
+	print("[NetworkWorld] CLIENT_THROWABLE_PRESENTATION peer=%d item=%s" % [peer_id, throwable_id])
+
+
+@rpc("authority", "call_remote", "reliable")
+func player_hurt_presentation(peer_id: int, damage: float, position: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
 		return
-	ThrowableProjectile.spawn(td, start_position, end_position, node, false, false)
+	var node := (_players.get(peer_id, {}) as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("play_network_hurt_presentation"):
+		node.play_network_hurt_presentation(damage, position)
+		if _is_auto_network_feature_test():
+			_auto_client_player_hurt_presentations += 1
+			print("[NetworkWorld] CLIENT_PLAYER_HURT_PRESENTATION peer=%d damage=%.1f" % [peer_id, damage])
+
+
+@rpc("authority", "call_remote", "reliable")
+func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, is_headshot: bool) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var node := (_enemies.get(entity_id, {}) as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("play_network_hurt_presentation"):
+		node.play_network_hurt_presentation(damage, position, is_headshot)
+		if _is_auto_network_feature_test():
+			_auto_client_enemy_hurt_presentations += 1
+			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s" % [entity_id, damage, is_headshot])
 
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
@@ -1560,7 +1642,9 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 				return
 			node.configure_network_entity(entity_id, true)
 			node.global_position = _packet_position(public_state)
-			get_tree().current_scene.add_child(node)
+			_players_parent.add_child(node)
+		if is_instance_valid(_players_parent) and node.get_parent() != _players_parent:
+			node.reparent(_players_parent, true)
 		node.configure_network_entity(entity_id, true)
 		entry = {"node": node, "scene_path": scene_path}
 		_enemies[entity_id] = entry
@@ -1836,7 +1920,7 @@ func request_safe_door_ready(door_key: String) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func safe_door_ready_request(door_key: String) -> void:
-	if not net.is_host:
+	if not net.is_host or _scene_transitioning or not is_inside_tree() or multiplayer == null:
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender > 1:
@@ -1961,6 +2045,48 @@ func _is_auto_network_feature_test() -> bool:
 	return "--net-test-features" in OS.get_cmdline_user_args()
 
 
+## 不等待完整 world_snapshot 的首图输入回归：Client 预置 Player 接管后立刻上传输入，
+## Host 只以自身收到的 submit_input 作为通过依据。正式游戏不会进入此分支。
+func _is_auto_client_ready_input_test() -> bool:
+	return "--net-test-client-ready-input" in OS.get_cmdline_user_args()
+
+
+func _run_auto_host_ready_input_test() -> void:
+	var deadline := Time.get_ticks_msec() + 6000
+	var client_id := 0
+	while Time.get_ticks_msec() < deadline:
+		for peer_id: int in net.get_peer_ids():
+			if peer_id > 1:
+				client_id = peer_id
+				break
+		if client_id > 1 and _auto_client_ready_input_seen_by_host:
+			print("[NetworkWorld] AUTO_CLIENT_READY_INPUT_HOST_COMPLETE peer=%d" % client_id)
+			await get_tree().create_timer(0.30).timeout
+			if is_inside_tree() and net.is_host:
+				net.leave()
+				get_tree().quit()
+			return
+		await get_tree().create_timer(0.05).timeout
+	printerr("[NetworkWorld] AUTO_CLIENT_READY_INPUT_HOST_FAILED peer=%d" % client_id)
+	if is_inside_tree() and net.is_host:
+		net.leave()
+		get_tree().quit(1)
+
+
+func _run_auto_client_ready_input_test() -> void:
+	if not _client_local_ready:
+		printerr("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_FAILED local_ready=false")
+		return
+	# 输入已在 _ready() 中、scene-ready 上报前发出；短暂保持按键以避免网络帧恰好错过，
+	# 再等待 Host 对该输入的权威接收。
+	await get_tree().create_timer(0.35).timeout
+	Input.action_release("右")
+	await get_tree().create_timer(1.00).timeout
+	if is_inside_tree() and not net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
 ## 单一双端回归覆盖：客户端投掷物输入、Host 权威消费、死亡救援与举放武器过渡。
 ## 测试只在明确 --net-test-features 下运行，正式游戏完全不会进入此分支。
 func _run_auto_host_feature_test() -> void:
@@ -2001,7 +2127,22 @@ func _run_auto_host_feature_test() -> void:
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_SETUP_FAILED missing_node")
 		return
 	_set_auto_test_player_position(client_id, host_node.global_position + Vector2(12.0, 0.0))
-	host_node.take_damage(host_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998801)
+	# 真实 Host 伤害链路必须在 Client 产生受伤闪烁、数字和音效；
+	# 先给一名敌人和 Host 各造成非致命伤，再进行后续倒地/救援回归。
+	var feedback_enemy: CharacterBody2D = null
+	for enemy_entry_value: Variant in _enemies.values():
+		var candidate := (enemy_entry_value as Dictionary).get("node") as CharacterBody2D
+		if is_instance_valid(candidate) and not candidate.is_network_dead():
+			feedback_enemy = candidate
+			break
+	if not is_instance_valid(feedback_enemy):
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_HURT_SETUP_FAILED missing_enemy")
+		return
+	feedback_enemy.take_damage(1.0, 0.0, Vector2.RIGHT, false, 0.0, 0.0, 998800)
+	host_node.take_damage(1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998801)
+	print("[NetworkWorld] AUTO_FEATURE_HOST_HURT_APPLIED enemy=%s player=%d" % [feedback_enemy.name, int(net.my_peer_id)])
+	await get_tree().create_timer(0.35).timeout
+	host_node.take_damage(host_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998802)
 	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 4000
 	while host_node.is_network_dead() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
@@ -2043,7 +2184,26 @@ func _run_auto_client_feature_test() -> void:
 	if state.throwable != null:
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_THROWABLE_FAILED not_consumed")
 		return
-	# Host 在投掷校验结束后会令自己倒地；客户端必须以真实 RPC 请求救援。
+	# Host 会通过真实 take_damage() 广播敌人和玩家受伤表现；Client 只验证收到的表现 RPC，
+	# 不在本地扣血或驱动敌人状态机。
+	deadline = Time.get_ticks_msec() + 3500
+	while (
+		_auto_client_player_hurt_presentations < 1
+		or _auto_client_enemy_hurt_presentations < 1
+	) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var hurt_presentation_ok := _auto_client_player_hurt_presentations >= 1 and _auto_client_enemy_hurt_presentations >= 1
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_HURT_COMPLETE player_events=%d enemy_events=%d" % [
+		_auto_client_player_hurt_presentations,
+		_auto_client_enemy_hurt_presentations,
+	])
+	if not hurt_presentation_ok:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_HURT_FAILED player_events=%d enemy_events=%d" % [
+			_auto_client_player_hurt_presentations,
+			_auto_client_enemy_hurt_presentations,
+		])
+		return
+	# Host 在投掷校验及受伤表现回归结束后会令自己倒地；客户端必须以真实 RPC 请求救援。
 	var host_entry: Dictionary = _players.get(1, {})
 	var host_node := host_entry.get("node") as CharacterBody2D
 	deadline = Time.get_ticks_msec() + 4000
@@ -2246,12 +2406,18 @@ func _run_auto_client_input_test() -> void:
 	_auto_client_bullet_seen = false
 	_auto_client_bullets_seen = 0
 	_auto_client_attack_weapon_id = ""
+	# HOLD 武器（如冲锋枪）必须在同一次连续按住中产生多次 Host 权威攻击，
+	# 不能仅验证一次按键会开火，否则会漏掉冲锋枪无法连发的回归。
+	var hold_fire_test := primary_weapon.fire_mode == WeaponData.FireMode.HOLD
+	var required_attack_count := 3 if hold_fire_test else 1
+	var required_visual_bullets := primary_weapon.bullet_list.size() * required_attack_count
+	var fire_hold_duration := 0.75 if hold_fire_test else 0.12
 	Input.action_press("确定键")
-	await get_tree().create_timer(0.12).timeout
+	await get_tree().create_timer(fire_hold_duration).timeout
 	Input.action_release("确定键")
 	deadline = Time.get_ticks_msec() + 3000
 	while (
-		(not _auto_client_fire_confirmed or _auto_client_bullets_seen < primary_weapon.bullet_list.size())
+		(not _auto_client_fire_confirmed or _auto_client_bullets_seen < required_visual_bullets)
 		and Time.get_ticks_msec() < deadline
 	):
 		await get_tree().create_timer(0.05).timeout
@@ -2261,26 +2427,27 @@ func _run_auto_client_input_test() -> void:
 	var fire_ok := (
 		_auto_client_fire_confirmed
 		and _auto_client_attack_weapon_id == primary_weapon.item_id
-		and _auto_client_bullets_seen == primary_weapon.bullet_list.size()
-		and final_ammo == primary_weapon.magazine_capacity - 1
+		and _auto_client_bullets_seen >= required_visual_bullets
+		and final_ammo <= primary_weapon.magazine_capacity - required_attack_count
 	)
-	print("[NetworkWorld] AUTO_CLIENT_FIRE_COMPLETE weapon=%s confirmed=%s bullets_seen=%d expected_bullets=%d ammo=%d" % [
+	print("[NetworkWorld] AUTO_CLIENT_FIRE_COMPLETE weapon=%s hold_mode=%s confirmed=%s bullets_seen=%d required_bullets=%d ammo=%d" % [
 		_auto_client_attack_weapon_id,
+		hold_fire_test,
 		_auto_client_fire_confirmed,
 		_auto_client_bullets_seen,
-		primary_weapon.bullet_list.size(),
+		required_visual_bullets,
 		final_ammo,
 	])
 	if not fire_ok:
-		printerr("[NetworkWorld] AUTO_CLIENT_FIRE_FAILED expected_weapon=%s weapon=%s confirmed=%s bullets_seen=%d expected_bullets=%d ammo=%d" % [
+		printerr("[NetworkWorld] AUTO_CLIENT_FIRE_FAILED expected_weapon=%s hold_mode=%s weapon=%s confirmed=%s bullets_seen=%d required_bullets=%d ammo=%d" % [
 			primary_weapon.item_id,
+			hold_fire_test,
 			_auto_client_attack_weapon_id,
 			_auto_client_fire_confirmed,
 			_auto_client_bullets_seen,
-			primary_weapon.bullet_list.size(),
+			required_visual_bullets,
 			final_ammo,
 		])
-
 	# 第二段：先通过正常的客户端输入移动到 Enemy2 的近战距离内。
 	# 不传送客户端坐标，确保本回归仍覆盖「Client 输入 → Host 模拟移动 → Host 判定」完整链路。
 	Input.action_press("右")
@@ -2453,6 +2620,7 @@ func _register_initial_host_enemies() -> void:
 		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
 		enemy.configure_network_entity(entity_id, false)
 		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+		_connect_host_enemy_damage_signal(entity_id, enemy)
 	print("[NetworkWorld] HOST_ENEMIES_REGISTERED count=%d" % _enemies.size())
 
 
@@ -2475,6 +2643,7 @@ func _register_untracked_host_enemies() -> void:
 		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
 		enemy.configure_network_entity(entity_id, false)
 		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+		_connect_host_enemy_damage_signal(entity_id, enemy)
 		var public_state := _public_enemy_state(entity_id)
 		var ready_client_count := 0
 		for peer_id: int in net.get_peer_ids():

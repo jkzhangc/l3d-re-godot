@@ -34,6 +34,10 @@ func _init(font: Font, font_size: int, color_img: Image, parent: Node, text_colo
 
 ## Internal helper used by render() — not meant for direct use.
 func _render(text: String, color_index: int, outline: bool, outline_color: Color, padding: int) -> Image:
+	# The headless Dummy renderer cannot read SubViewport target textures. Gradient text is cosmetic, so omit it in automated/headless runs.
+	if DisplayServer.get_name() == "headless":
+		return null
+
 	# Measure text
 	var ts := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, _font_size)
 	var img_w := maxi(ceili(ts.x) + padding * 2, 1)
@@ -61,10 +65,15 @@ func _render(text: String, color_index: int, outline: bool, outline_color: Color
 		await tree.process_frame
 		await tree.process_frame
 
-	var img := _viewport.get_texture().get_image()
-	if img.is_empty():
-		printerr("[TextGradientRenderer] 渲染失败: 文字='%s'" % text)
-		return img
+	# Dummy/headless renderer may not allocate a viewport texture at all.
+	# Treat it as an unavailable optional visual, rather than dereferencing null and
+	# flooding gameplay/network smoke tests with script errors.
+	var viewport_texture := _viewport.get_texture() if is_instance_valid(_viewport) else null
+	if viewport_texture == null:
+		return null
+	var img: Image = viewport_texture.get_image()
+	if img == null or img.is_empty():
+		return null
 
 	# Apply vertical gradient — brighten top, darken bottom from base color
 	var out := Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)
@@ -115,7 +124,7 @@ func render(text: String, color_index: int, outline: bool = false, outline_color
 	var padding := 2 if outline else 0
 	var img := await _render(text, color_index, outline, outline_color, padding)
 
-	if img.is_empty():
+	if img == null or img.is_empty():
 		return null
 
 	return ImageTexture.create_from_image(img)
@@ -129,7 +138,7 @@ func render_flat(text: String, color_index: int, _unused: bool = false, _unused2
 
 	# Render white text
 	var img := await _render(text, color_index, false, Color.BLACK, 0)
-	if img.is_empty():
+	if img == null or img.is_empty():
 		return null
 
 	# Apply flat color from color sheet center
