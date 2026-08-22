@@ -30,6 +30,7 @@ const NETWORK_THROWABLES: Dictionary = {
 }
 const SNAPSHOT_INTERVAL := 1.0 / 20.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 30.0
+const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
 
 var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
@@ -56,6 +57,7 @@ const REVIVE_RANGE := 52.0
 const REVIVE_DURATION_MSEC := 3000
 const REVIVE_HP_RATIO := 0.30
 var _snapshot_accumulator := 0.0
+var _reliable_resync_accumulator := 0.0
 var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
@@ -196,7 +198,13 @@ func _physics_process(delta: float) -> void:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			player_snapshot.rpc(_build_snapshot(), _build_enemy_snapshot(true))
+		_reliable_resync_accumulator += delta
+		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
+			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
+			# 定期可靠重同步可恢复高延迟/丢包客户端的敌人、玩家与掉落物列表。
+			_broadcast_reliable_world_snapshot()
 	else:
+		_predict_client_local_movement(local_menu_open or not local_player_alive)
 		_capture_client_input(delta, local_menu_open or not local_player_alive)
 
 
@@ -269,6 +277,8 @@ func _client_initialize_world() -> void:
 	state.facing = local_node.facing
 	var seat_index := _ensure_player_state_seat(state)
 	local_node.configure_network_entity(local_id, local_id)
+	local_node.set_network_local_prediction(true)
+	local_node.apply_network_spawn_state(state.character, state.current_hp, state.position, state.facing, true)
 	local_node.exit_weapon_mode()
 	Players.register_entity(local_node, seat_index)
 	_players[local_id] = {
@@ -523,6 +533,25 @@ func _capture_client_input(delta: float, blocked: bool = false) -> void:
 		return
 	_input_accumulator = fmod(_input_accumulator, LOCAL_INPUT_INTERVAL)
 	submit_input.rpc_id(1, Vector2.ZERO if blocked else _read_local_direction(), false if blocked else Input.is_action_pressed("行走键"))
+
+
+func _predict_client_local_movement(blocked: bool = false) -> void:
+	if not _client_local_ready:
+		return
+	var peer_id := int(net.my_peer_id)
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(node) or node.is_network_dead():
+		return
+	var direction := Vector2.ZERO if blocked else _read_local_direction()
+	var walking := false if blocked else Input.is_action_pressed("行走键")
+	var moving := not direction.is_zero_approx()
+	node.velocity = direction * (node.walk_speed if walking else node.run_speed)
+	if moving:
+		node.update_facing(direction)
+	node.move_and_slide()
+	node.update_appearance(moving, walking)
+	_set_input(peer_id, direction, walking)
 
 
 func _read_local_direction() -> Vector2:
@@ -1669,6 +1698,8 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		)
 		state.owner_peer_id = peer_id
 		node.configure_network_entity(peer_id, peer_id)
+		if peer_id == int(net.my_peer_id):
+			node.set_network_local_prediction(true)
 		node.exit_weapon_mode()
 		var seat_index: int = _ensure_player_state_seat(state)
 		Players.register_entity(node, seat_index)

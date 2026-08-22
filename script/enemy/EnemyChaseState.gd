@@ -402,6 +402,8 @@ func _mark_enemy_obstacles() -> Array[Vector2i]:
 		var gp: Vector2i = _world_to_grid(other.global_position)
 		if gp == my_grid:
 			continue
+		if not _astar_grid.region.has_point(gp):
+			continue
 		# 只标记当前可行走的格子（已经是墙的不用重复标记）
 		if not _astar_grid.is_point_solid(gp):
 			_astar_grid.set_point_solid(gp, true)
@@ -411,8 +413,11 @@ func _mark_enemy_obstacles() -> Array[Vector2i]:
 
 
 func _clear_enemy_obstacles(cells: Array[Vector2i]) -> void:
+	if not _astar_grid:
+		return
 	for gp in cells:
-		_astar_grid.set_point_solid(gp, false)
+		if _astar_grid.region.has_point(gp):
+			_astar_grid.set_point_solid(gp, false)
 
 
 func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:

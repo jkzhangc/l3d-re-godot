@@ -108,6 +108,8 @@ var current_hp: float = 200.0
 var network_entity_id: int = 0
 var network_owner_peer_id: int = 0
 var network_controlled: bool = false
+## 本地客户端实体开启预测；Host 仍是最终权威，快照只用于纠偏。
+var network_local_prediction: bool = false
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
 var _network_attack_token: int = 0
@@ -204,8 +206,10 @@ func _setup_hurt_area() -> Area2D:
 
 func _process(delta: float) -> void:
 	if network_controlled:
-		# 死亡快照必须停在 Host 给出的死亡坐标，不能继续向旧移动目标插值。
-		if not _is_dying and _network_has_target:
+		_update_shove_fatigue(delta)
+		_update_tp_regen(delta)
+		# 本地预测实体由 NetworkWorld 在物理帧直接移动，避免等待快照造成输入延迟。
+		if not network_local_prediction and not _is_dying and _network_has_target:
 			global_position = global_position.lerp(_network_target_position, minf(delta * 16.0, 1.0))
 		return
 	if _is_dying:
@@ -230,6 +234,7 @@ func configure_network_entity(entity_id: int, owner_peer_id: int) -> void:
 	network_entity_id = entity_id
 	network_owner_peer_id = owner_peer_id
 	network_controlled = true
+	network_local_prediction = false
 	velocity = Vector2.ZERO
 	if is_node_ready():
 		_disable_network_state_machine()
@@ -244,6 +249,12 @@ func apply_network_spawn_state(character: CharacterData, hp: float, new_position
 	apply_network_presentation(new_position, new_facing, false, false, snap)
 
 
+func set_network_local_prediction(enabled: bool) -> void:
+	network_local_prediction = enabled
+	if enabled:
+		_network_has_target = false
+
+
 ## 仅更新客户端可见状态。Host 传 snap=true，客户端由 _process 平滑插值。
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, walking: bool, snap: bool = false) -> void:
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
@@ -254,7 +265,13 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		_network_has_target = false
 		return
 	update_appearance(moving, walking)
-	if snap:
+	if snap and network_local_prediction and _network_has_target:
+		# 预测期间忽略小幅可靠快照回弹，严重偏差才纠正。
+		if global_position.distance_to(new_position) > 96.0:
+			global_position = new_position
+		_network_target_position = new_position
+		_network_has_target = false
+	elif snap:
 		global_position = new_position
 		_network_target_position = new_position
 		_network_has_target = false

@@ -42,8 +42,9 @@ weapon_walk_textures = {
 "Shotgun": ExtResource("9_w6m76"),
 "Smg": ExtResource("10_lxnma")
 }
-allowed_primary_weapons = Array[String](["shotgun_01", "rifle_01", "smg_01"])
-allowed_secondary_weapons = Array[String](["pistol_01"])
+# 空白白名单表示允许全部武器，避免角色资源遗漏近战/拾取能力。
+allowed_primary_weapons = Array[String]([])
+allowed_secondary_weapons = Array[String]([])
 shove_walk_texture = ExtResource("6_3yr1j")
 shove_fatigue_limit = 10
 attack_effect_offsets = {

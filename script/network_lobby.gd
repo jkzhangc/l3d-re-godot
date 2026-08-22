@@ -308,18 +308,18 @@ func _refresh_character_select(selection_ready: bool) -> void:
 	character_select.clear()
 	var selected_path: String = str(net.get_player_character_path(int(net.my_peer_id)))
 	var available_paths: Array[String] = net.get_available_character_paths()
-	var selected_index := -1
+	# 未选择时保留真实占位项，避免下拉框视觉默认值与玩家列表状态不一致。
+	character_select.add_item("请选择角色")
+	character_select.set_item_metadata(0, "")
+	var selected_index := 0
 	for character_path: String in available_paths:
 		var item_index := character_select.item_count
 		character_select.add_item(net.get_character_display_name(character_path))
 		character_select.set_item_metadata(item_index, character_path)
-		if character_path == selected_path:
+		if not selected_path.is_empty() and character_path == selected_path:
 			selected_index = item_index
-	if selected_index >= 0:
-		character_select.select(selected_index)
-	elif character_select.item_count > 0:
-		character_select.select(0)
-	character_select.disabled = not selection_ready or character_select.item_count == 0
+	character_select.select(selected_index)
+	character_select.disabled = not selection_ready or character_select.item_count <= 1
 	if not selection_ready:
 		character_hint.text = "连接并完成握手后可选择角色"
 	elif selected_path.is_empty():
