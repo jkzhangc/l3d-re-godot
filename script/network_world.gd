@@ -163,6 +163,7 @@ func _physics_process(delta: float) -> void:
 		if not revive_input_active and not throwable_input_active:
 			_capture_weapon_switch_input()
 			_capture_weapon_raise_input()
+			_capture_facing_lock_input()
 			_capture_reload_input()
 			_capture_shove_input()
 			_capture_fire_input()
@@ -186,6 +187,15 @@ func _is_local_menu_open() -> bool:
 		if menu.has_method("is_menu_open") and menu.is_menu_open():
 			return true
 	return false
+
+
+## 菜单需查询 NetworkWorld 的实际本地网络实体，不能依赖切图期间可能滞后的 Players 绑定。
+func is_local_weapon_mode_active() -> bool:
+	if not is_instance_valid(net):
+		return false
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	return is_instance_valid(node) and node.is_weapon_mode_active()
 
 
 # ---------------------------------------------------------------- Host simulation
@@ -398,6 +408,31 @@ func _capture_weapon_raise_input() -> void:
 		_try_host_toggle_weapon(int(net.my_peer_id))
 	elif _client_local_ready:
 		weapon_toggle_request.rpc_id(1)
+
+
+## 联机接管后离线武器状态机不再读取取消键，因此这里将固定朝向意图提交给 Host。
+## 投掷瞄准会先由 _capture_throwable_input() 吞掉取消键，避免两种取消操作冲突。
+func _capture_facing_lock_input() -> void:
+	var local_id := int(net.my_peer_id)
+	var entry: Dictionary = _players.get(local_id, {})
+	var node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active():
+		return
+	if Global.facing_lock_mode == 0:
+		if Input.is_action_just_pressed("取消键"):
+			_request_facing_lock(true, false)
+		return
+	var should_lock := Input.is_action_pressed("取消键")
+	if should_lock != node.is_facing_locked():
+		_request_facing_lock(false, should_lock)
+
+
+func _request_facing_lock(toggle: bool, locked: bool) -> void:
+	var local_id := int(net.my_peer_id)
+	if net.is_host:
+		_try_host_set_facing_lock(local_id, toggle, locked)
+	elif _client_local_ready:
+		facing_lock_request.rpc_id(1, toggle, locked)
 
 
 func _request_weapon_switch(slot: String) -> void:
@@ -805,6 +840,23 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 
 
+## Host 保留唯一朝向权威：客户端仅提交操作意图，朝向本身继续随快照广播。
+func _try_host_set_facing_lock(peer_id: int, toggle: bool, locked: bool) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_throwable_held(peer_id):
+		return
+	if toggle:
+		node.toggle_facing_lock()
+	elif locked:
+		node.lock_facing()
+	else:
+		node.unlock_facing()
+	print("[NetworkWorld] HOST_FACING_LOCK peer=%d locked=%s" % [peer_id, node.is_facing_locked()])
+
+
 ## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
 ## 这样客户端永远不能伪造备用弹药或通过重复 RPC 多扣/多装。
 func _try_host_reload(peer_id: int) -> void:
@@ -1091,6 +1143,16 @@ func weapon_toggle_request() -> void:
 	if sender <= 1 or not _players.has(sender):
 		return
 	_try_host_toggle_weapon(sender)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func facing_lock_request(toggle: bool, locked: bool) -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_set_facing_lock(sender, toggle, locked)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2150,8 +2212,8 @@ func _run_auto_host_feature_test() -> void:
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_FAILED hp=%.1f" % host_node.current_hp)
 		return
 	print("[NetworkWorld] AUTO_FEATURE_HOST_COMPLETE revived_hp=%.1f" % host_node.current_hp)
-	# Client 接下来还要完成两段武器过渡；避免无头 Host 留在场景中导致测试器超时。
-	await get_tree().create_timer(6.0).timeout
+	# Client 接下来还要完成武器举放与固定朝向回归；Host 必须持续在线直到请求已被权威处理。
+	await get_tree().create_timer(15.0).timeout
 	if is_inside_tree() and net.is_host:
 		net.leave()
 		get_tree().quit()
@@ -2242,7 +2304,45 @@ func _run_auto_client_feature_test() -> void:
 	if not raised or not lowered:
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_TRANSITION_FAILED raised=%s lowered=%s" % [raised, lowered])
 		return
-	print("[NetworkWorld] AUTO_FEATURE_CLIENT_COMPLETE throwable=true revive=true transition=true")
+	# 固定朝向回归：Client 只能请求 Host 加锁；Host 在锁定时收到移动输入也不得改变 facing，
+	# 解锁后下一次移动则必须恢复正常转向。
+	weapon_toggle_request.rpc_id(1)
+	await get_tree().create_timer(transition_wait).timeout
+	if not local_node.is_weapon_mode_active():
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_SETUP_FAILED weapon_not_raised")
+		return
+	# Player.facing is an integer enum; use the vector accessor here so the
+	# regression verifies direction without duplicating Player.FaceDir values.
+	var locked_facing: Vector2 = local_node.get_facing_vector()
+	var test_direction := Vector2.RIGHT if locked_facing != Vector2.RIGHT else Vector2.LEFT
+	# The test uses explicit state requests rather than toggle so an inherited
+	# scene/animation lock state cannot invert the assertion.
+	facing_lock_request.rpc_id(1, false, true)
+	await get_tree().create_timer(0.12).timeout
+	submit_input.rpc_id(1, test_direction, false)
+	await get_tree().create_timer(0.20).timeout
+	var facing_after_lock: Vector2 = local_node.get_facing_vector()
+	var stayed_locked: bool = facing_after_lock.is_equal_approx(locked_facing)
+	facing_lock_request.rpc_id(1, false, false)
+	await get_tree().create_timer(0.12).timeout
+	submit_input.rpc_id(1, test_direction, false)
+	await get_tree().create_timer(0.20).timeout
+	var facing_after_unlock: Vector2 = local_node.get_facing_vector()
+	var unlocked_turns: bool = facing_after_unlock.is_equal_approx(test_direction)
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_COMPLETE locked=%s unlocked=%s" % [stayed_locked, unlocked_turns])
+	if not stayed_locked or not unlocked_turns:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_FAILED locked=%s unlocked=%s expected=(%.0f,%.0f) locked_actual=(%.0f,%.0f) unlocked_actual=(%.0f,%.0f)" % [
+			stayed_locked,
+			unlocked_turns,
+			test_direction.x,
+			test_direction.y,
+			facing_after_lock.x,
+			facing_after_lock.y,
+			facing_after_unlock.x,
+			facing_after_unlock.y,
+		])
+		return
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_COMPLETE throwable=true revive=true transition=true facing_lock=true")
 	await get_tree().create_timer(0.20).timeout
 	net.leave()
 	get_tree().quit()

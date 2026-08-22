@@ -358,6 +358,12 @@ func _is_online_session() -> bool:
 
 
 func _is_player_in_weapon_state() -> bool:
+	# NetworkWorld is created dynamically by GameInit and owns the authoritative local network entity.
+	# During connection or scene transition Players can still point at an old/preplaced node.
+	var scene := get_tree().current_scene
+	var network_world: Node = scene.get_node_or_null("NetworkWorld") if scene else null
+	if network_world and network_world.has_method("is_local_weapon_mode_active"):
+		return network_world.is_local_weapon_mode_active()
 	var player: Node2D = Players.get_local_entity()
 	if player and player.has_method("is_weapon_mode_active"):
 		return player.is_weapon_mode_active()
