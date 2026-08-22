@@ -9,6 +9,9 @@ signal connection_failed
 signal server_disconnected
 signal handshake_completed
 signal player_list_changed
+## 大厅角色选择是 Host 权威的结构性状态；变更后广播完整表。
+signal player_character_list_changed
+signal player_character_selection_rejected(reason: String)
 signal game_scene_ready_received(peer_id: int, scene_path: String)
 ## 场景内 NetworkWorld 必须在真正换图前立即停止发送 RPC，避免旧节点路径的在途包命中已释放场景。
 signal scene_transition_started(scene_path: String)
@@ -18,6 +21,7 @@ const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 ## 给 LAN 上已发送的 scene-RPC 一小段排空时间；切图时双方仍保留旧 NetworkWorld，随后再同时释放。
 const SCENE_TRANSITION_FLUSH_SECONDS := 0.25
+const DEFAULT_CHARACTER_PATH := "res://object/character_nobita.tres"
 
 var is_host := false
 var my_peer_id := 1
@@ -26,6 +30,9 @@ var handshake_ok := false
 var active_scene_path := ""
 
 var _player_names: Dictionary = {}
+## peer_id -> CharacterData 资源路径。只接受由本机角色目录生成的白名单项。
+var _player_character_paths: Dictionary = {}
+var _allowed_character_paths: Dictionary = {} # resource_path -> display name
 var _pending_scene_ready: Dictionary = {}
 ## 切图前由 Client 回传的静默确认。Host 等待此确认后才释放旧场景，
 ## 防止客户端旧 NetworkWorld 的在途 RPC 命中 Host 已重建的新场景路径。
@@ -56,6 +63,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	my_peer_id = multiplayer.get_unique_id()
 	handshake_ok = true
 	_player_names = {my_peer_id: _sanitize_name(player_name)}
+	_player_character_paths = {my_peer_id: _get_default_character_path()}
 	_session_player_states.clear()
 	_connect_multiplayer_signals()
 	player_list_changed.emit()
@@ -86,6 +94,7 @@ func leave() -> void:
 	handshake_ok = false
 	active_scene_path = ""
 	_player_names.clear()
+	_player_character_paths.clear()
 	_pending_scene_ready.clear()
 	_pending_scene_transition_acks.clear()
 	_scene_transition_serial = 0
@@ -97,6 +106,47 @@ func get_player_name(peer_id: int) -> String:
 
 func get_player_names() -> Dictionary:
 	return _player_names.duplicate()
+
+func get_player_character_path(peer_id: int) -> String:
+	return str(_player_character_paths.get(peer_id, ""))
+
+
+func get_player_character_paths() -> Dictionary:
+	return _player_character_paths.duplicate()
+
+
+func get_character_display_name(character_path: String) -> String:
+	_ensure_character_whitelist()
+	return str(_allowed_character_paths.get(character_path, "未选择"))
+
+
+func get_available_character_paths() -> Array[String]:
+	_ensure_character_whitelist()
+	var paths: Array[String] = []
+	for value: Variant in _allowed_character_paths.keys():
+		paths.append(str(value))
+	paths.sort()
+	return paths
+
+
+func are_all_players_character_selected() -> bool:
+	if _player_names.is_empty():
+		return false
+	for value: Variant in _player_names.keys():
+		if get_player_character_path(int(value)).is_empty():
+			return false
+	return true
+
+
+## UI 只能调用这个入口：Client 发请求，Host 在本地执行同一套验证。
+func request_local_character_selection(character_path: String) -> bool:
+	if not handshake_ok:
+		return false
+	if is_host:
+		return _apply_host_character_selection(my_peer_id, character_path, false)
+	request_character_selection.rpc_id(1, character_path)
+	return true
+
 
 func get_peer_ids() -> Array[int]:
 	var result: Array[int] = []
@@ -133,27 +183,110 @@ func hello(version: String, name: String) -> void:
 		return
 	_player_names[sender] = _sanitize_name(name)
 	print("[Net] HANDSHAKE_OK peer=%d name=%s" % [sender, _player_names[sender]])
-	hello_ack.rpc_id(sender, PROTOCOL_VERSION, _player_names.duplicate())
+	hello_ack.rpc_id(sender, PROTOCOL_VERSION, _player_names.duplicate(), _player_character_paths.duplicate())
 	player_list.rpc(_player_names.duplicate())
+	player_character_list.rpc(_player_character_paths.duplicate())
 	player_list_changed.emit()
 	handshake_completed.emit()
 
 @rpc("authority", "call_remote", "reliable")
-func hello_ack(version: String, names: Dictionary) -> void:
+func hello_ack(version: String, names: Dictionary, character_paths: Dictionary) -> void:
 	if version != PROTOCOL_VERSION:
 		printerr("[Net] bad handshake ack protocol=%s" % version)
 		return
 	handshake_ok = true
 	_player_names = names.duplicate()
+	_player_character_paths = character_paths.duplicate()
 	my_peer_id = multiplayer.get_unique_id()
 	print("[Net] HANDSHAKE_OK client peer=%d players=%d" % [my_peer_id, _player_names.size()])
 	player_list_changed.emit()
+	player_character_list_changed.emit()
 	handshake_completed.emit()
 
 @rpc("authority", "call_remote", "reliable")
 func player_list(names: Dictionary) -> void:
 	_player_names = names.duplicate()
 	player_list_changed.emit()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_character_selection(character_path: String) -> void:
+	if not is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _player_names.has(sender):
+		return
+	_apply_host_character_selection(sender, character_path, true)
+
+
+@rpc("authority", "call_remote", "reliable")
+func player_character_list(character_paths: Dictionary) -> void:
+	_player_character_paths = character_paths.duplicate()
+	player_character_list_changed.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func character_selection_rejected(reason: String) -> void:
+	player_character_selection_rejected.emit(reason)
+
+
+func _apply_host_character_selection(peer_id: int, character_path: String, notify_requester: bool) -> bool:
+	if not is_host or not _player_names.has(peer_id):
+		return false
+	_ensure_character_whitelist()
+	if not _allowed_character_paths.has(character_path):
+		_reject_character_selection(peer_id, "角色无效或当前不可用", notify_requester)
+		return false
+	for value: Variant in _player_character_paths.keys():
+		var other_peer_id := int(value)
+		if other_peer_id != peer_id and str(_player_character_paths[value]) == character_path:
+			_reject_character_selection(peer_id, "%s 已被其他玩家选择" % get_character_display_name(character_path), notify_requester)
+			return false
+	_player_character_paths[peer_id] = character_path
+	print("[Net] CHARACTER_SELECTED peer=%d character=%s" % [peer_id, character_path])
+	player_character_list_changed.emit()
+	if has_network() and not multiplayer.get_peers().is_empty():
+		player_character_list.rpc(_player_character_paths.duplicate())
+	return true
+
+
+func _reject_character_selection(peer_id: int, reason: String, notify_requester: bool) -> void:
+	print("[Net] CHARACTER_SELECT_REJECT peer=%d reason=%s" % [peer_id, reason])
+	if notify_requester and peer_id > 1 and has_network():
+		character_selection_rejected.rpc_id(peer_id, reason)
+	elif peer_id == my_peer_id:
+		player_character_selection_rejected.emit(reason)
+
+
+func _ensure_character_whitelist() -> void:
+	if not _allowed_character_paths.is_empty():
+		return
+	var dir := DirAccess.open("res://object/")
+	if dir:
+		var filenames: Array[String] = []
+		dir.list_dir_begin()
+		var file_name := dir.get_next()
+		while not file_name.is_empty():
+			if file_name.begins_with("character_") and file_name.ends_with(".tres"):
+				filenames.append(file_name)
+			file_name = dir.get_next()
+		dir.list_dir_end()
+		filenames.sort()
+		for character_file_name: String in filenames:
+			var path := "res://object/" + character_file_name
+			var resource := load(path)
+			if resource is CharacterData:
+				_allowed_character_paths[path] = (resource as CharacterData).character_name
+	if _allowed_character_paths.is_empty() and ResourceLoader.exists(DEFAULT_CHARACTER_PATH):
+		_allowed_character_paths[DEFAULT_CHARACTER_PATH] = "のび太"
+
+
+func _get_default_character_path() -> String:
+	_ensure_character_whitelist()
+	if _allowed_character_paths.has(DEFAULT_CHARACTER_PATH):
+		return DEFAULT_CHARACTER_PATH
+	var paths := get_available_character_paths()
+	return paths[0] if not paths.is_empty() else ""
 
 # ---------------------------------------------------------------- scene lifecycle
 
@@ -337,11 +470,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if not is_host:
 		return
 	_player_names.erase(peer_id)
+	_player_character_paths.erase(peer_id)
 	_pending_scene_ready.erase(peer_id)
 	_pending_scene_transition_acks.erase(peer_id)
 	remove_session_player_state(peer_id)
 	print("[Net] PEER_DISCONNECTED peer=%d" % peer_id)
 	player_list_changed.emit()
+	player_character_list_changed.emit()
 	# ENet 刚触发断线时，其余连接也可能正处于关闭事件队列中；延后一帧，只对仍可用的连接广播。
 	call_deferred("_broadcast_player_list_after_peer_left")
 	peer_left.emit(peer_id)
@@ -351,6 +486,7 @@ func _broadcast_player_list_after_peer_left() -> void:
 	if not is_host or not has_network() or multiplayer.get_peers().is_empty():
 		return
 	player_list.rpc(_player_names.duplicate())
+	player_character_list.rpc(_player_character_paths.duplicate())
 
 
 func _sanitize_name(value: String) -> String:

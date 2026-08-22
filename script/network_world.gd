@@ -82,6 +82,8 @@ var _auto_multi_disconnect_complete := false
 ## 多个留存 Client 都确认状态收敛后，Host 才统一让它们退出回归进程，避免测试自身触发第二次断线。
 var _auto_multi_disconnect_acks: Dictionary = {}
 var _auto_multi_disconnect_release := false
+## --net-test-character-select 专用：Host 收到 Client 对进图角色状态的确认后才结束回归。
+var _auto_character_world_acks: Dictionary = {}
 ## 避免依赖编辑器正在重载的全局 Autoload 标识符；运行时取常驻 Net 节点。
 var net: Variant = null
 
@@ -117,6 +119,8 @@ func _ready() -> void:
 		if "--net-test=client" in OS.get_cmdline_user_args():
 			if _is_auto_multi_disconnect_test():
 				call_deferred("_run_auto_client_multi_disconnect_test")
+			elif _is_auto_character_select_test():
+				call_deferred("_run_auto_client_character_select_world_test")
 			elif _is_auto_network_feature_test():
 				call_deferred("_run_auto_client_feature_test")
 			elif _is_auto_client_ready_input_test():
@@ -130,6 +134,8 @@ func _ready() -> void:
 	if net.is_host:
 		if _is_auto_multi_disconnect_test():
 			call_deferred("_run_auto_host_multi_disconnect_test")
+		elif _is_auto_character_select_test():
+			call_deferred("_run_auto_host_character_select_world_test")
 		elif _is_auto_network_feature_test():
 			call_deferred("_run_auto_host_feature_test")
 		elif _is_auto_client_ready_input_test():
@@ -162,7 +168,9 @@ func _on_scene_transition_started(target_scene_path: String) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(net) or _scene_transitioning:
+	# 断线/自动回归收束期间，Net 仍是有效节点但其 ENet peer 已被 leave() 清空；
+	# 此时再上传输入或广播快照会触发“no multiplayer peer is active”。
+	if not is_instance_valid(net) or not net.has_network() or _scene_transitioning:
 		return
 	var local_menu_open := _is_local_menu_open()
 	var local_player_alive := _is_local_player_alive()
@@ -1474,6 +1482,15 @@ func spawn_network_enemy(public_state: Dictionary) -> void:
 	print("[NetworkWorld] CLIENT_ENEMY_SPAWN id=%d" % entity_id)
 
 
+@rpc("any_peer", "call_remote", "reliable")
+func auto_character_world_ack() -> void:
+	if not net.is_host or not _is_auto_character_select_test():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender > 1 and net.get_peer_ids().has(sender):
+		_auto_character_world_acks[sender] = true
+
+
 @rpc("authority", "call_remote", "reliable")
 func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
 	if net.is_host:
@@ -2302,6 +2319,65 @@ func _is_auto_network_feature_test() -> bool:
 	return "--net-test-features" in OS.get_cmdline_user_args()
 
 
+func _is_auto_character_select_test() -> bool:
+	return "--net-test-character-select" in OS.get_cmdline_user_args()
+
+
+func _run_auto_host_character_select_world_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	var client_id := 0
+	while Time.get_ticks_msec() < deadline:
+		for peer_id: int in net.get_peer_ids():
+			if peer_id > 1:
+				client_id = peer_id
+				break
+		var host_state := (_players.get(int(net.my_peer_id), {}).get("state") as PlayerState)
+		var client_state := (_players.get(client_id, {}).get("state") as PlayerState)
+		if client_id > 1 and host_state and client_state:
+			break
+		await get_tree().create_timer(0.05).timeout
+	var host_state := (_players.get(int(net.my_peer_id), {}).get("state") as PlayerState)
+	var client_state := (_players.get(client_id, {}).get("state") as PlayerState)
+	var host_expected := str(net.get_player_character_path(int(net.my_peer_id)))
+	var client_expected := str(net.get_player_character_path(client_id))
+	if client_id <= 1 or not host_state or not client_state or host_state.character_path != host_expected or client_state.character_path != client_expected:
+		printerr("[NetworkWorld] AUTO_CHARACTER_HOST_WORLD_FAILED host=%s/%s client=%s/%s" % [host_state.character_path if host_state else "<none>", host_expected, client_state.character_path if client_state else "<none>", client_expected])
+		get_tree().quit(1)
+		return
+	deadline = Time.get_ticks_msec() + 6000
+	while not _auto_character_world_acks.has(client_id) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _auto_character_world_acks.has(client_id):
+		printerr("[NetworkWorld] AUTO_CHARACTER_HOST_WORLD_FAILED missing_client_ack peer=%d" % client_id)
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_CHARACTER_HOST_WORLD_COMPLETE host=%s client=%s" % [host_state.character_path.get_file(), client_state.character_path.get_file()])
+	await get_tree().create_timer(0.20).timeout
+	net.leave()
+	get_tree().quit()
+
+
+func _run_auto_client_character_select_world_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while (not _initial_world_received or _players.size() < 2) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var local_id := int(net.my_peer_id)
+	var host_state := (_players.get(1, {}).get("state") as PlayerState)
+	var local_state := (_players.get(local_id, {}).get("state") as PlayerState)
+	var host_expected := str(net.get_player_character_path(1))
+	var local_expected := str(net.get_player_character_path(local_id))
+	if not _initial_world_received or not host_state or not local_state or host_state.character_path != host_expected or local_state.character_path != local_expected:
+		printerr("[NetworkWorld] AUTO_CHARACTER_CLIENT_WORLD_FAILED host=%s/%s local=%s/%s" % [host_state.character_path if host_state else "<none>", host_expected, local_state.character_path if local_state else "<none>", local_expected])
+		get_tree().quit(1)
+		return
+	auto_character_world_ack.rpc_id(1)
+	print("[NetworkWorld] AUTO_CHARACTER_CLIENT_WORLD_COMPLETE host=%s local=%s" % [host_state.character_path.get_file(), local_state.character_path.get_file()])
+	await get_tree().create_timer(0.80).timeout
+	if is_inside_tree():
+		net.leave()
+		get_tree().quit()
+
+
 ## 不等待完整 world_snapshot 的首图输入回归：Client 预置 Player 接管后立刻上传输入，
 ## Host 只以自身收到的 submit_input 作为通过依据。正式游戏不会进入此分支。
 func _is_auto_client_ready_input_test() -> bool:
@@ -3115,6 +3191,9 @@ func _claim_local_network_state() -> void:
 	var local_id := int(net.my_peer_id)
 	if local_id <= 0 or net.get_session_player_state(local_id):
 		return
+	## 大厅已有权威选择时，不接管单人模式留下的活动座位；首次进图应按大厅角色创建。
+	if net.has_method("get_player_character_path") and not str(net.get_player_character_path(local_id)).is_empty():
+		return
 	var state := Players.claim_active_seat_for_peer(local_id)
 	if state and net.has_method("set_session_player_state"):
 		net.set_session_player_state(local_id, state)
@@ -3149,6 +3228,10 @@ func _reconcile_network_seats(peer_ids: Array[int]) -> void:
 
 
 func _find_or_create_player_state(peer_id: int, character_path: String, hp: float) -> PlayerState:
+	## 角色表仅由大厅 Host 写入；进图时优先采用这份权威选择，避免回退为默认大雄。
+	var resolved_character_path: String = character_path
+	if resolved_character_path.is_empty() and net and net.has_method("get_player_character_path"):
+		resolved_character_path = str(net.get_player_character_path(peer_id))
 	var state: PlayerState = net.get_session_player_state(peer_id) if net and net.has_method("get_session_player_state") else null
 	if not state:
 		for index: int in range(Players.seat_count()):
@@ -3157,7 +3240,7 @@ func _find_or_create_player_state(peer_id: int, character_path: String, hp: floa
 				state = candidate
 				break
 	if not state:
-		state = _make_player_state(character_path, hp)
+		state = _make_player_state(resolved_character_path, hp)
 		state.owner_peer_id = peer_id
 	if net and net.has_method("set_session_player_state"):
 		net.set_session_player_state(peer_id, state)

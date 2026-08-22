@@ -1,5 +1,5 @@
 extends Control
-## 正式联机大厅：连接 UI 和自动测试入口；握手/玩家名单由 net 单例维护。
+## 正式联机大厅：连接 UI 和自动测试入口；握手、玩家名单与角色选择均由 Net Host 权威维护。
 
 const GAME_SCENE := "res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"
 const AUTO_TEST_SCENE := "res://scene/maps/test.tscn"
@@ -14,12 +14,17 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var join_btn: Button = %JoinBtn
 @onready var start_btn: Button = %StartBtn
 @onready var leave_btn: Button = %LeaveBtn
+@onready var character_select: OptionButton = %CharacterSelect
+@onready var character_hint: Label = %CharacterHint
 @onready var status_label: Label = %StatusLabel
 @onready var players_label: Label = %PlayersLabel
 @onready var log_label: Label = %LogLabel
 
 var _connected := false
 var _log_lines: Array[String] = []
+var _refreshing_character_select := false
+## --net-test-character-select 专用：Client 必须确认 Host 拒绝了重复角色。
+var _auto_character_selection_rejected := false
 ## 通过节点路径读取 Autoload，避免 Godot 编辑器热重载期间短暂丢失 `Net` 全局标识符。
 var net: Variant = null
 
@@ -36,13 +41,18 @@ func _ready() -> void:
 	net.peer_left.connect(_on_peer_left)
 	net.handshake_completed.connect(_on_handshake_completed)
 	net.player_list_changed.connect(_refresh_ui)
+	net.player_character_list_changed.connect(_refresh_ui)
+	net.player_character_selection_rejected.connect(_on_character_selection_rejected)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
 	leave_btn.pressed.connect(_on_leave_pressed)
+	character_select.item_selected.connect(_on_character_selected)
 	start_btn.disabled = true
 	leave_btn.disabled = true
+	character_select.disabled = true
 	_log("请创建房间或加入已有房间（默认 127.0.0.1:27015）")
+	_refresh_ui()
 
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
@@ -71,6 +81,10 @@ func _run_auto_host() -> void:
 		printerr("[AUTO] host 等待 client 握手超时")
 		get_tree().quit(1)
 		return
+	if _is_auto_character_select_test():
+		await _run_auto_host_character_select_lobby_test()
+		if not is_inside_tree():
+			return
 	var game_scene := _get_game_scene_for_launch()
 	print("[AUTO] host 握手完成，广播开始游戏: %s" % game_scene)
 	net.start_game.rpc(game_scene)
@@ -85,6 +99,66 @@ func _run_auto_client() -> void:
 		get_tree().quit(1)
 		return
 	print("[AUTO] client 已发起加入，等待握手和 host 开始游戏 ...")
+	if _is_auto_character_select_test():
+		call_deferred("_run_auto_client_character_select_lobby_test")
+
+
+func _is_auto_character_select_test() -> bool:
+	return "--net-test-character-select" in OS.get_cmdline_user_args()
+
+
+func _run_auto_host_character_select_lobby_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while not net.are_all_players_character_selected() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var host_path: String = str(net.get_player_character_path(int(net.my_peer_id)))
+	var client_id := 0
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			client_id = peer_id
+			break
+	var client_path: String = str(net.get_player_character_path(client_id))
+	var expected_client_path := "res://object/character_bigg.tres"
+	if not net.are_all_players_character_selected() or host_path != net.DEFAULT_CHARACTER_PATH or client_id <= 1 or client_path != expected_client_path:
+		printerr("[AUTO] AUTO_CHARACTER_HOST_LOBBY_FAILED host=%s client=%d client_character=%s" % [host_path, client_id, client_path])
+		get_tree().quit(1)
+		return
+	print("[AUTO] AUTO_CHARACTER_HOST_LOBBY_COMPLETE host=%s client=%s" % [host_path.get_file(), client_path.get_file()])
+
+
+func _run_auto_client_character_select_lobby_test() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while not net.handshake_ok and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not net.handshake_ok:
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED handshake_timeout")
+		get_tree().quit(1)
+		return
+	_auto_character_selection_rejected = false
+	if not net.request_local_character_selection(net.DEFAULT_CHARACTER_PATH):
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_request_not_sent")
+		get_tree().quit(1)
+		return
+	deadline = Time.get_ticks_msec() + 3000
+	while not _auto_character_selection_rejected and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _auto_character_selection_rejected:
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED duplicate_not_rejected")
+		get_tree().quit(1)
+		return
+	var requested_path := "res://object/character_bigg.tres"
+	if not net.request_local_character_selection(requested_path):
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED alternate_request_not_sent")
+		get_tree().quit(1)
+		return
+	deadline = Time.get_ticks_msec() + 3000
+	while str(net.get_player_character_path(int(net.my_peer_id))) != requested_path and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if str(net.get_player_character_path(int(net.my_peer_id))) != requested_path:
+		printerr("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_FAILED alternate_not_confirmed selected=%s" % str(net.get_player_character_path(int(net.my_peer_id))))
+		get_tree().quit(1)
+		return
+	print("[AUTO] AUTO_CHARACTER_CLIENT_LOBBY_COMPLETE rejected_duplicate=true selected=%s" % requested_path.get_file())
 
 
 func _get_auto_expected_player_count() -> int:
@@ -118,7 +192,7 @@ func _on_create_pressed() -> void:
 		_log("创建房间失败：%s" % error_string(err))
 		return
 	_connected = true
-	_log("已创建房间（端口 %d）" % net.DEFAULT_PORT)
+	_log("已创建房间（端口 %d），默认角色已选定" % net.DEFAULT_PORT)
 	_refresh_ui()
 
 
@@ -133,9 +207,14 @@ func _on_join_pressed() -> void:
 
 
 func _on_start_pressed() -> void:
-	if net.is_host and net.handshake_ok:
-		_log("广播开始游戏 ...")
-		net.start_game.rpc(GAME_SCENE)
+	if not net.is_host or not net.handshake_ok:
+		return
+	if not net.are_all_players_character_selected():
+		_log("不能开始：请等待所有玩家完成角色选择")
+		_refresh_ui()
+		return
+	_log("全部角色已确认，广播开始游戏 ...")
+	net.start_game.rpc(GAME_SCENE)
 
 
 func _on_leave_pressed() -> void:
@@ -143,6 +222,17 @@ func _on_leave_pressed() -> void:
 	_connected = false
 	_log("已离开房间")
 	_refresh_ui()
+
+
+func _on_character_selected(index: int) -> void:
+	if _refreshing_character_select or not net or not net.handshake_ok:
+		return
+	var character_path := str(character_select.get_item_metadata(index))
+	if character_path.is_empty():
+		return
+	if not net.request_local_character_selection(character_path):
+		_log("角色选择请求未发送，请先完成连接与握手")
+		_refresh_ui()
 
 
 # ---------------------------------------------------------------- 连接事件
@@ -155,7 +245,7 @@ func _on_connection_established() -> void:
 
 func _on_handshake_completed() -> void:
 	_connected = true
-	_log("协议握手完成")
+	_log("协议握手完成，请选择未被占用的角色")
 	_refresh_ui()
 
 
@@ -182,14 +272,23 @@ func _on_peer_left(_peer_id: int) -> void:
 	_refresh_ui()
 
 
+func _on_character_selection_rejected(reason: String) -> void:
+	if _is_auto_character_select_test():
+		_auto_character_selection_rejected = true
+	_log("角色选择被主机拒绝：%s" % reason)
+	character_hint.text = "角色选择失败：%s" % reason
+	_refresh_ui()
+
+
 # ---------------------------------------------------------------- UI
 
 func _refresh_ui() -> void:
-	if not is_node_ready():
+	if not is_node_ready() or not net:
 		return
+	var selection_ready: bool = _connected and bool(net.handshake_ok)
 	if net.is_host:
 		status_label.text = "状态：主机（端口 %d）" % net.DEFAULT_PORT
-		start_btn.disabled = not net.handshake_ok
+		start_btn.disabled = not (net.handshake_ok and net.are_all_players_character_selected())
 	else:
 		var text := "未连接"
 		if _connected:
@@ -199,12 +298,54 @@ func _refresh_ui() -> void:
 	create_btn.disabled = _connected
 	join_btn.disabled = _connected
 	leave_btn.disabled = not _connected
+	_refresh_character_select(selection_ready)
 
 	var names: Dictionary = net.get_player_names()
+	var peer_ids: Array[int] = []
+	for value: Variant in names.keys():
+		peer_ids.append(int(value))
+	peer_ids.sort()
 	var lines: Array[String] = ["玩家列表（%d）：" % names.size()]
-	for pid in names.keys():
-		lines.append("  · %s (peer %d)" % [names[pid], pid])
+	for peer_id: int in peer_ids:
+		var character_path: String = str(net.get_player_character_path(peer_id))
+		var character_name: String = str(net.get_character_display_name(character_path)) if not character_path.is_empty() else "未选择"
+		lines.append("  · %s（%s，peer %d）" % [str(names[peer_id]), character_name, peer_id])
 	players_label.text = "\n".join(lines)
+
+
+func _refresh_character_select(selection_ready: bool) -> void:
+	_refreshing_character_select = true
+	character_select.clear()
+	var selected_path: String = str(net.get_player_character_path(int(net.my_peer_id)))
+	var all_paths: Dictionary = net.get_player_character_paths()
+	var available_paths: Array[String] = net.get_available_character_paths()
+	var selected_index := -1
+	for character_path: String in available_paths:
+		var item_index := character_select.item_count
+		character_select.add_item(net.get_character_display_name(character_path))
+		character_select.set_item_metadata(item_index, character_path)
+		var occupied_by_other := false
+		for value: Variant in all_paths.keys():
+			if int(value) != int(net.my_peer_id) and str(all_paths[value]) == character_path:
+				occupied_by_other = true
+				break
+		character_select.set_item_disabled(item_index, occupied_by_other)
+		if character_path == selected_path:
+			selected_index = item_index
+	if selected_index >= 0:
+		character_select.select(selected_index)
+	elif character_select.item_count > 0:
+		character_select.select(0)
+	character_select.disabled = not selection_ready or character_select.item_count == 0
+	if not selection_ready:
+		character_hint.text = "连接并完成握手后可选择角色"
+	elif selected_path.is_empty():
+		character_hint.text = "请选择一名未被占用的角色；主机将在全员确认后才能开始。"
+	elif net.is_host and not net.are_all_players_character_selected():
+		character_hint.text = "等待其他玩家选择角色。"
+	else:
+		character_hint.text = "角色已由主机确认。"
+	_refreshing_character_select = false
 
 
 func _set_connect_buttons_disabled(value: bool) -> void:
@@ -212,6 +353,7 @@ func _set_connect_buttons_disabled(value: bool) -> void:
 	join_btn.disabled = value
 	start_btn.disabled = true
 	leave_btn.disabled = value
+	character_select.disabled = true
 
 
 func _log(msg: String) -> void:
