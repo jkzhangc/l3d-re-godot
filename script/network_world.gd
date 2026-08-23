@@ -705,7 +705,11 @@ func _configure_network_loadout(state: PlayerState, node: CharacterBody2D) -> vo
 
 
 func _get_network_primary_loadout_weapon() -> WeaponData:
+	var has_pickup_test := false
 	for argument: String in OS.get_cmdline_user_args():
+		if argument == "--net-test-pickup":
+			has_pickup_test = true
+			continue
 		if not argument.begins_with("--net-test-weapon="):
 			continue
 		var weapon_id := argument.trim_prefix("--net-test-weapon=")
@@ -713,8 +717,9 @@ func _get_network_primary_loadout_weapon() -> WeaponData:
 		if requested and requested.is_ranged:
 			return requested
 		push_warning("[NetworkWorld] 忽略无效的联机回归主武器: %s" % weapon_id)
-	return null
-
+	# 掉落物回归必须从“已装备的另一把远程武器”开始，才能验证替换与旧武器回落。
+	# 仅对专用无头测试提供默认值，不改变正常联机大厅的权威装备来源。
+	return NETWORK_SMG if has_pickup_test else null
 
 func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
 	return NETWORK_WEAPONS.get(weapon_id) as WeaponData
@@ -2886,22 +2891,26 @@ func _run_auto_client_safe_door_test() -> void:
 
 
 func _run_auto_client_input_test() -> void:
-	var deadline := Time.get_ticks_msec() + 5000
-	while not _initial_world_received and Time.get_ticks_msec() < deadline:
-		await get_tree().create_timer(0.05).timeout
-	if not _initial_world_received:
-		printerr("[NetworkWorld] AUTO_CLIENT_INPUT_TIMEOUT")
-		return
-
-	var primary_weapon := _get_network_primary_loadout_weapon()
+	# world_snapshot 到达时，_initial_world_received 只表示本地实体已经创建；装备字段仍可能
+	# 在同帧稍后才由 Host 快照写入。等待本地状态真正拥有主武器，避免回归测试将启动时序
+	# 误判为拾取/掉落物同步故障。
+	var primary_weapon := await _wait_for_auto_client_primary_weapon(5000)
 	if not primary_weapon:
-		printerr("[NetworkWorld] AUTO_CLIENT_PRIMARY_WEAPON_MISSING")
 		return
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var state := entry.get("state") as PlayerState
 	var initial_ammo := state.get_magazine_ammo(primary_weapon.item_id) if state else -1
 	if initial_ammo != primary_weapon.magazine_capacity:
 		printerr("[NetworkWorld] AUTO_CLIENT_INITIAL_AMMO_FAILED weapon=%s ammo=%d expected=%d" % [primary_weapon.item_id, initial_ammo, primary_weapon.magazine_capacity])
+
+
+	# 拾取回归只验证掉落物事务；不要先跑战斗/近战路径，避免经过相邻物品时
+	# 自动拾取改变测试前置状态。
+	if "--net-test-pickup" in OS.get_cmdline_user_args():
+		await _run_auto_client_pickup_test()
+		net.leave()
+		get_tree().quit()
+		return
 
 	Input.action_press("右")
 	var animation_frames: Dictionary = {}
@@ -2925,12 +2934,6 @@ func _run_auto_client_input_test() -> void:
 	])
 	if not animation_advanced:
 		printerr("[NetworkWorld] AUTO_CLIENT_ANIMATION_FAILED")
-	# 拾取/掉落物使用独立分支：从初始移动终点直接前往左侧手枪，避免战斗后被地图中部碰撞阻隔。
-	if "--net-test-pickup" in OS.get_cmdline_user_args():
-		await _run_auto_client_pickup_test()
-		net.leave()
-		get_tree().quit()
-		return
 
 	_auto_client_fire_confirmed = false
 	_auto_client_bullet_seen = false
@@ -2945,7 +2948,7 @@ func _run_auto_client_input_test() -> void:
 	Input.action_press("确定键")
 	await get_tree().create_timer(fire_hold_duration).timeout
 	Input.action_release("确定键")
-	deadline = Time.get_ticks_msec() + 3000
+	var deadline := Time.get_ticks_msec() + 3000
 	while (
 		(not _auto_client_fire_confirmed or _auto_client_bullets_seen < required_visual_bullets)
 		and Time.get_ticks_msec() < deadline
@@ -3046,15 +3049,47 @@ func _run_auto_client_input_test() -> void:
 	net.leave()
 	get_tree().quit()
 
+## 等待可靠 world_snapshot 已把 Host 权威主武器写入本地 PlayerState。
+## --net-test-weapon 指定时仍校验它，未指定时则直接使用 Host 已同步的 primary 装备，
+## 使测试不会依赖客户端本地命令行去猜测 Host 的初始配置。
+func _wait_for_auto_client_primary_weapon(timeout_msec: int) -> WeaponData:
+	var deadline := Time.get_ticks_msec() + timeout_msec
+	var expected_weapon := _get_network_primary_loadout_weapon()
+	while Time.get_ticks_msec() < deadline:
+		if _initial_world_received:
+			var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+			var state := entry.get("state") as PlayerState
+			var primary := state.get_equipped_weapon("primary") if state else null
+			if primary and (not expected_weapon or primary.item_id == expected_weapon.item_id):
+				return primary
+		await get_tree().create_timer(0.05).timeout
+	var expected_id := expected_weapon.item_id if expected_weapon else "<host-snapshot-primary>"
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var state := entry.get("state") as PlayerState
+	var actual := state.get_equipped_weapon("primary") if state else null
+	printerr("[NetworkWorld] AUTO_CLIENT_PRIMARY_WEAPON_TIMEOUT expected=%s actual=%s world=%s" % [
+		expected_id,
+		actual.item_id if actual else "<none>",
+		_initial_world_received,
+	])
+	return null
+
 
 ## 回归 Client 按住确认键拾取武器：Host 替换装备、删除源掉落物、生成旧武器掉落物，再由可靠快照回写客户端。
 func _run_auto_client_pickup_test() -> void:
+	var primary_weapon := await _wait_for_auto_client_primary_weapon(5000)
+	if not primary_weapon:
+		return
+	var deadline := Time.get_ticks_msec() + 5000
 	var source := _find_client_pickup_by_weapon_id(NETWORK_PISTOL.item_id)
+	while not is_instance_valid(source) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+		source = _find_client_pickup_by_weapon_id(NETWORK_PISTOL.item_id)
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(source) or not is_instance_valid(node) or not state:
-		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED source=%s node=%s state=%s" % [is_instance_valid(source), is_instance_valid(node), state != null])
+		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED source=%s node=%s state=%s primary=%s" % [is_instance_valid(source), is_instance_valid(node), state != null, primary_weapon.item_id])
 		return
 	var target_weapon := NETWORK_PISTOL
 	var target_slot := target_weapon.get_slot_key()
@@ -3065,11 +3100,15 @@ func _run_auto_client_pickup_test() -> void:
 	# 先用正常客户端输入移动到测试图里的手枪范围内，使 Host 仍会执行距离校验。
 	# 随后按确定的 network_pickup_id 精确提交一次请求：测试图内相邻的多个掉落物都会监听同一个“确定键”，
 	# 长按自动化有概率先命中路过的另一个物品，导致回归用例误报；正式的按住交互仍由 weapon_pickup.gd 覆盖。
-	Input.action_press("左")
-	var deadline := Time.get_ticks_msec() + 3000
+	var travel_delta := source.global_position - node.global_position
+	var move_action := "右" if absf(travel_delta.x) >= absf(travel_delta.y) and travel_delta.x > 0.0 else "左"
+	if absf(travel_delta.y) > absf(travel_delta.x):
+		move_action = "下" if travel_delta.y > 0.0 else "上"
+	Input.action_press(move_action)
+	deadline = Time.get_ticks_msec() + 3000
 	while Time.get_ticks_msec() < deadline and node.global_position.distance_to(source.global_position) > 18.0:
 		await get_tree().create_timer(0.05).timeout
-	Input.action_release("左")
+	Input.action_release(move_action)
 	await get_tree().create_timer(0.08).timeout
 	var in_range := node.global_position.distance_to(source.global_position) <= 28.0
 	if not in_range:
