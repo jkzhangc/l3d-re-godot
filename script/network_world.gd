@@ -768,7 +768,7 @@ func _configure_network_loadout(state: PlayerState, node: CharacterBody2D) -> vo
 func _get_network_primary_loadout_weapon() -> WeaponData:
 	var has_pickup_test := false
 	for argument: String in OS.get_cmdline_user_args():
-		if argument == "--net-test-pickup":
+		if argument == "--net-test-pickup" or argument == "--net-test-throwable-pickup":
 			has_pickup_test = true
 			continue
 		if not argument.begins_with("--net-test-weapon="):
@@ -2244,7 +2244,9 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			pickup.set("pickup_direction", int(packet.get("direction", 0)))
 		pickup.global_position = _packet_position(packet)
 		pickup.call("_refresh_sprite")
-		pickup.call("configure_network_pickup", pickup_id, true)
+		# 武器拾取由 WeaponPickup 的客户端交互逻辑处理；投掷物则必须允许本地节点
+		# 向 Host 提交拾取请求。最终距离、物品和替换均仍由 _try_host_pickup() 权威校验。
+		pickup.call("configure_network_pickup", pickup_id, pickup_kind != "throwable")
 		pickup.visible = true
 		pickup.call("reset_network_pickup_request")
 	for old_id: Variant in _pickups.keys().duplicate():
@@ -3021,6 +3023,11 @@ func _run_auto_client_input_test() -> void:
 
 	# 拾取回归只验证掉落物事务；不要先跑战斗/近战路径，避免经过相邻物品时
 	# 自动拾取改变测试前置状态。
+	if "--net-test-throwable-pickup" in OS.get_cmdline_user_args():
+		await _run_auto_client_throwable_pickup_test()
+		net.leave()
+		get_tree().quit()
+		return
 	if "--net-test-pickup" in OS.get_cmdline_user_args():
 		await _run_auto_client_pickup_test()
 		net.leave()
@@ -3252,6 +3259,72 @@ func _run_auto_client_pickup_test() -> void:
 	if not primary_swapped or not dropped_old_seen:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_FAILED slot=%s old=%s swapped=%s dropped_old_seen=%s" % [target_slot, old_weapon.item_id, primary_swapped, dropped_old_seen])
 
+
+
+## 回归 Client 拾取投掷物：客户端节点必须可提交请求，Host 再权威写入 throwable 并删除掉落物。
+func _run_auto_client_throwable_pickup_test() -> void:
+	var deadline := Time.get_ticks_msec() + 5000
+	while not _initial_world_received and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	var source := _find_client_pickup_by_throwable_id(NETWORK_GRENADE.item_id)
+	if not is_instance_valid(node) or not is_instance_valid(source):
+		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_SETUP_FAILED player=%s source=%s" % [is_instance_valid(node), is_instance_valid(source)])
+		return
+	var source_id := int(source.get("network_pickup_id"))
+	var source_position := source.global_position
+	var request_enabled := source_id > 0 and not bool(source.get("network_presentation_only"))
+	if not request_enabled:
+		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_REQUEST_DISABLED pickup=%d presentation_only=%s" % [source_id, source.get("network_presentation_only")])
+		return
+	# 通过生产输入移动，让 Host 的距离校验覆盖真实 Client -> Host 路径。
+	var travel_delta := source_position - node.global_position
+	if absf(travel_delta.x) > 8.0:
+		Input.action_press("右" if travel_delta.x > 0.0 else "左")
+		deadline = Time.get_ticks_msec() + 5000
+		while Time.get_ticks_msec() < deadline and absf(source_position.x - node.global_position.x) > 16.0:
+			await get_tree().create_timer(0.05).timeout
+		Input.action_release("右" if travel_delta.x > 0.0 else "左")
+	travel_delta = source_position - node.global_position
+	if absf(travel_delta.y) > 8.0:
+		Input.action_press("下" if travel_delta.y > 0.0 else "上")
+		deadline = Time.get_ticks_msec() + 3000
+		while Time.get_ticks_msec() < deadline and absf(source_position.y - node.global_position.y) > 16.0:
+			await get_tree().create_timer(0.05).timeout
+		Input.action_release("下" if travel_delta.y > 0.0 else "上")
+	await get_tree().create_timer(0.08).timeout
+	var in_range := node.global_position.distance_to(source_position) <= 28.0
+	if not in_range:
+		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_MOVE_FAILED player=%s source=%s" % [node.global_position, source_position])
+		return
+	# 进入范围时 HealingPickup 可能已通过生产逻辑自动提交请求；仍在场时再显式提交一次，
+	# 覆盖 request_pickup() 路径但避免访问已释放的源节点。
+	if _pickups.has(source_id):
+		request_pickup(source_id)
+	deadline = Time.get_ticks_msec() + 3000
+	var acquired := false
+	var removed := false
+	while Time.get_ticks_msec() < deadline:
+		entry = _players.get(int(net.my_peer_id), {})
+		var state := entry.get("state") as PlayerState
+		acquired = state != null and state.throwable == NETWORK_GRENADE
+		removed = not _pickups.has(source_id)
+		if acquired and removed:
+			break
+		await get_tree().create_timer(0.05).timeout
+	print("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_COMPLETE pickup=%d acquired=%s removed=%s" % [source_id, acquired, removed])
+	if not acquired or not removed:
+		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_FAILED pickup=%d acquired=%s removed=%s" % [source_id, acquired, removed])
+
+
+func _find_client_pickup_by_throwable_id(item_id: String) -> Node2D:
+	for value: Variant in _pickups.values():
+		var pickup := value as Node2D
+		var throwable := pickup.get("item") as ThrowableData if is_instance_valid(pickup) else null
+		if throwable and throwable.item_id == item_id:
+			return pickup
+	return null
 
 func _find_client_pickup_by_weapon_id(weapon_id: String) -> Node2D:
 	for value: Variant in _pickups.values():
