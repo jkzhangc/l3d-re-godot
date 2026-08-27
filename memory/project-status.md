@@ -123,3 +123,28 @@ metadata:
 - 单机保护：在线会话跳过存档加载、Checkpoint、角色切换管理器、A* 预构建和 Director gameplay 入口。
 - 验证：Godot 4.6.3 无头扫描通过；双端本地烟测通过，Client exit code=0；`git diff --check` 通过。
 - 已知噪声：headless Dummy 渲染器会触发 `TextGradientRenderer` 空纹理错误，属于既有 UI 渲染问题，不影响联机闭环。
+---
+
+## 主项目联机最新状态（2026-08-27）
+
+> 本节覆盖上文 2026-08-04 / 2026-08-20 的阶段性描述；`net_proto/` 仍是独立原型，但其显式 RPC/快照方案已经移植到主项目。
+
+### 已完成的局域网合作主干
+
+- **Host 权威**：Client 仅上报输入和交互意图；Host 结算玩家移动、武器/弹药、近战推击、投掷物、敌人 AI、子弹、伤害、掉落物和安全门/章节确认。
+- **连接与大厅**：`Net`（`script/network_manager.gd`）管理 ENet、`hello → hello_ack` 握手、玩家名单、角色选择、断开与跨场景会话；`network_lobby.gd` 提供创建/加入/开始游戏。
+- **显式同步**：结构性事件使用 reliable RPC；玩家/敌人高频位置快照使用 `unreliable_ordered`。不使用 `MultiplayerSpawner`、`MultiplayerSynchronizer` 或动态 `SceneReplicationConfig`。
+- **跨图与实体**：场景 ready/flush 协议避免切图时 RPC 丢失；`PlayerState` 与 `Players` 提供座位与玩家实体注册，`NetworkWorld` 只管理当前场景实体。
+- **共享拾取**：武器、治疗品和投掷物均由 Host 校验距离、归属、槽位和库存后提交。2026-08-27 已修复 Client 无法请求拾取投掷物的问题，并完成双端自动回归。
+- **自动测试**：无头 Host/Client 测试已覆盖握手、角色选择、移动、战斗/敌人、掉落物、投掷物拾取、安全门与断开等回归入口。
+
+### 当前限制与下一阶段
+
+1. 验证双人首关完整通关：多人倒地/救援、团灭恢复、Host 存档、章节流程和长时间稳定性。
+2. 扩展到 3–4 人、复杂尸潮与特感场景，并在高延迟/丢包下调优同步表现。
+3. 最后再实现房间发现、断线重连、UPnP/NAT 穿透与公网安全；主机迁移不作为当前局域网版本前置条件。
+
+### 本轮维护记录
+
+- 核心联机与单人脚本已补充中文职责/边界注释，便于区分单人、Host 和 Client 的执行路径。
+- 验证：Godot 4.6.3 无头编辑器扫描退出码为 `0`；已有 UI 渲染/证书类警告属于项目既有噪声，未发现本轮脚本解析错误。
