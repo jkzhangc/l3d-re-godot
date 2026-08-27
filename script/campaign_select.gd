@@ -41,7 +41,8 @@ var _cursor_frame_idx: int = 0
 func _ready() -> void:
 	_load_defaults_from_global()
 	_sync_window()
-	var color_img := Image.load_from_file(color_sheet_path)
+	var color_texture := ResourceLoader.load(color_sheet_path) as Texture2D
+	var color_img := color_texture.get_image() if color_texture else null
 	if color_img:
 		_title_label.set_color_image(color_img)
 	_load_campaigns()
@@ -82,7 +83,8 @@ func _load_campaigns() -> void:
 
 
 func _build_list() -> void:
-	var color_img := Image.load_from_file(color_sheet_path)
+	var color_texture := ResourceLoader.load(color_sheet_path) as Texture2D
+	var color_img := color_texture.get_image() if color_texture else null
 	for i: int in range(_campaigns.size()):
 		var gl := GradientLabel.new()
 		gl.text = "  %s" % _campaigns[i].campaign_name

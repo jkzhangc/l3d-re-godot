@@ -9,6 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://bgeyjj388766l" path="res://art/Characters/ジャイアン反撃セット.png" id="6_3yr1j"]
 [ext_resource type="Texture2D" uid="uid://1vip3nbc5fay" path="res://art/Characters/ジャイアンセット.png" id="7_yottv"]
 [ext_resource type="Texture2D" uid="uid://fmn2w2ipfx4k" path="res://art/Characters/ジャイアンセットハンドガン.png" id="8_d74mw"]
+[ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="8_yottv"]
 [ext_resource type="Texture2D" uid="uid://bybbxf1d78dfm" path="res://art/Characters/ジャイアンセットショットガン.png" id="9_w6m76"]
 [ext_resource type="Texture2D" uid="uid://nu308684slfr" path="res://art/Characters/ジャイアンセットアサルトライフル.png" id="10_lxnma"]
 
@@ -42,9 +43,6 @@ weapon_walk_textures = {
 "Shotgun": ExtResource("9_w6m76"),
 "Smg": ExtResource("10_lxnma")
 }
-# 空白白名单表示允许全部武器，避免角色资源遗漏近战/拾取能力。
-allowed_primary_weapons = Array[String]([])
-allowed_secondary_weapons = Array[String]([])
 shove_walk_texture = ExtResource("6_3yr1j")
 shove_fatigue_limit = 10
 attack_effect_offsets = {

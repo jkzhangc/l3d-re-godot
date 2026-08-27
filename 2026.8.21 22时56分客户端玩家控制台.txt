@@ -1,0 +1,180 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3050 Ti Laptop GPU
+
+[Global] debug = true
+[Global] 音频总线已创建: Master, SFX, Music
+[Director] initialized (Phase 3)
+[标题画面] Global 同步 — 色表索引=0 粗体=false 描边=false 阴影=true
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://script/title_screen.gd:121)
+[标题画面] 色表已加载 320×64
+[标题画面] 联机游戏 → 大厅
+[Net] CLIENT connecting 10.126.126.1:27015
+[Net] TRANSPORT_CONNECTED
+[Net] HANDSHAKE_OK client peer=633078175 players=2
+[Net] START_GAME res://scene/maps/突袭-第一关-开头安全屋-户外.tscn serial=1 (flush=0.25s)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Parameter "node" is null.
+   at: process_simplify_path (modules/multiplayer/scene_cache_interface.cpp:116)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+[Players] 实体注册: Player → 座位 0
+[Players] 座位表为空，已懒创建默认座位 0: [座位0 のび太 HP=200/200 TP=100 主武器=无 弹夹={  }]
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] get_cached_color_image (res://script/global.gd:52)
+         [1] _load_resources (res://script/gradient_label.gd:292)
+         [2] _rebuild (res://script/gradient_label.gd:257)
+[Global] 色表缓存: 320×64
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] CLIENT_LOCAL_READY peer=633078175
+[NetworkWorld] ready host=false scene=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[Players] 实体注册: @CharacterBody2D@20 → 座位 2
+[NetworkWorld] WORLD_SNAPSHOT players=2 enemies=0 local_ready=true
+[PlayerState] 拾取治疗品: 急救喷雾 ×1
+[PlayerState] 装备投掷物: 燃烧瓶
+[PlayerState] 装备辅助品: TP恢复品
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=1 shooter=1 weapon=pistol_01 index=0
+[PlayerState] 装备投掷物: 手雷
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=2 shooter=633078175 weapon=smg_01 index=0
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn target=res://scene/maps/突袭-第一关-街道.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=2 (flush=0.25s)
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=3 (flush=0.25s)
+[Players] 实体注册: Player → 座位 1
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] CLIENT_LOCAL_READY peer=633078175
+[NetworkWorld] ready host=false scene=res://scene/maps/突袭-第一关-街道.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[Players] 实体注册: @CharacterBody2D@34 → 座位 3
+WARNING: Navigation map synchronization had 47 edge error(s).
+More than 2 edges tried to occupy the same map rasterization space.
+This causes a logical error in the navigation mesh geometry and is commonly caused by overlap or too densely placed edges.
+Consider baking with a higher 'cell_size', greater geometry margin, and less detailed bake objects to cause fewer edges.
+Consider lowering the 'navigation/2d/merge_rasterizer_cell_scale' in the project settings.
+This warning can be toggled under 'navigation/2d/warnings/navmesh_edge_merge_errors' in the project settings.
+     at: _build_step_find_edge_connection_pairs (modules/navigation_2d/2d/nav_map_builder_2d.cpp:150)
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=1
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=2
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=3
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=4
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=5
+[NetworkWorld] WORLD_SNAPSHOT players=2 enemies=5 local_ready=true
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=6
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=7
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=8
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=9
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=10
+[菜单] 打开
+[菜单] 关闭
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=1 shooter=1 weapon=shotgun_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=2 shooter=1 weapon=shotgun_01 index=1
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=3 shooter=1 weapon=shotgun_01 index=2
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=4 shooter=1 weapon=shotgun_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=5 shooter=1 weapon=shotgun_01 index=1
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=6 shooter=1 weapon=shotgun_01 index=2
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=7 shooter=1 weapon=shotgun_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=8 shooter=1 weapon=shotgun_01 index=1
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=9 shooter=1 weapon=shotgun_01 index=2
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=10 shooter=633078175 weapon=smg_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=11 shooter=1 weapon=shotgun_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=12 shooter=1 weapon=shotgun_01 index=1
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=13 shooter=1 weapon=shotgun_01 index=2
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=11
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=12
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=14 shooter=633078175 weapon=smg_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=15 shooter=1 weapon=shotgun_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=16 shooter=1 weapon=shotgun_01 index=1
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=17 shooter=1 weapon=shotgun_01 index=2
+[NetworkWorld] CLIENT_ENEMY_SPAWN id=13
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=18 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=19 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=20 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=21 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=22 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=23 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=24 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=25 shooter=1 weapon=pistol_01 index=0
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-街道.tscn target=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn serial=4 (flush=0.25s)
+[Players] 实体注册: Player → 座位 1
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready().
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1487)
+     GDScript backtrace (most recent call first):
+         [0] _build_ui (res://script/ui/chapter_summary.gd:401)
+         [1] _ready (res://script/ui/chapter_summary.gd:50)
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] CLIENT_LOCAL_READY peer=633078175
+[NetworkWorld] ready host=false scene=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[Players] 实体注册: @CharacterBody2D@162 → 座位 4
+[NetworkWorld] WORLD_SNAPSHOT players=2 enemies=0 local_ready=true
+[ChapterSummary] REMOTE_CONFIRM_RX peer=1
+[ChapterSummary] REMOTE_CONFIRM_RX peer=633078175
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=1 shooter=1 weapon=pistol_01 index=0
+[子弹] 碰撞体尺寸已更新: (24.0, 28.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] CLIENT_BULLET bullet=2 shooter=1 weapon=pistol_01 index=0

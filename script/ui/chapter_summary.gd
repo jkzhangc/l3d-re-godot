@@ -403,7 +403,7 @@ func _build_ui() -> void:
 	var olive_band := ColorRect.new()
 	olive_band.color = Color(0.12, 0.14, 0.075, 1.0)
 	olive_band.position = Vector2(0, 88)
-	olive_band.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	olive_band.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	olive_band.size.y = 110
 	background.add_child(olive_band)
 

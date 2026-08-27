@@ -1,0 +1,32 @@
+# This is an example configuration file
+# To learn more, see the full config.yaml reference: https://docs.continue.dev/reference
+
+name: Local Ollama
+version: 0.0.1
+schema: v1
+
+models:
+  - name: Qwen Coder 3B
+    provider: ollama
+    model: qwen2.5-coder:3b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+  - name: Qwen Coder 7B
+    provider: ollama
+    model: qwen2.5-coder:7b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+
+context:
+  - provider: code
+  - provider: currentFile
+  - provider: diff
+  - provider: terminal
+
+

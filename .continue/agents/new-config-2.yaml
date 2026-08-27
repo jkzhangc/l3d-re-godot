@@ -1,0 +1,41 @@
+name: Local Ollama
+version: 0.0.1
+schema: v1
+
+models:
+  - name: Qwen Coder 3B
+    provider: ollama
+    model: qwen2.5-coder:3b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+
+  - name: Qwen Coder 7B
+    provider: ollama
+    model: qwen2.5-coder:7b
+    apiBase: http://localhost:11434
+    roles:
+      - chat
+      - edit
+      - apply
+
+embeddingsProvider:
+  provider: ollama
+  model: bge-m3
+  apiBase: http://localhost:11434
+
+context:
+  - provider: code
+  - provider: currentFile
+  - provider: diff
+  - provider: terminal
+
+mcpServers:
+  - name: project-filesystem
+    command: npx.cmd
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - "D:/!bird's-eye-view-arpg-test-/l3d-re-godot"

@@ -51,6 +51,5 @@ bounds_margin = 0.0
 bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
 
 [node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("7_mh0mb")]
-visible = false
 
 [node name="ChapterSummary" parent="." unique_id=1333217650 instance=ExtResource("8_fkgxc")]

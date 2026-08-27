@@ -49,7 +49,8 @@ func _ready() -> void:
 	_load_defaults_from_global()
 	_sync_window()
 	_font_small = load(font_path_small) as FontFile
-	var color_img := Image.load_from_file(color_sheet_path)
+	var color_texture := ResourceLoader.load(color_sheet_path) as Texture2D
+	var color_img := color_texture.get_image() if color_texture else null
 	if color_img:
 		_title_label.set_color_image(color_img)
 	_load_characters()
@@ -90,7 +91,8 @@ func _load_characters() -> void:
 
 
 func _build_list() -> void:
-	var color_img := Image.load_from_file(color_sheet_path)
+	var color_texture := ResourceLoader.load(color_sheet_path) as Texture2D
+	var color_img := color_texture.get_image() if color_texture else null
 	for i: int in range(_available_characters.size()):
 		var cd: CharacterData = _available_characters[i]
 		var cy: float = item_start_y + i * item_spacing

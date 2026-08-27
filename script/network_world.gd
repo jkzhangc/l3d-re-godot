@@ -29,8 +29,14 @@ const NETWORK_THROWABLES: Dictionary = {
 	"grenade_01": NETWORK_GRENADE,
 	"molotov_01": NETWORK_MOLOTOV,
 }
-## 高频快照缩短远端可见延迟；本地预测/平滑纠正仍负责吸收网络抖动。
+## 快照节拍说明：
+## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
+## - Client 只提交输入，并接收 Host 的表现数据。
+## - 玩家位置单独以 60Hz 发送；敌人位置与玩家表现合并为 40Hz 快照。
+## - 高频快照使用 unreliable_ordered，因为旧位置没有保存价值；可靠快照只用于
+##   首次进图、掉落物变化、实体列表收敛等结构性同步。
 const SNAPSHOT_INTERVAL := 1.0 / 40.0
+const PLAYER_SNAPSHOT_INTERVAL := 1.0 / 60.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
@@ -40,6 +46,8 @@ var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
 var _pickups: Dictionary = {} # pickup_id -> weapon/throwable pickup Node2D
 var _next_pickup_id := 1
+## 仅向已创建本场景 NetworkWorld 并报告 ready 的 Client 发送场景 RPC。
+var _ready_client_peers: Dictionary = {}
 ## 客户端预置掉落物按场景相对路径缓存，可靠快照必须复用原节点，
 ## 否则主机删除后会留下未纳入 _pickups 的旧可见节点。
 var _client_preplaced_pickups_by_path: Dictionary = {}
@@ -62,10 +70,12 @@ const REVIVE_RANGE := 52.0
 const REVIVE_DURATION_MSEC := 3000
 const REVIVE_HP_RATIO := 0.30
 var _snapshot_accumulator := 0.0
+var _player_snapshot_accumulator := 0.0
 var _reliable_resync_accumulator := 0.0
 var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
+var _camera_bound_local_node: Node2D = null
 var _initial_world_received := false
 ## 本地预置玩家已被接管后即可发送输入和战斗请求；完整世界快照只负责补齐远端实体/掉落物。
 var _client_local_ready := false
@@ -174,6 +184,12 @@ func _on_scene_transition_started(target_scene_path: String) -> void:
 	print("[NetworkWorld] SCENE_TRANSITION_QUIET current=%s target=%s" % [_scene_path, target_scene_path])
 
 
+## 每个物理帧的联机总调度入口。
+##
+## Host 分支的顺序很重要：先接收/采集输入，再模拟玩家，再注册 Director
+## 新生成的敌人，最后发送快照。这样快照描述的是本帧模拟后的状态。
+## Client 分支只负责发送输入和更新本地/远端表现，绝不能在这里执行权威伤害、
+## 敌人 AI 或弹药扣除。
 func _physics_process(delta: float) -> void:
 	# 断线/自动回归收束期间，Net 仍是有效节点但其 ENet peer 已被 leave() 清空；
 	# 此时再上传输入或广播快照会触发“no multiplayer peer is active”。
@@ -199,10 +215,18 @@ func _physics_process(delta: float) -> void:
 		_register_untracked_host_enemies()
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
+		_player_snapshot_accumulator += delta
+		if _player_snapshot_accumulator >= PLAYER_SNAPSHOT_INTERVAL:
+			_player_snapshot_accumulator = fmod(_player_snapshot_accumulator, PLAYER_SNAPSHOT_INTERVAL)
+			for peer_id: int in _ready_client_peers.keys():
+				if net.get_peer_ids().has(peer_id):
+					player_position_snapshot.rpc_id(peer_id, _build_compact_player_snapshot())
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
-			player_snapshot.rpc(_build_snapshot(), _build_enemy_snapshot(true))
+			for peer_id: int in _ready_client_peers.keys():
+				if net.get_peer_ids().has(peer_id):
+					player_snapshot.rpc_id(peer_id, _build_compact_player_snapshot(), _build_enemy_snapshot(true))
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
@@ -239,6 +263,11 @@ func _is_local_player_alive() -> bool:
 
 # ---------------------------------------------------------------- Host simulation
 
+## 初始化 Host 场景中的权威实体。
+##
+## 场景切换会销毁旧的 NetworkWorld，但 Net 单例中的 PlayerState 会保留跨场景
+## 数据。因此这里必须先清除旧的实体绑定，再把当前地图节点绑定到已有状态，
+## 而不是重新创建一套玩家数据。
 func _host_initialize_world() -> void:
 	# Scene switching must only discard old node bindings. Persistent PlayerState lives in Net.
 	Players.clear_entity_bindings()
@@ -268,6 +297,11 @@ func _finish_host_world_initialization() -> void:
 	_consume_pending_scene_ready()
 
 
+## 初始化 Client 场景中的表现实体。
+##
+## Client 会先接管地图预置 Player，再向 Host 发送 scene-ready。此时玩家可以
+## 立即显示和发送输入，但位置、装备和敌人列表仍要等待 Host 的可靠快照确认。
+## Client 本地玩家使用 Host 权威位置，避免本地预测与 Host 模拟产生两套坐标。
 func _client_initialize_world() -> void:
 	# Keep snapshot data during map loads, only invalidate scene-node bindings.
 	Players.clear_entity_bindings()
@@ -282,8 +316,10 @@ func _client_initialize_world() -> void:
 	state.facing = local_node.facing
 	var seat_index := _ensure_player_state_seat(state)
 	local_node.configure_network_entity(local_id, local_id)
-	local_node.set_network_local_prediction(true)
+	local_node.network_local_player = true
+	local_node.set_network_local_prediction(false)
 	local_node.apply_network_spawn_state(state.character, state.current_hp, state.position, state.facing, true)
+	local_node.reset_network_prediction_sync()
 	local_node.exit_weapon_mode()
 	Players.register_entity(local_node, seat_index)
 	_players[local_id] = {
@@ -457,7 +493,7 @@ func _capture_facing_lock_input() -> void:
 	var local_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(local_id, {})
 	var node := entry.get("node") as CharacterBody2D
-	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active():
+	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or node.player_in_weapon_state:
 		return
 	if Global.facing_lock_mode == 0:
 		if Input.is_action_just_pressed("取消键"):
@@ -474,6 +510,21 @@ func _request_facing_lock(toggle: bool, locked: bool) -> void:
 		_try_host_set_facing_lock(local_id, toggle, locked)
 	elif _client_local_ready:
 		facing_lock_request.rpc_id(1, toggle, locked)
+		if toggle:
+			var entry: Dictionary = _players.get(local_id, {})
+			var node := entry.get("node") as CharacterBody2D
+			if is_instance_valid(node):
+				node.toggle_facing_lock()
+		elif locked:
+			var entry: Dictionary = _players.get(local_id, {})
+			var node := entry.get("node") as CharacterBody2D
+			if is_instance_valid(node):
+				node.lock_facing()
+		else:
+			var entry: Dictionary = _players.get(local_id, {})
+			var node := entry.get("node") as CharacterBody2D
+			if is_instance_valid(node):
+				node.unlock_facing()
 
 
 func _request_weapon_switch(slot: String) -> void:
@@ -529,6 +580,11 @@ func _capture_host_input(blocked: bool = false) -> void:
 	_set_input(net.my_peer_id, Vector2.ZERO if blocked else _read_local_direction(), false if blocked else Input.is_action_pressed("行走键"))
 
 
+## 按固定节拍向 Host 提交当前输入状态。
+##
+## 这里发送的是“持续状态”而不是按键事件，例如方向向量和是否慢走。
+## RPC 丢失时，下一次输入包会覆盖旧状态；因此该 RPC 可以使用 unreliable_ordered。
+## Host 收到后才会真正改变远端玩家的速度和位置。
 func _capture_client_input(delta: float, blocked: bool = false) -> void:
 	# 首图的本地预置玩家在 _client_initialize_world() 已安全接管；不必等待完整世界快照。
 	if not _client_local_ready:
@@ -546,7 +602,7 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 	var peer_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := entry.get("node") as CharacterBody2D
-	if not is_instance_valid(node) or node.is_network_dead():
+	if not is_instance_valid(node) or node.is_network_dead() or not node.network_local_prediction:
 		return
 	var direction := Vector2.ZERO if blocked else _read_local_direction()
 	var walking := false if blocked else Input.is_action_pressed("行走键")
@@ -580,6 +636,11 @@ func _set_input(peer_id: int, direction: Vector2, walking: bool) -> void:
 			print("[NetworkWorld] HOST_INPUT peer=%d dir=(%.2f, %.2f) walk=%s" % [peer_id, normalized.x, normalized.y, walking])
 
 
+## Host 权威模拟所有玩家。
+##
+## `_players[peer_id]` 中的 input 是最近一次 Client 提交的输入。Host 不信任
+## Client 上传的位置，而是用同一套速度、碰撞和 move_and_slide() 重新计算位置。
+## 因此所有攻击距离、拾取距离和子弹出生点都必须使用这里产生的 Host 坐标。
 func _simulate_host_players(_delta: float) -> void:
 	for key: Variant in _players.keys():
 		var peer_id := int(key)
@@ -911,7 +972,7 @@ func _try_host_set_facing_lock(peer_id: int, toggle: bool, locked: bool) -> void
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
-	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_throwable_held(peer_id):
+	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
 	if toggle:
 		node.toggle_facing_lock()
@@ -1016,7 +1077,7 @@ func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2)
 		if not is_instance_valid(collider):
 			continue
 		for enemy_entry: Dictionary in _enemies.values():
-			var enemy := enemy_entry.get("node") as CharacterBody2D
+			var enemy := _resolve_enemy_entry(enemy_entry)
 			if not is_instance_valid(enemy) or enemy.get("_is_dead") == true or (collider != enemy and not enemy.is_ancestor_of(collider)):
 				continue
 			var enemy_id := enemy.get_instance_id()
@@ -1028,7 +1089,7 @@ func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2)
 	if hit_enemies.is_empty() or wd.shove_splash_radius <= 0.0:
 		return
 	for enemy_entry: Dictionary in _enemies.values():
-		var enemy := enemy_entry.get("node") as CharacterBody2D
+		var enemy := _resolve_enemy_entry(enemy_entry)
 		if not is_instance_valid(enemy) or enemy.get("_is_dead") == true or hit_enemies.has(enemy.get_instance_id()):
 			continue
 		var distance := enemy.global_position.distance_to(center)
@@ -1121,7 +1182,7 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 		if not is_instance_valid(collider):
 			continue
 		for enemy_entry: Dictionary in _enemies.values():
-			var enemy := enemy_entry.get("node") as CharacterBody2D
+			var enemy := _resolve_enemy_entry(enemy_entry)
 			if not is_instance_valid(enemy) or enemy.get("_is_dead") == true:
 				continue
 			if collider != enemy and not enemy.is_ancestor_of(collider):
@@ -1395,7 +1456,7 @@ func player_hurt_presentation(peer_id: int, damage: float, position: Vector2) ->
 func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, is_headshot: bool) -> void:
 	if net.is_host or _scene_transitioning:
 		return
-	var node := (_enemies.get(entity_id, {}) as Dictionary).get("node") as CharacterBody2D
+	var node := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
 	if is_instance_valid(node) and node.has_method("play_network_hurt_presentation"):
 		node.play_network_hurt_presentation(damage, position, is_headshot)
 		if _is_auto_network_feature_test():
@@ -1549,6 +1610,13 @@ func player_snapshot(player_states: Array, enemy_states: Array) -> void:
 	_apply_client_enemy_snapshot(enemy_states, false)
 
 
+@rpc("authority", "call_remote", "unreliable_ordered")
+func player_position_snapshot(player_states: Array) -> void:
+	if net.is_host:
+		return
+	_apply_client_snapshot(player_states, false)
+
+
 func _on_game_scene_ready_received(peer_id: int, ready_scene_path: String) -> void:
 	if not net.is_host or ready_scene_path != _scene_path:
 		return
@@ -1566,6 +1634,7 @@ func _consume_pending_scene_ready() -> void:
 func _accept_ready_peer(peer_id: int) -> void:
 	if peer_id <= 1 or not net.get_player_names().has(peer_id):
 		return
+	_ready_client_peers[peer_id] = true
 	_add_host_peer(peer_id)
 	# 首次世界快照是可靠的，保留字典格式及预置敌人的场景路径。
 	_send_reliable_world_snapshot(peer_id)
@@ -1581,14 +1650,15 @@ func _send_reliable_world_snapshot(peer_id: int) -> void:
 func _broadcast_reliable_world_snapshot() -> void:
 	if not net.is_host:
 		return
-	for peer_id: int in net.get_peer_ids():
-		if peer_id > 1:
+	for peer_id: int in _ready_client_peers.keys():
+		if net.get_peer_ids().has(peer_id):
 			_send_reliable_world_snapshot(peer_id)
 
 
 func _on_peer_left(peer_id: int) -> void:
 	if not net.is_host:
 		return
+	_ready_client_peers.erase(peer_id)
 	var had_player := _players.has(peer_id)
 	if had_player:
 		_remove_player(peer_id)
@@ -1660,7 +1730,7 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 	var transition := str(public_state.get("weapon_transition", ""))
 	if not transition.is_empty() and remote_weapon:
 		# 正常 Client 会先收到可靠表现 RPC；这里只服务于晚加入/丢包后的可见收敛。
-		if not _weapon_transition_state.has(node.network_entity_id):
+		if not _weapon_transition_state.has(node.network_entity_id) and not node.player_in_weapon_state:
 			_weapon_transition_state[node.network_entity_id] = transition
 			node.play_network_weapon_transition(remote_weapon, transition == "raising")
 	elif bool(public_state.get("weapon_raised", false)) and remote_weapon:
@@ -1672,13 +1742,18 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 	return remote_weapon
 
 
+## 应用玩家快照。
+##
+## `snap=true` 表示可靠完整快照：允许创建/删除实体并校准初始状态。
+## `snap=false` 表示高频移动快照：只能更新已有实体的表现，不能因为丢包而
+## 删除玩家。玩家快照同时兼容旧的 Dictionary 格式和新的紧凑 Array 格式。
 func _apply_client_snapshot(states: Array, snap: bool) -> void:
 	var seen: Dictionary = {}
 	var authoritative_peer_ids: Array[int] = []
 	for value: Variant in states:
-		if not (value is Dictionary):
+		var public_state := _normalize_player_snapshot(value)
+		if public_state.is_empty():
 			continue
-		var public_state := value as Dictionary
 		var peer_id := int(public_state.get("peer_id", 0))
 		if peer_id <= 0:
 			continue
@@ -1694,9 +1769,43 @@ func _apply_client_snapshot(states: Array, snap: bool) -> void:
 		_reconcile_network_seats(authoritative_peer_ids)
 
 
+func _normalize_player_snapshot(value: Variant) -> Dictionary:
+	if value is Dictionary:
+		return value as Dictionary
+	if value is Array:
+		var packet := value as Array
+		if packet.size() < 21:
+			return {}
+		return {
+			"peer_id": int(packet[0]),
+			"name": packet[1],
+			"character_path": packet[2],
+			"hp": packet[3],
+			"position": packet[4],
+			"facing": int(packet[5]),
+			"moving": bool(packet[6]),
+			"walking": bool(packet[7]),
+			"weapon_id": packet[8],
+			"primary_weapon_id": packet[9],
+			"secondary_weapon_id": packet[10],
+			"active_weapon_slot": packet[11],
+			"weapon_magazines": packet[12],
+			"weapon_raised": bool(packet[13]),
+			"weapon_transition": packet[14],
+			"throwable_id": packet[15],
+			"throwable_held": bool(packet[16]),
+			"throwable_aiming": bool(packet[17]),
+			"throw_range": int(packet[18]),
+			"dead": bool(packet[19]),
+			"magazine_ammo": int(packet[20]),
+		}
+	return {}
+
+
 func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := entry.get("node") as CharacterBody2D
+	var is_local_prediction: bool = peer_id == int(net.my_peer_id) and is_instance_valid(node) and node.network_local_prediction
 	if not is_instance_valid(node):
 		node = _instantiate_player(_packet_position(public_state), peer_id)
 		var state := _find_or_create_player_state(
@@ -1707,7 +1816,8 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		state.owner_peer_id = peer_id
 		node.configure_network_entity(peer_id, peer_id)
 		if peer_id == int(net.my_peer_id):
-			node.set_network_local_prediction(true)
+			node.network_local_player = true
+			node.set_network_local_prediction(false)
 		node.exit_weapon_mode()
 		var seat_index: int = _ensure_player_state_seat(state)
 		Players.register_entity(node, seat_index)
@@ -1743,7 +1853,7 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
 	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
 	# 客户端角色会永远停在同一张行走帧上。
-	if snap:
+	if snap and (not is_local_prediction or not _initial_world_received):
 		# 可靠世界重同步每隔一段时间会到达一次。对于已经开始本地预测的玩家，
 		# 只用当前位置刷新角色/H P 初始化，不把旧权威坐标立即写回；随后由
 		# apply_network_presentation 的小幅平滑纠正收敛，避免明显回弹。
@@ -1753,13 +1863,14 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
 	var is_dead := bool(public_state.get("dead", false))
 	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
-	node.apply_network_presentation(
-		_packet_position(public_state),
-		int(public_state.get("facing", 0)),
-		false if is_dead else bool(public_state.get("moving", false)),
-		false if is_dead else bool(public_state.get("walking", false)),
-		snap
-	)
+	if not is_local_prediction:
+		node.apply_network_presentation(
+			_packet_position(public_state),
+			int(public_state.get("facing", 0)),
+			false if is_dead else bool(public_state.get("moving", false)),
+			false if is_dead else bool(public_state.get("walking", false)),
+			snap
+		)
 	entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
 	entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
 	_players[peer_id] = entry
@@ -1809,7 +1920,7 @@ func _normalize_enemy_snapshot(value: Variant) -> Dictionary:
 
 func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _enemies.get(entity_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _resolve_enemy_entry(entry)
 	if not is_instance_valid(node):
 		var scene_path := str(public_state.get("scene_path", ""))
 		# 紧凑不可靠包不带场景路径；在可靠 world_snapshot 建立实体前不创建未知敌人。
@@ -1827,7 +1938,7 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 		if is_instance_valid(_players_parent) and node.get_parent() != _players_parent:
 			node.reparent(_players_parent, true)
 		node.configure_network_entity(entity_id, true)
-		entry = {"node": node, "scene_path": scene_path}
+		entry = {"node_id": node.get_instance_id(), "scene_path": scene_path}
 		_enemies[entity_id] = entry
 	node.apply_network_presentation(
 		_packet_position(public_state),
@@ -1845,7 +1956,7 @@ func _remove_client_enemy(entity_id: int) -> void:
 	if not _enemies.has(entity_id):
 		return
 	var entry: Dictionary = _enemies[entity_id]
-	var node := entry.get("node") as Node
+	var node := _resolve_enemy_entry(entry)
 	_enemies.erase(entity_id)
 	if is_instance_valid(node):
 		node.queue_free()
@@ -1940,6 +2051,10 @@ func _build_pickup_snapshot() -> Array:
 		if pickup_kind.is_empty():
 			continue
 		var scene := get_tree().current_scene
+		var reserve_ammo := int(pickup.get("pickup_reserve_ammo")) if weapon else 0
+		var magazine_ammo := int(pickup.get("pickup_magazine_ammo")) if weapon else -1
+		var char_idx := int(pickup.get("pickup_char_idx")) if weapon else item.pickup_char_idx
+		var direction := int(pickup.get("pickup_direction")) if weapon else item.pickup_direction
 		var packet := {
 			"pickup_id": pickup_id,
 			"pickup_kind": pickup_kind,
@@ -1947,10 +2062,10 @@ func _build_pickup_snapshot() -> Array:
 			"position": pickup.global_position,
 			"weapon_id": weapon.item_id if weapon else "",
 			"item_id": item.item_id if item else "",
-			"reserve_ammo": int(pickup.get("pickup_reserve_ammo")),
-			"magazine_ammo": int(pickup.get("pickup_magazine_ammo")),
-			"char_idx": int(pickup.get("pickup_char_idx")),
-			"direction": int(pickup.get("pickup_direction")),
+			"reserve_ammo": reserve_ammo,
+			"magazine_ammo": magazine_ammo,
+			"char_idx": char_idx,
+			"direction": direction,
 		}
 		packets.append(packet)
 	packets.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["pickup_id"]) < int(b["pickup_id"]))
@@ -2568,7 +2683,7 @@ func _run_auto_host_feature_test() -> void:
 	# 先给一名敌人和 Host 各造成非致命伤，再进行后续倒地/救援回归。
 	var feedback_enemy: CharacterBody2D = null
 	for enemy_entry_value: Variant in _enemies.values():
-		var candidate := (enemy_entry_value as Dictionary).get("node") as CharacterBody2D
+		var candidate := _resolve_enemy_entry(enemy_entry_value as Dictionary)
 		if is_instance_valid(candidate) and not candidate.is_network_dead():
 			feedback_enemy = candidate
 			break
@@ -2804,7 +2919,7 @@ func _run_auto_client_enemy_test() -> void:
 		return
 	var has_network_enemy := false
 	for entry_value: Variant in _enemies.values():
-		var enemy := (entry_value as Dictionary).get("node") as CharacterBody2D
+		var enemy := _resolve_enemy_entry(entry_value as Dictionary)
 		if is_instance_valid(enemy) and int(enemy.get("network_entity_id")) > 0:
 			has_network_enemy = true
 			break
@@ -3160,7 +3275,7 @@ func _has_client_pickup_weapon_near(weapon_id: String, position: Vector2, max_di
 func _get_client_live_enemy_hp_total() -> float:
 	var total := 0.0
 	for enemy_entry: Dictionary in _enemies.values():
-		var enemy := enemy_entry.get("node") as CharacterBody2D
+		var enemy := _resolve_enemy_entry(enemy_entry)
 		if is_instance_valid(enemy) and not enemy.is_network_dead():
 			total += enemy.current_hp
 	return total
@@ -3188,7 +3303,7 @@ func _register_initial_host_enemies() -> void:
 		_next_enemy_id += 1
 		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
 		enemy.configure_network_entity(entity_id, false)
-		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+		_enemies[entity_id] = {"node_id": enemy.get_instance_id(), "scene_path": scene_path}
 		_connect_host_enemy_damage_signal(entity_id, enemy)
 	print("[NetworkWorld] HOST_ENEMIES_REGISTERED count=%d" % _enemies.size())
 
@@ -3197,10 +3312,11 @@ func _register_untracked_host_enemies() -> void:
 	## Director 可以在地图运行后动态生成感染者。新节点进入 enemy group 后在此被 Host 收编。
 	if not net.is_host:
 		return
+	_prune_invalid_host_enemies()
 	var tracked_nodes: Dictionary = {}
 	for entry_value: Variant in _enemies.values():
-		var tracked := (entry_value as Dictionary).get("node") as CharacterBody2D
-		if is_instance_valid(tracked):
+		var tracked := _resolve_enemy_entry(entry_value as Dictionary)
+		if tracked:
 			tracked_nodes[tracked.get_instance_id()] = true
 	var scene := get_tree().current_scene
 	for value: Node in get_tree().get_nodes_in_group("enemy"):
@@ -3211,7 +3327,7 @@ func _register_untracked_host_enemies() -> void:
 		_next_enemy_id += 1
 		var scene_path := str(scene.get_path_to(enemy)) if scene else ""
 		enemy.configure_network_entity(entity_id, false)
-		_enemies[entity_id] = {"node": enemy, "scene_path": scene_path}
+		_enemies[entity_id] = {"node_id": enemy.get_instance_id(), "scene_path": scene_path}
 		_connect_host_enemy_damage_signal(entity_id, enemy)
 		var public_state := _public_enemy_state(entity_id)
 		var ready_client_count := 0
@@ -3230,11 +3346,15 @@ func _prepare_client_preplaced_enemies() -> void:
 
 
 func _build_enemy_snapshot(compact: bool = false) -> Array:
+	if compact:
+		_prune_invalid_host_enemies()
 	var states: Array = []
 	for key: Variant in _enemies.keys():
 		var entity_id := int(key)
 		var public_state := _public_enemy_state(entity_id)
 		if public_state.is_empty():
+			continue
+		if compact and bool(public_state.get("dead", false)):
 			continue
 		if compact:
 			# 高频 ENet 包：只发送客户端表现必需的数据；场景路径只在可靠 world_snapshot 中发送。
@@ -3261,8 +3381,8 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 	if not _enemies.has(entity_id):
 		return {}
 	var entry: Dictionary = _enemies[entity_id]
-	var enemy := entry.get("node") as CharacterBody2D
-	if not is_instance_valid(enemy):
+	var enemy := _resolve_enemy_entry(entry)
+	if not enemy:
 		return {}
 	return {
 		"entity_id": entity_id,
@@ -3278,11 +3398,46 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 	}
 
 
+func _prune_invalid_host_enemies() -> void:
+	if not net.is_host:
+		return
+	for key: Variant in _enemies.keys():
+		var entry: Dictionary = _enemies[key]
+		if not _resolve_enemy_entry(entry):
+			_enemies.erase(key)
+
+
+func _resolve_enemy_entry(entry: Dictionary) -> CharacterBody2D:
+	var enemy_id := int(entry.get("node_id", 0))
+	if enemy_id <= 0:
+		return null
+	var enemy_value: Object = instance_from_id(enemy_id)
+	if not is_instance_valid(enemy_value) or not enemy_value is CharacterBody2D:
+		return null
+	return enemy_value as CharacterBody2D
+
+
 func _build_snapshot() -> Array:
 	var states: Array = []
 	for key: Variant in _players.keys():
 		states.append(_public_state(int(key)))
 	states.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["peer_id"]) < int(b["peer_id"]))
+	return states
+
+
+func _build_compact_player_snapshot() -> Array:
+	var states: Array = []
+	for key: Variant in _players.keys():
+		var state := _public_state(int(key))
+		states.append([
+			state["peer_id"], state["name"], state["character_path"], state["hp"], state["position"],
+			state["facing"], state["moving"], state["walking"], state["weapon_id"],
+			state["primary_weapon_id"], state["secondary_weapon_id"], state["active_weapon_slot"],
+			state["weapon_magazines"], state["weapon_raised"], state["weapon_transition"],
+			state["throwable_id"], state["throwable_held"], state["throwable_aiming"],
+			state["throw_range"], state["dead"], state["magazine_ammo"],
+		])
+	states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return states
 
 
@@ -3460,6 +3615,9 @@ func _spawn_position(index: int) -> Vector2:
 func _set_local_player(node: Node2D, seat_index: int) -> void:
 	Players.active_seat_index = seat_index
 	Players.set_local_entity(node)
+	if _camera_bound_local_node == node:
+		return
 	var camera := get_tree().current_scene.find_child("Camera2D", true, false)
 	if camera and camera.has_method("set_follow_target"):
 		camera.set_follow_target(node)
+	_camera_bound_local_node = node

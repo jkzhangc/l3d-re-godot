@@ -118,7 +118,8 @@ func _ready() -> void:
 		return
 
 	_load_defaults_from_global()
-	_color_img = Image.load_from_file(color_sheet_path)
+	var color_texture := ResourceLoader.load(color_sheet_path) as Texture2D
+	_color_img = color_texture.get_image() if color_texture else null
 	if _color_img:
 		print("[标题画面] 色表已加载 %d×%d" % [_color_img.get_width(), _color_img.get_height()])
 	else:

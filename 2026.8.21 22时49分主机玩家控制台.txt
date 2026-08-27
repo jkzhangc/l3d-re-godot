@@ -1,0 +1,3188 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3050 Ti Laptop GPU
+
+[Global] debug = true
+[Global] 音频总线已创建: Master, SFX, Music
+[Director] initialized (Phase 3)
+[标题画面] Global 同步 — 色表索引=0 粗体=false 描边=false 阴影=true
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://script/title_screen.gd:121)
+[标题画面] 色表已加载 320×64
+[标题画面] 联机游戏 → 大厅
+[Net] HOST listening port=27015 peer_id=1 protocol=l3d_main_v2_combat_rpc
+[Net] PEER_CONNECTED peer=1283412646
+[Net] HANDSHAKE_OK peer=1283412646 name=Atea
+[Net] START_GAME res://scene/maps/突袭-第一关-开头安全屋-户外.tscn serial=1 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1283412646 serial=1
+[Net] SCENE_TRANSITION_COMMIT serial=1
+[Players] 实体注册: Player → 座位 0
+[Players] 座位表为空，已懒创建默认座位 0: [座位0 のび太 HP=200/200 TP=100 主武器=无 弹夹={  }]
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] get_cached_color_image (res://script/global.gd:52)
+         [1] _load_resources (res://script/gradient_label.gd:292)
+         [2] _rebuild (res://script/gradient_label.gd:257)
+[Global] 色表缓存: 320×64
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@20 → 座位 2
+[NetworkWorld] HOST_SPAWN peer=1283412646 preplaced=false
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=4
+[Director] no DirectorConfig in scene, using defaults
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1283412646 enemies=0
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[PlayerState] 拾取治疗品: 急救喷雾 ×1
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[PlayerState] 获得物品: 手枪子弹
+[NetworkWorld] HOST_PICKUP peer=1 pickup=3 weapon=pistol_01
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[PlayerState] 获得物品: 霰弹枪子弹
+[NetworkWorld] HOST_PICKUP peer=1 pickup=4 weapon=shotgun_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[NetworkWorld] HOST_PICKUP peer=1283412646 pickup=1 weapon=smg_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[PlayerState] 装备辅助品: TP恢复品
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_PICKUP peer=1283412646 pickup=2 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=29 bullets=1
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=28 bullets=1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=4 bullets=3
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=27 bullets=1
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=secondary weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=primary weapon=smg_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=secondary weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=secondary weapon=pistol_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=primary weapon=shotgun_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=secondary weapon=pistol_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=primary weapon=smg_01
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=11 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@20)
+[子弹] 去重记录: tid=200504514247 name=@CharacterBody2D@20 (累计=1)
+[子弹] >>> 造成伤害！tid=200504514247 name=@CharacterBody2D@20 damage=25 <<<
+[玩家] 受到伤害: 25 | HP: 175/200 | source=268552903639
+[子弹] 击中: @CharacterBody2D@20 | 伤害=25 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[PlayerState] 装备投掷物: 手雷
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=26 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 去重记录: tid=190203303241 name=Player (累计=1)
+[子弹] >>> 造成伤害！tid=190203303241 name=Player damage=20 <<<
+[玩家] 受到伤害: 20 | HP: 180/200 | source=278954775849
+[子弹] 击中: Player | 伤害=20 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[PlayerState] 装备投掷物: 燃烧瓶
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[Net] SCENE_CHANGE_REQUEST peer=1283412646 path=res://scene/maps/突袭-第一关-街道.tscn
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn target=res://scene/maps/突袭-第一关-街道.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=2 (flush=0.25s)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=25 bullets=1
+[Net] SCENE_TRANSITION_ACK peer=1283412646 serial=2
+[Net] SCENE_TRANSITION_COMMIT serial=2
+[Players] 实体注册: Player → 座位 1
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@79 → 座位 2
+[NetworkWorld] HOST_SPAWN peer=1283412646 preplaced=false
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-街道.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=0
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1283412646 enemies=0
+[Director] applying DirectorConfig from: res://scene/maps/突袭-第一关-街道.tscn
+[Director] config applied: spawn=true cooldown=0-5s
+[Pacing] → build (duration=23.7s)
+[Director] pacing phase → build
+[SpawnManager] phase → build
+[SpawnManager] scatter spawn: 5 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=0 fallback=near_player
+[Director] TileMapLayer cache: 3 layers
+WARNING: Navigation map synchronization had 47 edge error(s).
+More than 2 edges tried to occupy the same map rasterization space.
+This causes a logical error in the navigation mesh geometry and is commonly caused by overlap or too densely placed edges.
+Consider baking with a higher 'cell_size', greater geometry margin, and less detailed bake objects to cause fewer edges.
+Consider lowering the 'navigation/2d/merge_rasterizer_cell_scale' in the project settings.
+This warning can be toggled under 'navigation/2d/warnings/navmesh_edge_merge_errors' in the project settings.
+     at: _build_step_find_edge_connection_pairs (modules/navigation_2d/2d/nav_map_builder_2d.cpp:150)
+[Director] spawned enemy at (-498, 3196)
+[Director] spawned enemy at (-751, 2614)
+[Director] spawned enemy at (-810, 2746)
+[Director] spawned enemy at (-259, 3079)
+[Director] spawned enemy at (368, 3118)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=1 path=DecorLayer/Enemy clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=2 path=DecorLayer/@CharacterBody2D@80 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=3 path=DecorLayer/@CharacterBody2D@81 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=4 path=DecorLayer/@CharacterBody2D@82 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=5 path=DecorLayer/@CharacterBody2D@83 clients=1
+WARNING: Sending 1537 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+     at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+     GDScript backtrace (most recent call first):
+         [0] _physics_process (res://script/network_world.gd:129)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[A*] 找到 TileMapLayer (3 个): [GroundLayer DecorLayer UpperLayer]
+[A* DEBUG] 图块 (-16, 99) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-21, 99) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-498, 3196) → 格子: (-16, 99)  可行走=true
+[A*] 玩家世界: (-661, 3183) → 格子: (-21, 99)  可行走=true
+[A*] 分帧构建 AStarGrid2D: region=[P: (-57, -49), S: (191, 167)] cells=31897 (约22帧完成)
+[A*] ❌ 无法构建寻路网格！
+[A* DEBUG] 图块 (-57, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-56, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-55, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-54, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-53, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-52, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-51, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A*] ❌ 无法构建寻路网格！
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[敌人] @CharacterBody2D@81 被枪声惊动！
+[敌人] @CharacterBody2D@82 被枪声惊动！
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=24 bullets=1
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=485801072247 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=489961822016
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-530, 3194) → 格子: (-17, 99)  可行走=true
+[A*] 玩家世界: (-661, 3183) → 格子: (-21, 99)  可行走=true
+[A*] ❌ 无法构建寻路网格！
+[A*] ❌ 无法构建寻路网格！
+[A*] AStarGrid2D 构建完成: 31897 cells, 障碍物 6481 (20.3%)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-810, 2747) → 格子: (-26, 85)  可行走=true
+[A*] 玩家世界: (-661, 3183) → 格子: (-21, 99)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-260, 3080) → 格子: (-9, 96)  可行走=true
+[A*] 玩家世界: (-661, 3183) → 格子: (-21, 99)  可行走=true
+[玩家] 受到伤害: 10 | HP: 165/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=23 bullets=1
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=485801072247 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=493401151404
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=485801072247 name=Enemy ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=22 bullets=1
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=485801072247 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=494760105701
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=485801072247 name=Enemy ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=21 bullets=1
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=485801072247 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=496102283045
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=485801072247 name=Enemy ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=20 bullets=1
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=485801072247 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=497377352907
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 1 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=485801072247 name=Enemy ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=19 bullets=1
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=18 bullets=1
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=485801072247 name=Enemy (累计=1)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 去重记录: tid=287527934957 name=Player (累计=2)
+[子弹] >>> 造成伤害！tid=287527934957 name=Player damage=20 <<<
+[玩家] 受到伤害: 20 | HP: 160/200 | source=499289954068
+[子弹] 击中: Player | 伤害=20 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[玩家] 受到伤害: 10 | HP: 155/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-616, 3144) → 格子: (-20, 98)  可行走=true
+[A*] 玩家世界: (-482, 3097) → 格子: (-16, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=17 bullets=1
+[子弹] body_entered: @CharacterBody2D@82
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[子弹] >>> 造成伤害！tid=486824482672 name=@CharacterBody2D@82 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=504876768446
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@82 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] *** 去重拦截！tid=486824482672 name=@CharacterBody2D@82 ***
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-482, 3124) → 格子: (-16, 97)  可行走=true
+[A*] 玩家世界: (-429, 3143) → 格子: (-14, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=16 bullets=1
+[子弹] body_entered: @CharacterBody2D@82
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[子弹] >>> 造成伤害！tid=486824482672 name=@CharacterBody2D@82 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=506168612672
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@82 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] *** 去重拦截！tid=486824482672 name=@CharacterBody2D@82 ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=15 bullets=1
+[子弹] body_entered: @CharacterBody2D@82
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[子弹] >>> 造成伤害！tid=486824482672 name=@CharacterBody2D@82 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=507443681048
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@82 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] *** 去重拦截！tid=486824482672 name=@CharacterBody2D@82 ***
+[玩家] 受到伤害: 10 | HP: 145/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[SpawnManager] scatter spawn: 6 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (358, 3083)
+[Director] spawned enemy at (395, 3179)
+[Director] spawned enemy at (343, 3132)
+[Director] spawned enemy at (491, 3138)
+[Director] spawned enemy at (449, 3189)
+[Director] spawned enemy at (342, 3189)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=6 path=DecorLayer/@CharacterBody2D@230 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=7 path=DecorLayer/@CharacterBody2D@231 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=8 path=DecorLayer/@CharacterBody2D@232 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=9 path=DecorLayer/@CharacterBody2D@233 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=10 path=DecorLayer/@CharacterBody2D@234 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=11 path=DecorLayer/@CharacterBody2D@235 clients=1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=14 bullets=1
+[子弹] body_entered: @CharacterBody2D@82
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[子弹] >>> 造成伤害！tid=486824482672 name=@CharacterBody2D@82 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=511772202733
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@82 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] *** 去重拦截！tid=486824482672 name=@CharacterBody2D@82 ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=13 bullets=1
+[子弹] body_entered: @CharacterBody2D@82
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[子弹] >>> 造成伤害！tid=486824482672 name=@CharacterBody2D@82 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=513064049855
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 2 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@82 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] *** 去重拦截！tid=486824482672 name=@CharacterBody2D@82 ***
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=12 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@82)
+[子弹] 去重记录: tid=486824482672 name=@CharacterBody2D@82 (累计=1)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=primary weapon=shotgun_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[SpawnManager] scatter spawn: 1 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (394, 3058)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=12 path=DecorLayer/@CharacterBody2D@263 clients=1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[敌人] @CharacterBody2D@232 被枪声惊动！
+[敌人] @CharacterBody2D@235 被枪声惊动！
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=11 bullets=1
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (343, 3133) → 格子: (10, 97)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (342, 3190) → 格子: (10, 99)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=10 bullets=1
+[子弹] body_entered: @CharacterBody2D@232
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] >>> 造成伤害！tid=510262254866 name=@CharacterBody2D@232 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=525261085909
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@232 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] *** 去重拦截！tid=510262254866 name=@CharacterBody2D@232 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=2)
+[子弹] >>> 造成伤害！tid=511268887886 name=@CharacterBody2D@235 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=525261085909
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@235 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[硬直] 硬直结束 → 追击
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (89, 3126) → 格子: (2, 97)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (90, 3161) → 格子: (2, 98)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=9 bullets=1
+[子弹] body_entered: @CharacterBody2D@232
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] >>> 造成伤害！tid=510262254866 name=@CharacterBody2D@232 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=527945438952
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@232 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] *** 去重拦截！tid=510262254866 name=@CharacterBody2D@232 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=2)
+[子弹] >>> 造成伤害！tid=511268887886 name=@CharacterBody2D@235 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=527945438952
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@235 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=8 bullets=1
+[硬直] 硬直结束 → 追击
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (6, 3123) → 格子: (0, 97)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (7, 3158) → 格子: (0, 98)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] >>> 造成伤害！tid=510262254866 name=@CharacterBody2D@232 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=530126477080
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@232 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=2)
+[子弹] >>> 造成伤害！tid=511268887886 name=@CharacterBody2D@235 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=530126477080
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@235 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=7 bullets=1
+[硬直] 硬直结束 → 追击
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-2, 3122) → 格子: (-1, 97)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-1, 3158) → 格子: (-1, 98)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[子弹] body_entered: @CharacterBody2D@232
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] >>> 造成伤害！tid=510262254866 name=@CharacterBody2D@232 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=532173299068
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@232 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] *** 去重拦截！tid=510262254866 name=@CharacterBody2D@232 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=2)
+[子弹] >>> 造成伤害！tid=511268887886 name=@CharacterBody2D@235 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=532173299068
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@235 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=6 bullets=1
+[硬直] 硬直结束 → 追击
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-11, 3122) → 格子: (-1, 97)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-9, 3157) → 格子: (-1, 98)  可行走=true
+[A*] 玩家世界: (-154, 3143) → 格子: (-5, 98)  可行走=true
+[子弹] body_entered: @CharacterBody2D@232
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] >>> 造成伤害！tid=510262254866 name=@CharacterBody2D@232 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=534220119251
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 3 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@232 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] *** 去重拦截！tid=510262254866 name=@CharacterBody2D@232 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=2)
+[子弹] >>> 造成伤害！tid=511268887886 name=@CharacterBody2D@235 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=534220119251
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 4 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@235 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=5 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=4 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=3 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[SpawnManager] scatter spawn: 2 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (460, 3149)
+[Director] spawned enemy at (421, 3107)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=13 path=DecorLayer/@CharacterBody2D@380 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=14 path=DecorLayer/@CharacterBody2D@381 clients=1
+[Pacing] → peak (duration=30.0s)
+[Director] pacing phase → peak
+[SpawnManager] phase → peak
+[SpawnManager] HORDE START: total=17
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 在视野中发现玩家！
+[敵人] 在视野中发现玩家！
+[敵人] 在视野中发现玩家！
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[敌人] @CharacterBody2D@233 被枪声惊动！
+[敌人] @CharacterBody2D@234 被枪声惊动！
+[敌人] @CharacterBody2D@380 被枪声惊动！
+[敌人] @CharacterBody2D@381 被枪声惊动！
+[NetworkWorld] HOST_FIRE peer=1 ammo=3 bullets=3
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[子弹] body_entered: @CharacterBody2D@230
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=1)
+[子弹] >>> 造成伤害！tid=509591166174 name=@CharacterBody2D@230 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553883016580
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, -0.173648)
+[子弹] 击中: @CharacterBody2D@230 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] *** 去重拦截！tid=509591166174 name=@CharacterBody2D@230 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=1)
+[子弹] >>> 造成伤害！tid=487160026972 name=@CharacterBody2D@83 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553815907810
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@83 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=1)
+[子弹] >>> 造成伤害！tid=487160026972 name=@CharacterBody2D@83 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=553950125495
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@83 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] body_entered: @CharacterBody2D@83
+[子弹] *** 去重拦截！tid=487160026972 name=@CharacterBody2D@83 ***
+[子弹] body_entered: @CharacterBody2D@83
+[子弹] *** 去重拦截！tid=487160026972 name=@CharacterBody2D@83 ***
+[子弹] body_entered: @CharacterBody2D@263
+[子弹] 去重记录: tid=520781567770 name=@CharacterBody2D@263 (累计=2)
+[子弹] >>> 造成伤害！tid=520781567770 name=@CharacterBody2D@263 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553883016580
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, -0.173648)
+[子弹] 击中: @CharacterBody2D@263 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@263)
+[子弹] *** 去重拦截！tid=520781567770 name=@CharacterBody2D@263 ***
+[子弹] body_entered: @CharacterBody2D@381
+[子弹] 去重记录: tid=541887307114 name=@CharacterBody2D@381 (累计=2)
+[子弹] >>> 造成伤害！tid=541887307114 name=@CharacterBody2D@381 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553815907810
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@381 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@381)
+[子弹] *** 去重拦截！tid=541887307114 name=@CharacterBody2D@381 ***
+[子弹] body_entered: @CharacterBody2D@380
+[子弹] 去重记录: tid=541551762900 name=@CharacterBody2D@380 (累计=2)
+[子弹] >>> 造成伤害！tid=541551762900 name=@CharacterBody2D@380 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553950125495
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, 0.173648)
+[子弹] 击中: @CharacterBody2D@380 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@380)
+[子弹] *** 去重拦截！tid=541551762900 name=@CharacterBody2D@380 ***
+[敵人] 被推击 | HP: 100/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=24 stun=0.20s dir=(0.971321, -0.237772)
+[连锁推挤] @CharacterBody2D@380 推开了 1 个附近敌人 | 自身速度=190
+[子弹] body_entered: @CharacterBody2D@233
+[子弹] 去重记录: tid=510597799206 name=@CharacterBody2D@233 (累计=3)
+[子弹] >>> 造成伤害！tid=510597799206 name=@CharacterBody2D@233 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=553950125495
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@233 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@233)
+[子弹] *** 去重拦截！tid=510597799206 name=@CharacterBody2D@233 ***
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (396, 3180) → 格子: (12, 99)  可行走=true
+[A*] 玩家世界: (216, 3119) → 格子: (6, 97)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (492, 3138) → 格子: (15, 98)  可行走=true
+[A*] 玩家世界: (216, 3119) → 格子: (6, 97)  可行走=true
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=14 stun=0.20s dir=(0.904395, -0.426696)
+[连锁推挤] @CharacterBody2D@380 推开了 1 个附近敌人 | 自身速度=60
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (449, 3190) → 格子: (14, 99)  可行走=true
+[A*] 玩家世界: (216, 3119) → 格子: (6, 97)  可行走=true
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (402, 3118) → 格子: (12, 97)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (393, 3077) → 格子: (12, 96)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (493, 3135) → 格子: (15, 97)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (422, 3054) → 格子: (13, 95)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (457, 3108) → 格子: (14, 97)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (473, 3152) → 格子: (14, 98)  可行走=true
+[A*] 玩家世界: (215, 3119) → 格子: (6, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=2 bullets=3
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=1)
+[子弹] >>> 造成伤害！tid=509926710526 name=@CharacterBody2D@231 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=562204515702
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@231 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=1)
+[子弹] >>> 造成伤害！tid=509926710526 name=@CharacterBody2D@231 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=562338733429
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@231 | 伤害=20 | 爆头=false | 穿透剩余=2
+[敵人] 被推击 | HP: 60/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=14 stun=0.20s dir=(0.974462, 0.224551)
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=43 stun=0.20s dir=(0.814308, -0.580433)
+[连锁推挤] @CharacterBody2D@231 推开了 2 个附近敌人 | 自身速度=190
+[子弹] body_entered: @CharacterBody2D@230
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=2)
+[子弹] >>> 造成伤害！tid=509591166174 name=@CharacterBody2D@230 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=562204515702
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@230 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] *** 去重拦截！tid=509591166174 name=@CharacterBody2D@230 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=1)
+[子弹] >>> 造成伤害！tid=509591166174 name=@CharacterBody2D@230 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=562271624561
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@230 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] body_entered: @CharacterBody2D@231
+[子弹] *** 去重拦截！tid=509926710526 name=@CharacterBody2D@231 ***
+[子弹] body_entered: @CharacterBody2D@230
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=2)
+[子弹] >>> 造成伤害！tid=509591166174 name=@CharacterBody2D@230 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=562338733429
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@230 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] *** 去重拦截！tid=509591166174 name=@CharacterBody2D@230 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=3)
+[子弹] >>> 造成伤害！tid=487160026972 name=@CharacterBody2D@83 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=562338733429
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@83 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@263)
+[子弹] 去重记录: tid=520781567770 name=@CharacterBody2D@263 (累计=3)
+[子弹] >>> 造成伤害！tid=520781567770 name=@CharacterBody2D@263 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=562204515702
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@263 | 伤害=20 | 爆头=false | 穿透剩余=0
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (238, 3110) → 格子: (7, 97)  可行走=true
+[A*] 玩家世界: (116, 3087) → 格子: (3, 96)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (228, 3078) → 格子: (7, 96)  可行走=true
+[A*] 玩家世界: (116, 3087) → 格子: (3, 96)  可行走=true
+[敵人] 被推击 | HP: 40/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=11 stun=0.20s dir=(0.963338, 0.268292)
+[敵人] 被推击 | HP: 20/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=12 stun=0.20s dir=(0.840629, -0.541612)
+[连锁推挤] @CharacterBody2D@231 推开了 2 个附近敌人 | 自身速度=70
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=7 stun=0.20s dir=(0.72701, 0.686626)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=90
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=7 stun=0.20s dir=(0.999099, -0.042448)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=50
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (235, 3110) → 格子: (7, 97)  可行走=true
+[A*] 玩家世界: (62, 3087) → 格子: (1, 96)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (228, 3078) → 格子: (7, 96)  可行走=true
+[A*] 玩家世界: (62, 3087) → 格子: (1, 96)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (303, 3118) → 格子: (9, 97)  可行走=true
+[A*] 玩家世界: (62, 3087) → 格子: (1, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[擊退] 硬直结束 → 追击
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (206, 3099) → 格子: (6, 96)  可行走=true
+[A*] 玩家世界: (41, 3087) → 格子: (1, 96)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (338, 3087) → 格子: (10, 96)  可行走=true
+[A*] 玩家世界: (41, 3087) → 格子: (1, 96)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (293, 3087) → 格子: (9, 96)  可行走=true
+[A*] 玩家世界: (28, 3087) → 格子: (0, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=2 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[菜单] 打开
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=1 bullets=1
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1283412646 ammo=0 bullets=1
+[菜单] 关闭
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[子弹] body_entered: @CharacterBody2D@83
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=3)
+[子弹] >>> 造成伤害！tid=487160026972 name=@CharacterBody2D@83 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=570106584489
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@83 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] *** 去重拦截！tid=487160026972 name=@CharacterBody2D@83 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=4)
+[子弹] >>> 造成伤害！tid=510933343546 name=@CharacterBody2D@234 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=570106584489
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@234 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] body_entered: @CharacterBody2D@83
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=3)
+[子弹] >>> 造成伤害！tid=487160026972 name=@CharacterBody2D@83 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=571448761560
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 5 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@83 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] body_entered: @CharacterBody2D@234
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=4)
+[子弹] >>> 造成伤害！tid=510933343546 name=@CharacterBody2D@234 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=571448761560
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@234 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] *** 去重拦截！tid=487160026972 name=@CharacterBody2D@83 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] *** 去重拦截！tid=510933343546 name=@CharacterBody2D@234 ***
+[子弹] body_entered: @CharacterBody2D@83
+[子弹] 去重记录: tid=487160026972 name=@CharacterBody2D@83 (累计=3)
+[子弹] body_entered: @CharacterBody2D@234
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=4)
+[子弹] >>> 造成伤害！tid=510933343546 name=@CharacterBody2D@234 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=570744118665
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@234 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@83)
+[子弹] *** 去重拦截！tid=487160026972 name=@CharacterBody2D@83 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] *** 去重拦截！tid=510933343546 name=@CharacterBody2D@234 ***
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (115, 3146) → 格子: (3, 98)  可行走=true
+[A*] 玩家世界: (-13, 3087) → 格子: (-1, 96)  可行走=true
+[SpawnManager] horde batch: 1 enemies (remaining=17)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (387, 3059)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=15 path=DecorLayer/@CharacterBody2D@568 clients=1
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=1 bullets=3
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=1)
+[子弹] >>> 造成伤害！tid=509926710526 name=@CharacterBody2D@231 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=577438227976
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@231 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=1)
+[子弹] >>> 造成伤害！tid=509926710526 name=@CharacterBody2D@231 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=577505336841
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@231 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] body_entered: @CharacterBody2D@231
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=1)
+[子弹] >>> 造成伤害！tid=509926710526 name=@CharacterBody2D@231 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=577572445658
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 6 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@231 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] *** 去重拦截！tid=509926710526 name=@CharacterBody2D@231 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=2)
+[子弹] >>> 造成伤害！tid=509591166174 name=@CharacterBody2D@230 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=577438227976
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 7 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@230 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] body_entered: @CharacterBody2D@230
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=2)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] *** 去重拦截！tid=509591166174 name=@CharacterBody2D@230 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=3)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@263)
+[子弹] 去重记录: tid=520781567770 name=@CharacterBody2D@263 (累计=4)
+[子弹] >>> 造成伤害！tid=520781567770 name=@CharacterBody2D@263 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=577572445658
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, 0.173648)
+[子弹] 击中: @CharacterBody2D@263 | 伤害=20 | 爆头=false | 穿透剩余=1
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=10 stun=0.20s dir=(0.99957, -0.029339)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=190
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@233)
+[子弹] 去重记录: tid=510597799206 name=@CharacterBody2D@233 (累计=5)
+[子弹] >>> 造成伤害！tid=510597799206 name=@CharacterBody2D@233 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=577572445658
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@233 | 伤害=20 | 爆头=false | 穿透剩余=0
+[敵人] 被推击 | HP: 80/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=7 stun=0.20s dir=(0.996017, 0.089161)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=110
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (81, 3134) → 格子: (2, 97)  可行走=true
+[A*] 玩家世界: (-213, 3087) → 格子: (-7, 96)  可行走=true
+[敵人] 被推击 | HP: 60/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=25 stun=0.20s dir=(0.978999, -0.203866)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=60
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (101, 3142) → 格子: (3, 98)  可行走=true
+[A*] 玩家世界: (-242, 3087) → 格子: (-8, 96)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (81, 3133) → 格子: (2, 97)  可行走=true
+[A*] 玩家世界: (-267, 3087) → 格子: (-9, 96)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (59, 3141) → 格子: (1, 98)  可行走=true
+[A*] 玩家世界: (-282, 3092) → 格子: (-9, 96)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=0 bullets=3
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] body_entered: @CharacterBody2D@234
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=1)
+[子弹] >>> 造成伤害！tid=510933343546 name=@CharacterBody2D@234 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=584249777628
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@234 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] *** 去重拦截！tid=510933343546 name=@CharacterBody2D@234 ***
+[子弹] body_entered: @CharacterBody2D@234
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=1)
+[子弹] >>> 造成伤害！tid=510933343546 name=@CharacterBody2D@234 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=584316886407
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 8 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@234 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] *** 去重拦截！tid=510933343546 name=@CharacterBody2D@234 ***
+[子弹] body_entered: @CharacterBody2D@234
+[子弹] 去重记录: tid=510933343546 name=@CharacterBody2D@234 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@234)
+[子弹] *** 去重拦截！tid=510933343546 name=@CharacterBody2D@234 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@79)
+[子弹] 去重记录: tid=410035173002 name=@CharacterBody2D@79 (累计=2)
+[子弹] >>> 造成伤害！tid=410035173002 name=@CharacterBody2D@79 damage=20 <<<
+[玩家] 受到伤害: 20 | HP: 125/200 | source=584383993636
+[子弹] 击中: @CharacterBody2D@79 | 伤害=20 | 爆头=false | 穿透剩余=2
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@380)
+[子弹] 去重记录: tid=541551762900 name=@CharacterBody2D@380 (累计=3)
+[子弹] >>> 造成伤害！tid=541551762900 name=@CharacterBody2D@380 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=584383993636
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, 0.173648)
+[子弹] 击中: @CharacterBody2D@380 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=2)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@231)
+[子弹] 去重记录: tid=509926710526 name=@CharacterBody2D@231 (累计=2)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@230)
+[子弹] 去重记录: tid=509591166174 name=@CharacterBody2D@230 (累计=3)
+[子弹] body_entered: @CharacterBody2D@263
+[子弹] 去重记录: tid=520781567770 name=@CharacterBody2D@263 (累计=4)
+[子弹] >>> 造成伤害！tid=520781567770 name=@CharacterBody2D@263 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=584383993636
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(0.984808, 0.173648)
+[子弹] 击中: @CharacterBody2D@263 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@263)
+[子弹] *** 去重拦截！tid=520781567770 name=@CharacterBody2D@263 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=5)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=4)
+[敵人] 被推击 | HP: 60/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=14 stun=0.20s dir=(0.836801, -0.547507)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=190
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@233)
+[子弹] 去重记录: tid=510597799206 name=@CharacterBody2D@233 (累计=5)
+[子弹] >>> 造成伤害！tid=510597799206 name=@CharacterBody2D@233 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=584249777628
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@233 | 伤害=20 | 爆头=false | 穿透剩余=1
+[子弹] body_entered: @CharacterBody2D@381
+[子弹] 去重记录: tid=541887307114 name=@CharacterBody2D@381 (累计=6)
+[子弹] >>> 造成伤害！tid=541887307114 name=@CharacterBody2D@381 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=584249777628
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[擊退] 进入击退状态 | force=200 stun=0.50s dir=(1.0, 0.0)
+[子弹] 击中: @CharacterBody2D@381 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@381)
+[子弹] *** 去重拦截！tid=541887307114 name=@CharacterBody2D@381 ***
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (5, 3125) → 格子: (0, 97)  可行走=true
+[A*] 玩家世界: (-310, 3120) → 格子: (-10, 97)  可行走=true
+[敵人] 被推击 | HP: 40/100
+[受击反馈] color=(3.0, 3.0, 3.0, 1.0) duration=0.08s mode=0
+[擊退] 进入击退状态 | force=7 stun=0.20s dir=(0.793242, -0.608907)
+[连锁推挤] @CharacterBody2D@263 推开了 1 个附近敌人 | 自身速度=60
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-85, 3154) → 格子: (-3, 98)  可行走=true
+[A*] 玩家世界: (-300, 3152) → 格子: (-10, 98)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (3, 3122) → 格子: (0, 97)  可行走=true
+[A*] 玩家世界: (-292, 3152) → 格子: (-10, 98)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-12, 3153) → 格子: (-1, 98)  可行走=true
+[A*] 玩家世界: (-271, 3152) → 格子: (-9, 98)  可行走=true
+[擊退] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (81, 3100) → 格子: (2, 96)  可行走=true
+[A*] 玩家世界: (-279, 3152) → 格子: (-9, 98)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-11, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-10, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-10, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-9, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-8, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-8, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-8, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-8, 99)
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-7, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-4, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-4, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-3, 99)
+[SpawnManager] horde batch: 3 enemies (remaining=16)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (469, 3125)
+[Director] spawned enemy at (459, 3176)
+[Director] spawned enemy at (419, 3117)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=16 path=DecorLayer/@CharacterBody2D@690 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=17 path=DecorLayer/@CharacterBody2D@691 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=18 path=DecorLayer/@CharacterBody2D@692 clients=1
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (0, 99)
+[敵人] 攻击后摇: 30 帧
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (0, 99)
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-187, 3162) → 格子: (-6, 98)  可行走=true
+[A*] 玩家世界: (90, 3205) → 格子: (2, 100)  可行走=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (4, 99)
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 在视野中发现玩家！
+[敵人] 在视野中发现玩家！
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (6, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (387, 3060) → 格子: (12, 95)  可行走=true
+[A*] 玩家世界: (181, 3205) → 格子: (5, 100)  可行走=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (4, 99)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (420, 3118) → 格子: (13, 97)  可行走=true
+[A*] 玩家世界: (172, 3205) → 格子: (5, 100)  可行走=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (4, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (2, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (2, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (0, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (0, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-2, 99)
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (174, 3169) → 格子: (5, 99)  可行走=true
+[A*] 玩家世界: (-128, 3175) → 格子: (-4, 99)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[玩家] 受到伤害: 10 | HP: 150/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[玩家] 受到伤害: 10 | HP: 140/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[敵人] 攻击后摇: 30 帧
+[敵人] 攻击后摇: 30 帧
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-668, 3103) → 格子: (-21, 96)  可行走=true
+[A*] 玩家世界: (-439, 3183) → 格子: (-14, 99)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-602, 3090) → 格子: (-19, 96)  可行走=true
+[A*] 玩家世界: (-435, 3183) → 格子: (-14, 99)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-637, 3124) → 格子: (-20, 97)  可行走=true
+[A*] 玩家世界: (-414, 3183) → 格子: (-13, 99)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-683, 3092) → 格子: (-22, 96)  可行走=true
+[A*] 玩家世界: (-401, 3183) → 格子: (-13, 99)  可行走=true
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-601, 3158) → 格子: (-19, 98)  可行走=true
+[A*] 玩家世界: (-297, 3183) → 格子: (-10, 99)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=secondary weapon=pistol_01
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[敌人] @CharacterBody2D@690 被枪声惊动！
+[敌人] @CharacterBody2D@691 被枪声惊动！
+[NetworkWorld] HOST_FIRE peer=1 ammo=10 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@79)
+[子弹] 去重记录: tid=410035173002 name=@CharacterBody2D@79 (累计=2)
+[子弹] >>> 造成伤害！tid=410035173002 name=@CharacterBody2D@79 damage=25 <<<
+[玩家] 受到伤害: 25 | HP: 100/200 | source=610187351848
+[子弹] 击中: @CharacterBody2D@79 | 伤害=25 | 爆头=false | 穿透剩余=0
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (469, 3125) → 格子: (14, 97)  可行走=true
+[A*] 玩家世界: (66, 3138) → 格子: (2, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (460, 3176) → 格子: (14, 99)  可行走=true
+[A*] 玩家世界: (66, 3138) → 格子: (2, 98)  可行走=true
+[Pacing] → cooldown (duration=4.5s)
+[Director] pacing phase → cooldown
+[SpawnManager] phase → cooldown
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=9 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@235)
+[子弹] 去重记录: tid=511268887886 name=@CharacterBody2D@235 (累计=1)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@232)
+[子弹] 去重记录: tid=510262254866 name=@CharacterBody2D@232 (累计=2)
+[子弹] body_entered: @CharacterBody2D@381
+[子弹] 去重记录: tid=541887307114 name=@CharacterBody2D@381 (累计=3)
+[子弹] >>> 造成伤害！tid=541887307114 name=@CharacterBody2D@381 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 35/100 | 爆头=false | source=612703935919
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@381 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@381)
+[子弹] *** 去重拦截！tid=541887307114 name=@CharacterBody2D@381 ***
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-52, 3153) → 格子: (-2, 98)  可行走=true
+[A*] 玩家世界: (34, 3152) → 格子: (1, 98)  可行走=true
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (2, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (3, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (5, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (6, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (6, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (7, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[玩家] 受到伤害: 10 | HP: 130/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[Pacing] → build (duration=17.3s)
+[Director] pacing phase → build
+[SpawnManager] phase → build
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=8 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (308, 3172) → 格子: (9, 99)  可行走=true
+[A*] 玩家世界: (475, 3123) → 格子: (14, 97)  可行走=true
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@568)
+[子弹] 去重记录: tid=576146382323 name=@CharacterBody2D@568 (累计=1)
+[子弹] >>> 造成伤害！tid=576146382323 name=@CharacterBody2D@568 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 75/100 | 爆头=false | source=618156529403
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@568 | 伤害=25 | 爆头=false | 穿透剩余=0
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (17, 99)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (394, 3125) → 格子: (12, 97)  可行走=true
+[A*] 玩家世界: (479, 3123) → 格子: (14, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (20, 99)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=7 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[敵人] 攻击后摇: 30 帧
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@568)
+[子弹] 去重记录: tid=576146382323 name=@CharacterBody2D@568 (累计=1)
+[子弹] >>> 造成伤害！tid=576146382323 name=@CharacterBody2D@568 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 50/100 | 爆头=false | source=620572449987
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@568 | 伤害=25 | 爆头=false | 穿透剩余=0
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (24, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (521, 3120) → 格子: (16, 97)  可行走=true
+[A*] 玩家世界: (638, 3129) → 格子: (19, 97)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (455, 3149) → 格子: (14, 98)  可行走=true
+[A*] 玩家世界: (655, 3129) → 格子: (20, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=6 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@568)
+[子弹] 去重记录: tid=576146382323 name=@CharacterBody2D@568 (累计=1)
+[子弹] >>> 造成伤害！tid=576146382323 name=@CharacterBody2D@568 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 25/100 | 爆头=false | source=622669602196
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@568 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Player)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (678, 3118) → 格子: (21, 97)  可行走=true
+[A*] 玩家世界: (719, 3103) → 格子: (22, 96)  可行走=true
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=5 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] body_entered: @CharacterBody2D@568
+[子弹] 去重记录: tid=576146382323 name=@CharacterBody2D@568 (累计=1)
+[子弹] >>> 造成伤害！tid=576146382323 name=@CharacterBody2D@568 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 0/100 | 爆头=false | source=624749976944
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 9 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@568 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@568)
+[子弹] *** 去重拦截！tid=576146382323 name=@CharacterBody2D@568 ***
+[SpawnManager] scatter spawn: 1 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 2
+[Director] spawned enemy at (1030, 2504)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=19 path=DecorLayer/@CharacterBody2D@793 clients=1
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=4 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@381)
+[子弹] 去重记录: tid=541887307114 name=@CharacterBody2D@381 (累计=1)
+[子弹] >>> 造成伤害！tid=541887307114 name=@CharacterBody2D@381 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 10/100 | 爆头=false | source=627233004726
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@381 | 伤害=25 | 爆头=false | 穿透剩余=0
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (867, 3116) → 格子: (27, 97)  可行走=true
+[A*] 玩家世界: (944, 3105) → 格子: (29, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=3 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@381)
+[子弹] 去重记录: tid=541887307114 name=@CharacterBody2D@381 (累计=1)
+[子弹] >>> 造成伤害！tid=541887307114 name=@CharacterBody2D@381 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 0/100 | 爆头=false | source=629179168391
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 10 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@381 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=2 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@691)
+[子弹] 去重记录: tid=594467102098 name=@CharacterBody2D@691 (累计=1)
+[子弹] >>> 造成伤害！tid=594467102098 name=@CharacterBody2D@691 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 75/100 | 爆头=false | source=631309868214
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@691 | 伤害=25 | 爆头=false | 穿透剩余=0
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1053, 3092) → 格子: (32, 96)  可行走=true
+[A*] 玩家世界: (1125, 3090) → 格子: (35, 96)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=1 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@691)
+[子弹] 去重记录: tid=594467102098 name=@CharacterBody2D@691 (累计=1)
+[子弹] >>> 造成伤害！tid=594467102098 name=@CharacterBody2D@691 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 50/100 | 爆头=false | source=633088253389
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@691 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Player)
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=0 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[子弹] body_entered: @CharacterBody2D@691
+[子弹] 去重记录: tid=594467102098 name=@CharacterBody2D@691 (累计=1)
+[子弹] >>> 造成伤害！tid=594467102098 name=@CharacterBody2D@691 damage=25 <<<
+[敵人] 受到伤害: 25 | HP: 25/100 | 爆头=false | source=634849861040
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@691 | 伤害=25 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@691)
+[子弹] *** 去重拦截！tid=594467102098 name=@CharacterBody2D@691 ***
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1145, 3094) → 格子: (35, 96)  可行走=true
+[A*] 玩家世界: (1313, 3090) → 格子: (41, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1231, 3106) → 格子: (38, 97)  可行走=true
+[A*] 玩家世界: (1354, 3090) → 格子: (42, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (40, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (40, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (38, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (38, 99)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1357, 3125) → 格子: (42, 97)  可行走=true
+[A*] 玩家世界: (1164, 3146) → 格子: (36, 98)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=secondary weapon=knife_01
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1200, 3148) → 格子: (37, 98)  可行走=true
+[A*] 玩家世界: (1039, 3146) → 格子: (32, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (1255, 3169) → 格子: (39, 99)  可行走=true
+[A*] 玩家世界: (1039, 3146) → 格子: (32, 98)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[SpawnManager] scatter spawn: 1 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 2
+[Director] spawned enemy at (993, 2538)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=20 path=DecorLayer/@CharacterBody2D@860 clients=1
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=primary weapon=smg_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=secondary weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 85/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[Pacing] → peak (duration=30.0s)
+[Director] pacing phase → peak
+[SpawnManager] phase → peak
+[SpawnManager] HORDE START: total=24
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[敵人] 攻击后摇: 30 帧
+[玩家] 受到伤害: 10 | HP: 120/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 85/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 70/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-117, 3154) → 格子: (-4, 98)  可行走=true
+[A*] 玩家世界: (-259, 3149) → 格子: (-9, 98)  可行走=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 45/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@380 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 55/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-219, 3147) → 格子: (-7, 98)  可行走=true
+[A*] 玩家世界: (-299, 3191) → 格子: (-10, 99)  可行走=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[敵人] 受到伤害: 15 | HP: 30/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@380 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 5/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@263 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 40/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 11 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@263 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 25/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@233 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 10/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@691 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 25/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 12 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@691 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 10/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-17, 99)
+[SpawnManager] horde batch: 2 enemies (remaining=24)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=0 fallback=near_player
+[Director] spawned enemy at (-453, 2589)
+[Director] spawned enemy at (-24, 3147)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=21 path=DecorLayer/@CharacterBody2D@961 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=22 path=DecorLayer/@CharacterBody2D@962 clients=1
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-16, 99)
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-354, 3165) → 格子: (-12, 98)  可行走=true
+[A*] 玩家世界: (-403, 3205) → 格子: (-13, 100)  可行走=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-14, 99)
+[敵人] 受到伤害: 15 | HP: 10/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@233 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 13 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@692 damage=15 headshot=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-13, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-12, 99)
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-10, 99)
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 14 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@233 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 15/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@380 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 70/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 15 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@380 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 55/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-24, 3147) → 格子: (-1, 98)  可行走=true
+[A*] 玩家世界: (-247, 3113) → 格子: (-8, 97)  可行走=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 40/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 25/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 10/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-316, 3122) → 格子: (-10, 97)  可行走=true
+[A*] 玩家世界: (-165, 3141) → 格子: (-6, 98)  可行走=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 0/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 16 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@690 damage=15 headshot=false
+[SpawnManager] horde batch: 4 enemies (remaining=22)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=1
+[Director] spawned enemy at (396, 3086)
+[Director] spawned enemy at (390, 3137)
+[Director] spawned enemy at (319, 3149)
+[Director] spawned enemy at (394, 3083)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=23 path=DecorLayer/@CharacterBody2D@1038 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=24 path=DecorLayer/@CharacterBody2D@1039 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=25 path=DecorLayer/@CharacterBody2D@1040 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=26 path=DecorLayer/@CharacterBody2D@1041 clients=1
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 85/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@962 damage=15 headshot=false
+[敵人] 在视野中发现玩家！
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 在视野中发现玩家！
+[敵人] 受到伤害: 15 | HP: 70/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@962 damage=15 headshot=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (319, 3149) → 格子: (9, 98)  可行走=true
+[A*] 玩家世界: (202, 3146) → 格子: (6, 98)  可行走=true
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (377, 3083) → 格子: (11, 96)  可行走=true
+[A*] 玩家世界: (268, 3146) → 格子: (8, 98)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (390, 3137) → 格子: (12, 98)  可行走=true
+[A*] 玩家世界: (268, 3146) → 格子: (8, 98)  可行走=true
+[敵人] 受到伤害: 15 | HP: 55/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@962 damage=15 headshot=false
+[玩家] 受到伤害: 10 | HP: 110/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (415, 3086) → 格子: (12, 96)  可行走=true
+[A*] 玩家世界: (268, 3100) → 格子: (8, 96)  可行走=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[敵人] 受到伤害: 15 | HP: 40/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@962 damage=15 headshot=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[敵人] 受到伤害: 15 | HP: 25/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@962 damage=15 headshot=false
+[敵人] 受到伤害: 15 | HP: 85/100 | 爆头=false | source=0
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[NetworkWorld] HOST_MELEE_HIT enemy=@CharacterBody2D@1040 damage=15 headshot=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (288, 3147) → 格子: (8, 98)  可行走=true
+[A*] 玩家世界: (133, 3094) → 格子: (4, 96)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (262, 3070) → 格子: (8, 95)  可行走=true
+[A*] 玩家世界: (67, 3127) → 格子: (2, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (216, 3126) → 格子: (6, 97)  可行走=true
+[A*] 玩家世界: (35, 3159) → 格子: (1, 98)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-2, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (0, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (1, 99)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (2, 99)
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (182, 3119) → 格子: (5, 97)  可行走=true
+[A*] 玩家世界: (196, 2783) → 格子: (6, 86)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[Pacing] → cooldown (duration=2.4s)
+[Director] pacing phase → cooldown
+[SpawnManager] phase → cooldown
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[Pacing] → build (duration=24.1s)
+[Director] pacing phase → build
+[SpawnManager] phase → build
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (110, 15)
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[Pacing] → peak (duration=30.0s)
+[Director] pacing phase → peak
+[SpawnManager] phase → peak
+[SpawnManager] HORDE START: total=15
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[Pacing] → cooldown (duration=1.6s)
+[Director] pacing phase → cooldown
+[SpawnManager] phase → cooldown
+[ChapterStats] 章节完成，用时 0.0 秒
+[SafeDoor] Host 统一进入安全屋: res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-街道.tscn target=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn serial=3 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1283412646 serial=3
+[Net] SCENE_TRANSITION_COMMIT serial=3
+[Players] 实体注册: Player → 座位 1
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready().
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1487)
+     GDScript backtrace (most recent call first):
+         [0] _build_ui (res://script/ui/chapter_summary.gd:401)
+         [1] _ready (res://script/ui/chapter_summary.gd:50)
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@1164 → 座位 2
+[NetworkWorld] HOST_SPAWN peer=1283412646 preplaced=false
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=0
+ERROR: Node not found: "Test/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get cached node from peer 1283412646 with cache ID 3.
+   at: (modules/multiplayer/scene_cache_interface.cpp:291)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1283412646 enemies=0
+[ChapterSummary] CONFIRM_BROADCAST peer=1 targets=[1, 1283412646]
+[ChapterSummary] CONFIRM_APPLIED peer=1 seat=1
+[ChapterSummary] CONFIRM_BROADCAST peer=1283412646 targets=[1, 1283412646]
+[ChapterSummary] CONFIRM_APPLIED peer=1283412646 seat=2
+[Director] no DirectorConfig in scene, using defaults
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1283412646 weapon=knife_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1283412646 slot=primary weapon=smg_01
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=true
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1283412646 raised=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1283412646 dir=(0.00, 0.00) walk=false
+[Net] PEER_DISCONNECTED peer=1283412646
+[NetworkWorld] HOST_DESPAWN peer=1283412646

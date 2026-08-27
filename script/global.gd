@@ -49,7 +49,8 @@ var _cached_color_img_path: String = ""
 func get_cached_color_image() -> Image:
 	if _cached_color_img and _cached_color_img_path == text_color_sheet_path:
 		return _cached_color_img
-	_cached_color_img = Image.load_from_file(text_color_sheet_path)
+	var color_texture := ResourceLoader.load(text_color_sheet_path) as Texture2D
+	_cached_color_img = color_texture.get_image() if color_texture else null
 	_cached_color_img_path = text_color_sheet_path
 	if _cached_color_img:
 		print("[Global] 色表缓存: %d×%d" % [_cached_color_img.get_width(), _cached_color_img.get_height()])

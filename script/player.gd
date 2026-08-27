@@ -110,9 +110,12 @@ var network_owner_peer_id: int = 0
 var network_controlled: bool = false
 ## 本地客户端实体开启预测；Host 仍是最终权威，快照只用于纠偏。
 var network_local_prediction: bool = false
+var network_local_player: bool = false
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
+var _network_prediction_initialized: bool = false
 var _network_attack_token: int = 0
+var _network_reload_was_facing_locked: bool = false
 
 var _tp_regen_timer: float = 0.0
 
@@ -209,7 +212,14 @@ func _process(delta: float) -> void:
 		_update_shove_fatigue(delta)
 		_update_tp_regen(delta)
 		# 本地预测实体由 NetworkWorld 在物理帧直接移动，避免等待快照造成输入延迟。
-		if not network_local_prediction and not _is_dying and _network_has_target:
+		if network_local_prediction and not _is_dying and _network_has_target and velocity.is_zero_approx():
+			var correction := _network_target_position - global_position
+			var correction_step := minf(correction.length(), delta * 720.0)
+			if correction_step > 0.0:
+				global_position += correction.normalized() * correction_step
+			if correction.length() <= 0.5:
+				_network_has_target = false
+		elif not network_local_prediction and not _is_dying and _network_has_target:
 			global_position = global_position.lerp(_network_target_position, minf(delta * 16.0, 1.0))
 		return
 	if _is_dying:
@@ -246,6 +256,8 @@ func apply_network_spawn_state(character: CharacterData, hp: float, new_position
 		current_character = character
 		_apply_current_character_data(current_character)
 	current_hp = clampf(hp, 0.0, max_hp)
+	if network_local_prediction:
+		apply_network_local_spawn_position(new_position)
 	apply_network_presentation(new_position, new_facing, false, false, snap)
 
 
@@ -253,11 +265,28 @@ func set_network_local_prediction(enabled: bool) -> void:
 	network_local_prediction = enabled
 	if enabled:
 		_network_has_target = false
+		_network_prediction_initialized = false
+
+
+func reset_network_prediction_sync() -> void:
+	if network_local_prediction:
+		_network_has_target = false
+		_network_prediction_initialized = false
+
+
+func apply_network_local_spawn_position(new_position: Vector2) -> void:
+	if not network_local_prediction or _network_prediction_initialized:
+		return
+	global_position = new_position
+	_network_target_position = new_position
+	_network_has_target = false
+	_network_prediction_initialized = true
 
 
 ## 仅更新客户端可见状态。Host 传 snap=true，客户端由 _process 平滑插值。
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, walking: bool, snap: bool = false) -> void:
-	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
+	if not (network_local_player and _facing_locked):
+		_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	if _is_dying:
 		# 对齐 Host 权威死亡坐标，并丢弃死亡前尚未完成的插值目标。
 		global_position = new_position
@@ -265,21 +294,12 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		_network_has_target = false
 		return
 	update_appearance(moving, walking)
-	# 本地预测玩家的位置由本地输入驱动。普通高频快照只更新朝向/动画；
-	# 可靠重同步也只能做有限平滑纠正，不能每两秒把客户端拉回旧坐标。
-	if network_local_prediction:
-		if snap:
-			var correction := new_position - global_position
-			var correction_distance := correction.length()
-			# 大距离通常代表换图/复活等明确状态切换，必须立即对齐；普通网络
-			# 误差以最多 12px 的步进收敛，避免用户感受到回弹或脚滑。
-			if correction_distance > 192.0:
-				global_position = new_position
-			elif correction_distance > 1.0:
-				global_position += correction.limit_length(minf(12.0, correction_distance * 0.25))
-		_network_target_position = global_position
+	if network_local_player:
+		global_position = new_position
+		_network_target_position = new_position
 		_network_has_target = false
 		return
+	# 本地预测玩家的位置由本地输入驱动；快照只提供首次校准和后续平滑纠偏目标。
 	if snap:
 		global_position = new_position
 		_network_target_position = new_position
@@ -374,6 +394,9 @@ func update_appearance(moving: bool, is_walking: bool) -> void:
 ## 根据移动方向更新朝向
 func update_facing(move_dir: Vector2) -> void:
 	if _facing_locked:
+		if _facing != _locked_facing:
+			_facing = _locked_facing
+			_refresh_sprite()
 		return
 	var new_facing: int
 	if abs(move_dir.x) > abs(move_dir.y):
@@ -442,13 +465,18 @@ func play_network_weapon_transition(wd: WeaponData, raising: bool) -> void:
 func _run_network_weapon_transition(token: int, wd: WeaponData, raising: bool) -> void:
 	var sequence: Array[int] = wd.get_raise_char_sequence()
 	if not raising:
-		sequence.reverse()
-	for index: int in range(sequence.size()):
+		unlock_facing()
+		set_weapon_ready_frame()
+	var start_index := 1 if raising else sequence.size() - 2
+	var end_index := sequence.size() if raising else -1
+	var step := 1 if raising else -1
+	var index := start_index
+	while index != end_index:
 		if token != _network_attack_token or not is_inside_tree():
 			return
 		set_attack_char_index(sequence[index])
-		var source_index := index if raising else wd.get_raise_char_sequence().size() - 1 - index
-		await get_tree().create_timer(wd.get_raise_frame_duration(source_index)).timeout
+		await get_tree().create_timer(wd.get_raise_frame_duration(index)).timeout
+		index += step
 	if token != _network_attack_token or not is_inside_tree():
 		return
 	if raising:
@@ -481,9 +509,11 @@ func play_network_reload_presentation(wd: WeaponData, loaded_count: int) -> void
 		return
 	_network_attack_token += 1
 	var token := _network_attack_token
+	_network_reload_was_facing_locked = is_facing_locked()
 	enter_weapon_mode(wd)
 	player_in_weapon_state = true
-	lock_facing()
+	if _network_reload_was_facing_locked:
+		lock_facing()
 	call_deferred("_run_network_reload_presentation", token, wd, maxi(1, loaded_count))
 
 
@@ -536,6 +566,8 @@ func _run_network_reload_presentation(token: int, wd: WeaponData, loaded_count: 
 	await get_tree().create_timer(wd.reload_wait_duration).timeout
 	if token == _network_attack_token and is_inside_tree():
 		set_weapon_ready_frame()
+		if not _network_reload_was_facing_locked:
+			unlock_facing()
 		player_in_weapon_state = false
 
 

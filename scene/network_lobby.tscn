@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://dig5qkewvce2i"]
 
-[ext_resource type="Script" path="res://script/network_lobby.gd" id="1_lobby"]
+[ext_resource type="Script" uid="uid://bnvqbuwevjp5l" path="res://script/network_lobby.gd" id="1_lobby"]
 
-[node name="Lobby" type="Control"]
+[node name="Lobby" type="Control" unique_id=864238647]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,7 +11,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_lobby")
 
-[node name="VBox" type="VBoxContainer" parent="."]
+[node name="VBox" type="VBoxContainer" parent="." unique_id=1653230865]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -24,104 +24,104 @@ grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 8
 
-[node name="Title" type="Label" parent="VBox"]
+[node name="Title" type="Label" parent="VBox" unique_id=1190004924]
 layout_mode = 2
 theme_override_font_sizes/font_size = 22
 text = "联机大厅 — Host 权威模式"
 
-[node name="NameRow" type="HBoxContainer" parent="VBox"]
+[node name="NameRow" type="HBoxContainer" parent="VBox" unique_id=924446196]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="NameTag" type="Label" parent="VBox/NameRow"]
+[node name="NameTag" type="Label" parent="VBox/NameRow" unique_id=290855698]
 layout_mode = 2
 text = "昵称："
 
-[node name="NameEdit" type="LineEdit" parent="VBox/NameRow"]
+[node name="NameEdit" type="LineEdit" parent="VBox/NameRow" unique_id=1125376809]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "玩家"
 max_length = 16
 
-[node name="IpRow" type="HBoxContainer" parent="VBox"]
+[node name="IpRow" type="HBoxContainer" parent="VBox" unique_id=1293217784]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="IpTag" type="Label" parent="VBox/IpRow"]
+[node name="IpTag" type="Label" parent="VBox/IpRow" unique_id=968283124]
 layout_mode = 2
 text = "IP："
 
-[node name="IpEdit" type="LineEdit" parent="VBox/IpRow"]
+[node name="IpEdit" type="LineEdit" parent="VBox/IpRow" unique_id=1338840019]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "127.0.0.1"
 max_length = 45
 
-[node name="PortTag" type="Label" parent="VBox/IpRow"]
+[node name="PortTag" type="Label" parent="VBox/IpRow" unique_id=2056295527]
 layout_mode = 2
 text = "端口 27015"
 
-[node name="BtnRow" type="HBoxContainer" parent="VBox"]
+[node name="BtnRow" type="HBoxContainer" parent="VBox" unique_id=1979459331]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CreateBtn" type="Button" parent="VBox/BtnRow"]
+[node name="CreateBtn" type="Button" parent="VBox/BtnRow" unique_id=1346851598]
 unique_name_in_owner = true
 layout_mode = 2
 text = "创建房间"
 
-[node name="JoinBtn" type="Button" parent="VBox/BtnRow"]
+[node name="JoinBtn" type="Button" parent="VBox/BtnRow" unique_id=717107865]
 unique_name_in_owner = true
 layout_mode = 2
 text = "加入"
 
-[node name="StartBtn" type="Button" parent="VBox/BtnRow"]
+[node name="StartBtn" type="Button" parent="VBox/BtnRow" unique_id=939028129]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "开始游戏"
 
-[node name="LeaveBtn" type="Button" parent="VBox/BtnRow"]
+[node name="LeaveBtn" type="Button" parent="VBox/BtnRow" unique_id=871765043]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 text = "离开房间"
 
-[node name="CharacterRow" type="HBoxContainer" parent="VBox"]
+[node name="CharacterRow" type="HBoxContainer" parent="VBox" unique_id=1032345164]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="CharacterTag" type="Label" parent="VBox/CharacterRow"]
+[node name="CharacterTag" type="Label" parent="VBox/CharacterRow" unique_id=1712657184]
 layout_mode = 2
 text = "角色："
 
-[node name="CharacterSelect" type="OptionButton" parent="VBox/CharacterRow"]
+[node name="CharacterSelect" type="OptionButton" parent="VBox/CharacterRow" unique_id=1020836607]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 disabled = true
 
-[node name="CharacterHint" type="Label" parent="VBox"]
+[node name="CharacterHint" type="Label" parent="VBox" unique_id=1991161928]
 unique_name_in_owner = true
 layout_mode = 2
-autowrap_mode = 2
 text = "连接并完成握手后可选择角色"
+autowrap_mode = 2
 
-[node name="StatusLabel" type="Label" parent="VBox"]
+[node name="StatusLabel" type="Label" parent="VBox" unique_id=1847775365]
 unique_name_in_owner = true
 layout_mode = 2
 text = "状态：未连接"
 
-[node name="PlayersLabel" type="Label" parent="VBox"]
+[node name="PlayersLabel" type="Label" parent="VBox" unique_id=1155596099]
 unique_name_in_owner = true
-layout_mode = 2
 custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
 text = "玩家列表（0）："
 vertical_alignment = 1
 
-[node name="LogLabel" type="Label" parent="VBox"]
+[node name="LogLabel" type="Label" parent="VBox" unique_id=245060377]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3

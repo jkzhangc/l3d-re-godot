@@ -1,0 +1,1503 @@
+Godot Engine v4.6.3.stable.official.7d41c59c4 - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3050 Ti Laptop GPU
+
+[Global] debug = true
+[Global] 音频总线已创建: Master, SFX, Music
+[Director] initialized (Phase 3)
+[标题画面] Global 同步 — 色表索引=0 粗体=false 描边=false 阴影=true
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] _ready (res://script/title_screen.gd:121)
+[标题画面] 色表已加载 320×64
+[标题画面] 联机游戏 → 大厅
+[Net] HOST listening port=27015 peer_id=1 protocol=l3d_main_v2_combat_rpc
+[Net] PEER_CONNECTED peer=1904687743
+[Net] HANDSHAKE_OK peer=1904687743 name=玩家
+[Net] CHARACTER_SELECTED peer=1904687743 character=res://object/character_bigg.tres
+[Net] START_GAME res://scene/maps/突袭-第一关-开头安全屋-户外.tscn serial=1 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1904687743 serial=1
+[Net] SCENE_TRANSITION_COMMIT serial=1
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Parameter "node" is null.
+   at: process_simplify_path (modules/multiplayer/scene_cache_interface.cpp:116)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+ERROR: Node not found: "Test2/NetworkWorld" (relative to "/root").
+   at: (scene/main/node.cpp:1963)
+ERROR: Failed to get path from RPC: Test2/NetworkWorld.
+   at: _process_get_node (modules/multiplayer/scene_rpc_interface.cpp:146)
+ERROR: Invalid packet received. Requested node was not found.
+   at: (modules/multiplayer/scene_rpc_interface.cpp:209)
+[Players] 实体注册: Player → 座位 0
+[Players] 座位表为空，已懒创建默认座位 0: [座位0 のび太 HP=200/200 TP=100 主武器=无 弹夹={  }]
+WARNING: Loaded resource as image file, this will not work on export: 'res://art/System/Text color, 20 types (each 16 x 16).png'. Instead, import the image file as an Image resource and load it normally as a resource.
+     at: load_from_file (core/io/image.cpp:2766)
+     GDScript backtrace (most recent call first):
+         [0] get_cached_color_image (res://script/global.gd:52)
+         [1] _load_resources (res://script/gradient_label.gd:292)
+         [2] _rebuild (res://script/gradient_label.gd:257)
+[Global] 色表缓存: 320×64
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@28 → 座位 2
+[NetworkWorld] HOST_SPAWN peer=1904687743 preplaced=false
+[Players] 实体注册: Player → 座位 0
+[Players] 实体注册: @CharacterBody2D@28 → 座位 1
+[NetworkWorld] NETWORK_SEATS expected=2 actual=2 owners=[1, 1904687743]
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=6
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[Director] no DirectorConfig in scene, using defaults
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+[PlayerState] 获得物品: 冲锋枪子弹
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _try_host_pickup (res://script/network_world.gd:2015)
+              [2] request_pickup (res://script/network_world.gd:1957)
+              [3] _request_network_pickup (res://script/weapon_pickup.gd:203)
+              [4] _process_network_pickup (res://script/weapon_pickup.gd:183)
+              [5] _process (res://script/weapon_pickup.gd:111)
+[NetworkWorld] HOST_PICKUP peer=1 pickup=1 weapon=smg_01
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _try_host_pickup (res://script/network_world.gd:2015)
+              [2] request_pickup (res://script/network_world.gd:1957)
+              [3] _request_network_pickup (res://script/weapon_pickup.gd:203)
+              [4] _process_network_pickup (res://script/weapon_pickup.gd:183)
+              [5] _process (res://script/weapon_pickup.gd:111)
+[NetworkWorld] HOST_PICKUP peer=1 pickup=2 weapon=knife_01
+[PlayerState] 装备辅助品: TP恢复品
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[PlayerState] 拾取治疗品: 急救喷雾 ×1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+SCRIPT ERROR: Invalid call. Nonexistent 'int' constructor.
+          at: _build_pickup_snapshot (res://script/network_world.gd:1938)
+          GDScript backtrace (most recent call first):
+              [0] _build_pickup_snapshot (res://script/network_world.gd:1938)
+              [1] _send_reliable_world_snapshot (res://script/network_world.gd:1572)
+              [2] _broadcast_reliable_world_snapshot (res://script/network_world.gd:1581)
+              [3] _physics_process (res://script/network_world.gd:210)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[Net] SCENE_CHANGE_REQUEST peer=1904687743 path=res://scene/maps/突袭-第一关-街道.tscn
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn target=res://scene/maps/突袭-第一关-街道.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=2 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1904687743 serial=2
+[Net] SCENE_TRANSITION_COMMIT serial=2
+[Checkpoint] 已捕获: 场景=res://scene/maps/突袭-第一关-开头安全屋-户外.tscn 座位=2 [座位0 のび太 HP=200/200 TP=100 主武器=冲锋枪 弹夹={ "smg_01": 30 }]
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=3 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1904687743 serial=3
+[Net] SCENE_TRANSITION_COMMIT serial=3
+[Net] SCENE_CHANGE_REQUEST peer=1904687743 path=res://scene/maps/突袭-第一关-街道.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-街道.tscn serial=4 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1904687743 serial=4
+[Net] SCENE_TRANSITION_COMMIT serial=4
+[Players] 实体注册: Player → 座位 0
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 0
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@36 → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1904687743 preplaced=false
+[Players] 实体注册: Player → 座位 0
+[Players] 实体注册: @CharacterBody2D@36 → 座位 1
+[NetworkWorld] NETWORK_SEATS expected=2 actual=2 owners=[1, 1904687743]
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-街道.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=0
+WARNING: Sending 1413 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+     at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+     GDScript backtrace (most recent call first):
+         [0] _physics_process (res://script/network_world.gd:205)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[Director] applying DirectorConfig from: res://scene/maps/突袭-第一关-街道.tscn
+[Director] config applied: spawn=true cooldown=0-5s
+[Pacing] → build (duration=17.2s)
+[Director] pacing phase → build
+WARNING:[SpawnManager] phase → build
+ Navigation map synchronization had 47 edge error(s).
+More than 2 edges tried to occupy the same map rasterization space.
+This causes a logical error in the navigation mesh geometry and is commonly caused by overlap or too densely placed edges.
+Consider baking with a higher 'cell_size', greater geometry margin, and less detailed bake objects to cause fewer edges.
+Consider lowering the 'navigation/2d/merge_rasterizer_cell_scale' in the project settings.
+This warning can be toggled under 'navigation/2d/warnings/navmesh_edge_merge_errors' in the project settings.
+[SpawnManager] scatter spawn: 5 enemies
+     at: _build_step_find_edge_connection_pairs (modules/navigation_2d/2d/nav_map_builder_2d.cpp:150)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=0 fallback=near_player
+[Director] TileMapLayer cache: 3 layers
+[Director] spawned enemy at (-517, 3048)
+[Director] spawned enemy at (-220, 3169)
+[Director] spawned enemy at (-369, 3067)
+[Director] spawned enemy at (-518, 2639)
+[Director] spawned enemy at (-266, 3086)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=1 path=DecorLayer/Enemy clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=2 path=DecorLayer/@CharacterBody2D@37 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=3 path=DecorLayer/@CharacterBody2D@38 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=4 path=DecorLayer/@CharacterBody2D@39 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=5 path=DecorLayer/@CharacterBody2D@40 clients=1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[A*] 找到 TileMapLayer (3 个): [GroundLayer DecorLayer UpperLayer]
+[A* DEBUG] 图块 (-17, 95) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-19, 98) → layers=[GroundLayer,UpperLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-522, 3054) → 格子: (-17, 95)  可行走=true
+[A*] 玩家世界: (-602, 3152) → 格子: (-19, 98)  可行走=true
+[A*] 分帧构建 AStarGrid2D: region=[P: (-57, -49), S: (191, 167)] cells=31897 (约22帧完成)
+[A*] ❌ 无法构建寻路网格！
+[A* DEBUG] 图块 (-57, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-56, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-55, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-54, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-53, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-52, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A* DEBUG] 图块 (-51, -49) → layers=[GroundLayer,] → walkable=true  ground=true wall=false decor_block=false
+[A*] ❌ 无法构建寻路网格！
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[A*] AStarGrid2D 构建完成: 31897 cells, 障碍物 6481 (20.3%)
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-369, 3068) → 格子: (-12, 95)  可行走=true
+[A*] 玩家世界: (-656, 3132) → 格子: (-21, 97)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=5
+[敵人] 在视野中发现玩家！
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[敵人] 在视野中发现玩家！
+[敵人] 攻击后摇: 30 帧
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-267, 3087) → 格子: (-9, 96)  可行走=true
+[A*] 玩家世界: (-373, 3124) → 格子: (-12, 97)  可行走=true
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-539, 3090) → 格子: (-17, 96)  可行走=true
+[A*] 玩家世界: (-518, 3195) → 格子: (-17, 99)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-16, 99)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-221, 3170) → 格子: (-7, 99)  可行走=true
+[A*] 玩家世界: (-369, 3124) → 格子: (-12, 97)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=29 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=28 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-14, 99)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=27 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=26 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-12, 99)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=25 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=24 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-10, 99)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=23 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-8, 99)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=5
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=22 bullets=1
+[子弹] body_entered: @CharacterBody2D@37
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=1)
+[子弹] >>> 造成伤害！tid=451944650662 name=@CharacterBody2D@37 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=460517807939
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@37 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] *** 去重拦截！tid=451944650662 name=@CharacterBody2D@37 ***
+[子弹] area_entered: HurtArea (parent=Player)
+[敵人] 攻击后摇: 30 帧
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=21 bullets=1
+[子弹] body_entered: @CharacterBody2D@38
+[子弹] 去重记录: tid=452280194962 name=@CharacterBody2D@38 (累计=1)
+[子弹] >>> 造成伤害！tid=452280194962 name=@CharacterBody2D@38 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=461843207980
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@38 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] body_entered: @CharacterBody2D@37
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=2)
+[子弹] >>> 造成伤害！tid=451944650662 name=@CharacterBody2D@37 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=461843207980
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@37 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] *** 去重拦截！tid=451944650662 name=@CharacterBody2D@37 ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@38)
+[子弹] *** 去重拦截！tid=452280194962 name=@CharacterBody2D@38 ***
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[玩家] 受到伤害: 10 | HP: 190/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[A*] ⚠ 目标不可通行，搜索邻近格子...
+[A*]   邻近可通行格子: (-6, 99)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-346, 3165) → 格子: (-11, 98)  可行走=true
+[A*] 玩家世界: (-124, 3190) → 格子: (-4, 99)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=20 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-327, 3106) → 格子: (-11, 97)  可行走=true
+[A*] 玩家世界: (-275, 3166) → 格子: (-9, 98)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=19 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=18 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=17 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=16 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@40)
+[子弹] 去重记录: tid=452951283562 name=@CharacterBody2D@40 (累计=1)
+[子弹] >>> 造成伤害！tid=452951283562 name=@CharacterBody2D@40 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=466557605635
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@40 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=2)
+[子弹] >>> 造成伤害！tid=451944650662 name=@CharacterBody2D@37 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=466557605635
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@37 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] area_entered: HurtArea (parent=Player)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-263, 3127) → 格子: (-9, 97)  可行走=true
+[A*] 玩家世界: (-213, 3142) → 格子: (-7, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=15 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=1)
+[子弹] >>> 造成伤害！tid=451944650662 name=@CharacterBody2D@37 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=468637980426
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[子弹] 击中: @CharacterBody2D@37 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@40)
+[子弹] 去重记录: tid=452951283562 name=@CharacterBody2D@40 (累计=2)
+[子弹] >>> 造成伤害！tid=452951283562 name=@CharacterBody2D@40 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=468637980426
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@40 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[子弹] area_entered: HurtArea (parent=Player)
+[敵人] 攻击后摇: 30 帧
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-257, 3126) → 格子: (-9, 97)  可行走=true
+[A*] 玩家世界: (-205, 3142) → 格子: (-7, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=14 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=13 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-233, 3154) → 格子: (-8, 98)  可行走=true
+[A*] 玩家世界: (-163, 3142) → 格子: (-6, 98)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=12 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=11 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=10 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=5
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=9 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=451609105779 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=451609105779 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 80/100 | 爆头=false | source=473083943481
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[玩家] 受到伤害: 10 | HP: 180/200 | source=0
+[敵人] 攻击命中玩家！伤害=10
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=8 bullets=1
+[硬直] 硬直结束 → 追击
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-85, 3096) → 格子: (-3, 96)  可行走=true
+[A*] 玩家世界: (156, 3143) → 格子: (4, 98)  可行走=true
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=451609105779 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=451609105779 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=475030099723
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=7 bullets=1
+[硬直] 硬直结束 → 追击
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (-83, 3096) → 格子: (-3, 96)  可行走=true
+[A*] 玩家世界: (171, 3115) → 格子: (5, 97)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=6 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@36)
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=5 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=4 bullets=1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=3 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=451609105779 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=451609105779 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=478184217130
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=451609105779 name=Enemy ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=2)
+[子弹] >>> 造成伤害！tid=451944650662 name=@CharacterBody2D@37 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=478184217130
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 1 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@37 | 伤害=20 | 爆头=false | 穿透剩余=-1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=2 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (14, 3093) → 格子: (0, 96)  可行走=true
+[A*] 玩家世界: (186, 3004) → 格子: (5, 93)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[子弹] body_entered: Enemy
+[子弹] 去重记录: tid=451609105779 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=451609105779 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=480398808894
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] *** 去重拦截！tid=451609105779 name=Enemy ***
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@37)
+[子弹] 去重记录: tid=451944650662 name=@CharacterBody2D@37 (累计=2)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=1 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[硬直] 硬直结束 → 追击
+[子弹] area_entered: HurtArea (parent=Enemy)
+[子弹] 去重记录: tid=451609105779 name=Enemy (累计=1)
+[子弹] >>> 造成伤害！tid=451609105779 name=Enemy damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=481606768452
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 2 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: Enemy | 伤害=20 | 爆头=false | 穿透剩余=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=0 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[SpawnManager] scatter spawn: 5 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 2
+[Director] spawn candidates: total=2 nearby=1
+[Director] spawned enemy at (1064, 3184)
+[Director] spawned enemy at (1069, 3079)
+[Director] spawned enemy at (1010, 3190)
+[Director] spawned enemy at (1123, 3198)
+[Director] spawned enemy at (1000, 3135)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=6 path=DecorLayer/@CharacterBody2D@279 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=7 path=DecorLayer/@CharacterBody2D@280 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=8 path=DecorLayer/@CharacterBody2D@281 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=9 path=DecorLayer/@CharacterBody2D@282 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=10 path=DecorLayer/@CharacterBody2D@283 clients=1
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=10
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[敵人] 攻击落空（玩家不在矩形判定区内）
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[敵人] 攻击后摇: 30 帧
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (192, 3096) → 格子: (6, 96)  可行走=true
+[A*] 玩家世界: (172, 2878) → 格子: (5, 89)  可行走=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[PlayerState] 消耗弹药: ammo_smg ×30
+[玩家] 朝向已锁定: 3
+[NetworkWorld] HOST_RELOAD peer=1 weapon=smg_01 loaded=30 ammo=30
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=10
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=29 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=28 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=27 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=10
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[玩家] 朝向已解锁
+[NetworkWorld] HOST_FACING_LOCK peer=1 locked=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[玩家] 朝向已锁定: 0
+[NetworkWorld] HOST_FACING_LOCK peer=1 locked=true
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[SpawnManager] scatter spawn: 2 enemies
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawn candidates: total=3 nearby=2
+[Director] spawned enemy at (1078, 2454)
+[Director] spawned enemy at (349, 3120)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=11 path=DecorLayer/@CharacterBody2D@292 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=12 path=DecorLayer/@CharacterBody2D@293 clients=1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=26 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@38)
+[子弹] 去重记录: tid=452280194962 name=@CharacterBody2D@38 (累计=1)
+[子弹] >>> 造成伤害！tid=452280194962 name=@CharacterBody2D@38 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 60/100 | 爆头=false | source=492830726753
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@38 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Player)
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (405, 2551) → 格子: (12, 79)  可行走=true
+[A*] 玩家世界: (457, 2418) → 格子: (14, 75)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=25 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=24 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=23 bullets=1
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] body_entered: @CharacterBody2D@38
+[子弹] 去重记录: tid=452280194962 name=@CharacterBody2D@38 (累计=1)
+[子弹] >>> 造成伤害！tid=452280194962 name=@CharacterBody2D@38 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=494927878738
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@38 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@38)
+[子弹] *** 去重拦截！tid=452280194962 name=@CharacterBody2D@38 ***
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[硬直] 硬直结束 → 追击
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (403, 2503) → 格子: (12, 78)  可行走=true
+[A*] 玩家世界: (452, 2400) → 格子: (14, 74)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=22 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@38)
+[子弹] 去重记录: tid=452280194962 name=@CharacterBody2D@38 (累计=1)
+[子弹] >>> 造成伤害！tid=452280194962 name=@CharacterBody2D@38 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=496202946293
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@38 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=21 bullets=1
+[硬直] 硬直结束 → 追击
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (402, 2495) → 格子: (12, 77)  可行走=true
+[A*] 玩家世界: (489, 2400) → 格子: (15, 74)  可行走=true
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=12
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=20 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@38)
+[子弹] 去重记录: tid=452280194962 name=@CharacterBody2D@38 (累计=1)
+[子弹] >>> 造成伤害！tid=452280194962 name=@CharacterBody2D@38 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=497931000382
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 3 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@38 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=19 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=18 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@40)
+[子弹] 去重记录: tid=452951283562 name=@CharacterBody2D@40 (累计=1)
+[子弹] >>> 造成伤害！tid=452951283562 name=@CharacterBody2D@40 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 40/100 | 爆头=false | source=499659052856
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@40 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=17 bullets=1
+[硬直] 硬直结束 → 追击
+[子弹] area_entered: HurtArea (parent=Player)
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (336, 2453) → 格子: (10, 76)  可行走=true
+[A*] 玩家世界: (353, 2380) → 格子: (11, 74)  可行走=true
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@40)
+[子弹] 去重记录: tid=452951283562 name=@CharacterBody2D@40 (累计=1)
+[子弹] >>> 造成伤害！tid=452951283562 name=@CharacterBody2D@40 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 20/100 | 爆头=false | source=500900574188
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[硬直] 进入硬直状态 | duration=0.10s
+[子弹] 击中: @CharacterBody2D@40 | 伤害=20 | 爆头=false | 穿透剩余=0
+[硬直] 硬直结束 → 追击
+[A*] ═══ 寻路开始（AStarGrid2D, 32px 格子）═══
+[A*] 敌人世界: (336, 2450) → 格子: (10, 76)  可行走=true
+[A*] 玩家世界: (349, 2380) → 格子: (10, 74)  可行走=true
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=16 bullets=1
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@40)
+[子弹] 去重记录: tid=452951283562 name=@CharacterBody2D@40 (累计=1)
+[子弹] >>> 造成伤害！tid=452951283562 name=@CharacterBody2D@40 damage=20 <<<
+[敵人] 受到伤害: 20 | HP: 0/100 | 爆头=false | source=502158858039
+[受击反馈] color=(1.0, 0.0, 0.0, 1.0) duration=0.50s mode=0
+[敵人] 死亡！类型=普通
+[Global] 尸体注册: 当前 4 具（上限 20）
+[敵人] 进入普通死亡状态（尸体保留）
+[子弹] 击中: @CharacterBody2D@40 | 伤害=20 | 爆头=false | 穿透剩余=0
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=15 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=lowering
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=12
+[菜单] 打开
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[菜单] 关闭
+[Pacing] → peak (duration=30.0s)
+[Director] pacing phase → peak
+[SpawnManager] phase → peak
+[SpawnManager] HORDE START: total=18
+[SpawnManager] horde batch: 2 enemies (remaining=18)
+[Director] found 3 spawn nodes
+[Director] valid spawns: 3
+[Director] spawned enemy at (986, 2397)
+[Director] spawned enemy at (407, 3175)
+[NetworkWorld] HOST_ENEMY_REGISTERED id=13 path=DecorLayer/@CharacterBody2D@400 clients=1
+[NetworkWorld] HOST_ENEMY_REGISTERED id=14 path=DecorLayer/@CharacterBody2D@401 clients=1
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[玩家] 朝向已解锁
+[NetworkWorld] HOST_FACING_LOCK peer=1 locked=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=lowering
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=lowering
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=lowering
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[Pacing] → cooldown (duration=0.3s)
+[Director] pacing phase → cooldown
+[SpawnManager] phase → cooldown
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[Pacing] → build (duration=17.5s)
+[Director] pacing phase → build
+[SpawnManager] phase → build
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=14
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[Pacing] → cooldown (duration=3.4s)
+[Director] pacing phase → cooldown
+[SpawnManager] phase → cooldown
+[ChapterStats] 章节完成，用时 0.0 秒
+[SafeDoor] Host 统一进入安全屋: res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[NetworkWorld] SCENE_TRANSITION_QUIET current=res://scene/maps/突袭-第一关-街道.tscn target=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[Net] START_GAME res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn serial=5 (flush=0.25s)
+[Net] SCENE_TRANSITION_ACK peer=1904687743 serial=5
+[Net] SCENE_TRANSITION_COMMIT serial=5
+[Players] 实体注册: Player → 座位 0
+WARNING: Nodes with non-equal opposite anchors will have their size overridden after _ready().
+If you want to set size, change the anchors or consider using set_deferred().
+     at: _set_size (scene/gui/control.cpp:1487)
+     GDScript backtrace (most recent call first):
+         [0] _build_ui (res://script/ui/chapter_summary.gd:407)
+         [1] _ready (res://script/ui/chapter_summary.gd:50)
+[GradientLabel] 色表已加载 320×64
+[Players] 实体注册: Player → 座位 0
+[NetworkWorld] HOST_SPAWN peer=1 preplaced=true
+[Players] 实体注册: @CharacterBody2D@449 → 座位 1
+[NetworkWorld] HOST_SPAWN peer=1904687743 preplaced=false
+[Players] 实体注册: Player → 座位 0
+[Players] 实体注册: @CharacterBody2D@449 → 座位 1
+[NetworkWorld] NETWORK_SEATS expected=2 actual=2 owners=[1, 1904687743]
+[NetworkWorld] ready host=true scene=res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn
+[GameInit] 已进入 Phase 1 Host 权威联机世界
+[NetworkWorld] HOST_ENEMIES_REGISTERED count=0
+[NetworkWorld] HOST_PICKUPS_REGISTERED count=0
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[ChapterSummary] CONFIRM_BROADCAST peer=1904687743 targets=[1, 1904687743]
+[ChapterSummary] CONFIRM_APPLIED peer=1904687743 seat=1
+[ChapterSummary] CONFIRM_BROADCAST peer=1 targets=[1, 1904687743]
+[ChapterSummary] CONFIRM_APPLIED peer=1 seat=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[Director] no DirectorConfig in scene, using defaults
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, -1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, -0.71) walk=false
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=14 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@449)
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[子弹] 碰撞体尺寸已更新: (32.0, 6.0) | 偏移: (0.0, 0.0)
+[NetworkWorld] HOST_FIRE peer=1 ammo=13 bullets=1
+[子弹] area_entered: HurtArea (parent=Player)
+[子弹] area_entered: HurtArea (parent=@CharacterBody2D@449)
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 1.00) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=lowering
+[NetworkWorld] HOST_WEAPON_SWITCH peer=1 slot=secondary weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, 0.71) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.71, -0.71) walk=false
+[NetworkWorld] HOST_WEAPON_TOGGLE peer=1 transition=raising
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[NetworkWorld] HOST_MELEE peer=1 weapon=knife_01
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(-1.00, 0.00) walk=false
+[NetworkWorld] HOST_INPUT peer=1904687743 dir=(0.00, 0.00) walk=false
+[NetworkWorld] HOST_MELEE peer=1 weapon=knife_01
+[NetworkWorld] HOST_MELEE peer=1 weapon=knife_01
+[NetworkWorld] WORLD_SNAPSHOT_SENT peer=1904687743 enemies=0
+[Net] PEER_DISCONNECTED peer=1904687743
+[NetworkWorld] HOST_DESPAWN peer=1904687743
+[Players] 实体注册: Player → 座位 0
+[NetworkWorld] NETWORK_SEATS expected=1 actual=1 owners=[1]
+[Players] 实体注册: @CharacterBody2D@449 → 座位 0
