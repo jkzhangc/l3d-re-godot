@@ -1,4 +1,6 @@
 class_name FirePatch extends Node2D
+## 权威实例负责范围检测、周期伤害和生命周期；Client 镜像只播放火焰与环境音。
+## _damage_players 等玩法参数由 Host/单机决定，不能由远端请求任意修改。
 ## 燃烧区域 — 在半径内填充多个火精灵（VX Ace 行走图），周期性灼烧敌人
 
 const FIRE_TEXTURE_PATH := "res://art/misc/天罰キャラチップ.png"

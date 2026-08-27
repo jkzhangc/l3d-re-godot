@@ -1,4 +1,6 @@
 extends Node2D
+## 子弹运行时对象：移动、碰撞和伤害由单机本地或联机 Host 权威执行。
+## Client 的同名节点只负责轨迹表现，不能再次对敌人结算伤害；网络传输使用白名单 ID 和索引。
 ## 子弹实体 — 由远程武器射击生成
 
 signal finished(network_entity_id: int)

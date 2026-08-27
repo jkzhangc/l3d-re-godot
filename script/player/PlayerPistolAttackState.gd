@@ -1,4 +1,5 @@
 extends State
+## 攻击帧只触发一次发射；单机本地或 Host 才能生成权威子弹，Client 仅播放攻击表现。
 ## 手枪攻击状态 — 播放攻击动画并发射子弹
 ##
 ## 攻击动画: attack_char_sequence（默认 [3,4,3,2]）

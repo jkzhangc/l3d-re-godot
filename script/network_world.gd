@@ -3,6 +3,17 @@ extends Node
 ##
 ## 禁止使用 MultiplayerSpawner / MultiplayerSynchronizer；所有实体均由可靠 RPC 显式
 ## spawn/despawn，位置快照通过 unreliable_ordered 广播。
+##
+## 【阅读地图 / 数据流】
+## - _ready()、_process()：按 Host/Client 分支初始化，并调度输入、模拟、快照与定期重同步；
+## - submit_input() 及 attack/reload/throw/pickup 等 request RPC：Client 只能提交“操作意图”；
+## - _host_*：唯一会改变 HP、弹药、背包、敌人、子弹、掉落物与复活进度的权威模拟；
+## - *_snapshot / spawn_* / despawn_* RPC：Host 将权威结果复制为 Client 的表现状态；
+## - _try_host_pickup()：掉落物事务的唯一提交点，先验证距离/归属/槽位，再修改 PlayerState 并广播；
+## - 安全门、场景 ready 与 _scene_transitioning：跨图期间关闭旧节点的通信窗口。
+##
+## 重要边界：Client 可以做本地镜头和动画预测，但不能决定伤害、资源路径、武器参数或库存。
+## NetworkManager 管连接与跨图 PlayerState；本节点只管理“当前场景”的实体引用，换图后会被释放。
 
 const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
@@ -41,9 +52,15 @@ const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
 
+## 当前场景的玩家表：peer_id → {node, state, input, walking, moving, ...}。
+## node 是临时场景节点；state 是 Host 的 PlayerState（跨图持久化副本在 Net 中），
+## input 仅保存客户端最近一次意图，绝不可把它当作已验证的游戏结果。
 var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
+## 敌人表：Host 生成的稳定 entity_id → 当前场景节点及可重建资料。Client 只按 id 应用快照。
 var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
+## 掉落物表：稳定 pickup_id → 武器或治疗/投掷物节点。所有拾取都必须由 Host 提交并广播变化，
+## 这样多个 Client 同时按键也只会有一个获准拿到物品。
 var _pickups: Dictionary = {} # pickup_id -> weapon/throwable pickup Node2D
 var _next_pickup_id := 1
 ## 仅向已创建本场景 NetworkWorld 并报告 ready 的 Client 发送场景 RPC。
@@ -54,6 +71,7 @@ var _client_preplaced_pickups_by_path: Dictionary = {}
 ## 已确认安全门路径 -> true；Host 只跟踪最后一次有效确认的门，并权威统计到门人数。
 var _safe_door_ready: Dictionary = {}
 var _door_ready_status: Dictionary = {}
+## 子弹表：稳定 bullet_id → 表现节点。命中和伤害由 Host 计算；Client 的同名节点只负责看见轨迹。
 var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
 var _next_bullet_id := 1
 ## 攻击冷却按「玩家 + Host 当前武器」独立记录，避免切换武器后互相影响。

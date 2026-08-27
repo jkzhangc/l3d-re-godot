@@ -1,4 +1,5 @@
 extends State
+## 近战判定在配置的命中帧创建/执行一次，随后由状态机清理 hitbox 并回到 READY。
 ## 小刀攻击状态 — 播放攻击动画并执行近战判定
 ##
 ## 攻击动画: melee_attack_char_sequence（或回退 attack_char_sequence）

@@ -3,10 +3,13 @@ class_name PlayerState extends RefCounted
 ##
 ## 单人模式：每个队伍座位一份。角色切换 = 换绑 Player 节点指向的 PlayerState，
 ##           不再逐字段拷贝（旧实现见 global.gd 的 _apply/_save_team_member）。
-## 联机模式（尚未实现）：每个 peer 一份，按 Host 全量模拟模型只在 Host 侧写入。
+## 联机模式：每个 peer 一份，按 Host 全量模拟模型只在 Host 侧写入；Client 拿到的是
+## Host 序列化快照的表现副本，不能把本地修改直接视为有效库存或伤害结果。
 ##
-## 本类只存「数据」，不碰场景节点。消耗品的实际效果（回 HP/TP）由玩家节点自己施加 ——
-## use_healing_item() / use_support_item() 只负责扣数量并返回被消耗的物品。
+## 【数据边界】本类只存“可保存的玩法数据”，不碰场景节点、碰撞和动画。消耗品的实际效果
+## （回 HP/TP）由玩家节点/NetworkWorld 在权威确认后施加；use_healing_item() /
+## use_support_item() 只负责扣数量并返回被消耗的物品。资源对象来自本地 .tres 设计数据，
+## 网络上只传可信的 ID/路径白名单和基础值，不从 Client 接收任意 Resource。
 
 # ═══════════════════════════════════════
 # 角色与生命
@@ -22,6 +25,8 @@ var current_tp: int = 0
 # ═══════════════════════════════════════
 # 装备与弹药
 # ═══════════════════════════════════════
+## 装备槽只保存 ItemData/WeaponData 资源引用；序列化时应转换为稳定 item_id，再由本地目录解析。
+## primary 通常为主武器，secondary 为手枪/近战；active_weapon_slot 决定当前攻击状态读哪一槽。
 var equipment: Dictionary = {"primary": null, "secondary": null}
 var active_weapon_slot: String = "primary"
 var weapon_magazines: Dictionary = {}   ## item_id → 弹夹内余弹
@@ -275,6 +280,7 @@ func remove_item(idx: int) -> void:
 ## 容器（equipment/weapon_magazines/inventory）复制一份，
 ## 资源引用（character / 各 ItemData）按引用保留 —— 不复制资源实例。
 func clone() -> PlayerState:
+## 深拷贝本座位状态，用于角色切换、存档快照和联机会话缓存；不复制场景节点。
 	var c: PlayerState = PlayerState.new()
 	c.character = character
 	c.character_path = character_path
@@ -307,6 +313,7 @@ func clone() -> PlayerState:
 ## （它优先按 resource_path 还原，找不到路径才手动重建 —— 背包里的弹药是
 ## duplicate() 出来的、没有 resource_path，必须走后者）。
 func to_dict() -> Dictionary:
+## 将状态转换为纯 Dictionary，供 JSON 存档或可靠网络快照使用；资源会编码为稳定 ID。
 	var inv: Array = []
 	for item: Resource in inventory:
 		var it: ItemData = item as ItemData
@@ -341,6 +348,7 @@ func to_dict() -> Dictionary:
 ## 从 to_dict() 的产物还原。character 会 duplicate() 一份，
 ## 保证每个座位独占实例、不污染资源缓存里的 .tres 母本。
 func from_dict(d: Dictionary) -> void:
+## 用纯数据恢复状态。网络端只能把 Host 已确认的快照用于显示，不能用 Client 上行数据覆写 Host。
 	var cpath: String = d.get("character_path", "")
 	character = null
 	character_path = cpath

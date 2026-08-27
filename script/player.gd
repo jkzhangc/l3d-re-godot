@@ -16,7 +16,14 @@ signal network_damage_applied(damage: float, position: Vector2, is_headshot: boo
 ##   PistolAttack / KnifeAttack → 攻击状态
 ##
 ## VX Ace 角色精灵布局（576×512, 4×2共8角色, 每角色3帧×4方向）
-
+##
+## 【三种运行模式】
+## - 单机：StateMachine 读取本地输入，Player 自己移动、攻击、受伤并更新 PlayerState；
+## - 联机 Host：NetworkWorld 提供已验证输入并驱动该实体，Player 仍负责动画/碰撞等实体表现；
+## - 联机 Client：本地实体不执行权威战斗，只根据 NetworkWorld 快照更新位置、朝向、HP 和动画。
+##
+## 因此修改本脚本时，要先确认代码属于“玩法权威”还是“表现层”。涉及伤害、弹药、拾取、
+## 投掷物和复活的联机入口应回到 NetworkWorld，不能让 Client 通过本地 Player 直接结算。
 # ═══════════════════════════════════════
 # 角色参数（行走图/HP/音效 → 由 CharacterData 驱动）
 # ═══════════════════════════════════════
@@ -108,6 +115,8 @@ var current_hp: float = 200.0
 var network_entity_id: int = 0
 var network_owner_peer_id: int = 0
 var network_controlled: bool = false
+## true 表示本实体由 NetworkWorld 管理；单机实体才允许走 Players 注册和本地状态机。
+## true 表示本实体由 NetworkWorld 管理；单机实体才允许走 Players 注册和本地状态机。
 ## 本地客户端实体开启预测；Host 仍是最终权威，快照只用于纠偏。
 var network_local_prediction: bool = false
 var network_local_player: bool = false
@@ -147,6 +156,8 @@ var facing: int:
 
 
 func _ready() -> void:
+## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
+## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
 	add_to_group("player")
 	# NetworkWorld 会在实体加入场景前预先标记动态玩家；此处绝不能把它们
 	# 错绑到单人 active_seat。

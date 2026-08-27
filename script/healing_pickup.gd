@@ -1,4 +1,8 @@
 extends Node2D
+## 治疗品 / 投掷物掉落物。
+## healing_item 与 throwable 共用交互壳，但写入 PlayerState 的库存字段不同。
+## Client 必须走 _request_network_pickup()；只有 Host 明确标记的 presentation-only 镜像
+## 才屏蔽请求，这一点对客户端拾取投掷物尤其重要。
 ## 治疗品/投掷物拾取物 — 放在地图上供玩家拾取
 ##
 ## 治疗品/辅助品：触碰自动拾取。
@@ -104,6 +108,7 @@ func _is_online_network_pickup() -> bool:
 
 
 func _process_network_pickup(delta: float) -> void:
+## 联机客户端只检测交互、显示长按提示并提交请求；Host 回包后才视为成功。
 	if network_pickup_id <= 0 or network_presentation_only:
 		_hold_timer = 0.0
 		_update_hold_indicator(delta, false)
@@ -208,6 +213,7 @@ func _process_pickup(delta: float) -> void:
 
 
 func _do_pickup() -> void:
+## 单机/授权后的库存写入：按类型增加治疗品或投掷物，并按规则处理已有投掷物。
 	if not item:
 		return
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)

@@ -1,4 +1,5 @@
 extends State
+## 攻击命中帧由 Host 结算玩家伤害；Client 只看到攻击动画和 NetworkWorld 的伤害事件。
 ## 敌人攻击状态 — 面向玩家 → 近战动画 → 判定 → 后摇
 ##
 ## 攻击序列: attack_char_sequence（默认 [1,2,3,1,0]）

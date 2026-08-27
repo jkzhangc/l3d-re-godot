@@ -1,5 +1,10 @@
 extends Control
 ## 正式联机大厅：连接 UI 和自动测试入口；握手、玩家名单与角色选择均由 Net Host 权威维护。
+##
+## 此脚本是“表现层”：按钮只调用 Net 的公开请求接口，收到 Net 的信号后刷新文字和控件；
+## 它不自行写玩家名单、角色表或场景状态。正常流程为：创建/加入 → hello 握手完成 → 选择角色
+## （Client 请求、Host 校验并广播）→ Host 在所有玩家选好后按 Start → Net 的安全切图协议接管。
+## _run_auto_* 系列只服务无头双端回归，不能作为正式玩法同步逻辑的入口。
 
 const GAME_SCENE := "res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"
 const AUTO_TEST_SCENE := "res://scene/maps/test.tscn"
@@ -203,6 +208,7 @@ func _on_join_pressed() -> void:
 	_set_connect_buttons_disabled(true)
 
 
+## 仅 Host 可触发。实际“是否每名玩家均选角”的判定仍交给 Net，避免 UI 本地状态与会话事实不一致。
 func _on_start_pressed() -> void:
 	if not net.is_host or not net.handshake_ok:
 		return
@@ -272,6 +278,7 @@ func _on_peer_left(_peer_id: int) -> void:
 
 # ---------------------------------------------------------------- UI
 
+## 将 Net 当前会话快照投影到控件；本函数应保持无副作用，不能借刷新机会修改联机权威状态。
 func _refresh_ui() -> void:
 	if not is_node_ready() or not net:
 		return

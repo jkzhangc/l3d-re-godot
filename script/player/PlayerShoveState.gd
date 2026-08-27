@@ -1,4 +1,5 @@
 extends State
+## 推击是纯击退动作；联机 Client 只请求，Host 在命中帧执行推击并广播受击表现。
 ## 推击状态 — 近战推击（无伤害，纯击退）
 ##
 ## 推击动画：shove_char_sequence（统一帧时长 shove_frame_duration）

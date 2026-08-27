@@ -1,4 +1,5 @@
 extends Node
+## 管理普通/特殊敌人的生成冷却与数量限制；正式执行仍由 Director/Host 调用。
 ## 敌人生成调度器 — 管理自动生成散兵 + 尸潮分批
 ##
 ## 由 pacing_controller 的 phase_changed 信号驱动，

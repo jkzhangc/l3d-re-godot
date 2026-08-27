@@ -1,4 +1,5 @@
 extends Node
+## 将紧张度转换为 BUILDUP/PEAK/RELAX 等节奏阶段，供 Director 决定是否触发事件。
 ## 节奏控制器 — 管理 Build-up → Peak → Cooldown 三阶段循环
 ##
 ## 根据紧张度 + 时间自动切换阶段，所有参数 Inspector 可调

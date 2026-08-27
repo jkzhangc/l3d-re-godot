@@ -5,7 +5,9 @@ class_name StateMachine extends Node
 ##   1. 将 StateMachine 添加为 CharacterBody2D 的子节点
 ##   2. 将 State 子节点添加到 StateMachine 下
 ##   3. 设置 initial_state 指向初始状态
-
+##
+## 状态机本身不解释输入和规则，只保证生命周期顺序：exit(旧) → 记录 last_state → enter(新)。
+## 同名重入被有意允许，以便切换武器后重新读取当前装备资源参数。
 @export var initial_state: State
 
 var states: Dictionary = {}         ## name → State

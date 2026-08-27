@@ -10,6 +10,11 @@ extends Node
 ##
 ## 存在意义：替代散落在 7 个文件里的 _find_player()（各自遍历 group 或递归场景树取
 ## 第一个 CharacterBody2D），并把「当前玩家状态」从 Global 的顶层单值里解放出来。
+##
+## 【生命周期约定】PlayerState 是跨场景/存档可保存的数据；实体 Node2D 只在当前地图有效。
+## 玩家 _ready() 注册实体，退出树或换图时应解除绑定。调用者若缓存实体引用，必须先
+## is_instance_valid()；需要跨图保留的内容应缓存 PlayerState 或经 NetworkManager 的会话状态读取。
+## 联机动态玩家由 NetworkWorld 负责创建和绑定，不能按单机 active_seat 自动推断归属。
 
 const DEFAULT_CHARACTER_PATH: String = "res://object/character_nobita.tres"
 

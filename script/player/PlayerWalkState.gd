@@ -1,4 +1,5 @@
 extends State
+## 行走状态只负责移动速度/外观分支；武器和攻击状态通过 transition_requested 切入。
 ## 行走状态 — 按住行走键移动
 
 

@@ -1,4 +1,5 @@
 extends State
+## 手枪 READY 阶段允许移动和开火；RAISE/LOWER 阶段用于锁定过渡动画，避免快照重置表现。
 ## 手枪举起状态 — 主武器举起
 ##
 ## 举起动画：正向播放 weapon_raise_char_sequence

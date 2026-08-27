@@ -6,7 +6,10 @@ signal network_damage_applied(damage: float, position: Vector2, is_headshot: boo
 ## 敵人 — CharacterBody2D + AI 状态机
 ##
 ## VX Ace 精灵渲染（与玩家相同逻辑）
-
+##
+## 单机或联机 Host 执行目标搜索、寻路、攻击判定、受伤、击退和死亡；Client 只应用
+## NetworkWorld 快照并播放受击表现。敌人参数来自场景/白名单，不能由客户端 RPC 提供。
+## enemy.gd 管实体生命周期与表现，Enemy/*State.gd 管状态机规则。
 # ═══════════════════════════════════════
 # 精灵帧常量
 # ═══════════════════════════════════════

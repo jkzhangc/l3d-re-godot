@@ -1,6 +1,6 @@
 class_name ThrowableProjectile extends Node2D
 ## 投掷物投射物 — 抛物线飞向终点（带旋转），落地后爆炸（手雷）或生成火海（燃烧瓶）
-
+## authoritative=true 才会执行落地爆炸/火海伤害；Client 镜像必须关闭权威逻辑，避免每台机器重复结算。
 const FLY_DURATION: float = 0.5
 const TILE_SIZE: int = 32
 

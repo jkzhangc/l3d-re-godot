@@ -1,6 +1,17 @@
 extends Node
 ## 主项目联机连接层（Host 权威 v2.1）。
 ## 只负责 ENet、握手、玩家列表和场景 ready；游戏实体由 NetworkWorld 管理。
+##
+## 【阅读地图】
+## 1. host_game()/join_game()/leave() 管理 ENet 连接的创建与销毁；
+## 2. hello → hello_ack 完成协议版本、昵称、角色表同步，handshake_ok 前不允许进入游戏；
+## 3. Host 是大厅结构状态的唯一写入者：角色选择请求会经过白名单校验后再广播完整表；
+## 4. start_game()/scene_transition_commit()/scene_transition_ack() 用“旧场景静默 → 短暂排空 → 同步换图”
+##    的顺序规避 RPC 仍指向已释放 NetworkWorld 节点的竞态；
+## 5. _session_player_states 在换图期间保存 Host 权威 PlayerState。具体玩家、敌人和掉落物的
+##    生命周期、输入和快照均在场景内的 NetworkWorld 中处理。
+##
+## 本脚本不模拟战斗，也不相信客户端给出的资源或角色数据；它只维护联机会话的连接级事实。
 
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
@@ -52,6 +63,8 @@ func has_network() -> bool:
 func is_online_session() -> bool:
 	return has_network() and handshake_ok
 
+## 创建 Host（服务器也是本地玩家）。成功后立即建立本机玩家名单和默认角色记录；
+## 远端玩家仍须通过 hello 握手才会出现在会话表中。
 func host_game(port: int = DEFAULT_PORT) -> Error:
 	leave()
 	var peer := ENetMultiplayerPeer.new()
@@ -70,6 +83,8 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	print("[Net] HOST listening port=%d peer_id=%d protocol=%s" % [port, my_peer_id, PROTOCOL_VERSION])
 	return OK
 
+## 创建 Client 连接。这里只发起 ENet 连接，不代表已进入可游戏状态；
+## _on_connected_to_server() 发送 hello，待 hello_ack 后 handshake_ok 才会变为 true。
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	leave()
 	var peer := ENetMultiplayerPeer.new()
@@ -85,6 +100,8 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	print("[Net] CLIENT connecting %s:%d" % [address, port])
 	return OK
 
+## 无论连接处于“正在连线 / 已握手 / 已进图”哪一阶段，都将其还原为离线状态。
+## 同时清理跨图 PlayerState，避免下一次会话继承上一次 Host 的权威运行时数据。
 func leave() -> void:
 	_disconnect_multiplayer_signals()
 	if multiplayer.multiplayer_peer != null:
@@ -170,6 +187,8 @@ func remove_session_player_state(peer_id: int) -> void:
 
 # ---------------------------------------------------------------- handshake
 
+## Client → Host 的首个握手包。Host 从 RPC sender 取得 peer_id，而非相信客户端自报身份；
+## 版本或昵称不合规时不把该连接写入玩家列表。
 @rpc("any_peer", "call_remote", "reliable")
 func hello(version: String, name: String) -> void:
 	if not is_host:
@@ -189,6 +208,8 @@ func hello(version: String, name: String) -> void:
 	player_list_changed.emit()
 	handshake_completed.emit()
 
+## Host → Client 的握手确认。完整名单和角色路径表是大厅 UI 的只读投影；
+## Client 不得直接修改它们，任何选择都必须回到 request_character_selection() 请求。
 @rpc("authority", "call_remote", "reliable")
 func hello_ack(version: String, names: Dictionary, character_paths: Dictionary) -> void:
 	if version != PROTOCOL_VERSION:
@@ -209,6 +230,8 @@ func player_list(names: Dictionary) -> void:
 	player_list_changed.emit()
 
 
+## Client → Host 的角色选择意图。character_path 只是“候选键”，Host 会以本地目录产生的
+## _allowed_character_paths 白名单复核，随后通过 player_character_list 广播最终事实。
 @rpc("any_peer", "call_remote", "reliable")
 func request_character_selection(character_path: String) -> void:
 	if not is_host:
@@ -273,6 +296,8 @@ func _get_default_character_path() -> String:
 
 # ---------------------------------------------------------------- scene lifecycle
 
+## Host 发起开局的第一阶段：通知两端旧场景中的 NetworkWorld 立即停止业务 RPC。
+## 真正的 change_scene 被延后到双方 scene_transition_ack 均到达之后。
 @rpc("authority", "call_local", "reliable")
 func start_game(scene_path: String) -> void:
 	active_scene_path = scene_path
@@ -308,6 +333,7 @@ func _host_commit_scene_transition(scene_path: String, transition_serial: int) -
 	scene_transition_commit.rpc(scene_path, transition_serial)
 
 
+## Host 广播切图提交。serial 使迟到的旧轮次 ACK/commit 无法影响当前场景切换。
 @rpc("authority", "call_local", "reliable")
 func scene_transition_commit(scene_path: String, transition_serial: int) -> void:
 	if transition_serial != _scene_transition_serial or scene_path != active_scene_path:
@@ -377,6 +403,8 @@ func _change_scene_safely(scene_path: String) -> void:
 	if err != OK:
 		printerr("[Net] CHANGE_SCENE_FAILED path=%s error=%s" % [scene_path, error_string(err)])
 
+## Client/Host 的新场景 NetworkWorld 准备好后上报。Host 以该记录决定何时发送初始世界快照，
+## 防止 RPC 先于接收端节点创建而丢失。
 @rpc("any_peer", "call_remote", "reliable")
 func report_game_scene_ready(scene_path: String) -> void:
 	if not is_host:

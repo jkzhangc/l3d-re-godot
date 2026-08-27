@@ -1,4 +1,5 @@
 class_name EnemyChaseState extends State
+## Host 维护 A* 路径和敌人避让缓存；Client 不寻路，只表现 Host 给出的移动结果。
 ## 追击玩家 — A* 寻路（Godot 内置 AStarGrid2D）+ 调试输出 + 路径可视化
 ##
 ## 网格分辨率：32×32 像素（原生图块分辨率）

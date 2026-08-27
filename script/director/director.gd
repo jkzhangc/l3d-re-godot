@@ -2,7 +2,9 @@ extends Node
 ## 导演系统 Autoload — 全局总控
 ##
 ## 负责：紧张度评估、敌人生成、物品投放决策、事件编排
-
+##
+## Director 只在单机或联机 Host 运行；联机 Client 不自行刷怪或投放物品，只接收同步结果。
+## IntensityTracker/PacingController 决定节奏，SpawnManager/EventManager/ItemManager 执行子系统动作。
 # ═══════════════════════════════════════
 # 信号
 # ═══════════════════════════════════════

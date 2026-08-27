@@ -1,4 +1,5 @@
 class_name SafeDoor extends Node2D
+## 安全门交互：单机直接切图；联机提交 ready 后由 NetworkWorld 统计全员并统一切图。
 ## 安全门实体：使用 VX Ace 行走图显示，玩家靠近并按“确定键”后进入目标安全屋。
 ## 联机时由 NetworkWorld 验证所有已连接玩家都在同一扇门附近；任一到门玩家确认后统一切图。
 

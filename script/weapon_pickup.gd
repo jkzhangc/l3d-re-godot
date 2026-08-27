@@ -1,4 +1,9 @@
 extends Node2D
+## 地面武器掉落物。
+##
+## 单机：本地节点完成拾取/替换并生成旧武器掉落；联机：Client 只提交请求，Host
+## 验证距离、槽位和物品 ID 后修改权威 PlayerState，再广播结果。
+## network_presentation_only=true 只表示该镜像不能发起拾取请求，不能误用于仍需交互的掉落物。
 ## 武器拾取物 — 放在地图上供玩家拾取
 ##
 ## VX Ace 精灵渲染（与玩家/子弹相同）：通过 char_idx 选择角色，
@@ -164,6 +169,7 @@ func _is_online_network_pickup() -> bool:
 
 
 func _process_network_pickup(delta: float) -> void:
+## 联机交互入口：本地只显示提示和发送意图，成功与否由 Host 的拾取事务决定。
 	# 尚未收到 Host 的可靠 pickup_snapshot 前只能展示，不能执行本地拾取。
 	if network_pickup_id <= 0:
 		_hold_timer = 0.0
@@ -256,6 +262,7 @@ func _indicator_draw(node: Node2D) -> void:
 
 
 func _do_pickup() -> void:
+## 单机或 Host 已授权后的实际换装事务：处理空槽/替换、弹药补充和旧物掉落。
 	if not weapon_data:
 		return
 

@@ -1,4 +1,5 @@
 extends State
+## 小刀 READY 阶段允许移动和近战；伤害只在 KnifeAttackState 的命中帧结算。
 ## 小刀举起状态 — 副武器举起
 ##
 ## 举起动画：正向播放 weapon_raise_char_sequence

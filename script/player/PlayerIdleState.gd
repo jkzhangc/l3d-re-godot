@@ -1,4 +1,5 @@
 extends State
+## 单机由本状态读取本地输入；联机 Host 不走这里读取键盘，而由 NetworkWorld 注入已验证输入。
 ## 站立状态 — 玩家不移动时
 
 
