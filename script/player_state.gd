@@ -1,4 +1,11 @@
 class_name PlayerState extends RefCounted
+
+## ── 架构定位 ──
+## 系统：玩家状态 ｜ 层：数据（RefCounted）
+## 联机：Host 权威；Client 仅持表现副本
+## 职责：单个座位的完整玩法数据：HP/TP、双武器槽与弹夹/备弹、消耗品、投掷物、背包，以及序列化/快照接口。
+## 依赖：ItemData/WeaponData；被 Players 持有，NetworkWorld 读写
+
 ## 单个玩家/队员的完整状态 —— 从 Global 单例迁出的 per-player 数据。
 ##
 ## 单人模式：每个队伍座位一份。角色切换 = 换绑 Player 节点指向的 PlayerState，
@@ -10,6 +17,9 @@ class_name PlayerState extends RefCounted
 ## （回 HP/TP）由玩家节点/NetworkWorld 在权威确认后施加；use_healing_item() /
 ## use_support_item() 只负责扣数量并返回被消耗的物品。资源对象来自本地 .tres 设计数据，
 ## 网络上只传可信的 ID/路径白名单和基础值，不从 Client 接收任意 Resource。
+
+## 角色未配置 initial_weapon 时的统一出生武器。
+const DEFAULT_INITIAL_WEAPON := preload("res://object/weapon_pistol.tres")
 
 # ═══════════════════════════════════════
 # 角色与生命
@@ -30,6 +40,8 @@ var current_tp: int = 0
 var equipment: Dictionary = {"primary": null, "secondary": null}
 var active_weapon_slot: String = "primary"
 var weapon_magazines: Dictionary = {}   ## item_id → 弹夹内余弹
+## item_id → 当前耐久（仅 max_durability>0 的近战武器记录；原作"削り"削减用）
+var weapon_durability: Dictionary = {}
 
 # ═══════════════════════════════════════
 # 消耗品与背包
@@ -38,6 +50,9 @@ var healing_item: ItemData = null
 var healing_item_count: int = 0
 var support_item: ItemData = null
 var throwable: ThrowableData = null
+## 投掷物槽叠数：普通投掷物恒为 1（扔一次清槽）；炸药类可叠（拾取点一次性给 15）。
+## throwable 为空时无意义；序列化/copy/联机快照都随槽位走。
+var throwable_count: int = 0
 var inventory: Array = []
 
 # ═══════════════════════════════════════
@@ -85,6 +100,17 @@ func init_from_character(cd: CharacterData, source_path: String = "") -> void:
 		return
 	current_hp = float(cd.get_effective_max_hp())
 	current_tp = cd.get_effective_max_tp()
+	# 初始武器：角色资源可配 initial_weapon，未配置时统一给手枪 ——
+	# 单机与联机共用本入口，保证每个角色出场都有一把可举起的武器（满弹匣）。
+	# 入槽按 WeaponData.weapon_slot 走（现有手枪/小刀都是 secondary 副武器），
+	# active 槽跟随初始武器，保证出场即可举枪射击。
+	var weapon := cd.initial_weapon if cd.initial_weapon else DEFAULT_INITIAL_WEAPON
+	if weapon:
+		var slot := weapon.get_slot_key()
+		equipment[slot] = weapon
+		active_weapon_slot = slot
+		if weapon.is_ranged:
+			set_magazine_ammo(weapon.item_id, weapon.magazine_capacity)
 
 
 # ═══════════════════════════════════════
@@ -180,6 +206,14 @@ func use_healing_item() -> ItemData:
 	return used
 
 
+## 治疗品所持上限（原作：基本每人 1 个；スプレー+1 技能 +1）。
+func healing_capacity() -> int:
+	var cap: int = 1
+	if character and character.spray_plus_one:
+		cap += 1
+	return cap
+
+
 ## 使用辅助品。返回被消耗的物品，无则返回 null。
 func use_support_item() -> ItemData:
 	if not support_item:
@@ -190,11 +224,17 @@ func use_support_item() -> ItemData:
 	return used
 
 
-func pickup_consumable(item: ItemData) -> void:
+func pickup_consumable(item: ItemData, healing_cap: int = -1) -> bool:
 	if not item:
-		return
+		return false
 	match item.item_type:
 		ItemData.ItemType.HEALING:
+			# 联机：每人上限 3（2026-09-13 用户定稿，cap 由调用方传 Players.spray_per_seat_cap()）；
+			# 单机走 Players 共用池，不进本分支的计数。
+			var cap: int = healing_cap if healing_cap > 0 else healing_capacity()
+			if healing_item_count >= cap:
+				print("[PlayerState] 治疗品已达所持上限 %d（%s）" % [cap, "スプレー+1 已计入" if character and character.spray_plus_one else "联机上限"])
+				return false
 			if healing_item and healing_item.item_id != item.item_id:
 				print("[PlayerState] 替换治疗品: %s → %s" % [healing_item.item_name, item.item_name])
 				healing_item_count = 0
@@ -210,7 +250,37 @@ func pickup_consumable(item: ItemData) -> void:
 			if throwable:
 				print("[PlayerState] 替换投掷物: %s → %s" % [throwable.item_name, item.item_name])
 			throwable = item as ThrowableData
+			throwable_count = 1
 			print("[PlayerState] 装备投掷物: %s" % item.item_name)
+	return true
+
+
+## 叠加发放投掷物：同类（同一资源）→ 数量累加；异类/空槽 → 替换并设数量。
+## 供关键道具拾取点（炸药×15）与联机 Host 授予使用。返回实际入包数量。
+func grant_throwable(td: ThrowableData, count: int = 1) -> int:
+	if not td or count <= 0:
+		return 0
+	if throwable == td:
+		throwable_count += count
+	else:
+		if throwable:
+			print("[PlayerState] 替换投掷物: %s → %s" % [throwable.item_name, td.item_name])
+		throwable = td
+		throwable_count = count
+	print("[PlayerState] 投掷物入包: %s ×%d" % [td.item_name, count])
+	return throwable_count
+
+
+## 消耗一次投掷：数量减一，归零才清槽。返回清槽后是否已空。
+func consume_throwable() -> bool:
+	if not throwable:
+		return true
+	throwable_count -= 1
+	if throwable_count <= 0:
+		throwable = null
+		throwable_count = 0
+		return true
+	return false
 
 
 # ═══════════════════════════════════════
@@ -223,6 +293,15 @@ func get_magazine_ammo(weapon_id: String) -> int:
 
 func set_magazine_ammo(weapon_id: String, count: int) -> void:
 	weapon_magazines[weapon_id] = clampi(count, 0, 999)
+
+
+## 读取武器当前耐久（无记录 = 满耐久）。
+func get_weapon_durability(weapon_id: String, max_durability: float) -> float:
+	return float(weapon_durability.get(weapon_id, max_durability))
+
+
+func set_weapon_durability(weapon_id: String, value: float) -> void:
+	weapon_durability[weapon_id] = value
 
 
 func count_ammo_item(ammo_item_id: String) -> int:
@@ -289,10 +368,12 @@ func clone() -> PlayerState:
 	c.equipment = equipment.duplicate()
 	c.active_weapon_slot = active_weapon_slot
 	c.weapon_magazines = weapon_magazines.duplicate()
+	c.weapon_durability = weapon_durability.duplicate()
 	c.healing_item = healing_item
 	c.healing_item_count = healing_item_count
 	c.support_item = support_item
 	c.throwable = throwable
+	c.throwable_count = throwable_count
 	c.inventory = inventory.duplicate()
 	c.facing = facing
 	c.position = position
@@ -331,10 +412,12 @@ func to_dict() -> Dictionary:
 		},
 		"active_weapon_slot": active_weapon_slot,
 		"weapon_magazines": weapon_magazines.duplicate(),
+		"weapon_durability": weapon_durability.duplicate(),
 		"healing_item": ItemCodec.to_dict(healing_item) if healing_item else {},
 		"healing_item_count": healing_item_count,
 		"support_item": ItemCodec.to_dict(support_item) if support_item else {},
 		"throwable": ItemCodec.to_dict(throwable) if throwable else {},
+		"throwable_count": throwable_count,
 		"inventory": inv,
 		"facing": facing,
 		"position_x": position.x,
@@ -375,6 +458,9 @@ func from_dict(d: Dictionary) -> void:
 	weapon_magazines = {}
 	for k: Variant in d.get("weapon_magazines", {}):
 		weapon_magazines[k] = int(d["weapon_magazines"][k])
+	weapon_durability = {}
+	for k: Variant in d.get("weapon_durability", {}):
+		weapon_durability[k] = float(d["weapon_durability"][k])
 
 	var hd: Dictionary = d.get("healing_item", {})
 	healing_item = ItemCodec.from_dict_or_null(hd)
@@ -383,6 +469,8 @@ func from_dict(d: Dictionary) -> void:
 	support_item = ItemCodec.from_dict_or_null(sud)
 	var td: Dictionary = d.get("throwable", {})
 	throwable = ItemCodec.from_dict_or_null(td) as ThrowableData
+	# JSON 往返整数会变 float，强制回 int；旧存档无该字段时按「有槽位即 1 个」兜底
+	throwable_count = int(d.get("throwable_count", 1 if throwable else 0))
 
 	inventory = []
 	for elem: Variant in d.get("inventory", []):
@@ -405,11 +493,13 @@ func from_dict(d: Dictionary) -> void:
 
 func describe() -> String:
 	var primary: WeaponData = equipment.get("primary") as WeaponData
-	return "[座位%d %s HP=%.0f/%.0f TP=%d 主武器=%s 弹夹=%s]" % [
+	var secondary: WeaponData = equipment.get("secondary") as WeaponData
+	return "[座位%d %s HP=%.0f/%.0f TP=%d 主武器=%s 副武器=%s 弹夹=%s]" % [
 		seat_index,
 		get_character_name(),
 		current_hp, get_max_hp(),
 		current_tp,
 		primary.item_name if primary else "无",
+		secondary.item_name if secondary else "无",
 		str(weapon_magazines),
 	]

@@ -13,7 +13,7 @@ dest_files=["res://.godot/imported/ラッシュ１.mp3-1f431a094aa1770434aa5c222
 [params]
 
 loop=false
-loop_offset=0
-bpm=0
+loop_offset=0.0
+bpm=0.0
 beat_count=0
 bar_beats=4

@@ -1,5 +1,12 @@
 class_name DamageNumber
 extends Node2D
+
+## ── 架构定位 ──
+## 系统：伤害数字 ｜ 层：表现（Node2D）
+## 联机：不涉及（纯表现）
+## 职责：受击飘字：用 GradientLabel 渲染并做上浮+缓动，参数全部 @export。
+## 依赖：GradientLabel
+
 ## 伤害数字弹出 — 被击中时从目标位置浮起并消失。
 ##
 ## 使用 GradientLabel（渐变路径），与标题画面共用字体/着色器/色表系统。
@@ -31,10 +38,10 @@ enum EasingType {
 # ═══════════════════════════════════════
 
 @export var amount: float = 0.0            ## 伤害数值
-@export var font_path: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"  ## 字体路径
+@export var font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"  ## 字体路径（2026-09-17 与界面定稿统一）
 @export var color_index: int = 1           ## 色表颜色索引（0–19，默认 1 = 标题画面同款白）
 @export var color_row: int = 0             ## 色表颜色行（0–3，同一色相明暗变体）
-@export var font_size: int = 32            ## 字号（1280×960 基准）
+@export var font_size: int = 24            ## 字号（1280×960 基准；fusion-pixel 12 基底，取 12 整倍）
 @export var bold: bool = false             ## 粗体（1px 右偏移叠加，开启会让文字更亮）
 @export var shadow_enabled: bool = true    ## 阴影
 @export var rise_distance: float = 10.0    ## 上浮距离（像素）
@@ -42,6 +49,8 @@ enum EasingType {
 @export var use_easing: bool = true        ## 是否使用缓动
 @export var easing_type: EasingType = EasingType.EASE_OUT_ELASTIC  ## 缓动函数类型
 @export var modulate_color: Color = Color.WHITE  ## 颜色叠加（White=不变）
+## 文本覆盖（留空=显示整数伤害值）。用于「無効」等非数值反馈（2026-09-16 正面弹开提示）。
+@export var text_override: String = ""
 @export var position_offset: Vector2 = Vector2(0, -40)  ## 整体位置偏移（相对目标，像素）
 
 
@@ -65,12 +74,14 @@ static var _shared_color_img: Image = null
 # ═══════════════════════════════════════
 
 ## 快速生成伤害数字。
-static func spawn(world_pos: Vector2, dmg: float, parent: Node, col_idx: int = 1, mod_col: Color = Color.WHITE) -> DamageNumber:
+## text_override 非空时显示该文本（如「無効」），忽略 dmg 数值（2026-09-16）。
+static func spawn(world_pos: Vector2, dmg: float, parent: Node, col_idx: int = 1, mod_col: Color = Color.WHITE, text_override: String = "") -> DamageNumber:
 	var dn := DamageNumber.new()
 	dn.amount = dmg
 	dn.global_position = world_pos
 	dn.color_index = col_idx
 	dn.modulate_color = mod_col
+	dn.text_override = text_override
 	parent.add_child(dn)
 	return dn
 
@@ -80,10 +91,26 @@ static func spawn(world_pos: Vector2, dmg: float, parent: Node, col_idx: int = 1
 # ═══════════════════════════════════════
 
 func _ready() -> void:
+	## 树被暂停（章节总结/终章 ED）时也把 0.5s 动画放完自动消失——
+	## 否则飘字冻结在 layer 100 上，压在黑幕(90)之上残留到切场景（实测教训）。
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	add_to_group("damage_number")
 	_ensure_shared_canvas()
 	_ensure_shared_color_img()
 	_create_label()
 	_start_world_pos = global_position + position_offset + Vector2(randf_range(-8.0, 8.0), randf_range(-4.0, 4.0))
+
+
+## 清掉当前所有伤害数字（全屏演出如终章 ED 启动前调用）。
+static func clear_all() -> void:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	for node: Node in tree.get_nodes_in_group("damage_number"):
+		node.queue_free()
+	if _shared_canvas and is_instance_valid(_shared_canvas):
+		_shared_canvas.queue_free()
+	_shared_canvas = null
 
 
 func _process(delta: float) -> void:
@@ -169,7 +196,6 @@ func _create_label() -> void:
 	if not font_path.is_empty():
 		_label.font_path_override = font_path
 	_label.color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
-	_label.color_shader_path_override = "res://shader/text_color.gdshader"
 
 	# 共享色表（避免重复 I/O，与标题画面 set_color_image() 同理）
 	if _shared_color_img:
@@ -178,14 +204,13 @@ func _create_label() -> void:
 	_shared_canvas.add_child(_label)
 
 	# —— 效果属性（必须在 add_child 后设，覆盖 _enter_tree() 的 Global 默认值）——
-	_label.text = str(int(amount))
+	_label.text = text_override if not text_override.is_empty() else str(int(amount))
 	_label.text_font_size = font_size
-	_label.use_gradient = true
 	_label.color_index = color_index
 	_label.color_row = color_row
 	_label.bold = bold
 	_label.shadow = shadow_enabled
-	_label.shadow_color = Color(0, 0, 0, 0.6)
+	_label.shadow_color = Color(0, 0, 0, 1)
 	_label.shadow_offset = Vector2(2, 2)
 	_label.outline = false
 

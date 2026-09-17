@@ -1,0 +1,435 @@
+# 去背景处理报告  tol=40
+
+- 输入 428 张；处理 371 张；与现有素材同名跳过 57；目录内重复跳过 0
+
+## 与现有素材同名（未处理，留现有）
+- [2K-VX]-BOW僂乕僘.png
+- [2K-VX]-のび太セット.png
+- [2K-VX]-のび太セットシグマ砲.png
+- [2K-VX]-のび太セットボウガン.png
+- [2K-VX]-のび太セットマシンガン.png
+- [2K-VX]-のび太レッドコート_イフリート剣.png
+- [2K-VX]-のび太レッドコート_グレネード.png
+- [2K-VX]-のび太レッドコート_ショットガン.png
+- [2K-VX]-のび太レッドコート_死亡.png
+- [2K-VX]-ジャイアンセットアサルトライフル.png
+- [2K-VX]-ジャイアンセットハンドガン.png
+- [2K-VX]-ジャイアンセット素手.png
+- [2K-VX]-ジャイアンセット近接武器.png
+- [2K-VX]-ジャイアンセットＲＰＧ７.png
+- [2K-VX]-ジャバウォック先輩.png
+- [2K-VX]-スネ夫セットRPG7.png
+- [2K-VX]-スネ夫セットアサルトライフル.png
+- [2K-VX]-スネ夫セットショットガン.png
+- [2K-VX]-スネ夫セットスナイパーライフル.png
+- [2K-VX]-スネ夫セット包丁.png
+- [2K-VX]-タイラント２.png
+- [2K-VX]-ハンターγ1.png
+- [2K-VX]-ハンターγ2.png
+- [2K-VX]-バスクオム１.png
+- [2K-VX]-バスクオム２.png
+- [2K-VX]-ブラインドハンター1.png
+- [2K-VX]-ブラインドハンター2.png
+- [2K-VX]-ブラインドハンター3.png
+- [2K-VX]-ポスター.png
+- [2K-VX]-健治ハンドガンセット.png
+- [2K-VX]-健治マシンガンセット.png
+- [2K-VX]-健治包丁セット.png
+- [2K-VX]-先生ボス.png
+- [2K-VX]-出木杉セットRPG7.png
+- [2K-VX]-出来杉セットスナイパーライフル.png
+- [2K-VX]-咲夜セット.png
+- [2K-VX]-咲夜セットアサルトライフル.png
+- [2K-VX]-咲夜セットショットガン.png
+- [2K-VX]-咲夜セットソートオフ.png
+- [2K-VX]-咲夜セットブルーローズ.png
+- [2K-VX]-咲夜セットボウガン.png
+- [2K-VX]-咲夜セット包丁.png
+- [2K-VX]-咲夜セット近接武器.png
+- [2K-VX]-咲夜セット２丁マシンガン.png
+- [2K-VX]-太田さん専用消火器.png
+- [2K-VX]-安雄セットアサルトライフル.png
+- [2K-VX]-手りゅう弾２.png
+- [2K-VX]-現代1.png
+- [2K-VX]-聖奈セット2.png
+- [2K-VX]-聖奈セットテニスの王女様.png
+- [2K-VX]-聖奈セット包丁.png
+- [2K-VX]-職員クリムゾンヘッド.png
+- [2K-VX]-雷撃技.png
+- [2K-VX]-静香セット.png
+- [2K-VX]-静香セットRPG7.png
+- [2K-VX]-静香セットアサルトライフル.png
+- [2K-VX]-ＴＰⅨサーシャ.png
+
+## 已处理
+- $[XP-VX]-クリーチャー砕ける.png → $クリーチャー砕ける.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- $[XP-VX]-装備アイコンフライパン.png → $装備アイコンフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-Abyss1.png → Abyss1.png（背景色 RGB(np.int64(150), np.int64(200), np.int64(50))）
+- [2K-VX]-Aアタッシュケース.png → Aアタッシュケース.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-Aオブジェクト.png → Aオブジェクト.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-A武器オブジェクト.png → A武器オブジェクト.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１.png → A武器セット１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１０.png → A武器セット１０.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１１.png → A武器セット１１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１２.png → A武器セット１２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１３.png → A武器セット１３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット１４.png → A武器セット１４.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット２.png → A武器セット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット３.png → A武器セット３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット４.png → A武器セット４.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット５.png → A武器セット５.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット６.png → A武器セット６.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット７.png → A武器セット７.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット８.png → A武器セット８.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A武器セット９.png → A武器セット９.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セット.png → A特殊部隊セット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セットグレネードランチャー.png → A特殊部隊セットグレネードランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セットショットガン.png → A特殊部隊セットショットガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セットマシンガン.png → A特殊部隊セットマシンガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セット覚醒.png → A特殊部隊セット覚醒.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セット隊長.png → A特殊部隊セット隊長.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-A特殊部隊セットＪブレード.png → A特殊部隊セットＪブレード.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-cps_obj01.png → cps_obj01.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-Dダメージ数字.png → Dダメージ数字.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-Dダメージ数字回復.png → Dダメージ数字回復.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-Dダメージ数字金.png → Dダメージ数字金.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-gensou-R.png → gensou-R.png（背景色 RGB(np.int64(0), np.int64(128), np.int64(128))）
+- [2K-VX]-Gun弾.png → Gun弾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-item02.png → item02.png（背景色 RGB(np.int64(193), np.int64(165), np.int64(200))）
+- [2K-VX]-Sハンター.png → Sハンター.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-Sハンター2.png → Sハンター2.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-Sハンター３.png → Sハンター３.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-tobira1.png → tobira1.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-tobira2.png → tobira2.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-うさぎさんセット.png → うさぎさんセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-うさぎさんセット２.png → うさぎさんセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-おばちゃんボス.png → おばちゃんボス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-おまけ(拾い物).png → おまけ(拾い物).png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-どこでもドア.png → どこでもドア.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のびママ＆パパ.png → のびママ＆パパ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットRPG7.png → のび太セットRPG7.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットYESﾛﾘｰﾀ.png → のび太セットYESﾛﾘｰﾀ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットアルテミス.png → のび太セットアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットスティンガー.png → のび太セットスティンガー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットスナイパーライフル.png → のび太セットスナイパーライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットスナイパーライフル２.png → のび太セットスナイパーライフル２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットハンドガン２.png → のび太セットハンドガン２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットフライパン.png → のび太セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットライドアーマー.png → のび太セットライドアーマー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セットレールガン.png → のび太セットレールガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット回転射撃.png → のび太セット回転射撃.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット暴徒鎮圧用シールド.png → のび太セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット素手.png → のび太セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット縄縛り.png → のび太セット縄縛り.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット近接武器.png → のび太セット近接武器.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット近接武器A.png → のび太セット近接武器A.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット近接武器B.png → のび太セット近接武器B.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太セット近接武器２.png → のび太セット近接武器２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太レッドコート01.png → のび太レッドコート01.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太レッドコート02.png → のび太レッドコート02.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太レッドコートスパーダ.png → のび太レッドコートスパーダ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-のび太レッドコート挑発.png → のび太レッドコート挑発.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アイテムボックス.png → アイテムボックス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アックスマン.png → アックスマン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルトアンジェロ.png → アルトアンジェロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルトアンジェロ２.png → アルトアンジェロ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフセットマグナム.png → アルフセットマグナム.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフハンター.png → アルフハンター.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフハンター２.png → アルフハンター２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフハンター３.png → アルフハンター３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフ兄弟.png → アルフ兄弟.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフ格闘.png → アルフ格闘.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルフ覚醒.png → アルフ覚醒.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマデューラ.png → アルマデューラ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマデューラROD.png → アルマデューラROD.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマデューラ盾.png → アルマデューラ盾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマデューラ黒騎士.png → アルマデューラ黒騎士.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマデューラ２.png → アルマデューラ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマ・トーレ・カバジェロ.png → アルマ・トーレ・カバジェロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマ・ペネトラール・カバジェロ.png → アルマ・ペネトラール・カバジェロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-アルマ・ペネトラール・カバジェロ２.png → アルマ・ペネトラール・カバジェロ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-イベントカラー(紫透過).png → イベントカラー(紫透過).png（背景色 RGB(np.int64(24), np.int64(41), np.int64(131))）
+- [2K-VX]-イベントカラー(赤透過).png → イベントカラー(赤透過).png（背景色 RGB(np.int64(24), np.int64(41), np.int64(131))）
+- [2K-VX]-イベントパネル.png → イベントパネル.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-ウイルス.png → ウイルス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ウェブスピナーっぽい何か.png → ウェブスピナーっぽい何か.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-エスターク.png → エスターク.png（背景色 RGB(np.int64(160), np.int64(32), np.int64(0))）
+- [2K-VX]-オブジェクト1.png → オブジェクト1.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-オブジェクト2.png → オブジェクト2.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-ガスマスク大男ショットガン.png → ガスマスク大男ショットガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク女アサルトライフル.png → ガスマスク女アサルトライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク毒女１.png → ガスマスク毒女１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク毒女２.png → ガスマスク毒女２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク目男スナイパーライフル.png → ガスマスク目男スナイパーライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク隊長１.png → ガスマスク隊長１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク隊長２.png → ガスマスク隊長２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク青年アサルトライフル.png → ガスマスク青年アサルトライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク青年ハンドガン.png → ガスマスク青年ハンドガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク青年近接武器.png → ガスマスク青年近接武器.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガスマスク青年近接武器Ｂ.png → ガスマスク青年近接武器Ｂ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ガンマン.png → ガンマン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-キャラ選択アイコン.png → キャラ選択アイコン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-クマのぬいぐるみ.png → クマのぬいぐるみ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-コキュート..png → コキュート..png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-コキュート２..png → コキュート２..png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-コボルト.png → コボルト.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-シグマ.png → シグマ.png（背景色 RGB(np.int64(45), np.int64(156), np.int64(0))）
+- [2K-VX]-シグマ第二.png → シグマ第二.png（背景色 RGB(np.int64(45), np.int64(156), np.int64(0))）
+- [2K-VX]-シグマ２.png → シグマ２.png（背景色 RGB(np.int64(45), np.int64(156), np.int64(0))）
+- [2K-VX]-シノワゾア.png → シノワゾア.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-シノワベリル.png → シノワベリル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-シャア専用ケルベロス.png → シャア専用ケルベロス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-シャッター.png → シャッター.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセット グレネードランチャー .png → ジャイアンセット グレネードランチャー .png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセットガトリング.png → ジャイアンセットガトリング.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセットシグマ砲.png → ジャイアンセットシグマ砲.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセットスティンガー.png → ジャイアンセットスティンガー.png（背景色 RGB(np.int64(74), np.int64(103), np.int64(247))）
+- [2K-VX]-ジャイアンセットスナイパー.png → ジャイアンセットスナイパー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセットソートオフ.png → ジャイアンセットソートオフ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセットフライパン.png → ジャイアンセットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセット包丁.png → ジャイアンセット包丁.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセット近接武器２.png → ジャイアンセット近接武器２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャイアンセット近接武器３.png → ジャイアンセット近接武器３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ジャバウォッグ.png → ジャバウォッグ.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-スカルミリオーネ１.png → スカルミリオーネ１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スカルミリオーネ２.png → スカルミリオーネ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スティンガーターゲット.png → スティンガーターゲット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セット グレネードランチャー.png → スネ夫セット グレネードランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セットアルテミス.png → スネ夫セットアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セットシグマ砲.png → スネ夫セットシグマ砲.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セットフライパン.png → スネ夫セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セット暴徒鎮圧用シールド.png → スネ夫セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-スネ夫セット素手.png → スネ夫セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVセット.png → セワシVセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVセット挑発.png → セワシVセット挑発.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVフォースエッジセット.png → セワシVフォースエッジセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVベオウルフ.png → セワシVベオウルフ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVベオウルフ２.png → セワシVベオウルフ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVヤマトセット.png → セワシVヤマトセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVヤマトセット２.png → セワシVヤマトセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-セワシVヤマトセット３.png → セワシVヤマトセット３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ゼロセット.png → ゼロセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ゼロセットエフェクト(仮).png → ゼロセットエフェクト(仮).png（背景色 RGB(np.int64(176), np.int64(124), np.int64(141))）
+- [2K-VX]-ゼロセット２.png → ゼロセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ゼロセットＢ.png → ゼロセットＢ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ゼロセットＢ２.png → ゼロセットＢ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ゼロ覚醒セット.png → ゼロ覚醒セット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ソーサー.png → ソーサー.png（背景色 RGB(np.int64(0), np.int64(100), np.int64(0))）
+- [2K-VX]-チープ・アダム.png → チープ・アダム.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-チープ・宿敵.png → チープ・宿敵.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ティン_ポス.png → ティン_ポス.png（背景色 RGB(np.int64(55), np.int64(114), np.int64(128))）
+- [2K-VX]-トラック.png → トラック.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ドラえもんセットリアル.png → ドラえもんセットリアル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ドラえもんセット刃物.png → ドラえもんセット刃物.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ドラえもんセット敵.png → ドラえもんセット敵.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ドラえもんセット敵２.png → ドラえもんセット敵２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ナイトメアβ弾.png → ナイトメアβ弾.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ネメシス１.png → ネメシス１.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ネメシス２.png → ネメシス２.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ネメシス３.png → ネメシス３.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ネメシス４.png → ネメシス４.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ネロアンジェロ.png → ネロアンジェロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ネロアンジェロ２.png → ネロアンジェロ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ハンターF1.png → ハンターF1.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ハンターF2.png → ハンターF2.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ハンターβ1.png → ハンターβ1.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ハンターβ2.png → ハンターβ2.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-バイオ~1.png → バイオ~1.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ビアンコアンジェロ.png → ビアンコアンジェロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ビアンコアンジェロ２.png → ビアンコアンジェロ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ビリビリボール.png → ビリビリボール.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ピエロ.png → ピエロ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ピエロ2PC.png → ピエロ2PC.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ピエロ2PCWC.png → ピエロ2PCWC.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ピエロWC.png → ピエロWC.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-フローズヴィニルト強化1.png → フローズヴィニルト強化1.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-フローズヴィニルト強化2.png → フローズヴィニルト強化2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ブラインドハンター４.png → ブラインドハンター４.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-ブレアウィッチ.png → ブレアウィッチ.png（背景色 RGB(np.int64(1), np.int64(125), np.int64(0))）
+- [2K-VX]-ボスドラ１.png → ボスドラ１.png（背景色 RGB(np.int64(0), np.int64(156), np.int64(32))）
+- [2K-VX]-ボスドラ２.png → ボスドラ２.png（背景色 RGB(np.int64(0), np.int64(156), np.int64(32))）
+- [2K-VX]-ポスタルアンジェロ.png → ポスタルアンジェロ.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(115))）
+- [2K-VX]-ポスタル用.png → ポスタル用.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(115))）
+- [2K-VX]-ポスタル用Ⅱ.png → ポスタル用Ⅱ.png（背景色 RGB(np.int64(0), np.int64(138), np.int64(159))）
+- [2K-VX]-ポスタル用Ⅲ.png → ポスタル用Ⅲ.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(115))）
+- [2K-VX]-ポリタンクセット１.png → ポリタンクセット１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ポリタンクセット２.png → ポリタンクセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マクベ.png → マクベ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マクベ盾.png → マクベ盾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マ・クベ.png → マ・クベ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マ・クベ盾.png → マ・クベ盾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マ・クベ盾B.png → マ・クベ盾B.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マ・クベ２.png → マ・クベ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-マ・クベ２盾.png → マ・クベ２盾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ムスカセット.png → ムスカセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ムスカセット２.png → ムスカセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-メテオ弾.png → メテオ弾.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-モンスター1.png → モンスター1.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-モンスター2.png → モンスター2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リッカー.png → リッカー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リッカー2.png → リッカー2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リヘナラドール.png → リヘナラドール.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リヘナラドール２.png → リヘナラドール２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リヘナラドール３.png → リヘナラドール３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リーパー.png → リーパー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-リーパー２.png → リーパー２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-レイキャスト.png → レイキャスト.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-レイキャスト２.png → レイキャスト２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ヴァヴァセット.png → ヴァヴァセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ヴェルデューゴ.png → ヴェルデューゴ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ヴェルデュー２.png → ヴェルデュー２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-一般1.png → 一般1.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-一般2.png → 一般2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-一般3.png → 一般3.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-一般4.png → 一般4.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-一般5.png → 一般5.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-三角様.png → 三角様.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-主人公1.png → 主人公1.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-主人公2.png → 主人公2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-主人公3.png → 主人公3.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-主人公4.png → 主人公4.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-乗り物.png → 乗り物.png（背景色 RGB(np.int64(40), np.int64(152), np.int64(0))）
+- [2K-VX]-健冶セット刀.png → 健冶セット刀.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健冶セット刀２.png → 健冶セット刀２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治ショットガンセット.png → 健治ショットガンセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セットアサルトライフル.png → 健治セットアサルトライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セットフライパン.png → 健治セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セット中二撃ち.png → 健治セット中二撃ち.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セット素手.png → 健治セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セット近接武器.png → 健治セット近接武器.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治セット近接武器２.png → 健治セット近接武器２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-健治包丁セット2.png → 健治包丁セット2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-僂乕僘.png → 僂乕僘.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-光の炎.png → 光の炎.png（背景色 RGB(np.int64(45), np.int64(139), np.int64(89))）
+- [2K-VX]-処刑者.png → 処刑者.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出木杉セットフライパン.png → 出木杉セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出木杉セットレールガン.png → 出木杉セットレールガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出木杉セット近接武器.png → 出木杉セット近接武器.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出木杉セット近接武器２.png → 出木杉セット近接武器２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉セットシグマ砲.png → 出来杉セットシグマ砲.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉セットハンドガン２.png → 出来杉セットハンドガン２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉セット暴徒鎮圧用シールド.png → 出来杉セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉セット素手.png → 出来杉セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉セット近接武器A.png → 出来杉セット近接武器A.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-出来杉黒子セット.png → 出来杉黒子セット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-動物.png → 動物.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-合成選択アイコン.png → 合成選択アイコン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セットアルテミス.png → 咲夜セットアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セットカリーナ＝アン.png → 咲夜セットカリーナ＝アン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セットチェーン.png → 咲夜セットチェーン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セットフライパン.png → 咲夜セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セットレインボー.png → 咲夜セットレインボー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット挑発.png → 咲夜セット挑発.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット素手.png → 咲夜セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器B.png → 咲夜セット近接武器B.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器１.png → 咲夜セット近接武器１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器２ - コピー.png → 咲夜セット近接武器２ - コピー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器２.png → 咲夜セット近接武器２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器３.png → 咲夜セット近接武器３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-咲夜セット近接武器Ｃ.png → 咲夜セット近接武器Ｃ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-壁用.png → 壁用.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-天罰キャラチップ.png → 天罰キャラチップ.png（背景色 RGB(np.int64(45), np.int64(139), np.int64(89))）
+- [2K-VX]-奨斷.png → 奨斷.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-安全扉.png → 安全扉.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-安雄セットRPG7.png → 安雄セットRPG7.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セットアルテミス.png → 安雄セットアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セットシグマ砲.png → 安雄セットシグマ砲.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セットスティンガー.png → 安雄セットスティンガー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セットロケットランチャー.png → 安雄セットロケットランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セット暴徒鎮圧用シールド.png → 安雄セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-安雄セット素手.png → 安雄セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-張り紙.png → 張り紙.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(117))）
+- [2K-VX]-強盗チンピラセット.png → 強盗チンピラセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-強盗チンピラセット２.png → 強盗チンピラセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-料理セット.png → 料理セット.png（背景色 RGB(np.int64(255), np.int64(103), np.int64(139))）
+- [2K-VX]-斷01.png → 斷01.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷02.png → 斷02.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷03.png → 斷03.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷04.png → 斷04.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷05.png → 斷05.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷06.png → 斷06.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷07.png → 斷07.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷08.png → 斷08.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷09.png → 斷09.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷10.png → 斷10.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-斷11.png → 斷11.png（背景色 RGB(np.int64(255), np.int64(30), np.int64(70))）
+- [2K-VX]-晴香KJセット.png → 晴香KJセット.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-晴香セット.png → 晴香セット.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-晴香包丁セット.png → 晴香包丁セット.png（背景色 RGB(np.int64(255), np.int64(156), np.int64(0))）
+- [2K-VX]-暗黒ジャムおじさんセット.png → 暗黒ジャムおじさんセット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-暗黒ジャムおじさんセット２.png → 暗黒ジャムおじさんセット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-木箱.png → 木箱.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(117))）
+- [2K-VX]-本家１.png → 本家１.png（背景色 RGB(np.int64(4), np.int64(254), np.int64(4))）
+- [2K-VX]-榛名セット.png → 榛名セット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-榛名セットRPG7.png → 榛名セットRPG7.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-榛名セットスナイパーライフル.png → 榛名セットスナイパーライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-榛名陸佐ー大鷹.png → 榛名陸佐ー大鷹.png（背景色 RGB(np.int64(33), np.int64(156), np.int64(0))）
+- [2K-VX]-榛名＆狼浪.png → 榛名＆狼浪.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-炎の柱.png → 炎の柱.png（背景色 RGB(np.int64(0), np.int64(117), np.int64(117))）
+- [2K-VX]-現代1SAN値０.png → 現代1SAN値０.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-現代2.png → 現代2.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-現代3.png → 現代3.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-現代4.png → 現代4.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-現代5.png → 現代5.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-現代6.png → 現代6.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-白峰セット１.png → 白峰セット１.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-白峰セット２.png → 白峰セット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-神成セット居合刀.png → 神成セット居合刀.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-神成セット武者居合刀.png → 神成セット武者居合刀.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈グレネードランチャー.png → 聖奈グレネードランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈グレネードランチャーb.png → 聖奈グレネードランチャーb.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈グレネードランチャーm.png → 聖奈グレネードランチャーm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットm.png → 聖奈セットm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットRPG7.png → 聖奈セットRPG7.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットアサルトライフル.png → 聖奈セットアサルトライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットアサルトライフルb.png → 聖奈セットアサルトライフルb.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットアサルトライフルm.png → 聖奈セットアサルトライフルm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットショットガン.png → 聖奈セットショットガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットショットガンb.png → 聖奈セットショットガンb.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットショットガンm.png → 聖奈セットショットガンm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットスティンガー.png → 聖奈セットスティンガー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットフライパン.png → 聖奈セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットマグナム.png → 聖奈セットマグナム.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットマグナムb.png → 聖奈セットマグナムb.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットマグナムm.png → 聖奈セットマグナムm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットロケットランチャー.png → 聖奈セットロケットランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットロケットランチャーb.png → 聖奈セットロケットランチャーb.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットロケットランチャーm.png → 聖奈セットロケットランチャーm.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット包丁b.png → 聖奈セット包丁b.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット包丁m.png → 聖奈セット包丁m.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット暴徒鎮圧用シールド.png → 聖奈セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット素手.png → 聖奈セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット２丁ハンドガン.png → 聖奈セット２丁ハンドガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セット２丁マシンガン.png → 聖奈セット２丁マシンガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳ.png → 聖奈セットＢＳ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳ2丁ハンドガン.png → 聖奈セットＢＳ2丁ハンドガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳクラウザーブレード.png → 聖奈セットＢＳクラウザーブレード.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳショットガン＆アサルトライフル.png → 聖奈セットＢＳショットガン＆アサルトライフル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳソートオフ.png → 聖奈セットＢＳソートオフ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳパニッシャーランチャー.png → 聖奈セットＢＳパニッシャーランチャー.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳファング.png → 聖奈セットＢＳファング.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳローブ.png → 聖奈セットＢＳローブ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳ飛び蹴り.png → 聖奈セットＢＳ飛び蹴り.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＢＳ２丁マシンガン.png → 聖奈セットＢＳ２丁マシンガン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-聖奈セットＭ.png → 聖奈セットＭ.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-衝撃波.png → 衝撃波.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-警官悪.png → 警官悪.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-警察特殊部隊セット.png → 警察特殊部隊セット.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-警察特殊部隊セット２.png → 警察特殊部隊セット２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-邪教徒.png → 邪教徒.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-邪教徒戦闘.png → 邪教徒戦闘.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-邪教徒戦闘２.png → 邪教徒戦闘２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-邪教徒死亡.png → 邪教徒死亡.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-邪教徒赤戦闘.png → 邪教徒赤戦闘.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-金貨とか.png → 金貨とか.png（背景色 RGB(np.int64(40), np.int64(152), np.int64(0))）
+- [2K-VX]-静香セットアルテミス.png → 静香セットアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-静香セットフライパン.png → 静香セットフライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-静香セット暴徒鎮圧用シールド.png → 静香セット暴徒鎮圧用シールド.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-静香セット素手.png → 静香セット素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-静香タオル.png → 静香タオル.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャ_フライパン.png → ＴＰⅨサーシャ_フライパン.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャアルテミス.png → ＴＰⅨサーシャアルテミス.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャハンドガン２.png → ＴＰⅨサーシャハンドガン２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャ素手.png → ＴＰⅨサーシャ素手.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャ２.png → ＴＰⅨサーシャ２.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）
+- [2K-VX]-ＴＰⅨサーシャ３.png → ＴＰⅨサーシャ３.png（背景色 RGB(np.int64(32), np.int64(156), np.int64(0))）

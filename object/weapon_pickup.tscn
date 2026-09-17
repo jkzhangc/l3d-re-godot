@@ -9,8 +9,7 @@ radius = 24.0
 [node name="WeaponPickup" type="Node2D" unique_id=857466232]
 script = ExtResource("1")
 pickup_texture = ExtResource("2")
-pickup_reserve_ammo = 400
-pickup_animated = false
+pickup_animated = true
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=111129080]
 position = Vector2(0, -8)

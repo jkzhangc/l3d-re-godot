@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bq7fryp4nw1k2"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="1_4erks"]
+[ext_resource type="Texture2D" uid="uid://r04meep8xkd2" path="res://art/Characters/のび太セットフライパン.png" id="2"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_4erks"]
+[ext_resource type="AudioStream" uid="uid://vxkhm8bygwd7" path="res://sound/フライパン3.ogg" id="5"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="6"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="6_4erks"]
+[ext_resource type="Texture2D" uid="uid://c1g3g6xpc5v2c" path="res://art/Ui/装備アイコンフライパン.png" id="7"]
+[ext_resource type="Texture2D" uid="uid://xorgyc5g8lc8" path="res://art/Weapon/[2K-VX]-A武器セット１４.png" id="7_yijck"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 25
+attack_speed = 0.9
+weapon_state_name = "Frypan"
+weapon_walk_texture = ExtResource("2")
+weapon_raise_char_sequence = Array[int]([2])
+weapon_raise_frame_durations = Array[float]([0.08])
+is_ranged = false
+weapon_slot = 1
+critical_rate = 30.0
+attack_sound = ExtResource("1_4erks")
+raise_sound = ExtResource("6_4erks")
+lower_sound = ExtResource("6_4erks")
+hit_sound = ExtResource("5")
+hit_effect_anim = ExtResource("6")
+attack_char_sequence = Array[int]([3, 4, 2])
+melee_attack_char_sequence = Array[int]([3, 4, 2])
+melee_attack_frame_durations = Array[float]([0.12, 0.16, 0.12])
+item_id = "frypan_01"
+item_name = "平底锅"
+item_type = 3
+description = "原为厨具，现为凶器。敲中要害能把丧尸直接敲翻。副武器位的保命家伙。"
+icon = ExtResource("7")
+sell_price = 80
+max_stack = 1
+pickup_texture = ExtResource("7_yijck")
+pickup_char_idx = 4
+pickup_step_frames = Array[int]([0])

@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Node，子模块）
+## 联机：仅单机/Host
+## 职责：敌人投放调度：build 阶段定时撒散兵，peak 阶段分批出尸潮，受阶段与存活上限约束。
+## 依赖：Director.spawn_ahead_batch（前方屏外定点刷怪）、PacingController 信号
+
 ## 管理普通/特殊敌人的生成冷却与数量限制；正式执行仍由 Director/Host 调用。
 ## 敌人生成调度器 — 管理自动生成散兵 + 尸潮分批
 ##
@@ -16,8 +23,8 @@ extends Node
 
 @export var horde_total_min: int = 10         ## 尸潮最少总数
 @export var horde_total_max: int = 30         ## 尸潮最多总数
-@export var horde_batch_size: int = 4         ## 每批数量
-@export var horde_batch_interval: float = 3.0 ## 批次基础间隔（秒）
+@export var horde_batch_size: int = 8         ## 每批数量（2026-09-17 用户：慢刷但一批多）
+@export var horde_batch_interval: float = 5.0 ## 批次基础间隔（秒）（2026-09-17 用户：拉长）
 @export var max_active_common: int = 15       ## 同时最多普通感染者
 
 # ═══════════════════════════════════════
@@ -122,7 +129,9 @@ func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
 		return
 
 	print("[SpawnManager] scatter spawn: %d enemies" % count)
-	_director.spawn_horde(count, _find_decor())
+	# 位置改由 Director.spawn_ahead_batch（前方扇区 + 屏幕外 + 前方带数量闸门）决定，
+	# 不再走"作者点缺失时全图随机撒点"的旧回退。
+	_director.spawn_ahead_batch(count)
 
 
 func _reset_scatter_timer() -> void:
@@ -165,7 +174,7 @@ func _update_horde(delta: float, alive_count: int) -> void:
 	batch = mini(batch, max_active_common - alive_count)
 
 	print("[SpawnManager] horde batch: %d enemies (remaining=%d)" % [batch, _horde_remaining])
-	var spawned: int = _director.spawn_horde(batch, _find_decor())
+	var spawned: int = _director.spawn_ahead_batch(batch).size()
 	_horde_spawned += spawned
 	_horde_remaining -= spawned
 

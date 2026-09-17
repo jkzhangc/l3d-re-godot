@@ -1,0 +1,36 @@
+[gd_scene load_steps=5 format=3 uid="uid://dbatfjdfhtx33"]
+
+[ext_resource type="Script" uid="uid://dwbmw702aetpn" path="res://script/map_restore/map_restore_preview.gd" id="1_preview"]
+[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_xm3kq"]
+[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="3_1nk3q"]
+[ext_resource type="Texture2D" path="res://art/Tilesets/rm2k3_auto/Map0141_render.png" id="4_render"]
+
+[sub_resource type="TileSet" id="TileSet_restore"]
+tile_size = Vector2i(32, 32)
+
+[node name="Map0141_CP2_1" type="Node2D" unique_id=266124440]
+script = ExtResource("1_preview")
+
+[node name="GroundLayer" type="TileMapLayer" parent="." unique_id=1052923424]
+tile_set = SubResource("TileSet_restore")
+
+[node name="PreviewImage" type="Sprite2D" parent="GroundLayer"]
+texture = ExtResource("4_render")
+centered = false
+
+[node name="DecorLayer" type="TileMapLayer" parent="." unique_id=346238265]
+tile_set = SubResource("TileSet_restore")
+y_sort_enabled = true
+
+[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=1330422143]
+position = Vector2(2048, 928)
+
+[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_xm3kq")]
+
+[node name="UpperLayer" type="TileMapLayer" parent="." unique_id=787737825]
+tile_set = SubResource("TileSet_restore")
+y_sort_enabled = true
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1234787545]
+zoom = Vector2(1, 1)
+script = ExtResource("3_1nk3q")

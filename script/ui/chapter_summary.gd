@@ -1,4 +1,11 @@
 class_name ChapterSummary extends CanvasLayer
+
+## ── 架构定位 ──
+## 系统：章节总结 ｜ 层：表现（CanvasLayer）
+## 联机：联机需全员确认后关闭
+## 职责：L4D2 风格章节总结：单人按确定即关，联机由 Host 汇总每位玩家的确认后统一推进。
+## 依赖：ChapterStats、NetworkWorld
+
 ## L4D2 风格章节总结界面。
 ## 单人按确定键立即关闭；真正的网络多人模式下，每个玩家确认后才关闭。
 
@@ -6,7 +13,10 @@ signal summary_finished
 signal seat_confirmed(seat_index: int)
 
 @export var campaign_title: String = "突袭"
-@export var chapter_title: String = "第一章 · 街道"
+## 章名（2026-09-16 用户需求：可配置、不写死）。留空 = 从当前图 DirectorConfig.chapter_title
+## 自动取；仍取不到才落到兜底默认。取值链：场景节点值 > DirectorConfig > 兜底。
+@export var chapter_title: String = ""
+@export var chapter_title_fallback: String = "第一章 · 街道"
 @export var pause_game: bool = true
 @export var auto_show: bool = true
 @export var force_multiplayer_preview: bool = false
@@ -47,6 +57,16 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	layer = 100
 	_font = load(FONT_PATH) as Font if ResourceLoader.exists(FONT_PATH) else ThemeDB.fallback_font
+	if chapter_title.is_empty():
+		var director: Node = get_node_or_null("/root/Director")
+		## ⚠ current_config 可能指向上一张图已被释放的 DirectorConfig（换图瞬间新配置尚未应用）
+		## —— 必须用 Variant 接收 + is_instance_valid 校验，typed 直接赋值会报
+		## "Trying to assign invalid previously freed instance"（2026-09-17 进入安全屋报错）。
+		var raw_cfg: Variant = director.get("current_config") if director else null
+		if raw_cfg != null and is_instance_valid(raw_cfg) and not raw_cfg.chapter_title.is_empty():
+			chapter_title = raw_cfg.chapter_title
+		else:
+			chapter_title = chapter_title_fallback
 	_build_ui()
 	if auto_show:
 		show_summary()
@@ -598,6 +618,7 @@ func _make_label(text_value: String, font_size: int, color: Color, minimum: Vect
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	Global.apply_text_shadow(label)  ## 全局阴影参数（GradientLabel 同源）
 	return label
 
 

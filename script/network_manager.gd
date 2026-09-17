@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：联机连接层 ｜ 层：单例（autoload: Net）
+## 联机：Host 权威 v2.1
+## 职责：ENet 连接、握手协议、玩家名单与角色表校验、场景 ready 与安全切图协议；不管理游戏实体。
+## 依赖：ENetMultiplayerPeer、UPnP；NetworkWorld 为其场景内搭档
+
 ## 主项目联机连接层（Host 权威 v2.1）。
 ## 只负责 ENet、握手、玩家列表和场景 ready；游戏实体由 NetworkWorld 管理。
 ##
@@ -26,12 +33,18 @@ signal player_character_selection_rejected(reason: String)
 signal game_scene_ready_received(peer_id: int, scene_path: String)
 ## 场景内 NetworkWorld 必须在真正换图前立即停止发送 RPC，避免旧节点路径的在途包命中已释放场景。
 signal scene_transition_started(scene_path: String)
+## UPnP 自动端口映射结果（Host 专用）。映射成功时广播外部地址，
+## 大厅 UI 据此提示"把该地址告诉好友"；失败时给出改用内网穿透工具的提示。
+signal upnp_port_mapped(port: int, external_ip: String)
+signal upnp_mapping_failed(reason: String)
 
 const PROTOCOL_VERSION := "l3d_main_v2_combat_rpc"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 ## 给 LAN 上已发送的 scene-RPC 一小段排空时间；切图时双方仍保留旧 NetworkWorld，随后再同时释放。
 const SCENE_TRANSITION_FLUSH_SECONDS := 0.25
+## UPnP 端口映射在路由器上显示的描述名。
+const UPNP_MAPPING_DESCRIPTION := "nobita-l4d-udp"
 const DEFAULT_CHARACTER_PATH := CharacterCatalog.DEFAULT_CHARACTER_PATH
 
 var is_host := false
@@ -39,6 +52,17 @@ var my_peer_id := 1
 var player_name := "玩家"
 var handshake_ok := false
 var active_scene_path := ""
+## 当前场景转换的目的入口 ID；由 Host 随转换广播，供 NetworkWorld 放置玩家。
+var active_arrival_id := ""
+var active_arrival_position: Variant = null
+## Host 当前监听的端口（host_game 写入，大厅 UI 展示真实端口而非默认值）。
+var active_port := DEFAULT_PORT
+## 是否在创建房间时尝试 UPnP 自动端口映射（内网穿透第一步）。大厅 UI 可关闭。
+var upnp_enabled := true
+var _upnp_mapped_port := 0
+## UPnP discover/add_port_mapping 是阻塞调用，全部在工作线程执行；
+## 结果经 call_deferred 回主线程后才发信号。leave() 触发的删映射同样异步。
+var _upnp_threads: Array[Thread] = []
 
 var _player_names: Dictionary = {}
 ## peer_id -> CharacterData 资源路径。只接受由本机角色目录生成的白名单项。
@@ -75,12 +99,15 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	is_host = true
 	my_peer_id = multiplayer.get_unique_id()
 	handshake_ok = true
+	active_port = port
 	_player_names = {my_peer_id: _sanitize_name(player_name)}
 	_player_character_paths = {my_peer_id: _get_default_character_path()}
 	_session_player_states.clear()
 	_connect_multiplayer_signals()
 	player_list_changed.emit()
 	print("[Net] HOST listening port=%d peer_id=%d protocol=%s" % [port, my_peer_id, PROTOCOL_VERSION])
+	if upnp_enabled:
+		_start_upnp_mapping(port)
 	return OK
 
 ## 创建 Client 连接。这里只发起 ENet 连接，不代表已进入可游戏状态；
@@ -110,13 +137,84 @@ func leave() -> void:
 	my_peer_id = 1
 	handshake_ok = false
 	active_scene_path = ""
+	active_arrival_id = ""
+	active_arrival_position = null
 	_player_names.clear()
 	_player_character_paths.clear()
 	_pending_scene_ready.clear()
 	_pending_scene_transition_acks.clear()
 	_scene_transition_serial = 0
 	_session_player_states.clear()
+	if _upnp_mapped_port > 0:
+		_remove_upnp_mapping_async(_upnp_mapped_port)
+		_upnp_mapped_port = 0
 	player_list_changed.emit()
+
+# ---------------------------------------------------------------- UPnP 端口映射（内网穿透）
+
+## Host 开局后尝试 UPnP 自动端口映射：在 NAT 路由器上为本机打开 UDP 端口，
+## 让公网玩家可以直连。discover()/add_port_mapping() 会阻塞数百毫秒到数秒，
+## 必须放进工作线程；结果经 call_deferred 回主线程后才发信号、改状态。
+## 路由器不支持 UPnP 或映射被拒绝时，大厅会提示改用 frp/樱花等内网穿透工具。
+func _start_upnp_mapping(port: int) -> void:
+	_reap_finished_upnp_threads()
+	var thread := Thread.new()
+	_upnp_threads.append(thread)
+	thread.start(_upnp_mapping_worker.bind(port))
+
+func _upnp_mapping_worker(port: int) -> void:
+	var upnp := UPNP.new()
+	var discover_result: int = upnp.discover()
+	var gateway := upnp.get_gateway() if discover_result == OK else null
+	if not is_instance_valid(gateway) or not gateway.is_valid_gateway():
+		call_deferred("_finish_upnp_mapping", port, false, "未发现支持 UPnP 的路由器（可改用内网穿透工具）")
+		return
+	var add_result: int = gateway.add_port_mapping(port, port, UPNP_MAPPING_DESCRIPTION, "UDP", 0)
+	if add_result != OK:
+		call_deferred("_finish_upnp_mapping", port, false, "UPnP 端口映射被拒绝（%s）" % error_string(add_result))
+		return
+	var external_ip := upnp.query_external_address()
+	call_deferred("_finish_upnp_mapping", port, true, external_ip)
+
+func _finish_upnp_mapping(port: int, ok: bool, info: String) -> void:
+	if ok:
+		_upnp_mapped_port = port
+		print("[Net] UPnP 映射成功 UDP %d 外部地址=%s" % [port, info if not info.is_empty() else "未知"])
+		upnp_port_mapped.emit(port, info)
+	else:
+		printerr("[Net] UPnP 映射失败 UDP %d：%s" % [port, info])
+		upnp_mapping_failed.emit(info)
+
+## 房间解散/离开时异步删除已建立的映射，避免路由器残留永久转发规则。
+func _remove_upnp_mapping_async(port: int) -> void:
+	_reap_finished_upnp_threads()
+	var thread := Thread.new()
+	_upnp_threads.append(thread)
+	thread.start(_upnp_remove_worker.bind(port))
+
+func _upnp_remove_worker(port: int) -> void:
+	var upnp := UPNP.new()
+	if upnp.discover() != OK:
+		return
+	var gateway := upnp.get_gateway()
+	if is_instance_valid(gateway) and gateway.is_valid_gateway():
+		gateway.delete_port_mapping(port, "UDP")
+		print("[Net] UPnP 已删除 UDP %d 映射" % port)
+
+## 回收已结束的工作线程（Thread 必须被引用防止被 GC，结束后需 wait_to_finish）。
+func _reap_finished_upnp_threads() -> void:
+	for index: int in range(_upnp_threads.size() - 1, -1, -1):
+		var thread: Thread = _upnp_threads[index]
+		if thread.is_started() and not thread.is_alive():
+			thread.wait_to_finish()
+			_upnp_threads.remove_at(index)
+
+func _exit_tree() -> void:
+	for thread: Thread in _upnp_threads:
+		# started 且已结束 → 直接回收；仍在运行 → 等待收尾（UPnP 调用自带超时）。
+		if thread.is_started():
+			thread.wait_to_finish()
+	_upnp_threads.clear()
 
 func get_player_name(peer_id: int) -> String:
 	return str(_player_names.get(peer_id, "玩家%d" % peer_id))
@@ -299,22 +397,30 @@ func _get_default_character_path() -> String:
 ## Host 发起开局的第一阶段：通知两端旧场景中的 NetworkWorld 立即停止业务 RPC。
 ## 真正的 change_scene 被延后到双方 scene_transition_ack 均到达之后。
 @rpc("authority", "call_local", "reliable")
-func start_game(scene_path: String) -> void:
+func start_game(scene_path: String, arrival_id: String = "", arrival_position: Variant = null, difficulty: int = -1) -> void:
 	active_scene_path = scene_path
+	active_arrival_id = arrival_id.strip_edges()
+	active_arrival_position = arrival_position if arrival_position is Vector2 else null
+	# P0-B1 难度同步：Host 把 selected_difficulty 随开局 RPC 广播，Client 写入本地 Global，
+	# 两端难度倍率（hp/damage/intensity）才能一致。-1 = 不覆盖（lobby 等未选难度的调用）。
+	if difficulty >= 0:
+		if Global.selected_difficulty != difficulty:
+			print("[Net] DIFFICULTY_SYNC %d -> %d" % [Global.selected_difficulty, difficulty])
+		Global.selected_difficulty = difficulty
 	_scene_transition_serial += 1
 	var transition_serial := _scene_transition_serial
 	_pending_scene_transition_acks.clear()
 	## 第一阶段：双方保留旧场景，但立即令旧 NetworkWorld 静默。
 	## Client 只能确认静默，不能自行提前切图；否则 Host 先后顺序不同仍会让旧 RPC 打到已释放的节点路径。
 	scene_transition_started.emit(scene_path)
-	print("[Net] START_GAME %s serial=%d (flush=%.2fs)" % [scene_path, transition_serial, SCENE_TRANSITION_FLUSH_SECONDS])
+	print("[Net] START_GAME %s arrival=%s serial=%d (flush=%.2fs)" % [scene_path, active_arrival_id, transition_serial, SCENE_TRANSITION_FLUSH_SECONDS])
 	if is_host:
-		call_deferred("_host_commit_scene_transition", scene_path, transition_serial)
+		call_deferred("_host_commit_scene_transition", scene_path, active_arrival_id, active_arrival_position, transition_serial)
 	else:
 		scene_transition_ack.rpc_id(1, transition_serial, scene_path)
 
 
-func _host_commit_scene_transition(scene_path: String, transition_serial: int) -> void:
+func _host_commit_scene_transition(scene_path: String, arrival_id: String, arrival_position: Variant, transition_serial: int) -> void:
 	if not is_inside_tree():
 		return
 	var tree := get_tree()
@@ -330,14 +436,15 @@ func _host_commit_scene_transition(scene_path: String, transition_serial: int) -
 		return
 	## 第二阶段：同一个可靠 RPC 让所有同意静默的 peer 一起开始短暂 flush 后再释放旧场景。
 	print("[Net] SCENE_TRANSITION_COMMIT serial=%d" % transition_serial)
-	scene_transition_commit.rpc(scene_path, transition_serial)
+	scene_transition_commit.rpc(scene_path, arrival_id, arrival_position, transition_serial)
 
 
 ## Host 广播切图提交。serial 使迟到的旧轮次 ACK/commit 无法影响当前场景切换。
 @rpc("authority", "call_local", "reliable")
-func scene_transition_commit(scene_path: String, transition_serial: int) -> void:
-	if transition_serial != _scene_transition_serial or scene_path != active_scene_path:
+func scene_transition_commit(scene_path: String, arrival_id: String, arrival_position: Variant, transition_serial: int) -> void:
+	if transition_serial != _scene_transition_serial or scene_path != active_scene_path or arrival_id != active_arrival_id:
 		return
+	active_arrival_position = arrival_position if arrival_position is Vector2 else null
 	call_deferred("_change_scene_after_flush", scene_path, transition_serial)
 
 
@@ -372,21 +479,22 @@ func _have_all_scene_transition_acks() -> bool:
 			return false
 	return true
 
-func request_scene_change(scene_path: String) -> void:
+func request_scene_change(scene_path: String, arrival_id: String = "", arrival_position: Variant = null) -> void:
 	## 游戏内场景切换入口：联机时由 Host 广播，客户端只向 Host 请求。
 	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
 		printerr("[Net] CHANGE_SCENE_INVALID path=%s" % scene_path)
 		return
 	if not is_online_session():
+		Global.set_pending_arrival(scene_path, arrival_id, arrival_position)
 		call_deferred("_change_scene_safely", scene_path)
 		return
 	if is_host:
-		start_game.rpc(scene_path)
+		start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty)
 	else:
-		request_scene_change_rpc.rpc_id(1, scene_path)
+		request_scene_change_rpc.rpc_id(1, scene_path, arrival_id, arrival_position)
 
 @rpc("any_peer", "call_remote", "reliable")
-func request_scene_change_rpc(scene_path: String) -> void:
+func request_scene_change_rpc(scene_path: String, arrival_id: String = "", arrival_position: Variant = null) -> void:
 	if not is_host:
 		return
 	var sender := multiplayer.get_remote_sender_id()
@@ -395,8 +503,8 @@ func request_scene_change_rpc(scene_path: String) -> void:
 	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
 		printerr("[Net] CHANGE_SCENE_INVALID peer=%d path=%s" % [sender, scene_path])
 		return
-	print("[Net] SCENE_CHANGE_REQUEST peer=%d path=%s" % [sender, scene_path])
-	start_game.rpc(scene_path)
+	print("[Net] SCENE_CHANGE_REQUEST peer=%d path=%s arrival=%s" % [sender, scene_path, arrival_id])
+	start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty)
 
 func _change_scene_safely(scene_path: String) -> void:
 	var err := get_tree().change_scene_to_file(scene_path)

@@ -1,4 +1,11 @@
 class_name ItemData extends Resource
+
+## ── 架构定位 ──
+## 系统：物品数据 ｜ 层：数据（Resource）
+## 联机：ID/路径白名单，禁止远端传 Resource
+## 职责：物品基类：类型枚举、堆叠、图标、拾取外观等通用字段。
+## 依赖：被 WeaponData / ThrowableData 继承
+
 ## 物品数据 — 可在检查器中可视化编辑
 
 enum ItemType {
@@ -42,6 +49,13 @@ enum ItemType {
 @export var hp_restore: int = 0
 ## 使用时回复的 TP 量（0=不回复）
 @export var tp_restore: int = 0
+
+@export_group("拾取音效")
+## 拾取该物品（武器/治疗品/投掷物等，所有子类通用）时的音效。
+## 留空 = 用 Global.default_pickup_sfx_path 的全局默认音（2026-09-15 用户定稿 bio1_アイテム入手２）。
+@export var pickup_sound: AudioStream = null
+## 拾取音效音调（<=0 = 按原调 1.0 播放，沿用项目 0=沿用惯例）。
+@export_range(0.0, 4.0, 0.1) var pickup_sound_pitch: float = 1.0
 
 
 func get_type_name() -> String:

@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="ThrowableData" format=3 uid="uid://bbflshgr4n2x"]
+
+[ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://cds8bj0opy6r" path="res://art/Ui/装備アイコン手榴弾(閃光).png" id="2"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="2_4iaia"]
+[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="2_butmx"]
+[ext_resource type="Texture2D" uid="uid://cnn1rpqt41nlw" path="res://art/Barrages/手榴弾PIC.png" id="3_pamkk"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_58x6b"]
+
+[resource]
+script = ExtResource("1")
+projectile_texture = ExtResource("3_pamkk")
+arc_height = 56.0
+damage = 0.0
+throw_sound = ExtResource("7_58x6b")
+throw_sound_pitch = 1.6
+explode_sound = ExtResource("2_butmx")
+flash_radius = 3
+flash_stun_duration = 3.5
+flash_light_duration = 2.5
+item_id = "flash_01"
+item_name = "闪光弹"
+item_type = 8
+description = "投掷后发出强烈闪光：范围内敌人长时间硬直，夜间还能短暂照亮四周（Night Hunter 关卡利器）。"
+icon = ExtResource("2")
+effect_text = "强光致盲"
+sell_price = 40
+pickup_texture = ExtResource("2_4iaia")
+pickup_char_idx = 5
+pickup_step_frames = Array[int]([1])

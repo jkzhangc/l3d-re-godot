@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://b8fm67dg4gjwk"]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://dsa41b3t2ov3" path="res://sound/lisa1.ogg" id="1_geodw"]
+[ext_resource type="Texture2D" uid="uid://4y7wpwt8wvww" path="res://art/Characters/ブレアウィッチ.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://2mfvne03k2wk" path="res://sound/lisa_hit.ogg" id="2_dhiue"]
+
+[resource]
+script = ExtResource("1")
+id = &"blare_witch"
+weight = 0.5
+starts_in_chase = false
+texture = ExtResource("2")
+attack_char_sequence = Array[int]([1, 2])
+attack_frame_durations = Array[float]([0.14, 0.18])
+hit_at_sequence_idx = 1
+death_char_index = 3
+max_hp = 250.0
+move_speed = 200.0
+attack_damage = 30.0
+attack_cooldown_frames = 45
+vision_range = 400.0
+attack_causes_heat = false
+discover_sound = ExtResource("1_geodw")
+discover_sound_pitch = 0.5
+attack_sound = ExtResource("1_geodw")
+attack_sound_pitch = 1.5
+hit_target_sound = ExtResource("2_dhiue")
+hit_target_sound_pitch = 0.5
+witch_enabled = true
+witch_scream_sound = ExtResource("1_geodw")

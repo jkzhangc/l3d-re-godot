@@ -1,4 +1,11 @@
 class_name State extends Node
+
+## ── 架构定位 ──
+## 系统：状态机框架 ｜ 层：框架
+## 联机：不涉及（纯逻辑基类）
+## 职责：所有玩家/敌人状态的抽象基类，只声明 enter/exit/process_update/physics_update 生命周期与 transition_requested 信号。
+## 依赖：PlayerState（经 Players 反查），不依赖任何具体实体
+
 ## 状态基类 — 所有玩家/敌人状态的父类
 ##
 ## 状态只描述一段可替换行为，不保存跨场景进度。玩家状态通过 get_player_state() 访问对应座位；

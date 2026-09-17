@@ -1,0 +1,59 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://dq0pnnpkwk82q"]
+
+[ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://crf8qyt325byo" path="res://art/Characters/スネ夫セット.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://c3d7f5o21iu65" path="res://art/Characters/スネ夫歩行セット.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://bwev3yun5ys1c" path="res://art/Characters/スネ夫反撃セット.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://cjcmcsqg1ngct" path="res://art/Characters/スネ夫マグナムセット.png" id="5"]
+[ext_resource type="Texture2D" uid="uid://cfqqfq0a03ov7" path="res://art/Characters/スネ夫セットアサルトライフル.png" id="6"]
+[ext_resource type="Texture2D" uid="uid://hdcuwj8s3s86" path="res://art/Characters/スネ夫セットショットガン.png" id="7"]
+[ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="7_1imh2"]
+[ext_resource type="Texture2D" uid="uid://dhat1lh7dkd2h" path="res://art/Characters/スネ夫セットナイフ.png" id="8"]
+[ext_resource type="Texture2D" uid="uid://ghswh1viljfm" path="res://art/Characters/スネ夫セットスナイパーライフル.png" id="9"]
+[ext_resource type="AudioStream" uid="uid://cxlvpw0ipbyh0" path="res://sound/スネ夫_うわぁ.ogg" id="10"]
+[ext_resource type="AudioStream" uid="uid://tmow306x4pya" path="res://sound/スネ夫_ママー！.ogg" id="11"]
+[ext_resource type="Resource" path="res://object/skill_sa_backpack.tres" id="12"]
+[ext_resource type="AudioStream" uid="uid://drnowuxstl1o1" path="res://sound/(効果音)打撃1.ogg" id="13"]
+[ext_resource type="Texture2D" uid="uid://b8d4wde4ju55k" path="res://art/Characters/スネ夫セットグレネードランチャー.png" id="14_rk"]
+[ext_resource type="Texture2D" uid="uid://c4vksa42kaglk" path="res://art/Characters/スネ夫セットRPG7.png" id="15_rk"]
+[ext_resource type="Texture2D" uid="uid://bm7he88cp62qy" path="res://art/Characters/スネ夫セットフライパン.png" id="16_fp"]
+[ext_resource type="Texture2D" uid="uid://cy6j7llp7b51c" path="res://art/Characters/スネ夫セットボウガン.png" id="17_bg"]
+
+[resource]
+script = ExtResource("1")
+character_name = "スネ夫"
+character_id = "suneo"
+max_hp = 180
+max_mp = 40
+base_attack = 13
+base_defense = 3
+mp_growth = 4
+walk_texture = ExtResource("2")
+run_texture = ExtResource("3")
+death_texture = ExtResource("2")
+death_char_index = 6
+weapon_walk_textures = {
+"Bowgun": ExtResource("17_bg"),
+"Frypan": ExtResource("16_fp"),
+"Knife": ExtResource("8"),
+"Launcher": ExtResource("14_rk"),
+"Magnum": ExtResource("5"),
+"Pistol": ExtResource("5"),
+"RLauncher": ExtResource("15_rk"),
+"Rifle": ExtResource("6"),
+"Shotgun": ExtResource("7"),
+"Smg": ExtResource("6"),
+"Sniper": ExtResource("9")
+}
+allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
+allowed_secondary_weapons = Array[String](["pistol_01", "magnum_01", "knife_01", "frypan_01"])
+shove_walk_texture = ExtResource("4")
+shove_fatigue_limit = 10
+select_icon_direction = 3
+hurt_sound = ExtResource("10")
+death_sound = ExtResource("11")
+safehouse_lines = Array[String](["哼，这点丧尸根本不是我的对手。", "看到了吗？我的身手可不一般。", "妈妈一定在为我担心呢……", "先休息一下，接下来看我大显身手。"])
+skills = Array[ExtResource("7_1imh2")]([ExtResource("12")])
+counter_type = "punch"
+counter_sound = ExtResource("13")
+spray_plus_one = true

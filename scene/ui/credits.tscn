@@ -1,0 +1,77 @@
+[gd_scene format=3 uid="uid://bsvp2hti50a5x"]
+
+[ext_resource type="Script" uid="uid://d06fpykwsg8tw" path="res://script/ui/credits.gd" id="1"]
+
+[node name="Credits" type="CanvasLayer" unique_id=1188331924]
+layer = 95
+script = ExtResource("1")
+credits_text = "　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
+
+
+　　[原作]
+　　藤子·F·不二雄（哆啦A梦）
+　　aaa 等（野比大雄的生化危机）
+
+　　[导演]
+　　正宗金田
+
+　　[助理导演]
+　　ティンダロス
+
+　　[NG镜头最多的卡司]
+　　布蕾尔女士以 1/5 的概率乱入香艳镜头
+
+　　[贡献香艳镜头最多的卡司]
+　　布蕾尔女巫
+
+　　[最敬业的僵尸卡司]
+　　僵尸A
+　　僵尸B
+　　3号酱
+　　僵尸D
+　　僵尸E
+　　僵尸F
+　　僵尸G
+
+　　[最有猎人风范的卡司]
+　　猎人α
+　　猎人β
+　　猎人γ
+　　奇美拉
+
+　　[最不受女性待见的虫子卡司]
+　　脑螨虫
+　　黑虎
+
+　　[最具职业精神的Boss卡司]
+　　暴君
+　　复仇女神
+　　生物巨兽
+　　ティンダロス
+
+　　[程序]
+　　红锹甲
+
+　　[战役剪辑]
+　　诗织
+
+　　[特别鸣谢]
+　　野比ハザCODE:Vow制作团队
+　　冲绳
+
+@@STATS@@
+
+　　―――
+
+　　野比大雄的求生之路 〜L3D 重制版〜
+
+　　[重制]
+　　野比ハザ重制组（Godot 4）
+　　制作：剑客
+　　策划/玩法设计：Eluniht、阿茶Atea、剑客
+		测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔
+　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、还有 你
+
+　　 感谢游玩！
+　　　　在本片拍摄中牺牲的
+　　　　　僵尸等的数量　……　众多"

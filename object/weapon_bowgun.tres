@@ -1,0 +1,86 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cacwbg4n7p3q"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://ivldoltn11wm" path="res://art/Characters/のび太セットボウガン.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://cthw2bythgclc" path="res://art/Barrages/弓弩箭.png" id="3_kl7i0"]
+[ext_resource type="AudioStream" uid="uid://i7v8ws3kq28q" path="res://sound/弓1.ogg" id="5"]
+[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="6"]
+[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="7"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="8"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="9"]
+[ext_resource type="Texture2D" uid="uid://bwsy86x5lc3bi" path="res://art/Ui/装備アイコンボウガン.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://bh0ummygcr7xl" path="res://art/Weapon/[2K-VX]-A武器セット５.png" id="10_kl7i0"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="11"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="11_ijc1i"]
+
+[sub_resource type="Resource" id="Resource_bg1"]
+script = ExtResource("2")
+bullet_texture = ExtResource("3_kl7i0")
+speed = 1000.0
+max_range = 420.0
+offset_left = Vector2(0, 0)
+offset_right = Vector2(0, 0)
+explosion_radius = 64.0
+explosion_hurts_players = false
+explosion_player_radius = 64.0
+explode_effect_anim = ExtResource("6")
+explode_sound = ExtResource("7")
+knockback_enabled = true
+knockback_force = 400.0
+
+[sub_resource type="Resource" id="WSO_bowgun_01_bigg"]
+script = ExtResource("11")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_bowgun_01_nobita"]
+script = ExtResource("11")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_bowgun_01_shizuka"]
+script = ExtResource("11")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_bowgun_01_suneo"]
+script = ExtResource("11")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[resource]
+script = ExtResource("1")
+attack_power = 90
+attack_range = 240.0
+weapon_state_name = "Bowgun"
+weapon_walk_texture = ExtResource("3")
+weapon_raise_frame_durations = Array[float]([0.06, 0.06])
+attack_sound = ExtResource("5")
+empty_fire_sound = ExtResource("8")
+raise_sound = ExtResource("9")
+lower_sound = ExtResource("9")
+reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 50
+attack_effect_follow = true
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_bowgun_01_bigg"),
+"nobita": SubResource("WSO_bowgun_01_nobita"),
+"shizuka": SubResource("WSO_bowgun_01_shizuka"),
+"suneo": SubResource("WSO_bowgun_01_suneo")
+}
+magazine_capacity = 1
+ammo_item_id = "ammo_bowgun"
+attack_char_sequence = Array[int]([4, 2])
+attack_frame_durations = Array[float]([0.12, 0.08])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_bg1")])
+item_id = "bowgun_01"
+item_name = "十字弩"
+item_type = 3
+description = "发射爆炸弩箭的猎用十字弩。单发装填，命中后小范围爆炸并吹飞敌人。"
+icon = ExtResource("10")
+sell_price = 260
+max_stack = 1
+pickup_texture = ExtResource("10_kl7i0")
+pickup_char_idx = 6
+pickup_step_frames = Array[int]([0])

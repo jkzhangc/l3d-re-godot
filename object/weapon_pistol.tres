@@ -7,12 +7,34 @@
 [ext_resource type="PackedScene" uid="uid://clqlntwficib4" path="res://anim/anim_effect_手枪攻击左.tscn" id="2_3nhsm"]
 [ext_resource type="Resource" uid="uid://damfltust4ay6" path="res://object/bullet_pistol.tres" id="3"]
 [ext_resource type="PackedScene" uid="uid://dhdrdlbuna8db" path="res://anim/anim_effect_手枪攻击右.tscn" id="3_4gaqj"]
-[ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="3_55cd1"]
-[ext_resource type="AudioStream" uid="uid://b003n2hnn7bl2" path="res://sound/ベレッタ.wav" id="4_dijym"]
-[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_oxqje"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="3_55cd1"]
+[ext_resource type="AudioStream" uid="uid://bqptf36kc2nkw" path="res://sound/ベレッタ.ogg" id="4_dijym"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_oxqje"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_dijym"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_kl6un"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_kl6un"]
 [ext_resource type="Texture2D" uid="uid://8wg5txttqrg3" path="res://art/Ui/装備アイコンハンドガン.png" id="icon"]
+
+[sub_resource type="Resource" id="WSO_pistol_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_pistol_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -14)
+right = Vector2(0, -14)
+
+[sub_resource type="Resource" id="WSO_pistol_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_pistol_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
 
 [resource]
 script = ExtResource("1")
@@ -22,20 +44,26 @@ weapon_state_name = "Pistol"
 weapon_walk_texture = ExtResource("2")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
 weapon_slot = 1
-pickup_texture = ExtResource("6_dijym")
-pickup_animated = false
 attack_sound = ExtResource("4_dijym")
 empty_fire_sound = ExtResource("3_55cd1")
 raise_sound = ExtResource("5_oxqje")
 lower_sound = ExtResource("5_oxqje")
 reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 24
 attack_effect_anim_down = ExtResource("1_jkkld")
 attack_effect_anim_left = ExtResource("2_3nhsm")
 attack_effect_anim_right = ExtResource("3_4gaqj")
 attack_effect_follow = true
 hit_effect_anim = ExtResource("8_kl6un")
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_pistol_01_bigg"),
+"nobita": SubResource("WSO_pistol_01_nobita"),
+"shizuka": SubResource("WSO_pistol_01_shizuka"),
+"suneo": SubResource("WSO_pistol_01_suneo")
+}
 magazine_capacity = 12
 ammo_item_id = "ammo_pistol"
+ammo_is_infinite = true
 bullet_list = Array[ExtResource("1_tx4tb")]([ExtResource("3")])
 hitstun_duration = 0.1
 item_id = "pistol_01"
@@ -45,3 +73,5 @@ description = "一把普通的手枪。远程攻击。"
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
+pickup_texture = ExtResource("6_dijym")
+pickup_step_frames = Array[int]([1])

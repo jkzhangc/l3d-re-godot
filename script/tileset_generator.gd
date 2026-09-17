@@ -1,5 +1,12 @@
 @tool
 extends Node
+
+## ── 架构定位 ──
+## 系统：图块工具 ｜ 层：工具（Node, @tool）
+## 联机：不涉及
+## 职责：编辑器工具：把 RPG Maker VX Ace 图块图片按类型切成 Godot TileSet 资源。
+## 依赖：TileSet/TileSetAtlasSource
+
 ## 从 RPG Maker VX Ace 图块图片生成 Godot TileSet 资源的编辑器工具。
 ##
 ## 使用方法：

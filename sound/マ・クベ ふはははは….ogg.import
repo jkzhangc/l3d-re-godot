@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://cs4jxby0osajp"
+path="res://.godot/imported/マ・クベ ふはははは….ogg-a979fd38bef8c4071221364cc575554a.oggvorbisstr"
+
+[deps]
+
+source_file="res://sound/マ・クベ ふはははは….ogg"
+dest_files=["res://.godot/imported/マ・クベ ふはははは….ogg-a979fd38bef8c4071221364cc575554a.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

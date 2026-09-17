@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：Client 只请求，Host 结算
+## 职责：推击状态：无伤害纯击退，命中帧创建判定区域，可触发连锁击退与水花效果。
+## 依赖：WeaponData、敌人击退接口、PlayerState
+
 ## 推击是纯击退动作；联机 Client 只请求，Host 在命中帧执行推击并广播受击表现。
 ## 推击状态 — 近战推击（无伤害，纯击退）
 ##
@@ -91,7 +98,7 @@ func process_update(delta: float) -> void:
 func physics_update(delta: float) -> void:
 	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
 	character.velocity = move_dir * character.run_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()
 	# 推击中允许转向
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)

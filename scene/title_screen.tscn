@@ -3,6 +3,9 @@
 [ext_resource type="Texture2D" uid="uid://uswrptymqtk" path="res://art/Title/title1.png" id="1"]
 [ext_resource type="Script" uid="uid://b2rij6pnqot3r" path="res://script/title_screen.gd" id="3"]
 [ext_resource type="AudioStream" uid="uid://dnp3l87kccuws" path="res://music/l3d_title.mp3" id="3_2fir4"]
+[ext_resource type="Texture2D" uid="uid://dksnwuxdiamf4" path="res://art/System/Window background color.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://cnkb288dlwahv" path="res://art/System/Window frame.png" id="5"]
+[ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6"]
 
 [node name="TitleScreen" type="Control" unique_id=1446514083]
 layout_mode = 3
@@ -12,7 +15,11 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3")
-window_size = Vector2(120, 158)
+window_size = Vector2(240, 300)
+window_y_offset = 300.0
+item_font_size = 24
+item_start_y = 20.0
+font_path = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
 
 [node name="Background" type="TextureRect" parent="." unique_id=921359252]
 layout_mode = 0
@@ -24,7 +31,105 @@ expand_mode = 1
 
 [node name="MenuWindow" type="Control" parent="." unique_id=1800102687]
 anchors_preset = 0
+offset_left = 520.0
+offset_top = 630.0
+offset_right = 760.0
+offset_bottom = 930.0
+
+[node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=1788669830]
+layout_mode = 0
+offset_right = 240.0
+offset_bottom = 300.0
+mouse_filter = 2
+texture = ExtResource("4")
+
+[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow" unique_id=912612211]
+layout_mode = 0
+offset_right = 240.0
+offset_bottom = 300.0
+texture = ExtResource("5")
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow" unique_id=1955472125]
+layout_mode = 0
+offset_left = 12.0
+offset_top = 18.0
+offset_right = 228.0
+offset_bottom = 66.0
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="Item0" type="Control" parent="MenuWindow" unique_id=1067713586]
+anchors_preset = 0
+offset_left = 72.0
+offset_top = 25.0
+offset_right = 168.0
+offset_bottom = 49.0
+script = ExtResource("6")
+text = "开始游戏"
+text_font_size = 24
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="Item1" type="Control" parent="MenuWindow" unique_id=1829436033]
+anchors_preset = 0
+offset_left = 72.0
+offset_top = 81.0
+offset_right = 168.0
+offset_bottom = 105.0
+script = ExtResource("6")
+text = "联机游戏"
+text_font_size = 24
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="Item2" type="Control" parent="MenuWindow" unique_id=1972409327]
+anchors_preset = 0
+offset_left = 72.0
+offset_top = 137.0
+offset_right = 168.0
+offset_bottom = 161.0
+script = ExtResource("6")
+text = "操作说明"
+text_font_size = 24
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="Item3" type="Control" parent="MenuWindow" unique_id=279283184]
+anchors_preset = 0
+offset_left = 96.0
+offset_top = 193.0
+offset_right = 144.0
+offset_bottom = 217.0
+script = ExtResource("6")
+text = "设置"
+text_font_size = 24
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="Item4" type="Control" parent="MenuWindow" unique_id=1784841362]
+anchors_preset = 0
+offset_left = 72.0
+offset_top = 249.0
+offset_right = 168.0
+offset_bottom = 273.0
+script = ExtResource("6")
+text = "退出游戏"
+text_font_size = 24
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=1027434183]
 stream = ExtResource("3_2fir4")
+autoplay = true
 parameters/looping = true

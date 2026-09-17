@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://c5bgammo6t8w"]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "ammo_bowgun"
+item_name = "弩箭"
+item_type = 5
+description = "十字弩用的爆炸弩箭。"
+sell_price = 8
+stackable = true

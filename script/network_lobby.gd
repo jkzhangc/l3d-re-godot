@@ -1,4 +1,11 @@
 extends Control
+
+## ── 架构定位 ──
+## 系统：联机大厅 ｜ 层：表现（Control）
+## 联机：纯表现层，不写权威状态
+## 职责：联机大厅界面：按钮只调用 Net 的公开请求接口，并按 Net 信号刷新 UI；另含无头回归用自动流程。
+## 依赖：Net 的公开接口与信号
+
 ## 正式联机大厅：连接 UI 和自动测试入口；握手、玩家名单与角色选择均由 Net Host 权威维护。
 ##
 ## 此脚本是“表现层”：按钮只调用 Net 的公开请求接口，收到 Net 的信号后刷新文字和控件；
@@ -15,6 +22,10 @@ const AUTO_HOST_TIMEOUT := 30.0
 
 @onready var name_edit: LineEdit = %NameEdit
 @onready var ip_edit: LineEdit = %IpEdit
+## 端口输入框（建主与加入共用；默认 27015，可改为内网穿透服务分配的 UDP 端口）。
+@onready var port_edit: SpinBox = %PortEdit
+## 建主时是否尝试 UPnP 自动端口映射（路由器不支持时改用 frp/樱花等穿透工具）。
+@onready var upnp_check: CheckBox = %UpnpCheck
 @onready var create_btn: Button = %CreateBtn
 @onready var join_btn: Button = %JoinBtn
 @onready var start_btn: Button = %StartBtn
@@ -33,6 +44,10 @@ var net: Variant = null
 
 
 func _ready() -> void:
+	## 场景内全部 Label 套全局阴影（原 .tscn 里的 Label 都没带阴影，与全游戏风格不一致）
+	for node in find_children("", "Label", true, false):
+		Global.apply_text_shadow(node as Label)
+	_add_wip_notice()
 	net = get_node_or_null("/root/Net")
 	if not net:
 		push_error("[NetworkLobby] 未找到 Net Autoload")
@@ -50,17 +65,61 @@ func _ready() -> void:
 	start_btn.pressed.connect(_on_start_pressed)
 	leave_btn.pressed.connect(_on_leave_pressed)
 	character_select.item_selected.connect(_on_character_selected)
+	net.upnp_port_mapped.connect(_on_upnp_port_mapped)
+	net.upnp_mapping_failed.connect(_on_upnp_mapping_failed)
 	start_btn.disabled = true
 	leave_btn.disabled = true
 	character_select.disabled = true
 	_log("请创建房间或加入已有房间（默认 127.0.0.1:27015）")
 	_refresh_ui()
+	_add_back_button()
 
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
 		_run_auto_host()
 	elif "--net-test=client" in user_args:
 		_run_auto_client()
+
+
+# ---------------------------------------------------------------- 表现层小件
+
+## 「返回标题」按钮（2026-09-14 用户要求）：不必重开游戏就能回标题；
+## 已连接时先离开房间，再停大厅 BGM 切回标题（标题有自己的 BGM）。
+func _add_back_button() -> void:
+	var vbox: Control = get_node_or_null("VBox")
+	if vbox == null:
+		return
+	var back_btn := Button.new()
+	back_btn.name = "BackToTitleBtn"
+	back_btn.text = "返回标题界面"
+	back_btn.pressed.connect(_on_back_to_title_pressed)
+	vbox.add_child(back_btn)
+
+
+func _on_back_to_title_pressed() -> void:
+	if net and _connected:
+		net.leave()
+		_connected = false
+	Global.stop_lobby_music()
+	var err: Error = get_tree().change_scene_to_file("res://scene/title_screen.tscn")
+	if err != OK:
+		printerr("[NetworkLobby] 返回标题失败: %d" % err)
+
+
+## 联机暂未完成提示（2026-09-14 用户要求）：挂在标题下方，黄字醒目。
+func _add_wip_notice() -> void:
+	var vbox: Control = get_node_or_null("VBox")
+	if vbox == null:
+		return
+	var notice := Label.new()
+	notice.name = "WipNotice"
+	notice.text = "※ 联机模式暂未完成 —— 目前仅为基础联机同步（Host 权威），内容与存档请以单人模式为准；遇到异常请先回单人确认。"
+	notice.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	notice.add_theme_font_size_override("font_size", 15)
+	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	Global.apply_text_shadow(notice)
+	vbox.add_child(notice)
+	vbox.move_child(notice, 1)  # 标题之下、表单之上
 
 
 # ---------------------------------------------------------------- 无头自动联机测试
@@ -189,22 +248,28 @@ func _get_game_scene_for_launch() -> String:
 
 func _on_create_pressed() -> void:
 	net.player_name = name_edit.text
-	var err: Error = net.host_game()
+	net.upnp_enabled = upnp_check.button_pressed
+	# 端口由大厅输入框提供：默认 27015。使用 frp 等端口映射型内网穿透时，
+	# 这里应填穿透隧道指向本机的本地 UDP 端口（或保持默认并在穿透服务侧映射它）。
+	var port := int(port_edit.value)
+	var err: Error = net.host_game(port)
 	if err != OK:
 		_log("创建房间失败：%s" % error_string(err))
 		return
 	_connected = true
-	_log("已创建房间（端口 %d），默认角色已选定" % net.DEFAULT_PORT)
+	_log("已创建房间（UDP 端口 %d），正在尝试 UPnP 端口映射 ..." % port)
 	_refresh_ui()
 
 
 func _on_join_pressed() -> void:
 	net.player_name = name_edit.text
-	var err: Error = net.join_game(ip_edit.text)
+	# 端口由大厅输入框提供：默认 27015；内网穿透场景填穿透服务分配的远程 UDP 端口。
+	var port := int(port_edit.value)
+	var err: Error = net.join_game(ip_edit.text, port)
 	if err != OK:
 		_log("加入失败：%s" % error_string(err))
 		return
-	_log("正在加入 %s ..." % ip_edit.text)
+	_log("正在加入 %s:%d ..." % [ip_edit.text, port])
 	_set_connect_buttons_disabled(true)
 
 
@@ -275,6 +340,19 @@ func _on_peer_left(_peer_id: int) -> void:
 	_refresh_ui()
 
 
+## UPnP 映射成功：向 Host 展示可直连的公网地址与端口。
+## 若走内网穿透（frp/樱花等），把下面 IP 换成穿透服务分配的地址、端口填穿透端口即可。
+func _on_upnp_port_mapped(port: int, external_ip: String) -> void:
+	if external_ip.is_empty():
+		_log("UPnP 已映射 UDP %d（未能查询外部 IP），好友可用路由器 WAN IP:%d 直连" % [port, port])
+	else:
+		_log("UPnP 已映射，公网直连地址：%s:%d（把该地址告诉好友）" % [external_ip, port])
+
+
+func _on_upnp_mapping_failed(reason: String) -> void:
+	_log("UPnP 失败：%s；可改用 frp/樱花等内网穿透，将 UDP 端口映射到本机后让好友连接穿透地址" % reason)
+
+
 
 # ---------------------------------------------------------------- UI
 
@@ -284,7 +362,7 @@ func _refresh_ui() -> void:
 		return
 	var selection_ready: bool = _connected and bool(net.handshake_ok)
 	if net.is_host:
-		status_label.text = "状态：主机（端口 %d）" % net.DEFAULT_PORT
+		status_label.text = "状态：主机（UDP 端口 %d）" % int(net.active_port)
 		start_btn.disabled = not (net.handshake_ok and net.are_all_players_character_selected())
 	else:
 		var text := "未连接"

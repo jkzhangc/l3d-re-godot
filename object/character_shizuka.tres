@@ -1,0 +1,56 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://c4b1dvd5allvg"]
+
+[ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bs4dx4jjr4f8m" path="res://art/Characters/静香セット.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://dcyvvvxaojww7" path="res://art/Characters/静香歩行セット.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://t83wv5svjh3w" path="res://art/Characters/静香セットナイフ.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://c83wsv1mmjgoj" path="res://art/Characters/静香反撃セット.png" id="5"]
+[ext_resource type="AudioStream" uid="uid://mqx3gck4bgu" path="res://sound/静香_被弾１.ogg" id="6"]
+[ext_resource type="Resource" path="res://object/skill_sa_crouch.tres" id="7"]
+[ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="8"]
+[ext_resource type="Texture2D" uid="uid://p8pmkqkr173m" path="res://art/Characters/静香セットアサルトライフル.png" id="9"]
+[ext_resource type="Texture2D" uid="uid://up802u1h8qmd" path="res://art/Characters/静香セットショットガン.png" id="10"]
+[ext_resource type="AudioStream" uid="uid://bn1i045g34wtn" path="res://sound/静香_カウンター１.ogg" id="11"]
+[ext_resource type="Texture2D" uid="uid://dtj53d4s1by6s" path="res://art/Characters/静香セットマグナム.png" id="12"]
+[ext_resource type="Texture2D" uid="uid://by7cllepl8s3h" path="res://art/Characters/静香セットグレネードランチャー.png" id="13"]
+[ext_resource type="Texture2D" uid="uid://cpi3fiuuxsxqm" path="res://art/Characters/静香セットRPG7.png" id="14"]
+[ext_resource type="Texture2D" uid="uid://bb2hq3pfv2acy" path="res://art/Characters/静香セットフライパン.png" id="16_fp"]
+[ext_resource type="Texture2D" uid="uid://svyxru106sob" path="res://art/Characters/静香セットボウガン.png" id="17_bg"]
+
+[resource]
+script = ExtResource("1")
+character_name = "静香"
+character_id = "shizuka"
+max_hp = 180
+max_mp = 30
+tp_regen_interval = 4.0
+base_attack = 11
+base_defense = 4
+walk_texture = ExtResource("2")
+run_texture = ExtResource("3")
+death_texture = ExtResource("2")
+death_char_index = 6
+weapon_walk_textures = {
+"Bowgun": ExtResource("17_bg"),
+"Frypan": ExtResource("16_fp"),
+"Knife": ExtResource("4"),
+"Launcher": ExtResource("13"),
+"Magnum": ExtResource("12"),
+"Pistol": ExtResource("2"),
+"RLauncher": ExtResource("14"),
+"Rifle": ExtResource("9"),
+"Shotgun": ExtResource("10"),
+"Smg": ExtResource("9")
+}
+allowed_primary_weapons = Array[String](["sniper_01", "smg_01", "rifle_01", "shotgun_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
+allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01"])
+shove_walk_texture = ExtResource("5")
+select_icon_index = 3
+select_icon_direction = 3
+hurt_sound = ExtResource("6")
+safehouse_lines = Array[String](["大家……都没受伤吧？", "我这就给大家处理伤口。", "小心一点，不要逞强。", "下一程也一起加油吧。"])
+skills = Array[ExtResource("8")]([ExtResource("7")])
+counter_type = "issen"
+counter_sound = ExtResource("11")
+nursing = true
+spray_plus_one = true

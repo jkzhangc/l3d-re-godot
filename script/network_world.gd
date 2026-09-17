@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：联机世界 ｜ 层：网络（Node，场景内）
+## 联机：Host 全量权威模拟
+## 职责：联机世界：Host 权威模拟移动/战斗/拾取/复活，Client 只提交输入并渲染快照；禁用 MultiplayerSpawner/Synchronizer。
+## 依赖：Net、Players、PlayerState、敌人/子弹/掉落物实体、快照插值
+
 ## 第一阶段联机世界：Host 全量权威移动，客户端只提交输入并渲染快照。
 ##
 ## 禁止使用 MultiplayerSpawner / MultiplayerSynchronizer；所有实体均由可靠 RPC 显式
@@ -19,14 +26,27 @@ const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
 const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://object/weapon_pickup.tscn")
+## 武器拾取物脚本（静态工具：落点避让 find_free_drop_position 等）
+const PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
 const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
 const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
 const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
 const NETWORK_SMG: WeaponData = preload("res://object/weapon_smg.tres")
 const NETWORK_SHOTGUN: WeaponData = preload("res://object/weapon_shotgun.tres")
+const NETWORK_SNIPER: WeaponData = preload("res://object/weapon_sniper.tres")
+const NETWORK_MAGNUM: WeaponData = preload("res://object/weapon_magnum.tres")
+const NETWORK_LAUNCHER: WeaponData = preload("res://object/weapon_grenade_launcher.tres")
+const NETWORK_ROCKET: WeaponData = preload("res://object/weapon_rocket_launcher.tres")
+const NETWORK_BOWGUN: WeaponData = preload("res://object/weapon_bowgun.tres")
+const NETWORK_LAUNCHER_ACID: WeaponData = preload("res://object/weapon_launcher_acid.tres")
+const NETWORK_LAUNCHER_ICE: WeaponData = preload("res://object/weapon_launcher_ice.tres")
+const NETWORK_LAUNCHER_THUNDER: WeaponData = preload("res://object/weapon_launcher_thunder.tres")
+const NETWORK_FRYSPAN: WeaponData = preload("res://object/weapon_frypan.tres")
+const NETWORK_BAT: WeaponData = preload("res://object/weapon_metal_bat.tres")
 const NETWORK_GRENADE: ThrowableData = preload("res://object/item_grenade.tres")
 const NETWORK_MOLOTOV: ThrowableData = preload("res://object/item_molotov.tres")
+const NETWORK_FLASH: ThrowableData = preload("res://object/throwable_flash.tres")
 ## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
 const NETWORK_WEAPONS: Dictionary = {
 	"pistol_01": NETWORK_PISTOL,
@@ -34,11 +54,22 @@ const NETWORK_WEAPONS: Dictionary = {
 	"rifle_01": NETWORK_RIFLE,
 	"smg_01": NETWORK_SMG,
 	"shotgun_01": NETWORK_SHOTGUN,
+	"sniper_01": NETWORK_SNIPER,
+	"magnum_01": NETWORK_MAGNUM,
+	"launcher_01": NETWORK_LAUNCHER,
+	"rocket_01": NETWORK_ROCKET,
+	"bowgun_01": NETWORK_BOWGUN,
+	"launcher_acid_01": NETWORK_LAUNCHER_ACID,
+	"launcher_ice_01": NETWORK_LAUNCHER_ICE,
+	"launcher_thunder_01": NETWORK_LAUNCHER_THUNDER,
+	"frypan_01": NETWORK_FRYSPAN,
+	"bat_01": NETWORK_BAT,
 }
 ## 投掷物同样必须由 Host 的固定白名单解析；客户端 RPC 绝不能指定资源或伤害。
 const NETWORK_THROWABLES: Dictionary = {
 	"grenade_01": NETWORK_GRENADE,
 	"molotov_01": NETWORK_MOLOTOV,
+	"flash_01": NETWORK_FLASH,
 }
 ## 快照节拍说明：
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
@@ -59,6 +90,9 @@ var _players: Dictionary = {} # peer_id -> {node, state, input, walking, moving}
 ## 敌人表：Host 生成的稳定 entity_id → 当前场景节点及可重建资料。Client 只按 id 应用快照。
 var _enemies: Dictionary = {} # entity_id -> {node, scene_path}
 var _next_enemy_id := 1
+## 已用可靠 RPC 广播过死亡的敌人 entity_id。紧凑快照会跳过尸体，死亡必须
+## 主动广播，否则 Client 要等 2 秒一次的可靠重同步才看到尸体表现。
+var _announced_dead_enemy_ids: Dictionary = {}
 ## 掉落物表：稳定 pickup_id → 武器或治疗/投掷物节点。所有拾取都必须由 Host 提交并广播变化，
 ## 这样多个 Client 同时按键也只会有一个获准拿到物品。
 var _pickups: Dictionary = {} # pickup_id -> weapon/throwable pickup Node2D
@@ -68,6 +102,9 @@ var _ready_client_peers: Dictionary = {}
 ## 客户端预置掉落物按场景相对路径缓存，可靠快照必须复用原节点，
 ## 否则主机删除后会留下未纳入 _pickups 的旧可见节点。
 var _client_preplaced_pickups_by_path: Dictionary = {}
+
+## 剧情机关 flag 是否已向 Host 拉取过全量（客户端首个世界快照后触发一次）
+var _quest_flags_synced: bool = false
 ## 已确认安全门路径 -> true；Host 只跟踪最后一次有效确认的门，并权威统计到门人数。
 var _safe_door_ready: Dictionary = {}
 var _door_ready_status: Dictionary = {}
@@ -84,9 +121,30 @@ var _network_throwable_state: Dictionary = {}
 var _revive_attempts: Dictionary = {}
 ## peer_id -> "raising" / "lowering"; published so late snapshots never reset transition presentation.
 var _weapon_transition_state: Dictionary = {}
+## Client 尚未收到 Host 确认的朝向锁定意图：peer_id -> desired locked state。
+var _facing_lock_requests: Dictionary = {}
 const REVIVE_RANGE := 52.0
 const REVIVE_DURATION_MSEC := 3000
 const REVIVE_HP_RATIO := 0.30
+## 倒地（L4D2 式 incapacitated）：HP=0 不再直接死亡，而是先倒地 —— 躺地表现、
+## 仍可按 DOWNED_CRAWL_SPEED 爬行，流血池按 DOWNED_BLEED_RATE 每秒递减，
+## 耗尽后才转为真死亡（不可再救）。数值推进只发生在 Host；Client 通过快照观察。
+const DOWNED_BLEED_HP := 100.0
+const DOWNED_BLEED_RATE := 5.0
+const DOWNED_CRAWL_SPEED := 60.0
+## 团灭：全员非站立（全部倒地或死亡）→ 广播黑屏，FADE+HOLD 秒后由 Host 复用
+## 既有切图协议重载本章（会话 PlayerState 满血重置）。倒地/死亡不跨场景持久化。
+const WIPE_FADE_SECONDS := 2.0
+const WIPE_HOLD_SECONDS := 1.0
+## 救援进度环脚本。Host 与 Client 各自驱动：Host 来自权威 attempts，
+## Client 来自快照 revive_progress 字段；两条路径共用同一个挂载/摘除函数。
+const REVIVE_INDICATOR_SCRIPT := preload("res://script/network_revive_indicator.gd")
+## 头顶名牌（1P/2P 编号 + 昵称 + 正式 HUD 血条），联机玩家实体注册时挂载。
+const NAMEPLATE_SCRIPT := preload("res://script/player_nameplate.gd")
+var _wipe_active := false
+var _wipe_started_msec := 0
+var _wipe_restart_requested := false
+var _wipe_fade_overlay: ColorRect = null
 var _snapshot_accumulator := 0.0
 var _player_snapshot_accumulator := 0.0
 var _reliable_resync_accumulator := 0.0
@@ -111,6 +169,8 @@ var _auto_client_attack_weapon_id := ""
 ## --net-test-features 专用：只统计 Client 收到的可靠受伤表现 RPC，不参与正式玩法。
 var _auto_client_player_hurt_presentations := 0
 var _auto_client_enemy_hurt_presentations := 0
+## --net-test-enemies 专用：统计 Client 收到的可靠敌人死亡表现 RPC。
+var _auto_client_enemy_death_presentations := 0
 var _auto_client_ready_input_seen_by_host := false
 ## --net-test-multi-disconnect 专用：Host 在玩家断线后通知留在房间的 Client 校验收敛。
 var _auto_multi_disconnect_complete := false
@@ -119,8 +179,17 @@ var _auto_multi_disconnect_acks: Dictionary = {}
 var _auto_multi_disconnect_release := false
 ## --net-test-character-select 专用：Host 收到 Client 对进图角色状态的确认后才结束回归。
 var _auto_character_world_acks: Dictionary = {}
+## --net-test=slow-host-ready 专用：统计本场景发出的可靠世界快照次数，
+## 用于断言"ready 报告先于 Host 场景就绪到达"的竞态下快照最终仍被补发。
+var _auto_world_snapshot_sent_count := 0
 ## 避免依赖编辑器正在重载的全局 Autoload 标识符；运行时取常驻 Net 节点。
 var net: Variant = null
+
+## 防守战倒计时权威同步状态。由 Host 的 HoldoutMachine 每帧写入，供中途加入的 Client
+## 补发（_accept_ready_peer），并用于丢弃旧场景残留的过期 RPC（token 不符即忽略）。
+## 结构：{"phase":int, "remaining":float, "total":float, "token":int}；空字典表示当前无进行中的防守战。
+var _holdout_state: Dictionary = {}
+var _holdout_last_broadcast_msec: int = -999999
 
 
 func _ready() -> void:
@@ -128,6 +197,14 @@ func _ready() -> void:
 	if not net:
 		push_error("[NetworkWorld] 未找到 Net Autoload")
 		return
+	# 无头回归确定性：facing_lock 的"显式 RPC 加锁"语义属于切换式（mode=0），
+	# 绝不能继承 config.json 里可能残留的"按住式"（mode=1）。否则 Client 每帧的
+	# _capture_facing_lock_input 会因未按住取消键而立即把锁解掉，导致 features 用例假失败。
+	# 仅影响当前无头进程；不写回 config，真实玩家的设置不受影响。
+	for _a in OS.get_cmdline_user_args():
+		if _a.begins_with("--net-test"):
+			Global.facing_lock_mode = 0
+			break
 	_scene_path = get_tree().current_scene.scene_file_path if get_tree().current_scene else ""
 	_players_parent = _find_players_parent()
 	if not _players_parent:
@@ -154,6 +231,12 @@ func _ready() -> void:
 		if "--net-test=client" in OS.get_cmdline_user_args():
 			if _is_auto_multi_disconnect_test():
 				call_deferred("_run_auto_client_multi_disconnect_test")
+			elif _is_auto_team_wipe_test():
+				# 团灭回归：第一次进图执行倒地/流血/团灭触发；换图后同一入口走验证分支。
+				call_deferred("_run_auto_client_team_wipe_test")
+			elif _is_auto_slow_host_ready_test():
+				# 慢速主机回归：Client 先就绪并上报 ready，验证被缓冲的 ready 最终仍能收到世界快照。
+				call_deferred("_run_auto_client_slow_host_ready_test")
 			elif _is_auto_character_select_test():
 				call_deferred("_run_auto_client_character_select_world_test")
 			elif _is_auto_network_feature_test():
@@ -169,6 +252,13 @@ func _ready() -> void:
 	if net.is_host:
 		if _is_auto_multi_disconnect_test():
 			call_deferred("_run_auto_host_multi_disconnect_test")
+		elif _is_auto_team_wipe_test():
+			# 团灭回归：第一次进图执行倒地/流血/团灭触发；换图后同一入口走验证分支。
+			call_deferred("_run_auto_host_team_wipe_test")
+		elif _is_auto_slow_host_ready_test():
+			# 慢速主机回归：配合 game_init 的 --net-test-host-scene-delay-ms= 复现
+			# "Client ready 报告先于 Host 场景就绪到达"竞态，断言世界快照最终仍被补发。
+			call_deferred("_run_auto_host_slow_host_ready_test")
 		elif _is_auto_character_select_test():
 			call_deferred("_run_auto_host_character_select_world_test")
 		elif _is_auto_network_feature_test():
@@ -199,6 +289,8 @@ func _on_scene_transition_started(target_scene_path: String) -> void:
 		return
 	_scene_transitioning = true
 	_client_local_ready = false
+	# 进入新场景前清空防守战权威快照；旧场景的在途包也会因 _scene_transitioning 被 RPC 端丢弃。
+	_holdout_state.clear()
 	print("[NetworkWorld] SCENE_TRANSITION_QUIET current=%s target=%s" % [_scene_path, target_scene_path])
 
 
@@ -214,9 +306,13 @@ func _physics_process(delta: float) -> void:
 	if not is_instance_valid(net) or not net.has_network() or _scene_transitioning:
 		return
 	var local_menu_open := _is_local_menu_open()
-	var local_player_alive := _is_local_player_alive()
-	if not local_menu_open and local_player_alive:
-		# 救援与投掷均占用确定键，必须在普通战斗输入前优先处理。
+	var local_life := _get_local_player_life_state()
+	# 输入冻结条件：菜单打开、本地玩家真死亡、或团灭收束中 —— 三者都把移动输入归零。
+	# 倒地（local_life == 1）仍可提交移动输入，由 Host 以爬行速度结算。
+	var inputs_frozen := local_menu_open or local_life == 2 or _wipe_active
+	if not inputs_frozen and local_life == 0:
+		# 救援占用功能键(D)、投掷占用确定键，都必须在普通战斗输入前优先处理。
+		# 倒地/死亡的本地玩家不进入此分支：他们不能开火、装填、投掷或救援他人。
 		var revive_input_active := _capture_revive_input()
 		var throwable_input_active := false if revive_input_active else _capture_throwable_input()
 		if not revive_input_active and not throwable_input_active:
@@ -227,10 +323,16 @@ func _physics_process(delta: float) -> void:
 			_capture_shove_input()
 			_capture_fire_input()
 	if net.is_host:
-		_capture_host_input(local_menu_open or not local_player_alive)
+		_capture_host_input(inputs_frozen)
 		_simulate_host_players(delta)
+		# Host 权威推进顺序：先 reconcile 倒地表现与流血（可能把玩家转成真死亡），
+		# 再推进救援（只认仍在流血期内的倒地目标），最后检测团灭与到时重启。
+		_update_host_downed(delta)
 		_update_host_revives()
+		_check_host_team_wipe()
+		_update_host_wipe()
 		_register_untracked_host_enemies()
+		_announce_host_enemy_deaths()
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
 		_player_snapshot_accumulator += delta
@@ -251,8 +353,8 @@ func _physics_process(delta: float) -> void:
 			# 定期可靠重同步可恢复高延迟/丢包客户端的敌人、玩家与掉落物列表。
 			_broadcast_reliable_world_snapshot()
 	else:
-		_predict_client_local_movement(local_menu_open or not local_player_alive)
-		_capture_client_input(delta, local_menu_open or not local_player_alive)
+		_predict_client_local_movement(inputs_frozen)
+		_capture_client_input(delta, inputs_frozen)
 
 
 func _is_local_menu_open() -> bool:
@@ -271,12 +373,21 @@ func is_local_weapon_mode_active() -> bool:
 	return is_instance_valid(node) and node.is_weapon_mode_active()
 
 
-func _is_local_player_alive() -> bool:
+## 本地玩家的三态生命状态，供输入闸门使用：
+## 0 = 站立（可战斗、可救援他人）、1 = 倒地（只能爬行移动，等待救援）、2 = 死亡（全部输入冻结）。
+## 【为什么需要三态】节点层的 is_network_dead() 对"倒地"与"真死亡"都返回 true
+## （两者共用躺地表现），只有 NetworkWorld entry 的权威 downed 标记能区分二者；
+## 而倒地玩家恰恰需要保留移动输入通道（爬行），所以不能用旧的二值 alive 判断。
+func _get_local_player_life_state() -> int:
 	if not is_instance_valid(net):
-		return false
+		return 2
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := entry.get("node") as CharacterBody2D
-	return is_instance_valid(node) and not node.is_network_dead() and node.current_hp > 0.0
+	if not is_instance_valid(node):
+		return 2
+	if not node.is_network_dead():
+		return 0
+	return 1 if bool(entry.get("downed", false)) else 2
 
 
 # ---------------------------------------------------------------- Host simulation
@@ -292,6 +403,7 @@ func _host_initialize_world() -> void:
 	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var host_node := _find_preplaced_player()
+	_apply_arrival_to_preplaced_player(host_node)
 	if host_node:
 		_register_host_player(local_id, host_node, true)
 	else:
@@ -299,9 +411,16 @@ func _host_initialize_world() -> void:
 	for peer_id: int in net.get_peer_ids():
 		if peer_id > 1:
 			_register_host_player(peer_id, _instantiate_player(_spawn_position(_players.size()), peer_id), false)
-	# 若本轮 start_game 前客户端已报告 ready，先把其权威实体在 Host 场景里重建出来。
+	# 【场景 ready 竞态】Client 的 scene-ready 报告可能先于 Host 场景加载完成到达
+	# （Net 缓冲在 _pending_scene_ready）。这里必须走 _accept_ready_peer：
+	# 它会把对端记入 _ready_client_peers 并补建实体。绝不能只调 _add_host_peer ——
+	# 对端玩家已在上方 get_peer_ids() 循环里注册过，_add_host_peer 会整个 no-op，
+	# ready 记录被这一行 take 掉之后就再也无人处理，Host 永远不会向该 Client 发送
+	# 世界快照（客户端表现为画面永久卡死、远端精灵全部不刷出）。
+	# 快照本身延后到 _finish_host_world_initialization（send_snapshot=false），
+	# 因为敌人/掉落物要到那时才注册完毕，提前发会丢掉预置内容。
 	for peer_id: int in net.take_pending_scene_ready(_scene_path):
-		_add_host_peer(peer_id)
+		_accept_ready_peer(peer_id, false)
 	_reconcile_network_seats(net.get_peer_ids())
 	# Enemy/Pickup joins its groups from _ready(), so scan after the scene is completely ready.
 	call_deferred("_finish_host_world_initialization")
@@ -313,6 +432,10 @@ func _finish_host_world_initialization() -> void:
 	_register_initial_host_enemies()
 	_register_initial_host_pickups()
 	_consume_pending_scene_ready()
+	# 兜底补发：对"在 Host 世界初始化前就已 ready"的 Client（ready 被 Net 缓冲、
+	# 上方只标记未发快照），此刻世界已完整，统一补发可靠世界快照。
+	# 对已在 _accept_ready_peer 中收过快照的对端，重复收一次是幂等的可靠包。
+	_broadcast_reliable_world_snapshot()
 
 
 ## 初始化 Client 场景中的表现实体。
@@ -326,20 +449,28 @@ func _client_initialize_world() -> void:
 	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var local_node := _find_preplaced_player()
+	_apply_arrival_to_preplaced_player(local_node)
 	if not local_node:
 		local_node = _instantiate_player(_spawn_position(0), local_id)
 	var state := _find_or_create_player_state(local_id, "", local_node.current_hp)
+	# 与 Host 侧 _register_host_player 相同的章节推进复活兜底（详见彼处注释）：
+	# Host 满血后会经快照同步，这里先行恢复，避免本地先以 0 HP 表现一帧。
+	if state.current_hp <= 0.0:
+		state.current_hp = state.get_max_hp()
 	state.owner_peer_id = local_id
 	state.position = local_node.global_position
 	state.facing = local_node.facing
 	var seat_index := _ensure_player_state_seat(state)
 	local_node.configure_network_entity(local_id, local_id)
 	local_node.network_local_player = true
-	local_node.set_network_local_prediction(false)
+	# 本地预测：Client 立即按本地输入移动自己，Host 权威坐标经快照平滑纠偏。
+	# 关闭预测会导致位置完全由 60Hz 快照硬赋值 —— 移动一顿一顿且输入延迟等于 RTT。
+	local_node.set_network_local_prediction(true)
 	local_node.apply_network_spawn_state(state.character, state.current_hp, state.position, state.facing, true)
 	local_node.reset_network_prediction_sync()
 	local_node.exit_weapon_mode()
 	Players.register_entity(local_node, seat_index)
+	_attach_player_nameplate(local_node, local_id, seat_index)
 	_players[local_id] = {
 		"node": local_node,
 		"state": state,
@@ -355,6 +486,13 @@ func _client_initialize_world() -> void:
 	print("[NetworkWorld] CLIENT_LOCAL_READY peer=%d" % local_id)
 
 
+## 找到 peer_id 玩家救援范围内最近的"可救援目标"。
+## 【倒地语义】只有 entry["downed"] 为 true 的玩家可被救援 —— 流血耗尽后的
+## 真死亡（downed=false、dead=true）同样躺地、同样 is_network_dead()，但不再响应救援。
+## reviver 自身倒地/死亡时在开头就被拦下（is_network_dead() 覆盖两种状态），
+## 因此倒地玩家无法救他人，其未完成的救援尝试也会在 _update_host_revives 中自动取消。
+## Host 用它做权威校验；Client 在 _capture_revive_input 里基于快照同步来的 downed
+## 预估目标，Host 仍会重新验证身份、距离与状态。
 func _find_revive_target_for(peer_id: int) -> int:
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := entry.get("node") as Node2D
@@ -366,8 +504,11 @@ func _find_revive_target_for(peer_id: int) -> int:
 		var target_id := int(value)
 		if target_id == peer_id:
 			continue
-		var target_node := (_players[target_id] as Dictionary).get("node") as Node2D
-		if is_instance_valid(target_node) and target_node.is_network_dead():
+		var target_entry: Dictionary = _players[target_id]
+		if not bool(target_entry.get("downed", false)):
+			continue
+		var target_node := target_entry.get("node") as Node2D
+		if is_instance_valid(target_node):
 			var distance := node.global_position.distance_to(target_node.global_position)
 			if distance <= closest_distance:
 				closest_distance = distance
@@ -377,7 +518,7 @@ func _find_revive_target_for(peer_id: int) -> int:
 
 func _capture_revive_input() -> bool:
 	var peer_id := int(net.my_peer_id)
-	if Input.is_action_just_pressed("确定键"):
+	if Input.is_action_just_pressed("功能键"):
 		var target_id := _find_revive_target_for(peer_id)
 		if target_id > 0:
 			if net.is_host:
@@ -387,7 +528,7 @@ func _capture_revive_input() -> bool:
 				_revive_attempts[peer_id] = {"target": target_id, "started_msec": 0}
 				revive_start_request.rpc_id(1, target_id)
 			return true
-	if Input.is_action_just_released("确定键") and _revive_attempts.has(peer_id):
+	if Input.is_action_just_released("功能键") and _revive_attempts.has(peer_id):
 		if net.is_host:
 			_cancel_host_revive(peer_id)
 		elif _client_local_ready:
@@ -397,6 +538,9 @@ func _capture_revive_input() -> bool:
 	return _revive_attempts.has(peer_id)
 
 
+## Host 权威受理救援开始。目标合法性完全由 _find_revive_target_for 复核：
+## 必须是距离内的"倒地"玩家（站立/真死亡都不行），reviver 自身必须站立且不在
+## 战斗锁定（装填等）中。Client 的本地记录只是按键占位，这里才是唯一权威起点。
 func _try_host_start_revive(reviver_id: int, target_id: int) -> void:
 	if not net.is_host or reviver_id == target_id or not _players.has(reviver_id) or not _players.has(target_id):
 		return
@@ -427,15 +571,176 @@ func _update_host_revives() -> void:
 		var target_entry: Dictionary = _players.get(target_id, {})
 		var target_node := target_entry.get("node") as CharacterBody2D
 		var target_state := target_entry.get("state") as PlayerState
-		if not is_instance_valid(target_node) or not target_state or not target_node.is_network_dead():
+		# 目标必须是仍在流血期内的倒地玩家：is_network_dead() 无法区分倒地与真死亡
+		# （共用躺地表现），权威依据是 entry["downed"]。目标若已流血耗尽或状态异常，
+		# 一律取消本次救援，避免"把尸体扶起来"。
+		if not is_instance_valid(target_node) or not target_state or not bool(target_entry.get("downed", false)):
 			_cancel_host_revive(reviver_id)
 			continue
 		var hp := maxf(1.0, target_node.max_hp * REVIVE_HP_RATIO)
 		target_state.current_hp = hp
+		# 先清权威倒地标记再播放复活表现：entry 是快照与救援筛选的唯一事实来源；
+		# apply_network_revive_state 会同步复位节点层的 network_downed/染色/碰撞。
+		target_entry["downed"] = false
+		target_entry["dead"] = false
+		_players[target_id] = target_entry
 		target_node.apply_network_revive_state(hp)
 		_revive_attempts.erase(reviver_id)
 		revive_presentation.rpc(target_id, hp)
 		print("[NetworkWorld] HOST_REVIVE_COMPLETE reviver=%d target=%d hp=%.1f" % [reviver_id, target_id, hp])
+
+
+## Host：倒地状态推进（每帧）。
+## 职责一：把 entry 的 downed/dead 权威状态 reconcile 到节点表现 —— 倒地时重新
+##         启用移动碰撞并染红（_die() 的 deferred 关闭在前一帧已生效，这里下一帧
+##         覆盖为开启，时序安全）；真死亡时恢复关闭与普通染色。
+## 职责二：推进流血池；耗尽后转真死亡（downed=false / dead=true），此后
+##         _find_revive_target_for 不再返回该玩家，安全门也不再等他到常。
+## 职责三：驱动 Host 本地的救援进度环（Client 侧由快照 revive_progress 驱动）。
+func _update_host_downed(delta: float) -> void:
+	if not net.is_host:
+		return
+	for value: Variant in _players.keys():
+		var peer_id := int(value)
+		var entry: Dictionary = _players[peer_id]
+		var node := entry.get("node") as CharacterBody2D
+		if not is_instance_valid(node):
+			continue
+		var downed := bool(entry.get("downed", false))
+		if node.is_network_downed() != downed:
+			node.set_network_downed(downed)
+		if not downed:
+			_update_network_revive_indicator(node, 0.0)
+			continue
+		var bleed_hp := maxf(0.0, float(entry.get("downed_hp", DOWNED_BLEED_HP)) - DOWNED_BLEED_RATE * delta)
+		entry["downed_hp"] = bleed_hp
+		_players[peer_id] = entry
+		if bleed_hp <= 0.0:
+			# 流血耗尽 → 真死亡：节点表现由下一帧 reconcile 回落（碰撞关闭、染色复位），
+			# 未完成的"救他"尝试会在 _update_host_revives 的 downed 校验里被取消。
+			entry["downed"] = false
+			entry["dead"] = true
+			_players[peer_id] = entry
+			print("[NetworkWorld] HOST_BLEEDOUT peer=%d" % peer_id)
+			continue
+		_update_network_revive_indicator(node, _get_host_revive_progress_for(peer_id))
+
+
+## 目标玩家当前被救援的进度（0–1）；没有任何进行中的救援尝试时返回 0。
+## 仅供 Host 调用（attempts 是 Host 权威状态）；Client 的进度来自快照字段。
+func _get_host_revive_progress_for(target_id: int) -> float:
+	for attempt: Dictionary in _revive_attempts.values():
+		if int(attempt.get("target", 0)) != target_id:
+			continue
+		var started := int(attempt.get("started_msec", 0))
+		if started > 0:
+			return clampf(float(Time.get_ticks_msec() - started) / float(REVIVE_DURATION_MSEC), 0.0, 1.0)
+	return 0.0
+
+
+## 在倒地玩家头顶挂/更新/摘除救援进度环。
+## Host：进度来自 _revive_attempts（_update_host_downed 调用）；
+## Client：进度来自快照 revive_progress（_ensure_client_player 调用）。
+## progress <= 0 表示当前没有救援进行中 —— 摘除节点，避免常驻空绘制。
+func _update_network_revive_indicator(node: CharacterBody2D, progress: float) -> void:
+	if not is_instance_valid(node):
+		return
+	var indicator := node.get_node_or_null("NetworkReviveIndicator") as Node2D
+	if progress <= 0.0:
+		if indicator:
+			indicator.queue_free()
+		return
+	if not indicator:
+		indicator = Node2D.new()
+		indicator.name = "NetworkReviveIndicator"
+		indicator.z_index = 20
+		indicator.set_script(REVIVE_INDICATOR_SCRIPT)
+		node.add_child(indicator)
+	# 用 set() 而非静态属性访问：indicator 声明为 Node2D，脚本字段需动态写入。
+	indicator.set("progress", clampf(progress, 0.0, 1.0))
+
+
+## Host：团灭检测 —— 全员非站立（全部倒地或死亡）即触发。
+## _players 为空时跳过（切图间隙等无玩家瞬间不做误判）；
+## _scene_transitioning 由 _physics_process 顶部统一拦截，这里无需重复判断。
+func _check_host_team_wipe() -> void:
+	if not net.is_host or _wipe_active or _players.is_empty():
+		return
+	for entry: Dictionary in _players.values():
+		var node := entry.get("node") as CharacterBody2D
+		if is_instance_valid(node) and not node.is_network_dead():
+			return
+	_trigger_host_team_wipe()
+
+
+## Host：发起团灭收束 —— 置位 _wipe_active 冻结全部输入与移动（含倒地爬行），
+## 清空未完成的救援尝试，广播黑屏表现（call_local：Host 自己也要看到遮罩）。
+func _trigger_host_team_wipe() -> void:
+	_wipe_active = true
+	_wipe_started_msec = Time.get_ticks_msec()
+	_wipe_restart_requested = false
+	_revive_attempts.clear()
+	team_wipe_presentation.rpc()
+	print("[NetworkWorld] HOST_TEAM_WIPE players=%d" % _players.size())
+
+
+## Host：黑屏淡出 + 停留结束后，重置会话 PlayerState（全员满血 —— 倒地/死亡
+## 是场景运行时状态，不跨场景持久化），再复用既有切图协议重载本章。
+## Client 不需要单独的重启指令：request_scene_change 会经 start_game 广播，
+## 双端按同一 serial 走"静默 → ack → flush → 换图"流程。
+func _update_host_wipe() -> void:
+	if not net.is_host or not _wipe_active or _wipe_restart_requested:
+		return
+	if Time.get_ticks_msec() - _wipe_started_msec < int((WIPE_FADE_SECONDS + WIPE_HOLD_SECONDS) * 1000.0):
+		return
+	_wipe_restart_requested = true
+	for value: Variant in _players.keys():
+		var state := (_players[int(value)] as Dictionary).get("state") as PlayerState
+		if state:
+			state.current_hp = state.get_max_hp()
+	print("[NetworkWorld] HOST_TEAM_WIPE_RESTART scene=%s hp_reset=done" % _scene_path)
+	net.request_scene_change(_scene_path)
+
+
+## 团灭黑屏表现：authority + call_local，Host 与所有 Client 各自本地建遮罩。
+## Client 同时置位 _wipe_active 冻结本地输入，直到切图协议接管（旧场景节点随
+## 换图被释放，新场景的 NetworkWorld 会以全新状态启动）。
+@rpc("authority", "call_local", "reliable")
+func team_wipe_presentation() -> void:
+	_wipe_active = true
+	_wipe_started_msec = Time.get_ticks_msec()
+	_revive_attempts.clear()
+	_show_team_wipe_fade()
+	print("[NetworkWorld] TEAM_WIPE_PRESENTATION host=%s" % net.is_host)
+
+
+## 建一层顶层黑屏遮罩（layer=128，与单人死亡黑屏同级）。只建不重建：
+## RPC 重复到达时复用已有节点，避免叠加多层遮罩；换图时随场景一起释放。
+func _show_team_wipe_fade() -> void:
+	var tree := get_tree()
+	if not tree or not tree.current_scene:
+		return
+	if is_instance_valid(_wipe_fade_overlay):
+		return
+	var canvas_layer := CanvasLayer.new()
+	canvas_layer.name = "TeamWipeFadeCanvas"
+	canvas_layer.layer = 128
+	_wipe_fade_overlay = ColorRect.new()
+	_wipe_fade_overlay.name = "TeamWipeFadeOverlay"
+	_wipe_fade_overlay.color = Color(0, 0, 0, 0)
+	_wipe_fade_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_wipe_fade_overlay.size = tree.current_scene.get_viewport().get_visible_rect().size
+	canvas_layer.add_child(_wipe_fade_overlay)
+	tree.current_scene.add_child(canvas_layer)
+
+
+## 团灭黑屏渐变驱动（Host 与 Client 通用）。Host 到时后的重启在
+## _update_host_wipe（物理帧）执行；遮罩随换图自动消失。
+func _process(_delta: float) -> void:
+	if not _wipe_active or not is_instance_valid(_wipe_fade_overlay):
+		return
+	var elapsed := float(Time.get_ticks_msec() - _wipe_started_msec) / 1000.0
+	_wipe_fade_overlay.color = Color(0, 0, 0, clampf(elapsed / WIPE_FADE_SECONDS, 0.0, 1.0))
 
 
 func _capture_throwable_input() -> bool:
@@ -443,7 +748,7 @@ func _capture_throwable_input() -> bool:
 	var local_throw_state: Dictionary = _network_throwable_state.get(local_id, {})
 	var held := bool(local_throw_state.get("held", false))
 	var aiming := bool(local_throw_state.get("aiming", false))
-	if Input.is_action_just_pressed("投掷物键"):
+	if Global.item_key_just_pressed("投掷物键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, not held)
 		elif _client_local_ready:
@@ -451,7 +756,7 @@ func _capture_throwable_input() -> bool:
 		return true
 	if not held:
 		return false
-	if Input.is_action_just_pressed("主武器键") or Input.is_action_just_pressed("副武器键"):
+	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, false)
 		elif _client_local_ready:
@@ -490,9 +795,9 @@ func _request_throwable_range(delta: int) -> void:
 
 
 func _capture_weapon_switch_input() -> void:
-	if Input.is_action_just_pressed("主武器键"):
+	if Global.item_key_just_pressed("主武器键"):
 		_request_weapon_switch("primary")
-	elif Input.is_action_just_pressed("副武器键"):
+	elif Global.item_key_just_pressed("副武器键"):
 		_request_weapon_switch("secondary")
 
 
@@ -527,22 +832,15 @@ func _request_facing_lock(toggle: bool, locked: bool) -> void:
 	if net.is_host:
 		_try_host_set_facing_lock(local_id, toggle, locked)
 	elif _client_local_ready:
-		facing_lock_request.rpc_id(1, toggle, locked)
-		if toggle:
-			var entry: Dictionary = _players.get(local_id, {})
-			var node := entry.get("node") as CharacterBody2D
-			if is_instance_valid(node):
-				node.toggle_facing_lock()
-		elif locked:
-			var entry: Dictionary = _players.get(local_id, {})
-			var node := entry.get("node") as CharacterBody2D
-			if is_instance_valid(node):
-				node.lock_facing()
-		else:
-			var entry: Dictionary = _players.get(local_id, {})
-			var node := entry.get("node") as CharacterBody2D
-			if is_instance_valid(node):
-				node.unlock_facing()
+		var entry: Dictionary = _players.get(local_id, {})
+		var node := entry.get("node") as CharacterBody2D
+		if not is_instance_valid(node):
+			return
+		var desired_locked: bool = (not node.is_facing_locked()) if toggle else locked
+		_facing_lock_requests[local_id] = desired_locked
+		facing_lock_request.rpc_id(1, false, desired_locked)
+		# 仅做视觉预测；最终状态由 Host 的 facing_lock_presentation 覆盖。
+		node.apply_facing_lock_state(desired_locked, node.facing)
 
 
 func _request_weapon_switch(slot: String) -> void:
@@ -628,7 +926,7 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 	node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 	if moving:
 		node.update_facing(direction)
-	node.move_and_slide()
+	node.move_with_corner_assist()
 	node.update_appearance(moving, walking)
 	_set_input(peer_id, direction, walking)
 
@@ -668,9 +966,24 @@ func _simulate_host_players(_delta: float) -> void:
 			continue
 		if node.has_method("is_network_dead") and node.is_network_dead():
 			_clear_host_combat_state_for_dead_peer(peer_id)
-			node.velocity = Vector2.ZERO
-			_set_input(peer_id, Vector2.ZERO, false)
-			_sync_state_from_node(peer_id, node, false, false)
+			# 倒地（downed）与真死亡（dead）都进入本分支，但移动规则不同：
+			# 倒地玩家仍可按 DOWNED_CRAWL_SPEED 缓慢爬行（方向来自其 Client 提交的
+			# 输入），真死亡玩家完全冻结。躺地状态下 _refresh_sprite 拒绝刷新精灵，
+			# 因此移动不会破坏死亡帧，只会同步位置与朝向（爬行转向）。
+			# 团灭收束（_wipe_active）期间连爬行也一并冻结。
+			if not bool(entry.get("downed", false)) or _wipe_active:
+				node.velocity = Vector2.ZERO
+				_set_input(peer_id, Vector2.ZERO, false)
+				_sync_state_from_node(peer_id, node, false, false)
+				continue
+			var crawl_dir: Vector2 = entry.get("input", Vector2.ZERO)
+			var crawling := not crawl_dir.is_zero_approx()
+			node.velocity = crawl_dir.limit_length(1.0) * DOWNED_CRAWL_SPEED
+			if crawling:
+				node.update_facing(crawl_dir)
+			node.move_with_corner_assist()
+			node.update_appearance(crawling, true)
+			_sync_state_from_node(peer_id, node, crawling, true)
 			continue
 		var direction: Vector2 = entry.get("input", Vector2.ZERO)
 		var walking: bool = bool(entry.get("walking", false))
@@ -678,7 +991,7 @@ func _simulate_host_players(_delta: float) -> void:
 		node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 		if moving:
 			node.update_facing(direction)
-		node.move_and_slide()
+		node.move_with_corner_assist()
 		node.update_appearance(moving, walking)
 		_sync_state_from_node(peer_id, node, moving, walking)
 
@@ -701,6 +1014,12 @@ func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bo
 	if not is_instance_valid(node) or _players.has(peer_id):
 		return
 	var state := _find_or_create_player_state(peer_id, "", node.current_hp)
+	# 章节推进复活：上一章真死亡的玩家在新场景按满血归队。
+	# 倒地/死亡是场景运行时状态（entry 字段），换图后 entry 全新，无需清理；
+	# 只有会话 PlayerState 的 HP 需要在这里兜底恢复，否则会以 0 HP 站立出场。
+	# 这同时解决了"一人死亡、全员卡安全门"的软锁：过门后死者满血回归。
+	if state.current_hp <= 0.0:
+		state.current_hp = state.get_max_hp()
 	state.owner_peer_id = peer_id
 	state.position = node.global_position
 	state.facing = node.facing
@@ -713,6 +1032,7 @@ func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bo
 	if not is_preplaced:
 		node.global_position = _spawn_position(_players.size())
 	Players.register_entity(node, seat_index)
+	_attach_player_nameplate(node, peer_id, seat_index)
 	# Host 也走同一套表现初始化，保证新实体的角色、HP 和朝向与 PlayerState 一致。
 	node.apply_network_spawn_state(state.character, state.current_hp, node.global_position, state.facing, true)
 	if peer_id == net.my_peer_id:
@@ -745,9 +1065,35 @@ func _connect_host_enemy_damage_signal(entity_id: int, node: CharacterBody2D) ->
 		node.connect("network_damage_applied", callback)
 
 
+## Host 收到玩家实体受伤信号（player.take_damage → network_damage_applied）。
+## 【时序】信号在 take_damage() 内部、`_die()` 之前发出 —— 此刻 current_hp 已扣减，
+## 但躺地表现尚未播放。这里只把"HP 归零"登记为权威倒地状态；躺地表现由
+## player._die() 自己完成，碰撞再启用交给 _update_host_downed 下一帧 reconcile，
+## 避免与 _apply_network_death_state 中 deferred 关闭碰撞的写入争抢顺序。
 func _on_host_player_damage_applied(damage: float, position: Vector2, _is_headshot: bool, peer_id: int) -> void:
-	if net.is_host and damage > 0.0:
-		player_hurt_presentation.rpc(peer_id, damage, position)
+	if not net.is_host or damage <= 0.0:
+		return
+	player_hurt_presentation.rpc(peer_id, damage, position)
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := entry.get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.current_hp <= 0.0:
+		_handle_host_player_downed(peer_id)
+
+
+## Host：把 HP 归零的玩家登记为倒地（可救援）。流血池从 DOWNED_BLEED_HP 满值起算。
+## 已倒地/已真死亡的玩家直接忽略 —— take_damage 对躺地实体本就不生效
+## （_is_dying 挡板），这里是防御性的二次进入保护。
+func _handle_host_player_downed(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	if bool(entry.get("downed", false)) or bool(entry.get("dead", false)):
+		return
+	entry["downed"] = true
+	entry["dead"] = false
+	entry["downed_hp"] = DOWNED_BLEED_HP
+	_players[peer_id] = entry
+	print("[NetworkWorld] HOST_DOWNED peer=%d bleed_hp=%.0f" % [peer_id, DOWNED_BLEED_HP])
 
 
 func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool, entity_id: int) -> void:
@@ -826,6 +1172,7 @@ func _clear_host_combat_state_for_dead_peer(peer_id: int) -> void:
 	_revive_attempts.erase(peer_id)
 	_weapon_transition_state.erase(peer_id)
 	_combat_busy_until_msec.erase(peer_id)
+	_send_host_facing_lock_state(peer_id)
 
 
 func _apply_host_throwable_presentation(peer_id: int) -> void:
@@ -858,6 +1205,7 @@ func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
 		node.unlock_facing()
 	_apply_host_throwable_presentation(peer_id)
 	throwable_state_presentation.rpc(peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", 3)))
+	_send_host_facing_lock_state(peer_id)
 
 
 func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
@@ -874,6 +1222,7 @@ func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
 	throwable_state_presentation.rpc(peer_id, td.item_id, true, aiming, int(throw_state.get("range", 3)))
+	_send_host_facing_lock_state(peer_id)
 
 
 func _try_host_adjust_throwable_range(peer_id: int, delta: int) -> void:
@@ -903,12 +1252,17 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 		return
 	var start := node.global_position
 	var landing_position: Vector2 = start + node.get_facing_vector() * (clampi(int(throw_state.get("range", 3)), 0, td.throw_range_max) * 32.0)
-	state.throwable = null
+	state.consume_throwable()
 	_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
-	node.apply_network_throwable_presentation(null, false, false, 3)
+	if state.throwable and state.throwable_count > 0:
+		# 炸药类叠数投掷物：槽没空 → 保留举起外观，只清瞄准状态
+		node.apply_network_throwable_presentation(td, false, false, 3)
+		throwable_state_presentation.rpc(peer_id, td.item_id, false, false, 3)
+	else:
+		node.apply_network_throwable_presentation(null, false, false, 3)
+		throwable_state_presentation.rpc(peer_id, "", false, false, 3)
 	ThrowableProjectile.spawn(td, start, landing_position, node, true, false)
 	throwable_presentation.rpc(peer_id, td.item_id, start, landing_position)
-	throwable_state_presentation.rpc(peer_id, "", false, false, 3)
 	print("[NetworkWorld] HOST_THROWABLE peer=%d item=%s" % [peer_id, td.item_id])
 
 
@@ -984,21 +1338,28 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 
 
-## Host 保留唯一朝向权威：客户端仅提交操作意图，朝向本身继续随快照广播。
+## Host 保留唯一朝向权威：客户端仅提交操作意图，结果通过可靠确认回传。
 func _try_host_set_facing_lock(peer_id: int, toggle: bool, locked: bool) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := entry.get("node") as CharacterBody2D
 	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
+		_send_host_facing_lock_state(peer_id)
 		return
-	if toggle:
-		node.toggle_facing_lock()
-	elif locked:
-		node.lock_facing()
-	else:
-		node.unlock_facing()
+	var desired_locked: bool = (not node.is_facing_locked()) if toggle else locked
+	node.apply_facing_lock_state(desired_locked, node.facing)
+	_send_host_facing_lock_state(peer_id)
 	print("[NetworkWorld] HOST_FACING_LOCK peer=%d locked=%s" % [peer_id, node.is_facing_locked()])
+
+
+func _send_host_facing_lock_state(peer_id: int) -> void:
+	if not net.is_host or peer_id <= 1 or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(node):
+		return
+	facing_lock_presentation.rpc(peer_id, node.is_facing_locked(), node.get_locked_facing())
 
 
 ## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
@@ -1209,8 +1570,9 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 			if hit_enemy_ids.has(enemy_id):
 				break
 			hit_enemy_ids[enemy_id] = true
-			enemy.take_damage(wd.get_effective_damage(), 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration)
-			print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s" % [enemy.name, int(wd.get_effective_damage()), is_headshot])
+			var melee_damage: float = wd.get_effective_damage() * (wd.critical_damage if is_headshot else 1.0)
+			enemy.take_damage(melee_damage, 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.element)
+			print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s" % [enemy.name, int(melee_damage), is_headshot])
 			break
 
 
@@ -1218,7 +1580,16 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	var bullet_id := _next_bullet_id
 	_next_bullet_id += 1
 	var direction := bd.get_fire_direction(shooter.get_facing_vector())
-	var start_position := shooter.global_position + direction * bd.spawn_offset + bd.get_extra_offset(shooter.facing)
+	## 枪口偏移与单机同规则（2026-09-16）：角色专属（WeaponData.bullet_spawn_offsets）
+	## **配置了条目即生效**（显式 (0,0) 合法）；未配置回退 BulletData 的逐方向 offset_*。
+	## 两端必须用同一套，否则联机弹道错位。
+	var shooter_cd: CharacterData = shooter.get("current_character") as CharacterData
+	var muzzle_extra: Vector2
+	if wd.has_bullet_spawn_offset(shooter_cd):
+		muzzle_extra = wd.get_bullet_spawn_offset(shooter_cd, shooter.facing)
+	else:
+		muzzle_extra = bd.get_extra_offset(shooter.facing)
+	var start_position := shooter.global_position + direction * bd.spawn_offset + muzzle_extra
 	var bullet := BULLET_SCENE.instantiate() as Node2D
 	if not bullet:
 		return
@@ -1232,6 +1603,8 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 		"destroy_on_hit": bd.destroy_on_hit,
 		"penetration": bd.penetration,
 		"critical_rate": wd.critical_rate,
+		"critical_damage": wd.critical_damage,
+		"element": wd.element,
 		"hit_effect_anim": wd.hit_effect_anim,
 		"hit_effect_follow": wd.hit_effect_follow,
 		"hit_effect_offset_override": wd.hit_effect_offset_override,
@@ -1241,6 +1614,7 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 		"frame_duration": bd.bullet_frame_duration,
 		"collision_size": bd.collision_size,
 		"collision_offset": bd.collision_offset,
+		"spawn_offset": bd.spawn_offset,
 		"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
 		"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
 		"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else wd.hitstun_duration,
@@ -1297,6 +1671,18 @@ func facing_lock_request(toggle: bool, locked: bool) -> void:
 	if sender <= 1 or not _players.has(sender):
 		return
 	_try_host_set_facing_lock(sender, toggle, locked)
+
+
+@rpc("authority", "call_remote", "reliable")
+func facing_lock_presentation(peer_id: int, locked: bool, locked_facing: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(node):
+		return
+	_facing_lock_requests.erase(peer_id)
+	node.apply_facing_lock_state(locked, locked_facing)
+	print("[NetworkWorld] CLIENT_FACING_LOCK peer=%d locked=%s facing=%d" % [peer_id, locked, locked_facing])
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -1482,6 +1868,37 @@ func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, i
 			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s" % [entity_id, damage, is_headshot])
 
 
+## Host：每帧检查是否有敌人刚刚进入死亡，并用可靠 RPC 广播死亡表现。
+## 死亡是状态变更（铁律 4：状态变更走 reliable），绝不能依赖不可靠快照：
+## 紧凑快照会跳过尸体，Client 不广播的话只能等 2 秒一次的可靠世界重同步，
+## 表现为丧尸死后仍原地踏步一段时间才切换尸体行走图。
+func _announce_host_enemy_deaths() -> void:
+	if not net.is_host or _enemies.is_empty():
+		return
+	for key: Variant in _enemies.keys():
+		var entity_id := int(key)
+		if _announced_dead_enemy_ids.has(entity_id):
+			continue
+		var enemy := _resolve_enemy_entry(_enemies[entity_id] as Dictionary)
+		if not is_instance_valid(enemy) or not enemy.is_network_dead():
+			continue
+		_announced_dead_enemy_ids[entity_id] = true
+		enemy_death_presentation.rpc(entity_id, enemy.is_network_headshot_dead())
+		print("[NetworkWorld] HOST_ENEMY_DEATH entity=%d headshot=%s" % [entity_id, enemy.is_network_headshot_dead()])
+
+
+@rpc("authority", "call_remote", "reliable")
+func enemy_death_presentation(entity_id: int, is_headshot: bool) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var node := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if is_instance_valid(node) and node.has_method("apply_network_death"):
+		node.apply_network_death(is_headshot)
+		if _is_auto_enemy_test_scene():
+			_auto_client_enemy_death_presentations += 1
+			print("[NetworkWorld] CLIENT_ENEMY_DEATH_PRESENTATION entity=%d headshot=%s" % [entity_id, is_headshot])
+
+
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func submit_input(direction: Vector2, walking: bool) -> void:
 	if not net.is_host:
@@ -1600,6 +2017,41 @@ func spawn_network_enemy(public_state: Dictionary) -> void:
 	print("[NetworkWorld] CLIENT_ENEMY_SPAWN id=%d" % entity_id)
 
 
+## Host：把一只敌人从全端（含 Client）移除 —— 供 Director 的「远处回收」使用。
+## 直接 queue_free 的话 Client 会留下永久幽灵表现实体，所以必须走可靠 RPC 广播。
+func despawn_enemy_networkwide(enemy: Node2D) -> void:
+	if not net.is_host:
+		return
+	var entity_id := int(enemy.get("network_entity_id"))
+	if entity_id <= 0:
+		# 未登记的敌人：按节点实例 id 反查实体号
+		for key: Variant in _enemies.keys():
+			var n := _resolve_enemy_entry(_enemies[key] as Dictionary)
+			if is_instance_valid(n) and n == enemy:
+				entity_id = int(key)
+				break
+	_despawn_enemy_local(entity_id)
+	if entity_id > 0:
+		despawn_network_enemy.rpc(entity_id)
+	if is_instance_valid(enemy):
+		enemy.queue_free()
+
+
+@rpc("authority", "call_remote", "reliable")
+func despawn_network_enemy(entity_id: int) -> void:
+	if net.is_host:
+		return
+	_despawn_enemy_local(entity_id)
+
+
+func _despawn_enemy_local(entity_id: int) -> void:
+	var entry: Dictionary = _enemies.get(entity_id, {})
+	var node := _resolve_enemy_entry(entry)
+	_enemies.erase(entity_id)
+	if is_instance_valid(node):
+		node.queue_free()
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func auto_character_world_ack() -> void:
 	if not net.is_host or not _is_auto_character_select_test():
@@ -1616,8 +2068,28 @@ func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Ar
 	_apply_client_snapshot(player_states, true)
 	_apply_client_enemy_snapshot(enemy_states, true)
 	_apply_client_pickup_snapshot(pickup_states)
+	if not _quest_flags_synced:
+		# 首个快照后补拉剧情机关 flag 全量（拾取点/爆破墙/门的状态对客户端可见性至关重要）
+		_quest_flags_synced = true
+		quest_flag_sync_request.rpc_id(1)
 	_initial_world_received = _players.has(net.my_peer_id)
 	print("[NetworkWorld] WORLD_SNAPSHOT players=%d enemies=%d local_ready=%s" % [player_states.size(), enemy_states.size(), _initial_world_received])
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func quest_flag_sync_request() -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		sync_quest_flags_rpc.rpc_id(sender, Global.quest_flags.duplicate())
+
+
+@rpc("authority", "call_remote", "reliable")
+func sync_quest_flags_rpc(flags: Dictionary) -> void:
+	_quest_flags_synced = true
+	for k: Variant in flags:
+		Global.apply_quest_flag(str(k), bool(flags[k]))
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
@@ -1649,19 +2121,33 @@ func _consume_pending_scene_ready() -> void:
 		_accept_ready_peer(peer_id)
 
 
-func _accept_ready_peer(peer_id: int) -> void:
+## 把一个已上报 scene-ready 的 Client 纳入本场景的同步名单。
+## send_snapshot=false 用于 Host 世界尚未初始化完成时（_host_initialize_world 的
+## 缓冲 ready 路径）：只标记 + 补建实体，可靠快照由 _finish_host_world_initialization
+## 统一补发，避免发出缺敌人/掉落物的世界快照。
+func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 	if peer_id <= 1 or not net.get_player_names().has(peer_id):
 		return
 	_ready_client_peers[peer_id] = true
 	_add_host_peer(peer_id)
 	# 首次世界快照是可靠的，保留字典格式及预置敌人的场景路径。
-	_send_reliable_world_snapshot(peer_id)
+	if send_snapshot:
+		_send_reliable_world_snapshot(peer_id)
+	# 中途加入的 Client 补发当前防守战倒计时状态（若有），使其立即看到正确剩余时间，
+	# 不会因"进入时刚好错过广播"而看不到 HUD。
+	if not _holdout_state.is_empty():
+		holdout_state_sync.rpc_id(peer_id,
+			int(_holdout_state.get("phase", 0)),
+			float(_holdout_state.get("remaining", 0.0)),
+			float(_holdout_state.get("total", 0.0)),
+			int(_holdout_state.get("token", 0)))
 
 
 func _send_reliable_world_snapshot(peer_id: int) -> void:
 	if not net.is_host or peer_id <= 1:
 		return
 	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	_auto_world_snapshot_sent_count += 1
 	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
 
@@ -1816,6 +2302,13 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			"throw_range": int(packet[18]),
 			"dead": bool(packet[19]),
 			"magazine_ammo": int(packet[20]),
+			# 倒地扩展字段（v2 起追加）。旧长度包按默认值降级：
+			# 未倒地 / 无流血数据 / 无人施救，保证与旧 Host 的 21 字段包兼容。
+			"downed": bool(packet[21]) if packet.size() > 21 else false,
+			"bleed_ratio": float(packet[22]) if packet.size() > 22 else -1.0,
+			"revive_progress": float(packet[23]) if packet.size() > 23 else 0.0,
+			"facing_locked": bool(packet[24]) if packet.size() > 24 else false,
+			"locked_facing": int(packet[25]) if packet.size() > 25 else -1,
 		}
 	return {}
 
@@ -1823,8 +2316,9 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := entry.get("node") as CharacterBody2D
-	var is_local_prediction: bool = peer_id == int(net.my_peer_id) and is_instance_valid(node) and node.network_local_prediction
+	var created := false
 	if not is_instance_valid(node):
+		created = true
 		node = _instantiate_player(_packet_position(public_state), peer_id)
 		var state := _find_or_create_player_state(
 			peer_id,
@@ -1835,14 +2329,16 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		node.configure_network_entity(peer_id, peer_id)
 		if peer_id == int(net.my_peer_id):
 			node.network_local_player = true
-			node.set_network_local_prediction(false)
+			node.set_network_local_prediction(true)
 		node.exit_weapon_mode()
 		var seat_index: int = _ensure_player_state_seat(state)
 		Players.register_entity(node, seat_index)
+		_attach_player_nameplate(node, peer_id, seat_index)
 		entry = {"node": node, "state": state, "input": Vector2.ZERO, "moving": false, "walking": false}
 		_players[peer_id] = entry
-		if peer_id == net.my_peer_id:
+		if peer_id == int(net.my_peer_id):
 			_set_local_player(node, seat_index)
+	var is_local_prediction: bool = peer_id == int(net.my_peer_id) and node.network_local_prediction
 
 	var state := entry.get("state") as PlayerState
 	var character := _load_character(str(public_state.get("character_path", "")))
@@ -1853,6 +2349,27 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		state.current_hp = float(public_state.get("hp", state.current_hp))
 		state.position = _packet_position(public_state)
 		state.facing = int(public_state.get("facing", state.facing))
+		var snapshot_locked: bool = bool(public_state.get("facing_locked", false))
+		var snapshot_locked_facing: int = int(public_state.get("locked_facing", -1))
+		# facing_lock 是 Host 权威属性：Host 处理远端 Client 上报的状态时，绝不能让 Client
+		# 自报的 facing_locked 覆盖 Host 权威值（否则 Host 每帧把它刷回 false，再经快照广播成
+		# 海量 locked=false，客户端本地 is_facing_locked() 永远对不上）。
+		# 仅当"客户端接收 Host 快照"时才应用此字段。
+		var is_host_applying_remote: bool = net.is_host and peer_id != int(net.my_peer_id)
+		if is_host_applying_remote:
+			pass  # Host 权威值由 _try_host_set_facing_lock / unlock_facing 维护，忽略 Client 自报
+		else:
+			# 快照也是权威收敛兜底；但不能让请求确认前的旧快照覆盖本地预测。
+			var has_pending_lock_request: bool = peer_id == int(net.my_peer_id) and _facing_lock_requests.has(peer_id)
+			if has_pending_lock_request:
+				if bool(_facing_lock_requests[peer_id]) != snapshot_locked:
+					# Host 尚未处理请求，保留预测状态，等待可靠确认包。
+					pass
+				else:
+					_facing_lock_requests.erase(peer_id)
+					node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
+			else:
+				node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
 		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
 		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
 		var remote_weapon := _apply_client_weapon_snapshot(state, node, public_state)
@@ -1862,32 +2379,55 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		var throwable_range := clampi(int(public_state.get("throw_range", 3)), 0, remote_throwable.throw_range_max if remote_throwable else 0)
 		state.throwable = remote_throwable
 		_network_throwable_state[peer_id] = {"held": throwable_held, "aiming": throwable_aiming, "range": throwable_range}
-		node.apply_network_throwable_presentation(remote_throwable, throwable_held, throwable_aiming, throwable_range)
+		# 每帧状态回放：投掷物外观照常更新，但朝向锁由 facing_lock_presentation 权威通道管理，
+		# 不要因 held=false 把固定朝向锁解掉（固定朝向锁与投掷物瞄准锁共用 _facing_locked）。
+		node.apply_network_throwable_presentation(remote_throwable, throwable_held, throwable_aiming, throwable_range, false)
 		if remote_weapon and remote_weapon.is_ranged:
 			state.set_magazine_ammo(
 				remote_weapon.item_id,
 				int(public_state.get("magazine_ammo", state.get_magazine_ammo(remote_weapon.item_id)))
 			)
+	# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
+	# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
+	# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
+	var established: bool = (not created) and node.has_network_position_tracking()
 	# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
 	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
 	# 客户端角色会永远停在同一张行走帧上。
 	if snap and (not is_local_prediction or not _initial_world_received):
-		# 可靠世界重同步每隔一段时间会到达一次。对于已经开始本地预测的玩家，
-		# 只用当前位置刷新角色/H P 初始化，不把旧权威坐标立即写回；随后由
-		# apply_network_presentation 的小幅平滑纠正收敛，避免明显回弹。
 		var spawn_position := _packet_position(public_state)
-		if peer_id == int(net.my_peer_id) and node.network_local_prediction and _initial_world_received:
-			spawn_position = node.global_position
-		node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
+		if is_local_prediction and _initial_world_received:
+			# 本地预测玩家只吃首次校准；此后的权威坐标经 apply_network_authority_target 纠偏。
+			pass
+		elif established:
+			node.apply_network_resync_state(character, spawn_position, int(public_state.get("facing", 0)))
+		else:
+			node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
 	var is_dead := bool(public_state.get("dead", false))
 	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
-	if not is_local_prediction:
+	# 倒地状态 reconcile：downed 只可能伴随 dead=true（躺地表现已由
+	# apply_network_health_state 触发）。set_network_downed 负责碰撞/染色；
+	# 同时把权威值写回 entry —— 本地救援预估（_find_revive_target_for）与
+	# 本地玩家生命三态判定（_get_local_player_life_state）都依赖它。
+	# revive_progress 驱动头顶救援进度环；不可靠快照偶尔丢包只会让环短暂停顿。
+	var downed := is_dead and bool(public_state.get("downed", false))
+	entry["downed"] = downed
+	entry["dead"] = is_dead and not downed
+	entry["bleed_ratio"] = float(public_state.get("bleed_ratio", -1.0))
+	var revive_progress := float(public_state.get("revive_progress", 0.0))
+	entry["revive_progress"] = revive_progress
+	node.set_network_downed(downed)
+	_update_network_revive_indicator(node, revive_progress)
+	if is_local_prediction:
+		# 本地预测玩家：快照只提供权威纠偏目标与朝向，位置由本地输入驱动。
+		node.apply_network_authority_target(_packet_position(public_state), int(public_state.get("facing", 0)))
+	else:
 		node.apply_network_presentation(
 			_packet_position(public_state),
 			int(public_state.get("facing", 0)),
 			false if is_dead else bool(public_state.get("moving", false)),
 			false if is_dead else bool(public_state.get("walking", false)),
-			snap
+			snap and not established
 		)
 	entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
 	entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
@@ -1932,6 +2472,8 @@ func _normalize_enemy_snapshot(value: Variant) -> Dictionary:
 			"visual_char_index": int(packet[5]),
 			"dead": bool(packet[6]),
 			"headshot": bool(packet[7]),
+			# P0-B3：第 9 位=元素染色字节；旧长度包按 -1 处理（保持现状不清色）。
+			"element_state": int(packet[8]) if packet.size() >= 9 else -1,
 		}
 	return {}
 
@@ -1939,7 +2481,10 @@ func _normalize_enemy_snapshot(value: Variant) -> Dictionary:
 func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _enemies.get(entity_id, {})
 	var node := _resolve_enemy_entry(entry)
-	if not is_instance_valid(node):
+	# 已存在的敌人属于"平滑渲染中"的实体：可靠重同步对它按软并流处理，
+	# 避免每 2 秒一次的可靠包把位置硬切（客户端丧尸周期性卡顿的根源）。
+	var established := is_instance_valid(node)
+	if not established:
 		var scene_path := str(public_state.get("scene_path", ""))
 		# 紧凑不可靠包不带场景路径；在可靠 world_snapshot 建立实体前不创建未知敌人。
 		if scene_path.is_empty() and not snap:
@@ -1958,6 +2503,11 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 		node.configure_network_entity(entity_id, true)
 		entry = {"node_id": node.get_instance_id(), "scene_path": scene_path}
 		_enemies[entity_id] = entry
+	# 可靠死亡广播后，乱序迟到的不可靠位置包（死亡前发出、死亡后送达）不得
+	# 把尸体重新拉回行走状态；可靠快照本身按序到达，仍可幂等刷新尸体表现。
+	# （established 实体的可靠重同步按 snap=false 生效，因此这里同样拦截尸体。）
+	if not snap and node.is_network_dead():
+		return
 	node.apply_network_presentation(
 		_packet_position(public_state),
 		int(public_state.get("facing", 0)),
@@ -1966,7 +2516,8 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 		int(public_state.get("visual_char_index", -1)),
 		bool(public_state.get("dead", false)),
 		bool(public_state.get("headshot", false)),
-		snap
+		snap and not established,
+		int(public_state.get("element_state", -1))  # P0-B3
 	)
 
 
@@ -2121,9 +2672,14 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 		return
 	if throwable:
 		var old_throwable: ThrowableData = state.throwable
-		if old_throwable:
-			_spawn_host_dropped_throwable(old_throwable, player.global_position)
-		state.throwable = throwable
+		if old_throwable == throwable and state.throwable_count > 0:
+			# 同类投掷物 → 叠数累加，不掉落旧的
+			state.throwable_count += 1
+		else:
+			if old_throwable:
+				_spawn_host_dropped_throwable(old_throwable, player.global_position)
+			state.throwable = throwable
+			state.throwable_count = 1
 		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
 		_apply_host_throwable_presentation(peer_id)
 		_pickups.erase(pickup_id)
@@ -2169,9 +2725,11 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: Pl
 		pickup.set("pickup_reserve_ammo", reserve)
 		if reserve > 0:
 			state.consume_ammo_item(weapon.ammo_item_id, reserve)
-	pickup.global_position = position
 	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 	(parent if parent else get_tree().current_scene).add_child(pickup)
+	## 落点避让（2026-09-16 用户反馈②）：与已有地面掉落物保持 ≥24px。
+	## 必须在 add_child（=入组）之后算，否则看不到刚掉下的那一件。
+	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(get_tree(), position)
 	_register_host_pickup(pickup)
 
 
@@ -2186,6 +2744,59 @@ func _spawn_host_dropped_throwable(throwable: ThrowableData, position: Vector2) 
 	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 	(parent if parent else get_tree().current_scene).add_child(pickup)
 	_register_host_pickup(pickup)
+
+
+# ---------------------------------------------------------------- 玩家主动丢弃全部武器（2026-09-16 用户需求）
+
+## 本地发起「丢弃全部武器」（E 键）。单机不走这里（player.gd 本地直接丢）。
+## Host → 直接结算；Client → 提交意图，等 Host 权威事务 + 掉落物快照。
+func request_drop_all() -> void:
+	if not net.is_online_session():
+		return
+	if net.is_host:
+		_try_host_drop_all(int(net.my_peer_id))
+	elif _client_local_ready:
+		drop_all_request.rpc_id(1)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func drop_all_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_drop_all(sender)
+
+
+## Host 权威：把该玩家两个武器槽的武器全部丢到地上（弹夹/备弹一并转移），
+## 清空槽位后广播「状态 + 掉落物」快照 —— 与拾取事务同款不可拆分提交。
+func _try_host_drop_all(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var player := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(player) or not state or player.current_hp <= 0.0:
+		return
+	if _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
+		return
+	var dropped: int = 0
+	for slot: String in ["primary", "secondary"]:
+		var wd: WeaponData = state.get_equipped_weapon(slot)
+		if wd == null:
+			continue
+		_spawn_host_dropped_weapon(wd, player.global_position, state)
+		state.unequip_slot(slot)
+		_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + 200
+		dropped += 1
+	if dropped == 0:
+		return
+	## 手里空了 → 收起武器模式（表现层交给客户端 PlayerPistolState 的 _wd==null → Idle 自愈）
+	if player.is_weapon_mode_active() and player.has_method("exit_weapon_mode"):
+		player.exit_weapon_mode()
+	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+	print("[NetworkWorld] HOST_DROP_ALL peer=%d dropped=%d" % [peer_id, dropped])
 
 
 func _add_host_reserve_ammo(state: PlayerState, weapon: WeaponData, amount: int) -> void:
@@ -2305,6 +2916,12 @@ func safe_door_ready_request(door_key: String) -> void:
 func _try_host_safe_door_ready(peer_id: int, door_key: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
+	# 倒地/死亡玩家不能确认安全门（L4D2 规则：必须站立状态交互）；
+	# 他们仍可爬到门边被计入到门人数，由站立的队友执行确认。
+	var entry: Dictionary = _players[peer_id]
+	var requester := entry.get("node") as CharacterBody2D
+	if is_instance_valid(requester) and requester.is_network_dead():
+		return
 	var door := _find_safe_door(door_key)
 	# 任何请求都必须来自实际站在门边的玩家，不能信任客户端提交的门路径。
 	if not is_instance_valid(door) or not _is_host_player_at_safe_door(peer_id, door):
@@ -2340,11 +2957,19 @@ func _is_host_player_at_safe_door(peer_id: int, door: Node2D) -> bool:
 	return player.global_position.distance_to(door.global_position) <= float(door.get("interact_range"))
 
 
+## 全员到门检查（Host 权威转场条件）。
+## 【死亡豁免】真死亡（流血耗尽）的玩家不再计入 —— 否则一人死亡全队就永远
+## 无法过门（软锁）。他们将在下一章开头由 spawn 满血复活兜底归队。
+## 倒地玩家仍计入：他们可以爬行到门边等待，但确认门本身必须由站立玩家执行。
 func _are_all_players_at_safe_door(door: Node2D) -> bool:
 	var peer_ids: Array[int] = net.get_peer_ids()
 	if peer_ids.is_empty():
 		return false
 	for peer_id: int in peer_ids:
+		var entry: Dictionary = _players.get(peer_id, {})
+		var node := entry.get("node") as CharacterBody2D
+		if is_instance_valid(node) and node.is_network_dead() and not bool(entry.get("downed", false)):
+			continue
 		if not _is_host_player_at_safe_door(peer_id, door):
 			return false
 	return true
@@ -2403,6 +3028,64 @@ func safe_door_ready_status(door_key: String, ready_count: int, total_count: int
 	if net.is_host:
 		return
 	_apply_safe_door_ready_status(door_key, ready_count, total_count)
+
+
+# ---------------------------------------------------------------- Host-authoritative holdout countdown
+
+## Host 机器每帧调用：保存权威快照 + 限速（≈2Hz）可靠广播到所有 Client。
+## force=true（阶段切换/结束）时立即发送，保证客户端阶段切换及时、不过渡滞后。
+## 单机模式下 NetworkWorld 不存在，机器不会调用本方法，本地 HUD 由机器直接驱动（行为不变）。
+func broadcast_holdout_state(phase: int, remaining: float, total: float, token: int, force: bool = false) -> void:
+	if not net or not net.is_host:
+		return
+	if phase <= 0:
+		_holdout_state.clear()
+	else:
+		_holdout_state = {"phase": phase, "remaining": remaining, "total": total, "token": token}
+	var now := Time.get_ticks_msec()
+	if not force and now - _holdout_last_broadcast_msec < 500:
+		return
+	_holdout_last_broadcast_msec = now
+	holdout_state_sync.rpc(phase, remaining, total, token)
+
+
+@rpc("authority", "call_remote", "reliable")
+func holdout_state_sync(phase: int, remaining: float, total: float, token: int) -> void:
+	if net.is_host or not is_inside_tree() or _scene_transitioning:
+		return
+	# 场景切换静默期收到的包直接丢弃；其余交给机器自身按 token 校验（含结束哨兵），
+	# 避免误杀"中途加入补发"等合法包，也避免在新场景弹出旧场景残留的幽灵 HUD。
+	_apply_holdout_state(phase, remaining, total, token)
+
+
+## 找到场景内所有防守战机器并驱动其本地 HUD。仅 Client 收到 RPC 时调用：
+## Host 在 broadcast 里不再本地 _apply，避免与机器自身 _process 的驱动重复叠加。
+func _apply_holdout_state(phase: int, remaining: float, total: float, token: int) -> void:
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
+		if machine.has_method("apply_remote_holdout_state"):
+			machine.apply_remote_holdout_state(phase, remaining, total, token)
+
+
+## 防守战完成事件的可靠广播：让 Client 也执行节点显隐（传送点仅 Host 创建，避免重复生成）。
+func broadcast_holdout_completed(token: int) -> void:
+	if not net or not net.is_host:
+		return
+	holdout_completed.rpc(int(token))
+
+
+@rpc("authority", "call_remote", "reliable")
+func holdout_completed(token: int) -> void:
+	if net.is_host or not is_inside_tree() or _scene_transitioning:
+		return
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
+		if machine.has_method("apply_remote_completion"):
+			machine.apply_remote_completion(token)
 
 
 # ---------------------------------------------------------------- Automated smoke input
@@ -2553,6 +3236,217 @@ func _run_auto_client_multi_disconnect_test() -> void:
 	print("[NetworkWorld] AUTO_MULTI_CLIENT_STAY_COMPLETE peers=%d players=%d seats=%d" % [remaining_count, remaining_count, remaining_count])
 	net.leave()
 	get_tree().quit()
+
+## --net-test=slow-host-ready 专用：回归"Client 的 scene-ready 报告先于 Host 场景
+## 就绪到达"的竞态。必须让 Host 进程同时携带 --net-test-host-scene-delay-ms=N
+## （由 game_init.gd 延迟创建 NetworkWorld），否则 Client 的 ready 不会落入缓冲窗口。
+## 修复前该竞态会吞掉 ready 记录：_ready_client_peers 永远为空、世界快照永不发出，
+## Client 画面永久卡死 —— 正是手工对局中"客户端卡住"的根因。
+func _is_auto_slow_host_ready_test() -> bool:
+	return "--net-test=slow-host-ready" in OS.get_cmdline_user_args()
+
+
+## Host 端断言：竞态发生后，Client 仍被纳入 _ready_client_peers 且可靠世界快照
+## 最终被补发（计数 > 0）。
+func _run_auto_host_slow_host_ready_test() -> void:
+	var deadline := Time.get_ticks_msec() + 12000
+	while _ready_client_peers.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _ready_client_peers.is_empty():
+		printerr("[NetworkWorld] AUTO_SLOWHOST_HOST_FAILED ready_peers_empty")
+		get_tree().quit(1)
+		return
+	deadline = Time.get_ticks_msec() + 4000
+	while _auto_world_snapshot_sent_count <= 0 and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _auto_world_snapshot_sent_count <= 0:
+		printerr("[NetworkWorld] AUTO_SLOWHOST_HOST_FAILED no_world_snapshot_sent")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_SLOWHOST_HOST_COMPLETE snapshots=%d ready_peers=%d" % [_auto_world_snapshot_sent_count, _ready_client_peers.size()])
+	await get_tree().create_timer(0.30).timeout
+	if is_inside_tree() and net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
+## Client 端断言：收到可靠世界快照（_initial_world_received）、Host 实体已在本端
+## 重建 —— 即"Client 先就绪"的会话里远端精灵能够正常刷出。
+func _run_auto_client_slow_host_ready_test() -> void:
+	var deadline := Time.get_ticks_msec() + 12000
+	while (not _initial_world_received or _players.size() < 2) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var host_node := (_players.get(1, {}) as Dictionary).get("node") as CharacterBody2D
+	if not _initial_world_received or _players.size() < 2 or not is_instance_valid(host_node):
+		printerr("[NetworkWorld] AUTO_SLOWHOST_CLIENT_FAILED world=%s players=%d host_node=%s" % [
+			str(_initial_world_received), _players.size(), str(is_instance_valid(host_node))])
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_SLOWHOST_CLIENT_COMPLETE players=%d" % _players.size())
+	await get_tree().create_timer(0.40).timeout
+	if is_inside_tree() and not net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
+## --net-test=downed-wipe 专用：验证倒地流血 → 真死亡 → 团灭黑屏 → 重载本章收敛。
+## 团灭会触发一次真实换图，因此用 Engine meta（跨场景存活、随进程结束）区分两次进图：
+## 第一次进图执行"双端倒地 → 加速流血 → 团灭触发"，第二次进图只做恢复验证后退出。
+## 正式游戏绝不会进入这些分支。
+func _is_auto_team_wipe_test() -> bool:
+	return "--net-test=downed-wipe" in OS.get_cmdline_user_args()
+
+
+## 第一次进图的 Host 场景：等 Client 就位后，用与真实敌人完全一致的生产伤害链路
+## （CharacterBody2D.take_damage → network_damage_applied 信号）把双端同时打到 0 ——
+## 双端同时倒地 → 无站立玩家 → 满足团灭条件。真实流血需 20 秒，测试把权威流血池
+## 压到 0.4 令其在下一帧耗尽。触发后场景由 _update_host_wipe 走切图协议重载，
+## 本协程到此结束 —— 绝不能在这里 leave()/quit()，否则切图协议中断。
+func _run_auto_host_team_wipe_test() -> void:
+	if Engine.has_meta("l3d_auto_team_wipe_stage"):
+		_run_auto_host_team_wipe_verify()
+		return
+	Engine.set_meta("l3d_auto_team_wipe_stage", 1)
+	var deadline := Time.get_ticks_msec() + 8000
+	while (_players.size() < 2 or net.get_peer_ids().size() < 2) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	var client_id := 0
+	for peer_id: int in net.get_peer_ids():
+		if peer_id > 1:
+			client_id = peer_id
+			break
+	var host_node := (_players.get(int(net.my_peer_id), {}) as Dictionary).get("node") as CharacterBody2D
+	var client_node := (_players.get(client_id, {}) as Dictionary).get("node") as CharacterBody2D
+	if client_id <= 1 or not is_instance_valid(host_node) or not is_instance_valid(client_node):
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_SETUP_FAILED client=%d" % client_id)
+		get_tree().quit(1)
+		return
+	# 生产伤害入口：伤害信号同步把玩家登记为权威倒地（_handle_host_player_downed）。
+	# ガッツ（HP≥2 保底 1 HP）会拦下 max_hp+1 的致死伤 → 永远不倒地（DOWN_FAILED 假红），
+	# 先压 HP=1 再打（take_damage 链路原样保留）。
+	_force_auto_test_player_low_hp(client_node)
+	_force_auto_test_player_low_hp(host_node)
+	client_node.take_damage(client_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998900)
+	host_node.take_damage(host_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998901)
+	deadline = Time.get_ticks_msec() + 2000
+	while Time.get_ticks_msec() < deadline:
+		var host_entry_now := _players.get(int(net.my_peer_id), {}) as Dictionary
+		var client_entry_now := _players.get(client_id, {}) as Dictionary
+		if bool(host_entry_now.get("downed", false)) and bool(client_entry_now.get("downed", false)):
+			break
+		await get_tree().create_timer(0.05).timeout
+	var host_entry := _players.get(int(net.my_peer_id), {}) as Dictionary
+	var client_entry := _players.get(client_id, {}) as Dictionary
+	if not (bool(host_entry.get("downed", false)) and bool(client_entry.get("downed", false))):
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_DOWN_FAILED host=%s client=%s" % [
+			str(bool(host_entry.get("downed", false))), str(bool(client_entry.get("downed", false)))])
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_HOST_DOWNED_OK")
+	# 加速流血：直接改写权威流血池（Host 是唯一写入者），下一帧 _update_host_downed
+	# 就会耗尽转真死亡，随后 _check_host_team_wipe 立即命中"全员非站立"。
+	host_entry["downed_hp"] = 0.4
+	_players[int(net.my_peer_id)] = host_entry
+	client_entry["downed_hp"] = 0.4
+	_players[client_id] = client_entry
+	deadline = Time.get_ticks_msec() + 4000
+	while not _wipe_active and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _wipe_active:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_TRIGGER_FAILED")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_HOST_TRIGGERED scene=%s" % _scene_path)
+	# 黑屏淡出 + 停留结束后自动换图；本实例的职责到此为止。
+
+
+## 第一次进图的 Client 场景。验证两点：
+## 1) 快照把 downed=true 同步到本地 entry（救援筛选与生命三态判定的数据来源）；
+## 2) team_wipe_presentation 广播把本地 _wipe_active 置位（黑屏 + 输入冻结）。
+## 之后等待换图，不主动退出。
+func _run_auto_client_team_wipe_test() -> void:
+	if Engine.has_meta("l3d_auto_team_wipe_stage"):
+		_run_auto_client_team_wipe_verify()
+		return
+	Engine.set_meta("l3d_auto_team_wipe_stage", 1)
+	var deadline := Time.get_ticks_msec() + 8000
+	while (not _initial_world_received or _players.size() < 2) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _initial_world_received or _players.size() < 2:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_SETUP_FAILED world=%s players=%d" % [str(_initial_world_received), _players.size()])
+		get_tree().quit(1)
+		return
+	var local_entry := _players.get(int(net.my_peer_id), {}) as Dictionary
+	deadline = Time.get_ticks_msec() + 4000
+	while not bool(local_entry.get("downed", false)) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+		local_entry = _players.get(int(net.my_peer_id), {}) as Dictionary
+	if not bool(local_entry.get("downed", false)):
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_DOWN_FLAG_FAILED")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_DOWNED_OK")
+	deadline = Time.get_ticks_msec() + 4000
+	while not _wipe_active and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _wipe_active:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_FADE_FAILED")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_FADE_OK")
+
+
+## 第二次进图（团灭重载后）的 Host 验证：客户端已回到场景，所有会话状态满血
+## （团灭重置 + spawn 兜底），且没有任何玩家带着倒地/死亡 entry 标记。
+func _run_auto_host_team_wipe_verify() -> void:
+	print("[NetworkWorld] AUTO_TEAM_WIPE_HOST_VERIFY_STAGE scene=%s" % _scene_path)
+	var deadline := Time.get_ticks_msec() + 10000
+	while (_players.size() < 2 or _ready_client_peers.is_empty()) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _players.size() < 2 or _ready_client_peers.is_empty():
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_VERIFY_FAILED players=%d ready=%d" % [_players.size(), _ready_client_peers.size()])
+		get_tree().quit(1)
+		return
+	var ok := true
+	for value: Variant in _players.keys():
+		var entry := _players[int(value)] as Dictionary
+		var state := entry.get("state") as PlayerState
+		if not state or state.current_hp <= 0.0:
+			ok = false
+		if bool(entry.get("downed", false)) or bool(entry.get("dead", false)):
+			ok = false
+	if not ok:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_VERIFY_FAILED hp_or_state")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_HOST_RECOVERY_COMPLETE players=%d" % _players.size())
+	await get_tree().create_timer(0.30).timeout
+	if is_inside_tree() and net.is_host:
+		net.leave()
+		get_tree().quit()
+
+
+## 第二次进图（团灭重载后）的 Client 验证：收到可靠世界快照，本地玩家站立且 HP>0。
+func _run_auto_client_team_wipe_verify() -> void:
+	print("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_VERIFY_STAGE scene=%s" % _scene_path)
+	var deadline := Time.get_ticks_msec() + 10000
+	while (not _initial_world_received or _players.size() < 2) and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _initial_world_received or _players.size() < 2:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_VERIFY_FAILED no_world")
+		get_tree().quit(1)
+		return
+	var local_node := (_players.get(int(net.my_peer_id), {}) as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(local_node) or local_node.is_network_dead() or local_node.current_hp <= 0.0:
+		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_VERIFY_FAILED not_standing")
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_RECOVERY_COMPLETE hp=%.1f" % local_node.current_hp)
+	await get_tree().create_timer(0.80).timeout
+	if is_inside_tree() and not net.is_host:
+		net.leave()
+		get_tree().quit()
+
 
 func _is_auto_network_feature_test() -> bool:
 	return "--net-test-features" in OS.get_cmdline_user_args()
@@ -2714,6 +3608,7 @@ func _run_auto_host_feature_test() -> void:
 	host_node.take_damage(1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998801)
 	print("[NetworkWorld] AUTO_FEATURE_HOST_HURT_APPLIED enemy=%s player=%d" % [feedback_enemy.name, int(net.my_peer_id)])
 	await get_tree().create_timer(0.35).timeout
+	_force_auto_test_player_low_hp(host_node)  # ガッツ拦致死伤，先压 HP=1（见 helper 注释）
 	host_node.take_damage(host_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998802)
 	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 4000
 	while host_node.is_network_dead() and Time.get_ticks_msec() < deadline:
@@ -2722,6 +3617,7 @@ func _run_auto_host_feature_test() -> void:
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_FAILED hp=%.1f" % host_node.current_hp)
 		return
 	# 接着验证 Client 自身倒地：Host 必须清空其陈旧输入，客户端必须冻结死亡位置。
+	_force_auto_test_player_low_hp(client_node)  # ガッツ拦致死伤，先压 HP=1
 	client_node.take_damage(client_node.max_hp + 1.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 998803)
 	deadline = Time.get_ticks_msec() + 2000
 	while not client_node.is_network_dead() and Time.get_ticks_msec() < deadline:
@@ -2733,6 +3629,11 @@ func _run_auto_host_feature_test() -> void:
 	var client_entry_after_death: Dictionary = _players.get(client_id, {})
 	var client_input: Vector2 = client_entry_after_death.get("input", Vector2.ZERO)
 	var client_marked_stopped := not bool(client_entry_after_death.get("moving", false)) and client_input.is_zero_approx()
+	# 倒地回归点：Client 倒地必须登记为权威 entry 标记（而不只是节点躺地表现），
+	# 否则 _find_revive_target_for 与快照 downed 字段都会失效。
+	if not bool(client_entry_after_death.get("downed", false)):
+		printerr("[NetworkWorld] AUTO_FEATURE_HOST_CLIENT_DOWNED_FLAG_FAILED")
+		return
 	_try_host_start_revive(int(net.my_peer_id), client_id)
 	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 2500
 	while client_node.is_network_dead() and Time.get_ticks_msec() < deadline:
@@ -2809,6 +3710,12 @@ func _run_auto_client_feature_test() -> void:
 	if not is_instance_valid(host_node) or not host_node.is_network_dead():
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_REVIVE_SETUP_FAILED host_dead=%s" % [is_instance_valid(host_node) and host_node.is_network_dead()])
 		return
+	# 倒地回归点：Host 的 downed 标记必须经快照同步到 Client entry ——
+	# 它是救援目标筛选（_find_revive_target_for）与生命三态判定的数据来源；
+	# 只有节点躺地表现而缺少该标记时，Client 将无法发起救援。
+	if not bool((_players.get(1, {}) as Dictionary).get("downed", false)):
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DOWNED_FLAG_FAILED")
+		return
 	revive_start_request.rpc_id(1, 1)
 	deadline = Time.get_ticks_msec() + REVIVE_DURATION_MSEC + 2500
 	while host_node.is_network_dead() and Time.get_ticks_msec() < deadline:
@@ -2830,7 +3737,9 @@ func _run_auto_client_feature_test() -> void:
 		return
 	await get_tree().process_frame
 	var collision_shape := local_node.get_node_or_null("CollisionShape2D") as CollisionShape2D
-	var collision_disabled := is_instance_valid(collision_shape) and collision_shape.disabled
+	# 倒地语义回归点：碰撞体在倒地期间必须重新启用（倒地爬行不能穿墙），
+	# 取代旧的"死亡=碰撞关闭"断言；复活后同样保持启用。
+	var collision_enabled_while_downed := is_instance_valid(collision_shape) and not collision_shape.disabled
 	# 直接提交死亡后的移动意图；Host 入口必须忽略它，客户端的位置也不能继续漂移。
 	await get_tree().create_timer(0.20).timeout
 	var death_position := local_node.global_position
@@ -2845,9 +3754,9 @@ func _run_auto_client_feature_test() -> void:
 		return
 	await get_tree().process_frame
 	var collision_restored := is_instance_valid(collision_shape) and not collision_shape.disabled
-	print("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_COMPLETE frozen=%s collision_disabled=%s collision_restored=%s revived=true" % [frozen, collision_disabled, collision_restored])
-	if not frozen or not collision_disabled or not collision_restored:
-		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_FAILED frozen=%s collision_disabled=%s collision_restored=%s" % [frozen, collision_disabled, collision_restored])
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_COMPLETE frozen=%s collision_enabled_while_downed=%s collision_restored=%s revived=true" % [frozen, collision_enabled_while_downed, collision_restored])
+	if not frozen or not collision_enabled_while_downed or not collision_restored:
+		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_FAILED frozen=%s collision_enabled_while_downed=%s collision_restored=%s" % [frozen, collision_enabled_while_downed, collision_restored])
 		return
 	var active_weapon: WeaponData = state.get_active_weapon() if state else null
 	if not is_instance_valid(local_node) or not active_weapon:
@@ -2886,14 +3795,16 @@ func _run_auto_client_feature_test() -> void:
 	await get_tree().create_timer(0.20).timeout
 	var facing_after_lock: Vector2 = local_node.get_facing_vector()
 	var stayed_locked: bool = facing_after_lock.is_equal_approx(locked_facing)
+	var lock_state_synced: bool = local_node.is_facing_locked()
 	facing_lock_request.rpc_id(1, false, false)
 	await get_tree().create_timer(0.12).timeout
 	submit_input.rpc_id(1, test_direction, false)
 	await get_tree().create_timer(0.20).timeout
 	var facing_after_unlock: Vector2 = local_node.get_facing_vector()
 	var unlocked_turns: bool = facing_after_unlock.is_equal_approx(test_direction)
-	print("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_COMPLETE locked=%s unlocked=%s" % [stayed_locked, unlocked_turns])
-	if not stayed_locked or not unlocked_turns:
+	var unlock_state_synced: bool = not local_node.is_facing_locked()
+	print("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_COMPLETE locked=%s unlocked=%s lock_state=%s unlock_state=%s" % [stayed_locked, unlocked_turns, lock_state_synced, unlock_state_synced])
+	if not stayed_locked or not unlocked_turns or not lock_state_synced or not unlock_state_synced:
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_FACING_FAILED locked=%s unlocked=%s expected=(%.0f,%.0f) locked_actual=(%.0f,%.0f) unlocked_actual=(%.0f,%.0f)" % [
 			stayed_locked,
 			unlocked_turns,
@@ -2929,6 +3840,33 @@ func _run_auto_host_enemy_test() -> void:
 		get_tree().quit(1)
 		return
 	print("[NetworkWorld] AUTO_ENEMY_HOST_COMPLETE registered=%d" % _enemies.size())
+	# 死亡广播回归：等 Client 建立表现实体后击杀一名敌人。
+	# Client 侧断言会验证可靠 enemy_death_presentation 已被应用（而非等 2s 重同步）。
+	deadline = Time.get_ticks_msec() + 8000
+	while _ready_client_peers.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	await get_tree().create_timer(1.00).timeout
+	var victim := _find_first_alive_host_enemy()
+	if not is_instance_valid(victim):
+		printerr("[NetworkWorld] AUTO_ENEMY_HOST_DEATH_FAILED no_victim")
+		net.leave()
+		get_tree().quit(1)
+		return
+	victim.take_damage(victim.current_hp + 1.0, 0.0, Vector2.RIGHT, false, 0.0, 0.0, 998801)
+	deadline = Time.get_ticks_msec() + 4000
+	while not victim.is_network_dead() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	print("[NetworkWorld] AUTO_ENEMY_HOST_DEATH_COMPLETE victim=%s dead=%s" % [victim.name, victim.is_network_dead()])
+	# 留出 Client 完成死亡断言并自行退出；Host 随后走 _on_peer_left 的常规收束。
+	await get_tree().create_timer(4.0).timeout
+
+
+func _find_first_alive_host_enemy() -> CharacterBody2D:
+	for entry_value: Variant in _enemies.values():
+		var enemy := _resolve_enemy_entry(entry_value as Dictionary)
+		if is_instance_valid(enemy) and not enemy.is_network_dead():
+			return enemy
+	return null
 
 
 func _run_auto_client_enemy_test() -> void:
@@ -2949,6 +3887,16 @@ func _run_auto_client_enemy_test() -> void:
 		get_tree().quit(1)
 		return
 	print("[NetworkWorld] AUTO_ENEMY_CLIENT_COMPLETE received=%d" % _enemies.size())
+	# 死亡广播回归：Host 会击杀一名敌人；Client 必须收到可靠死亡表现并立即变尸体。
+	deadline = Time.get_ticks_msec() + 8000
+	while _auto_client_enemy_death_presentations < 1 and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _auto_client_enemy_death_presentations < 1:
+		printerr("[NetworkWorld] AUTO_ENEMY_CLIENT_DEATH_FAILED presentations=%d" % _auto_client_enemy_death_presentations)
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_ENEMY_CLIENT_DEATH_COMPLETE")
 	# Give the Host smoke coroutine one network tick to record its own assertion before teardown.
 	await get_tree().create_timer(0.20).timeout
 	net.leave()
@@ -3149,6 +4097,8 @@ func _run_auto_client_input_test() -> void:
 		printerr("[NetworkWorld] AUTO_CLIENT_KNIFE_SWITCH_FAILED slot=%s" % [state.active_weapon_slot if state else "<none>"])
 
 	# 小刀命中必须通过 Host 的物理查询和敌人权威 take_damage() 产生；客户端只通过敌人快照观察 HP 变化。
+	# 按 entity_id 跟踪同一只敌人的 hp——总和分析会被 Director scatter 新刷的敌人抬高（假红）。
+	var enemy_hp_map_before := _get_client_enemy_hp_map()
 	var enemy_hp_before: float = _get_client_live_enemy_hp_total()
 	_auto_client_fire_confirmed = false
 	_auto_client_bullet_seen = false
@@ -3162,7 +4112,11 @@ func _run_auto_client_input_test() -> void:
 	var enemy_hp_after := enemy_hp_before
 	while Time.get_ticks_msec() < deadline:
 		enemy_hp_after = _get_client_live_enemy_hp_total()
-		melee_damage_seen = enemy_hp_after <= enemy_hp_before - NETWORK_KNIFE.get_effective_damage() + 0.1
+		var hp_map_after := _get_client_enemy_hp_map()
+		for enemy_key: int in enemy_hp_map_before.keys():
+			if hp_map_after.has(enemy_key) and hp_map_after[enemy_key] <= float(enemy_hp_map_before[enemy_key]) - NETWORK_KNIFE.get_effective_damage() + 0.1:
+				melee_damage_seen = true
+				break
 		if _auto_client_fire_confirmed and melee_damage_seen:
 			break
 		await get_tree().create_timer(0.05).timeout
@@ -3363,6 +4317,29 @@ func _has_client_pickup_weapon_near(weapon_id: String, position: Vector2, max_di
 
 
 ## 自动双端烟测只从客户端已接收的 Host 敌人快照累计生命值；不读取或伪造 Host 命中结果。
+## --net-test harness 专用：把玩家 HP 压到 1 再吃致死伤。
+## ガッツ（HP≥2 保底 1 HP，player.gd）会拦下 harness 的 max_hp+1 致死伤
+## （2026-09 加的机制没同步测试，features/downed-wipe 双双 setup 失败）。
+## 压 HP=1 后 take_damage 链路原样保留（信号/倒地登记不变），只绕开保底语义。
+func _force_auto_test_player_low_hp(node: CharacterBody2D) -> void:
+	var state := Players.get_state_for_entity(node)
+	if state:
+		state.current_hp = 1.0
+	node.current_hp = 1.0
+
+
+## --net-test harness 专用：Client 视角各活敌的 hp 快照（entity_id → hp）。
+## 判定近战伤害必须跟踪**同一只**敌人——Director 持续 scatter 刷新敌人，
+## 用 hp 总和比较会被新入场敌人抬高（weapon 场景 140→280 假红的根因）。
+func _get_client_enemy_hp_map() -> Dictionary:
+	var map := {}
+	for key: Variant in _enemies.keys():
+		var enemy := _resolve_enemy_entry(_enemies[key])
+		if is_instance_valid(enemy) and not enemy.is_network_dead():
+			map[int(key)] = enemy.current_hp
+	return map
+
+
 func _get_client_live_enemy_hp_total() -> float:
 	var total := 0.0
 	for enemy_entry: Dictionary in _enemies.values():
@@ -3458,6 +4435,7 @@ func _build_enemy_snapshot(compact: bool = false) -> Array:
 				public_state["visual_char_index"],
 				public_state["dead"],
 				public_state["headshot"],
+				public_state["element_state"],  # P0-B3：元素染色 3bit（炎/氷/雷）
 			])
 		else:
 			states.append(public_state)
@@ -3486,6 +4464,7 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 		"visual_char_index": enemy.get_network_visual_char_index(),
 		"dead": enemy.is_network_dead(),
 		"headshot": enemy.is_network_headshot_dead(),
+		"element_state": enemy.get_network_element_state(),  # P0-B3
 	}
 
 
@@ -3527,6 +4506,9 @@ func _build_compact_player_snapshot() -> Array:
 			state["weapon_magazines"], state["weapon_raised"], state["weapon_transition"],
 			state["throwable_id"], state["throwable_held"], state["throwable_aiming"],
 			state["throw_range"], state["dead"], state["magazine_ammo"],
+			# 倒地扩展字段（尾部追加；_normalize_player_snapshot 对旧长度包向后兼容）。
+			state["downed"], state["bleed_ratio"], state["revive_progress"],
+			state["facing_locked"], state["locked_facing"],
 		])
 	states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return states
@@ -3559,6 +4541,14 @@ func _public_state(peer_id: int) -> Dictionary:
 		"throw_range": int(_get_host_throwable_state(peer_id).get("range", 3)),
 		"dead": node.is_network_dead() if is_instance_valid(node) else true,
 		"magazine_ammo": state.get_magazine_ammo(weapon.item_id) if state and weapon else 0,
+		# 倒地扩展字段（追加在尾部，旧字段顺序保持不变）：
+		# downed = 可救援的倒地状态；bleed_ratio = 流血池剩余比（未倒地为 -1）；
+		# revive_progress = 被救援进度（0 表示当前无人施救）。
+		"downed": bool(entry.get("downed", false)),
+		"bleed_ratio": (float(entry.get("downed_hp", 0.0)) / DOWNED_BLEED_HP) if bool(entry.get("downed", false)) else -1.0,
+		"revive_progress": _get_host_revive_progress_for(peer_id),
+		"facing_locked": node.is_facing_locked() if is_instance_valid(node) else false,
+		"locked_facing": node.get_locked_facing() if is_instance_valid(node) else -1,
 	}
 
 
@@ -3601,6 +4591,7 @@ func _reconcile_network_seats(peer_ids: Array[int]) -> void:
 		var seat_index := Players.find_seat_by_owner_peer_id(peer_id)
 		if is_instance_valid(node) and seat_index >= 0:
 			Players.register_entity(node, seat_index)
+			_attach_player_nameplate(node as CharacterBody2D, peer_id, seat_index)
 			if peer_id == int(net.my_peer_id):
 				_set_local_player(node, seat_index)
 	var owners: Array[int] = []
@@ -3609,6 +4600,20 @@ func _reconcile_network_seats(peer_ids: Array[int]) -> void:
 		if state:
 			owners.append(state.owner_peer_id)
 	print("[NetworkWorld] NETWORK_SEATS expected=%d actual=%d owners=%s" % [peer_ids.size(), Players.seat_count(), str(owners)])
+
+
+## 给联机玩家挂头顶名牌（座位编号 + 昵称 + 正式 HUD 血条）。
+## Host 与 Client 走同一入口；幂等 —— 已挂载时只刷新文字（座位重排后编号会变）。
+func _attach_player_nameplate(node: CharacterBody2D, peer_id: int, seat_index: int) -> void:
+	if not is_instance_valid(node):
+		return
+	var plate := node.get_node_or_null("NetworkNameplate") as Node2D
+	if not plate:
+		plate = Node2D.new()
+		plate.name = "NetworkNameplate"
+		plate.set_script(NAMEPLATE_SCRIPT)
+		node.add_child(plate)
+	plate.call("set_nameplate_info", seat_index, net.get_player_name(peer_id))
 
 
 func _find_or_create_player_state(peer_id: int, character_path: String, hp: float) -> PlayerState:
@@ -3672,6 +4677,19 @@ func _packet_position(packet: Dictionary) -> Vector2:
 	return Vector2.ZERO
 
 
+func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> void:
+	if not is_instance_valid(player):
+		return
+	var arrival_id: String = str(net.active_arrival_id)
+	var arrival_position: Variant = ArrivalResolver.resolve(
+		get_tree().current_scene, arrival_id, net.active_arrival_position
+	)
+	if not arrival_position is Vector2:
+		return
+	player.global_position = arrival_position as Vector2
+	print("[NetworkWorld] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
+
+
 func _find_players_parent() -> Node:
 	var preplaced := _find_preplaced_player()
 	return preplaced.get_parent() if is_instance_valid(preplaced) else null
@@ -3712,3 +4730,102 @@ func _set_local_player(node: Node2D, seat_index: int) -> void:
 	if camera and camera.has_method("set_follow_target"):
 		camera.set_follow_target(node)
 	_camera_bound_local_node = node
+
+
+# ---------------------------------------------------------------- 剧情机关 flag 同步（Host 权威）
+
+## 玩法节点统一入口：单机/Host 立即生效并广播；Client 转交 Host 复核。
+## 返回 true = 本次调用已本地生效；false = 已提交请求，等 Host 回包。
+func submit_quest_flag(flag_name: String, value: bool = true) -> bool:
+	if flag_name.is_empty():
+		return false
+	if not net.is_online_session():
+		Global.apply_quest_flag(flag_name, value)
+		return true
+	if net.is_host:
+		# call_local：Host 本地与 Client 一次性同步生效
+		apply_quest_flag_rpc.rpc(flag_name, value)
+		return true
+	quest_flag_request.rpc_id(1, flag_name, value)
+	return false
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func quest_flag_request(flag_name: String, value: bool) -> void:
+	## Client → Host 的 flag 请求。LAN 合作场景，与拾取请求同级信任，不再二次校验。
+	if not net.is_host:
+		return
+	apply_quest_flag_rpc.rpc(flag_name, value)
+
+
+@rpc("authority", "call_local", "reliable")
+func apply_quest_flag_rpc(flag_name: String, value: bool) -> void:
+	Global.apply_quest_flag(flag_name, value)
+
+
+# ---------------------------------------------------------------- 关键道具拾取点（Host 权威事务）
+
+## 关键道具拾取点统一入口：单机/Host 直接走节点上的 host_commit_pickup；
+## Client 提交请求，由 Host 校验距离与状态后代为结算。
+func request_quest_pickup(node_path: NodePath) -> void:
+	if net.is_host:
+		_try_host_quest_pickup(int(net.my_peer_id), node_path)
+	else:
+		quest_pickup_request.rpc_id(1, node_path)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func quest_pickup_request(node_path: NodePath) -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_quest_pickup(sender, node_path)
+
+
+func _try_host_quest_pickup(peer_id: int, node_path: NodePath) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var scene := get_tree().current_scene
+	var pickup := (scene.get_node_or_null(node_path) if scene else null) as Node2D
+	if not is_instance_valid(pickup) or not pickup.has_method("host_commit_pickup"):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var player := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(player) or player.global_position.distance_to(pickup.global_position) > 96.0:
+		print("[NetworkWorld] QUEST_PICKUP 拒绝: peer=%d 距离过远 path=%s" % [peer_id, node_path])
+		return
+	pickup.call("host_commit_pickup", state)
+
+
+## ── 爆破墙放置炸药请求（Client → Host；距离/资格由墙内 host_commit_place 校验）──
+func request_wall_place(node_path: NodePath) -> void:
+	if net.is_host:
+		_try_host_wall_place(int(net.my_peer_id), node_path)
+	else:
+		wall_place_request.rpc_id(1, node_path)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func wall_place_request(node_path: NodePath) -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_wall_place(sender, node_path)
+
+
+func _try_host_wall_place(peer_id: int, node_path: NodePath) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var scene := get_tree().current_scene
+	var wall := (scene.get_node_or_null(node_path) if scene else null) as Node2D
+	if not is_instance_valid(wall) or not wall.has_method("host_commit_place"):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var player := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(player):
+		return
+	## 不在这里做距离校验：墙的层原点可能在地图角落，最近格距离由墙自己算
+	wall.call("host_commit_place", player)

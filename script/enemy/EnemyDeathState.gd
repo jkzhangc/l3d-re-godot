@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：敌人状态机 ｜ 层：玩法（State）
+## 联机：Host 决定尸体策略
+## 职责：普通死亡状态：切换死亡帧、关闭碰撞与视野，尸体保留在地图上。
+## 依赖：State、enemy 实体
+
 ## 死亡状态关闭碰撞/视野并保留尸体；是否销毁由 Host 的尸体管理策略决定。
 ## 普通死亡状态 — 显示死亡精灵 (char_idx=4)，尸体保留在地图上
 ##
@@ -23,8 +30,8 @@ func enter() -> void:
 	if timer:
 		timer.stop()
 
-	# 设置死亡精灵
-	enemy._refresh_sprite_with_index(enemy.death_char_index)
+	# 设置死亡精灵（death_texture 接入：特感切专用死亡表，普通僵尸维持行走表索引）
+	enemy.apply_death_appearance(false)
 
 	# 注册到全局尸体列表
 	enemy._register_corpse()

@@ -1,9 +1,20 @@
 class_name WeaponData extends ItemData
+
+## ── 架构定位 ──
+## 系统：武器数据 ｜ 层：数据（Resource）
+## 联机：ID/路径白名单，禁止远端传 Resource
+## 职责：武器配置：伤害/射速/射程、主副槽位、开火模式、装填模式、举枪/攻击/装填/后坐力动画序列、枪声惊动范围。
+## 依赖：继承 ItemData；被 BulletData 列表与玩家武器状态读取
+
 ## 武器数据 — 继承 ItemData，增加战斗属性和武器动画
 
 enum WeaponSlot { PRIMARY, SECONDARY }  ## PRIMARY=主武器, SECONDARY=副武器
 enum ReloadMode { NORMAL = 0, SHOTGUN = 1 }  ## NORMAL=普通装填（一次装满）, SHOTGUN=霰弹枪装填（逐发装填）
 enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD=按住连发（自动步枪/冲锋枪）
+
+## 属性（原作说明书 §4.5）：炎=持续燃烧掉血；雷=感电（攻击不能）；氷=冻结（受 1.5 倍伤）；酸=仅大伤害（抗性持有者最少，最泛用）。
+## 武器/投掷物带属性时，命中敌人按其抗性表结算（enemy.gd 的 resist_*）。
+enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 
 
 @export_group("战斗属性")
@@ -28,6 +39,16 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 @export var is_ranged: bool = true            ## true=远程, false=近战
 @export var weapon_slot: WeaponSlot = WeaponSlot.PRIMARY  ## 主武器/副武器（决定装备到哪个槽位）
 @export var critical_rate: float = 0.0        ## 暴击率（0-100，如 100=100% 爆头，50=50% 几率爆头）
+@export var critical_damage: float = 2.0      ## 暴击伤害倍率（暴击时最终伤害 = 基础伤害 × 此值，黄色伤害数字）
+
+@export_group("属性与耐久")
+## 属性（原作 §4.5）：NONE/FIRE/LIGHTNING/ICE/ACID。命中敌人时按其抗性表附加状态：
+## 炎→持续燃烧、雷→感电（攻击不能）、氷→冻结（受 1.5 倍）、酸→无附加（最泛用）。
+## 酸与 Heat 攻击还会触发「削り」——削减玩家武器弹药/耐久。
+@export var element: Element = Element.NONE
+## 最大耐久（近战武器用）。0 = 无耐久概念（原作"无限耐久武器"，免疫削り）。
+## 削り攻击命中持械玩家时，近战武器耐久 -削り量，归零武器损坏（卸下）。
+@export var max_durability: float = 0.0
 
 
 @export_group("攻击输入")
@@ -51,7 +72,7 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 ## --- 普通装填（NORMAL 模式）---
 @export var reload_char_sequence: Array[int] = []        ## 装填动画帧序列（空=使用默认 [3, 4, 3, 2]）
 @export var reload_frame_durations: Array[float] = []    ## 装填动画每帧时长（空=默认 0.1s）
-@export var reload_sound: AudioStream = null              ## 装填音效
+@export var reload_sound: AudioStream = preload("res://sound/チャキッ.ogg")  ## 装填音效（2026-09-17 用户指定默认；tres 可逐武器覆盖）
 
 ## --- 霰弹枪装填（SHOTGUN 模式）---
 @export var shotgun_reload_loop_char_sequence: Array[int] = []     ## 单发装填循环帧序列
@@ -63,6 +84,10 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 
 ## --- 共用 ---
 @export var reload_wait_duration: float = 0.3            ## 装填完成后等待时长（秒）
+
+## 从地图/随机掉落物初次拾取本武器时给予的备弹数量（对应 ammo_item_id 的弹药）。
+## 0 = 不给备弹。掉落物上转移来的旧武器备弹（weapon_pickup.pickup_reserve_ammo）优先于本值。
+@export var initial_reserve_ammo: int = 0
 
 
 @export_group("攻击后动画")
@@ -94,10 +119,47 @@ enum FireMode { TAP = 0, HOLD = 1 }  ## TAP=点按（按一次打一发）, HOLD
 ## 命中特效位置偏移覆盖（非零时替换 .tscn 内置的 position_offset）
 @export var hit_effect_offset_override: Vector2 = Vector2.ZERO
 
+@export_group("子弹发射点（按角色 × 方向）")
+## 每个角色的枪口额外偏移。键 = CharacterData.character_id（如 "nobita"；留空回退 tres 文件名），
+## 值 = WeaponEffectOffsets（四方向 Vector2）。
+## 最终生成点 = 角色位置 + 朝向 × BulletData.spawn_offset + 本偏移。
+## **配置了条目的角色，其偏移替换 BulletData 的 offset_down/up/left/right**；
+## 未配置的角色完全沿用旧行为（逐子弹的 offset_*），因此留空字典 = 无行为变化。
+## 何时需要：同一把枪在不同角色手里，枪口像素位置不同（行走图各异），
+## 贴脸射击时会有"子弹从身体里冒出来"的观感 —— 用本表按角色/朝向精修。
+@export var bullet_spawn_offsets: Dictionary = {}
+
+
+## 该角色是否配置了枪口偏移条目（键存在且值为 WeaponEffectOffsets）。
+## 配置判定与「值是否为零」解耦：显式 (0,0) = 角色中心线，不再触发回退。
+func has_bullet_spawn_offset(cd: CharacterData) -> bool:
+	if cd == null or bullet_spawn_offsets.is_empty():
+		return false
+	var key: String = cd.get_character_key()
+	if key.is_empty() or not bullet_spawn_offsets.has(key):
+		return false
+	return bullet_spawn_offsets[key] is WeaponEffectOffsets
+
+
+## 取某角色在该武器下的枪口额外偏移（四方向）。
+## 无条目 / 空键 / 值类型不对 → 返回 Vector2.ZERO，调用方回退 BulletData 的逐方向偏移。
+## ⚠ 判定"是否配置"请用 has_bullet_spawn_offset（零值是合法配置，≠未配置）。
+func get_bullet_spawn_offset(cd: CharacterData, facing: int) -> Vector2:
+	if cd == null or bullet_spawn_offsets.is_empty():
+		return Vector2.ZERO
+	var key: String = cd.get_character_key()
+	if key.is_empty() or not bullet_spawn_offsets.has(key):
+		return Vector2.ZERO
+	var offs: WeaponEffectOffsets = bullet_spawn_offsets[key] as WeaponEffectOffsets
+	if offs == null:
+		return Vector2.ZERO
+	return offs.get_offset(facing)
+
 
 @export_group("远程攻击")
 @export var magazine_capacity: int = 0        ## 弹夹容量（0=无需弹药/近战武器）
 @export var ammo_item_id: String = ""         ## 对应弹药 ItemData.item_id
+@export var ammo_is_infinite: bool = false     ## true=此武器的备弹无限；弹夹仍会耗尽，耗尽后仍需换弹
 ## 攻击动画：角色索引序列（在 weapon_walk_texture 上的 char_idx）
 @export var attack_char_sequence: Array[int] = [3, 4, 3, 2]
 ## 攻击动画每帧持续时间（秒），长度应与 attack_char_sequence 一致
@@ -155,6 +217,10 @@ func get_slot_key() -> String:
 ## 获取武器基础伤害
 func get_effective_damage() -> float:
 	return float(attack_power)
+
+
+func has_infinite_ammo() -> bool:
+	return ammo_is_infinite
 
 
 ## 获取举起动画每帧持续时间（秒）

@@ -1,4 +1,11 @@
 class_name VXAnimSprite extends Node2D
+
+## ── 架构定位 ──
+## 系统：动画特效 ｜ 层：表现（Node2D）
+## 联机：不涉及
+## 职责：VX Ace 动画播放器：多格合成、帧序列/时长、三层偏移（格/帧/节点）与可选跟随目标。
+## 依赖：VXAnimCellData
+
 ## VX Ace 动画精灵 — 播放 RPG Maker VX Ace 格式的动画精灵表
 ##
 ## 精灵表格式：通常 960px 宽 = 5 列 × 192px，每格 192×192
@@ -33,6 +40,10 @@ class_name VXAnimSprite extends Node2D
 @export var centered: bool = true         ## 是否居中（false = 左上角锚点）
 @export var animation_scale: Vector2 = Vector2(1, 1)  ## 整体缩放
 @export var animation_rotation: float = 0.0  ## 整体旋转角度（度）
+## 精灵色调 tone（2026-09-17 用户需求）：乘法调制，作用于本动画全部精灵。
+## 白 (1,1,1,1) = 原样；压某通道染色（如酸绿 0.55,1,0.55）；分量 >1 提亮（配合加算混合当闪光）。
+## alpha 与 cell 的 opacity 相乘，整体调淡用 tone.a。
+@export var tone: Color = Color(1, 1, 1, 1)
 ## 整体位置偏移（叠加到动画节点自身位置之上），用于微调特效相对生成点的位置
 @export var position_offset: Vector2 = Vector2.ZERO
 ## 每帧位置偏移数组，索引对应帧序列中的帧号
@@ -225,7 +236,7 @@ func _apply_cell_to_sprite(s: Sprite2D, pattern: int, offset: Vector2, sc: Vecto
 	s.position = offset
 	s.scale = sc
 	s.rotation_degrees = rot
-	s.modulate = Color(1, 1, 1, op)
+	s.modulate = Color(tone.r, tone.g, tone.b, tone.a * op)
 	s.flip_h = flip
 
 	match blend:
@@ -306,10 +317,11 @@ static func from_name(anim_name: String, fps: float = 10.0) -> VXAnimSprite:
 
 ## 在指定位置播放动画，自动添加到场景树，播完自动释放。
 ## 若传入 follow 节点且非空，则启用跟随模式（动画每帧跟随该实体移动）。
-static func play_at(anim_name: String, pos: Vector2, parent: Node, fps: float = 10.0, follow: Node2D = null) -> VXAnimSprite:
+static func play_at(anim_name: String, pos: Vector2, parent: Node, fps: float = 10.0, follow: Node2D = null, tone: Color = Color(1, 1, 1, 1)) -> VXAnimSprite:
 	var anim := from_name(anim_name, fps)
 	if not anim:
 		return null
+	anim.tone = tone
 	anim.global_position = pos
 	if follow:
 		anim.follow_target = follow
@@ -337,10 +349,11 @@ static func from_scene(packed: PackedScene, offset_override: Vector2 = Vector2.Z
 
 ## 从 PackedScene 实例化动画并在指定位置播放。
 ## offset_override 非零时叠加到 .tscn 内置的 position_offset 上。
-static func play_scene(packed: PackedScene, pos: Vector2, parent: Node, fps: float = 10.0, follow: Node2D = null, offset_override: Vector2 = Vector2.ZERO) -> VXAnimSprite:
+static func play_scene(packed: PackedScene, pos: Vector2, parent: Node, fps: float = 10.0, follow: Node2D = null, offset_override: Vector2 = Vector2.ZERO, tone: Color = Color(1, 1, 1, 1)) -> VXAnimSprite:
 	var anim := from_scene(packed, offset_override)
 	if not anim:
 		return null
+	anim.tone = tone
 	anim.global_position = pos
 	if follow:
 		anim.follow_target = follow

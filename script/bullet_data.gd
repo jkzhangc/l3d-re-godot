@@ -1,4 +1,11 @@
 class_name BulletData extends Resource
+
+## ── 架构定位 ──
+## 系统：子弹数据 ｜ 层：数据（Resource）
+## 联机：纯本机配置
+## 职责：单颗子弹配置：外观分帧、弹道（速度/射程/穿透）、方向覆盖与逐朝向额外偏移、击退与硬直参数。
+## 依赖：由 WeaponData.bullet_list 引用
+
 ## 子弹数据 — 封装单颗子弹的全部配置
 ##
 ## 由 WeaponData.bullet_list 引用，每次攻击遍历 bullet_list 发射所有子弹。
@@ -46,6 +53,31 @@ class_name BulletData extends Resource
 @export var offset_up: Vector2 = Vector2.ZERO
 @export var offset_left: Vector2 = Vector2(0, -4)
 @export var offset_right: Vector2 = Vector2(0, -4)
+
+
+# ═══════════════════════════════════════
+# 即死 / 爆炸
+# ═══════════════════════════════════════
+@export_group("即死/爆炸")
+## 即死効果（原作マグナム/スナイパー系）。命中普通敌人直接拉满伤害即死；
+## tank_enemies 组 Boss 免疫即死 → 伤害 ×1.5 + 0.8s 怯み（与覚醒集中射撃同一结算）。
+@export var instant_kill: bool = false
+## 爆炸半径（像素）。0=普通子弹；>0=命中/到射程/撞墙时在原地爆炸，
+## 对半径内敌人造成伤害（超プッシュ按击退参数），并引爆 blast_wall。
+## 爆炸模式下不再对直击目标单独结算（伤害由爆炸统一给，避免双倍）。
+@export var explosion_radius: float = 0.0
+## 爆炸是否波及玩家（原作爆発物「自爆あり」）。M79 炸裂弾=true，Denel-MGL 可关。
+@export var explosion_hurts_players: bool = true
+## 能否炸开可爆破墙（BlastWall）。默认 false —— 只有显式配置 true 的爆炸源（炸药）
+## 才能破坏墙体；火箭筒/榴弹炮等就算炸得再响也炸不开（2026-09-16 用户定稿）。
+@export var breaks_blast_wall: bool = false
+## 对玩家的自爆半径（像素，2026-09-15）。0 = 同 explosion_radius；
+## >0 用更小半径——爆风对敌人范围大、自爆只惩罚贴脸开火（榴弹炮/火箭筒=96，3 格）。
+@export var explosion_player_radius: float = 0.0
+## 爆炸特效场景（如 anim/anim_effect_爆炸动画.tscn）
+@export var explode_effect_anim: PackedScene = null
+## 爆炸音效
+@export var explode_sound: AudioStream = null
 
 
 # ═══════════════════════════════════════

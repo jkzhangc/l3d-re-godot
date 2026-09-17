@@ -1,0 +1,173 @@
+{
+  "source": {
+    "file": "奨3.png",
+    "format": "png",
+    "size": [
+      480,
+      256
+    ],
+    "tile_size": 16
+  },
+  "groups": {
+    "A1": {
+      "source_rect": [
+        0,
+        0,
+        192,
+        64
+      ],
+      "va_atlas": "奨3_A1_VA.png",
+      "godot_atlas": "奨3_A1_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 4,
+      "scale": 2,
+      "tile_count": 48,
+      "needs_calibration": true,
+      "generated": true
+    },
+    "A2": {
+      "source_rect": [
+        0,
+        64,
+        192,
+        128
+      ],
+      "va_atlas": "奨3_A2_VA.png",
+      "godot_atlas": "奨3_A2_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 4,
+      "scale": 2,
+      "tile_count": 48,
+      "needs_calibration": true,
+      "generated": true
+    },
+    "A3": {
+      "source_rect": [
+        0,
+        128,
+        192,
+        192
+      ],
+      "va_atlas": "奨3_A3_VA.png",
+      "godot_atlas": "奨3_A3_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 4,
+      "scale": 2,
+      "tile_count": 48,
+      "needs_calibration": true,
+      "generated": true
+    },
+    "A4": {
+      "source_rect": [
+        0,
+        192,
+        192,
+        256
+      ],
+      "va_atlas": "奨3_A4_VA.png",
+      "godot_atlas": "奨3_A4_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 4,
+      "scale": 2,
+      "tile_count": 48,
+      "needs_calibration": true,
+      "generated": true
+    },
+    "A5": {
+      "source_rect": [
+        192,
+        0,
+        288,
+        256
+      ],
+      "va_atlas": "奨3_A5_VA.png",
+      "godot_atlas": "奨3_A5_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 6,
+      "godot_rows": 16,
+      "scale": 2,
+      "tile_count": 96,
+      "needs_calibration": false,
+      "generated": true
+    },
+    "B": {
+      "source_rect": [
+        288,
+        0,
+        480,
+        128
+      ],
+      "va_atlas": "奨3_B_VA.png",
+      "godot_atlas": "奨3_B_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 8,
+      "scale": 2,
+      "tile_count": 96,
+      "needs_calibration": false,
+      "generated": true
+    },
+    "C": {
+      "source_rect": [
+        288,
+        128,
+        480,
+        160
+      ],
+      "va_atlas": "奨3_C_VA.png",
+      "godot_atlas": "奨3_C_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 2,
+      "scale": 2,
+      "tile_count": 24,
+      "needs_calibration": false,
+      "generated": true
+    },
+    "D": {
+      "source_rect": [
+        0,
+        0,
+        192,
+        256
+      ],
+      "va_atlas": "奨3_D_VA.png",
+      "godot_atlas": "奨3_D_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 16,
+      "scale": 2,
+      "tile_count": 192,
+      "needs_calibration": true,
+      "generated": true
+    },
+    "E": {
+      "source_rect": [
+        288,
+        160,
+        480,
+        256
+      ],
+      "va_atlas": "奨3_E_VA.png",
+      "godot_atlas": "奨3_E_godot.png",
+      "godot_tile_size": 32,
+      "godot_columns": 12,
+      "godot_rows": 6,
+      "scale": 2,
+      "tile_count": 72,
+      "needs_calibration": true,
+      "generated": true
+    }
+  },
+  "warnings": [],
+  "bridge": {
+    "kind": "rm2k3_tileconverter_bridge",
+    "fixed_scale": 2,
+    "godot_rule": "Use *_godot.png only for Godot TileSet and TileMap production; *_VA.png is inspection-only.",
+    "preserve_existing_flow": true
+  }
+}

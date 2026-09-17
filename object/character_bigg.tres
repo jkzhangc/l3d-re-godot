@@ -1,9 +1,8 @@
 [gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://d1idwrngv2tqq"]
 
-[ext_resource type="AudioStream" uid="uid://chctb16yd4dv8" path="res://sound/シグマ_断末魔.wav" id="1_4pvvf"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="1_yottv"]
-[ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="2_d74mw"]
-[ext_resource type="AudioStream" uid="uid://bop1va7h4ubnx" path="res://sound/シグマ_やぁっ.wav" id="3_w6m76"]
+[ext_resource type="AudioStream" uid="uid://c14qvbstir5iw" path="res://sound/(ジャイアン)かーちゃん.ogg" id="3_xbmbw"]
+[ext_resource type="AudioStream" uid="uid://b0mpgi1y87oa4" path="res://sound/(ジャイアン)オッ.ogg" id="4_ckl1d"]
 [ext_resource type="Texture2D" uid="uid://b8bejwcsh2fga" path="res://art/Characters/ジャイアン歩行セット.png" id="4_lxnma"]
 [ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="5_lxnma"]
 [ext_resource type="Texture2D" uid="uid://bgeyjj388766l" path="res://art/Characters/ジャイアン反撃セット.png" id="6_3yr1j"]
@@ -12,6 +11,14 @@
 [ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="8_yottv"]
 [ext_resource type="Texture2D" uid="uid://bybbxf1d78dfm" path="res://art/Characters/ジャイアンセットショットガン.png" id="9_w6m76"]
 [ext_resource type="Texture2D" uid="uid://nu308684slfr" path="res://art/Characters/ジャイアンセットアサルトライフル.png" id="10_lxnma"]
+[ext_resource type="Resource" path="res://object/skill_sa_recital.tres" id="11_recital"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="12_counter"]
+[ext_resource type="Texture2D" uid="uid://de4kjicfqi7p8" path="res://art/Characters/ジャイアンセットマグナム.png" id="13_rk"]
+[ext_resource type="Texture2D" uid="uid://vlfxr36oa2sc" path="res://art/Characters/ジャイアンセットグレネードランチャー.png" id="14_rk"]
+[ext_resource type="Texture2D" uid="uid://bblxxvykmf8uc" path="res://art/Characters/ジャイアンセットRPG7.png" id="15_rk"]
+[ext_resource type="Texture2D" uid="uid://7m3ea8wuwlf2" path="res://art/Characters/ジャイアンセットフライパン.png" id="16_fp"]
+[ext_resource type="Texture2D" uid="uid://dkcp52ael5rev" path="res://art/Characters/ジャイアンセットボウガン.png" id="17_bg"]
+[ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="18_bat"]
 
 [sub_resource type="Resource" id="Resource_1lk36"]
 script = ExtResource("1_yottv")
@@ -28,6 +35,7 @@ right = Vector2(0, -6)
 [resource]
 script = ExtResource("5_lxnma")
 character_name = "ジャイ"
+character_id = "bigg"
 max_hp = 200
 max_mp = 30
 base_attack = 12
@@ -35,19 +43,33 @@ base_defense = 4
 mp_growth = 3
 walk_texture = ExtResource("7_yottv")
 run_texture = ExtResource("4_lxnma")
-death_texture = ExtResource("2_d74mw")
 death_char_index = 6
 weapon_walk_textures = {
+"Bat": ExtResource("18_bat"),
+"Bowgun": ExtResource("17_bg"),
+"Frypan": ExtResource("16_fp"),
+"Launcher": ExtResource("14_rk"),
+"Magnum": ExtResource("13_rk"),
 "Pistol": ExtResource("8_d74mw"),
+"RLauncher": ExtResource("15_rk"),
 "Rifle": ExtResource("10_lxnma"),
 "Shotgun": ExtResource("9_w6m76"),
 "Smg": ExtResource("10_lxnma")
 }
+allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
+allowed_secondary_weapons = Array[String](["pistol_01", "magnum_01", "frypan_01", "bat_01"])
 shove_walk_texture = ExtResource("6_3yr1j")
 shove_fatigue_limit = 10
+select_icon_direction = 2
 attack_effect_offsets = {
 "Pistol": SubResource("Resource_1lk36"),
 "Shotgun": SubResource("Resource_3yr1j")
 }
-hurt_sound = ExtResource("3_w6m76")
-death_sound = ExtResource("1_4pvvf")
+hurt_sound = ExtResource("4_ckl1d")
+death_sound = ExtResource("3_xbmbw")
+skills = Array[ExtResource("8_yottv")]([ExtResource("11_recital")])
+counter_type = "heavy"
+counter_sound = ExtResource("12_counter")
+commando = true
+demolition = true
+kairiki = true

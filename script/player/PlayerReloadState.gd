@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：弹药由本地单机或 Host 写入
+## 职责：装填状态：NORMAL 一次装满 / SHOTGUN 逐发装填，含装填动画、等待帧与满弹兜底。
+## 依赖：WeaponData、PlayerState
+
 ## 装填期间锁定攻击/部分移动；弹药变更由本地单机或 Host 权威写入 PlayerState。
 ## 装填状态 — 处理普通装填和霰弹枪逐发装填
 ##
@@ -36,12 +43,15 @@ func enter() -> void:
 		_return_to_weapon()
 		return
 
-	# 没有备用弹药
+	# 备弹无限时不需要检查库存；否则需要有真实备用弹药
 	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
-	if available <= 0:
+	if available <= 0 && !_wd.has_infinite_ammo():
 		print("[装填] 没有可用弹药！(%s)" % _wd.ammo_item_id)
 		_return_to_weapon()
 		return
+
+	if _wd.has_infinite_ammo():
+		print("[装填] %s 备弹无限，仍需补满弹夹" % _wd.item_name)
 
 	# 进入装填
 	character.enter_weapon_mode(_wd)
@@ -90,7 +100,7 @@ func process_update(delta: float) -> void:
 func physics_update(_delta: float) -> void:
 	# 装填期间允许移动（朝向锁定，仅位移）
 	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()
 
 
 # ============================================================
@@ -161,7 +171,7 @@ func _process_shotgun_loop(delta: float) -> void:
 			# 检查是否继续循环
 			var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 			var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
-			if current >= _wd.magazine_capacity or available <= 0:
+			if current >= _wd.magazine_capacity or (not _wd.has_infinite_ammo() and available <= 0):
 				_enter_shotgun_end()
 				return
 			# 继续循环
@@ -224,6 +234,10 @@ func _process_wait(delta: float) -> void:
 func _do_reload() -> void:
 	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	var capacity: int = _wd.magazine_capacity
+	if _wd.has_infinite_ammo():
+		get_player_state().set_magazine_ammo(_wd.item_id, capacity)
+		print("[装填] 完成: %d → %d / %d (备弹无限)" % [current, capacity, capacity])
+		return
 	var need: int = capacity - current
 	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)
 	var to_load: int = mini(need, available)
@@ -243,6 +257,14 @@ func _do_reload() -> void:
 func _load_one_shell() -> void:
 	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	if current >= _wd.magazine_capacity:
+		return
+
+	if _wd.has_infinite_ammo():
+		get_player_state().set_magazine_ammo(_wd.item_id, current + 1)
+		print("[霰弹枪装填] +1 → %d / %d (备弹无限)" % [
+			get_player_state().get_magazine_ammo(_wd.item_id),
+			_wd.magazine_capacity
+		])
 		return
 
 	var available: int = get_player_state().count_ammo_item(_wd.ammo_item_id)

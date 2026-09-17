@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillData" format=3 uid="uid://cof45ah0o3bfn"]
+
+[ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://2ydueemfxr2s" path="res://sound/ジャイアンの歌.ogg" id="1_w42qe"]
+
+[resource]
+script = ExtResource("1")
+skill_type = 2
+sa_sound = ExtResource("1_w42qe")
+skill_id = "sa_recital"
+skill_name = "ジャイアンリサイタル"
+description = "（ジャイアン SA，TP15）歌声震慑：半径 400px 内全体敌人踉跄 2 秒。"
+tp_cost = 15
+cooldown = 10.0
+command_trigger = "SA键"

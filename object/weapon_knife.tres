@@ -4,9 +4,9 @@
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="1_q4c54"]
 [ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="2_12jfk"]
-[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="3_12jfk"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="3_12jfk"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="3_ewivl"]
-[ext_resource type="AudioStream" uid="uid://ct6wqa836p8ov" path="res://sound/ナイフ.wav" id="3_idirh"]
+[ext_resource type="AudioStream" uid="uid://c3vxqj720m3g4" path="res://sound/ナイフ.ogg" id="3_idirh"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_kp675"]
 [ext_resource type="Texture2D" uid="uid://dmjow6qlmi38s" path="res://art/Ui/装備アイコンナイフ.png" id="icon"]
 
@@ -18,10 +18,6 @@ weapon_state_name = "Knife"
 weapon_walk_texture = ExtResource("2")
 is_ranged = false
 weapon_slot = 1
-pickup_texture = ExtResource("6_kp675")
-pickup_char_idx = 2
-pickup_direction = 3
-pickup_animated = false
 attack_sound = ExtResource("2_12jfk")
 raise_sound = ExtResource("3_12jfk")
 lower_sound = ExtResource("3_12jfk")
@@ -37,3 +33,7 @@ description = "一把锋利的小刀。近战攻击。"
 icon = ExtResource("icon")
 sell_price = 50
 max_stack = 1
+pickup_texture = ExtResource("6_kp675")
+pickup_char_idx = 2
+pickup_direction = 3
+pickup_step_frames = Array[int]([0])

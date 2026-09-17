@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://c06omikap4ndl"]
+
+[ext_resource type="Script" uid="uid://bhmb315drlfv3" path="res://script/random_pickup.gd" id="1"]
+
+[node name="RandomPickup" type="Node2D" unique_id=1863981552]
+script = ExtResource("1")

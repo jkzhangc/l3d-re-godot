@@ -1,13 +1,19 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bpt55tvcf1xj"]
 
+[ext_resource type="PackedScene" uid="uid://dj5fqkmk5oxqx" path="res://anim/anim_effect_步枪攻击下.tscn" id="1_1qci5"]
 [ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_2b1o8"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_lg75x"]
+[ext_resource type="PackedScene" uid="uid://c5nbupmji5188" path="res://anim/anim_effect_步枪攻击左.tscn" id="2_q0j2b"]
+[ext_resource type="PackedScene" uid="uid://dvnf6mrtf1ccb" path="res://anim/anim_effect_步枪攻击右.tscn" id="3_fjvgb"]
 [ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="3_lg75x"]
-[ext_resource type="AudioStream" uid="uid://h2v7grirhb8f" path="res://sound/ショットガン2.wav" id="4_tk8ak"]
-[ext_resource type="AudioStream" uid="uid://dayabju3noj31" path="res://sound/カチャ.wav" id="5_5vlxl"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_tk8ak"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_5vlxl"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="5_tk8ak"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_lg75x"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_oiymr"]
 [ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="7_2b1o8"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_fjvgb"]
 [ext_resource type="Texture2D" uid="uid://d3krstbwy7w1a" path="res://art/Ui/装備アイコンアサルトライフル.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_tdlcb"]
@@ -18,9 +24,29 @@ offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
 collision_size = Vector2(32, 6)
 
+[sub_resource type="Resource" id="WSO_rifle_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_rifle_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -5)
+right = Vector2(0, -5)
+
+[sub_resource type="Resource" id="WSO_rifle_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -11)
+right = Vector2(0, -11)
+
+[sub_resource type="Resource" id="WSO_rifle_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -13)
+right = Vector2(0, -13)
+
 [resource]
 script = ExtResource("6_oiymr")
-attack_power = 30
+attack_power = 35
 attack_range = 200.0
 weapon_state_name = "Rifle"
 weapon_walk_texture = ExtResource("7_2b1o8")
@@ -31,7 +57,19 @@ empty_fire_sound = ExtResource("4_tk8ak")
 raise_sound = ExtResource("5_5vlxl")
 lower_sound = ExtResource("5_5vlxl")
 reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 270
+attack_effect_anim_down = ExtResource("1_1qci5")
+attack_effect_anim_left = ExtResource("2_q0j2b")
+attack_effect_anim_right = ExtResource("3_fjvgb")
 attack_effect_follow = true
+attack_effect_offset_override = Vector2(0, -5)
+hit_effect_anim = ExtResource("5_tk8ak")
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_rifle_01_bigg"),
+"nobita": SubResource("WSO_rifle_01_nobita"),
+"shizuka": SubResource("WSO_rifle_01_shizuka"),
+"suneo": SubResource("WSO_rifle_01_suneo")
+}
 magazine_capacity = 30
 ammo_item_id = "ammo_rifle"
 attack_char_sequence = Array[int]([3, 2])
@@ -46,4 +84,4 @@ sell_price = 100
 max_stack = 1
 pickup_texture = ExtResource("6_lg75x")
 pickup_direction = 2
-pickup_animated = false
+pickup_step_frames = Array[int]([1])

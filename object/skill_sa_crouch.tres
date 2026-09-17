@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/skill_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://bleseau6alvjv" path="res://sound/静香_ＳＡ.ogg" id="2"]
+[resource]
+script = ExtResource("1")
+skill_type = 3
+duration = 1.5
+crouch_tp_drain = 15.0
+skill_id = "sa_crouch"
+skill_name = "しゃがみ回避"
+description = "（静香 SA，TP0）1.5 秒无敌；按住 SA 键可持续蹲下，每秒急速消耗 15 TP。"
+tp_cost = 0
+cooldown = 3.0
+sa_sound = ExtResource("2")
+command_trigger = "SA键"
+command_motion = ""

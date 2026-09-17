@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://script/director/holdout_machine.gd" id="1_machine"]
+[ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="HoldoutRect"]
+size = Vector2(32, 32)
+
+[node name="HoldoutMachine" type="Node2D"]
+script = ExtResource("1_machine")
+walk_texture = ExtResource("2_tex")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="HintLabel" type="Label" parent="."]
+offset_left = -80.0
+offset_top = -66.0
+offset_right = 80.0
+offset_bottom = -38.0
+horizontal_alignment = 1
+
+[node name="Collision" type="StaticBody2D" parent="."]
+collision_layer = 33
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Collision"]
+shape = SubResource("HoldoutRect")

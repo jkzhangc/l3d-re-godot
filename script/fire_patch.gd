@@ -1,4 +1,11 @@
 class_name FirePatch extends Node2D
+
+## ── 架构定位 ──
+## 系统：燃烧区域 ｜ 层：玩法（Node2D）
+## 联机：Host 结算周期伤害
+## 职责：在半径内铺满火焰精灵并按 tick 灼烧敌人；Client 镜像只播放火焰与环境音。
+## 依赖：ThrowableData（燃烧参数）、敌人伤害接口
+
 ## 权威实例负责范围检测、周期伤害和生命周期；Client 镜像只播放火焰与环境音。
 ## _damage_players 等玩法参数由 Host/单机决定，不能由远端请求任意修改。
 ## 燃烧区域 — 在半径内填充多个火精灵（VX Ace 行走图），周期性灼烧敌人
@@ -61,6 +68,16 @@ func _build_fire() -> void:
 			_fire_sprites.append(s)
 
 	_setup_ambient_sound()
+	_setup_night_light()
+
+
+func _setup_night_light() -> void:
+	## 夜间视界：火海本身就是光源。NightOverlay 存在时把火海注册成亮圈。
+	## 光圈半径=火海半径(px)+余量；NightOverlay 不存在（白天关卡）时零开销。
+	var scene := get_tree().current_scene if get_tree() else null
+	var overlay := NightOverlay.find_in_scene(scene)
+	if overlay:
+		overlay.register_light(self, float(_radius) * 32.0 + 64.0)
 
 
 func _setup_ambient_sound() -> void:
@@ -70,6 +87,8 @@ func _setup_ambient_sound() -> void:
 	var ap := AudioStreamPlayer2D.new()
 	ap.name = "FireAmbientSound"
 	ap.stream = _ambient_sound
+	# 走 SFX 总线（2026-09-13 用户反馈：全局音量对部分音效无效——本播放器直连 Master 漏网）
+	ap.bus = "SFX"
 	add_child(ap)
 	var cb: Callable = func(): ap.play()
 	ap.finished.connect(cb)
@@ -116,5 +135,6 @@ func _burn() -> void:
 		for n: Node in get_tree().get_nodes_in_group(group):
 			if n is Node2D and (n as Node2D).global_position.distance_to(global_position) <= radius_px:
 				if (n as Node2D).has_method("take_damage"):
-					# source_id=0 跳过源头去重，保证持续灼烧按 tick 间隔生效
-					(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0)
+					# source_id=0 跳过源头去重，保证持续灼烧按 tick 间隔生效；
+					# 元素传 FIRE → 站火海即点燃灼烧 DoT（2026-09-15 灼烧 debuff 接线）
+					(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE)

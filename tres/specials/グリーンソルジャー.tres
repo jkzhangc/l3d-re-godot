@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://bkcg8hn6ghxjw"]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://7x7ehcwbaf1p" path="res://art/Characters/[2K-VX]-タイラント１.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="3"]
+[resource]
+script = ExtResource("1")
+id = &"green_soldier"
+weight = 0.0
+texture = ExtResource("2")
+attack_char_sequence = Array[int]([1, 2, 3, 4, 5])
+max_hp = 900.0
+move_speed = 150.0
+attack_damage = 40.0
+attack_range = Vector2(96, 64)
+attack_hit_range = Vector2(72, 40)
+attack_cooldown_frames = 120
+vision_range = 420.0
+attack_causes_heat = false
+discover_sound = ExtResource("3")
+frontal_arc_degrees = 90.0
+frontal_normalize = true

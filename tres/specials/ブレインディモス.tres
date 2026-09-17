@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://nbk5ma46gfcc"]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://busmmjomla8s" path="res://sound/ブレインディモス声2.ogg" id="1_itnaw"]
+[ext_resource type="Texture2D" uid="uid://oj3abxiovxwc" path="res://art/Characters/[2K-VX]-ブレインディモス1.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="3_7f5ko"]
+[ext_resource type="Texture2D" uid="uid://duldls0mm8ecp" path="res://art/Characters/[2K-VX]-ブレインディモス2.png" id="3_death"]
+[ext_resource type="AudioStream" uid="uid://mjo0xbjv686j" path="res://sound/酸発射.ogg" id="4_spit"]
+[ext_resource type="PackedScene" uid="uid://b826u628r1jyb" path="res://anim/anim_effect_酸.tscn" id="5_impact"]
+
+[resource]
+script = ExtResource("1")
+id = &"brain_demos"
+weight = 0.6
+texture = ExtResource("2")
+attack_char_sequence = Array[int]([2, 3])
+hit_at_sequence_idx = 1
+death_texture = ExtResource("3_death")
+death_char_index = 5
+max_hp = 140.0
+move_speed = 110.0
+attack_damage = 25.0
+attack_cooldown_frames = 45
+vision_range = 360.0
+attack_element = 4
+hurt_sound = ExtResource("3_7f5ko")
+hurt_sound_pitch = 0.7
+attack_sound = ExtResource("4_spit")
+attack_sound_pitch = 0.5
+death_sound = ExtResource("1_itnaw")
+spit_enabled = true
+spit_damage = 20.0
+spit_char_sequence = Array[int]([3, 4])
+spit_sound = ExtResource("4_spit")
+spit_impact_effect = ExtResource("5_impact")
+spit_impact_tone = Color(0.57254905, 1, 0.5921569, 1)
+instant_kill_immune = true

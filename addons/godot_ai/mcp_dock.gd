@@ -88,6 +88,10 @@ var _install_label: Label
 # plugin reload so the new server comes up with the trimmed list.
 var _tools_pending_excluded: PackedStringArray = PackedStringArray()
 var _tools_saved_excluded: PackedStringArray = PackedStringArray()
+## Custom (addon-registered) tools list — rebuilt live on registry
+## tools_changed; per-tool checkboxes apply immediately (no restart).
+var _custom_tools_list: VBoxContainer
+var _custom_tools_count_label: Label
 var _tools_domain_checkboxes: Dictionary = {}
 var _tools_count_label: Label
 var _tools_apply_btn: Button
@@ -157,6 +161,20 @@ var _server_restart_in_progress := false
 ## repeated explicit refreshes don't repaint identical text. Mirrors the
 ## `_last_server_status` pattern used by the crash panel.
 var _last_mismatched_ids: Array[String] = []
+## One-shot post-self-update auto-repin (armed by plugin.gd via
+## `notify_self_update_success`). After an update, every client configured
+## through this plugin still pins the OLD server version — the drift banner
+## names them, but until they're rewritten each attach-bridge (re)start
+## launches the outdated backend. The first completed status sweep with a
+## healthy server consumes this flag and runs the same reconfigure the
+## banner button would, so the user isn't left owing a manual click for a
+## state the update itself created. Sweeps that land while the server is
+## still INCOMPATIBLE (stale-occupant recovery in flight) keep it pending —
+## their rows read ERROR, not CONFIGURED_MISMATCH.
+var _pending_post_update_repin: bool = false
+## The version the completed update replaced — consumed with the flag
+## above; the pin-only gate renders each entry against it.
+var _post_update_from_version: String = ""
 var _client_status_refresh_thread: Thread
 ## Single source of truth for the refresh-sweep state machine. See
 ## `ClientRefreshStateScript` for the transition table. Replaces the
@@ -898,7 +916,10 @@ func _build_client_row(client_id: String) -> void:
 	remove_btn.pressed.connect(_on_remove_client.bind(client_id))
 	row.add_child(remove_btn)
 
-	var config_path := ClientConfigurator.config_path(client_id)
+	# F-3-4: use the authoritative facade so Open/Reveal land on the same
+	# file `_check_status_merged` drives (last-wins across project tiers,
+	# matching the F2 status fix).
+	var config_path := ClientConfigurator.effective_authoritative_path(client_id)
 	var open_config_btn := Button.new()
 	_apply_editor_icon(open_config_btn, "ExternalLink", "Open")
 	open_config_btn.custom_minimum_size = Vector2(28, 28)
@@ -2148,7 +2169,14 @@ func _apply_client_action_result(client_id: String, action: String, result: Dict
 
 	var success_status := Client.Status.NOT_CONFIGURED if action == "remove" else Client.Status.CONFIGURED
 	if result.get("status") == "ok":
-		_apply_row_status(client_id, success_status)
+		## #877: Remove targets only the selected scope, so a configure is the
+		## only action with an all-scope sweep to disclose. The manual panel
+		## that lists those removes is shown on the failure path below, which
+		## left the success path — where the sweep actually ran — silent.
+		var sweep_note := (
+			ClientConfigurator.configure_sweep_note(client_id) if action == "configure" else ""
+		)
+		_apply_row_status(client_id, success_status, sweep_note)
 		var row: Dictionary = _client_rows.get(client_id, {})
 		if not row.is_empty():
 			(row["manual_panel"] as VBoxContainer).visible = false
@@ -2348,6 +2376,33 @@ func _build_tools_tab(tabs: TabContainer) -> void:
 	for entry in ToolCatalog.DOMAINS:
 		_build_tools_domain_row(grid, entry)
 
+	## Custom (addon-registered) tools — unlike the domain rows above,
+	## toggles apply LIVE: the registry re-pushes the filtered catalog to
+	## the server on every change, no restart needed.
+	grid.add_child(HSeparator.new())
+	var custom_header_row := HBoxContainer.new()
+	custom_header_row.add_theme_constant_override("separation", 8)
+	var custom_header := Label.new()
+	custom_header.text = "Custom tools (addon-registered)"
+	custom_header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	custom_header_row.add_child(custom_header)
+	_custom_tools_count_label = Label.new()
+	_custom_tools_count_label.add_theme_color_override("font_color", COLOR_MUTED)
+	custom_header_row.add_child(_custom_tools_count_label)
+	grid.add_child(custom_header_row)
+	var custom_hint := Label.new()
+	custom_hint.text = "Applies immediately — disabled tools are hidden from agents and rejected if called."
+	custom_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	custom_hint.add_theme_color_override("font_color", COLOR_MUTED)
+	custom_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(custom_hint)
+	_custom_tools_list = VBoxContainer.new()
+	_custom_tools_list.add_theme_constant_override("separation", 4)
+	_custom_tools_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_child(_custom_tools_list)
+	_connect_custom_tool_registry()
+	_refresh_custom_tools_rows()
+
 	tools_tab.add_child(HSeparator.new())
 
 	var telemetry_row := HBoxContainer.new()
@@ -2396,6 +2451,73 @@ func _build_tools_tab(tabs: TabContainer) -> void:
 
 	_reset_tools_pending_from_setting()
 	_refresh_tools_ui_state()
+
+
+## --- Custom (addon-registered) tools section ---
+
+func _connect_custom_tool_registry() -> void:
+	var registry := McpToolRegistry.get_instance()
+	if registry == null:
+		return
+	if not registry.tools_changed.is_connected(_on_custom_tool_registry_changed):
+		registry.tools_changed.connect(_on_custom_tool_registry_changed)
+
+
+func _on_custom_tool_registry_changed() -> void:
+	## Deferred: tools_changed can fire from inside a checkbox toggle in
+	## this very list — rebuilding synchronously would free the emitting
+	## control mid-signal.
+	_refresh_custom_tools_rows.call_deferred()
+
+
+func _refresh_custom_tools_rows() -> void:
+	if _custom_tools_list == null or not is_instance_valid(_custom_tools_list):
+		return
+	for child in _custom_tools_list.get_children():
+		child.queue_free()
+	var registry := McpToolRegistry.get_instance()
+	var specs: Array = [] if registry == null else registry.all()
+	specs.sort_custom(func(a, b): return String(a.name) < String(b.name))
+	var enabled_count := 0
+	for spec in specs:
+		if registry.is_tool_enabled(spec.name):
+			enabled_count += 1
+		_custom_tools_list.add_child(_build_custom_tool_row(registry, spec))
+	if _custom_tools_count_label != null and is_instance_valid(_custom_tools_count_label):
+		_custom_tools_count_label.text = "%d/%d enabled" % [enabled_count, specs.size()]
+	if specs.is_empty():
+		var empty := Label.new()
+		empty.text = "None registered. Addons add tools via McpToolRegistry — see docs/plugin-architecture.md."
+		empty.add_theme_color_override("font_color", COLOR_MUTED)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		empty.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_custom_tools_list.add_child(empty)
+
+
+func _build_custom_tool_row(registry: McpToolRegistry, spec: McpCustomToolSpec) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var chk := CheckBox.new()
+	chk.button_pressed = registry.is_tool_enabled(spec.name)
+	chk.toggled.connect(func(pressed: bool): registry.set_tool_enabled(spec.name, pressed))
+	row.add_child(chk)
+	var name_label := Label.new()
+	name_label.text = spec.name + (" · promoted" if spec.promoted else "")
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(name_label)
+	var source_label := Label.new()
+	source_label.text = spec.source if not spec.source.is_empty() else spec.source_path.get_base_dir().get_file()
+	source_label.add_theme_color_override("font_color", COLOR_MUTED)
+	row.add_child(source_label)
+	## Tooltip = the agent-facing description plus provenance, so the user
+	## can judge what they're enabling without leaving the dock.
+	row.tooltip_text = "%s\n\nsource: %s%s" % [
+		spec.description,
+		spec.source_path,
+		"\npromoted: registers as first-class MCP tool custom_%s" % spec.name if spec.promoted else "",
+	]
+	name_label.tooltip_text = row.tooltip_text
+	return row
 
 
 func _build_tools_domain_row(parent: VBoxContainer, entry: Dictionary) -> void:
@@ -2981,6 +3103,9 @@ func _finalize_completed_refresh() -> void:
 	if _refresh_state != ClientRefreshStateScript.SHUTTING_DOWN:
 		_refresh_state = ClientRefreshStateScript.IDLE
 	_refresh_clients_summary()
+	## After the summary pass so `_last_mismatched_ids` reflects the sweep
+	## that just completed.
+	_maybe_auto_repin_after_update()
 
 
 func _request_client_status_refresh(force: bool = false) -> bool:
@@ -3244,6 +3369,79 @@ func _on_reconfigure_mismatched() -> void:
 	_refresh_all_client_statuses()
 
 
+## Arm the one-shot post-update repin (see `_pending_post_update_repin`).
+## Called by plugin.gd when it drains a `status == "success"` self-update
+## marker, i.e. exactly once per completed update. `from_version` is the
+## plugin version the update replaced — required by the pin-only gate
+## below; an empty value (marker from a pre-gate runner) arms nothing, so
+## those updates keep the manual drift-banner path.
+func notify_self_update_success(from_version: String = "") -> void:
+	if from_version.strip_edges().is_empty():
+		return
+	_post_update_from_version = from_version.strip_edges()
+	_pending_post_update_repin = true
+
+
+## Consume `_pending_post_update_repin` on the first completed status sweep
+## that could actually observe drift. Runs from `_finalize_completed_refresh`
+## AFTER `_refresh_clients_summary()` has rebuilt `_last_mismatched_ids`
+## from the sweep that just landed.
+##
+## Blast-radius gate: only entries whose SOLE drift is the old version pin
+## are repinned (`entry_drift_is_version_pin_only`). A mismatched entry can
+## also mean "points at a different editor's ports" — this dock ran inside
+## a side project with custom ports, or the user hand-tuned the entry — and
+## auto-rewriting those hijacks every AI client on the machine to THIS
+## editor's ports (observed live: the self-update smoke fixture on port
+## 18000 repinned 21 real client configs). Those stay on the drift banner's
+## human click.
+func _maybe_auto_repin_after_update() -> void:
+	if not _pending_post_update_repin:
+		return
+	## While the server is INCOMPATIBLE (post-update stale-occupant recovery
+	## still in flight) every row reads ERROR, not CONFIGURED_MISMATCH — a
+	## consume here would see an empty mismatch list and drop the repin on
+	## the floor. Stay pending for the sweep that lands after recovery.
+	if _server_blocks_client_health():
+		return
+	if ClientRefreshStateScript.should_disable_client_actions(_refresh_state):
+		return
+	_pending_post_update_repin = false
+	var from_version := _post_update_from_version
+	_post_update_from_version = ""
+	if _last_mismatched_ids.is_empty():
+		return
+	var launch_context := ClientConfigurator.capture_launch_context()
+	var pin_only: Array[String] = []
+	for client_id in _last_mismatched_ids:
+		if _entry_drift_is_version_pin_only(String(client_id), from_version, launch_context):
+			pin_only.append(String(client_id))
+	if pin_only.is_empty():
+		print(
+			"MCP | self-update complete — no client entry drifts by version pin alone; leaving %d drifted config(s) to the Reconfigure banner"
+			% _last_mismatched_ids.size()
+		)
+		return
+	print(
+		"MCP | self-update complete — repinning %d client config(s) from v%s to v%s"
+		% [pin_only.size(), from_version, ClientConfigurator.get_plugin_version()]
+	)
+	for client_id in pin_only:
+		if _client_rows.has(client_id):
+			_on_configure_client(client_id)
+	_refresh_all_client_statuses()
+
+
+## Instance seam over the static gate so the dock test suite can fake the
+## per-client verdict without real config files on disk.
+func _entry_drift_is_version_pin_only(
+	client_id: String, from_version: String, launch_context: Dictionary
+) -> bool:
+	return ClientConfigurator.entry_drift_is_version_pin_only(
+		client_id, from_version, launch_context
+	)
+
+
 func _apply_row_status(
 	client_id: String,
 	status: Client.Status,
@@ -3265,7 +3463,13 @@ func _apply_row_status(
 			dot.color = Color.GREEN
 			configure_btn.text = "Reconfigure"
 			remove_btn.visible = true
-			name_label.text = base_name
+			## `error_msg` doubles as a detail slot on the green path: a
+			## successful configure passes the sweep note (#877). Transient by
+			## design — the next status refresh re-applies CONFIGURED with no
+			## detail, so the row settles back to its plain name.
+			name_label.text = (
+				"%s  (%s)" % [base_name, error_msg] if not error_msg.is_empty() else base_name
+			)
 		Client.Status.NOT_CONFIGURED:
 			dot.color = COLOR_MUTED
 			configure_btn.text = "Configure"
@@ -3278,7 +3482,15 @@ func _apply_row_status(
 			dot.color = COLOR_AMBER
 			configure_btn.text = "Reconfigure"
 			remove_btn.visible = true
-			name_label.text = "%s  (URL out of date)" % base_name
+			## Drift is usually a stale URL, but a `{scope}` client can also be
+			## registered in a scope the user did not select (#872), and
+			## "URL out of date" would be a wrong description of that. Prefer
+			## the probe's own words whenever it supplied any.
+			name_label.text = (
+				"%s  (%s)" % [base_name, error_msg]
+				if not error_msg.is_empty()
+				else "%s  (URL out of date)" % base_name
+			)
 		_:
 			dot.color = Color.RED
 			configure_btn.text = "Retry"
@@ -3290,7 +3502,13 @@ func _refresh_client_config_file_buttons(client_id: String) -> void:
 	var row: Dictionary = _client_rows.get(client_id, {})
 	if row.is_empty():
 		return
-	var config_path := String(row.get("config_path", ""))
+	# Re-resolve on every refresh so the Open/Reveal buttons follow the entry
+	# when it lands in (or moves to) a higher-precedence merge tier (codex F3).
+	# F-3-4: switched from `effective_config_path` to the authoritative facade
+	# so multi-project-tier cases resolve to the LATEST tier (matching F2
+	# status semantics) instead of failing closed to `path_template`.
+	row["config_path"] = ClientConfigurator.effective_authoritative_path(client_id)
+	var config_path := String(row["config_path"])
 	var has_path := not config_path.is_empty()
 	var open_config_btn: Button = row["open_config_btn"]
 	var reveal_btn: Button = row["reveal_btn"]

@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：敌人状态机 ｜ 层：玩法（State）
+## 联机：Host 决定状态迁移
+## 职责：发现状态：短暂播放「!」提示作为节奏缓冲，随后进入 Chase。
+## 依赖：State、enemy 实体
+
 ## 发现阶段是短暂的视觉/节奏状态，结束后才进入 Chase；联机状态由 Host 快照决定。
 ## 发现玩家 — 显示 "!" 表情符号，持续 2 秒后开始追击
 
@@ -13,7 +20,7 @@ func enter() -> void:
 
 	# 播放发现音效
 	var enemy: Node2D = character
-	enemy._play_sound(enemy.discover_sound)
+	enemy._play_sound(enemy.get_discover_sound(), enemy.get_discover_pitch())
 
 	# 显示 "!"
 	var label: Label = character.get_node_or_null("DiscoverLabel") as Label
@@ -39,4 +46,4 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(_delta: float) -> void:
-	character.move_and_slide()
+	character.move_with_corner_assist()

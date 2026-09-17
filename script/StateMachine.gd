@@ -1,4 +1,11 @@
 class_name StateMachine extends Node
+
+## ── 架构定位 ──
+## 系统：状态机框架 ｜ 层：框架
+## 联机：不涉及（纯逻辑驱动）
+## 职责：按 State 子节点名路由状态切换，保证 exit→enter 顺序并允许同名重入（换武器时重读资源）。
+## 依赖：State 子节点；宿主为 CharacterBody2D
+
 ## 通用状态机 — 管理 State 子节点，路由生命周期和帧更新
 ##
 ## 用法：

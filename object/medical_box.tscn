@@ -1,0 +1,26 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://script/medical_box.gd" id="1_medbox"]
+[ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-救急箱.png" id="2_tex"]
+
+[sub_resource type="RectangleShape2D" id="MedBoxRect"]
+size = Vector2(32, 32)
+
+[node name="MedicalBox" type="Node2D"]
+script = ExtResource("1_medbox")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="HintLabel" type="Label" parent="."]
+offset_left = -90.0
+offset_top = -70.0
+offset_right = 90.0
+offset_bottom = -42.0
+horizontal_alignment = 1
+
+[node name="Collision" type="StaticBody2D" parent="."]
+collision_layer = 33
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Collision"]
+shape = SubResource("MedBoxRect")

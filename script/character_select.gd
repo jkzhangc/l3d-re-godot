@@ -1,4 +1,11 @@
 extends Control
+
+## ── 架构定位 ──
+## 系统：角色选择 ｜ 层：表现（Control，占位）
+## 联机：不涉及
+## 职责：早期角色选择占位界面，正式流程已由 character_select_menu 承担。
+## 依赖：无（占位）
+
 ## 角色/关卡选择界面 — 占位
 ##
 ## 操作：
@@ -10,6 +17,7 @@ extends Control
 
 
 func _ready() -> void:
+	Global.play_lobby_music()   # 大厅 BGM：三选择界面共用，切界面不中断（2026-09-13）
 	_create_ui()
 
 
@@ -20,6 +28,7 @@ func _input(event: InputEvent) -> void:
 
 func _go_back() -> void:
 	print("[角色选择] 返回标题画面")
+	Global.stop_lobby_music()   # 回标题，让位标题画面自己的 BGM
 	var err: Error = get_tree().change_scene_to_file(title_screen_scene)
 	if err != OK:
 		printerr("[角色选择] 场景切换失败: %s (err=%d)" % [title_screen_scene, err])
@@ -70,4 +79,5 @@ func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> La
 	lbl.add_theme_font_override("font", _load_font(font_size))
 	lbl.add_theme_font_size_override("font_size", font_size)
 	lbl.add_theme_color_override("font_color", color)
+	Global.apply_text_shadow(lbl)  ## 全局阴影参数（GradientLabel 同源）
 	return lbl

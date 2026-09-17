@@ -1,4 +1,11 @@
 extends Node2D
+
+## ── 架构定位 ──
+## 系统：投掷瞄准指示器 ｜ 层：表现（Node2D）
+## 联机：不涉及
+## 职责：绘制投掷路线与落点圆，由 PlayerThrowableState 创建并逐帧更新。
+## 依赖：PlayerThrowableState（父节点）
+
 ## 投掷瞄准指示器 — 绘制投掷路径（线）+ 终点（圆）
 ## 由 PlayerThrowableState 创建为玩家子节点，direction/range_tiles 每帧更新
 

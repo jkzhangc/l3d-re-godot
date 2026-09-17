@@ -1,4 +1,11 @@
 class_name ItemCodec extends RefCounted
+
+## ── 架构定位 ──
+## 系统：物品编解码 ｜ 层：数据（工具类）
+## 联机：不涉及
+## 职责：ItemData/WeaponData 的 Dictionary 编解码，单独成类以打断 PlayerState ↔ SaveManager 的循环依赖。
+## 依赖：ItemData/WeaponData；无上层依赖（依赖链最底层）
+
 ## 物品（ItemData / WeaponData）的 Dictionary 编解码。
 ##
 ## 单独成类是为了**打断循环依赖**：PlayerState 要序列化自己持有的物品，
@@ -27,6 +34,7 @@ static func to_dict(item: ItemData) -> Dictionary:
 		d["attack_speed"] = w.attack_speed
 		d["attack_range"] = w.attack_range
 		d["critical_rate"] = w.critical_rate
+		d["critical_damage"] = w.critical_damage
 		d["weapon_slot"] = w.weapon_slot
 	return d
 
@@ -55,6 +63,7 @@ static func from_dict(d: Dictionary) -> ItemData:
 		w.attack_speed = d.get("attack_speed", 1.0)
 		w.attack_range = d.get("attack_range", 48.0)
 		w.critical_rate = d.get("critical_rate", 0.0)
+		w.critical_damage = d.get("critical_damage", 2.0)
 		var ws: Variant = d.get("weapon_slot", 0)
 		if ws is String:
 			w.weapon_slot = 0 if ws == "primary" else 1

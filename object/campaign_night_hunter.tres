@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CampaignData" format=3 uid="uid://bnhcamp2k7xs"]
+
+[ext_resource type="Script" path="res://script/campaign_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+campaign_id = "night_hunter"
+campaign_name = "夜行猎手"
+description = "第二战役（Night Hunter）。从突袭战役逃出的幸存者抵达 R 市，追踪直升机的轰鸣寻找生机。夜幕笼罩的市街、非忍池公园、电视台与天台决战——ハンター種出現率更高，視界悪く、ブレアウィッチとハンターγを見落とすな。章节地图尚未实装。"
+level_scenes = Array[String]([])

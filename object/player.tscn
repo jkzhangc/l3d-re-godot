@@ -12,10 +12,10 @@
 [ext_resource type="Script" uid="uid://byyfyvj4w6c1e" path="res://script/player/PlayerKnifeAttackState.gd" id="11"]
 [ext_resource type="Script" uid="uid://dsglyhws4ejp8" path="res://script/player/PlayerReloadState.gd" id="12"]
 [ext_resource type="Script" uid="uid://cctexj4rv8a0c" path="res://script/player/PlayerShoveState.gd" id="13"]
-[ext_resource type="Script" path="res://script/player/PlayerThrowableState.gd" id="15"]
+[ext_resource type="Script" uid="uid://d30tupysobn75" path="res://script/player/PlayerThrowableState.gd" id="15"]
 
 [sub_resource type="RectangleShape2D" id="5_shape"]
-size = Vector2(24, 29)
+size = Vector2(24, 27)
 
 [node name="Player" type="CharacterBody2D" unique_id=1681709351]
 z_index = 1
@@ -33,7 +33,7 @@ region_enabled = true
 region_rect = Rect2(0, 0, 48, 64)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=944471131]
-position = Vector2(0, 2.5)
+position = Vector2(0, 3.5)
 shape = SubResource("5_shape")
 
 [node name="AnimationTimer" type="Timer" parent="." unique_id=1496992385]
@@ -87,5 +87,29 @@ script = ExtResource("8")
 [node name="SmgAttack" type="Node" parent="StateMachine" unique_id=846857311]
 script = ExtResource("10")
 
-[node name="Throwable" type="Node" parent="StateMachine" unique_id=3015754556]
+[node name="Throwable" type="Node" parent="StateMachine" unique_id=-1279212740]
 script = ExtResource("15")
+
+[node name="Sniper" type="Node" parent="StateMachine" unique_id=1180501427]
+script = ExtResource("8")
+
+[node name="SniperAttack" type="Node" parent="StateMachine" unique_id=2074634755]
+script = ExtResource("10")
+
+[node name="Magnum" type="Node" parent="StateMachine" unique_id=2074634900]
+script = ExtResource("8")
+
+[node name="Launcher" type="Node" parent="StateMachine" unique_id=2074634901]
+script = ExtResource("8")
+
+[node name="RLauncher" type="Node" parent="StateMachine"]
+script = ExtResource("8")
+
+[node name="Frypan" type="Node" parent="StateMachine"]
+script = ExtResource("9")
+
+[node name="Bat" type="Node" parent="StateMachine"]
+script = ExtResource("9")
+
+[node name="Bowgun" type="Node" parent="StateMachine"]
+script = ExtResource("8")

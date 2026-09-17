@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ZombieVariant" format=3 uid="uid://cpdxauv1a184n"]
+
+[ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://c1cqtfqs2lxww" path="res://art/Characters/学生ゾンビ1-2.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://bvypi73qiiwg2" path="res://art/Characters/学生クリムゾンヘッド1.png" id="3"]
+[ext_resource type="AudioStream" uid="uid://bagycpkahdqah" path="res://sound/ゾンビ声4.ogg" id="4"]
+[ext_resource type="AudioStream" uid="uid://bf4iu84yldrmv" path="res://sound/クリム_叫び.ogg" id="4_iukcu"]
+[ext_resource type="AudioStream" uid="uid://b52sexct1ha4j" path="res://sound/女ゾンビ声2.ogg" id="5"]
+
+[resource]
+script = ExtResource("1")
+id = &"runner"
+normal_texture = ExtResource("2")
+rage_texture = ExtResource("3")
+max_hp = 60.0
+move_speed = 230.0
+rage_move_speed = 300.0
+attack_damage = 8.0
+rage_attack_damage = 12.0
+discover_sound = ExtResource("4")
+hurt_sound = ExtResource("5")

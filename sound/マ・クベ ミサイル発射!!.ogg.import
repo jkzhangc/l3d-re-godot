@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://bnwxcs71g8r3r"
+path="res://.godot/imported/マ・クベ ミサイル発射!!.ogg-c76f552e55a877dc05b95d54ddbd3021.oggvorbisstr"
+
+[deps]
+
+source_file="res://sound/マ・クベ ミサイル発射!!.ogg"
+dest_files=["res://.godot/imported/マ・クベ ミサイル発射!!.ogg-c76f552e55a877dc05b95d54ddbd3021.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

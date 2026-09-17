@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://bdkkdshplnh8t"
+path="res://.godot/imported/ハンク やられ.ogg-8029f8c99e0f0869fdb6a43edb9b9a6f.oggvorbisstr"
+
+[deps]
+
+source_file="res://sound/ハンク やられ.ogg"
+dest_files=["res://.godot/imported/ハンク やられ.ogg-8029f8c99e0f0869fdb6a43edb9b9a6f.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

@@ -1,4 +1,11 @@
 class_name CampaignData extends Resource
+
+## ── 架构定位 ──
+## 系统：战役数据 ｜ 层：数据（Resource）
+## 联机：不涉及
+## 职责：战役定义：ID/名称/描述/图标与按顺序排列的关卡场景路径。
+## 依赖：被 campaign_select 读取
+
 ## 战役数据 — 定义一组连续关卡
 
 @export var campaign_id: String = ""           ## 唯一标识，如 "assault"

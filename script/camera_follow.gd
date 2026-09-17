@@ -1,4 +1,11 @@
 extends Camera2D
+
+## ── 架构定位 ──
+## 系统：相机 ｜ 层：表现（Camera2D）
+## 联机：不涉及
+## 职责：相机跟随与地图边界限制；运行时动态创建 PhantomCamera 子节点，对外保留原有 @export 接口。
+## 依赖：Phantom Camera 插件、地图边界节点
+
 ## 相机跟随 + 地图边界限制。
 ##
 ## 基于 Phantom Camera 插件实现：
@@ -92,6 +99,24 @@ func set_follow_target(target: Node2D) -> void:
 		if _target:
 			_pcam.position = _target.global_position
 	teleport_to_player()
+
+## 强制重新绑定跟随目标 —— 目标节点被 reparent（remove_child/add_child）后必须调用。
+##
+## 【为什么要专门做这一步】目标节点离树会发出 `tree_exiting`，PhantomCamera2D 在
+## `_follow_target_tree_exiting()` 里据此把 `_should_follow` 关成 false，目标重新入树
+## **不会**自动恢复 —— 表现为镜头永远停在原地。而且直接再赋同一个 target 也没用：
+## `set_follow_target()` 开头有 `if follow_target == value: return` 的短路。
+## 所以必须先清空再赋值，让 `_should_follow` 重新置真。
+func rebind_follow_target(target: Node2D) -> void:
+	_target = target if target and is_instance_valid(target) else null
+	if not is_instance_valid(_pcam):
+		return
+	_pcam.follow_target = null
+	_pcam.follow_target = _target
+	if _target:
+		_pcam.position = _target.global_position
+	teleport_to_player()
+
 
 ## 计算地图边界（bound_layers 各层 used rect 的并集）并应用到 pcam 的显式 limit 四边。
 func _setup_map_limits() -> void:

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/skill_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+skill_type = 1
+duration = 10.0
+skill_id = "sa_kankaku"
+skill_name = "感覚向上"
+description = "（のび太 SA）10 秒内非架势完全见切：敌方攻击全部无效化。"
+tp_cost = 10
+cooldown = 8.0
+command_trigger = "SA键"
+command_motion = ""

@@ -1,0 +1,12 @@
+[gd_resource type="TileSet" format=3 uid="uid://cltng2ujuxbqi"]
+
+[ext_resource type="Texture2D" uid="uid://bvs13livvnqhi" path="res://art/misc/no_spawn_marker.png" id="1_mark"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_nospawn"]
+texture = ExtResource("1_mark")
+texture_region_size = Vector2i(32, 32)
+0:0/0 = 0
+
+[resource]
+tile_size = Vector2i(32, 32)
+sources/0 = SubResource("TileSetAtlasSource_nospawn")

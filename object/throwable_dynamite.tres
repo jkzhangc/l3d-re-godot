@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ThrowableData" format=3 uid="uid://ca12vm5oxp7k1"]
+
+[ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="2_rtgqi"]
+[ext_resource type="Texture2D" uid="uid://dwp2vko8s307e" path="res://art/Ui/装備アイコン手榴弾.png" id="3"]
+[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="4_butmx"][ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="5_58x6b"]
+[resource]
+script = ExtResource("1")
+throw_range_max = 6
+arc_height = 64.0
+explosion_radius = 3
+breaks_blast_wall = true
+damage = 80.0
+explode_effect_anim = ExtResource("2_rtgqi")
+throw_sound = ExtResource("5_58x6b")
+throw_sound_pitch = 1.4
+explode_sound = ExtResource("4_butmx")
+item_id = "dynamite_01"
+item_name = "炸药"
+item_type = 8
+description = "投掷后剧烈爆炸，能炸开堵路的墙壁。原作中成把成把地拿到。"
+icon = ExtResource("3")
+effect_text = "大爆炸"

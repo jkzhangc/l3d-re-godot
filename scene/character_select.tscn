@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://cnkb288dlwahv" path="res://art/System/Window frame.png" id="3"]
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="4"]
 
-[node name="CharacterSelect" type="Control" unique_id=1095765913]
+[node name="CharacterSelect" type="Control" unique_id=1457089973]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,95 +13,177 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
-item_start_y = 60.0
-cursor_y_offset = 9.0
 
-[node name="MenuWindow" type="Control" parent="." unique_id=290410846]
+[node name="PageTitle" type="Control" parent="." unique_id=914637014]
 anchors_preset = 0
-offset_left = 70.0
-offset_top = 40.0
-offset_right = 570.0
-offset_bottom = 400.0
+offset_left = 40.0
+offset_top = 16.0
+offset_right = 280.0
+offset_bottom = 76.0
+script = ExtResource("4")
+text = "选择角色"
+text_font_size = 60
+color_index = 1
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
-[node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=130406140]
+[node name="HintJoin" type="Control" parent="." unique_id=568702136]
+anchors_preset = 0
+offset_left = 40.0
+offset_top = 100.0
+offset_right = 508.0
+offset_bottom = 136.0
+script = ExtResource("4")
+text = "Z / Space  加入 / 移除队伍"
+text_font_size = 36
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="HintEnter" type="Control" parent="." unique_id=1831875776]
+anchors_preset = 0
+offset_left = 40.0
+offset_top = 142.0
+offset_right = 238.0
+offset_bottom = 178.0
+script = ExtResource("4")
+text = "Enter  出发"
+text_font_size = 36
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="HintBack" type="Control" parent="." unique_id=1051622185]
+anchors_preset = 0
+offset_left = 42.0
+offset_top = 185.0
+offset_right = 276.0
+offset_bottom = 221.0
+script = ExtResource("4")
+text = "X / Esc  返回"
+text_font_size = 36
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="InfoWindow" type="Control" parent="." unique_id=1538146603]
+anchors_preset = 0
+offset_left = 60.0
+offset_top = 648.0
+offset_right = 1220.0
+offset_bottom = 920.0
+mouse_filter = 2
+
+[node name="WindowBg" type="TextureRect" parent="InfoWindow" unique_id=283793772]
 layout_mode = 0
-offset_right = 500.0
-offset_bottom = 360.0
+offset_right = 1160.0
+offset_bottom = 272.0
 mouse_filter = 2
 texture = ExtResource("2")
 
-[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow" unique_id=2047693753]
+[node name="WindowFrame" type="NinePatchRect" parent="InfoWindow" unique_id=589767279]
 layout_mode = 0
-offset_right = 500.0
-offset_bottom = 360.0
+offset_right = 1160.0
+offset_bottom = 272.0
 texture = ExtResource("3")
 patch_margin_left = 20
 patch_margin_top = 20
 patch_margin_right = 20
 patch_margin_bottom = 20
 
-[node name="TitleLabel" type="Control" parent="MenuWindow" unique_id=782501874]
+[node name="NameLabel" type="Control" parent="InfoWindow" unique_id=1725543235]
 anchors_preset = 0
 offset_left = 16.0
-offset_top = 10.0
-offset_right = 104.0
-offset_bottom = 41.0
+offset_top = 12.0
+offset_right = 136.0
+offset_bottom = 60.0
 script = ExtResource("4")
-text = "选择角色"
-text_font_size = 16
+text = "「 」"
+text_font_size = 48
 color_index = 1
-bold = true
 shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
-[node name="Separator" type="ColorRect" parent="MenuWindow" unique_id=293984696]
-layout_mode = 0
+[node name="StatLabel" type="Control" parent="InfoWindow" unique_id=184864938]
+anchors_preset = 0
 offset_left = 16.0
-offset_top = 38.0
-offset_right = 484.0
-offset_bottom = 39.0
-color = Color(0.5, 0.5, 0.7, 0.5)
-
-[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow" unique_id=512672912]
-layout_mode = 0
-offset_left = 17.0
-offset_top = 46.0
-offset_right = 277.0
-offset_bottom = 86.0
-patch_margin_left = 16
-patch_margin_top = 16
-patch_margin_right = 16
-patch_margin_bottom = 16
-axis_stretch_horizontal = 1
-axis_stretch_vertical = 1
-
-[node name="TeamPanel" type="Panel" parent="MenuWindow" unique_id=893306213]
-layout_mode = 0
-offset_left = 330.0
-offset_top = 40.0
-offset_right = 490.0
-offset_bottom = 240.0
-
-[node name="TeamTitle" type="Control" parent="MenuWindow" unique_id=95429946]
-anchors_preset = 0
-offset_left = 344.0
-offset_top = 42.0
-offset_right = 376.0
-offset_bottom = 65.0
+offset_top = 76.0
+offset_right = 16.0
+offset_bottom = 76.0
 script = ExtResource("4")
-text = "队伍"
-color_index = 1
+text_font_size = 24
+color_index = 5
+color_row = 1
 bold = true
 shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
-[node name="HintLabel" type="Control" parent="MenuWindow" unique_id=1203690]
+[node name="WeaponLabel" type="Control" parent="InfoWindow" unique_id=2063901035]
+visible = false
 anchors_preset = 0
-offset_left = 282.0
-offset_top = 325.0
-offset_right = 476.0
-offset_bottom = 342.0
+offset_left = 16.0
+offset_top = 104.0
+offset_right = 16.0
+offset_bottom = 104.0
 script = ExtResource("4")
-text = "Enter开始游戏  Z添加/移除  Esc返回"
-text_font_size = 12
-color_index = 1
+text_font_size = 24
+color_index = 5
+color_row = 1
 bold = true
 shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="MukiriLabel" type="Control" parent="InfoWindow" unique_id=143216704]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 136.0
+offset_right = 16.0
+offset_bottom = 136.0
+script = ExtResource("4")
+text_font_size = 24
+color_index = 5
+color_row = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="SkillLabel" type="Control" parent="InfoWindow" unique_id=128966075]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 168.0
+offset_right = 16.0
+offset_bottom = 168.0
+script = ExtResource("4")
+text_font_size = 24
+color_index = 5
+color_row = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="AwakenLabel" type="Control" parent="InfoWindow" unique_id=439861225]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 200.0
+offset_right = 16.0
+offset_bottom = 200.0
+script = ExtResource("4")
+text_font_size = 24
+color_index = 5
+color_row = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"

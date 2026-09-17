@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：Host 注入已验证输入
+## 职责：站立状态：速度归零，消费武器/消耗品/投掷/举枪等边沿输入，按移动输入切 Walk/Run。
+## 依赖：State、Player 实体、PlayerState
+
 ## 单机由本状态读取本地输入；联机 Host 不走这里读取键盘，而由 NetworkWorld 注入已验证输入。
 ## 站立状态 — 玩家不移动时
 
@@ -10,23 +17,23 @@ func enter() -> void:
 
 func process_update(_delta: float) -> void:
 	# 直接举起武器
-	if Input.is_action_just_pressed("主武器键"):
+	if Global.item_key_just_pressed("主武器键"):
 		_try_raise_weapon("primary")
 		return
-	if Input.is_action_just_pressed("副武器键"):
+	if Global.item_key_just_pressed("副武器键"):
 		_try_raise_weapon("secondary")
 		return
 
 	# 使用消耗品
-	if Input.is_action_just_pressed("治疗品键"):
+	if Global.item_key_just_pressed("治疗品键"):
 		character.use_healing_item()
 		return
-	if Input.is_action_just_pressed("辅助品键"):
+	if Global.item_key_just_pressed("辅助品键"):
 		character.use_support_item()
 		return
 
 	# 投掷物
-	if Input.is_action_just_pressed("投掷物键"):
+	if Global.item_key_just_pressed("投掷物键"):
 		_try_throwable()
 		return
 
@@ -65,4 +72,4 @@ func _try_throwable() -> void:
 
 func physics_update(delta: float) -> void:
 	character.velocity = Vector2.ZERO
-	character.move_and_slide()
+	character.move_with_corner_assist()

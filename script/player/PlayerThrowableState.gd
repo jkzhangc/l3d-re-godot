@@ -1,11 +1,21 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：终点与伤害由 Host 复核
+## 职责：投掷状态机（举起→瞄准→投掷）。
+## 依赖：ThrowableData、ThrowableProjectile、PlayerState
+
 ## 投掷状态分为举起、瞄准、投掷；终点和伤害参数在 Host 侧重新验证，不能信任客户端。
 ## 投掷物状态 — 举起投掷物 → 瞄准（显示路径+终点）→ 投掷
 ##
 ## 「投掷物键」(5) 进入；再次按 5 或按主/副武器键放下。
-## 按住「确定键」瞄准，松开投掷；按住时按「取消键」取消瞄准。
-## 「投掷加格键」(A) / 「投掷减格键」(S) 调终点格数（0 ~ throw_range_max）。
-## 举起时朝向跟随移动；按住「确定键」瞄准时朝向锁定，可移动。
+## 2026-09-14 改版：按 5 进入后**轨迹线常显**、朝向跟随移动不锁定（自由瞄准）；
+##   快速按一下「确定键」= 即刻扔出（按下进固定瞄准、松开即掷，手感为按 Z 扔）。
+## 固定朝向 = 旧逻辑原样保留：按住「确定键」锁定朝向瞄准，松开投掷；
+##   按住时按「取消键」取消瞄准解锁朝向。
+## 「投掷加格键」(A) / 「投掷减格键」(S) 调终点格数（0 ~ throw_range_max），
+##   轨迹常显后 READY / AIM 两阶段都可调。
 
 const TILE_SIZE: int = 32
 const DEFAULT_RANGE: int = 3
@@ -33,6 +43,8 @@ func enter() -> void:
 		character.enter_throwable_mode(_td)
 	character.velocity = Vector2.ZERO
 	character.update_appearance(false, false)
+	# 2026-09-14：轨迹线常显——举起即显示，朝向不锁定（自由瞄准）
+	_create_aim_indicator()
 
 
 func exit() -> void:
@@ -54,22 +66,32 @@ func process_update(_delta: float) -> void:
 
 func _process_ready() -> void:
 	# 再次按投掷物键 → 放下
-	if Input.is_action_just_pressed("投掷物键"):
+	if Global.item_key_just_pressed("投掷物键"):
 		transition_requested.emit("Idle")
 		return
 	# 主/副武器键 → 切武器放下
-	if Input.is_action_just_pressed("主武器键") or Input.is_action_just_pressed("副武器键"):
+	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
 		transition_requested.emit("Idle")
 		return
 	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)
 	character.update_appearance(move_dir != Vector2.ZERO, false)
-	# 确定键 → 锁定朝向并进入瞄准
+	# 调终点格数（READY 阶段轨迹已常显，A/S 直接可调）
+	if Input.is_action_just_pressed("投掷加格键"):
+		_range = mini(_range + 1, _td.throw_range_max)
+	if Input.is_action_just_pressed("投掷减格键"):
+		_range = maxi(_range - 1, 0)
+	# 确定键按下 → 锁定朝向进入固定瞄准（旧逻辑保留）；松开时在 _process_aim 投掷
+	# ——快速点按 Z 即"进瞄准立刻松开"= 按一下 Z 直接扔出的手感
 	if Input.is_action_just_pressed("确定键"):
 		character.lock_facing()
 		_phase = Phase.AIM
-		_create_aim_indicator()
+		return
+	# 轨迹线常显（2026-09-14）：READY 阶段朝向不锁定，指示器随朝向逐帧刷新
+	if _aim_indicator:
+		_aim_indicator.direction = character.get_facing_vector()
+		_aim_indicator.range_tiles = _range
 
 
 func _process_aim() -> void:
@@ -97,7 +119,7 @@ func _process_aim() -> void:
 
 func physics_update(_delta: float) -> void:
 	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()
 
 
 func _throw() -> void:
@@ -105,7 +127,8 @@ func _throw() -> void:
 	var start: Vector2 = character.global_position
 	var end: Vector2 = start + dir * (_range * TILE_SIZE)
 	ThrowableProjectile.spawn(_td, start, end, character)
-	get_player_state().throwable = null
+	# 叠数投掷物（炸药）：扔一次减一个，归零才清槽；普通投掷物直接清槽
+	get_player_state().consume_throwable()
 	_remove_aim_indicator()
 	transition_requested.emit("Idle")
 

@@ -1,8 +1,18 @@
 class_name CharacterData extends Resource
+
+## ── 架构定位 ──
+## 系统：角色数据 ｜ 层：数据（Resource）
+## 联机：角色表须 Host 校验后广播
+## 职责：角色配置：基础属性与成长率、初始装备、行走/跑步/死亡精灵表、逐武器行走图、武器槽限制、枪口与特效偏移。
+## 依赖：被 Player、CharacterCatalog、玩家状态读取
+
 ## 角色参数数据 — 可在检查器中可视化编辑
 
 @export_group("基础属性")
 @export var character_name: String = "のび太"
+## 稳定数据键（如 "nobita"）。武器侧的「按角色子弹发射点偏移」等按角色配置的数据用它做键；
+## 留空则回退 tres 文件名（character_nobita.tres → nobita）。
+@export var character_id: String = ""
 @export var level: int = 1
 @export var max_hp: int = 100
 @export var max_mp: int = 50
@@ -19,6 +29,11 @@ class_name CharacterData extends Resource
 @export var critical_rate: float = 0.05    ## 暴击率 (0~1)
 @export var critical_damage: float = 1.5    ## 暴击倍率
 
+@export_group("初始装备")
+## 角色出生自带的主武器。未配置时 PlayerState 统一发放手枪，
+## 保证单机与联机每个角色出场都有一把可举起的武器。
+@export var initial_weapon: WeaponData = null
+
 @export_group("成长率")
 @export var hp_growth: int = 10
 @export var mp_growth: int = 5
@@ -29,10 +44,13 @@ class_name CharacterData extends Resource
 @export var portrait: Texture2D              ## 角色立绘/头像
 @export var walk_texture: Texture2D          ## 行走图精灵表
 @export var walk_char_index: int = 0         ## 行走图角色索引
-@export var walk_frame_duration: float = 0.18
+## 步行动画帧时长（秒）。0 = 按全局基准与 walk_speed 自动算（2026-09-15：
+## duration = 0.18 × 150 / walk_speed，默认即 0.18）；>0 = 手动固定。
+@export var walk_frame_duration: float = 0.0
 @export var run_texture: Texture2D           ## 跑步图精灵表
 @export var run_char_index: int = 1          ## 跑步图角色索引
-@export var run_frame_duration: float = 0.10
+## 跑步动画帧时长（秒）。0 = 按全局基准与 run_speed 自动算（默认 250 速 → 0.108s）；>0 = 手动固定。
+@export var run_frame_duration: float = 0.0
 @export var death_texture: Texture2D         ## 死亡图精灵表（留空回退 walk_texture）
 @export var death_char_index: int = 7        ## 死亡角色索引
 
@@ -71,6 +89,12 @@ class_name CharacterData extends Resource
 @export_group("选择界面")
 ## 角色选择界面使用的小头像（如未设置则用 portrait）
 @export var select_portrait: Texture2D
+## 选择界面图标行走图（未设置时界面回退到默认图标表）
+@export var select_icon_sheet: Texture2D
+## 图标行走图中的角色索引（横向第几组三帧，0~3）
+@export var select_icon_index: int = 0
+## 图标行走图的朝向行（0=下 1=左 2=右 3=上；这张表不同朝向行指向不同角色）
+@export var select_icon_direction: int = 0
 
 @export_group("特效偏移")
 ## 攻击特效偏移（按武器 × 方向）。键=weapon_state_name（如 "Pistol"/"Shotgun"），值=WeaponEffectOffsets 资源。
@@ -86,8 +110,40 @@ class_name CharacterData extends Resource
 @export var safehouse_lines: Array[String] = []
 
 @export_group("技能")
-## 角色拥有的技能列表（SkillData 资源）
+## 角色拥有的技能列表（SkillData 资源）。SA 主动技 = command_trigger 填 "SA键" 的条目。
 @export var skills: Array[SkillData] = []
+
+@export_group("说明书设定（L3D 原作 §6）")
+## 反击类型：见切成功后触发的反击招式（原作每角色专属）。
+## punch=拳打（のび太/スネ夫）、heavy=强打（ジャイアン/聖奈）、issen=一闪·超Push+即死（静香/出木杉/健治）。
+## 见切/反击系统尚未实装，此字段先作为角色设定数据保存。
+@export_enum("none", "punch", "heavy", "issen") var counter_type: String = "none"
+## 反击音效（见切成功触发反击时播放，如 静香_カウンター１）。留空=不播放。
+@export var counter_sound: AudioStream = null
+
+@export_group("见切动画（见切成功时播放，配置方式同举枪动画）")
+## 见切时切换到的行走图精灵表（576×512 同布局；空 = 回退推击图/反撃套）。
+@export var mukiri_walk_texture: Texture2D
+## 见切动画的角色索引序列（char_idx，图上第几组姿态；空=不播动画）。
+@export var mukiri_char_sequence: Array[int] = []
+## 每帧持续时间（秒）；条目不足时用默认 0.08。
+@export var mukiri_frame_durations: Array[float] = []
+## 看护：自己使用治疗品时，全队玩家同时回复相同 HP。
+@export var nursing: bool = false
+## スプレー+1：急救喷雾携带上限 +1 并开局自带一瓶（喷雾库存系统接入后生效）。
+@export var spray_plus_one: bool = false
+## コマンドー：机枪/散弹/马格南攻击后无硬直（跳过攻击后动画）。
+@export var commando: bool = false
+## デモリション：投掷爆炸类无发射硬直（投掷状态接入后生效）。
+@export var demolition: bool = false
+## 怪力（かいりき）：近战武器攻击后无硬直（跳过攻击后动画）。
+@export var kairiki: bool = false
+
+## ── 覚醒コマンド（原作：構え中 Z+X）──
+## 觉醒类型。none = 该角色没有觉醒（原作我方四人只有のび太有）。
+## concentrated_fire = 集中射撃（のび太）：发动中 TP 缓慢消耗，射击威力上升，
+## 子弹附带即死・怯み（对 tank_enemies 组 Boss 无效 → 伤害 ×1.5 + 怯み）。
+@export_enum("none", "concentrated_fire") var awaken_type: String = "none"
 
 # ═══════════════════════════════════════
 # 运行时 HP（不保存到 .tres，由存档系统管理）
@@ -177,3 +233,13 @@ func get_attack_effect_offset(weapon_state_name: String, facing: int, fallback: 
 		if off:
 			return off.get_offset(facing)
 	return fallback
+
+
+## 稳定数据键：优先 character_id，留空回退 tres 文件名（character_nobita.tres → nobita）。
+## 供「按角色」配置的资源做字典键（如 WeaponData.bullet_spawn_offsets）。
+func get_character_key() -> String:
+	if not character_id.is_empty():
+		return character_id
+	if resource_path and not resource_path.is_empty():
+		return resource_path.get_file().get_basename()
+	return character_name

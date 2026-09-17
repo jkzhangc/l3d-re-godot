@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：仅单机/Host 生成权威子弹
+## 职责：远程攻击状态：按序列播攻击动画，在配置帧触发一次发射，并按开火模式决定是否连发。
+## 依赖：WeaponData、BulletData、PlayerState、子弹场景
+
 ## 攻击帧只触发一次发射；单机本地或 Host 才能生成权威子弹，Client 仅播放攻击表现。
 ## 手枪攻击状态 — 播放攻击动画并发射子弹
 ##
@@ -83,9 +90,9 @@ func process_update(delta: float) -> void:
 
 		_seq_idx += 1
 		if _seq_idx >= _wd.attack_char_sequence.size():
-			# 攻击动画结束 → 检查是否有攻击后动画
+			# 攻击动画结束 → 检查是否有攻击后动画（コマンドー 被动：机枪/散弹/马格南无硬直）
 			var post_seq: Array[int] = _wd.get_post_attack_char_sequence()
-			if post_seq.size() > 0:
+			if post_seq.size() > 0 and not character.skip_post_attack(_wd.weapon_state_name):
 				_post_attack_active = true
 				_seq_idx = 0
 				_timer = _wd.get_post_attack_frame_duration(0)
@@ -108,7 +115,7 @@ func process_update(delta: float) -> void:
 func physics_update(delta: float) -> void:
 	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
 	character.velocity = move_dir * character.run_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()
 	# 攻击中允许转向
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)
@@ -125,15 +132,15 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 
 
 func _fire_bullet() -> void:
-	# 消耗弹药
+	# 消耗弹夹内子弹；备弹可无限，但弹夹仍然会空
 	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	if current <= 0:
 		print("[手枪] 弹夹为空！咔嚓——")
 		return
-
 	get_player_state().set_magazine_ammo(_wd.item_id, current - 1)
+	current = get_player_state().get_magazine_ammo(_wd.item_id)
 	var bullet_count: int = _wd.bullet_list.size()
-	print("[手枪] 发射！弹夹剩余: %d / %d | 子弹数: %d" % [current - 1, _wd.magazine_capacity, bullet_count])
+	print("[手枪] 发射！弹夹剩余: %d / %d | 子弹数: %d" % [current, _wd.magazine_capacity, bullet_count])
 
 	# 加载子弹场景（只加载一次）
 	var bullet_scene: PackedScene = load("res://object/bullet.tscn") as PackedScene
@@ -151,6 +158,10 @@ func _fire_bullet() -> void:
 		# 方向：BulletData 控制角度/方向覆盖
 		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
 		var damage: float = bd.get_effective_damage(_wd.attack_power)
+		# 覚醒「集中射撃」：射撃威力 ×1.5，子弹附带即死・怯み（bullet 侧对 Boss 自动降级为 ×1.5+怯み）
+		var awaken: bool = character.is_awaken_active()
+		if awaken:
+			damage *= character.AWAKEN_DAMAGE_MULT
 
 		if bullet.has_method("setup"):
 			bullet.setup({
@@ -161,6 +172,15 @@ func _fire_bullet() -> void:
 				"destroy_on_hit": bd.destroy_on_hit,
 				"penetration": bd.penetration,
 				"critical_rate": _wd.critical_rate,
+				"critical_damage": _wd.critical_damage,
+				"element": _wd.element,
+				"instant_kill": awaken or bd.instant_kill,
+				"explosion_radius": bd.explosion_radius,
+				"explosion_hurts_players": bd.explosion_hurts_players,
+				"explosion_player_radius": bd.explosion_player_radius,
+				"breaks_blast_wall": bd.breaks_blast_wall,
+				"explode_effect_anim": bd.explode_effect_anim,
+				"explode_sound": bd.explode_sound,
 				"hit_effect_anim": _wd.hit_effect_anim,
 				"hit_effect_follow": _wd.hit_effect_follow,
 				"hit_effect_offset_override": _wd.hit_effect_offset_override,
@@ -170,14 +190,20 @@ func _fire_bullet() -> void:
 				"frame_duration": bd.bullet_frame_duration,
 				"collision_size": bd.collision_size,
 				"collision_offset": bd.collision_offset,
+				"spawn_offset": bd.spawn_offset,
 				"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
 				"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
-					"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else _wd.hitstun_duration,
+				"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else _wd.hitstun_duration,
 				"shooter": character,
 			})
 
-		# 子弹初始位置 = 角色位置 + 前方偏移 + 方向额外偏移
+		# 子弹初始位置 = 角色位置 + 前方偏移 + 枪口偏移
+		# 枪口偏移（2026-09-16）：角色专属（WeaponData.bullet_spawn_offsets）**配置了条目即生效**
+		# （显式 (0,0) = 角色中心线，合法配置）；未配置该角色时沿用 BulletData 的逐方向 offset_*。
+		# 单机与 Host（network_world._spawn_host_bullet）必须同规则。
 		var extra: Vector2 = bd.get_extra_offset(character.facing)
+		if _wd.has_bullet_spawn_offset(character.current_character):
+			extra = _wd.get_bullet_spawn_offset(character.current_character, character.facing)
 		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
 
 		# 添加到场景树
@@ -215,7 +241,7 @@ func _try_continue_attack() -> bool:
 	## 返回 true 表示已重新开始攻击。
 	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
 		# HOLD 模式下检查弹药（空弹则终止连发）
-		if _wd.is_ranged and _wd.magazine_capacity > 0:
+		if _wd.is_ranged and _wd.magazine_capacity > 0 and not _wd.has_infinite_ammo():
 			if get_player_state().get_magazine_ammo(_wd.item_id) <= 0:
 				if _wd.empty_fire_sound:
 					_play_attack_sound(_wd.empty_fire_sound)

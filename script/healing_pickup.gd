@@ -1,4 +1,12 @@
+@tool
 extends Node2D
+
+## ── 架构定位 ──
+## 系统：补给掉落物 ｜ 层：玩法（Node2D）
+## 联机：Client 请求 / Host 校验提交
+## 职责：治疗品/辅助品/投掷物掉落物：共用一个交互壳，但写入 PlayerState 的字段各不相同。
+## 依赖：ItemData/ThrowableData、PlayerState、NetworkWorld
+
 ## 治疗品 / 投掷物掉落物。
 ## healing_item 与 throwable 共用交互壳，但写入 PlayerState 的库存字段不同。
 ## Client 必须走 _request_network_pickup()；只有 Host 明确标记的 presentation-only 镜像
@@ -26,7 +34,15 @@ const PICKUP_DELAY_MSEC: int = 600
 
 const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
 
-@export var item: ItemData  ## 要给予的物品（治疗品/投掷物）
+@export var item: ItemData:
+	set(v):
+		item = v
+		## Inspector 里换物品即时刷编辑器预览（预览走 item.pickup_texture/icon）
+		_refresh_sprite()  ## 要给予的物品（治疗品/投掷物）
+
+## 2026-09-13 用户需求：开启后治疗品/辅助品不再触碰自动拾取，
+## 改为靠近按住功能键(D)拾取（进度环提示）。投掷物替换仍按住确定键（旧机制）。
+@export var require_function_key: bool = false
 
 @export_group("Hold Settings")
 ## 按住替换所需时长（秒）
@@ -54,6 +70,9 @@ const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
 var _step_idx: int = 0           ## 当前踏步帧在序列中的索引
 var _step_timer: float = 0.0     ## 踏步帧计时器
 var _spawn_msec: int = 0         ## 生成时刻（掉落物拾取冷却用）
+## 地面放置物上限豁免：地图预摆的拾取物（含 random_pickup 预摆实例刷出的）不参与
+## GroundItemCap(8) 计数与淘汰 —— 它们是关卡设计的一部分，不是掉落杂物。
+var cap_exempt: bool = false
 var _player_in_range: bool = false
 var _player_ref: CharacterBody2D = null
 var _hold_timer: float = 0.0
@@ -67,7 +86,17 @@ var _network_pickup_request_pending: bool = false
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		# 编辑器预览（@tool）：按 item.pickup_texture/icon 刷出显示，让摆点时能看见长相。
+		# 不注册掉落上限、不连 Area2D、不建按住指示器。
+		_refresh_sprite()
+		return
 	_spawn_msec = Time.get_ticks_msec()
+	## 自动判定：编辑器摆进场景的实例 owner 非空 → 豁免（运行时刷出 owner 为空）。
+	## 用 or 是为了不覆盖 random_pickup 对预摆实例刷出物的预设豁免。
+	cap_exempt = cap_exempt or owner != null
+	if not cap_exempt:
+		GroundItemCap.register(self)
 	if _area:
 		_area.body_entered.connect(_on_body_entered)
 		_area.body_exited.connect(_on_body_exited)
@@ -84,6 +113,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
 	# 踏步动画（仅行走图模式下生效）
 	if item and item.pickup_texture and item.pickup_animated:
 		var frames: Array[int] = item.pickup_step_frames
@@ -96,10 +127,13 @@ func _process(delta: float) -> void:
 			_step_idx = (_step_idx + 1) % frames.size()
 			_refresh_sprite()
 
+	# 指示器每帧无条件刷新（2026-09-13 残留修复，同 weapon_pickup）
+	var holding: bool = false
 	if _is_online_network_pickup() and item and item.item_type == ItemData.ItemType.THROWABLE:
-		_process_network_pickup(delta)
+		holding = _process_network_pickup(delta)
 	else:
-		_process_pickup(delta)
+		holding = _process_pickup(delta)
+	_update_hold_indicator(delta, holding)
 
 
 func _is_online_network_pickup() -> bool:
@@ -107,39 +141,26 @@ func _is_online_network_pickup() -> bool:
 	return net and net.has_method("is_online_session") and bool(net.is_online_session())
 
 
-func _process_network_pickup(delta: float) -> void:
+func _process_network_pickup(delta: float) -> bool:
 ## 联机客户端只检测交互、显示长按提示并提交请求；Host 回包后才视为成功。
 	if network_pickup_id <= 0 or network_presentation_only:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	var local_player := Players.get_local_entity() as CharacterBody2D
 	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
 	_player_ref = local_player if in_range else null
 	_player_in_range = in_range
 	if not in_range or not item:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	var state: PlayerState = Players.get_state_for_entity(local_player)
 	if not state:
-		return
-	var needs_hold := state.throwable != null
-	if not needs_hold:
+		return false
+	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
+	if not throwable_replacement and not require_function_key:
 		_request_network_pickup()
-		return
-	if local_player.get("player_in_weapon_state"):
-		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
-	if Input.is_action_pressed("确定键"):
-		_hold_timer += delta
-		_update_hold_indicator(delta, true)
-		if _hold_timer >= hold_time:
-			_request_network_pickup()
-	else:
-		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
+		return false
+	return _process_hold(delta, throwable_replacement)
 
 
 func _request_network_pickup() -> void:
@@ -175,41 +196,48 @@ func disable_network_pickup() -> void:
 		_area.set_deferred("monitorable", false)
 
 
-func _process_pickup(delta: float) -> void:
+func _process_pickup(delta: float) -> bool:
+## 单机/Host 拾取逻辑。返回本帧是否处于按住状态（供进度环刷新）。
 	if not _player_in_range or not _player_ref:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	if not item:
-		return
+		return false
 	# 掉落物短时间不可拾取，防止替换后立即重新拾取循环
 	if Time.get_ticks_msec() - _spawn_msec < PICKUP_DELAY_MSEC:
-		return
+		return false
 
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if not state:
-		return
+		return false
 
-	# 仅投掷物且已持有 → 需按住确定键替换；其余自动拾取
-	var needs_hold: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
-	if not needs_hold:
-		_do_pickup()
-		return
+	# 投掷物且已持有 → 按住确定键替换；其余默认自动拾取，
+	# require_function_key 时改按住功能键(D)（进度环提示，避免路过误拾）
+	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
+	if not throwable_replacement:
+		if not require_function_key:
+			_do_pickup()
+			return false
+		return _process_hold(delta, false)
 
 	# 玩家正在武器/投掷物举起/瞄准状态，不触发替换（避免与确定键瞄准冲突）
 	if _player_ref.get("player_in_weapon_state"):
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
+	return _process_hold(delta, true)
 
-	if Input.is_action_pressed("确定键"):
+
+func _process_hold(delta: float, throwable_replacement: bool) -> bool:
+	## 按住进度：投掷物替换用确定键（旧行为），功能键获取用功能键(D)。
+	var action: String = "确定键" if throwable_replacement else "功能键"
+	if Input.is_action_pressed(action):
 		_hold_timer += delta
-		_update_hold_indicator(delta, true)
 		if _hold_timer >= hold_time:
 			_do_pickup()
-	else:
-		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
+			return false
+		return true
+	_hold_timer = 0.0
+	return false
 
 
 func _do_pickup() -> void:
@@ -223,7 +251,32 @@ func _do_pickup() -> void:
 	# 投掷物单槽位：已持有则先掉落旧的（同副武器替换逻辑）
 	if item.item_type == ItemData.ItemType.THROWABLE and state.throwable:
 		_drop_old_throwable(_player_ref, state)
-	state.pickup_consumable(item)
+	# 治疗品（急救喷雾）：
+	#   单机 → 队伍共用池（上限 10，2026-09-13 用户定稿），满了留在地上；
+	#   联机 → 各自持有（每人上限 3），自己满转投其他座位；全满 = 留在地上。
+	if item.item_type == ItemData.ItemType.HEALING:
+		var placed: bool = false
+		if Players.using_shared_spray_pool():
+			placed = Players.try_add_team_spray(item)
+			if not placed:
+				print("[拾取] 喷雾共用池已满（10），留在地上")
+				return
+		else:
+			var cap: int = Players.spray_per_seat_cap()
+			placed = state.pickup_consumable(item, cap)
+			if not placed:
+				for s: PlayerState in Players.seats:
+					if s and s != state and s.pickup_consumable(item, cap):
+						placed = true
+						break
+			if not placed:
+				print("[拾取] 急救喷雾已达全队所持上限，留在地上")
+				return
+	else:
+		state.pickup_consumable(item)
+	## 拾取音效：物品数据（ItemData.pickup_sound）可配，留空用全局默认（2026-09-15）。
+	## 放满留在地上的分支在上面已 return，不会响。
+	Global.play_pickup_sfx(item.pickup_sound, item.pickup_sound_pitch)
 	queue_free()
 
 
@@ -243,7 +296,9 @@ func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 
 
 func _refresh_sprite() -> void:
-	if not _sprite or not item:
+	# @onready 在编辑器预览路径可能未赋值（如手动触发），兜底按节点名取
+	var sprite: Sprite2D = _sprite if _sprite else get_node_or_null("Sprite2D") as Sprite2D
+	if not sprite or not item:
 		return
 
 	# 行走图模式：ItemData 配置了地面精灵表
@@ -262,15 +317,15 @@ func _refresh_sprite() -> void:
 		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
 		var y: int = char_row * (FRAME_H * DIRECTIONS) + item.pickup_direction * FRAME_H
 
-		_sprite.texture = item.pickup_texture
-		_sprite.region_enabled = true
-		_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+		sprite.texture = item.pickup_texture
+		sprite.region_enabled = true
+		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
 		return
 
 	# 回退：整图显示 icon
 	if item.icon:
-		_sprite.texture = item.icon
-		_sprite.region_enabled = false
+		sprite.texture = item.icon
+		sprite.region_enabled = false
 
 
 func _on_body_entered(body: Node2D) -> void:
@@ -290,12 +345,14 @@ func _on_body_exited(body: Node2D) -> void:
 
 
 func _update_hold_indicator(delta: float, is_holding: bool) -> void:
-	## 更新按住进度指示器的淡入/淡出透明度，并触发重绘
+	## 更新按住进度指示器的淡入/淡出透明度，并触发重绘。
+	## 2026-09-13 残留修复：同 weapon_pickup —— 每帧无条件调用 + alpha 归零补清屏。
 	if not hold_indicator_enabled or not _indicator_node:
 		return
 	var target: float = 1.0 if is_holding else 0.0
+	var prev: float = _indicator_alpha
 	_indicator_alpha = move_toward(_indicator_alpha, target, hold_indicator_fade_speed * delta)
-	if _indicator_alpha > 0.001 or _hold_timer > 0.0:
+	if prev != _indicator_alpha or _indicator_alpha > 0.0 or _hold_timer > 0.0:
 		_indicator_node.queue_redraw()
 
 

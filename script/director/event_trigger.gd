@@ -1,4 +1,11 @@
 class_name ScriptedEventTrigger extends Area2D
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Area2D）
+## 联机：仅单机/Host
+## 职责：放置在地图中的剧本事件触发器，玩家进入区域即通知 Director 接管节奏与生成。
+## 依赖：EventManager、Director
+
 ## 剧本事件触发器 — 放置在地图中，玩家进入区域时触发防守事件
 ##
 ## 支持 Crescendo（计时防守）、Finale（最终章节）、Alarm（警报）、
@@ -57,12 +64,19 @@ func _ready() -> void:
 		var label := Label.new()
 		label.name = "HintLabel"
 		label.text = event_name
-		label.add_theme_font_size_override("font_size", 11)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		## 字体统一（2026-09-17）：fusion-pixel + 12 整倍；编辑器进程无 autoload，判空再套。
+		var hg: Node = get_node_or_null("/root/Global")
+		if hg:
+			hg.apply_hint_font(label, 12)
 		label.position = Vector2(-60, -28)
 		label.size = Vector2(120, 20)
 		label.modulate = Color(1, 1, 1, 0.6)
 		add_child(label)
+		## 全局阴影参数；编辑器进程里没有 autoload，判空再套。
+		var g: Node = get_node_or_null("/root/Global")
+		if g:
+			g.apply_text_shadow(label)
 
 
 func _draw() -> void:

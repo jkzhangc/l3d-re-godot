@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Node，子模块）
+## 联机：仅单机/Host
+## 职责：补给投放决策：按玩家血量/弹药紧张程度挑选物品与投放点。
+## 依赖：Director、PlayerState
+
 ## 根据玩家资源状态决定物品投放候选；联机只在 Host 侧运行并同步结果。
 ## 物品投放管理器 — 根据玩家状态自动投放补给
 ##
@@ -7,6 +14,11 @@ extends Node
 # ═══════════════════════════════════════
 # 参数
 # ═══════════════════════════════════════
+const RANDOM_PICKUP_SCENE := preload("res://object/random_pickup.tscn")
+const WEAPON_PICKUP_SCENE := preload("res://object/weapon_pickup.tscn")
+const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
+const ITEM_PICKUP_SCENE := preload("res://object/healing_pickup.tscn")
+
 @export var check_interval: float = 10.0          ## 检查间隔（秒）
 @export var fail_safe_cooldown: float = 180.0     ## 降级投放冷却（秒）
 
@@ -98,6 +110,72 @@ func _evaluate_and_spawn(player: Node2D) -> void:
 	# 目前投放逻辑：在玩家前方生成提示标记
 	# 具体拾取物实例化逻辑等物品系统完善后再接
 	print("[ItemManager] 投放位置: (%d, %d)" % [int(pos.x), int(pos.y)])
+	_spawn_pickup(item, pos)
+
+
+## 实际生成地面拾取物（此前只 print 不实例化——这就是"导演投放没生效"的原因）。
+## 配置了掉落池（DirectorConfig.drop_pool）→ 生成随机掉落物，从池里按权重抽武器/物品；
+## 未配置 → 按决策类别直接投放对应资源（喷雾/药品/弹药/副武器）。
+func _spawn_pickup(category: String, pos: Vector2) -> void:
+	var scene := _director.get_tree().current_scene if _director.get_tree() else null
+	if not scene:
+		return
+	var parent: Node = scene.find_child("GroundLayer", true, false)
+	if not parent:
+		parent = scene
+
+	## freed 对象 != null 恒真（经典陷阱），必须 is_instance_valid 判悬空
+	var cfg_raw: Variant = _director.get("current_config")
+	var cfg: Node = cfg_raw if is_instance_valid(cfg_raw) else null
+	var pool: Resource = cfg.get("drop_pool") if cfg != null and cfg.get("drop_pool") != null else null
+
+	var spawned: Node2D = null
+	if pool != null:
+		spawned = RANDOM_PICKUP_SCENE.instantiate()
+		spawned.pool = pool
+	else:
+		var res: Resource = _resolve_category_resource(category, pos)
+		if res == null:
+			print("[ItemManager] 类别 %s 无可投放资源" % category)
+			return
+		if res is WeaponData:
+			spawned = WEAPON_PICKUP_SCENE.instantiate()
+			# 地面显示参数统一走 WeaponData（2026-09-13：完全按武器数据来）
+			WEAPON_PICKUP_SCRIPT.apply_weapon_ground_display(spawned, res)
+		else:
+			spawned = ITEM_PICKUP_SCENE.instantiate()
+			spawned.item = res
+
+	parent.add_child(spawned)
+	spawned.global_position = pos
+	print("[ItemManager] 已投放 %s @ (%d, %d)" % [category, int(pos.x), int(pos.y)])
+
+
+## 未配置掉落池时的类别 → 资源映射。
+func _resolve_category_resource(category: String, player_pos: Vector2) -> Resource:
+	match category:
+		"急救喷雾":
+			return load("res://object/item_first_aid_spray.tres")
+		"药品":
+			return load("res://object/item_pills.tres")
+		"弹药堆":
+			# 找当前主武器对应的弹药资源
+			var player: Node2D = _find_player()
+			var state: PlayerState = Players.get_state_for_entity(player) if player else null
+			if state:
+				var wd: WeaponData = state.get_equipped_weapon("primary")
+				if wd and not wd.ammo_item_id.is_empty():
+					var direct := "res://object/item_%s.tres" % wd.ammo_item_id
+					var derived := "res://object/item_%s_ammo.tres" % wd.ammo_item_id.trim_prefix("ammo_")
+					if ResourceLoader.exists(derived):
+						return load(derived)
+					if ResourceLoader.exists(direct):
+						return load(direct)
+			return null
+		"副武器":
+			return load("res://object/weapon_pistol.tres")
+		_:
+			return null
 
 
 # ═══════════════════════════════════════

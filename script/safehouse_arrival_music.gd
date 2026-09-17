@@ -1,4 +1,11 @@
 class_name SafehouseArrivalMusic extends Node
+
+## ── 架构定位 ──
+## 系统：音频表现 ｜ 层：表现（Node）
+## 联机：不涉及
+## 职责：安全屋到达音乐：初始安全屋立即播，有章节总结的安全屋在总结关闭后播。
+## 依赖：ChapterSummary 信号
+
 ## 安全屋到达音乐。初始安全屋立即播放；有章节总结的安全屋在总结关闭后播放。
 
 @export var arrival_music: AudioStream

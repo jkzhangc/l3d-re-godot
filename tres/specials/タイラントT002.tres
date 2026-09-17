@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://dpvwesq5my6dx"]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b705jbjaqeds1" path="res://art/Characters/T002/T002_body.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://b4y88bimtqtq5" path="res://art/Characters/T002/T002_attack.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://dbrkbpnmn1i1g" path="res://art/Characters/T002/T002_extra.png" id="4"]
+[ext_resource type="AudioStream" uid="uid://d4h3wbuynr6i3" path="res://sound/タイラント.ogg" id="5"]
+[ext_resource type="AudioStream" uid="uid://cxwhy3uhqatir" path="res://sound/タイラント２.ogg" id="6"]
+
+[resource]
+script = ExtResource("1")
+id = &"tyrant_t002"
+weight = 0.0
+texture = ExtResource("2")
+walk_char_index = 1
+attack_char_sequence = Array[int]([0, 1, 2, 3])
+attack_frame_durations = Array[float]([0.05, 0.05, 0.05, 0.1])
+hit_at_sequence_idx = 2
+sprite_frame_w = 128
+sprite_frame_h = 144
+hurt_effect_offset = Vector2(0, -64)
+hurtbox_size = Vector2(90, 110)
+hurtbox_offset = Vector2(0, -60)
+attack_texture = ExtResource("3")
+death_texture = ExtResource("4")
+death_char_index = 3
+max_hp = 2000.0
+move_speed = 150.0
+run_char_index = 0
+run_speed = 290.0
+attack_damage = 60.0
+attack_range = Vector2(110, 65)
+attack_hit_range = Vector2(110, 65)
+attack_cooldown_frames = 110
+vision_range = 640.0
+attack_causes_heat = false
+hurt_sound = ExtResource("6")
+attack_sound = ExtResource("5")
+frontal_arc_degrees = 90.0
+frontal_normalize = true

@@ -1,4 +1,11 @@
 class_name SpawnPoint extends Node2D
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Node2D）
+## 联机：仅单机/Host
+## 职责：地图上的敌人出生点标记，可区分普通/特殊/通用并指定初始朝向。
+## 依赖：Director._get_valid_spawn_points
+
 ## 敌人生成点 — 放置在关卡场景中标记敌人生成位置
 
 enum SpawnType { COMMON = 0, SPECIAL = 1, BOTH = 2 }

@@ -4,3 +4,57 @@
 
 # 第三方参考 demo 仓库（独立 git 仓库，不纳入主仓库）
 engine-reference/Godot-Demos/
+
+# --- 以下为 2026-09-02 补充 ---
+# 注意：这些路径中已有一部分此前被 git 跟踪（*.tmp 4 个、根目录 *.exe/*.pck、
+# chm_extract/）。写入 .gitignore 只会阻止**新文件**被加入，不会自动取消跟踪。
+# 需要真正移出版本库时请单独执行（会 staged 大量删除，务必先确认）：
+#   git rm -r --cached "bird's-eye_view-ARPG test.exe" \
+#       "bird's-eye_view-ARPG test.console.exe" "bird's-eye_view-ARPG test.pck" \
+#       chm_extract/ "object/enemy.tscn647636915.tmp" \
+#       "scene/maps/test.tscn164599960.tmp" "scene/maps/test.tscn2208483626.tmp" \
+#       "scene/vx_test.tscn7245302921.tmp"
+
+# 导出产物（根目录打包结果，约 200MB，不应进入版本库）
+/*.exe
+/*.pck
+/build/
+
+# 导出发布包目录（约 190MB：exe + pck，由 export_presets.cfg 产出）
+/发布包*/
+
+# 临时评审产物（diff 转储等，非项目源文件）
+/tmpcheck_review/
+
+# Godot 运行时用户数据（无头/编辑器运行日志，非项目源文件）
+/Godot/
+
+# Godot 编辑器临时备份（崩溃恢复残留）
+*.tmp
+
+# 联机无头测试临时目录（历史遗留，当前为空）
+/.tmp-user-client/
+/.tmp-user-host/
+
+# 联机回归日志（tools/net_regression.py 产出）
+/tools/net_regression_logs/
+
+# Python 工具链缓存
+__pycache__/
+*.pyc
+
+# CHM 解压产物（由 rpg2003.chm 派生，可随时重建）
+/chm_extract/
+
+# 本地 AI 助手工作目录（不纳入版本库）
+/.claude/
+/.workbuddy/
+/.zcode/
+
+# 第三方工具二进制（本地自备，不入库）
+tools/**/*.exe
+
+# CHM 帮助文档源（6MB，chm_extract/ 已由其派生）
+/rpg2003.chm
+.workbuddy/
+release/*.exe

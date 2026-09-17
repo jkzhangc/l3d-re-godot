@@ -1,2 +1,4 @@
+- [设计方向](游戏设计方向-L3D混合.md) — **设计总纲（2026-09 定稿）**：L3D 混合路线、敌人阵容、角色差异化、第一章范围与里程碑；与其他文档冲突时以此为准
 - [项目状态](memory/project-status.md) — 整体实现进度
 - [场景规范](memory/scene-conventions.md) — 关卡节点标准
+- [RM2K3地图还原](memory/rm2k3-map-restore.md) — LCF格式结论、突袭子地图范围与下一步计划

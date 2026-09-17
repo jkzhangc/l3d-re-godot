@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：仅单机/Host 结算近战
+## 职责：近战攻击状态：在命中帧创建判定区域并只检测一次，随后清理 hitbox 回到 READY。
+## 依赖：WeaponData、PlayerState、敌人伤害接口
+
 ## 近战判定在配置的命中帧创建/执行一次，随后由状态机清理 hitbox 并回到 READY。
 ## 小刀攻击状态 — 播放攻击动画并执行近战判定
 ##
@@ -80,9 +87,9 @@ func process_update(delta: float) -> void:
 
 		_seq_idx += 1
 		if _seq_idx >= _wd.get_melee_attack_char_sequence().size():
-			# 攻击动画结束 → 检查是否有攻击后动画
+			# 攻击动画结束 → 检查是否有攻击后动画（かいりき 被动：近战无硬直）
 			var post_seq: Array[int] = _wd.get_post_attack_char_sequence()
-			if post_seq.size() > 0:
+			if post_seq.size() > 0 and not character.skip_post_attack(_wd.weapon_state_name):
 				_post_attack_active = true
 				_seq_idx = 0
 				_timer = _wd.get_post_attack_frame_duration(0)
@@ -113,7 +120,7 @@ func process_update(delta: float) -> void:
 func physics_update(delta: float) -> void:
 	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
 	character.velocity = move_dir * character.run_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()
 	# 攻击中允许转向
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)
@@ -175,7 +182,8 @@ func _check_melee_hits() -> void:
 	var bodies: Array[Node2D] = _hitbox.get_overlapping_bodies()
 	var areas: Array[Area2D] = _hitbox.get_overlapping_areas()
 
-	var damage: float = _wd.get_effective_damage()
+	## 暴击时伤害按武器倍率放大（数值与黄色伤害数字一致）
+	var damage: float = _wd.get_effective_damage() * (_wd.critical_damage if _is_headshot else 1.0)
 	var hit_any: bool = false
 	var hit_ids: Array[int] = []  ## 已命中目标 instance_id（防双次命中）
 
@@ -190,12 +198,16 @@ func _check_melee_hits() -> void:
 				continue
 			hit_ids.append(bid)
 			var hp_before: float = float(body.get("current_hp")) if body.get("current_hp") != null else 0.0
-			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			body.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.element)
 			var hp_after: float = float(body.get("current_hp")) if body.get("current_hp") != null else hp_before
 			_record_chapter_hit(hp_before, hp_after)
 			if _wd.hit_effect_anim:
 				var hf: Node2D = body if _wd.hit_effect_follow else null
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, _wd.hit_effect_offset_override)
+				## 偏移优先级：武器覆盖 > 目标自身 hurt_effect_offset（大体型敌人抬到躯干）
+				var fx_offset: Vector2 = _wd.hit_effect_offset_override
+				if fx_offset == Vector2.ZERO and "hurt_effect_offset" in body:
+					fx_offset = body.hurt_effect_offset
+				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, fx_offset)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound)
 			print("[小刀] 击中 body: %s | 伤害=%d | 爆头=%s" % [body.name, int(damage), str(_is_headshot)])
@@ -215,12 +227,15 @@ func _check_melee_hits() -> void:
 				continue
 			hit_ids.append(pid)
 			var hp_before: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else 0.0
-			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration)
+			parent.take_damage(damage, 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.element)
 			var hp_after: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else hp_before
 			_record_chapter_hit(hp_before, hp_after)
 			if _wd.hit_effect_anim:
 				var hf2: Node2D = parent if _wd.hit_effect_follow else null
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, _wd.hit_effect_offset_override)
+				var fx_offset2: Vector2 = _wd.hit_effect_offset_override
+				if fx_offset2 == Vector2.ZERO and "hurt_effect_offset" in parent:
+					fx_offset2 = parent.hurt_effect_offset
+				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, fx_offset2)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound)
 			print("[小刀] 击中 area: %s | 伤害=%d | 爆头=%s" % [parent.name, int(damage), str(_is_headshot)])

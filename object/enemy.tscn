@@ -3,19 +3,20 @@
 [ext_resource type="Script" uid="uid://cqo64jhrtggin" path="res://script/enemy.gd" id="1"]
 [ext_resource type="Script" uid="uid://bm5recau6w727" path="res://script/StateMachine.gd" id="2"]
 [ext_resource type="Script" uid="uid://cvkybsadvl2g" path="res://script/enemy/EnemyIdleState.gd" id="3"]
-[ext_resource type="AudioStream" uid="uid://bp2nbnu15myj2" path="res://sound/ゾンビ声5.wav" id="3_vfd3m"]
-[ext_resource type="Script" uid="uid://dksy6ilsw52aw" path="res://script/enemy/EnemyDiscoverState.gd" id="4"]
-[ext_resource type="AudioStream" uid="uid://clqb4gmiiyla6" path="res://sound/ゾンビ声6.wav" id="4_jpigs"]
-[ext_resource type="Script" uid="uid://ba7fcrpnivd4c" path="res://script/enemy/EnemyChaseState.gd" id="5"]
-[ext_resource type="AudioStream" uid="uid://c11squ08m07gm" path="res://sound/ゾンビ声4.wav" id="5_vunvt"]
-[ext_resource type="Script" uid="uid://bkt3kjrwayuvt" path="res://script/enemy/EnemyAttackState.gd" id="6"]
-[ext_resource type="AudioStream" uid="uid://drrv03o6v83yp" path="res://sound/ゾンビ声.wav" id="6_jpigs"]
-[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7_p667r"]
+[ext_resource type="AudioStream" uid="uid://c5hmo3fk280oy" path="res://sound/ゾンビ声5.ogg" id="3_vfd3m"][ext_resource type="Script" uid="uid://dksy6ilsw52aw" path="res://script/enemy/EnemyDiscoverState.gd" id="4"]
+[ext_resource type="AudioStream" uid="uid://c2wmwkmr4mepv" path="res://sound/ゾンビ声6.ogg" id="4_jpigs"][ext_resource type="Script" uid="uid://ba7fcrpnivd4c" path="res://script/enemy/EnemyChaseState.gd" id="5"]
+[ext_resource type="AudioStream" uid="uid://bagycpkahdqah" path="res://sound/ゾンビ声4.ogg" id="5_vunvt"][ext_resource type="Script" uid="uid://bkt3kjrwayuvt" path="res://script/enemy/EnemyAttackState.gd" id="6"]
+[ext_resource type="AudioStream" uid="uid://bfby5odhhi330" path="res://sound/ゾンビ声.ogg" id="6_jpigs"][ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7_p667r"]
 [ext_resource type="Script" uid="uid://bmxnep8cisr8o" path="res://script/enemy/EnemyDeathState.gd" id="8"]
 [ext_resource type="Script" uid="uid://bs3edidsf88gt" path="res://script/enemy/EnemyHeadshotDeathState.gd" id="9"]
 [ext_resource type="Texture2D" uid="uid://c1dyjxewy0ldj" path="res://art/Characters/男性ゾンビ1.png" id="10"]
 [ext_resource type="Script" uid="uid://2s70w6drffnt" path="res://script/enemy/EnemyKnockbackState.gd" id="11"]
 [ext_resource type="Script" uid="uid://bn41w43dadxis" path="res://script/enemy/EnemyHitstunState.gd" id="12"]
+[ext_resource type="Script" path="res://script/enemy/EnemyExhaustedState.gd" id="13"]
+[ext_resource type="Script" path="res://script/enemy/EnemyPounceState.gd" id="14"]
+[ext_resource type="Script" path="res://script/enemy/EnemyWitchIdleState.gd" id="15"]
+[ext_resource type="Script" path="res://script/enemy/EnemySwallowState.gd" id="16"]
+[ext_resource type="Script" path="res://script/enemy/EnemySpitState.gd" id="17"]
 
 [sub_resource type="RectangleShape2D" id="enemy_shape"]
 size = Vector2(20, 28)
@@ -54,6 +55,7 @@ shape = SubResource("enemy_shape")
 [node name="AnimationTimer" type="Timer" parent="." unique_id=2082223074]
 
 [node name="VisionArea" type="Area2D" parent="." unique_id=2108075112]
+collision_layer = 0
 collision_mask = 15
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="VisionArea" unique_id=42734486]
@@ -94,6 +96,21 @@ script = ExtResource("11")
 
 [node name="Hitstun" type="Node" parent="StateMachine" unique_id=999000004]
 script = ExtResource("12")
+
+[node name="Exhausted" type="Node" parent="StateMachine" unique_id=999000005]
+script = ExtResource("13")
+
+[node name="Pounce" type="Node" parent="StateMachine" unique_id=999000006]
+script = ExtResource("14")
+
+[node name="WitchIdle" type="Node" parent="StateMachine" unique_id=999000007]
+script = ExtResource("15")
+
+[node name="Swallow" type="Node" parent="StateMachine" unique_id=999000008]
+script = ExtResource("16")
+
+[node name="Spit" type="Node" parent="StateMachine" unique_id=999000009]
+script = ExtResource("17")
 
 [connection signal="body_entered" from="VisionArea" to="." method="_on_vision_area_body_entered"]
 [connection signal="body_exited" from="VisionArea" to="." method="_on_vision_area_body_exited"]

@@ -1,0 +1,217 @@
+[gd_scene format=4 uid="uid://brbcwrrdswh2l"]
+
+[ext_resource type="TileSet" uid="uid://8mwr4r4jlopi" path="res://tres/Map0143_lower_tileset.tres" id="1_mcsm6"]
+[ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="2_260tg"]
+[ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="2_dcfg"]
+[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_tbg6p"]
+[ext_resource type="TileSet" uid="uid://cwv2hugc80snh" path="res://tres/Map0143_upper_tileset.tres" id="3_f2bpg"]
+[ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="3_s1uoq"]
+[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="4_eldoc"]
+[ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="5_e868y"]
+[ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="6_62c55"]
+[ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="6_260tg"]
+[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="7_s1uoq"]
+[ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="7_vaahr"]
+[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="8_6lern"]
+[ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="8_vv0vf"]
+[ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="9_0yv3w"]
+[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="9_i5n5w"]
+[ext_resource type="PackedScene" path="res://scene/ui/chapter_summary.tscn" id="10_62c55"]
+[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="10_vv0vf"]
+[ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="11_0yv3w"]
+[ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="12_0yv3w"]
+[ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="13_82whr"]
+[ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="13_gg51h"]
+[ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="14_0ryb5"]
+[ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="14_bt2wr"]
+[ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="15_qkes6"]
+[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="16_84vq2"]
+[ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="16_bt2wr"]
+[ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="17_edq43"]
+[ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="18_qkes6"]
+[ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="19_84vq2"]
+[ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="20_edq43"]
+
+[sub_resource type="Resource" id="Resource_82whr"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("7_vaahr"), ExtResource("8_vv0vf")])
+weights = Array[float]([0.5, 0.5])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_kfq16"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("10_vv0vf")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_866oo"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("11_0yv3w")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_rkbvx"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("12_0yv3w"), ExtResource("13_gg51h"), ExtResource("14_bt2wr")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_id55e"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("13_82whr"), ExtResource("16_bt2wr")])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_1lnwu"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("14_0ryb5")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_pgmtm"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("15_qkes6")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_gg51h"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("16_84vq2")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_bt2wr"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("10_vv0vf")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_qkt3q"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("17_edq43")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_edq43"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("19_84vq2")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_86tq3"]
+script = ExtResource("9_0yv3w")
+items = Array[Resource]([ExtResource("20_edq43")])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[node name="Map0143" type="Node2D" unique_id=1551897638]
+
+[node name="GameInit" type="Node" parent="." unique_id=1366019564]
+script = ExtResource("4_eldoc")
+
+[node name="GroundLayer" type="TileMapLayer" parent="." unique_id=143432727]
+tile_map_data = PackedByteArray("AAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAACAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAGAAAAAAAAAAAAAAAHAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAKAAAAAAAAAAAAAAALAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAANAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAPAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAARAAAAAAAAAAAAAAASAAAAAAAAAAAAAAATAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAABAAEAAAABAAAAAAACAAEAAAACAAAAAAADAAEAAAACAAAAAAAEAAEAAAADAAAAAAAFAAEAAAACAAAAAAAGAAEAAAACAAAAAAAHAAEAAAACAAAAAAAIAAEAAAAEAAAAAAAJAAEAAAAAAAAAAAAKAAEAAAAAAAAAAAALAAEAAAAAAAAAAAAMAAEAAAAAAAAAAAANAAEAAAAAAAAAAAAOAAEAAAAAAAAAAAAPAAEAAAAAAAAAAAAQAAEAAAAAAAAAAAARAAEAAAAAAAAAAAASAAEAAAAAAAAAAAATAAEAAAAAAAAAAAAAAAIAAAAAAAAAAAABAAIAAAAFAAAAAAACAAIAAAAGAAAAAAADAAIAAAAGAAAAAAAEAAIAAAAHAAAAAAAFAAIAAAAIAAAAAAAGAAIAAAAJAAAAAAAHAAIAAAAKAAAAAAAIAAIAAAALAAAAAAAJAAIAAAACAAAAAAAKAAIAAAACAAAAAAALAAIAAAACAAAAAAAMAAIAAAACAAAAAAANAAIAAAACAAAAAAAOAAIAAAAEAAAAAAAPAAIAAAAAAAAAAAAQAAIAAAAAAAAAAAARAAIAAAAAAAAAAAASAAIAAAAAAAAAAAATAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAABAAMAAAAFAAAAAAACAAMAAAAMAAAAAAADAAMAAAAMAAAAAAAEAAMAAAANAAAAAAAFAAMAAAAOAAAAAAAGAAMAAAAPAAAAAAAHAAMAAAAAAAEAAAAIAAMAAAABAAEAAAAJAAMAAAAGAAAAAAAKAAMAAAAGAAAAAAALAAMAAAAGAAAAAAAMAAMAAAAGAAAAAAANAAMAAAAGAAAAAAAOAAMAAAACAAEAAAAPAAMAAAAAAAAAAAAQAAMAAAAAAAAAAAARAAMAAAAAAAAAAAASAAMAAAAAAAAAAAATAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAABAAQAAAAFAAAAAAACAAQAAAADAAEAAAADAAQAAAAEAAEAAAAEAAQAAAAFAAEAAAAFAAQAAAADAAEAAAAGAAQAAAAGAAEAAAAHAAQAAAAEAAEAAAAIAAQAAAAHAAEAAAAJAAQAAAAIAAEAAAAKAAQAAAAJAAEAAAALAAQAAAAMAAAAAAAMAAQAAAAMAAAAAAANAAQAAAAMAAAAAAAOAAQAAAACAAEAAAAPAAQAAAAAAAAAAAAQAAQAAAAAAAAAAAARAAQAAAAAAAAAAAASAAQAAAAAAAAAAAATAAQAAAAAAAAAAAAAAAUAAAAAAAAAAAABAAUAAAAFAAAAAAACAAUAAAAKAAEAAAADAAUAAAALAAEAAAAEAAUAAAAMAAEAAAAFAAUAAAAKAAEAAAAGAAUAAAANAAEAAAAHAAUAAAALAAEAAAAIAAUAAAAOAAEAAAAJAAUAAAAPAAEAAAAKAAUAAAAAAAIAAAALAAUAAAADAAEAAAAMAAUAAAAGAAEAAAANAAUAAAAEAAEAAAAOAAUAAAACAAEAAAAPAAUAAAAAAAAAAAAQAAUAAAAAAAAAAAARAAUAAAAAAAAAAAASAAUAAAAAAAAAAAATAAUAAAAAAAAAAAAAAAYAAAAAAAAAAAABAAYAAAAFAAAAAAACAAYAAAABAAIAAAADAAYAAAACAAIAAAAEAAYAAAADAAIAAAAFAAYAAAAEAAIAAAAGAAYAAAANAAEAAAAHAAYAAAAFAAIAAAAIAAYAAAAGAAEAAAAJAAYAAAAGAAEAAAAKAAYAAAAGAAEAAAALAAYAAAAGAAIAAAAMAAYAAAANAAEAAAANAAYAAAALAAEAAAAOAAYAAAACAAEAAAAPAAYAAAAAAAAAAAAQAAYAAAAAAAAAAAARAAYAAAAAAAAAAAASAAYAAAAAAAAAAAATAAYAAAAAAAAAAAAAAAcAAAAAAAAAAAABAAcAAAAHAAIAAAACAAcAAAAIAAIAAAADAAcAAAAIAAIAAAAEAAcAAAAJAAIAAAAFAAcAAAABAAIAAAAGAAcAAAAKAAIAAAAHAAcAAAAKAAIAAAAIAAcAAAAKAAIAAAAJAAcAAAAKAAIAAAAKAAcAAAAKAAIAAAALAAcAAAALAAIAAAAMAAcAAAANAAEAAAANAAcAAAALAAEAAAAOAAcAAAACAAEAAAAPAAcAAAAAAAAAAAAQAAcAAAAAAAAAAAARAAcAAAAAAAAAAAASAAcAAAAAAAAAAAATAAcAAAAAAAAAAAAAAAgAAAAAAAAAAAABAAgAAAAAAAAAAAACAAgAAAAAAAAAAAADAAgAAAAAAAAAAAAEAAgAAAAFAAAAAAAFAAgAAAAMAAAAAAAGAAgAAAAMAAAAAAAHAAgAAAAMAAAAAAAIAAgAAAAMAAAAAAAJAAgAAAAMAAAAAAAKAAgAAAAMAAAAAAALAAgAAAAKAAEAAAAMAAgAAAANAAEAAAANAAgAAAALAAEAAAAOAAgAAAACAAEAAAAPAAgAAAAAAAAAAAAQAAgAAAAAAAAAAAARAAgAAAAAAAAAAAASAAgAAAAAAAAAAAATAAgAAAAAAAAAAAAAAAkAAAAAAAAAAAABAAkAAAAAAAAAAAACAAkAAAAAAAAAAAADAAkAAAAAAAAAAAAEAAkAAAAFAAAAAAAFAAkAAAAFAAMAAAAGAAkAAAAFAAMAAAAHAAkAAAAFAAMAAAAIAAkAAAAFAAMAAAAJAAkAAAAFAAMAAAAKAAkAAAAFAAMAAAALAAkAAAAGAAIAAAAMAAkAAAAMAAIAAAANAAkAAAANAAIAAAAOAAkAAAACAAEAAAAPAAkAAAAAAAAAAAAQAAkAAAAAAAAAAAARAAkAAAAAAAAAAAASAAkAAAAAAAAAAAATAAkAAAAAAAAAAAAAAAoAAAAAAAAAAAABAAoAAAAAAAAAAAACAAoAAAAAAAAAAAADAAoAAAAAAAAAAAAEAAoAAAAFAAAAAAAFAAoAAAAFAAMAAAAGAAoAAAAFAAMAAAAHAAoAAAAFAAMAAAAIAAoAAAAFAAMAAAAJAAoAAAAFAAMAAAAKAAoAAAAFAAMAAAALAAoAAAANAAEAAAAMAAoAAAALAAEAAAANAAoAAAAOAAIAAAAOAAoAAAACAAEAAAAPAAoAAAAAAAAAAAAQAAoAAAAAAAAAAAARAAoAAAAAAAAAAAASAAoAAAAAAAAAAAATAAoAAAAAAAAAAAAAAAsAAAAAAAAAAAABAAsAAAAAAAAAAAACAAsAAAAAAAAAAAADAAsAAAAAAAAAAAAEAAsAAAAFAAAAAAAFAAsAAAAFAAMAAAAGAAsAAAAFAAMAAAAHAAsAAAAFAAMAAAAIAAsAAAAFAAMAAAAJAAsAAAAFAAMAAAAKAAsAAAAFAAMAAAALAAsAAAANAAEAAAAMAAsAAAALAAEAAAANAAsAAAAPAAIAAAAOAAsAAAACAAEAAAAPAAsAAAAAAAAAAAAQAAsAAAAAAAAAAAARAAsAAAAAAAAAAAASAAsAAAAAAAAAAAATAAsAAAAAAAAAAAAAAAwAAAAAAAAAAAABAAwAAAAAAAAAAAACAAwAAAAAAAAAAAADAAwAAAAAAAAAAAAEAAwAAAAFAAAAAAAFAAwAAAAFAAMAAAAGAAwAAAAFAAMAAAAHAAwAAAAFAAMAAAAIAAwAAAAFAAMAAAAJAAwAAAAFAAMAAAAKAAwAAAAIAAMAAAALAAwAAAAAAAMAAAAMAAwAAAANAAIAAAANAAwAAAABAAMAAAAOAAwAAAACAAEAAAAPAAwAAAAAAAAAAAAQAAwAAAAAAAAAAAARAAwAAAAAAAAAAAASAAwAAAAAAAAAAAATAAwAAAAAAAAAAAAAAA0AAAAAAAAAAAABAA0AAAAAAAAAAAACAA0AAAAAAAAAAAADAA0AAAAAAAAAAAAEAA0AAAAHAAIAAAAFAA0AAAAIAAIAAAAGAA0AAAAIAAIAAAAHAA0AAAAIAAIAAAAIAA0AAAAIAAIAAAAJAA0AAAAIAAIAAAAKAA0AAAAJAAIAAAALAA0AAAACAAMAAAAMAA0AAAADAAMAAAANAA0AAAAIAAIAAAAOAA0AAAAEAAMAAAAPAA0AAAAAAAAAAAAQAA0AAAAAAAAAAAARAA0AAAAAAAAAAAASAA0AAAAAAAAAAAATAA0AAAAAAAAAAAAAAA4AAAAAAAAAAAABAA4AAAAAAAAAAAACAA4AAAAAAAAAAAADAA4AAAAAAAAAAAAEAA4AAAAAAAAAAAAFAA4AAAAAAAAAAAAGAA4AAAAAAAAAAAAHAA4AAAAAAAAAAAAIAA4AAAAAAAAAAAAJAA4AAAAAAAAAAAAKAA4AAAAHAAIAAAALAA4AAAAIAAIAAAAMAA4AAAAEAAMAAAANAA4AAAAAAAAAAAAOAA4AAAAAAAAAAAAPAA4AAAAAAAAAAAAQAA4AAAAAAAAAAAARAA4AAAAAAAAAAAASAA4AAAAAAAAAAAATAA4AAAAAAAAAAAA=")
+tile_set = ExtResource("1_mcsm6")
+
+[node name="TeleportPoint" type="Node2D" parent="GroundLayer" unique_id=6944152]
+z_index = 1
+position = Vector2(400, 128)
+script = ExtResource("2_260tg")
+target_scene = "res://scene/maps/突袭-第三关-矿洞.tscn"
+walk_texture = ExtResource("3_s1uoq")
+walk_char_index = 2
+step_frames = Array[int]([1])
+animated = false
+
+[node name="DecorLayer" type="Node2D" parent="." unique_id=2132360327]
+y_sort_enabled = true
+
+[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=414533413]
+position = Vector2(366, 407)
+
+[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_tbg6p")]
+
+[node name="投掷物类" parent="DecorLayer" unique_id=1863981552 instance=ExtResource("6_62c55")]
+position = Vector2(403, 390)
+pool = SubResource("Resource_82whr")
+
+[node name="急救喷雾" parent="DecorLayer" unique_id=583809474 instance=ExtResource("6_62c55")]
+position = Vector2(369, 163)
+pool = SubResource("Resource_kfq16")
+
+[node name="狙击步枪类" parent="DecorLayer" unique_id=1510427695 instance=ExtResource("6_62c55")]
+position = Vector2(74, 170)
+pool = SubResource("Resource_866oo")
+
+[node name="近战类" parent="DecorLayer" unique_id=1409372393 instance=ExtResource("6_62c55")]
+position = Vector2(433, 235)
+pool = SubResource("Resource_rkbvx")
+
+[node name="近战类2" parent="DecorLayer" unique_id=2010485252 instance=ExtResource("6_62c55")]
+position = Vector2(434, 270)
+pool = SubResource("Resource_rkbvx")
+
+[node name="近战类3" parent="DecorLayer" unique_id=238848941 instance=ExtResource("6_62c55")]
+position = Vector2(435, 297)
+pool = SubResource("Resource_rkbvx")
+
+[node name="榴弹炮类" parent="DecorLayer" unique_id=2136199667 instance=ExtResource("6_62c55")]
+position = Vector2(398, 350)
+pool = SubResource("Resource_id55e")
+
+[node name="手枪类" parent="DecorLayer" unique_id=1593297400 instance=ExtResource("6_62c55")]
+position = Vector2(203, 230)
+pool = SubResource("Resource_1lnwu")
+
+[node name="霰弹枪类" parent="DecorLayer" unique_id=1504100948 instance=ExtResource("6_62c55")]
+position = Vector2(239, 232)
+pool = SubResource("Resource_pgmtm")
+
+[node name="冲锋枪类" parent="DecorLayer" unique_id=919008836 instance=ExtResource("6_62c55")]
+position = Vector2(280, 234)
+pool = SubResource("Resource_gg51h")
+
+[node name="药品类" parent="DecorLayer" unique_id=356812665 instance=ExtResource("6_62c55")]
+position = Vector2(175, 132)
+pool = SubResource("Resource_bt2wr")
+
+[node name="重型手枪类" parent="DecorLayer" unique_id=1281159491 instance=ExtResource("6_62c55")]
+position = Vector2(80, 200)
+pool = SubResource("Resource_qkt3q")
+
+[node name="MedicalBox" parent="DecorLayer" unique_id=146923207 instance=ExtResource("18_qkes6")]
+position = Vector2(208, 144)
+sprite_offset = Vector2(0, -10)
+
+[node name="步枪类" parent="DecorLayer" unique_id=1589333366 instance=ExtResource("6_62c55")]
+position = Vector2(76, 137)
+pool = SubResource("Resource_edq43")
+
+[node name="火箭炮类" parent="DecorLayer" unique_id=1723205867 instance=ExtResource("6_62c55")]
+position = Vector2(336, 221)
+pool = SubResource("Resource_86tq3")
+
+[node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1832929092]
+y_sort_enabled = true
+tile_map_data = PackedByteArray("AAAFAAIAAAAAAAAAAAAFAAMAAAAAAAAAAAAJAAMAAAAAAAAAAAAMAAMAAAABAAAAAAAFAAQAAAAAAAAAAAAJAAQAAAAAAAAAAAAMAAQAAAACAAAAAAAFAAUAAAAAAAAAAAAJAAUAAAAAAAAAAAAFAAYAAAAAAAAAAAAJAAYAAAAAAAAAAAAFAAcAAAAAAAAAAAAJAAcAAAAAAAAAAAAMAAcAAAADAAAAAAAFAAgAAAAAAAAAAAAJAAgAAAAAAAAAAAAMAAgAAAAEAAAAAAAFAAkAAAAAAAAAAAAJAAkAAAAAAAAAAAAMAAkAAAADAAAAAAAFAAoAAAAAAAAAAAAJAAoAAAAAAAAAAAAMAAoAAAAEAAAAAAAFAAsAAAAAAAAAAAAJAAsAAAAAAAAAAAAFAAwAAAAAAAAAAAAJAAwAAAAAAAAAAAA=")
+tile_set = ExtResource("3_f2bpg")
+
+[node name="Camera2D2" type="Camera2D" parent="." unique_id=437178264]
+zoom = Vector2(2, 2)
+script = ExtResource("8_6lern")
+follow_speed = 6.0
+bounds_margin = 0.0
+bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
+
+[node name="SafehouseArrivalMusic" type="Node" parent="." unique_id=1779037351]
+script = ExtResource("5_e868y")
+arrival_music = ExtResource("6_260tg")
+
+[node name="Menu" parent="." unique_id=377828622 instance=ExtResource("7_s1uoq")]
+
+[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("9_i5n5w")]
+
+[node name="ChapterSummary" parent="." unique_id=1304895809 instance=ExtResource("10_62c55")]
+chapter_title = "第二章 · 学校"
+
+[node name="DirectorConfig" type="Node" parent="." unique_id=1546911568]
+script = ExtResource("2_dcfg")
+spawn_enabled = false

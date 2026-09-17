@@ -1,4 +1,12 @@
+@tool
 class_name SafeDoor extends Node2D
+
+## ── 架构定位 ──
+## 系统：关卡流程 ｜ 层：玩法（Node2D）
+## 联机：Host 统计全员 ready 后统一切图
+## 职责：安全门：靠近按确定键进入目标安全屋；联机需所有已连接玩家都在门附近并确认后统一切图。
+## 依赖：NetworkWorld、Global（pending arrival）、关卡场景路径
+
 ## 安全门交互：单机直接切图；联机提交 ready 后由 NetworkWorld 统计全员并统一切图。
 ## 安全门实体：使用 VX Ace 行走图显示，玩家靠近并按“确定键”后进入目标安全屋。
 ## 联机时由 NetworkWorld 验证所有已连接玩家都在同一扇门附近；任一到门玩家确认后统一切图。
@@ -9,9 +17,20 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 
 @export_file("*.tscn") var target_scene: String = ""
-@export var walk_texture: Texture2D
-@export_range(0, 7, 1) var walk_char_index: int = 0
-@export_range(0, 3, 1) var walk_direction: int = 0
+## walk_* 三个导出带 setter：Inspector 里改贴图/索引/朝向即时刷预览，无需重开场景
+## （同 GradientLabel font_path_override 的 2026-09-14 修法；加载期 sprite 未建时刷新自动早退）。
+@export var walk_texture: Texture2D:
+	set(v):
+		walk_texture = v
+		_refresh_sprite()
+@export_range(0, 7, 1) var walk_char_index: int = 0:
+	set(v):
+		walk_char_index = v
+		_refresh_sprite()
+@export_range(0, 3, 1) var walk_direction: int = 0:
+	set(v):
+		walk_direction = v
+		_refresh_sprite()
 
 @export_group("踏步动画")
 @export var step_frames: Array[int] = [1]
@@ -37,6 +56,9 @@ var _local_network_ready: bool = false
 
 
 func _ready() -> void:
+	if Engine.is_editor_hint():
+		_editor_preview()
+		return
 	if target_scene.is_empty():
 		push_warning("[SafeDoor] target_scene 未设置")
 	if step_frames.is_empty():
@@ -47,7 +69,20 @@ func _ready() -> void:
 	_update_label()
 
 
+## 编辑器预览（@tool）：只构建显示节点并刷出行走图，不碰任何游戏逻辑。
+## 好处：摆门时能直接看到它长什么样、朝向/角色索引对不对。
+## 子节点不设 owner → 不会被打进 .tscn；编辑器分支绝不访问 autoload（编辑器里不存在）。
+func _editor_preview() -> void:
+	if step_frames.is_empty():
+		step_frames = [1]
+	_step_index = 0
+	_ensure_children()
+	_refresh_sprite()
+
+
 func _process(delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
 	# 静态门也必须持续检查距离；不能像旧 TeleportPoint 那样随动画一起 return。
 	if animated and step_frames.size() > 1:
 		_step_timer -= delta
@@ -59,6 +94,8 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if Engine.is_editor_hint():
+		return
 	if _transitioning or not _can_interact:
 		return
 	if event.is_action_pressed("确定键"):
@@ -81,11 +118,9 @@ func _ensure_children() -> void:
 		label.position = Vector2(-72, -62)
 		label.size = Vector2(144, 28)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", 14)
+		Global.apply_hint_font(label, 12)  ## 字体统一（2026-09-17）：fusion-pixel + 12 整倍
 		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
-		label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
-		label.add_theme_constant_override("shadow_offset_x", 2)
-		label.add_theme_constant_override("shadow_offset_y", 2)
+		Global.apply_text_shadow(label)  ## 阴影参数统一走 Global（原来是写死的 2,2 黑影）
 		add_child(label)
 
 

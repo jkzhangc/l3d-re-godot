@@ -6,15 +6,24 @@
 [ext_resource type="Texture2D" uid="uid://chm1obiay2ndt" path="res://art/Ui/回復薬×０.png" id="4_q34ws"]
 [ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="5_5nspm"]
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6_aeqfj"]
+[ext_resource type="FontFile" uid="uid://dwngyyjcuaet3" path="res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf" id="7_font"]
+
+[sub_resource type="StyleBoxFlat" id="HoldoutPanel"]
+bg_color = Color(0, 0, 0, 0.55)
+draw_center = false
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="CombatHUD" type="CanvasLayer" unique_id=410597860]
 script = ExtResource("1_708nl")
 
 [node name="HPFill" type="TextureRect" parent="." unique_id=1592456375]
-offset_left = 8.0
-offset_top = 42.0
-offset_right = 218.0
-offset_bottom = 126.0
+offset_left = 10.0
+offset_top = 78.0
+offset_right = 430.0
+offset_bottom = 246.0
 mouse_filter = 2
 texture = ExtResource("3_aeqfj")
 expand_mode = 1
@@ -24,43 +33,158 @@ offset_left = 6.0
 offset_top = 6.0
 offset_right = 6.0
 offset_bottom = 6.0
+scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("2_5nspm")
 
 [node name="SprayCount" type="TextureRect" parent="." unique_id=306595916]
-offset_left = 156.0
-offset_top = 82.0
-offset_right = 208.0
-offset_bottom = 100.0
+offset_left = 318.0
+offset_top = 158.0
+offset_right = 370.0
+offset_bottom = 176.0
+scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("4_q34ws")
 
+[node name="SupportIcon" type="TextureRect" parent="." unique_id=1700000004]
+offset_left = 788.0
+offset_top = 57.0
+offset_right = 884.0
+offset_bottom = 129.0
+scale = Vector2(2, 2)
+mouse_filter = 2
+texture = ExtResource("5_5nspm")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ThrowableIcon" type="TextureRect" parent="." unique_id=1700000003]
+offset_left = 734.0
+offset_top = -2.0
+offset_right = 830.0
+offset_bottom = 70.0
+scale = Vector2(2, 2)
+mouse_filter = 2
+texture = ExtResource("5_5nspm")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ThrowableCountLabel" type="Label" parent="." unique_id=1700000005]
+offset_left = 765.0
+offset_top = 77.0
+offset_right = 917.0
+offset_bottom = 101.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_fonts/font = ExtResource("7_font")
+theme_override_font_sizes/font_size = 36
+text = "×15"
+
 [node name="SecondaryWeaponIcon" type="TextureRect" parent="." unique_id=1922084394]
-offset_left = 1151.0
+offset_left = 1025.0
 offset_top = 107.0
-offset_right = 1311.0
+offset_right = 1185.0
 offset_bottom = 199.0
-scale = Vector2(0.8, 0.8)
+scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("5_5nspm")
 
 [node name="PrimaryWeaponIcon" type="TextureRect" parent="." unique_id=1987563237]
-offset_left = 1135.0
-offset_top = 13.0
-offset_right = 1295.0
-offset_bottom = 105.0
+offset_left = 931.0
+offset_top = 1.0
+offset_right = 1091.0
+offset_bottom = 93.0
+scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("5_5nspm")
+
+[node name="PrimaryAmmoLabel" type="Label" parent="." unique_id=1700000001]
+offset_left = 989.0
+offset_top = 128.0
+offset_right = 1141.0
+offset_bottom = 152.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_fonts/font = ExtResource("7_font")
+theme_override_font_sizes/font_size = 36
+text = "12/96"
+
+[node name="SecondaryAmmoLabel" type="Label" parent="." unique_id=1700000002]
+offset_left = 1098.0
+offset_top = 238.0
+offset_right = 1230.0
+offset_bottom = 275.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_fonts/font = ExtResource("7_font")
+theme_override_font_sizes/font_size = 36
+text = "7/48"
 
 [node name="TPLabel" type="Control" parent="." unique_id=918184148]
 layout_mode = 3
 anchors_preset = 0
-offset_left = 51.0
-offset_top = 84.0
-offset_right = 67.0
-offset_bottom = 116.0
+offset_left = 82.0
+offset_top = 158.0
+offset_right = 90.0
+offset_bottom = 174.0
+scale = Vector2(2, 2)
 script = ExtResource("6_aeqfj")
 text = "0"
 font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
-color_shader_path_override = "res://shader/text_color.gdshader"
+
+[node name="HoldoutCountdown" type="PanelContainer" parent="." unique_id=1952354651]
+offset_left = 47.0
+offset_top = 18.0
+offset_right = 167.0
+offset_bottom = 96.0
+scale = Vector2(2, 2)
+mouse_filter = 2
+theme_override_styles/panel = SubResource("HoldoutPanel")
+
+[node name="Margin" type="MarginContainer" parent="HoldoutCountdown" unique_id=1830518122]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBox" type="VBoxContainer" parent="HoldoutCountdown/Margin" unique_id=2032519222]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="TitleLabel" type="Label" parent="HoldoutCountdown/Margin/VBox" unique_id=1543441680]
+visible = false
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("7_font")
+theme_override_font_sizes/font_size = 16
+text = "准备防守"
+
+[node name="TimeLabel" type="Control" parent="HoldoutCountdown/Margin/VBox" unique_id=1118143495]
+layout_mode = 2
+script = ExtResource("6_aeqfj")
+text = "1:00"
+text_font_size = 32
+color_index = 1
+shadow = true
+font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
+
+[node name="MessageLabel" type="Label" parent="HoldoutCountdown/Margin/VBox" unique_id=1966756493]
+visible = false
+layout_mode = 2
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("7_font")
+theme_override_font_sizes/font_size = 16
+text = "守住机器！"

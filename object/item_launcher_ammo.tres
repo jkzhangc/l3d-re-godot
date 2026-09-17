@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemData" format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+item_id = "ammo_launcher"
+item_name = "榴弹"
+item_type = 5
+description = "榴弹发射器用的炸裂弹。"
+sell_price = 8
+stackable = true

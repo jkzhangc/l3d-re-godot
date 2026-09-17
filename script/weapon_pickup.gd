@@ -1,4 +1,12 @@
+@tool
 extends Node2D
+
+## ── 架构定位 ──
+## 系统：武器掉落物 ｜ 层：玩法（Node2D）
+## 联机：Client 请求 / Host 校验提交
+## 职责：地面武器掉落物：踏步动画、按住拾取进度环、单机直接替换与联机请求式拾取。
+## 依赖：WeaponData、PlayerState、NetworkWorld
+
 ## 地面武器掉落物。
 ##
 ## 单机：本地节点完成拾取/替换并生成旧武器掉落；联机：Client 只提交请求，Host
@@ -22,23 +30,168 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 ## 武器拾取物模板场景（用于掉落生成）
 const PICKUP_SCENE := preload("res://object/weapon_pickup.tscn")
 
+# ═══════════════════════════════════════
+# 堆叠仲裁与掉落间距（2026-09-16 用户反馈）
+# ═══════════════════════════════════════
+## 用户反馈①：多把武器堆在一起会被"一起拾取"、玩家无法选择
+##   → 只有**离玩家最近**的武器拾取物可以动手；且一次"靠近"只自动捡一件，
+##     走开 AUTO_REARM_DISTANCE 或换场景后重新武装（靠站位选想要的武器）。
+## 用户反馈②：替换/丢弃的武器掉在玩家脚下会和附近掉落物叠在一起
+##   → 落点自动避让，与已有地面掉落物保持 DROP_MIN_GAP 以上。
+const PICKUP_GROUP := &"ground_pickup"          ## 全部地面掉落物（武器/治疗/投掷物）→ 落点避让用
+const WEAPON_PICKUP_GROUP := &"weapon_pickup"   ## 仅武器拾取物 → 最近者仲裁用
+const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
+const AUTO_REARM_DISTANCE: float = 64.0         ## 自动拾取后走开多远才重新武装
+
+## 自动拾取闩锁（static 跨实例共享；换场景或走远自动解除）
+static var _auto_pick_latch: bool = false
+static var _auto_pick_pos: Vector2 = Vector2.ZERO
+static var _auto_pick_scene: String = ""
+
+
+## 自动拾取是否已重新武装：未捡过 / 已换场景 / 已走开足够远。
+static func auto_pickup_armed(tree: SceneTree, player: Node2D) -> bool:
+	if not _auto_pick_latch:
+		return true
+	var scene_path: String = ""
+	if tree and tree.current_scene:
+		scene_path = tree.current_scene.scene_file_path
+	if scene_path != _auto_pick_scene:
+		_auto_pick_latch = false
+		return true
+	if is_instance_valid(player) \
+			and player.global_position.distance_to(_auto_pick_pos) > AUTO_REARM_DISTANCE:
+		_auto_pick_latch = false
+		return true
+	return false
+
+
+## 记一次自动拾取：在玩家当前位置锁上闩锁（走开才解除）。
+static func mark_auto_picked(tree: SceneTree, player: Node2D) -> void:
+	_auto_pick_latch = true
+	_auto_pick_pos = player.global_position if is_instance_valid(player) else Vector2.ZERO
+	_auto_pick_scene = tree.current_scene.scene_file_path if tree and tree.current_scene else ""
+
+
+## 找一个与已有地面掉落物保持 ≥min_gap 的落点：先试基准点，再按环形由近及远扩散。
+static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: float = DROP_MIN_GAP) -> Vector2:
+	if tree == null:
+		return base
+	var others: Array[Vector2] = []
+	for n: Node in tree.get_nodes_in_group(PICKUP_GROUP):
+		if n is Node2D and is_instance_valid(n):
+			others.append((n as Node2D).global_position)
+	if others.is_empty():
+		return base
+	var radii: Array[float] = [0.0, min_gap, min_gap * 1.5, min_gap * 2.0]
+	for radius: float in radii:
+		for i: int in 8:
+			var ang: float = TAU * float(i) / 8.0
+			var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
+			var ok: bool = true
+			for o: Vector2 in others:
+				if cand.distance_to(o) < min_gap - 0.01:
+					ok = false
+					break
+			if ok:
+				return cand
+	return base + Vector2(min_gap, 0.0)
+
+
+## 静态入口：把一把武器作为掉落物放到 player 附近（替换掉落 / 玩家主动丢弃共用）。
+## 远程武器的弹夹与备弹一并转移到掉落物上（与替换掉落同规则）。
+static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
+	if wd == null or not is_instance_valid(player):
+		return null
+	var tree: SceneTree = player.get_tree()
+	if tree == null:
+		return null
+	## 静态函数里不用 autoload 标识符（热重载/时序差异），走节点路径取 Players。
+	var players: Node = player.get_node_or_null("/root/Players")
+	var state: PlayerState = null
+	if players and players.has_method("get_state_for_entity"):
+		state = players.get_state_for_entity(player) as PlayerState
+	var pickup: Node2D = PICKUP_SCENE.instantiate()
+	apply_weapon_ground_display(pickup, wd)
+	if state and wd.is_ranged and wd.magazine_capacity > 0:
+		pickup.pickup_magazine_ammo = state.get_magazine_ammo(wd.item_id)
+		state.weapon_magazines.erase(wd.item_id)
+		var reserve: int = state.count_ammo_item(wd.ammo_item_id)
+		if reserve > 0:
+			pickup.pickup_reserve_ammo = reserve
+			state.consume_ammo_item(wd.ammo_item_id, reserve)
+	## 落点避让：与已有掉落物保持间距（用户 2026-09-16 反馈②）
+	pickup.position = find_free_drop_position(tree, player.global_position)
+	var parent: Node = null
+	if tree.current_scene:
+		parent = tree.current_scene.find_child("GroundLayer", true, false)
+	if parent == null:
+		parent = tree.current_scene if tree.current_scene else player.get_parent()
+	if parent:
+		parent.add_child(pickup)
+	print("[拾取] %s 掉落在地上 (%s) | 弹夹=%d 备弹=%d" % [
+		wd.item_name, pickup.position, pickup.pickup_magazine_ammo, pickup.pickup_reserve_ammo])
+	return pickup
+
+
+## 统一入口：地面显示参数从 WeaponData 读取（2026-09-13 用户反馈：
+## 掉落物要完全按武器数据里的来——texture/char/direction/踏步节奏一致走武器配置）。
+## texture 优先 pickup_texture，未配回退武器行走图；char_idx/direction/踏步参数
+## 一律取武器数据当前值（未配置即脚本默认 char0/dir0，不再用举枪序列顶替）。
+## random_pickup / item_manager / _drop_weapon 三条掉落路径共用。
+static func apply_weapon_ground_display(pickup: Node2D, wd: WeaponData) -> void:
+	pickup.weapon_data = wd
+	pickup.pickup_texture = wd.pickup_texture if wd.pickup_texture else wd.weapon_walk_texture
+	pickup.pickup_char_idx = wd.pickup_char_idx
+	pickup.pickup_direction = wd.pickup_direction
+	pickup.pickup_animated = wd.pickup_animated
+	if wd.pickup_step_frames.size() > 0:
+		pickup.pickup_step_frames = wd.pickup_step_frames
+	if wd.pickup_step_duration > 0.0:
+		pickup.pickup_step_duration = wd.pickup_step_duration
+
 
 # ═══════════════════════════════════════
 # 配置
 # ═══════════════════════════════════════
-@export var weapon_data: WeaponData           ## 要给予的武器资源
-@export var pickup_texture: Texture2D         ## 地上显示的精灵表
-@export var pickup_char_idx: int = 0          ## 精灵表中的角色索引
-@export var pickup_direction: int = 0         ## 朝向（0=下, 1=左, 2=右, 3=上）
+## 以下四个导出带 setter：Inspector 里改贴图/索引/朝向即时刷编辑器预览，
+## 无需重开场景（同 GradientLabel font_path_override 的 2026-09-14 修法）。
+## 注意 weapon_data 只触发重绘、不自动套用地面显示参数 —— 自动套用会按
+## 场景加载顺序覆盖手工调过的 pickup_texture（资源默认值陷阱）。
+@export var weapon_data: WeaponData:           ## 要给予的武器资源
+	set(v):
+		weapon_data = v
+		_refresh_sprite()
+@export var pickup_texture: Texture2D:         ## 地上显示的精灵表
+	set(v):
+		pickup_texture = v
+		_refresh_sprite()
+@export var pickup_char_idx: int = 0:          ## 精灵表中的角色索引
+	set(v):
+		pickup_char_idx = v
+		_refresh_sprite()
+@export var pickup_direction: int = 0:         ## 朝向（0=下, 1=左, 2=右, 3=上）
+	set(v):
+		pickup_direction = v
+		_refresh_sprite()
 
 @export_group("拾取弹药")
-## 拾取时给予的备弹数量（对应 weapon_data.ammo_item_id 的弹药物品）
+## 拾取时给予的备弹数量（对应 weapon_data.ammo_item_id 的弹药物品）。
+## 0 = 沿用武器数据里的 initial_reserve_ammo（掉落转移的旧备弹仍优先）。
 @export var pickup_reserve_ammo: int = 0
 ## 拾取时弹夹内的子弹数（-1=自动填满弹夹容量，0=空弹夹）
 @export var pickup_magazine_ammo: int = -1
 
+## 2026-09-13 用户需求：开启后即使槽位为空也必须按住功能键(D)才拾取（进度环提示），
+## 关闭（默认）保持「空槽触碰自动拾取」。随机掉落物可透传本选项。
+@export var require_function_key: bool = false
+
 ## 在线联机中由 NetworkWorld 分配；0 表示离线旧逻辑。
 var network_pickup_id: int = 0
+## 地面放置物上限豁免：地图预摆的拾取物（含 random_pickup 预摆实例刷出的）不参与
+## GroundItemCap(8) 计数与淘汰 —— 它们是关卡设计的一部分，不是掉落杂物。
+## _ready 里按 owner 判定（编辑器摆进场景的实例 owner 非空）；动态刷出保持 false。
+var cap_exempt: bool = false
 var network_presentation_only: bool = false
 var _network_pickup_request_pending: bool = false
 
@@ -96,6 +249,18 @@ const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
 
 
 func _ready() -> void:
+	add_to_group(WEAPON_PICKUP_GROUP)
+	add_to_group(PICKUP_GROUP)
+	if Engine.is_editor_hint():
+		# 编辑器预览（@tool）：只按 pickup_texture/pickup_char_idx/pickup_direction 刷出
+		# 48x64 裁帧，让摆点时能看见掉落物长相。不注册掉落上限、不连 Area2D、不建指示器。
+		_refresh_sprite()
+		return
+	## 自动判定：编辑器摆进场景的实例 owner 非空 → 豁免（运行时刷出 owner 为空）。
+	## 用 or 是为了不覆盖 random_pickup 对预摆实例刷出物的预设豁免。
+	cap_exempt = cap_exempt or owner != null
+	if not cap_exempt:
+		GroundItemCap.register(self)
 	if _area:
 		_area.body_entered.connect(_on_body_entered)
 		_area.body_exited.connect(_on_body_exited)
@@ -112,45 +277,168 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if _is_online_network_pickup():
-		_process_network_pickup(delta)
+	if Engine.is_editor_hint():
+		# 编辑器也跑踏步动画（2026-09-13 用户反馈：编辑器里不显示踏步动画）
 		_process_step_animation(delta)
 		return
-	_process_step_animation(delta)
+	# 指示器每帧无条件刷新（2026-09-13 残留修复）：进度环淡入淡出不再依赖各分支
+	# 自觉调用 —— 旧实现个别提前 return 路径会冻结 alpha，圆环以低透明度残留。
+	var holding: bool = false
+	if _is_online_network_pickup():
+		holding = _process_network_pickup(delta)
+		_process_step_animation(delta)
+	else:
+		_process_step_animation(delta)
+		holding = _process_local_pickup(delta)
+	_update_hold_indicator(delta, holding)
+	_update_keycap_hint()
 
-	# 拾取逻辑
+
+## ── D 键帽图标（2026-09-17 用户需求）──
+## 玩家站在可使用（可拾取/可替换）的武器掉落物附近时，掉落物上方显示「D」键帽，
+## 提示按住 D 拾取/替换。角色不可用的武器（can_use false）不显示。
+const KEYCAP_KEY_TEXT := "D"
+
+var _keycap_hint: Label = null
+
+
+func _ensure_keycap_hint() -> void:
+	if _keycap_hint != null and is_instance_valid(_keycap_hint):
+		return
+	var lbl := Label.new()
+	lbl.name = "KeycapHint"
+	lbl.text = KEYCAP_KEY_TEXT
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	## 键帽外观：深底 + 浅描边 + 圆角（fusion 12px 基底，键帽 16×14）
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.1, 0.85)
+	sb.border_color = Color(0.95, 0.95, 0.9, 0.95)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_left = 4.0
+	sb.content_margin_right = 4.0
+	sb.content_margin_top = 1.0
+	sb.content_margin_bottom = 1.0
+	lbl.add_theme_stylebox_override("normal", sb)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	var g: Node = get_node_or_null("/root/Global")
+	if g and g.has_method("apply_hint_font"):
+		g.apply_hint_font(lbl, 12)
+	add_child(lbl)
+	# 掉落物精灵约 48×64、原点在脚部 → 键帽悬在头顶上方
+	lbl.position = Vector2(-11, -78)
+	lbl.size = Vector2(22, 16)
+	## 抬 z：键帽在 DecorLayer（画序上被 UpperLayer 图块覆盖）→ 提到单位层之上、
+	## 黑幕(90)/ED(95)/章节总结(100) 之下（2026-09-17 用户反馈：被上层图块盖住）
+	lbl.z_index = 10
+	_keycap_hint = lbl
+
+
+func _update_keycap_hint() -> void:
+	if _player_in_range and _player_can_use():
+		_ensure_keycap_hint()
+		_keycap_hint.visible = true
+	elif _keycap_hint != null and is_instance_valid(_keycap_hint):
+		_keycap_hint.visible = false
+
+
+func _process_local_pickup(delta: float) -> bool:
+	## 单机拾取逻辑。返回本帧是否处于按住状态（供进度环刷新）。
 	if not _player_in_range or not _player_ref:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	if not weapon_data:
-		return
+		return false
 
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if not state:
-		return
+		return false
 	var slot: String = weapon_data.get_slot_key()
 	var current: WeaponData = state.get_equipped_weapon(slot)
 
-	# 该槽位为空 → 自动拾取装备
+	# 该槽位为空 → 默认自动拾取；require_function_key 时同样走按住流程
 	if current == null:
-		_do_pickup()
-		return
+		if not require_function_key:
+			if not _can_auto_take():
+				return false
+			mark_auto_picked(get_tree(), _player_ref)
+			_do_pickup()
+			return false
+		return _process_hold(delta)
 
-	# 槽位已有武器 → 需按住确定键替换
+	return _process_hold(delta)
+
+
+## 自动拾取闸门：① 本节点必须是离玩家最近的武器拾取物；
+## ② 本次"靠近"还没自动捡过（走开再回来即可换下一件）—— 修"堆一起被全捡"；
+## ③ 本角色能使用该武器（2026-09-16 用户：不能拿的武器路过也不自动捡）。
+func _can_auto_take() -> bool:
+	if not _is_nearest_weapon_pickup():
+		return false
+	if not _player_can_use():
+		return false
+	return auto_pickup_armed(get_tree(), _player_ref)
+
+
+## 本角色是否可使用本拾取物武器（角色 allowed 列表）。玩家无效时放行（保持旧行为）。
+func _player_can_use() -> bool:
+	if not weapon_data:
+		return true
+	var pc: CharacterData = _player_ref.get("current_character") if is_instance_valid(_player_ref) else null
+	if pc == null:
+		return true
+	return pc.can_use_weapon(weapon_data)
+
+
+## 同点堆叠仲裁：只有离玩家最近的武器拾取物能动手（距离相同按实例 id 定序，保证唯一）。
+func _is_nearest_weapon_pickup() -> bool:
+	var player: Node2D = _player_ref
+	if not is_instance_valid(player):
+		return true   ## 拿不到玩家 → 不做仲裁，保持旧行为
+	var my_d: float = global_position.distance_squared_to(player.global_position)
+	for other: Node in get_tree().get_nodes_in_group(WEAPON_PICKUP_GROUP):
+		if other == self or not is_instance_valid(other):
+			continue
+		if other.get("_player_in_range") != true:
+			continue
+		var other_node: Node2D = other as Node2D
+		if other_node == null:
+			continue
+		var d: float = other_node.global_position.distance_squared_to(player.global_position)
+		if d < my_d - 0.01:
+			return false
+		if absf(d - my_d) <= 0.01 and other.get_instance_id() < get_instance_id():
+			return false
+	return true
+
+
+func _process_hold(delta: float) -> bool:
+	## 按住功能键(D)的替换/拾取进度。返回是否按住中。
 	if not _can_hold_pickup():
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
+	## 堆叠仲裁：长按进度也只给最近的一个（否则两把武器会同时读满进度、一起替换）。
+	if not _is_nearest_weapon_pickup():
+		_hold_timer = 0.0
+		return false
+	# 角色限制（2026-09-16 用户）：不能拿的武器按 D 无反应——不出进度环、不计进度
+	if not _player_can_use():
+		_hold_timer = 0.0
+		return false
+	# 救人优先（用户 2026-09-11）：附近有倒地队友时，功能键归救援用，不进入换武器长按
+	if _downed_player_near():
+		_hold_timer = 0.0
+		return false
 
-	if Input.is_action_pressed("确定键"):
+	if Input.is_action_pressed("功能键"):
 		_hold_timer += delta
-		_update_hold_indicator(delta, true)
 		if _hold_timer >= hold_time:
 			_do_pickup()
-	else:
-		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
+			return false
+		return true
+	_hold_timer = 0.0
+	return false
 
 
 
@@ -168,34 +456,44 @@ func _is_online_network_pickup() -> bool:
 	return net and net.has_method("is_online_session") and bool(net.is_online_session())
 
 
-func _process_network_pickup(delta: float) -> void:
+func _process_network_pickup(delta: float) -> bool:
 ## 联机交互入口：本地只显示提示和发送意图，成功与否由 Host 的拾取事务决定。
 	# 尚未收到 Host 的可靠 pickup_snapshot 前只能展示，不能执行本地拾取。
 	if network_pickup_id <= 0:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	var local_player := Players.get_local_entity() as CharacterBody2D
 	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
 	_player_ref = local_player if in_range else null
 	_player_in_range = in_range
 	if not in_range or not weapon_data:
 		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
-		return
+		return false
 	var state: PlayerState = Players.get_state_for_entity(local_player)
 	var current: WeaponData = state.get_equipped_weapon(weapon_data.get_slot_key()) if state else null
-	if current == null:
+	# 空槽 + 未要求功能键 → 直接请求；其余按住流程
+	if current == null and not require_function_key:
+		## 堆叠仲裁同样作用于联机请求：只让最近的一个发请求，且一次靠近只自动要一件。
+		if not _can_auto_take():
+			return false
+		mark_auto_picked(get_tree(), local_player)
 		_request_network_pickup()
-		return
-	if Input.is_action_pressed("确定键"):
-		_hold_timer += delta
-		_update_hold_indicator(delta, true)
-		if _hold_timer >= hold_time:
-			_request_network_pickup()
-	else:
-		_hold_timer = 0.0
-		_update_hold_indicator(delta, false)
+		return false
+	return _process_hold(delta)
+
+
+## 附近（72px）是否有倒地队友：有则功能键优先用于救援（network_world 的 revive 流程）。
+func _downed_player_near() -> bool:
+	if not _player_ref:
+		return false
+	for p: Node2D in get_tree().get_nodes_in_group("player"):
+		if not is_instance_valid(p) or p == _player_ref:
+			continue
+		if p.get("network_downed") != true:
+			continue
+		if p.global_position.distance_to(_player_ref.global_position) <= 72.0:
+			return true
+	return false
 
 
 func _request_network_pickup() -> void:
@@ -226,12 +524,16 @@ func _can_hold_pickup() -> bool:
 
 
 func _update_hold_indicator(delta: float, is_holding: bool) -> void:
-	## 更新按住进度指示器的淡入/淡出透明度，并触发重绘
+	## 更新按住进度指示器的淡入/淡出透明度，并触发重绘。
+	## 2026-09-13 残留修复：只要 alpha 有变化或仍大于 0 就重绘；归零那帧的重绘
+	## 会以 alpha<=0.001 早退 → 清空画布内容。旧实现重绘条件过窄，
+	## 圆环可能停在最后一帧的低透明度画面上不再消失。
 	if not hold_indicator_enabled or not _indicator_node:
 		return
 	var target: float = 1.0 if is_holding else 0.0
+	var prev: float = _indicator_alpha
 	_indicator_alpha = move_toward(_indicator_alpha, target, hold_indicator_fade_speed * delta)
-	if _indicator_alpha > 0.001 or _hold_timer > 0.0:
+	if prev != _indicator_alpha or _indicator_alpha > 0.0 or _hold_timer > 0.0:
 		_indicator_node.queue_redraw()
 
 
@@ -298,78 +600,27 @@ func _do_pickup() -> void:
 			# -1 = 自动填满弹夹
 			state.set_magazine_ammo(weapon_data.item_id, weapon_data.magazine_capacity)
 
-	# 备弹（库存弹药物品）
-	if pickup_reserve_ammo > 0 and not weapon_data.ammo_item_id.is_empty():
+	# 备弹（库存弹药物品）：掉落转移的旧备弹优先，否则用武器数据的初始备弹
+	var reserve: int = pickup_reserve_ammo if pickup_reserve_ammo > 0 else weapon_data.initial_reserve_ammo
+	if reserve > 0 and not weapon_data.ammo_item_id.is_empty():
 		var ammo_res: ItemData = _find_ammo_resource(state, weapon_data.ammo_item_id)
 		if ammo_res:
-			for _i: int in range(pickup_reserve_ammo):
+			for _i: int in range(reserve):
 				state.add_item(ammo_res.duplicate())
-			print("[拾取] 给予备弹: %s ×%d" % [weapon_data.ammo_item_id, pickup_reserve_ammo])
+			print("[拾取] 给予备弹: %s ×%d" % [weapon_data.ammo_item_id, reserve])
 		else:
 			push_warning("[拾取] 找不到弹药资源: %s" % weapon_data.ammo_item_id)
 
 	# 不自动进入武器举起状态，玩家按 Shift 自行举起
+	## 拾取音效：武器数据（ItemData.pickup_sound）可配，留空用全局默认（2026-09-15）
+	Global.play_pickup_sfx(weapon_data.pickup_sound, weapon_data.pickup_sound_pitch)
 	queue_free()
 
 
-func _drop_weapon(wd: WeaponData, slot: String) -> void:
-	## 将旧武器生成为地面拾取物，掉落在玩家脚下。
-	## 远程武器的弹夹子弹和备弹一并转移到拾取物上。
-	if not _player_ref:
-		return
-	var state: PlayerState = Players.get_state_for_entity(_player_ref)
-	if not state:
-		return
-
-	var pickup: Node2D = PICKUP_SCENE.instantiate()
-	pickup.weapon_data = wd
-
-	# 从 WeaponData 读取地面显示参数；未配置则回退到武器行走图
-	if wd.pickup_texture:
-		pickup.pickup_texture = wd.pickup_texture
-		pickup.pickup_char_idx = wd.pickup_char_idx
-		pickup.pickup_direction = wd.pickup_direction
-	else:
-		pickup.pickup_texture = wd.weapon_walk_texture
-		var seq: Array[int] = wd.get_raise_char_sequence()
-		pickup.pickup_char_idx = seq[0] if seq.size() > 0 else 0
-		pickup.pickup_direction = 0  # 面朝下
-
-	# 踏步动画设置（从 WeaponData 读取）
-	pickup.pickup_animated = wd.pickup_animated
-	if wd.pickup_step_frames.size() > 0:
-		pickup.pickup_step_frames = wd.pickup_step_frames
-	if wd.pickup_step_duration > 0.0:
-		pickup.pickup_step_duration = wd.pickup_step_duration
-
-	# —— 远程武器：转移弹药到拾取物 ——
-	if wd.is_ranged and wd.magazine_capacity > 0:
-		# 弹夹子弹
-		var mag: int = state.get_magazine_ammo(wd.item_id)
-		pickup.pickup_magazine_ammo = mag
-		state.weapon_magazines.erase(wd.item_id)
-
-		# 备弹：从背包取出全部对应弹药，写入拾取物
-		var reserve: int = state.count_ammo_item(wd.ammo_item_id)
-		if reserve > 0:
-			pickup.pickup_reserve_ammo = reserve
-			state.consume_ammo_item(wd.ammo_item_id, reserve)
-
-	# 掉落在玩家脚下
-	pickup.position = _player_ref.global_position
-
-	# 添加到 GroundLayer 节点下
-	var parent: Node = _find_ground_layer()
-	if parent:
-		parent.add_child(pickup)
-	else:
-		var tree: SceneTree = get_tree()
-		if tree and tree.current_scene:
-			tree.current_scene.add_child(pickup)
-		else:
-			get_parent().add_child(pickup)
-
-	print("[拾取] %s 掉落在地上 (%s) | 弹夹=%d 备弹=%d" % [wd.item_name, pickup.position, pickup.pickup_magazine_ammo, pickup.pickup_reserve_ammo])
+func _drop_weapon(wd: WeaponData, _slot: String) -> void:
+	## 替换掉落：交给静态入口统一处理（含落点避让，2026-09-16 用户反馈②）。
+	## 远程武器的弹夹子弹和备弹一并转移到拾取物上（逻辑在 drop_weapon_for_player 里）。
+	drop_weapon_for_player(_player_ref, wd)
 
 
 func _find_ground_layer() -> Node:
@@ -412,24 +663,24 @@ func _on_body_entered(body: Node2D) -> void:
 		_player_in_range = true
 		_player_ref = player
 		_hold_timer = 0.0
-		player._near_pickup = true
 
 
 func _on_body_exited(body: Node2D) -> void:
 	var player: CharacterBody2D = body as CharacterBody2D
 	if player and player == _player_ref:
 		_player_in_range = false
-		_player_ref._near_pickup = false
 		_player_ref = null
 		_hold_timer = 0.0
 
 
 func _refresh_sprite() -> void:
-	if not _sprite or not pickup_texture:
+	# @onready 在编辑器预览路径可能未赋值（如手动触发），兜底按节点名取
+	var sprite: Sprite2D = _sprite if _sprite else get_node_or_null("Sprite2D") as Sprite2D
+	if not sprite or not pickup_texture:
 		return
 
-	_sprite.texture = pickup_texture
-	_sprite.region_enabled = true
+	sprite.texture = pickup_texture
+	sprite.region_enabled = true
 
 	# 当前踏步帧（动画关闭时用第一帧，即站立帧）
 	var frame: int
@@ -443,4 +694,4 @@ func _refresh_sprite() -> void:
 
 	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
 	var y: int = char_row * (FRAME_H * DIRECTIONS) + pickup_direction * FRAME_H
-	_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)

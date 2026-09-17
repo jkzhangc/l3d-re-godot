@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：Host 权威；Client 表现
+## 职责：副武器（近战）举起状态：举/放动画正反向播放，READY 期允许移动与近战。
+## 依赖：WeaponData、Player 实体、PlayerState
+
 ## 小刀 READY 阶段允许移动和近战；伤害只在 KnifeAttackState 的命中帧结算。
 ## 小刀举起状态 — 副武器举起
 ##
@@ -59,14 +66,7 @@ func process_update(delta: float) -> void:
 					character.set_weapon_frame(_seq_idx)
 
 		Phase.READY:
-			# 技能搓招：按住技能键 + 按触发键（确定键=攻击 / 取消键）释放对应技能（优先于其它输入）
-			if Input.is_action_pressed("技能键"):
-				if Input.is_action_just_pressed("确定键"):
-					character.use_skill("确定键")
-					return
-				if Input.is_action_just_pressed("取消键"):
-					character.use_skill("取消键")
-					return
+			# （旧「按住技能键搓招」已移除：技能键动作删除，主动技 = SA 键 C，见 player._update_sa_state）
 
 			# --- 固定朝向输入处理 ---
 			if Global.facing_lock_mode == 0:
@@ -87,7 +87,7 @@ func process_update(delta: float) -> void:
 				character.update_facing(move_dir)
 
 			# 主武器键：同槽位→放下；不同槽位→切换并举起
-			if Input.is_action_just_pressed("主武器键"):
+			if Global.item_key_just_pressed("主武器键"):
 				if get_player_state().active_weapon_slot == "primary":
 					_begin_lower()
 				else:
@@ -95,7 +95,7 @@ func process_update(delta: float) -> void:
 				return
 
 			# 副武器键：同槽位→放下；不同槽位→切换并举起
-			if Input.is_action_just_pressed("副武器键"):
+			if Global.item_key_just_pressed("副武器键"):
 				if get_player_state().active_weapon_slot == "secondary":
 					_begin_lower()
 				else:
@@ -103,10 +103,10 @@ func process_update(delta: float) -> void:
 				return
 
 			# 使用消耗品
-			if Input.is_action_just_pressed("治疗品键"):
+			if Global.item_key_just_pressed("治疗品键"):
 				character.use_healing_item()
 				return
-			if Input.is_action_just_pressed("辅助品键"):
+			if Global.item_key_just_pressed("辅助品键"):
 				character.use_support_item()
 				return
 
@@ -117,9 +117,8 @@ func process_update(delta: float) -> void:
 				transition_requested.emit("Shove")
 
 			if Input.is_action_just_pressed("确定键"):
-				# 在拾取物范围内时不攻击，让拾取物处理按住替换
-				if not character._near_pickup:
-					transition_requested.emit("KnifeAttack")
+				# 同 Pistol：武器替换已改「按住功能键(D)」，拾取物旁点按 Z 照常攻击
+				transition_requested.emit("KnifeAttack")
 
 		Phase.LOWER:
 			_timer -= delta
@@ -138,7 +137,7 @@ func physics_update(delta: float) -> void:
 		character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
 	else:
 		character.velocity = Vector2.ZERO
-	character.move_and_slide()
+	character.move_with_corner_assist()
 
 
 func _begin_lower() -> void:

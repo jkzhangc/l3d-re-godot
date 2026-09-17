@@ -1,5 +1,12 @@
 class_name CharacterCatalog
 extends RefCounted
+
+## ── 架构定位 ──
+## 系统：角色目录 ｜ 层：数据（枚举器）
+## 联机：与联机白名单共用同一份目录
+## 职责：角色资源目录：显式 preload 的正式角色列表，供角色选择与联机校验共用，避免目录枚举在部分环境不可用。
+## 依赖：preload 角色 .tres；被 character_select_menu 与 Net 使用
+
 ## 角色资源目录。
 ##
 ## 角色选择和联机白名单必须使用同一份目录：目录枚举在部分运行环境中可能
@@ -12,6 +19,7 @@ const BIGG_CHARACTER_PATH := "res://object/character_bigg.tres"
 const _CORE_CHARACTER_RESOURCES := [
 	preload("res://object/character_nobita.tres"),
 	preload("res://object/character_bigg.tres"),
+	preload("res://object/character_suneo.tres"),
 ]
 
 

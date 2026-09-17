@@ -1,0 +1,82 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bulbhyls2xeo8"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://duumnrw1jm624" path="res://art/Barrages/grenade.png" id="3"]
+[ext_resource type="AudioStream" uid="uid://cwjuklape7gpf" path="res://sound/ロケットランチャー.ogg" id="4"]
+[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="5"]
+[ext_resource type="AudioStream" uid="uid://c0m5bt0p2rpik" path="res://sound/ロケットランチャー爆発.ogg" id="6"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="7"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="8"]
+[ext_resource type="Texture2D" uid="uid://dw11lrqj0vtcs" path="res://art/Ui/装備アイコンロケットランチャー.png" id="9"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://c6mufmlgssema" path="res://art/Weapon/[2K-VX]-A武器セット４.png" id="11"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="11_4ooyv"]
+
+[sub_resource type="Resource" id="Resource_rk1"]
+script = ExtResource("2")
+bullet_texture = ExtResource("3")
+speed = 560.0
+max_range = 560.0
+instant_kill = true
+explosion_radius = 240.0
+explosion_hurts_players = false
+explosion_player_radius = 96.0
+explode_effect_anim = ExtResource("5")
+explode_sound = ExtResource("6")
+knockback_enabled = true
+knockback_force = 600.0
+
+[sub_resource type="Resource" id="WSO_rocket_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_rocket_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_rocket_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[sub_resource type="Resource" id="WSO_rocket_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -4)
+right = Vector2(0, -4)
+
+[resource]
+script = ExtResource("1")
+attack_power = 300
+attack_range = 280.0
+weapon_state_name = "RLauncher"
+weapon_walk_texture = ExtResource("10")
+attack_sound = ExtResource("4")
+empty_fire_sound = ExtResource("7")
+raise_sound = ExtResource("8")
+lower_sound = ExtResource("8")
+reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 20
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_rocket_01_bigg"),
+"nobita": SubResource("WSO_rocket_01_nobita"),
+"shizuka": SubResource("WSO_rocket_01_shizuka"),
+"suneo": SubResource("WSO_rocket_01_suneo")
+}
+magazine_capacity = 1
+ammo_item_id = "ammo_rocket"
+attack_frame_durations = Array[float]([0.14, 0.1, 0.16, 0.14])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_rk1")])
+item_id = "rocket_01"
+item_name = "火箭筒（RPG-7）"
+item_type = 3
+description = "RPG-7 火箭推进榴弹发射器。超プッシュ・即死効果，爆风范围非常大；爆炸会波及自己（自爆危険），注意保持距离。对 Boss 也有富余的威力。"
+icon = ExtResource("9")
+sell_price = 400
+max_stack = 1
+pickup_texture = ExtResource("11")
+pickup_char_idx = 5
+pickup_step_frames = Array[int]([0])

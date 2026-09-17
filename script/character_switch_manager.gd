@@ -1,4 +1,11 @@
 class_name CharacterSwitchManager extends Node
+
+## ── 架构定位 ──
+## 系统：角色切换 ｜ 层：玩法（Node）
+## 联机：单机为主
+## 职责：Q / Ctrl+1~4 切换队伍成员、维护队友站立替身、切换镜头与死亡后自动切人。
+## 依赖：Players、PlayerState、camera_follow
+
 ## 角色切换管理器 — 处理 Q/Ctrl+1-4 切换、队友静态精灵、死亡切换
 ##
 ## 添加到关卡场景根节点（由 GameInit 自动创建），管理:
@@ -203,6 +210,12 @@ func _input(event: InputEvent) -> void:
 		return
 	var target_state: PlayerState = Players.get_seat(target_index)
 	if not target_state or not target_state.is_alive():
+		return
+	# Heat 中切人不可（原作 system.html ◆ヒート：「キャラチェンジ不可」）。
+	# 只挡手动切换 —— 死亡自动切换（switch_after_death）不走这里，Heat 角色死亡照常切人。
+	var player: Node = Players.get_local_entity()
+	if player and "is_heat_active" in player and player.is_heat_active():
+		print("[状态] Heat 中切人不可！")
 		return
 
 	_do_switch(target_index)

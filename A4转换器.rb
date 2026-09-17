@@ -1,358 +1,406 @@
-# va图块转new格式
+# -*- coding: utf-8 -*-
+# ============================================================================
+# A4 墙壁自动图块转换器（改进版）— 标准 A4 (TileA4-Tw.png) → 展开的自用图集
+#
+# 改进依据：仿 VA 编辑器（D:\aigametest\测试\editor）的图块显示逻辑
+#   · native/Spec.cs               A4 渲染：屋顶 kind 用 47 形状 FLOOR 表
+#                                   （4×6 半块 = 64×96px），墙壁 kind 用 16 形状
+#                                   WALL 表（4×4 半块 = 64×64px）
+#   · native/AutotileTables.gen.cs 形状 → 4 个 16×16 象限来源坐标（已原样移植）
+#   · native/AutotileData.gen.cs   8 位邻居组合 → 屋顶形状索引（已原样移植）
+#   · 源图每组 64×160px = 屋顶块 2×3 格（上，96px）+ 墙壁块 2×2 格（下，64px）
+#
+# 本次改进（对应《VX动画特效与图块系统.md》状态栏"未实现"清单）：
+#   1. 遍历全部 24 组：输出 A4-new_g00.png ～ A4-new_g23.png（组 NN → _gNN.png）。
+#      任何模式都不写 A4-new.png，原有 A4-new.png / A4-new2.png 原样保留
+#   2. 补全形状：输出块新增完整 47+1 屋顶形状行（y=288..480，x=0..256）与
+#      16 墙壁形状行（y=288..352，x=256..512），逐形状与编辑器渲染一致
+#   3. 输出 bitmask→形状→格坐标 速查表（A4-new_形状速查表.txt），
+#      供 Godot Terrain peering bit 配置使用
+#   4. 旧版布局（屋顶3×3 / 外角16 / 墙壁3×3 / 内角4 / 平行边2 / T形4）的每一条
+#      blt 坐标与旧脚本逐一比对过（114 条完全一致），街道B.tres 已配好 terrain
+#      的格子 (0:0 ～ 6:4) 不受影响
+#
+# 说明：
+#   · 旧版 y=256 行的"平行边/T 形"合成会用屋顶内墙面整块覆盖（屋顶线缺失），
+#     属旧版行为，原样保留；这些情况在新增的形状行里有正确版本，可改用新行。
+#   · 阴影行（Twnew 第 4 行那种过渡 tile）源自地图阴影层（z3），A4 图内无此
+#     数据，本转换器不生成；游戏侧照旧用阴影绘制逻辑。
+#
+# 运行：VX Ace 脚本编辑器粘贴全部 → 运行游戏 → 按 C 键退出。
+#       （需要工程内已有 Bitmap#create_surface / #save_png 扩展，与旧脚本相同）
+# ============================================================================
 
-# 单图块大小
-$tile_width = 32
-$tile_height = 32
+$tile_width   = 32
+$tile_height  = 32
+$tile_w_index = 5       # 单组模式：图块组横索引 0-7（决定预览哪个组）
+$tile_h_index = 1       # 单组模式：图块组纵索引 0-2
+$convert_all  = true    # true = 遍历源图全部 24 组；false = 只转上面指定的组
+$out_prefix   = "A4-new"
+$write_lookup = true    # 同时输出 bitmask→形状→格坐标 速查表
 
-$tile_w_index = 5 # 要转换的图块组横索引
-$tile_h_index = 1 # 要转换的图块组纵索引
-sprite = Sprite.new
-sprite.oy = 128/2
-sprite.y = Graphics.height/2
-sprite.bitmap = Bitmap.new(544,128)
-sprite.bitmap.draw_text(sprite.bitmap.rect, "正在转换", 1)
+TILE         = 32
+HALF         = 16
+GROUP_COLS   = 8        # 源图横向组数（512 / 64）
+GROUP_ROWS   = 3        # 源图纵向组数（480 / 160）
+ROOF_BLOCK_H = 96       # 屋顶块高（2×3 格）
+BLOCK_W      = 512      # 输出单组画布
+BLOCK_H      = 480
+SHAPE_ROW_Y  = 288      # 新增形状行起始 y（旧内容只用到 y=288 之前）
 
-newbitmap = Bitmap.new(512,480)
-bitmap = Cache.tileset("TileA4-Tw.png")
-Graphics.update
+# ── 屋顶形状表（48 项 = 编辑器 FLOOR_AUTOTILE_TABLE，含 shape 47 = 整块屋顶-单个）──
+# 每项 = [TL,TR,BL,BR] 四个 16×16 象限在屋顶块（4×6 半块，组原点起）中的 [半块x,半块y]
+ROOF_SHAPES = [
+  [[2,4], [1,4], [2,3], [1,3]],  # 0
+  [[2,0], [1,4], [2,3], [1,3]],
+  [[2,4], [3,0], [2,3], [1,3]],
+  [[2,0], [3,0], [2,3], [1,3]],
+  [[2,4], [1,4], [2,3], [3,1]],
+  [[2,0], [1,4], [2,3], [3,1]],
+  [[2,4], [3,0], [2,3], [3,1]],
+  [[2,0], [3,0], [2,3], [3,1]],
+  [[2,4], [1,4], [2,1], [1,3]],  # 8
+  [[2,0], [1,4], [2,1], [1,3]],
+  [[2,4], [3,0], [2,1], [1,3]],
+  [[2,0], [3,0], [2,1], [1,3]],
+  [[2,4], [1,4], [2,1], [3,1]],
+  [[2,0], [1,4], [2,1], [3,1]],
+  [[2,4], [3,0], [2,1], [3,1]],
+  [[2,0], [3,0], [2,1], [3,1]],
+  [[0,4], [1,4], [0,3], [1,3]],  # 16
+  [[0,4], [3,0], [0,3], [1,3]],
+  [[0,4], [1,4], [0,3], [3,1]],
+  [[0,4], [3,0], [0,3], [3,1]],
+  [[2,2], [1,2], [2,3], [1,3]],
+  [[2,2], [1,2], [2,3], [3,1]],
+  [[2,2], [1,2], [2,1], [1,3]],
+  [[2,2], [1,2], [2,1], [3,1]],
+  [[2,4], [3,4], [2,3], [3,3]],  # 24
+  [[2,4], [3,4], [2,1], [3,3]],
+  [[2,0], [3,4], [2,3], [3,3]],
+  [[2,0], [3,4], [2,1], [3,3]],
+  [[2,4], [1,4], [2,5], [1,5]],
+  [[2,0], [1,4], [2,5], [1,5]],
+  [[2,4], [3,0], [2,5], [1,5]],
+  [[2,0], [3,0], [2,5], [1,5]],
+  [[0,4], [3,4], [0,3], [3,3]],  # 32
+  [[2,2], [1,2], [2,5], [1,5]],
+  [[0,2], [1,2], [0,3], [1,3]],
+  [[0,2], [1,2], [0,3], [3,1]],
+  [[2,2], [3,2], [2,3], [3,3]],
+  [[2,2], [3,2], [2,1], [3,3]],
+  [[2,4], [3,4], [2,5], [3,5]],
+  [[2,0], [3,4], [2,5], [3,5]],
+  [[0,4], [1,4], [0,5], [1,5]],  # 40
+  [[0,4], [3,0], [0,5], [1,5]],
+  [[0,2], [3,2], [0,3], [3,3]],
+  [[0,2], [1,2], [0,5], [1,5]],
+  [[0,4], [3,4], [0,5], [3,5]],
+  [[2,2], [3,2], [2,5], [3,5]],
+  [[0,2], [3,2], [0,5], [3,5]],
+  [[0,0], [1,0], [0,1], [1,1]],
+]
 
-# 屋顶单个
-x,y = 0,0
-tilex = 64*$tile_w_index
-tiley = 160*$tile_h_index
-p tilex,tiley
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+# ── 墙壁形状表（16 项 = 编辑器 WALL_AUTOTILE_TABLE）──
+# 半块坐标相对墙壁块左上角（= 组原点下方 96px）
+WALL_SHAPES = [
+  [[2,2], [1,2], [2,1], [1,1]],  # 0
+  [[0,2], [1,2], [0,1], [1,1]],
+  [[2,0], [1,0], [2,1], [1,1]],
+  [[0,0], [1,0], [0,1], [1,1]],
+  [[2,2], [3,2], [2,1], [3,1]],  # 4
+  [[0,2], [3,2], [0,1], [3,1]],
+  [[2,0], [3,0], [2,1], [3,1]],
+  [[0,0], [3,0], [0,1], [3,1]],
+  [[2,2], [1,2], [2,3], [1,3]],  # 8
+  [[0,2], [1,2], [0,3], [1,3]],
+  [[2,0], [1,0], [2,3], [1,3]],
+  [[0,0], [1,0], [0,3], [1,3]],
+  [[2,2], [3,2], [2,3], [3,3]],  # 12
+  [[0,2], [3,2], [0,3], [3,3]],
+  [[2,0], [3,0], [2,3], [3,3]],
+  [[0,0], [3,0], [0,3], [3,3]],
+]
 
-# 屋顶四个边角
-x += 32
-tilex += 32
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+# ── 8 位邻居组合 → 屋顶形状（编辑器 FloorShapeLookup，官方地图反推，256 项全）──
+# 键序 n,e,s,w,nw,ne,se,sw（1 = 与同种图块连接；与 comboKey 一致）
+FLOOR_SHAPE_DATA = <<-EOD
+  00000000:46 00000001:46 00000010:46 00000011:46 00000100:46 00000101:46 00000110:46 00000111:46
+  00001000:46 00001001:46 00001010:46 00001011:46 00001100:46 00001101:46 00001110:46 00001111:46
+  00010000:45 00010001:45 00010010:45 00010011:45 00010100:45 00010101:45 00010110:45 00010111:45
+  00011000:45 00011001:45 00011010:45 00011011:45 00011100:45 00011101:45 00011110:45 00011111:45
+  00100000:42 00100001:42 00100010:42 00100011:42 00100100:42 00100101:42 00100110:42 00100111:42
+  00101000:42 00101001:42 00101010:42 00101011:42 00101100:42 00101101:42 00101110:42 00101111:42
+  00110000:37 00110001:36 00110010:37 00110011:36 00110100:37 00110101:36 00110110:37 00110111:36
+  00111000:37 00111001:36 00111010:37 00111011:36 00111100:37 00111101:36 00111110:37 00111111:36
+  01000000:43 01000001:43 01000010:43 01000011:43 01000100:43 01000101:43 01000110:43 01000111:43
+  01001000:43 01001001:43 01001010:43 01001011:43 01001100:43 01001101:43 01001110:43 01001111:43
+  01010000:33 01010001:33 01010010:33 01010011:33 01010100:33 01010101:33 01010110:33 01010111:33
+  01011000:33 01011001:33 01011010:33 01011011:33 01011100:33 01011101:33 01011110:33 01011111:33
+  01100000:35 01100001:35 01100010:34 01100011:34 01100100:35 01100101:35 01100110:34 01100111:34
+  01101000:35 01101001:35 01101010:34 01101011:34 01101100:35 01101101:35 01101110:34 01101111:34
+  01110000:23 01110001:21 01110010:22 01110011:20 01110100:23 01110101:21 01110110:22 01110111:20
+  01111000:23 01111001:21 01111010:22 01111011:20 01111100:23 01111101:21 01111110:22 01111111:20
+  10000000:44 10000001:44 10000010:44 10000011:44 10000100:44 10000101:44 10000110:44 10000111:44
+  10001000:44 10001001:44 10001010:44 10001011:44 10001100:44 10001101:44 10001110:44 10001111:44
+  10010000:39 10010001:39 10010010:39 10010011:39 10010100:39 10010101:39 10010110:39 10010111:39
+  10011000:38 10011001:38 10011010:38 10011011:38 10011100:38 10011101:38 10011110:38 10011111:38
+  10100000:32 10100001:32 10100010:32 10100011:32 10100100:32 10100101:32 10100110:32 10100111:32
+  10101000:32 10101001:32 10101010:32 10101011:32 10101100:32 10101101:32 10101110:32 10101111:32
+  10110000:27 10110001:26 10110010:27 10110011:26 10110100:27 10110101:26 10110110:27 10110111:26
+  10111000:25 10111001:24 10111010:25 10111011:24 10111100:25 10111101:24 10111110:25 10111111:24
+  11000000:41 11000001:41 11000010:41 11000011:41 11000100:40 11000101:40 11000110:40 11000111:40
+  11001000:41 11001001:41 11001010:41 11001011:41 11001100:40 11001101:40 11001110:40 11001111:40
+  11010000:31 11010001:31 11010010:31 11010011:31 11010100:29 11010101:29 11010110:29 11010111:29
+  11011000:30 11011001:30 11011010:30 11011011:30 11011100:28 11011101:28 11011110:28 11011111:28
+  11100000:19 11100001:19 11100010:17 11100011:17 11100100:18 11100101:18 11100110:16 11100111:16
+  11101000:19 11101001:19 11101010:17 11101011:17 11101100:18 11101101:18 11101110:16 11101111:16
+  11110000:15 11110001:7 11110010:11 11110011:3 11110100:13 11110101:5 11110110:9 11110111:1
+  11111000:14 11111001:6 11111010:10 11111011:2 11111100:12 11111101:4 11111110:8 11111111:0
+EOD
+FLOOR_SHAPE_LOOKUP = {}
+FLOOR_SHAPE_DATA.scan(/([01]{8}):(\d+)/) { |k, v| FLOOR_SHAPE_LOOKUP[k] = v.to_i }
 
-# 屋顶左上
-x = 0
-y += 32
-tilex -= 32
-tiley += 32
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+# ── 墙壁形状模型（已验证：16 种边位组合与 WALL_SHAPES 一一对应）──
+# 墙面只由上下左右 4 边是否与同种墙连接决定。每象限从墙块 2×2 tile 网格取
+# "水平边闭合→取对面列 / 垂直边闭合→取对面行"上同一象限的 16×16。
+def wall_quads(n, e, s, w)
+  pick = lambda do |h_closed, v_closed, h_side, v_side, q|
+    col = h_closed ? 1 - h_side : h_side
+    row = v_closed ? 1 - v_side : v_side
+    [col * 2 + q % 2, row * 2 + q / 2]
+  end
+  [pick.call(w == 1, n == 1, 0, 0, 0),
+   pick.call(e == 1, n == 1, 1, 0, 1),
+   pick.call(w == 1, s == 1, 0, 1, 2),
+   pick.call(e == 1, s == 1, 1, 1, 3)]
+end
 
-# 屋顶中上
-x += 32
-tilex += 16
-src_rect = Rect.new(tilex,tiley,16,32)
-newbitmap.blt(x, y, bitmap, src_rect)
-x += 16
-tilex += 16
-src_rect = Rect.new(tilex,tiley,16,32)
-newbitmap.blt(x, y, bitmap, src_rect)
+def wall_shape_index(n, e, s, w)
+  i = WALL_SHAPES.index(wall_quads(n, e, s, w))
+  i.nil? ? 0 : i
+end
 
-# 屋顶右上
-x += 16
-#~ tilex += 16
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+# ── 游戏侧 bitmask（vx_tile_data.gd）→ 编辑器 comboKey ──
+# BIT: UP=1 RIGHT=2 DOWN=4 LEFT=8 UP_RIGHT=16 DOWN_RIGHT=32 DOWN_LEFT=64 UP_LEFT=128
+NEIGHBOR_BITS = [1, 2, 4, 8, 128, 16, 32, 64]
+def neighbor_key(mask)
+  NEIGHBOR_BITS.map { |b| (mask & b) != 0 ? "1" : "0" }.join
+end
 
-# 屋顶左中
-x = 0
-y += 32
-tilex -= 32
-tiley += 16
-src_rect = Rect.new(tilex,tiley,$tile_width,16)
-newbitmap.blt(x, y, bitmap, src_rect)
-y += 16
-tiley += 16
-src_rect = Rect.new(tilex,tiley,$tile_width,16)
-newbitmap.blt(x, y, bitmap, src_rect)
+# ── 绘制辅助 ──
+def tile_blit(dst, dx, dy, src, sx, sy, w = TILE, h = TILE)
+  dst.blt(dx, dy, src, Rect.new(sx, sy, w, h))
+end
 
-# 屋顶左下
-y += 16
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+def quarter_blit(dst, dx, dy, src, sx, sy)
+  dst.blt(dx, dy, src, Rect.new(sx, sy, HALF, HALF))
+end
 
-# 屋顶中下
-x += 32
-tilex += 16
-src_rect = Rect.new(tilex,tiley,16,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
-x += 16
-tilex += 16
-src_rect = Rect.new(tilex,tiley,16,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+# 按 4 象限源表合成一个 32×32 图块（ox,oy = 形状块在源图上的左上角像素）
+def draw_shape(dst, dx, dy, src, ox, oy, quads)
+  4.times do |i|
+    hx, hy = quads[i]
+    quarter_blit(dst, dx + (i % 2) * HALF, dy + (i / 2) * HALF,
+                 src, ox + hx * HALF, oy + hy * HALF)
+  end
+end
 
+# ── 旧版布局块（y=0..288：坐标与旧脚本逐条一致，勿动）──
+def draw_legacy_block(nb, src, gx, gy)
+  t = lambda do |dx, dy, sx, sy, w = TILE, h = TILE|
+    tile_blit(nb, dx, dy, src, gx + sx, gy + sy, w, h)
+  end
+  q = lambda { |dx, dy, sx, sy| quarter_blit(nb, dx, dy, src, gx + sx, gy + sy) }
 
-# 屋顶右下
-x += 16
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
+  # 屋顶-单个 / 屋顶-四边角
+  t.call(0, 0, 0, 0)
+  t.call(32, 0, 32, 0)
 
-# 屋顶右中
-y -= 16
-src_rect = Rect.new(tilex,tiley,$tile_width,16)
-newbitmap.blt(x, y, bitmap, src_rect)
-y -= 16
-tiley -= 16
-src_rect = Rect.new(tilex,tiley,$tile_width,16)
-newbitmap.blt(x, y, bitmap, src_rect)
+  # 屋顶 3×3（四角 + 四边由相邻 tile 拼接 + 中 = 4 tile 交界）
+  t.call(0, 32, 0, 32)
+  t.call(64, 32, 32, 32)
+  t.call(32, 32, 16, 32, HALF, TILE)
+  t.call(48, 32, 32, 32, HALF, TILE)
+  t.call(32, 96, 16, 64, HALF, TILE)
+  t.call(48, 96, 32, 64, HALF, TILE)
+  t.call(0, 64, 0, 48, TILE, HALF)
+  t.call(0, 80, 0, 64, TILE, HALF)
+  t.call(64, 64, 32, 48, TILE, HALF)
+  t.call(64, 80, 32, 64, TILE, HALF)
+  t.call(0, 96, 0, 64)
+  t.call(64, 96, 32, 64)
+  t.call(32, 64, 16, 48)
 
-# 屋顶中
-tilex -= 16
-x -= 32
-p "屋顶中",tilex,tiley
-src_rect = Rect.new(tilex,tiley,$tile_width,$tile_height)
-newbitmap.blt(x, y, bitmap, src_rect)
-
-# ============================================================
-# 边角 16 种变体 — 4×4 网格
-# 每个角可独立显示/隐藏 roofline，共 2^4 = 16 种组合
-# 列编码 TL/TR，行编码 BL/BR：
-#         col0(无顶角) col1(TL)  col2(TR)  col3(TL+TR)
-# row0(无底角):  NONE      TL        TR        TL+TR
-# row1(BL):      BL        TL+BL     TR+BL     TL+TR+BL
-# row2(BR):      BR        TL+BR     TR+BR     TL+TR+BR
-# row3(BL+BR):   BL+BR     TL+BL+BR  TR+BL+BR  ALL4
-# ============================================================
-
-base_src_x = 64 * $tile_w_index + 16   # 墙壁基底 x
-base_src_y = 160 * $tile_h_index + 48  # 墙壁基底 y
-corner_x = 64 * $tile_w_index + 32     # 屋顶四边角 tile 的 x（取四角碎片）
-corner_y = 160 * $tile_h_index         # 屋顶四边角 tile 的 y
-
-grid_x = 32 * 3   # = 96
-grid_y = 32        # = 32
-
-4.times do |col|
-  4.times do |row|
-    has_tl = (col & 1) != 0
-    has_tr = (col & 2) != 0
-    has_bl = (row & 1) != 0
-    has_br = (row & 2) != 0
-
-    x = grid_x + col * 32
-    y = grid_y + row * 32
-
-    # 1. 画基底（无 roofline 的墙壁）
-    src_rect = Rect.new(base_src_x, base_src_y, 32, 32)
-    newbitmap.blt(x, y, bitmap, src_rect)
-
-    # 2. 叠加激活的角碎片（16×16）
-    if has_tl
-      src_rect = Rect.new(corner_x, corner_y, 16, 16)
-      newbitmap.blt(x, y, bitmap, src_rect)
+  # 外角 16 变体（列编码 TL/TR，行编码 BL/BR）：无 roofline 基底 + 四边角 16×16 碎片
+  4.times do |col|
+    4.times do |row|
+      px = 96 + col * TILE
+      py = 32 + row * TILE
+      t.call(px, py, 16, 48)
+      t.call(px, py, 32, 0, HALF, HALF)            if (col & 1) != 0
+      t.call(px + 16, py, 48, 0, HALF, HALF)       if (col & 2) != 0
+      t.call(px, py + 16, 32, 16, HALF, HALF)      if (row & 1) != 0
+      t.call(px + 16, py + 16, 48, 16, HALF, HALF) if (row & 2) != 0
     end
-    if has_tr
-      src_rect = Rect.new(corner_x + 16, corner_y, 16, 16)
-      newbitmap.blt(x + 16, y, bitmap, src_rect)
-    end
-    if has_bl
-      src_rect = Rect.new(corner_x, corner_y + 16, 16, 16)
-      newbitmap.blt(x, y + 16, bitmap, src_rect)
-    end
-    if has_br
-      src_rect = Rect.new(corner_x + 16, corner_y + 16, 16, 16)
-      newbitmap.blt(x + 16, y + 16, bitmap, src_rect)
+  end
+
+  # 墙壁 3×3（源行 3-4 纯墙壁 tile 拼接）
+  t.call(0, 128, 0, 96)
+  t.call(64, 128, 32, 96)
+  t.call(32, 128, 16, 96, HALF, TILE)
+  t.call(48, 128, 32, 96, HALF, TILE)
+  t.call(32, 192, 16, 128, HALF, TILE)
+  t.call(48, 192, 32, 128, HALF, TILE)
+  t.call(0, 160, 0, 112, TILE, HALF)
+  t.call(0, 176, 0, 128, TILE, HALF)
+  t.call(64, 160, 32, 112, TILE, HALF)
+  t.call(64, 176, 32, 128, TILE, HALF)
+  t.call(0, 192, 0, 128)
+  t.call(64, 192, 32, 128)
+  t.call(32, 160, 16, 112)
+
+  # 内角 4（凹角：两个 roof 象限 + 屋顶内墙面；内墙面 = 屋顶TL 右下 16×16 = (16,48)）
+  ic = [
+    [16, 0, 32, 32], [0, 16, 0, 64],  [16, 16, 16, 48], [0, 0, 16, 48],
+    [0, 0, 16, 32],  [16, 16, 32, 80], [0, 16, 16, 48], [16, 0, 16, 48],
+    [0, 0, 0, 48],   [16, 16, 48, 64], [16, 0, 16, 48], [0, 16, 16, 48],
+    [16, 0, 48, 48], [0, 16, 16, 80], [0, 0, 16, 48],  [16, 16, 16, 48],
+  ]
+  ic.each_with_index do |(qx, qy, sx, sy), i|
+    q.call((i / 4) * TILE + qx, 224 + qy, sx, sy)
+  end
+
+  # 平行边 2（屋顶-单 底图 + 内墙面覆盖）
+  t.call(96, 256, 0, 0)
+  t.call(128, 256, 0, 0)
+  [[96, 256], [96, 272], [112, 256], [112, 272]].each { |dx, dy| q.call(dx, dy, 16, 48) }
+  [[128, 256], [144, 256], [128, 272], [144, 272]].each { |dx, dy| q.call(dx, dy, 16, 48) }
+
+  # T 形 4（四边角 底图 + 内墙面覆盖缺失边）：缺顶 / 缺底 / 缺左 / 缺右
+  4.times do |k|
+    dx = 160 + k * TILE
+    t.call(dx, 256, 32, 0)
+    case k
+    when 0 then q.call(dx, 256, 16, 48);      q.call(dx + 16, 256, 16, 48)
+    when 1 then q.call(dx, 272, 16, 48);      q.call(dx + 16, 272, 16, 48)
+    when 2 then q.call(dx, 256, 16, 48);      q.call(dx, 272, 16, 48)
+    when 3 then q.call(dx + 16, 256, 16, 48); q.call(dx + 16, 272, 16, 48)
     end
   end
 end
 
-# ============================================================
-# 墙壁 3×3 网格（纯墙壁，无 roofline）— 源行3-4
-# 合成"中上/左中/中/右中/中下"，与屋顶 3×3 结构一致
-# ============================================================
-wx = 64 * $tile_w_index   # 320
-wy = 160 * $tile_h_index  # 160
-wally = 32 * 4  # = 128
-
-# 墙壁TL
-src_rect = Rect.new(wx, wy + 96, 32, 32)
-newbitmap.blt(0, wally, bitmap, src_rect)
-
-# 墙壁中上: 右半 墙壁TL + 左半 墙壁TR
-src_rect = Rect.new(wx + 16, wy + 96, 16, 32)
-newbitmap.blt(32, wally, bitmap, src_rect)
-src_rect = Rect.new(wx + 32, wy + 96, 16, 32)
-newbitmap.blt(48, wally, bitmap, src_rect)
-
-# 墙壁TR
-src_rect = Rect.new(wx + 32, wy + 96, 32, 32)
-newbitmap.blt(64, wally, bitmap, src_rect)
-
-# 墙壁左中: 下半 墙壁TL + 上半 墙壁BL
-wally += 32
-src_rect = Rect.new(wx, wy + 112, 32, 16)
-newbitmap.blt(0, wally, bitmap, src_rect)
-src_rect = Rect.new(wx, wy + 128, 32, 16)
-newbitmap.blt(0, wally + 16, bitmap, src_rect)
-
-# 墙壁中: 四个墙壁的交界 32×32
-src_rect = Rect.new(wx + 16, wy + 112, 32, 32)
-newbitmap.blt(32, wally, bitmap, src_rect)
-
-# 墙壁右中: 下半 墙壁TR + 上半 墙壁BR
-src_rect = Rect.new(wx + 32, wy + 112, 32, 16)
-newbitmap.blt(64, wally, bitmap, src_rect)
-src_rect = Rect.new(wx + 32, wy + 128, 32, 16)
-newbitmap.blt(64, wally + 16, bitmap, src_rect)
-
-# 墙壁BL
-wally += 32
-src_rect = Rect.new(wx, wy + 128, 32, 32)
-newbitmap.blt(0, wally, bitmap, src_rect)
-
-# 墙壁中下: 右半 墙壁BL + 左半 墙壁BR
-src_rect = Rect.new(wx + 16, wy + 128, 16, 32)
-newbitmap.blt(32, wally, bitmap, src_rect)
-src_rect = Rect.new(wx + 32, wy + 128, 16, 32)
-newbitmap.blt(48, wally, bitmap, src_rect)
-
-# 墙壁BR
-src_rect = Rect.new(wx + 32, wy + 128, 32, 32)
-newbitmap.blt(64, wally, bitmap, src_rect)
-
-# ============================================================
-# 内角 4 种（凹角 — wall wraps around empty quadrant）
-# 每个内角 = 两个 roof 象限(带 roofline 的内壁) + 两个墙象限
-# 内角 TL: empty=TL, wall=TR+BL+BR
-#    TR(16,0): 从 屋顶TR 取 top-left 16×16 → roofline 朝上
-#    BL(0,16): 从 屋顶BL 取 top-left 16×16 → roofline 朝左
-#    BR(16,16): 纯墙壁
-#    TL(0,0): 纯墙壁（外侧）
-# ============================================================
-
-# 屋顶 tile 内部墙面（无 roofline 可见），取 屋顶TL 右下 16×16
-rw_x = wx + 16   # 336
-rw_y = wy + 48   # 208
-
-ic_x = 0
-ic_y = 32 * 7  # = 224 (墙壁 3×3 占 y=128..224)
-
-# --- 内角 TL (empty=TL) ---
-# TR 象限: 屋顶TR(352,192) top-left 16×16 (roofline 朝上)
-src_rect = Rect.new(wx + 32, wy + 32, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y, bitmap, src_rect)
-# BL 象限: 屋顶BL(320,224) top-left 16×16 (roofline 朝左)
-src_rect = Rect.new(wx, wy + 64, 16, 16)
-newbitmap.blt(ic_x, ic_y + 16, bitmap, src_rect)
-# BR+TL 象限: 屋顶内墙面 (纯墙，无 roofline)
-src_rect = Rect.new(rw_x, rw_y, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y + 16, bitmap, src_rect)
-newbitmap.blt(ic_x, ic_y, bitmap, src_rect)
-
-# --- 内角 TR (empty=TR) ---
-ic_x += 32
-# TL 象限: 屋顶TL(320,192) top-right 16×16 (roofline 朝上+左)
-src_rect = Rect.new(wx + 16, wy + 32, 16, 16)
-newbitmap.blt(ic_x, ic_y, bitmap, src_rect)
-# BR 象限: 屋顶BR(352,224) bottom-left 16×16 (roofline 朝右+下)
-src_rect = Rect.new(wx + 32, wy + 80, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y + 16, bitmap, src_rect)
-# BL+TR 象限: 屋顶内墙面
-src_rect = Rect.new(rw_x, rw_y, 16, 16)
-newbitmap.blt(ic_x, ic_y + 16, bitmap, src_rect)
-newbitmap.blt(ic_x + 16, ic_y, bitmap, src_rect)
-
-# --- 内角 BL (empty=BL) ---
-ic_x += 32
-# TL 象限: 屋顶TL(320,192) bottom-left 16×16 (roofline 朝上+左)
-src_rect = Rect.new(wx, wy + 48, 16, 16)
-newbitmap.blt(ic_x, ic_y, bitmap, src_rect)
-# BR 象限: 屋顶BR(352,224) top-right 16×16 (roofline 朝右+下)
-src_rect = Rect.new(wx + 48, wy + 64, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y + 16, bitmap, src_rect)
-# TR+BL 象限: 屋顶内墙面
-src_rect = Rect.new(rw_x, rw_y, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y, bitmap, src_rect)
-newbitmap.blt(ic_x, ic_y + 16, bitmap, src_rect)
-
-# --- 内角 BR (empty=BR) ---
-ic_x += 32
-# TR 象限: 屋顶TR(352,192) bottom-right 16×16 (roofline 朝上+右)
-src_rect = Rect.new(wx + 48, wy + 48, 16, 16)
-newbitmap.blt(ic_x + 16, ic_y, bitmap, src_rect)
-# BL 象限: 屋顶BL(320,224) bottom-right 16×16 (roofline 朝左+下)
-src_rect = Rect.new(wx + 16, wy + 80, 16, 16)
-newbitmap.blt(ic_x, ic_y + 16, bitmap, src_rect)
-# TL+BR 象限: 屋顶内墙面
-src_rect = Rect.new(rw_x, rw_y, 16, 16)
-newbitmap.blt(ic_x, ic_y, bitmap, src_rect)
-newbitmap.blt(ic_x + 16, ic_y + 16, bitmap, src_rect)
-
-# ============================================================
-# 屋顶边缘变体（全部用屋顶 tile 合成）
-# ============================================================
-
-# 辅助: 用 16×16 屋顶内墙面填充 32×16 横条
-def fill_wall_h(newbitmap, bitmap, rw_x, rw_y, dst_x, dst_y)
-  src_rect = Rect.new(rw_x, rw_y, 16, 16)
-  newbitmap.blt(dst_x, dst_y, bitmap, src_rect)
-  newbitmap.blt(dst_x + 16, dst_y, bitmap, src_rect)
+# ── 转换一组 → 512×480 输出块 ──
+def convert_group(src, g_index)
+  gx = (g_index % GROUP_COLS) * 64
+  gy = (g_index / GROUP_COLS) * 160
+  nb = Bitmap.new(BLOCK_W, BLOCK_H)
+  draw_legacy_block(nb, src, gx, gy)
+  # 新增：完整屋顶形状 0-47（8 列 × 6 行；shape s → 格 (s%8, 9+s/8)）
+  ROOF_SHAPES.each_with_index do |quads, s|
+    draw_shape(nb, (s % 8) * TILE, SHAPE_ROW_Y + (s / 8) * TILE, src, gx, gy, quads)
+  end
+  # 新增：完整墙壁形状 0-15（8 列 × 2 行；shape s → 格 (8+s%8, 9+s/8)）
+  WALL_SHAPES.each_with_index do |quads, s|
+    draw_shape(nb, 256 + (s % 8) * TILE, SHAPE_ROW_Y + (s / 8) * TILE,
+               src, gx, gy + ROOF_BLOCK_H, quads)
+  end
+  nb
 end
 
-# 辅助: 用 16×16 屋顶内墙面填充 16×32 竖条
-def fill_wall_v(newbitmap, bitmap, rw_x, rw_y, dst_x, dst_y)
-  src_rect = Rect.new(rw_x, rw_y, 16, 16)
-  newbitmap.blt(dst_x, dst_y, bitmap, src_rect)
-  newbitmap.blt(dst_x, dst_y + 16, bitmap, src_rect)
+# 输出文件名：组 NN → $out_prefix_gNN.png（绝不写 $out_prefix.png，不覆盖旧产物）
+def output_name(g)
+  format("%s_g%02d.png", $out_prefix, g)
 end
 
-# --- 平行边 (2 边相对) ---
-ev_x = 32 * 3   # = 96
-ev_y = 32 * 8   # = 256
-
-# 仅顶+底 (水平带): 屋顶-单 底图 + 左右贴屋顶内墙面
-src_rect = Rect.new(wx, wy, 32, 32)  # 屋顶-单
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_v(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y)
-fill_wall_v(newbitmap, bitmap, rw_x, rw_y, ev_x + 16, ev_y)
-
-# 仅左+右 (垂直带)
-ev_x += 32
-src_rect = Rect.new(wx, wy, 32, 32)
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_h(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y)
-fill_wall_h(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y + 16)
-
-# --- T 形 (3 边有 roofline，缺一边) ---
-ev_x = 32 * 5   # = 160
-ev_y = 32 * 8   # = 256
-
-# 屋顶-四边角 的坐标
-roof_all_x = wx + 32  # 352
-roof_all_y = wy        # 160
-
-# 缺顶 (底+左+右): 四边角底 + 顶部贴屋顶内墙面
-src_rect = Rect.new(roof_all_x, roof_all_y, 32, 32)
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_h(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y)
-
-# 缺底 (顶+左+右)
-ev_x += 32
-src_rect = Rect.new(roof_all_x, roof_all_y, 32, 32)
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_h(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y + 16)
-
-# 缺左 (顶+右+底)
-ev_x += 32
-src_rect = Rect.new(roof_all_x, roof_all_y, 32, 32)
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_v(newbitmap, bitmap, rw_x, rw_y, ev_x, ev_y)
-
-# 缺右 (顶+左+底)
-ev_x += 32
-src_rect = Rect.new(roof_all_x, roof_all_y, 32, 32)
-newbitmap.blt(ev_x, ev_y, bitmap, src_rect)
-fill_wall_v(newbitmap, bitmap, rw_x, rw_y, ev_x + 16, ev_y)
-
-# 将newbitmap保存为png。
-surface = newbitmap.create_surface
-if surface
-  surface.save_png("A4-new.png")
+def save_png(bmp, filename)
+  surface = bmp.create_surface
+  surface.save_png(filename) if surface
 end
 
+# ── bitmask → 形状 → 格坐标 速查表（供 Godot Terrain 配置）──
+def neighbor_symbols(mask)
+  syms = ["↑", "→", "↓", "←", "↗", "↘", "↙", "↖"]
+  bits = [1, 2, 4, 8, 16, 32, 64, 128]
+  s = ""
+  bits.each_with_index { |b, i| s += syms[i] if (mask & b) != 0 }
+  s
+end
+
+def write_lookup_file
+  lines = []
+  lines.push("A4-new 形状速查表（由 A4转换器.rb 自动生成）")
+  lines.push("")
+  lines.push("单组输出块（512×480）局部布局（各组文件相同，组 NN 的源图原点：")
+  lines.push("  gx=(NN%8)*64, gy=(NN/8)*160）：")
+  lines.push("  (0,0)屋顶-单个    (32,0)屋顶-四边角")
+  lines.push("  (0,32)-(96,96)    屋顶 3×3")
+  lines.push("  (96,32)-(224,160) 外角 16 变体")
+  lines.push("  (0,128)-(96,192)  墙壁 3×3")
+  lines.push("  (0,224)-(128,256) 内角 4")
+  lines.push("  (96,256)-(288,288) 平行边 2 / T 形 4（旧版，屋顶线缺失，建议改用形状行）")
+  lines.push("  (0,288)-(256,480) 屋顶形状 0-47：shape s → 格 (s%8, 9+s/8)")
+  lines.push("  (256,288)-(512,352) 墙壁形状 0-15：shape s → 格 (8+s%8, 9+s/8)")
+  lines.push("")
+  lines.push("bitmask 位：↑=1 →=2 ↓=4 ←=8 ↗=16 ↘=32 ↙=64 ↖=128（与 vx_tile_data.gd 一致）")
+  lines.push("")
+  lines.push("■ 屋顶形状（bitmask → 形状 → 组内格坐标；上表面 = has_above 为假时使用）")
+  256.times do |mask|
+    s = FLOOR_SHAPE_LOOKUP[neighbor_key(mask)]
+    s = 0 if s.nil?
+    lines.push(format("mask %3d (0x%02X) 邻居 %-4s → 屋顶形状 %2d → 格(%d,%d)",
+                      mask, mask, neighbor_symbols(mask), s, s % 8, 9 + s / 8))
+  end
+  lines.push("")
+  lines.push("■ 墙壁形状（只取决于上下左右 4 边；侧面 = has_above 为真时使用）")
+  16.times do |i|
+    n = i & 1
+    e = (i >> 1) & 1
+    so = (i >> 2) & 1
+    w = (i >> 3) & 1
+    si = wall_shape_index(n, e, so, w)
+    lines.push(format("边位 n%d e%d s%d w%d → 墙壁形状 %2d → 格(%d,%d)",
+                      n, e, so, w, si, 8 + si % 8, 9 + si / 8))
+  end
+  # 二进制模式直接写出 UTF-8 字节：绕开引擎缺失的编码转换器
+  # （URGE/CRuby3 下 File.open("w:UTF-8") + 文本写会报
+  #   Encoding::ConverterNotFoundError: US-ASCII to UTF-8 with crlf_newline）
+  data = lines.join("\r\n").force_encoding("ASCII-8BIT")
+  File.open("#{$out_prefix}_形状速查表.txt", "wb") do |f|
+    f.write(data)
+  end
+end
+
+# ════════════════════════════ 主流程 ════════════════════════════
+
+sprite = Sprite.new
+sprite.bitmap = Bitmap.new(544, 128)
+sprite.bitmap.draw_text(sprite.bitmap.rect, "正在转换 A4 图块…", 1)
+sprite.y = Graphics.height / 2 - 64
+Graphics.update
+
+src = Cache.tileset("TileA4-Tw.png")
+
+groups = []
+if $convert_all
+  (GROUP_COLS * GROUP_ROWS).times { |i| groups.push(i) }
+else
+  groups.push($tile_h_index * GROUP_COLS + $tile_w_index)
+end
+
+groups.each do |g|
+  nb = convert_group(src, g)
+  save_png(nb, output_name(g))
+  nb.dispose
+  Graphics.update
+end
+
+write_lookup_file if $write_lookup
+
+# 预览配置组的转换结果，按 C 退出
+preview = convert_group(src, $tile_h_index * GROUP_COLS + $tile_w_index)
 loop do
-  sprite.bitmap = newbitmap
+  sprite.bitmap = preview
   Graphics.update
   break if Input.press?(:C)
 end
-exit

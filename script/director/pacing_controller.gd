@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Node，子模块）
+## 联机：仅单机/Host
+## 职责：把紧张度翻译为 build/peak/cooldown 三阶段循环，并广播 phase_changed 供生成器使用。
+## 依赖：被 Director 调用，广播给 SpawnManager
+
 ## 将紧张度转换为 BUILDUP/PEAK/RELAX 等节奏阶段，供 Director 决定是否触发事件。
 ## 节奏控制器 — 管理 Build-up → Peak → Cooldown 三阶段循环
 ##

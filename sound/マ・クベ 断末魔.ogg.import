@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://ddjtt8v8an1fs"
+path="res://.godot/imported/マ・クベ 断末魔.ogg-2416f3ae142a60f4c4bd5127b4beab63.oggvorbisstr"
+
+[deps]
+
+source_file="res://sound/マ・クベ 断末魔.ogg"
+dest_files=["res://.godot/imported/マ・クベ 断末魔.ogg-2416f3ae142a60f4c4bd5127b4beab63.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

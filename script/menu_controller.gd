@@ -1,38 +1,73 @@
 extends CanvasLayer
-## 主菜单控制器 — 简化版（仅存档/退出）
-##
-## 操作：
-##   菜单键 → 开关菜单
-##   上/下   → 移动光标
-##   确定键  → 确认
-##   取消键  → 关闭菜单
 
-const CURSOR_SYMBOL: String = "▶"
+## ── 架构定位 ──
+## 系统：主菜单 ｜ 层：表现（CanvasLayer）
+## 联机：联机时屏蔽武器操作
+## 职责：主菜单：继续游戏/设置/退出面板；打开菜单期间屏蔽玩家武器输入。
+## 依赖：Global 音量与 UI 音效接口、Player.player_in_weapon_state
+##
+## 2026-09-15 与标题/选择战役界面同步：
+##   ① 窗口换装 RM 皮肤（WindowBg 渐变底图 + WindowFrame 九宫格包边，同款素材）；
+##   ② 文字统一 GradientLabel（fusion 像素字体 24px）；
+##   ③ 光标换 2 帧九宫格选择框（呼吸闪烁，同标题画面）；
+##   ④ 进设置子页窗口放大并居中、退出还原（同标题画面行为）；
+##   ⑤ 接入全局 UI 窗口音效（光标/确定/取消，可被本界面导出覆盖）。
+
 const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "退出游戏"]
-const MENU_ITEMS_NO_SAVE: Array[String] = ["继续游戏", "设置", "退出游戏"]
+const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "返回"]
+
+## 设置子页窗口尺寸（进设置放大居中、退出还原；同标题画面 SETTINGS_WINDOW_SIZE 思路）
+const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(480, 280)
+## 音量条几何（GradientLabel 24px 下「  音乐音量」宽约 120px）
+const BAR_X: float = 190.0
+const BAR_W: float = 160.0
+const BAR_H: float = 16.0
 
 @export_group("主菜单布局")
-@export var menu_cursor_x: float = 24.0
-@export var menu_item_start_y: float = 38.0
-@export var menu_item_height: float = 24.0
-@export var menu_panel_size: Vector2 = Vector2(260, 160)
-@export var menu_panel_pos: Vector2 = Vector2(510, 400)
+@export var menu_panel_size: Vector2 = Vector2(280, 200)
+@export var menu_panel_pos: Vector2 = Vector2(500, 400)
+
+@export_group("菜单项布局")
+@export var menu_item_start_y: float = 56.0
+@export var menu_item_height: float = 24.0   ## 文字行高（GradientLabel 24px）
+@export var menu_item_step: float = 36.0     ## 行距
+@export var settings_item_start_y: float = 20.0
+
+@export_group("资源路径")
+@export var font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+@export var color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
+@export var window_bg_path: String = "res://art/System/Window background color.png"
+@export var window_frame_path: String = "res://art/System/Window frame.png"
+@export var cursor_frame_path: String = "res://art/System/Frames for command cursor 2 types (each 32 x 32).png"
+@export var frame_blink_interval: float = 0.3  ## 选择框闪烁间隔（秒）
+
+@export_group("界面音效")
+## 留空 = 用 Global 的 ui_*_sfx_path（全局窗口音效参数）
+@export_file("*.wav", "*.ogg", "*.mp3") var sfx_cursor_path: String = ""
+@export_file("*.wav", "*.ogg", "*.mp3") var sfx_confirm_path: String = ""
+@export_file("*.wav", "*.ogg", "*.mp3") var sfx_cancel_path: String = ""
 
 var _menu_open: bool = false
 var _cursor_idx: int = 0
 
 var _menu_panel: Panel = null
-var _cursor_label: Label = null
-var _item_labels: Array[Label] = []
+var _window_bg: TextureRect = null
+var _window_frame: NinePatchRect = null
+var _title_label: GradientLabel = null
+var _separator: ColorRect = null
+var _item_labels: Array[GradientLabel] = []
+var _cursor_frame: NinePatchRect = null
+var _cursor_atlas: Array[AtlasTexture] = []
+var _cursor_frame_idx: int = 0
+var _blink_timer: float = 0.0
 
 ## 设置面板状态
 var _in_settings: bool = false
 var _settings_cursor_idx: int = 0
-var _settings_labels: Array[Label] = []
-var _settings_value_labels: Array[Label] = []
+var _settings_labels: Array[GradientLabel] = []
+var _settings_value_labels: Array = []
 var _settings_bar_bg: Array[ColorRect] = []
 var _settings_bar_fill: Array[ColorRect] = []
-const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "返回"]
 
 
 func _ready() -> void:
@@ -47,6 +82,7 @@ func _input(event: InputEvent) -> void:
 		if event.is_action_pressed("菜单键"):
 			# 联机角色举枪时 X 仍是菜单键；依据真实武器模式拦截，不能只看单机状态机标志。
 			if not _is_player_in_weapon_state():
+				Global.play_ui_sfx("cursor", sfx_cursor_path)
 				_open_menu()
 			get_viewport().set_input_as_handled()
 		return
@@ -57,11 +93,13 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_pressed("菜单键") or event.is_action_pressed("取消键"):
+		Global.play_ui_sfx("cancel", sfx_cancel_path)
 		_close_menu()
 		get_viewport().set_input_as_handled()
 		return
 
 	if event.is_action_pressed("确定键"):
+		Global.play_ui_sfx("confirm", sfx_confirm_path)
 		_menu_confirm()
 		get_viewport().set_input_as_handled()
 		return
@@ -69,12 +107,26 @@ func _input(event: InputEvent) -> void:
 	var item_count: int = _get_menu_item_count()
 	if event.is_action_pressed("上"):
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
+		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("下"):
 		_cursor_idx = (_cursor_idx + 1) % item_count
+		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
+
+
+func _process(delta: float) -> void:
+	# 选择框 2 帧呼吸闪烁（process_mode=ALWAYS，暂停中也闪，同标题画面）
+	if _cursor_atlas.is_empty() or not _cursor_frame:
+		return
+	_blink_timer += delta
+	if _blink_timer < frame_blink_interval:
+		return
+	_blink_timer = 0.0
+	_cursor_frame_idx = 1 - _cursor_frame_idx
+	_cursor_frame.texture = _cursor_atlas[_cursor_frame_idx]
 
 
 func _open_menu() -> void:
@@ -95,34 +147,93 @@ func _close_menu() -> void:
 	print("[菜单] 关闭")
 
 
+# ═══════════════════════════════════════
+# 界面构建
+# ═══════════════════════════════════════
+
 func _create_menu() -> void:
-	_menu_panel = _make_panel("MenuPanel", menu_panel_size, menu_panel_pos)
+	## Panel 仅作容器（自身透明），视觉全部由 RM 底图/九宫格框承担——
+	## 与标题/选择战役同款窗口皮肤（2026-09-15 同步）
+	_menu_panel = Panel.new()
+	_menu_panel.name = "MenuPanel"
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	_menu_panel.add_theme_stylebox_override("panel", style)
+	_menu_panel.size = menu_panel_size
+	_menu_panel.position = menu_panel_pos
+	_menu_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_menu_panel)
 
-	var title: Label = _make_label("主菜单", Vector2(60, 8), 16, Color.WHITE)
-	title.name = "MenuTitle"
-	_menu_panel.add_child(title)
+	_window_bg = TextureRect.new()
+	_window_bg.name = "WindowBg"
+	_window_bg.texture = load(window_bg_path) as Texture2D
+	_window_bg.size = menu_panel_size
+	_window_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu_panel.add_child(_window_bg)
 
-	var vbox: VBoxContainer = VBoxContainer.new()
-	vbox.name = "MenuItems"
-	vbox.position = Vector2(40, menu_item_start_y)
-	vbox.add_theme_constant_override("separation", 6)
-	_menu_panel.add_child(vbox)
+	_window_frame = NinePatchRect.new()
+	_window_frame.name = "WindowFrame"
+	_window_frame.texture = load(window_frame_path) as Texture2D
+	_window_frame.patch_margin_left = 20
+	_window_frame.patch_margin_top = 20
+	_window_frame.patch_margin_right = 20
+	_window_frame.patch_margin_bottom = 20
+	_window_frame.size = menu_panel_size
+	_window_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu_panel.add_child(_window_frame)
 
+	# 光标选择框：2 帧九宫格（与标题画面同款素材）。
+	## 必须在菜单项/设置文字之前创建——Godot 后 add_child 的画在上面，
+	## 光标最后创建会把当前行的文字整个盖住（2026-09-15 用户截图复现）。
+	var src: Texture2D = load(cursor_frame_path) as Texture2D
+	if src:
+		for i: int in range(2):
+			var at := AtlasTexture.new()
+			at.atlas = src
+			at.region = Rect2(i * 64, 0, 64, 64)
+			at.filter_clip = true
+			_cursor_atlas.append(at)
+	_cursor_frame = NinePatchRect.new()
+	_cursor_frame.name = "CursorFrame"
+	_cursor_frame.patch_margin_left = 16
+	_cursor_frame.patch_margin_top = 16
+	_cursor_frame.patch_margin_right = 16
+	_cursor_frame.patch_margin_bottom = 16
+	_cursor_frame.size = Vector2(menu_panel_size.x - 24.0, menu_item_step)
+	_cursor_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu_panel.add_child(_cursor_frame)
+	if not _cursor_atlas.is_empty():
+		_cursor_frame.texture = _cursor_atlas[0]
+
+	# 标题 + 分隔线（GradientLabel 统一像素字体）
+	_title_label = _make_gl("主菜单", Vector2(24, 12), 24)
+	_menu_panel.add_child(_title_label)
+	_separator = ColorRect.new()
+	_separator.color = Color(0.5, 0.5, 0.7, 0.5)
+	_separator.size = Vector2(menu_panel_size.x - 32, 1)
+	_separator.position = Vector2(16, 46)
+	_separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu_panel.add_child(_separator)
+
+	# 菜单项
 	for i: int in MENU_ITEMS.size():
-		var lbl: Label = Label.new()
-		lbl.text = "  %s" % MENU_ITEMS[i]
-		lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
-		lbl.add_theme_font_size_override("font_size", 16)
-		vbox.add_child(lbl)
-		_item_labels.append(lbl)
+		var gl := _make_gl("  %s" % MENU_ITEMS[i], Vector2(12, menu_item_start_y + i * menu_item_step), 24)
+		_menu_panel.add_child(gl)
+		_item_labels.append(gl)
+	_refresh_cursor()
 
-	_cursor_label = Label.new()
-	_cursor_label.text = CURSOR_SYMBOL
-	_cursor_label.position = Vector2(menu_cursor_x, menu_item_start_y)
-	_cursor_label.add_theme_color_override("font_color", Color.YELLOW)
-	_cursor_label.add_theme_font_size_override("font_size", 15)
-	_menu_panel.add_child(_cursor_label)
+
+## 统一 GradientLabel 构造（fusion 字体 + 色表固定色 + 阴影，同各选择界面观感）
+func _make_gl(label_text: String, pos: Vector2, font_size: int) -> GradientLabel:
+	var gl := GradientLabel.new()
+	gl.text = label_text
+	gl.position = pos
+	gl.text_font_size = font_size
+	gl.color_index = 1
+	gl.shadow = true
+	gl.font_path_override = font_path
+	gl.color_sheet_path_override = color_sheet_path
+	return gl
 
 
 func _get_menu_item_count() -> int:
@@ -130,12 +241,16 @@ func _get_menu_item_count() -> int:
 
 
 func _refresh_cursor() -> void:
-	_cursor_label.position = Vector2(menu_cursor_x, menu_item_start_y + _cursor_idx * menu_item_height)
+	if not _cursor_frame:
+		return
+	_cursor_frame.position = Vector2(
+		12.0,
+		menu_item_start_y + _cursor_idx * menu_item_step + (menu_item_height - _cursor_frame.size.y) * 0.5
+	)
 
 
 func _menu_confirm() -> void:
-	var items: Array[String] = MENU_ITEMS
-	var selected: String = items[_cursor_idx]
+	var selected: String = MENU_ITEMS[_cursor_idx]
 
 	match selected:
 		"继续游戏":
@@ -151,18 +266,30 @@ func _menu_confirm() -> void:
 # 设置面板
 # ═══════════════════════════════════════
 
+## 运行时改窗口尺寸（设置页放大 / 退出还原）：窗口、RM 底图、九宫格框同步并居中
+## （同标题画面 _apply_window_size 行为，2026-09-15 用户要求设置页窗口也要有变化）
+func _apply_window_size(s: Vector2) -> void:
+	_menu_panel.size = s
+	_menu_panel.position = Vector2((1280.0 - s.x) * 0.5, (960.0 - s.y) * 0.5)
+	if _window_bg:
+		_window_bg.size = s
+	if _window_frame:
+		_window_frame.size = s
+	if _cursor_frame:
+		_cursor_frame.size.x = s.x - 24.0
+
+
 func _enter_settings() -> void:
 	_in_settings = true
 	_settings_cursor_idx = 0
-	# 隐藏主菜单项
+	_apply_window_size(SETTINGS_WINDOW_SIZE)
+	# 隐藏主菜单项与标题
 	for lbl in _item_labels:
 		lbl.hide()
-	if _cursor_label:
-		_cursor_label.hide()
-	# 查找并隐藏标题
-	var title: Node = _menu_panel.get_node_or_null("MenuTitle")
-	if title and title is Label:
-		title.hide()
+	if _title_label:
+		_title_label.hide()
+	if _separator:
+		_separator.hide()
 	_build_settings_items()
 	_refresh_settings_cursor()
 
@@ -170,65 +297,59 @@ func _enter_settings() -> void:
 func _exit_settings() -> void:
 	_in_settings = false
 	_clear_settings_ui()
-	# 恢复主菜单项
+	_apply_window_size(menu_panel_size)
+	# 恢复主菜单项与标题
 	for lbl in _item_labels:
 		lbl.show()
-	if _cursor_label:
-		_cursor_label.show()
-	var title: Node = _menu_panel.get_node_or_null("MenuTitle")
-	if title and title is Label:
-		title.show()
+	if _title_label:
+		_title_label.show()
+	if _separator:
+		_separator.show()
 	_refresh_cursor()
 
 
 func _build_settings_items() -> void:
-	var panel_w: float = menu_panel_size.x
-	var row_step: float = menu_item_height + 6.0
-	var start_y: float = 12.0
-	var label_x: float = 16.0
-	var bar_x: float = 90.0
-	var bar_w: float = 100.0
-	var bar_h: float = 12.0
-
 	for i: int in range(SETTINGS_ITEMS.size()):
-		var pos_y: float = start_y + i * row_step
+		var pos_y: float = settings_item_start_y + i * menu_item_step
 		var text: String = SETTINGS_ITEMS[i]
 
-		var lbl: Label = _make_label("  %s" % text, Vector2(label_x, pos_y), 16, Color(0.9, 0.9, 0.9, 1))
-		_menu_panel.add_child(lbl)
-		_settings_labels.append(lbl)
+		var gl := _make_gl("  %s" % text, Vector2(12, pos_y), 24)
+		_menu_panel.add_child(gl)
+		_settings_labels.append(gl)
 
 		if i < 2:
-			# 音量条
-			var bar_y: float = pos_y + (menu_item_height - bar_h) / 2.0
+			# 音量条：背景 + 填充 + 百分比标签
+			var bar_y: float = pos_y + (menu_item_height - BAR_H) * 0.5
 
 			var bg := ColorRect.new()
 			bg.name = "VolBarBg%d" % i
 			bg.color = Color(0.15, 0.15, 0.15, 0.8)
-			bg.size = Vector2(bar_w, bar_h)
-			bg.position = Vector2(bar_x, bar_y)
+			bg.size = Vector2(BAR_W, BAR_H)
+			bg.position = Vector2(BAR_X, bar_y)
 			bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_menu_panel.add_child(bg)
 			_settings_bar_bg.append(bg)
 
 			var fill := ColorRect.new()
 			fill.name = "VolBarFill%d" % i
-			fill.color = Color(0.35, 0.35, 0.70, 0.9)
-			fill.size = Vector2(bar_w, bar_h)
-			fill.position = Vector2(bar_x, bar_y)
+			fill.color = Color(0.30, 0.30, 0.60, 0.9)
+			fill.size = Vector2(BAR_W, BAR_H)
+			fill.position = Vector2(BAR_X, bar_y)
 			fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_menu_panel.add_child(fill)
 			_settings_bar_fill.append(fill)
 
-			var pct := _make_label("", Vector2(bar_x + bar_w + 8, pos_y), 16, Color(0.7, 0.7, 1.0, 1))
+			var pct := _make_gl("", Vector2(BAR_X + BAR_W + 12, pos_y), 24)
 			_menu_panel.add_child(pct)
 			_settings_value_labels.append(pct)
 		elif i == 2:
+			# 固定朝向模式标签
 			var mode_text: String = "切换式" if Global.facing_lock_mode == 0 else "按住式"
-			var mode_lbl := _make_label(mode_text, Vector2(bar_x, pos_y), 16, Color(0.7, 0.7, 1.0, 1))
-			_menu_panel.add_child(mode_lbl)
-			_settings_value_labels.append(mode_lbl)
+			var mode_label := _make_gl(mode_text, Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(mode_label)
+			_settings_value_labels.append(mode_label)
 		else:
+			# "返回" — 无额外控件
 			_settings_value_labels.append(null)
 
 	_update_all_volume_display()
@@ -255,20 +376,24 @@ func _clear_settings_ui() -> void:
 
 func _handle_settings_input(event: InputEvent) -> void:
 	if event.is_action_pressed("取消键"):
+		Global.play_ui_sfx("cancel", sfx_cancel_path)
 		_exit_settings()
 		return
 
 	var item_count: int = SETTINGS_ITEMS.size()
 	if event.is_action_pressed("上"):
 		_settings_cursor_idx = (_settings_cursor_idx - 1 + item_count) % item_count
+		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_settings_cursor()
 		return
 	if event.is_action_pressed("下"):
 		_settings_cursor_idx = (_settings_cursor_idx + 1) % item_count
+		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_settings_cursor()
 		return
 
 	if event.is_action_pressed("确定键"):
+		Global.play_ui_sfx("confirm", sfx_confirm_path)
 		match _settings_cursor_idx:
 			2:  # 固定朝向
 				var new_mode: int = 1 if Global.facing_lock_mode == 0 else 0
@@ -298,11 +423,12 @@ func _handle_settings_input(event: InputEvent) -> void:
 
 
 func _refresh_settings_cursor() -> void:
-	if not _cursor_label:
+	if not _cursor_frame:
 		return
-	_cursor_label.show()
-	_cursor_label.position.y = 12.0 + _settings_cursor_idx * (menu_item_height + 6.0)
-	_cursor_label.position.x = 4.0
+	_cursor_frame.position = Vector2(
+		12.0,
+		settings_item_start_y + _settings_cursor_idx * menu_item_step + (menu_item_height - _cursor_frame.size.y) * 0.5
+	)
 
 
 func _update_volume_display(idx: int) -> void:
@@ -310,7 +436,7 @@ func _update_volume_display(idx: int) -> void:
 	if idx < _settings_value_labels.size() and _settings_value_labels[idx]:
 		_settings_value_labels[idx].text = "%d%%" % vol
 	if idx < _settings_bar_fill.size() and _settings_bar_fill[idx]:
-		_settings_bar_fill[idx].size.x = 100.0 * vol / 100.0
+		_settings_bar_fill[idx].size.x = BAR_W * vol / 100.0
 
 
 func _update_all_volume_display() -> void:
@@ -319,34 +445,8 @@ func _update_all_volume_display() -> void:
 
 
 # ═══════════════════════════════════════
-# UI 工具
+# 状态查询
 # ═══════════════════════════════════════
-
-func _make_panel(pname: String, psize: Vector2, ppos: Vector2) -> Panel:
-	var p: Panel = Panel.new()
-	p.name = pname
-	p.size = psize
-	p.position = ppos
-	var s: StyleBoxFlat = StyleBoxFlat.new()
-	s.bg_color = Color(0.05, 0.05, 0.12, 0.95)
-	s.border_width_left = 2
-	s.border_width_right = 2
-	s.border_width_top = 2
-	s.border_width_bottom = 2
-	s.border_color = Color(0.4, 0.4, 0.6, 0.8)
-	s.set_corner_radius_all(6)
-	p.add_theme_stylebox_override("panel", s)
-	return p
-
-
-func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> Label:
-	var lbl: Label = Label.new()
-	lbl.text = text
-	lbl.position = pos
-	lbl.add_theme_color_override("font_color", color)
-	lbl.add_theme_font_size_override("font_size", font_size)
-	return lbl
-
 
 func is_menu_open() -> bool:
 	return _menu_open

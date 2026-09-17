@@ -12,6 +12,7 @@
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="7_ushfk"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="8_emmcv"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="9_1a117"]
+[ext_resource type="Resource" path="res://object/weapon_sniper.tres" id="20_snip"]
 [ext_resource type="Texture2D" uid="uid://bn08w6gxd16qc" path="res://art/Ui/ＨＰメーターＴ.png" id="9_03brr"]
 [ext_resource type="Texture2D" uid="uid://dr8abwp68b83l" path="res://art/Ui/ＨＰバーＴ.png" id="9_oqc8j"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="10_cam"]
@@ -32,8 +33,6 @@ weapon_data = ExtResource("7_oqc8j")
 pickup_char_idx = null
 pickup_direction = null
 pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="小刀" parent="GroundLayer" unique_id=1811310426 instance=ExtResource("6_1wkr3")]
 position = Vector2(-271, -64)
@@ -41,8 +40,6 @@ weapon_data = ExtResource("6_23swb")
 pickup_char_idx = 2
 pickup_direction = 3
 pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="霰弹枪" parent="GroundLayer" unique_id=857466232 instance=ExtResource("6_1wkr3")]
 position = Vector2(-325, -123)
@@ -51,8 +48,6 @@ pickup_char_idx = null
 pickup_direction = 1
 pickup_reserve_ammo = 280
 pickup_magazine_ammo = null
-pickup_step_frames = null
-pickup_step_duration = null
 
 [node name="步枪" parent="GroundLayer" unique_id=1615159628 instance=ExtResource("6_1wkr3")]
 position = Vector2(-179, -125)
@@ -61,7 +56,6 @@ pickup_char_idx = null
 pickup_direction = 2
 pickup_magazine_ammo = null
 pickup_step_frames = Array[int]([1])
-pickup_step_duration = null
 
 [node name="冲锋枪" parent="GroundLayer" unique_id=1694232618 instance=ExtResource("6_1wkr3")]
 position = Vector2(-261, -124)
@@ -70,7 +64,16 @@ pickup_char_idx = null
 pickup_direction = 2
 pickup_magazine_ammo = null
 pickup_step_frames = Array[int]([2])
-pickup_step_duration = null
+
+[node name="狙击枪" parent="GroundLayer" unique_id=1873420917 instance=ExtResource("6_1wkr3")]
+position = Vector2(-389, -124)
+weapon_data = ExtResource("20_snip")
+pickup_char_idx = 2
+pickup_direction = 0
+pickup_reserve_ammo = 120
+pickup_magazine_ammo = null
+pickup_step_frames = Array[int]([1])
+pickup_animated = false
 
 [node name="DecorLayer" type="TileMapLayer" parent="." unique_id=1677088665]
 y_sort_enabled = true

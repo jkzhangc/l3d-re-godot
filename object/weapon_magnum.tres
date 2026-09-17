@@ -1,0 +1,90 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://coh2o038kbxsu"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" uid="uid://ckopb8d73wj80" path="res://anim/anim_effect_手枪攻击下.tscn" id="1_qrpph"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="PackedScene" uid="uid://clqlntwficib4" path="res://anim/anim_effect_手枪攻击左.tscn" id="2_cakux"]
+[ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="3"]
+[ext_resource type="PackedScene" uid="uid://dhdrdlbuna8db" path="res://anim/anim_effect_手枪攻击右.tscn" id="3_7663u"]
+[ext_resource type="AudioStream" uid="uid://dvo0crg0qseym" path="res://sound/マグナム.ogg" id="4"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="5"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="6"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8"]
+[ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="9"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_7663u"]
+[ext_resource type="Texture2D" uid="uid://besgsj4eo73rp" path="res://art/Ui/装備アイコンマグナム.png" id="icon"]
+
+[sub_resource type="Resource" id="Resource_magnum1"]
+script = ExtResource("2")
+bullet_texture = ExtResource("3")
+speed = 1200.0
+max_range = 600.0
+penetration = 1
+offset_left = Vector2(0, -16)
+offset_right = Vector2(0, -16)
+instant_kill = true
+collision_size = Vector2(28, 8)
+
+[sub_resource type="Resource" id="WSO_magnum_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_magnum_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_magnum_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_magnum_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[resource]
+script = ExtResource("1")
+attack_power = 100
+attack_range = 260.0
+weapon_state_name = "Magnum"
+weapon_walk_texture = ExtResource("9")
+weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+weapon_slot = 1
+attack_sound = ExtResource("4")
+empty_fire_sound = ExtResource("5")
+raise_sound = ExtResource("6")
+lower_sound = ExtResource("6")
+reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 50
+attack_effect_anim_down = ExtResource("1_qrpph")
+attack_effect_anim_left = ExtResource("2_cakux")
+attack_effect_anim_right = ExtResource("3_7663u")
+attack_effect_follow = true
+attack_effect_offset_override = Vector2(0, -2)
+hit_effect_anim = ExtResource("7")
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_magnum_01_bigg"),
+"nobita": SubResource("WSO_magnum_01_nobita"),
+"shizuka": SubResource("WSO_magnum_01_shizuka"),
+"suneo": SubResource("WSO_magnum_01_suneo")
+}
+magazine_capacity = 7
+ammo_item_id = "ammo_magnum"
+attack_frame_durations = Array[float]([0.16, 0.1, 0.14, 0.12])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_magnum1")])
+hitstun_duration = 0.2
+item_id = "magnum_01"
+item_name = "马格南"
+item_type = 3
+description = "大口径左轮手枪。威力高且子弹贯穿，普通敌人一击即死（Boss 无效）。"
+icon = ExtResource("icon")
+sell_price = 250
+max_stack = 1
+pickup_texture = ExtResource("8")
+pickup_direction = 3
+pickup_step_frames = Array[int]([0])

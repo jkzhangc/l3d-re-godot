@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：玩家座位注册表 ｜ 层：单例（autoload: Players）
+## 联机：联机按 peer 建座位，Host 写入
+## 职责：维护「座位（PlayerState 数据）」与「实体（Player 节点）」两层映射，替代过去散落各处的 _find_player()。
+## 依赖：PlayerState；被 State.get_player_state()、Director、NetworkWorld 查询
+
 ## 玩家座位与实体注册表（autoload 名：Players）
 ##
 ## 两层概念：
@@ -28,6 +35,63 @@ var active_seat_index: int = 0
 ## 懒创建的默认座位不算。Global.try_load_or_init() 用它判断是否要初始化新游戏 ——
 ## 不能用 seat_count()==0，因为其他游戏流程调用 get_active_state() 时也可能触发懒创建。
 var seats_authored: bool = false
+
+# ═══════════════════════════════════════
+# 急救喷雾队伍库存（2026-09-13 用户定稿）
+# ═══════════════════════════════════════
+## 单机：队伍共用池（上限 10）；联机：每人各自持有（上限 3，座位字段不变）。
+const SPRAY_POOL_MAX: int = 10
+const SPRAY_CAP_PER_SEAT_MULTI: int = 3
+var team_spray_count: int = 0
+var team_spray_item: ItemData = null
+
+
+func is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and bool(net.is_online_session())
+
+
+## 急救喷雾是否走单机共用池（联机走座位各自持有）。
+func using_shared_spray_pool() -> bool:
+	return not is_online_session()
+
+
+## 队伍喷雾总容量：单机=共用池 10；联机=座位数×3。
+func spray_capacity_total() -> int:
+	return SPRAY_CAP_PER_SEAT_MULTI * seat_count() if is_online_session() else SPRAY_POOL_MAX
+
+
+## 联机模式下每个座位的喷雾持有上限（单机共用池模式下座位不再各自持有，返回兼容值）。
+func spray_per_seat_cap() -> int:
+	return SPRAY_CAP_PER_SEAT_MULTI if is_online_session() else 1
+
+
+## 队伍当前喷雾总数（HUD/日志用）。
+func spray_total() -> int:
+	if is_online_session():
+		var total: int = 0
+		for s: PlayerState in seats:
+			if s:
+				total += s.healing_item_count
+		return total
+	return team_spray_count
+
+
+## 单机共用池：尝试放入一支喷雾。满了返回 false（调用方让物品留在地上）。
+func try_add_team_spray(item: ItemData) -> bool:
+	if is_online_session() or team_spray_count >= SPRAY_POOL_MAX:
+		return false
+	team_spray_count += 1
+	team_spray_item = item
+	return true
+
+
+## 单机共用池：消耗一支，返回其 ItemData；空池返回 null。联机不使用此入口。
+func consume_team_spray() -> ItemData:
+	if is_online_session() or team_spray_count <= 0:
+		return null
+	team_spray_count -= 1
+	return team_spray_item
 
 # ═══════════════════════════════════════
 # 实体（节点层）
@@ -98,6 +162,8 @@ func clear_seats() -> void:
 	seats.clear()
 	active_seat_index = 0
 	seats_authored = false
+	team_spray_count = 0
+	team_spray_item = null
 	clear_entity_bindings()
 
 

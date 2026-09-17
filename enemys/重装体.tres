@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="ZombieVariant" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://script/enemy/zombie_variant.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Characters/中年ゾンビ.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://gxvj8w0svbjr" path="res://sound/ゾンビ声9.ogg" id="3"][ext_resource type="AudioStream" uid="uid://dvewdknbfsb82" path="res://sound/ゾンビ声3.ogg" id="4"]
+[resource]
+script = ExtResource("1")
+id = &"tank"
+weight = 1.0
+normal_texture = ExtResource("2")
+max_hp = 280.0
+move_speed = 90.0
+rage_move_speed = 135.0
+attack_damage = 22.0
+rage_attack_damage = 30.0
+discover_sound = ExtResource("3")
+hurt_sound = ExtResource("4")

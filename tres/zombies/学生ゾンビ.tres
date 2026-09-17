@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ZombieVariant" format=3 uid="uid://ycwi6hulksfl"]
+
+[ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://cw6frpurxf0ri" path="res://art/Characters/学生ゾンビ1.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://bf4iu84yldrmv" path="res://sound/クリム_叫び.ogg" id="2_k1bsp"][ext_resource type="Texture2D" uid="uid://bvypi73qiiwg2" path="res://art/Characters/学生クリムゾンヘッド1.png" id="3"]
+
+[resource]
+script = ExtResource("1")
+id = &"student"
+weight = 2.0
+normal_texture = ExtResource("2")
+rage_texture = ExtResource("3")

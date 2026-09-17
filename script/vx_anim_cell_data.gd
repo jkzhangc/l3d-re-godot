@@ -1,4 +1,11 @@
 class_name VXAnimCellData extends Resource
+
+## ── 架构定位 ──
+## 系统：动画数据 ｜ 层：数据（Resource）
+## 联机：不涉及
+## 职责：VX Ace 动画单格数据：帧序号、精灵格索引、偏移/缩放/旋转/透明度/混合模式。
+## 依赖：被 VXAnimSprite.cell_data 引用
+
 ## VX Ace 动画单格数据 — 定义某一帧中显示的一个精灵
 ##
 ## 在 VXAnimSprite 的 cell_data 数组中添加多个即可实现同帧多精灵。

@@ -1,4 +1,11 @@
 extends Node
+
+## ── 架构定位 ──
+## 系统：导演系统 ｜ 层：玩法（Node，子模块）
+## 联机：仅单机/Host
+## 职责：只统计队伍压力（血量/弹药/敌方贴近度/战斗状态/关卡进度）并输出 0~1 紧张度，不生成实体。
+## 依赖：被 Director.update 调用
+
 ## 只统计队伍压力（受伤、战斗、敌人密度等）并输出紧张度；不直接生成实体。
 ## 紧张度计算器 — 根据玩家状态评估当前压力 0.0~1.0
 
@@ -24,14 +31,16 @@ func evaluate(player: Node2D, delta: float) -> float:
 	var progress_factor: float = _calc_progress_factor(player)
 	var combat_factor: float = _calc_combat_factor()
 
-	_raw_intensity = clampf(
+	## 难度倍率（2026-09-16）：Global.difficulty_multipliers.director_intensity ——
+	## 同样的战况在高难度下把紧张度推得更高（更早进入尸潮）。乘在求和之后、clamp 之前。
+	var raw: float = (
 		hp_factor * HP_WEIGHT +
 		ammo_factor * AMMO_WEIGHT +
 		proximity_factor * PROXIMITY_WEIGHT +
 		progress_factor * PROGRESS_WEIGHT +
-		combat_factor * COMBAT_WEIGHT,
-		0.0, 1.0
-	)
+		combat_factor * COMBAT_WEIGHT
+	) * Global.difficulty_director_intensity()
+	_raw_intensity = clampf(raw, 0.0, 1.0)
 
 	# 平滑过渡
 	_current_intensity = lerpf(_current_intensity, _raw_intensity, delta * SMOOTH_SPEED)

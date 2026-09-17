@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/director/no_spawn_layer.gd" id="1_script"]
+[ext_resource type="TileSet" path="res://object/no_spawn_layer_tileset.tres" id="2_tileset"]
+
+[node name="NoSpawnLayer" type="TileMapLayer"]
+tile_set = ExtResource("2_tileset")
+script = ExtResource("1_script")

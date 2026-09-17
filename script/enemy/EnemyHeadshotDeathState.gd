@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：敌人状态机 ｜ 层：玩法（State）
+## 联机：Host 决定尸体策略
+## 职责：爆头死亡状态：两段死亡帧 + 停顿，不可被普通受击状态抢占。
+## 依赖：State、enemy 实体
+
 ## 爆头死亡包含独立动画与暂停阶段，不能被普通受击状态抢占。
 ## 爆头死亡状态 — 播放爆头动画 (char_idx 5 → 暂停20帧 → char_idx 6)，尸体保留
 ##
@@ -33,8 +40,12 @@ func enter() -> void:
 	if timer:
 		timer.stop()
 
-	# 设置爆头死亡第一帧
-	enemy._refresh_sprite_with_index(enemy.headshot_char_index_1)
+	# 设置爆头死亡第一帧（特感有专用死亡表时直接切死亡表终帧，
+	# headshot_char_index_1/2 是行走表索引，对特感无意义）
+	if enemy.death_texture != null:
+		enemy.apply_death_appearance(true)
+	else:
+		enemy._refresh_sprite_with_index(enemy.headshot_char_index_1)
 	_pause_frames_left = enemy.headshot_pause_frames
 	_phase = Phase.ANIM
 	_fallen_sound_played = false
@@ -57,9 +68,11 @@ func process_update(_delta: float) -> void:
 
 			# 暂停结束 → 切到最终死亡帧
 			_phase = Phase.DONE
-			enemy._refresh_sprite_with_index(enemy.headshot_char_index_2)
+			if enemy.death_texture == null:
+				enemy._refresh_sprite_with_index(enemy.headshot_char_index_2)
+			# （特感已在 enter() 切到死亡表终帧，这里无需再换）
 			# 播放倒地音效
-			enemy._play_sound(enemy.headshot_fall_sound)
+			enemy._play_sound(enemy.headshot_fall_sound, enemy.headshot_fall_sound_pitch)
 			# 注册到全局尸体列表
 			enemy._register_corpse()
 			# 动画完成，现在可以安全关闭 StateMachine

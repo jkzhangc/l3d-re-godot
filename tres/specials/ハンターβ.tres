@@ -1,0 +1,38 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://dtwr8d4xchwiw"]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="1_fyni7"]
+[ext_resource type="Texture2D" uid="uid://dlp5cptf5yg3j" path="res://art/Characters/ハンター1β.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://d3ocx5d63sf26" path="res://sound/ハンター声.ogg" id="2_1txmb"]
+[ext_resource type="AudioStream" uid="uid://bnoqxbrs3ucka" path="res://sound/ハンター発見.ogg" id="3"]
+[ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="4"]
+[ext_resource type="AudioStream" uid="uid://b7m7w0o2h1hqf" path="res://sound/ハンター声3.ogg" id="5_g0tpg"]
+[ext_resource type="Texture2D" uid="uid://vbsq48dt208g" path="res://art/Characters/ハンター2β.png" id="6_death"]
+
+[resource]
+script = ExtResource("1")
+id = &"hunter_beta"
+weight = 0.6
+texture = ExtResource("2")
+attack_char_sequence = Array[int]([1, 3, 4, 5])
+attack_frame_durations = Array[float]([0.12, 0.15, 0.08, 0.14])
+hit_at_sequence_idx = 2
+death_texture = ExtResource("6_death")
+death_char_index = 4
+max_hp = 180.0
+move_speed = 210.0
+attack_damage = 18.0
+attack_cooldown_frames = 70
+vision_range = 320.0
+discover_sound = ExtResource("3")
+hurt_sound = ExtResource("4")
+attack_sound = ExtResource("1_fyni7")
+attack_sound_pitch = 1.2
+death_sound = ExtResource("2_1txmb")
+frontal_damage_mult = 0.0
+pounce_enabled = true
+pounce_trigger_min_dist = 120.0
+pounce_trigger_max_dist = 300.0
+pounce_damage_mult = 1.0
+pounce_cooldown_seconds = 3.0
+pounce_sound = ExtResource("5_g0tpg")

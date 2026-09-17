@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ZombieVariant" format=3 uid="uid://cf1ay21u0ekph"]
+
+[ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://b52sexct1ha4j" path="res://sound/女ゾンビ声2.ogg" id="1_owjd7"]
+[ext_resource type="AudioStream" uid="uid://dvjvm6vfpgnlm" path="res://sound/女ゾンビ声4.ogg" id="1_yjvrs"]
+[ext_resource type="Texture2D" uid="uid://p14svlohldc2" path="res://art/Characters/女子学生ゾンビ1.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://c2fonawn0j6t8" path="res://sound/女ゾンビ声3.ogg" id="2_owjd7"]
+[ext_resource type="Texture2D" uid="uid://db12bonwo4wy5" path="res://art/Characters/女子学生クリムゾンヘッド1.png" id="3"]
+[ext_resource type="AudioStream" uid="uid://bf4iu84yldrmv" path="res://sound/クリム_叫び.ogg" id="4_4lcly"]
+[ext_resource type="AudioStream" uid="uid://cnqmkryabshfj" path="res://sound/女ゾンビ声.ogg" id="4_fuo5k"]
+
+[resource]
+script = ExtResource("1")
+id = &"joshi_gakusei"
+weight = 1.5
+normal_texture = ExtResource("2")
+rage_texture = ExtResource("3")
+discover_sound = ExtResource("1_yjvrs")
+hurt_sound = ExtResource("4_fuo5k")
+attack_sound = ExtResource("2_owjd7")
+death_sound = ExtResource("1_owjd7")

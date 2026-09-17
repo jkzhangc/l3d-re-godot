@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://b826u628r1jyb"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_iwome"]
+[ext_resource type="Texture2D" uid="uid://cc1w17chyvm8c" path="res://art/Animations/酸だー！.png" id="2_iwome"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
+script = ExtResource("1_iwome")
+texture = ExtResource("2_iwome")
+fps = 20.5
+tone = Color(0, 1, 0, 1)
+position_offset = Vector2(0, -12)
+frame_sequence = Array[int]([15, 16, 17, 18, 5])

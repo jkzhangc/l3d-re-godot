@@ -1,11 +1,12 @@
-[gd_scene load_steps=5 format=3 uid="uid://duw8t3kng8k1r"]
+[gd_scene format=3 uid="uid://duw8t3kng8k1r"]
 
 [ext_resource type="Script" uid="uid://i0aeqdcsvb0m" path="res://script/campaign_select.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://c0nop7c1ibymf" path="res://art/System/Window background color.png" id="2"]
-[ext_resource type="Texture2D" uid="uid://d4nqa7xbhy3cx" path="res://art/System/Window frame.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://dksnwuxdiamf4" path="res://art/System/Window background color.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://cnkb288dlwahv" path="res://art/System/Window frame.png" id="3"]
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="4"]
+[ext_resource type="FontFile" uid="uid://dvtth4183uhrt" path="res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf" id="7"]
 
-[node name="CampaignSelect" type="Control"]
+[node name="CampaignSelect" type="Control" unique_id=62342403]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -14,64 +15,107 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="MenuWindow" type="Control" parent="."]
-size = Vector2(440, 280)
-position = Vector2(100, 60)
-
-[node name="WindowBg" type="TextureRect" parent="MenuWindow"]
-texture = ExtResource("2")
-stretch_mode = 0
-size = Vector2(440, 280)
-mouse_filter = 2
-
-[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow"]
-texture = ExtResource("3")
-patch_margin_left = 20
-patch_margin_right = 20
-patch_margin_top = 20
-patch_margin_bottom = 20
-size = Vector2(440, 280)
-mouse_filter = 2
-
-[node name="TitleLabel" type="Control" parent="MenuWindow"]
+[node name="PageTitle" type="Control" parent="." unique_id=1279118889]
+anchors_preset = 0
+offset_left = 40.0
+offset_top = 16.0
+offset_right = 280.0
+offset_bottom = 76.0
 script = ExtResource("4")
 text = "选择战役"
-position = Vector2(16, 10)
-text_font_size = 16
+text_font_size = 60
 color_index = 1
-color_row = 0
-use_gradient = true
-font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
-color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
-color_shader_path_override = "res://shader/text_color.gdshader"
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+
+[node name="MenuWindow" type="Control" parent="." unique_id=1261967771]
+anchors_preset = 0
+offset_left = 210.0
+offset_top = 160.0
+offset_right = 1070.0
+offset_bottom = 800.0
+
+[node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=980712389]
+layout_mode = 0
+offset_right = 860.0
+offset_bottom = 640.0
+mouse_filter = 2
+texture = ExtResource("2")
+
+[node name="WindowFrame" type="NinePatchRect" parent="MenuWindow" unique_id=335684849]
+layout_mode = 0
+offset_right = 860.0
+offset_bottom = 640.0
+texture = ExtResource("3")
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="TitleLabel" type="Control" parent="MenuWindow" unique_id=1406494173]
+anchors_preset = 0
+offset_left = 18.0
+offset_top = 11.0
+offset_right = 162.0
+offset_bottom = 47.0
+script = ExtResource("4")
+text = "选择战役"
+text_font_size = 36
+color_index = 1
 bold = true
 shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
-[node name="Separator" type="ColorRect" parent="MenuWindow"]
+[node name="Separator" type="ColorRect" parent="MenuWindow" unique_id=273788891]
+layout_mode = 0
+offset_left = 17.0
+offset_top = 53.0
+offset_right = 425.0
+offset_bottom = 54.0
 color = Color(0.5, 0.5, 0.7, 0.5)
-size = Vector2(408, 1)
-position = Vector2(16, 38)
 
-[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow"]
+[node name="CursorFrame" type="NinePatchRect" parent="MenuWindow" unique_id=31258385]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 57.0
+offset_right = 218.0
+offset_bottom = 89.0
 patch_margin_left = 16
-patch_margin_right = 16
 patch_margin_top = 16
+patch_margin_right = 16
 patch_margin_bottom = 16
 axis_stretch_horizontal = 1
 axis_stretch_vertical = 1
-size = Vector2(200, 28)
-position = Vector2(16, 45)
-mouse_filter = 2
 
-[node name="DescPanel" type="Panel" parent="MenuWindow"]
-position = Vector2(244, 48)
-size = Vector2(180, 160)
+[node name="DescPanel" type="Panel" parent="MenuWindow" unique_id=938196493]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 460.0
+offset_right = 820.0
+offset_bottom = 556.0
 
-[node name="DescLabel" type="Label" parent="MenuWindow/DescPanel"]
-position = Vector2(10, 8)
-size = Vector2(160, 144)
+[node name="DescLabel" type="Label" parent="MenuWindow/DescPanel" unique_id=1461220690]
+layout_mode = 0
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 788.0
+offset_bottom = 92.0
+theme_override_fonts/font = ExtResource("7")
+theme_override_font_sizes/font_size = 24
 autowrap_mode = 3
 
-[node name="HintLabel" type="Label" parent="MenuWindow"]
+[node name="HintLabel" type="Control" parent="MenuWindow" unique_id=640684916]
+anchors_preset = 0
+offset_left = 40.0
+offset_top = 576.0
+offset_right = 526.0
+offset_bottom = 612.0
+script = ExtResource("4")
 text = "↑↓选择  确定确认  Esc返回"
-position = Vector2(16, 256)
+text_font_size = 36
+color_index = 1
+bold = true
+shadow = true
+font_path_override = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"

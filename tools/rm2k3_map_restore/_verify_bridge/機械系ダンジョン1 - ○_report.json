@@ -1,0 +1,27 @@
+{
+  "chipset": "機械系ダンジョン1 - ○.png",
+  "requested_groups": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "generated_groups": [
+    "A1",
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "B",
+    "C",
+    "D",
+    "E"
+  ],
+  "warnings": [],
+  "godot_rule": "Use *_godot.png only; *_VA.png is inspection-only."
+}

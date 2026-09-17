@@ -1,0 +1,10 @@
+__pycache__/
+
+# dump_orig_events.py 生成的中间产物（可随时重新生成，不入库）
+_common_events.txt
+_switch_var_names.txt
+
+# A1–A4 生成器 / 自检的临时产物（可随时重新生成，不入库）
+_a14/
+_verify_*.png
+_inspect_*.png

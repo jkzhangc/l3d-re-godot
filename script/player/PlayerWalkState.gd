@@ -1,4 +1,11 @@
 extends State
+
+## ── 架构定位 ──
+## 系统：玩家状态机 ｜ 层：玩法（State）
+## 联机：Host 注入已验证输入
+## 职责：行走状态：按住行走键时的低速移动与外观分支。
+## 依赖：State、Player 实体、PlayerState
+
 ## 行走状态只负责移动速度/外观分支；武器和攻击状态通过 transition_requested 切入。
 ## 行走状态 — 按住行走键移动
 
@@ -9,23 +16,23 @@ func enter() -> void:
 
 func process_update(_delta: float) -> void:
 	# 直接举起武器
-	if Input.is_action_just_pressed("主武器键"):
+	if Global.item_key_just_pressed("主武器键"):
 		_try_raise_weapon("primary")
 		return
-	if Input.is_action_just_pressed("副武器键"):
+	if Global.item_key_just_pressed("副武器键"):
 		_try_raise_weapon("secondary")
 		return
 
 	# 使用消耗品
-	if Input.is_action_just_pressed("治疗品键"):
+	if Global.item_key_just_pressed("治疗品键"):
 		character.use_healing_item()
 		return
-	if Input.is_action_just_pressed("辅助品键"):
+	if Global.item_key_just_pressed("辅助品键"):
 		character.use_support_item()
 		return
 
 	# 投掷物
-	if Input.is_action_just_pressed("投掷物键"):
+	if Global.item_key_just_pressed("投掷物键"):
 		_try_throwable()
 		return
 
@@ -66,4 +73,4 @@ func _try_throwable() -> void:
 
 func physics_update(delta: float) -> void:
 	character.velocity = Input.get_vector("左", "右", "上", "下") * character.walk_speed
-	character.move_and_slide()
+	character.move_with_corner_assist()

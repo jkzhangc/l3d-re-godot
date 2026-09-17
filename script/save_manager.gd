@@ -1,4 +1,11 @@
 class_name SaveManager extends RefCounted
+
+## ── 架构定位 ──
+## 系统：存档系统 ｜ 层：数据（RefCounted）
+## 联机：当前为单机/Host 存档
+## 职责：JSON 存档读写，格式 v2（seats 数组承载 per-player 状态）并兼容读取 v1 旧格式。
+## 依赖：PlayerState、ItemCodec；被 Global/菜单调用
+
 ## 存档管理器 — 保存/加载游戏数据到 JSON 文件
 ##
 ## 存档格式 v2：per-player 状态全部收在 seats 数组里（每项 = PlayerState.to_dict()），
@@ -33,8 +40,11 @@ static func save_game() -> void:
 		"scene_path": scene_path,
 		"seats": seat_dicts,
 		"active_seat_index": Players.active_seat_index,
+		# 单机喷雾共用池（2026-09-13）；联机时恒 0（各座位自己存）
+		"team_spray_count": Players.team_spray_count if Players.using_shared_spray_pool() else 0,
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
+		"quest_flags": Global.quest_flags.duplicate(),
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
 
@@ -73,6 +83,12 @@ static func load_game() -> Dictionary:
 
 	# 全局字段（两个版本共用）
 	Global.gold = data.get("gold", 0)
+	# 剧情机关 flag：JSON 往返 value 可能变 float/其他，只收真值；存档没有该字段则清空
+	Global.quest_flags.clear()
+	var saved_flags: Dictionary = data.get("quest_flags", {})
+	if not saved_flags.is_empty():
+		for k: Variant in saved_flags:
+			Global.quest_flags[str(k)] = bool(saved_flags[k])
 	var campaign_path: String = data.get("selected_campaign", "")
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData
@@ -98,6 +114,19 @@ static func _load_v2(data: Dictionary) -> void:
 		Players.active_seat_index = clampi(
 			data.get("active_seat_index", 0), 0, Players.seat_count() - 1
 		)
+	# 喷雾共用池（单机）：v2.1 起有专用字段；旧 v2 存档把各座位持有的喷雾并入池
+	var saved_pool: int = int(data.get("team_spray_count", -1))
+	if saved_pool >= 0:
+		Players.team_spray_count = saved_pool
+	elif not Players.is_online_session():
+		var migrated: int = 0
+		for s: PlayerState in Players.seats:
+			if s and s.healing_item_count > 0:
+				migrated += s.healing_item_count
+			if s:
+				s.healing_item = null
+				s.healing_item_count = 0
+		Players.team_spray_count = migrated
 
 
 ## 读取 v1 旧存档并归一化为座位表

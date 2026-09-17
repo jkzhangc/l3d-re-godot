@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bb8mtbat2xk5"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="2"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_s7a8v"]
+[ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="3"]
+[ext_resource type="AudioStream" uid="uid://cq8l1xcyq0g13" path="res://sound/打撃5.ogg" id="5"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="6"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7"]
+[ext_resource type="Texture2D" uid="uid://dx7jfrrb2g6x8" path="res://art/Weapon/A武器セット６.png" id="7_e8ecx"]
+[ext_resource type="Texture2D" uid="uid://2di8l2lepdf2" path="res://art/Ui/装備アイコンバット.png" id="8"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 40
+attack_speed = 0.7
+attack_range = 56.0
+weapon_state_name = "Bat"
+weapon_walk_texture = ExtResource("2")
+is_ranged = false
+weapon_slot = 1
+critical_rate = 20.0
+attack_sound = ExtResource("3")
+empty_fire_sound = ExtResource("6")
+raise_sound = ExtResource("6")
+lower_sound = ExtResource("6")
+hit_sound = ExtResource("5")
+hit_effect_anim = ExtResource("7")
+attack_char_sequence = Array[int]([2, 3, 4, 1])
+melee_attack_char_sequence = Array[int]([2, 3, 4, 1])
+melee_attack_frame_durations = Array[float]([0.12, 0.12, 0.18, 0.12])
+melee_range_size = Vector2(72, 40)
+melee_range_forward_offset = 30.0
+item_id = "bat_01"
+item_name = "金属球棒"
+item_type = 3
+description = "重型近接武器，挥棒范围大、砸得很疼，但收招慢。目前只有刚田武趁手的家伙。"
+icon = ExtResource("8")
+sell_price = 120
+max_stack = 1
+pickup_texture = ExtResource("7_e8ecx")
+pickup_char_idx = 5
+pickup_step_frames = Array[int]([0])

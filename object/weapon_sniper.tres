@@ -1,0 +1,82 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://sedjpfqlx8eb"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="4"]
+[ext_resource type="AudioStream" uid="uid://dvo0crg0qseym" path="res://sound/マグナム.ogg" id="5"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="6"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8_oo4tp"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="9_q7ktf"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="10_2eh8r"]
+[ext_resource type="Texture2D" uid="uid://dkuax4v4pm7eu" path="res://art/Ui/装備アイコンスナイパーライフル.png" id="icon"]
+
+[sub_resource type="Resource" id="Resource_sniper1"]
+script = ExtResource("2")
+bullet_texture = ExtResource("4")
+speed = 1400.0
+max_range = 650.0
+penetration = 4
+offset_left = Vector2(0, -16)
+offset_right = Vector2(0, -16)
+collision_size = Vector2(40, 6)
+
+[sub_resource type="Resource" id="WSO_sniper_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_sniper_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_sniper_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_sniper_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[resource]
+script = ExtResource("1")
+attack_power = 55
+attack_range = 300.0
+weapon_state_name = "Sniper"
+weapon_walk_texture = ExtResource("9_q7ktf")
+weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+critical_rate = 30.0
+attack_sound = ExtResource("5")
+empty_fire_sound = ExtResource("6")
+raise_sound = ExtResource("7")
+lower_sound = ExtResource("7")
+reload_char_sequence = Array[int]([2, 1])
+initial_reserve_ammo = 120
+attack_effect_follow = true
+hit_effect_anim = ExtResource("8")
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_sniper_01_bigg"),
+"nobita": SubResource("WSO_sniper_01_nobita"),
+"shizuka": SubResource("WSO_sniper_01_shizuka"),
+"suneo": SubResource("WSO_sniper_01_suneo")
+}
+magazine_capacity = 10
+ammo_item_id = "ammo_sniper"
+attack_frame_durations = Array[float]([0.18, 0.1, 0.16, 0.14])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_sniper1")])
+hitstun_duration = 0.15
+item_id = "sniper_01"
+item_name = "狙击枪"
+item_type = 3
+description = "大威力狙击枪。一发子弹可以贯穿最多5个敌人。"
+icon = ExtResource("icon")
+sell_price = 200
+max_stack = 1
+pickup_texture = ExtResource("8_oo4tp")
+pickup_char_idx = 2
+pickup_step_frames = Array[int]([1])

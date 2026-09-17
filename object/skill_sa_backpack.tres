@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="SkillData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/skill_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+skill_type = 4
+duration = 10.0
+skill_id = "sa_backpack"
+skill_name = "バックパック"
+description = "（スネ夫 SA，TP0）背包与手持互换。背包系统未实装，当前为占位。"
+tp_cost = 0
+cooldown = 1.0
+command_trigger = "SA键"
+command_motion = ""

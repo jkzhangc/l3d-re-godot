@@ -1,0 +1,87 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://ctsvaf5ywfd0f"]
+
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="Texture2D" uid="uid://b82tcdeuvxdpc" path="res://art/Barrages/榴弹[3,5].png" id="3_fcf2g"]
+[ext_resource type="AudioStream" uid="uid://hspioxu2ll5b" path="res://sound/グレネードランチャー.ogg" id="4"]
+[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="5"]
+[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="5_6c8tl"]
+[ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="6"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="Texture2D" uid="uid://dkr5x1yk1s2xf" path="res://art/Ui/装備アイコングレネードランチャー２.png" id="7_6c8tl"]
+[ext_resource type="Texture2D" uid="uid://csoysbu3j0wy" path="res://art/Characters/のび太グレネードランチャー.png" id="9"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://3pnx2cypqcey" path="res://art/Weapon/A武器セット2.png" id="9_6c8tl"]
+[ext_resource type="AudioStream" uid="uid://cq67g7gquqvou" path="res://sound/グレネードランチャー2.ogg" id="10_vbg3o"]
+
+[sub_resource type="Resource" id="Resource_gl1"]
+script = ExtResource("2")
+bullet_texture = ExtResource("3_fcf2g")
+bullet_anim_frames = 3
+bullet_frame_duration = 5
+speed = 520.0
+max_range = 430.0
+offset_left = Vector2(0, 0)
+offset_right = Vector2(0, 0)
+explosion_radius = 96.0
+explosion_hurts_players = false
+explosion_player_radius = 96.0
+explode_effect_anim = ExtResource("5")
+explode_sound = ExtResource("5_6c8tl")
+knockback_enabled = true
+knockback_force = 450.0
+
+[sub_resource type="Resource" id="WSO_launcher_01_bigg"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -16)
+right = Vector2(0, -16)
+
+[sub_resource type="Resource" id="WSO_launcher_01_nobita"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -14)
+right = Vector2(0, -14)
+
+[sub_resource type="Resource" id="WSO_launcher_01_shizuka"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -14)
+right = Vector2(0, -14)
+
+[sub_resource type="Resource" id="WSO_launcher_01_suneo"]
+script = ExtResource("9wspawn")
+left = Vector2(0, -14)
+right = Vector2(0, -14)
+
+[resource]
+script = ExtResource("1")
+attack_power = 150
+attack_range = 240.0
+weapon_state_name = "Launcher"
+weapon_walk_texture = ExtResource("9")
+weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+attack_sound = ExtResource("4")
+empty_fire_sound = ExtResource("6")
+raise_sound = ExtResource("7")
+lower_sound = ExtResource("7")
+reload_char_sequence = Array[int]([2, 1])
+reload_sound = ExtResource("10_vbg3o")
+initial_reserve_ammo = 45
+attack_effect_follow = true
+bullet_spawn_offsets = {
+"bigg": SubResource("WSO_launcher_01_bigg"),
+"nobita": SubResource("WSO_launcher_01_nobita"),
+"shizuka": SubResource("WSO_launcher_01_shizuka"),
+"suneo": SubResource("WSO_launcher_01_suneo")
+}
+magazine_capacity = 1
+ammo_item_id = "ammo_launcher"
+attack_frame_durations = Array[float]([0.14, 0.1, 0.16, 0.14])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_gl1")])
+item_id = "launcher_01"
+item_name = "榴弹发射器"
+item_type = 3
+description = "M79 炸裂弹发射器。命中后爆炸，波及周围敌人并吹飞；爆炸会伤到自己人，小心零距离开火。"
+icon = ExtResource("7_6c8tl")
+sell_price = 300
+max_stack = 1
+pickup_texture = ExtResource("9_6c8tl")
+pickup_step_frames = Array[int]([0])
