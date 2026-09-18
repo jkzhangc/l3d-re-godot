@@ -1884,6 +1884,60 @@ func _play_sound(stream: AudioStream, pitch: float = 1.0) -> void:
 	# 丧尸叫和贴脸一样响，叠加并发上限内多实例 → 用户反馈「叫声音量大得离谱」。
 	# pitch：每音效独立音调（2026-09-15）。
 	Global.play_sfx_managed(stream, self, true, pitch)
+	_announce_network_sfx(stream, pitch)
+
+
+## ── A3 联机音效事件化 ──
+## Client 敌人不跑状态机 → 攻击/发现/女巫尖叫/β 格挡音 Host 才有。反查表：
+## Host _play_sound 播到下列字段的音时按 key 转发，Client 从本地节点同名字段
+## 解析 AudioStream（资源不过网络，与武器/特感/变体白名单同铁律）。
+## 不进表的音效已有专门通道：hurt（受击表现 RPC）、headshot/death/headshot_fall
+## （死亡表现 RPC）、spit（A2 酸弹镜像）——进表反而双播。
+const NETWORK_SFX_FIELDS: Dictionary = {
+	"attack": "attack_sound",
+	"discover": "discover_sound",
+	"rage_discover": "variant_rage_discover_sound",
+	"witch_scream": "witch_scream_sound",
+	"frontal_block": "frontal_block_sound",
+}
+
+
+## 反查 stream 对应的转发 key（表外音效返回 ""，不转发）。
+## 发现音的动态回退天然兼容：rage 时播 variant_rage_discover_sound 命中
+## rage_discover；rage 音为空回退 discover_sound 命中 discover——两端同字段取值。
+func _sfx_key_for(stream: AudioStream) -> String:
+	for sfx_key: String in NETWORK_SFX_FIELDS:
+		if get(NETWORK_SFX_FIELDS[sfx_key]) == stream:
+			return sfx_key
+	return ""
+
+
+## Host：联机会话下把缺口音效转发 Client（单机 is_host=false / 未收编 id=0 直接跳过）。
+## ⚠ 此处引用的是 autoload `Net`（大写）——network_world.gd 的小写 net 是它自己的成员。
+func _announce_network_sfx(stream: AudioStream, pitch: float) -> void:
+	if not Net.is_host or network_entity_id <= 0:
+		return
+	var sfx_key := _sfx_key_for(stream)
+	if sfx_key == "":
+		return
+	var tree := get_tree()
+	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld") \
+			if tree != null and tree.current_scene != null else null
+	if world != null and world.has_method("announce_enemy_sfx"):
+		world.call("announce_enemy_sfx", self, sfx_key, pitch)
+
+
+## Client 表现接口（NetworkWorld.enemy_sfx_presentation 调用）：
+## 按 key 从本地节点字段取 stream 播放。直接走 play_sfx_managed，
+## 不经 _play_sound（避免再进转发判定）。
+func play_network_sfx(sfx_key: String, pitch: float) -> void:
+	var field: String = NETWORK_SFX_FIELDS.get(sfx_key, "")
+	if field == "":
+		return
+	var stream: AudioStream = get(field)
+	if stream == null:
+		return
+	Global.play_sfx_managed(stream, self, true, pitch)
 
 
 # ═══════════════════════════════════════

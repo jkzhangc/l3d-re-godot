@@ -220,6 +220,8 @@ var _auto_client_player_hurt_presentations := 0
 var _auto_client_enemy_hurt_presentations := 0
 ## --net-test-features 专用：统计 Client 收到的可靠吐酸表现 RPC（A2 酸弹镜像回归断言用）。
 var _auto_client_enemy_acid_spits := 0
+## --net-test-features 专用：统计 Client 收到的可靠敌人音效事件 RPC（A3 回归断言用）。
+var _auto_client_enemy_sfx := 0
 ## --net-test-enemies 专用：统计 Client 收到的可靠敌人死亡表现 RPC。
 var _auto_client_enemy_death_presentations := 0
 var _auto_client_ready_input_seen_by_host := false
@@ -1963,6 +1965,33 @@ func enemy_acid_spit_presentation(entity_id: int, spawn_pos: Vector2, dir: Vecto
 	if _is_auto_network_feature_test():
 		_auto_client_enemy_acid_spits += 1
 	print("[NetworkWorld] CLIENT_ENEMY_ACID_SPIT entity=%d pos=%s" % [entity_id, spawn_pos])
+
+
+## Host：enemy._play_sound 反查命中缺口音效（attack/discover/rage_discover/
+## witch_scream/frontal_block）后调用（A3 音效事件化）。单机/Client 调用为 no-op。
+## 只传 entity_id + 音效 key + pitch；AudioStream 由 Client 从本地 enemy 节点
+## 同名字段解析（A1/A5 注入 + tscn 默认值保证有值），资源不经网络传输。
+func announce_enemy_sfx(enemy: Node2D, sfx_key: String, pitch: float) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = enemy.network_entity_id
+	if entity_id <= 0:
+		return
+	enemy_sfx_presentation.rpc(entity_id, sfx_key, pitch)
+
+
+## Client：按音效 key 走 enemy.play_network_sfx 本地播放（key→字段映射在 enemy 侧）。
+@rpc("authority", "call_remote", "reliable")
+func enemy_sfx_presentation(entity_id: int, sfx_key: String, pitch: float) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if not is_instance_valid(enemy):
+		return
+	enemy.play_network_sfx(sfx_key, pitch)
+	if _is_auto_network_feature_test():
+		_auto_client_enemy_sfx += 1
+	print("[NetworkWorld] CLIENT_ENEMY_SFX entity=%d key=%s pitch=%.2f" % [entity_id, sfx_key, pitch])
 
 
 ## Host：每帧检查是否有敌人刚刚进入死亡，并用可靠 RPC 广播死亡表现。
