@@ -602,68 +602,15 @@ func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
 	enemy.global_position = pos
 	## 僵尸变体：按关卡池权重随机选一种，注入外观与数值。
 	## 必须在 add_child 之前（enemy._ready() 里 _refresh_sprite 用到 walk_texture）。
+	## 注入逻辑统一在 ZombieVariant.apply_to_enemy —— Host 生成与联机 Client 重建共用同一份。
 	if not _zombie_pool.is_empty():
-		var zv: Resource = _pick_zombie_variant()
-		if zv:
-			enemy.walk_texture = zv.normal_texture
-			enemy.move_speed = zv.move_speed
-			enemy.attack_damage = zv.attack_damage
-			# 血量/普通音效：0 或 null 表示沿用敌人自身默认值
-			if float(zv.get("max_hp")) > 0.0:
-				enemy.max_hp = float(zv.get("max_hp"))
-			if zv.get("discover_sound") != null:
-				enemy.discover_sound = zv.get("discover_sound")
-			if zv.get("hurt_sound") != null:
-				enemy.hurt_sound = zv.get("hurt_sound")
-			if zv.get("attack_sound") != null:
-				enemy.attack_sound = zv.get("attack_sound")
-			# 死亡系音效（2026-09-14 补）：留空沿用 enemy.tscn 默认
-			if zv.get("death_sound") != null:
-				enemy.death_sound = zv.get("death_sound")
-			if zv.get("headshot_sound") != null:
-				enemy.headshot_sound = zv.get("headshot_sound")
-			if zv.get("headshot_fall_sound") != null:
-				enemy.headshot_fall_sound = zv.get("headshot_fall_sound")
-			if zv.get("hit_target_sound") != null:
-				enemy.hit_target_sound = zv.get("hit_target_sound")
-			# 音效音调（2026-09-15 每音效可设音调）：0 = 沿用敌人自身默认
-			if float(zv.get("discover_sound_pitch")) > 0.0:
-				enemy.discover_sound_pitch = float(zv.get("discover_sound_pitch"))
-			if float(zv.get("hurt_sound_pitch")) > 0.0:
-				enemy.hurt_sound_pitch = float(zv.get("hurt_sound_pitch"))
-			if float(zv.get("attack_sound_pitch")) > 0.0:
-				enemy.attack_sound_pitch = float(zv.get("attack_sound_pitch"))
-			if float(zv.get("death_sound_pitch")) > 0.0:
-				enemy.death_sound_pitch = float(zv.get("death_sound_pitch"))
-			if float(zv.get("headshot_sound_pitch")) > 0.0:
-				enemy.headshot_sound_pitch = float(zv.get("headshot_sound_pitch"))
-			if float(zv.get("headshot_fall_sound_pitch")) > 0.0:
-				enemy.headshot_fall_sound_pitch = float(zv.get("headshot_fall_sound_pitch"))
-			if float(zv.get("hit_target_sound_pitch")) > 0.0:
-				enemy.hit_target_sound_pitch = float(zv.get("hit_target_sound_pitch"))
-			if float(zv.get("rage_discover_sound_pitch")) > 0.0:
-				enemy.variant_rage_discover_pitch = float(zv.get("rage_discover_sound_pitch"))
-			enemy.variant_rage_texture = zv.rage_texture
-			enemy.variant_rage_move_speed = zv.rage_move_speed
-			enemy.variant_rage_attack_damage = zv.rage_attack_damage
-			enemy.variant_rage_discover_sound = zv.rage_discover_sound
-			enemy.variant_rage_exhaust_seconds = float(zv.get("rage_exhaust_seconds"))
-			enemy.variant_rage_exhaust_down_seconds = float(zv.get("rage_exhaust_down_seconds"))
-			# 数值扩展（2026-09-14 补差异化）：0 / 零值 = 沿用 enemy.gd 默认
-			if int(zv.get("attack_cooldown_frames")) > 0:
-				enemy.attack_cooldown_frames = int(zv.get("attack_cooldown_frames"))
-			if int(zv.get("attack_element")) != 0:
-				enemy.attack_element = int(zv.get("attack_element"))
-			if float(zv.get("vision_angle")) > 0.0:
-				enemy.vision_angle = float(zv.get("vision_angle"))
-			if float(zv.get("vision_range")) > 0.0:
-				enemy.vision_range = float(zv.get("vision_range"))
-			if float(zv.get("walk_frame_duration")) > 0.0:
-				enemy.walk_frame_duration = float(zv.get("walk_frame_duration"))
-			if (zv.get("hurtbox_size") as Vector2) != Vector2.ZERO:
-				enemy.hurtbox_size = zv.get("hurtbox_size")
-			if (zv.get("hurtbox_offset") as Vector2) != Vector2.ZERO:
-				enemy.hurtbox_offset = zv.get("hurtbox_offset")
+		var zv_res: Resource = _pick_zombie_variant()
+		if zv_res:
+			var zv := zv_res as ZombieVariant
+			if zv:
+				zv.apply_to_enemy(enemy)
+				# Host 侧登记：联机 spawn 快照经 enemy.get_network_variant_id() 反查白名单 id 下发。
+				enemy.variant_data = zv
 	# 必须在 add_child 前设 initial_facing（@export），
 	# 因为 enemy._ready() 里 _facing = initial_facing，
 	# 之后 _refresh_sprite() 每次都用 _facing 重算精灵帧

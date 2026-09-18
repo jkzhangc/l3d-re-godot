@@ -433,6 +433,9 @@ var network_presentation_only: bool = false
 ## NetworkWorld.NETWORK_SPECIALS 白名单 id 下发）。Client 重建节点不走本字段 ——
 ## 由 network_world 按 special_id 拿到同一份 tres 后调 apply_to_enemy 注入。
 var special_data: SpecialEnemyData = null
+## Host 侧：spawn_enemy 按 zombie_pool 选中的变体数据（联机快照反查
+## NETWORK_VARIANTS 白名单 id）。与 special_data 互斥 —— 普通丧尸走本字段。
+var variant_data: ZombieVariant = null
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
 var _network_headshot_death: bool = false
@@ -674,6 +677,11 @@ func get_network_special_id() -> String:
 	return String(special_data.id) if special_data != null else ""
 
 
+## Host 侧：僵尸变体白名单 id（无变体/特感返回空串，快照不带该字段）。
+func get_network_variant_id() -> String:
+	return String(variant_data.id) if variant_data != null else ""
+
+
 ## entity_id 为 Host 分配的稳定实体 ID。presentation_only=true 时关闭本地 AI/判定。
 func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
 	network_entity_id = entity_id
@@ -730,7 +738,9 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		apply_network_element_tint(element_state)
 
 
-## Host 侧：把当前元素状态压成 3bit 整数随敌人快照下发（bit0=炎 bit1=氷 bit2=雷）。
+## Host 侧：把当前视觉状态压成 1 字节随敌人快照下发。
+## bit0=炎 bit1=氷 bit2=雷（P0-B3）｜bit3=狂暴换皮（A5：尸潮 peak 的クリムゾンヘッド形态，
+## Client 经 apply_network_element_tint 里的 set_rage 复现换皮；普通/狂暴图同布局，帧索引通用）。
 func get_network_element_state() -> int:
 	var state: int = 0
 	if _burning_time > 0.0:
@@ -739,15 +749,21 @@ func get_network_element_state() -> int:
 		state |= 2
 	if _electro_time > 0.0:
 		state |= 4
+	if _rage:
+		state |= 8
 	return state
 
 
-## Client 专用：按快照字节设置元素染色（与 _apply_element_tint 同一配色与优先级：
-## 氷 > 雷 > 炎）。Client 不跑 _update_element_status，染色完全由快照驱动，
-## 状态结束 Host 发 state=0 还原白色。
+## Client 专用：按快照字节设置视觉状态（染色与狂暴换皮）。
+## 染色与 _apply_element_tint 同一配色与优先级：氷 > 雷 > 炎。Client 不跑
+## _update_element_status，染色完全由快照驱动，状态结束 Host 发 state=0 还原白。
+## bit3=狂暴：set_rage 自带幂等闸（_rage == on 直接 no-op），不会每包重切贴图；
+## 无狂暴图（variant_rage_texture == null）的实体自动 no-op。
 func apply_network_element_tint(state: int) -> void:
 	if not sprite:
 		return
+	# A5 狂暴换皮（bit3）：与染色正交，先换皮再调 modulate。
+	set_rage(bool(state & 8))
 	if state & 2:
 		sprite.modulate = Color(0.6, 0.85, 2.0)       # 氷=青蓝
 	elif state & 4:

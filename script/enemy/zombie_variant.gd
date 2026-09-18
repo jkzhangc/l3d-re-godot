@@ -95,3 +95,75 @@ extends Resource
 @export var hurtbox_size: Vector2 = Vector2.ZERO
 ## 受击碰撞体偏移。ZERO = 沿用（0, -8）。
 @export var hurtbox_offset: Vector2 = Vector2.ZERO
+
+
+# ═══════════════════════════════════════
+# 注入（Host 生成 / Client 重建共用）
+# ═══════════════════════════════════════
+
+## 把本变体的外观与数值注入一只 enemy 实例。Host 与 Client 共用同一份注入代码：
+## · Host —— Director.spawn_enemy() 按 zombie_pool 选种后在 add_child 前调用
+##   （_ready 的 _refresh_sprite 需要注入后的 walk_texture）。
+## · Client —— NetworkWorld 按 variant_id 从 NETWORK_VARIANTS 白名单取得本资源后调用
+##   （Client 不跑 AI，注入的行为字段不生效，只消费外观/音效/受击盒）。
+## 注意：必须在 add_child 之前调用；initial_facing 由调用方另行设置。
+func apply_to_enemy(enemy: Node) -> void:
+	enemy.walk_texture = normal_texture
+	enemy.move_speed = move_speed
+	enemy.attack_damage = attack_damage
+	# 血量/普通音效：0 或 null 表示沿用敌人自身默认值
+	if max_hp > 0.0:
+		enemy.max_hp = max_hp
+	if discover_sound != null:
+		enemy.discover_sound = discover_sound
+	if hurt_sound != null:
+		enemy.hurt_sound = hurt_sound
+	if attack_sound != null:
+		enemy.attack_sound = attack_sound
+	# 死亡系音效（2026-09-14 补）：留空沿用 enemy.tscn 默认
+	if death_sound != null:
+		enemy.death_sound = death_sound
+	if headshot_sound != null:
+		enemy.headshot_sound = headshot_sound
+	if headshot_fall_sound != null:
+		enemy.headshot_fall_sound = headshot_fall_sound
+	if hit_target_sound != null:
+		enemy.hit_target_sound = hit_target_sound
+	# 音效音调（2026-09-15 每音效可设音调）：0 = 沿用敌人自身默认
+	if discover_sound_pitch > 0.0:
+		enemy.discover_sound_pitch = discover_sound_pitch
+	if hurt_sound_pitch > 0.0:
+		enemy.hurt_sound_pitch = hurt_sound_pitch
+	if attack_sound_pitch > 0.0:
+		enemy.attack_sound_pitch = attack_sound_pitch
+	if death_sound_pitch > 0.0:
+		enemy.death_sound_pitch = death_sound_pitch
+	if headshot_sound_pitch > 0.0:
+		enemy.headshot_sound_pitch = headshot_sound_pitch
+	if headshot_fall_sound_pitch > 0.0:
+		enemy.headshot_fall_sound_pitch = headshot_fall_sound_pitch
+	if hit_target_sound_pitch > 0.0:
+		enemy.hit_target_sound_pitch = hit_target_sound_pitch
+	if rage_discover_sound_pitch > 0.0:
+		enemy.variant_rage_discover_pitch = rage_discover_sound_pitch
+	enemy.variant_rage_texture = rage_texture
+	enemy.variant_rage_move_speed = rage_move_speed
+	enemy.variant_rage_attack_damage = rage_attack_damage
+	enemy.variant_rage_discover_sound = rage_discover_sound
+	enemy.variant_rage_exhaust_seconds = rage_exhaust_seconds
+	enemy.variant_rage_exhaust_down_seconds = rage_exhaust_down_seconds
+	# 数值扩展（2026-09-14 补差异化）：0 / 零值 = 沿用 enemy.gd 默认
+	if attack_cooldown_frames > 0:
+		enemy.attack_cooldown_frames = attack_cooldown_frames
+	if attack_element != 0:
+		enemy.attack_element = attack_element
+	if vision_angle > 0.0:
+		enemy.vision_angle = vision_angle
+	if vision_range > 0.0:
+		enemy.vision_range = vision_range
+	if walk_frame_duration > 0.0:
+		enemy.walk_frame_duration = walk_frame_duration
+	if hurtbox_size != Vector2.ZERO:
+		enemy.hurtbox_size = hurtbox_size
+	if hurtbox_offset != Vector2.ZERO:
+		enemy.hurtbox_offset = hurtbox_offset

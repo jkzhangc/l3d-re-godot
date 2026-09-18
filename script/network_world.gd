@@ -91,6 +91,35 @@ const NETWORK_SPECIALS: Dictionary = {
 	"blare_witch": NETWORK_SPECIAL_WITCH,
 	"brain_demos": NETWORK_SPECIALDEMOS,
 }
+## 僵尸变体白名单（A5）：键 = tres 的 id 字段。Host 在 spawn_enemy 按 zombie_pool
+## 选种后登记 enemy.variant_data，spawn 快照携带 variant_id；Client 命中白名单
+## 才在本地重建差异化行走图。狂暴换皮不走本表 —— 随快照 element_state bit3 实时同步。
+const NETWORK_VARIANT_MALE: ZombieVariant = preload("res://tres/zombies/男性ゾンビ.tres")
+const NETWORK_VARIANT_FEMALE: ZombieVariant = preload("res://tres/zombies/女性ゾンビ.tres")
+const NETWORK_VARIANT_STUDENT: ZombieVariant = preload("res://tres/zombies/学生ゾンビ.tres")
+const NETWORK_VARIANT_CHUNEN: ZombieVariant = preload("res://tres/zombies/中年ゾンビ.tres")
+const NETWORK_VARIANT_SHIKAN: ZombieVariant = preload("res://tres/zombies/士官ゾンビ.tres")
+const NETWORK_VARIANT_JOSHI: ZombieVariant = preload("res://tres/zombies/女子学生ゾンビ.tres")
+const NETWORK_VARIANT_JIKKENTAI: ZombieVariant = preload("res://tres/zombies/実験体ゾンビ.tres")
+const NETWORK_VARIANT_KENKYUIN: ZombieVariant = preload("res://tres/zombies/研究員ゾンビ.tres")
+const NETWORK_VARIANT_SHOKUIN: ZombieVariant = preload("res://tres/zombies/職員ゾンビ.tres")
+const NETWORK_VARIANT_KUNRENSEI: ZombieVariant = preload("res://tres/zombies/訓練生ゾンビ.tres")
+const NETWORK_VARIANT_RUNNER: ZombieVariant = preload("res://enemys/疾走体.tres")
+const NETWORK_VARIANT_TANK: ZombieVariant = preload("res://enemys/重装体.tres")
+const NETWORK_VARIANTS: Dictionary = {
+	"male": NETWORK_VARIANT_MALE,
+	"female": NETWORK_VARIANT_FEMALE,
+	"student": NETWORK_VARIANT_STUDENT,
+	"chunen": NETWORK_VARIANT_CHUNEN,
+	"shikan": NETWORK_VARIANT_SHIKAN,
+	"joshi_gakusei": NETWORK_VARIANT_JOSHI,
+	"jikkentai": NETWORK_VARIANT_JIKKENTAI,
+	"kenkyuin": NETWORK_VARIANT_KENKYUIN,
+	"shokuin": NETWORK_VARIANT_SHOKUIN,
+	"kunrensei": NETWORK_VARIANT_KUNRENSEI,
+	"runner": NETWORK_VARIANT_RUNNER,
+	"tank": NETWORK_VARIANT_TANK,
+}
 ## 快照节拍说明：
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
 ## - Client 只提交输入，并接收 Host 的表现数据。
@@ -1178,6 +1207,12 @@ func _get_network_special_data(special_id: String) -> SpecialEnemyData:
 	if special_id.is_empty():
 		return null
 	return NETWORK_SPECIALS.get(special_id) as SpecialEnemyData
+
+
+func _get_network_variant_data(variant_id: String) -> ZombieVariant:
+	if variant_id.is_empty():
+		return null
+	return NETWORK_VARIANTS.get(variant_id) as ZombieVariant
 
 
 func _get_host_throwable_state(peer_id: int) -> Dictionary:
@@ -2521,12 +2556,17 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 			node = ENEMY_SCENE.instantiate() as CharacterBody2D
 			if not is_instance_valid(node):
 				return
-			# A1 特感复制：可靠通道携带 special_id 时按白名单取同一份 tres，
-			# 用与 Host 完全相同的注入代码（SpecialEnemyData.apply_to_enemy）重建表现。
+			# A1 特感复制 / A5 僵尸变体：可靠通道携带 id 时按白名单取同一份 tres，
+			# 用与 Host 完全相同的注入代码（*.apply_to_enemy）重建表现。
 			# 必须在 add_child 之前注入 —— enemy._ready() 的 _refresh_sprite 依赖 walk_texture。
+			# 特感与变体互斥（同一只敌人只会走其中一条）。
 			var special := _get_network_special_data(str(public_state.get("special_id", "")))
 			if special:
 				special.apply_to_enemy(node)
+			else:
+				var variant := _get_network_variant_data(str(public_state.get("variant_id", "")))
+				if variant:
+					variant.apply_to_enemy(node)
 			node.configure_network_entity(entity_id, true)
 			node.global_position = _packet_position(public_state)
 			_players_parent.add_child(node)
@@ -4500,6 +4540,9 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 		# A1 特感复制：非特感为空串；Client 只在可靠通道（spawn RPC / world_snapshot）
 		# 建实体时消费本字段，紧凑快照不带（_normalize_enemy_snapshot 会剥掉）。
 		"special_id": enemy.get_network_special_id(),
+		# A5 僵尸变体：同 special_id 语义，普通丧尸的差异化行走图靠它重建；
+		# 狂暴换皮不在此 —— 随 element_state bit3 实时同步。
+		"variant_id": enemy.get_network_variant_id(),
 	}
 
 
