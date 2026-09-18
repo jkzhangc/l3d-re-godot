@@ -1651,13 +1651,22 @@ func push_action_texture(tex: Texture2D, char_idx: int = 0) -> void:
 		_sync_frame_size_to_texture()
 	_frame_size_by_texture[tex] = Vector2i(sprite_frame_w, sprite_frame_h)
 	_refresh_sprite_with_index(char_idx)
+	# 联机（A4）：表内动作表切换转发 Client（death_texture 等表外贴图不转发）。
+	# Client 侧经 apply_network_action_texture 再次进入本函数，Net.is_host 闸防回环。
+	var action_key := _texture_key_for(tex)
+	if action_key != "":
+		_announce_network_action(action_key, char_idx, true)
 
 
 ## 恢复到行走图（并恢复切换前的角色索引与帧尺寸）。
 func restore_walk_texture() -> void:
 	if _action_texture_stack.is_empty():
 		return
+	# 联机（A4）：弹出前记下栈顶动作表的 key 并转发恢复（表外贴图 key="" 不转发）。
+	var popped_key := _texture_key_for(_action_texture_stack.back())
 	_action_texture_stack.pop_back()
+	if popped_key != "":
+		_announce_network_action(popped_key, 0, false)
 	walk_texture = _action_texture_prev if _action_texture_stack.is_empty() else _action_texture_stack.back()
 	if _action_texture_stack.is_empty():
 		# 精确还原行走表帧尺寸（推断不可靠：多动作表宽度整除方式有歧义）
@@ -1910,6 +1919,53 @@ func _sfx_key_for(stream: AudioStream) -> String:
 		if get(NETWORK_SFX_FIELDS[sfx_key]) == stream:
 			return sfx_key
 	return ""
+
+
+## ── A4 动作表事件化（视觉预警：攻击/突进/丸呑み张嘴的独立动作表不跨端，Client
+##    快照帧号会落在行走表上显示错图）──
+## 反查转发表（同 NETWORK_SFX_FIELDS 定式）：key→enemy 字段名。只收 Client 侧
+## 需要 push_action_texture 的动作表；death_texture 走死亡表现通道（A1）、
+## 狂暴换皮走 element_state bit3（A5），均不进表避免双播。
+const NETWORK_TEXTURE_FIELDS: Dictionary = {
+	"attack": "attack_texture",
+	"swallow": "swallow_texture",
+}
+
+
+## 反查动作表对应的转发 key（表外贴图返回 ""，不转发）。
+func _texture_key_for(tex: Texture2D) -> String:
+	for tex_key: String in NETWORK_TEXTURE_FIELDS:
+		if get(NETWORK_TEXTURE_FIELDS[tex_key]) == tex:
+			return tex_key
+	return ""
+
+
+## Host：联机会话下把动作表切换转发 Client（单机 is_host=false / 未收编 id=0
+## 直接跳过）。⚠ 引用 autoload `Net`（大写），同 _announce_network_sfx。
+func _announce_network_action(tex_key: String, char_idx: int, active: bool) -> void:
+	if not Net.is_host or network_entity_id <= 0:
+		return
+	var tree := get_tree()
+	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld") \
+			if tree != null and tree.current_scene != null else null
+	if world != null and world.has_method("announce_enemy_action"):
+		world.call("announce_enemy_action", self, tex_key, char_idx, active)
+
+
+## Client 表现接口（NetworkWorld.enemy_action_presentation 调用）：
+## active=true 按本地节点字段解析动作表并 push（后续帧号由快照 visual_char_index
+## 继续驱动，落在动作表上）；active=false 恢复行走表（幂等：栈空时内部早退）。
+func apply_network_action_texture(tex_key: String, char_idx: int, active: bool) -> void:
+	if active:
+		var field: String = NETWORK_TEXTURE_FIELDS.get(tex_key, "")
+		if field == "":
+			return
+		var tex: Texture2D = get(field)
+		if tex == null:
+			return
+		push_action_texture(tex, char_idx)
+	else:
+		restore_walk_texture()
 
 
 ## Host：联机会话下把缺口音效转发 Client（单机 is_host=false / 未收编 id=0 直接跳过）。

@@ -222,6 +222,7 @@ var _auto_client_enemy_hurt_presentations := 0
 var _auto_client_enemy_acid_spits := 0
 ## --net-test-features 专用：统计 Client 收到的可靠敌人音效事件 RPC（A3 回归断言用）。
 var _auto_client_enemy_sfx := 0
+var _auto_client_enemy_action := 0  ## A4：enemy_action_presentation 回归计数
 ## --net-test-features 专用：统计 Client 收到的可靠导演 BGM 事件 RPC（A6 回归断言用）。
 var _auto_client_director_music := 0
 ## --net-test-features 专用：统计 Client 收到的可靠覚醒染色表现 RPC（C1 回归断言用）。
@@ -2329,6 +2330,32 @@ func enemy_sfx_presentation(entity_id: int, sfx_key: String, pitch: float) -> vo
 	if _is_auto_network_feature_test():
 		_auto_client_enemy_sfx += 1
 	print("[NetworkWorld] CLIENT_ENEMY_SFX entity=%d key=%s pitch=%.2f" % [entity_id, sfx_key, pitch])
+
+
+## Host：动作表切换转发（A4，enemy.push_action_texture/restore_walk_texture 挂出）。
+## 单机/未收编（闸在 enemy._announce_network_action）与 Client 端 no-op。
+## 零资源传输：贴图由 Client 从本地节点字段解析（NETWORK_TEXTURE_FIELDS 反查同表）。
+func announce_enemy_action(enemy: Node2D, tex_key: String, char_idx: int, active: bool) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = enemy.network_entity_id
+	if entity_id <= 0:
+		return
+	enemy_action_presentation.rpc(entity_id, tex_key, char_idx, active)
+
+
+## Client：动作表切到/恢复（攻击/突进/丸呑み张嘴等独立动作表的视觉预警）。
+@rpc("authority", "call_remote", "reliable")
+func enemy_action_presentation(entity_id: int, tex_key: String, char_idx: int, active: bool) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if not is_instance_valid(enemy):
+		return
+	enemy.apply_network_action_texture(tex_key, char_idx, active)
+	if _is_auto_network_feature_test():
+		_auto_client_enemy_action += 1
+	print("[NetworkWorld] CLIENT_ENEMY_ACTION entity=%d key=%s idx=%d active=%s" % [entity_id, tex_key, char_idx, active])
 
 
 ## Host：Director 尸潮/Boss BGM 真正起停时调用（A6 导演 BGM）。单机/Client 调用
