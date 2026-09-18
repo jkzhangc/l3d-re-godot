@@ -800,6 +800,23 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 	if phase <= 0:
 		_net_token = -1  # 结束哨兵：后续迟到包一律忽略，直到下一场 trigger 重置
 	_drive_local_hud(phase, remaining, total)
+	_drive_remote_holdout_music(phase)
+
+
+## Client 防守战 BGM 驱动（A6，2026-09-18）：复用 holdout_state_sync 通道按
+## phase 起停，不新增 RPC。ACTIVE 起播（500ms 周期包重复到达 → playing 幂等闸
+## 防重头）；IDLE/SETTLE 停播（abort/完成都广播 IDLE；SETTLE 一并停防异常路径
+## 残留幽灵 BGM）。中途加入的 Client 经 _accept_ready_peer 补发状态 → 自动起播。
+## Boss BGM 优先级无需处理：Director.apply_network_music 在 Client 维护
+## boss_music_changed 信号 → _on_boss_music_changed 的 stream_paused 照常工作。
+func _drive_remote_holdout_music(phase: int) -> void:
+	if phase == Phase.ACTIVE:
+		if _music_player and is_instance_valid(_music_player) and _music_player.playing:
+			return  ## 幂等：周期包重复到达不重头播
+		_play_holdout_music()
+	elif phase == Phase.IDLE or phase == Phase.SETTLE:
+		_stop_holdout_music()
+	# PREPARE 不动：BGM 不在预备阶段播（用户 2026-09-13 定稿）。
 
 
 ## Client 收到防守战完成广播后执行本地完成事件（节点显隐等；传送点仅 Host 创建）。

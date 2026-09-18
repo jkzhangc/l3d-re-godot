@@ -375,11 +375,13 @@ func _play_horde_music() -> void:
 	_horde_music_player.stream = stream
 	_horde_music_player.volume_db = current_config.horde_music_volume_db if current_config else 0.0
 	_horde_music_player.play()
+	_announce_music("horde", true)
 	print("[Director] 尸潮 BGM 开始")
 
 func _stop_horde_music() -> void:
 	if _horde_music_player and _horde_music_player.playing:
 		_horde_music_player.stop()
+		_announce_music("horde", false)
 		print("[Director] 尸潮 BGM 停止")
 
 
@@ -416,6 +418,7 @@ func play_boss_music(watch: Node2D = null) -> void:
 	_boss_music_player.play()
 	_boss_music_active = true
 	boss_music_changed.emit(true)
+	_announce_music("boss", true)
 	print("[Director] ★ Boss BGM 开始")
 
 ## Boss 全灭 / 全员死亡冻结时调用。resume_horde=true 且尸潮仍在 peak 时接回尸潮 BGM。
@@ -427,11 +430,52 @@ func stop_boss_music(resume_horde: bool = false) -> void:
 	if _boss_music_player:
 		_boss_music_player.stop()
 	boss_music_changed.emit(false)
+	_announce_music("boss", false)
 	print("[Director] Boss BGM 停止")
 	if resume_horde:
 		var pc: Node = get_node_or_null("PacingController")
 		if pc and pc.get("current_phase") == 1:  # 1 = peak
 			_play_horde_music()
+
+
+## ── 联机：BGM 事件转发（A6，2026-09-18）──
+## Client 的 _process 整体早退 → 尸潮/Boss BGM 从不播放。Host 在真正的起停
+## 发生处经 NetworkWorld 广播 music key（"horde"/"boss"），音源由 Client 从
+## 本地 current_config 解析（场景切换钩子对所有 peer 生效 → Client 也有值），
+## 资源不经网络传输（白名单铁律）。
+func _announce_music(music_key: String, active: bool) -> void:
+	# Client 不会走到这里（_process 早退），此闸兜底防御 + 避免表现回环二次广播。
+	if _is_network_client_session():
+		return
+	var tree := get_tree()
+	if tree == null:
+		return
+	var scene := tree.current_scene
+	if scene == null:
+		return
+	var world: Node = scene.find_child("NetworkWorld", true, false)
+	if world and world.has_method("announce_director_music"):
+		world.call("announce_director_music", music_key, active)
+
+
+## Client 收到 NetworkWorld 的 BGM 事件后调用：复用既有起停函数——音源/音量
+## 从本地 current_config 解析，_boss_music_active 状态与 boss_music_changed
+## 信号一并维护（Client 的 HoldoutMachine 靠该信号挂起/恢复防守战 BGM）。
+## reliable RPC 保序：Host 的 boss=false → horde=true 序列在 Client 以同序重放。
+func apply_network_music(music_key: String, active: bool) -> void:
+	match music_key:
+		"horde":
+			if active:
+				_play_horde_music()
+			else:
+				_stop_horde_music()
+		"boss":
+			if active:
+				play_boss_music(null)  # watch 监视是 Host 职责，Client 只管播放
+			else:
+				stop_boss_music(false)  # 尸潮接回由随后到达的 horde=true 事件驱动
+		_:
+			push_warning("[Director] 未知 BGM key: %s" % music_key)
 
 ## 每帧调用：Boss 全灭（tank 组空 + 监视列表全灭）→ 收 Boss BGM。
 func _update_boss_music() -> void:
