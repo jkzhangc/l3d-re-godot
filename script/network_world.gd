@@ -308,6 +308,8 @@ func _ready() -> void:
 				call_deferred("_run_auto_client_ready_input_test")
 			elif _is_auto_enemy_test_scene():
 				call_deferred("_run_auto_client_enemy_test")
+			elif _is_auto_appearance_test():
+				call_deferred("_run_auto_client_appearance_test")
 			elif _is_auto_safe_door_test_scene():
 				call_deferred("_run_auto_client_safe_door_test")
 			elif "--net-test-safe-door" not in OS.get_cmdline_user_args():
@@ -330,6 +332,8 @@ func _ready() -> void:
 			call_deferred("_run_auto_host_ready_input_test")
 		elif _is_auto_enemy_test_scene():
 			call_deferred("_run_auto_host_enemy_test")
+		elif _is_auto_appearance_test():
+			call_deferred("_run_auto_host_appearance_test")
 		elif _is_auto_safe_door_test_scene():
 			call_deferred("_run_auto_host_safe_door_test")
 	print("[NetworkWorld] ready host=%s scene=%s" % [net.is_host, _scene_path])
@@ -4426,6 +4430,137 @@ func _run_auto_client_enemy_test() -> void:
 		return
 	print("[NetworkWorld] AUTO_ENEMY_CLIENT_DEATH_COMPLETE")
 	# Give the Host smoke coroutine one network tick to record its own assertion before teardown.
+	await get_tree().create_timer(0.20).timeout
+	net.leave()
+	get_tree().quit()
+
+
+## ── D2 外观/难度一致性回归（--net-test-appearance，第一关街道图）──
+## Host：定向刷 1 特感（ブレインディモス，Director.spawn_special_enemy 生产路径）
+## + 1 变体丧尸（中年ゾンビ，与 spawn_enemy 同字段注入），等收编后周期性广播吐酸
+## 表现（镜像弹纯视觉，多次广播幂等无害）。Client 断言四件套：
+##   A1 特感 spawn 外观注入 / A5 变体行走图重建 / A2 酸弹镜像 / B1 难度覆写
+##   （Host --net-test-difficulty=2，Client 预置 1，进图后必须被同步覆写为 2）。
+func _is_auto_appearance_test() -> bool:
+	return "--net-test-appearance" in OS.get_cmdline_user_args() and "突袭-第一关-街道" in _scene_path
+
+
+func _run_auto_host_appearance_test() -> void:
+	var deadline := Time.get_ticks_msec() + 30000
+	while _ready_client_peers.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.10).timeout
+	if not is_instance_valid(self) or _scene_transitioning or not net.is_host:
+		return
+	var decor := get_tree().current_scene.find_child("DecorLayer", true, false) as Node2D
+	var player := get_tree().get_first_node_in_group("player") as Node2D
+	if decor == null or player == null:
+		printerr("[NetworkWorld] AUTO_APPEARANCE_HOST_FAILED missing_decor_or_player")
+		net.leave()
+		get_tree().quit(1)
+		return
+	# 特感：走 Director 生产路径（注入 special_data → 快照携带 special_id）。
+	var special_data := load("res://tres/specials/ブレインディモス.tres") as SpecialEnemyData
+	var director := get_node_or_null("/root/Director")
+	if special_data == null or director == null or not director.has_method("spawn_special_enemy"):
+		printerr("[NetworkWorld] AUTO_APPEARANCE_HOST_FAILED missing_special_pipeline")
+		net.leave()
+		get_tree().quit(1)
+		return
+	var sp: Node2D = director.spawn_special_enemy(player.global_position + Vector2(140.0, 0.0), special_data, decor)
+	# 变体：与 spawn_enemy 同字段注入（apply_to_enemy + variant_data → 快照携带 variant_id）。
+	var variant := load("res://tres/zombies/中年ゾンビ.tres") as ZombieVariant
+	if variant == null:
+		printerr("[NetworkWorld] AUTO_APPEARANCE_HOST_FAILED missing_variant_tres")
+		net.leave()
+		get_tree().quit(1)
+		return
+	var zombie := ENEMY_SCENE.instantiate() as CharacterBody2D
+	zombie.global_position = player.global_position + Vector2(-140.0, 0.0)
+	variant.apply_to_enemy(zombie)
+	zombie.variant_data = variant
+	decor.add_child(zombie)
+	# 等收编（_register_untracked_host_enemies 周期扫描）。
+	deadline = Time.get_ticks_msec() + 8000
+	var registered := false
+	while Time.get_ticks_msec() < deadline and not registered:
+		registered = _find_entity_id_by_filter(func(e: CharacterBody2D) -> bool: return e.get_network_special_id() == "brain_demos") > 0 \
+			and _find_entity_id_by_filter(func(e: CharacterBody2D) -> bool: return e.get_network_variant_id() == "chunen") > 0
+		if not registered:
+			await get_tree().create_timer(0.10).timeout
+	if not registered:
+		printerr("[NetworkWorld] AUTO_APPEARANCE_HOST_FAILED not_registered")
+		net.leave()
+		get_tree().quit(1)
+		return
+	# ⚠ 标记必须先于吐酸广播：net-test 下 Client 一断开 Host 即被
+	# _finish_auto_host_after_client_leave 收束，挂起协程不再恢复——若把
+	# COMPLETE 放在广播循环之后，Client 先退出时标记永远打不出来。
+	print("[NetworkWorld] AUTO_APPEARANCE_HOST_COMPLETE special=brain_demos variant=chunen")
+	# 吐酸表现广播 ×6（镜像弹纯视觉即焚，重复广播幂等），收尾尽力执行。
+	for i: int in 6:
+		var sp_node := _resolve_enemy_entry(_enemies.get(_find_entity_id_by_filter(func(e: CharacterBody2D) -> bool: return e.get_network_special_id() == "brain_demos"), {}) as Dictionary)
+		if is_instance_valid(sp_node):
+			announce_enemy_acid_spit(sp_node, sp_node.global_position, Vector2.RIGHT)
+		await get_tree().create_timer(0.50).timeout
+	await get_tree().create_timer(3.0).timeout
+
+
+func _find_entity_id_by_filter(filter: Callable) -> int:
+	for key: Variant in _enemies.keys():
+		var enemy := _resolve_enemy_entry(_enemies[key] as Dictionary)
+		if is_instance_valid(enemy) and int(enemy.get("network_entity_id")) > 0 and filter.call(enemy):
+			return int(key)
+	return 0
+
+
+func _run_auto_client_appearance_test() -> void:
+	# 与 network_world 白名单同一份 tres：Client 重建用 preload 常量，断言用 load()
+	# 取回的是同一缓存实例，纹理按引用相等比较成立。
+	var special_res := load("res://tres/specials/ブレインディモス.tres") as SpecialEnemyData
+	var variant_res := load("res://tres/zombies/中年ゾンビ.tres") as ZombieVariant
+	var deadline := Time.get_ticks_msec() + 35000
+	var special_hit := false
+	var variant_hit := false
+	while Time.get_ticks_msec() < deadline and not (special_hit and variant_hit):
+		special_hit = false
+		variant_hit = false
+		for key: Variant in _enemies.keys():
+			var enemy := _resolve_enemy_entry(_enemies[key] as Dictionary)
+			if not is_instance_valid(enemy):
+				continue
+			if not special_hit and enemy.get("walk_texture") == special_res.texture \
+					and enemy.get("spit_enabled") == true:
+				special_hit = true
+			if not variant_hit and enemy.get("walk_texture") == variant_res.normal_texture:
+				variant_hit = true
+		if special_hit and variant_hit:
+			break
+		await get_tree().create_timer(0.10).timeout
+	if not is_instance_valid(self) or _scene_transitioning:
+		return
+	if not (special_hit and variant_hit):
+		printerr("[NetworkWorld] AUTO_APPEARANCE_CLIENT_FAILED special=%s variant=%s enemies=%d" % [special_hit, variant_hit, _enemies.size()])
+		net.leave()
+		get_tree().quit(1)
+		return
+	# 酸弹镜像（A2）：Host 周期广播，任意时刻场景里出现非权威镜像弹即通过。
+	deadline = Time.get_ticks_msec() + 12000
+	var mirror_seen := false
+	while Time.get_ticks_msec() < deadline and not mirror_seen:
+		for child: Node in get_tree().current_scene.get_children():
+			if child is EnemyAcidSpit and child.get("_authoritative") == false:
+				mirror_seen = true
+				break
+		if not mirror_seen:
+			await get_tree().create_timer(0.05).timeout
+	# 难度一致性（B1）：Client 预置 1、Host 固定 2 —— 进图后必须被 start_game 覆写。
+	var difficulty_ok: bool = Global.selected_difficulty == 2
+	if not mirror_seen or not difficulty_ok:
+		printerr("[NetworkWorld] AUTO_APPEARANCE_CLIENT_FAILED mirror=%s difficulty=%d (expected 2)" % [mirror_seen, Global.selected_difficulty])
+		net.leave()
+		get_tree().quit(1)
+		return
+	print("[NetworkWorld] AUTO_APPEARANCE_CLIENT_COMPLETE mirror=true difficulty=2")
 	await get_tree().create_timer(0.20).timeout
 	net.leave()
 	get_tree().quit()

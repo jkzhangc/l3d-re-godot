@@ -97,6 +97,18 @@ SCENARIOS: dict[str, dict] = {
         {"host": ["AUTO_ENEMY_HOST_COMPLETE", "AUTO_ENEMY_HOST_DEATH_COMPLETE"],
          "client0": ["AUTO_ENEMY_CLIENT_COMPLETE", "AUTO_ENEMY_CLIENT_DEATH_COMPLETE"]},
     ),
+    "appearance": _scenario(
+        "外观/难度端到端：特感 A1 复制 + 变体 A5 重建 + 酸弹 A2 镜像 + 难度 B1 同步（第一关街道图）",
+        ["--net-test=host", "--net-test-appearance", "--net-test-scene=enemies",
+         "--net-test-difficulty=2"],
+        [["--net-test=client", "--net-test-appearance", "--net-test-scene=enemies",
+          "--net-test-difficulty=1"]],
+        {"host": ["AUTO_APPEARANCE_HOST_COMPLETE"],
+         "client0": ["AUTO_APPEARANCE_CLIENT_COMPLETE"]},
+        retries=1,
+        note="难度断言为异值设计：Host 固定难度 2，Client 预置 1，进图后必须被 B1 的 "
+             "start_game 覆写为 2（两端同值则断言退化为平凡成立，故必须异值）。",
+    ),
     "downed-wipe": _scenario(
         "倒地 → 流血 → 真死亡 → 团灭黑屏 → 重载本章收敛（test 图）",
         ["--net-test=host", "--net-test=downed-wipe", "--net-test-scene=test"],
