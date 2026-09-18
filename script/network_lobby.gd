@@ -148,7 +148,9 @@ func _run_auto_host() -> void:
 			return
 	var game_scene := _get_game_scene_for_launch()
 	print("[AUTO] host 握手完成，广播开始游戏: %s" % game_scene)
-	net.start_game.rpc(game_scene)
+	# D2 修正：开局 RPC 必须携带难度（B1 随 start_game 广播）；原调用漏参导致
+	# net-test 流程恒走 -1（不覆盖），Client 的 Global.selected_difficulty 与 Host 脱钩。
+	net.start_game.rpc(game_scene, "", null, Global.selected_difficulty)
 
 
 func _run_auto_client() -> void:
@@ -282,7 +284,9 @@ func _on_start_pressed() -> void:
 		_refresh_ui()
 		return
 	_log("全部角色已确认，广播开始游戏 ...")
-	net.start_game.rpc(GAME_SCENE)
+	# B1 难度同步（D2 用例暴露）：开局广播必须携带难度 —— 原调用漏参（默认 -1 不覆盖），
+	# 联机开局的 Client 难度从未被同步，只有中途切图（request_scene_change）才带上。
+	net.start_game.rpc(GAME_SCENE, "", null, Global.selected_difficulty)
 
 
 func _on_leave_pressed() -> void:

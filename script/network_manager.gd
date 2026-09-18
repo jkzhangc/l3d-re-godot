@@ -80,6 +80,16 @@ var _signals_connected := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 【回归专用】--net-test-difficulty=N（D2 难度一致性用例）：autoload 启动期覆盖
+	# 难度，早于 lobby 的 start_game（难度随开局 RPC 广播）。用法：Host 传目标值，
+	# Client 传不同的本地预置值 —— 进图后 Client 断言被 B1 同步覆写为 Host 值，
+	# 从而端到端证明难度通道生效（若只写 Client 不写 Host，断言恒假；两边同值则退化
+	# 为平凡成立，因此两端必须异值）。正式游戏绝不会带此参数。
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test-difficulty="):
+			Global.selected_difficulty = argument.trim_prefix("--net-test-difficulty=").to_int()
+			print("[Net] AUTO_DIFFICULTY_OVERRIDE selected_difficulty=%d" % Global.selected_difficulty)
+			break
 
 func has_network() -> bool:
 	return multiplayer.multiplayer_peer != null and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer)
