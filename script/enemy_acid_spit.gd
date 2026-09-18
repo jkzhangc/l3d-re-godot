@@ -2,7 +2,9 @@ class_name EnemyAcidSpit extends Area2D
 
 ## ── 架构定位 ──
 ## 系统：敌人攻击 ｜ 层：玩法（Area2D 投射物）
-## 联机：仅 Host/单机生成（Client 暂不还原吐酸演出，与首狩り的 Client 视觉妥协同层级）。
+## 联机：Host/单机生成权威弹（结算伤害与相消）；Client 经 enemy_acid_spit_presentation
+##       RPC 生成 _authoritative=false 镜像弹（A2）——只做视觉与音效：撞墙/寿命/穿身播
+##       特效音效即焚，伤害与相消全部 Host 判定。
 ## 职责：ブレインディモス 的酸弹 —— 全工程首个敌方投射物：
 ##       直飞 → 命中玩家（伤害 + element=酸 → 削り自动触发）/ 撞墙销毁 / 与玩家子弹相消。
 ## 依赖：art/misc/ブレインディモス酸弾.png（12 帧动画）、sound/酸着弾.ogg
@@ -19,6 +21,9 @@ var direction: Vector2 = Vector2.RIGHT
 var speed: float = 450.0
 var damage: float = 8.0
 var source_id: int = 0
+## 权威闸（同 ThrowableProjectile/FirePatch 模式）：true 才结算伤害与相消。
+## Client 镜像弹必须为 false，避免每台机器重复结算（穿身/相消只走表现）。
+var _authoritative: bool = true
 ## 命中/落地特效（VXAnimSprite 场景）与染色——由 EnemySpitState 从特感 tres 透传。
 ## 空 = 不播特效。命中玩家与撞墙/落地共用。
 var impact_effect: PackedScene = null
@@ -68,22 +73,23 @@ func _physics_process(delta: float) -> void:
 	global_position += direction * speed * delta
 
 
-## 命中任何 body：玩家 → 结算伤害；墙/机器 → 直接碎裂。
+## 命中任何 body：玩家 → 结算伤害（仅权威）；墙/机器 → 直接碎裂。
+## 镜像弹（非权威）任何 body 都只播特效即焚——伤害由 Host 权威弹结算。
 func _on_body_entered(body: Node2D) -> void:
 	if _dead:
 		return
-	if body.has_method("take_damage") and body.get("_is_dying") != true:
+	if _authoritative and body.has_method("take_damage") and body.get("_is_dying") != true:
 		## 見切/SA 无效化在 take_damage 内部处理（与敌人近战同入口）。
 		body.take_damage(damage, 60.0, direction, false, 0.0, 0.0, source_id,
 			WeaponData.Element.ACID, false)
 	_impact()
 
 
-## 与玩家子弹相消（原作「酸で銃弾を相殺」）：双方销毁。
+## 与玩家子弹相消（原作「酸で銃弾を相殺」）：双方销毁（仅权威——镜像弹不参与）。
 ## 玩家子弹 collision_layer=64（「玩家弹」），本 Area2D mask 含 64 才能感知它。
 ## 注意：进组的节点是子弹的 Area2D 子节点，销毁必须作用到子弹根节点（否则留下隐形弹体继续飞）。
 func _on_area_entered(area: Area2D) -> void:
-	if _dead:
+	if _dead or not _authoritative:
 		return
 	if area.is_in_group(PLAYER_BULLET_GROUP):
 		var root: Node = area.get_parent()
@@ -123,3 +129,25 @@ func _play_impact_effect() -> void:
 		return
 	VXAnimSprite.play_scene(impact_effect, global_position, parent,
 		10.0, null, Vector2.ZERO, impact_tone)
+
+
+## Client 非权威镜像弹生成（A2 联机视觉还原，NetworkWorld.enemy_acid_spit_presentation 调用）。
+## 出口/方向来自 Host 广播；速度/特效/tone 由 RPC 侧从 Client 本地 enemy 节点字段解析
+## （A1 的 apply_to_enemy 注入保证特感节点有值），资源不经网络传输。
+## 镜像弹不结算伤害、不参与相消；撞墙/寿命到点/穿身播特效音效即焚。
+static func spawn_mirror(parent: Node, spawn_pos: Vector2, dir: Vector2, speed: float,
+		impact_effect_: PackedScene, impact_tone_: Color) -> void:
+	if parent == null:
+		return
+	## ⚠ 本脚本类自带 class_name → 这里必须用运行时 load() 而非 preload：
+	## preload 自场景会形成 enemy_acid_spit.gd ↔ enemy_acid_spit.tscn 循环依赖，
+	## 任何引用 EnemyAcidSpit 类名的脚本都会在编译期一起崩（SIGTERM 无输出）。
+	var scene: PackedScene = load("res://object/enemy_acid_spit.tscn")
+	var proj: EnemyAcidSpit = scene.instantiate()
+	proj.global_position = spawn_pos
+	proj.direction = dir
+	proj.speed = speed
+	proj.impact_effect = impact_effect_
+	proj.impact_tone = impact_tone_
+	proj._authoritative = false
+	parent.add_child(proj)

@@ -2,8 +2,9 @@ class_name EnemySpitState extends State
 
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
-## 联机：Host 权威生成酸弹；Client 靠 transform 快照跟随、靠 visual_char_index 拿吐酸帧
-##       （酸弹本体暂不在 Client 还原 —— 与首狩り的 Client 视觉妥协同层级，后续接 RPC）。
+## 联机：Host 权威生成酸弹；Client 靠 transform 快照跟随、靠 visual_char_index 拿吐酸帧。
+##       出酸瞬间经 NetworkWorld 广播 enemy_acid_spit_presentation（A2）→ Client 生成
+##       非权威镜像弹（只做视觉音效，伤害/相消仍 Host 判定）。
 ## 职责：远程吐酸 —— ブレインディモス 专属（全工程首个敌人远程攻击状态）：
 ##       中距离停步 → 后仰蓄力 → 吐出酸弹（命中玩家：伤害+削り；与玩家子弹相消）→ 后摇 → 回追击。
 ## 依赖：State、enemy 实体（spit_* 系列参数）、object/enemy_acid_spit.tscn
@@ -142,3 +143,19 @@ func _fire_acid(enemy: Node2D) -> void:
 	if parent == null:
 		parent = enemy.get_parent()
 	parent.add_child(proj)
+	## A2 联机：把本次吐酸广播给 Client（单机/无联机时在 NetworkWorld 内 no-op）。
+	_announce_network_spit(enemy, spawn_pos, dir)
+
+
+## Host：吐酸事件广播（entity_id + 出口坐标 + 方向）。速度/特效/音效由 Client 从
+## 本地 enemy 节点字段解析（A1 注入保证有值），资源不经网络传输。
+func _announce_network_spit(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -> void:
+	var tree := enemy.get_tree()
+	if tree == null:
+		return
+	var scene := tree.current_scene
+	if scene == null:
+		return
+	var world := scene.find_child("NetworkWorld", true, false)
+	if world != null and world.has_method("announce_enemy_acid_spit"):
+		world.call("announce_enemy_acid_spit", enemy, spawn_pos, dir)

@@ -218,6 +218,8 @@ var _auto_client_attack_weapon_id := ""
 ## --net-test-features 专用：只统计 Client 收到的可靠受伤表现 RPC，不参与正式玩法。
 var _auto_client_player_hurt_presentations := 0
 var _auto_client_enemy_hurt_presentations := 0
+## --net-test-features 专用：统计 Client 收到的可靠吐酸表现 RPC（A2 酸弹镜像回归断言用）。
+var _auto_client_enemy_acid_spits := 0
 ## --net-test-enemies 专用：统计 Client 收到的可靠敌人死亡表现 RPC。
 var _auto_client_enemy_death_presentations := 0
 var _auto_client_ready_input_seen_by_host := false
@@ -1927,6 +1929,40 @@ func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, i
 		if _is_auto_network_feature_test():
 			_auto_client_enemy_hurt_presentations += 1
 			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s" % [entity_id, damage, is_headshot])
+
+
+## Host：EnemySpitState 出酸瞬间调用（A2 酸弹镜像）。单机/Client 调用为 no-op。
+## 只传 entity_id + 出口坐标 + 方向；速度/特效/音效由 Client 从本地 enemy 节点字段解析
+## （A1 的 apply_to_enemy 注入保证特感节点有值），资源不经网络传输（白名单铁律）。
+func announce_enemy_acid_spit(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = enemy.network_entity_id
+	if entity_id <= 0:
+		# 尚未被收编（吐酸早于 register 周期的极端时序）→ 丢弃本次表现，下次吐酸照常广播。
+		return
+	enemy_acid_spit_presentation.rpc(entity_id, spawn_pos, dir)
+
+
+## Client：生成非权威镜像酸弹并播放吐酸音（与 Host 出酸瞬间同帧语义）。
+## 镜像弹撞墙/寿命/穿身只播特效音效即焚，伤害与相消全部 Host 判定。
+@rpc("authority", "call_remote", "reliable")
+func enemy_acid_spit_presentation(entity_id: int, spawn_pos: Vector2, dir: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if not is_instance_valid(enemy):
+		return
+	var parent: Node = get_tree().current_scene
+	if parent == null:
+		parent = enemy.get_parent()
+	EnemyAcidSpit.spawn_mirror(parent, spawn_pos, dir,
+		enemy.spit_projectile_speed, enemy.spit_impact_effect, enemy.spit_impact_tone)
+	# 吐酸音（Client 本地 enemy 字段解析，与 Host _fire_acid 的出酸瞬间播音同语义）。
+	enemy._play_sound(enemy.spit_sound, enemy.spit_sound_pitch)
+	if _is_auto_network_feature_test():
+		_auto_client_enemy_acid_spits += 1
+	print("[NetworkWorld] CLIENT_ENEMY_ACID_SPIT entity=%d pos=%s" % [entity_id, spawn_pos])
 
 
 ## Host：每帧检查是否有敌人刚刚进入死亡，并用可靠 RPC 广播死亡表现。
@@ -4312,9 +4348,18 @@ func _run_auto_client_throwable_pickup_test() -> void:
 		await get_tree().create_timer(0.05).timeout
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := entry.get("node") as CharacterBody2D
-	var source := _find_client_pickup_by_throwable_id(NETWORK_GRENADE.item_id)
-	if not is_instance_valid(node) or not is_instance_valid(source):
-		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_SETUP_FAILED player=%s source=%s" % [is_instance_valid(node), is_instance_valid(source)])
+	## 安全屋开局随机掉落表的投掷物是混合概率（grenade/molotov/flash 只会刷出其一或都不出），
+	## 用例若只找手雷会随掉落随机性摆烂（2026-09-18 连续两轮 SETUP_FAILED，Host 该局刷的是
+	## 燃烧瓶）——泛化为「任一白名单投掷物掉落」，消除 setup 的运气依赖。
+	var td: ThrowableData = null
+	var source: Node2D = null
+	for throwable_id: String in NETWORK_THROWABLES.keys():
+		source = _find_client_pickup_by_throwable_id(throwable_id)
+		if is_instance_valid(source):
+			td = NETWORK_THROWABLES[throwable_id] as ThrowableData
+			break
+	if not is_instance_valid(node) or not is_instance_valid(source) or td == null:
+		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_SETUP_FAILED player=%s source=%s td=%s" % [is_instance_valid(node), is_instance_valid(source), td != null])
 		return
 	var source_id := int(source.get("network_pickup_id"))
 	var source_position := source.global_position
@@ -4352,7 +4397,7 @@ func _run_auto_client_throwable_pickup_test() -> void:
 	while Time.get_ticks_msec() < deadline:
 		entry = _players.get(int(net.my_peer_id), {})
 		var state := entry.get("state") as PlayerState
-		acquired = state != null and state.throwable == NETWORK_GRENADE
+		acquired = state != null and state.throwable == td
 		removed = not _pickups.has(source_id)
 		if acquired and removed:
 			break
