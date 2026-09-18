@@ -311,6 +311,10 @@ func _process(delta: float) -> void:
 	if network_controlled:
 		_update_shove_fatigue(delta)
 		_update_tp_regen(delta)
+		# 覚醒（C1）：联机实体（Host 权威实体 / Client 本地预测实体）也持续推进
+		# TP 扣费与自动解除——与 _update_tp_regen 同款「数值型每帧更新」模式；
+		# 各实体解析各自域的 PlayerState（Host 权威 / Client 本地显示），同速同规则。
+		_update_awaken(delta)
 		# 本地预测实体由 NetworkWorld 在物理帧直接移动；权威快照只提供纠偏目标，
 		# 绝不直接写位置 —— 否则预测位置被反复拉回权威坐标，表现为拖影/顿挫。
 		if network_local_prediction and not _is_dying and _network_has_target:
@@ -1454,6 +1458,15 @@ func try_activate_awaken() -> bool:
 		return false
 	if not Input.is_action_pressed("覚醒键"):
 		return false
+	return _activate_awaken_core()
+
+
+## 覚醒发动核心（无 Input 读取）：联机下 Host 替 Client 玩家结算时经此入口
+## （Host 上读不到 Client 键盘，输入判定由 Client 的 awaken_request 上报替代）。
+## 校验 awaken_type + TP（PlayerState 权威值），成功后置 _awaken_active + 金色染色。
+func _activate_awaken_core() -> bool:
+	if _awaken_active or _is_dying:
+		return false
 	if current_character == null or current_character.awaken_type == "none":
 		return false
 	var state: PlayerState = Players.get_state_for_entity(self)
@@ -1496,6 +1509,40 @@ func _deactivate_awaken() -> void:
 	if sprite and _awaken_tint_applied:
 		sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
 		_awaken_tint_applied = false
+	# 联机（C1）：Host 权威实体上任何解除路径（TP 耗尽/死亡/放下武器）统一出口广播；
+	# 单机/Client 端 find_child 找不到 NetworkWorld → no-op。
+	var tree := get_tree()
+	if tree:
+		var scene := tree.current_scene
+		if scene:
+			var world: Node = scene.find_child("NetworkWorld", true, false)
+			if world and world.has_method("announce_player_awaken"):
+				world.call("announce_player_awaken", self, false)
+
+
+## 联机表现接口（C1，由 NetworkWorld 的 awaken_presentation 调用）：
+## 置 _awaken_active + 染色还原——发起者本人的 Client 也经此获得即时染色，
+## 其余 Client 的远端玩家同款；后续 TP 扣费由本实体 _process 的
+## network_controlled 分支内 _update_awaken 各自域独立推进（同速同规则）。
+func apply_network_awaken_state(active: bool) -> void:
+	if active:
+		if _awaken_active:
+			return
+		if current_character == null or current_character.awaken_type == "none":
+			return
+		_awaken_active = true
+		if sprite:
+			sprite.modulate = Color(1.9, 1.7, 0.9)
+			_awaken_tint_applied = true
+		print("[覚醒] 联机染色 ON（peer 表现）")
+	else:
+		if not _awaken_active:
+			return
+		_awaken_active = false
+		if sprite and _awaken_tint_applied:
+			sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
+			_awaken_tint_applied = false
+		print("[覚醒] 联机染色 OFF（peer 表现）")
 
 
 ## 削り：削减装备中武器的弹药/耐久。

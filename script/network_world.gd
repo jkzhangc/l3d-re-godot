@@ -224,6 +224,10 @@ var _auto_client_enemy_acid_spits := 0
 var _auto_client_enemy_sfx := 0
 ## --net-test-features 专用：统计 Client 收到的可靠导演 BGM 事件 RPC（A6 回归断言用）。
 var _auto_client_director_music := 0
+## --net-test-features 专用：统计 Client 收到的可靠覚醒染色表现 RPC（C1 回归断言用）。
+var _auto_client_awaken_presentations := 0
+## Host：当前覚醒中的玩家 peer 集合（C1）——中途加入的 Client 据此补发染色。
+var _awaken_active_peers := {}
 ## --net-test-enemies 专用：统计 Client 收到的可靠敌人死亡表现 RPC。
 var _auto_client_enemy_death_presentations := 0
 var _auto_client_ready_input_seen_by_host := false
@@ -377,6 +381,7 @@ func _physics_process(delta: float) -> void:
 			_capture_reload_input()
 			_capture_shove_input()
 			_capture_fire_input()
+			_capture_awaken_input()
 	if net.is_host:
 		_capture_host_input(inputs_frozen)
 		_simulate_host_players(delta)
@@ -923,6 +928,21 @@ func _capture_shove_input() -> void:
 		_try_host_shove(int(net.my_peer_id))
 	elif _client_local_ready:
 		shove_request.rpc_id(1)
+
+
+## 覚醒（集中射撃）输入收集（C1）：構え（武器模式）中按覚醒键上报请求，
+## Host 校验 awaken_type/TP/存活后统一结算并发染色表现。
+func _capture_awaken_input() -> void:
+	if not Input.is_action_just_pressed("覚醒键"):
+		return
+	if net.is_host:
+		_try_host_awaken(int(net.my_peer_id))
+	elif _client_local_ready:
+		# 轻量预校验（本地 node 的武器模式由表现接口维护）减少无效请求；TP 由 Host 权威校验。
+		var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+		var node := entry.get("node") as CharacterBody2D
+		if is_instance_valid(node) and node.is_weapon_mode_active():
+			awaken_request.rpc_id(1)
 
 
 func _capture_fire_input() -> void:
@@ -1686,6 +1706,10 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 		"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
 		"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else wd.hitstun_duration,
 		"shooter": shooter,
+		# 覚醒（集中射撃）即死・怯み（C1 补缺）：单机走 PlayerPistolAttackState 同款
+		# 判定（awaken or bd.instant_kill）；Host node 的 _awaken_active 由
+		# awaken_request 权威流程维护，Host 权威弹据此携带即死标志。
+		"instant_kill": shooter.is_awaken_active() or bd.instant_kill,
 	})
 	bullet.global_position = start_position
 	get_tree().current_scene.add_child(bullet)
@@ -1818,6 +1842,77 @@ func reload_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, lo
 		return
 	state.set_magazine_ammo(wd.item_id, magazine_ammo)
 	node.play_network_reload_presentation(wd, loaded_count)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func awaken_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_awaken(sender)
+
+
+## Host：覚醒（集中射撃）发动结算（C1）。武器/存活可查 node，TP 为 PlayerState
+## 权威值；发动核心走 _activate_awaken_core（无 Input 读取）。成功后广播染色表现，
+## 并记入 _awaken_active_peers 供中途加入的 Client 补发。
+func _try_host_awaken(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
+		return
+	if not node.is_weapon_mode_active():
+		return
+	var cd: CharacterData = node.get("current_character") as CharacterData
+	if cd == null or cd.awaken_type == "none":
+		return
+	if state.current_tp <= 0:
+		return
+	if not node._activate_awaken_core():
+		return
+	_awaken_active_peers[peer_id] = true
+	awaken_presentation.rpc(peer_id, true)
+	print("[NetworkWorld] HOST_AWAKEN peer=%d tp=%d" % [peer_id, state.current_tp])
+
+
+## Host：player._deactivate_awaken 的统一解除出口（TP 耗尽/死亡/放下武器）调用。
+## 单机（无 NetworkWorld 节点）或 Client 端为 no-op。
+func announce_player_awaken(node: Node2D, active: bool) -> void:
+	if not net.is_host:
+		return
+	if active:
+		return  # 激活广播只走 _try_host_awaken（含白名单记录）
+	var peer_id := _peer_id_for_node(node)
+	if peer_id <= 0 or not _awaken_active_peers.has(peer_id):
+		return
+	_awaken_active_peers.erase(peer_id)
+	awaken_presentation.rpc(peer_id, false)
+	print("[NetworkWorld] HOST_AWAKEN_OFF peer=%d" % peer_id)
+
+
+func _peer_id_for_node(node: Node2D) -> int:
+	for peer_id: int in _players.keys():
+		if _players[peer_id].get("node") == node:
+			return peer_id
+	return 0
+
+
+## Client：覚醒染色表现（发起者本人 + 其余远端玩家同款；后续 TP 各域独立推进）。
+@rpc("authority", "call_remote", "reliable")
+func awaken_presentation(peer_id: int, active: bool) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := entry.get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("apply_network_awaken_state"):
+		node.call("apply_network_awaken_state", active)
+	if _is_auto_network_feature_test():
+		_auto_client_awaken_presentations += 1
+	print("[NetworkWorld] CLIENT_AWAKEN peer=%d active=%s" % [peer_id, active])
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2293,6 +2388,9 @@ func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 			float(_holdout_state.get("remaining", 0.0)),
 			float(_holdout_state.get("total", 0.0)),
 			int(_holdout_state.get("token", 0)))
+	# 中途加入的 Client 补发覚醒中的玩家染色（C1）。
+	for awaken_peer: int in _awaken_active_peers.keys():
+		awaken_presentation.rpc_id(peer_id, awaken_peer, true)
 
 
 func _send_reliable_world_snapshot(peer_id: int) -> void:
