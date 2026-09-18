@@ -429,6 +429,10 @@ var _forced_target_locked: bool = false
 ## 联机表现层：Host 保持 AI 与伤害权威；Client 只接收并渲染快照。
 var network_entity_id: int = 0
 var network_presentation_only: bool = false
+## Host 侧：spawn_special_enemy 注入的特感数据引用（联机 spawn 快照据此反查
+## NetworkWorld.NETWORK_SPECIALS 白名单 id 下发）。Client 重建节点不走本字段 ——
+## 由 network_world 按 special_id 拿到同一份 tres 后调 apply_to_enemy 注入。
+var special_data: SpecialEnemyData = null
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
 var _network_headshot_death: bool = false
@@ -664,6 +668,11 @@ func _process(delta: float) -> void:
 # ═══════════════════════════════════════
 # 联机表现接口（由 NetworkWorld 调用）
 # ═══════════════════════════════════════
+
+## Host 侧：特感白名单 id（非特感返回空串，快照不带该字段）。
+func get_network_special_id() -> String:
+	return String(special_data.id) if special_data != null else ""
+
 
 ## entity_id 为 Host 分配的稳定实体 ID。presentation_only=true 时关闭本地 AI/判定。
 func configure_network_entity(entity_id: int, presentation_only: bool) -> void:

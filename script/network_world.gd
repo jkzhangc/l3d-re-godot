@@ -71,6 +71,26 @@ const NETWORK_THROWABLES: Dictionary = {
 	"molotov_01": NETWORK_MOLOTOV,
 	"flash_01": NETWORK_FLASH,
 }
+## 特感（SpecialEnemyData）白名单：键 = tres 的 id 字段（StringName 转字符串）。
+## Host 在 spawn_special_enemy 注入 enemy.special_data 后，spawn 快照携带
+## special_id 下发；Client 命中白名单才在本地重建表现节点（外观/帧表/受击盒）。
+## 与武器/投掷物同铁律：Client RPC 永远只传 id，资源只从本表解析。
+const NETWORK_SPECIAL_GREEN: SpecialEnemyData = preload("res://tres/specials/グリーンソルジャー.tres")
+const NETWORK_SPECIAL_TYRANT: SpecialEnemyData = preload("res://tres/specials/タイラントT002.tres")
+const NETWORK_SPECIAL_HUNTER: SpecialEnemyData = preload("res://tres/specials/ハンター.tres")
+const NETWORK_SPECIAL_HUNTER_BETA: SpecialEnemyData = preload("res://tres/specials/ハンターβ.tres")
+const NETWORK_SPECIAL_HUNTER_GAMMA: SpecialEnemyData = preload("res://tres/specials/ハンターγ.tres")
+const NETWORK_SPECIAL_WITCH: SpecialEnemyData = preload("res://tres/specials/ブレアウィッチ.tres")
+const NETWORK_SPECIALDEMOS: SpecialEnemyData = preload("res://tres/specials/ブレインディモス.tres")
+const NETWORK_SPECIALS: Dictionary = {
+	"green_soldier": NETWORK_SPECIAL_GREEN,
+	"tyrant_t002": NETWORK_SPECIAL_TYRANT,
+	"hunter": NETWORK_SPECIAL_HUNTER,
+	"hunter_beta": NETWORK_SPECIAL_HUNTER_BETA,
+	"hunter_gamma": NETWORK_SPECIAL_HUNTER_GAMMA,
+	"blare_witch": NETWORK_SPECIAL_WITCH,
+	"brain_demos": NETWORK_SPECIALDEMOS,
+}
 ## 快照节拍说明：
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
 ## - Client 只提交输入，并接收 Host 的表现数据。
@@ -1152,6 +1172,12 @@ func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
 
 func _get_network_throwable_data_by_id(item_id: String) -> ThrowableData:
 	return NETWORK_THROWABLES.get(item_id) as ThrowableData
+
+
+func _get_network_special_data(special_id: String) -> SpecialEnemyData:
+	if special_id.is_empty():
+		return null
+	return NETWORK_SPECIALS.get(special_id) as SpecialEnemyData
 
 
 func _get_host_throwable_state(peer_id: int) -> Dictionary:
@@ -2495,6 +2521,12 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 			node = ENEMY_SCENE.instantiate() as CharacterBody2D
 			if not is_instance_valid(node):
 				return
+			# A1 特感复制：可靠通道携带 special_id 时按白名单取同一份 tres，
+			# 用与 Host 完全相同的注入代码（SpecialEnemyData.apply_to_enemy）重建表现。
+			# 必须在 add_child 之前注入 —— enemy._ready() 的 _refresh_sprite 依赖 walk_texture。
+			var special := _get_network_special_data(str(public_state.get("special_id", "")))
+			if special:
+				special.apply_to_enemy(node)
 			node.configure_network_entity(entity_id, true)
 			node.global_position = _packet_position(public_state)
 			_players_parent.add_child(node)
@@ -4465,6 +4497,9 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 		"dead": enemy.is_network_dead(),
 		"headshot": enemy.is_network_headshot_dead(),
 		"element_state": enemy.get_network_element_state(),  # P0-B3
+		# A1 特感复制：非特感为空串；Client 只在可靠通道（spawn RPC / world_snapshot）
+		# 建实体时消费本字段，紧凑快照不带（_normalize_enemy_snapshot 会剥掉）。
+		"special_id": enemy.get_network_special_id(),
 	}
 
 

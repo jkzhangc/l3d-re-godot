@@ -264,3 +264,159 @@ extends Resource
 ## 集中射撃（覚醒）的即死弹免疫。原作 enemy.html ブレインディモス条：即死 ×（即死耐性）。
 ## true = 集中射撃命中时走 Boss 同款结算：伤害 ×1.5 + 0.8s 怯み，不死。
 @export var instant_kill_immune: bool = false
+
+
+# ═══════════════════════════════════════
+# 注入（Host 生成 / Client 重建共用）
+# ═══════════════════════════════════════
+
+## 把本资源的全部字段注入一只 enemy 实例。Host 与 Client 共用同一份注入代码：
+## · Host —— Director.spawn_special_enemy() 在 add_child 前调用（_ready 的 _refresh_sprite
+##   需要注入后的 walk_texture 才能摆对首帧）。
+## · Client —— NetworkWorld 按 special_id 从 NETWORK_SPECIALS 白名单取得本资源后调用
+##   （Client 不跑 AI 状态机，注入的 AI 字段不会生效，只消费外观/帧表/受击盒）。
+## 注意：必须在 add_child 之前调用；initial_facing 由调用方按出生点语义另行设置。
+func apply_to_enemy(enemy: Node) -> void:
+	if texture:
+		enemy.walk_texture = texture
+		enemy.walk_char_index = walk_char_index
+	enemy.move_speed = move_speed
+	enemy.attack_damage = attack_damage
+	# 步行/跑步双移动模式（暴君・猎杀者：-1/0 = 未配置 = 单速）
+	enemy.run_char_index = run_char_index
+	enemy.run_speed = run_speed
+	enemy.run_trigger_distance = run_trigger_distance
+	# 初始行为：特感/Tank 登场即追击（Client 无 AI，字段随注入保持同源）
+	enemy.starts_in_chase = starts_in_chase
+	enemy.chase_acquire_range = chase_acquire_range
+	if float(max_hp) > 0.0:
+		enemy.max_hp = float(max_hp)
+	if attack_range.x > 0.0 and attack_range.y > 0.0:
+		enemy.attack_range = attack_range
+	if attack_hit_range.x > 0.0 and attack_hit_range.y > 0.0:
+		enemy.attack_hit_range = attack_hit_range
+	if attack_cooldown_frames > 0:
+		enemy.attack_cooldown_frames = attack_cooldown_frames
+	if vision_range > 0.0:
+		enemy.vision_range = vision_range
+	enemy.attack_causes_heat = attack_causes_heat
+	enemy.attack_element = attack_element
+	enemy.melee_enabled = melee_enabled
+	enemy.instant_kill_immune = instant_kill_immune
+	# 远程吐酸（ブレインディモス）
+	enemy.spit_enabled = spit_enabled
+	enemy.spit_trigger_min_dist = spit_trigger_min_dist
+	enemy.spit_trigger_max_dist = spit_trigger_max_dist
+	enemy.spit_cooldown_seconds = spit_cooldown_seconds
+	enemy.spit_windup_seconds = spit_windup_seconds
+	enemy.spit_recover_seconds = spit_recover_seconds
+	enemy.spit_projectile_speed = spit_projectile_speed
+	enemy.spit_damage = spit_damage
+	enemy.spit_char_sequence = spit_char_sequence
+	enemy.spit_fire_at_sequence_idx = spit_fire_at_sequence_idx
+	enemy.spit_sound = spit_sound
+	enemy.spit_sound_pitch = spit_sound_pitch
+	enemy.spit_impact_effect = spit_impact_effect
+	enemy.spit_impact_tone = spit_impact_tone
+	# 正面抗性（Hunter β 回避 / Tyrant Normalize）
+	enemy.frontal_damage_mult = frontal_damage_mult
+	enemy.frontal_arc_degrees = frontal_arc_degrees
+	enemy.frontal_normalize = frontal_normalize
+	enemy.frontal_normalize_ratio = frontal_normalize_ratio
+	# 首狩り突进（ハンター 系）
+	enemy.pounce_enabled = pounce_enabled
+	enemy.pounce_trigger_min_dist = pounce_trigger_min_dist
+	enemy.pounce_trigger_max_dist = pounce_trigger_max_dist
+	enemy.pounce_windup_seconds = pounce_windup_seconds
+	enemy.pounce_dash_seconds = pounce_dash_seconds
+	enemy.pounce_speed_mult = pounce_speed_mult
+	enemy.pounce_dash_speed = pounce_dash_speed
+	enemy.pounce_hit_radius = pounce_hit_radius
+	enemy.pounce_homing_turn_rate = pounce_homing_turn_rate
+	enemy.pounce_hit_tolerance = pounce_hit_tolerance
+	enemy.pounce_damage_mult = pounce_damage_mult
+	enemy.pounce_cooldown_seconds = pounce_cooldown_seconds
+	# 冲刺期锁定突刺帧（ハンターγ：原作「直到突刺移动结束之前，一直保持1」）
+	enemy.pounce_hold_frame_during_dash = pounce_hold_frame_during_dash
+	# 特感专属攻击动画帧序列（空 = 沿用丧尸默认帧）
+	if attack_char_sequence.size() > 0:
+		enemy.attack_char_sequence = attack_char_sequence
+	# 攻击动画节奏与判定帧（tres 未配置 = 沿用 enemy 默认）
+	if attack_frame_durations.size() > 0:
+		enemy.attack_frame_durations = attack_frame_durations
+	if hit_at_sequence_idx >= 0:
+		enemy.hit_at_sequence_idx = hit_at_sequence_idx
+	if attack_hit_forward_offset >= 0.0:
+		enemy.attack_hit_forward_offset = attack_hit_forward_offset
+	# 放大版素材帧尺寸（0 = 由 enemy.gd 按贴图自动推断）
+	enemy.sprite_frame_w = sprite_frame_w
+	enemy.sprite_frame_h = sprite_frame_h
+	# 受击表现偏移 + 受击碰撞体（大体型敌人）
+	enemy.hurt_effect_offset = hurt_effect_offset
+	if hurtbox_size != Vector2.ZERO:
+		enemy.hurtbox_size = hurtbox_size
+	if hurtbox_offset != Vector2.ZERO:
+		enemy.hurtbox_offset = hurtbox_offset
+	# 附加动作表（T-002 等：走/攻/死分属不同贴图文件）
+	if attack_texture != null:
+		enemy.attack_texture = attack_texture
+	if death_texture != null:
+		enemy.death_texture = death_texture
+	# death_char_index 语义按「有没有专用死亡表」分流（-1 = 不覆盖）：
+	#   有 death_texture → 它是**死亡表内**的格索引（T-002 = 3）
+	#   无 death_texture → 它是**行走表内**的格索引（女巫 = 3）
+	if death_char_index >= 0:
+		if death_texture != null:
+			enemy.death_texture_char_index = death_char_index
+		else:
+			enemy.death_char_index = death_char_index
+	# 女巫徘徊（ブレアウィッチ）
+	enemy.witch_enabled = witch_enabled
+	enemy.witch_wander_speed = witch_wander_speed
+	enemy.witch_stim_radius = witch_stim_radius
+	enemy.witch_stim_speed = witch_stim_speed
+	enemy.witch_enrage_speed_mult = witch_enrage_speed_mult
+	if witch_scream_sound != null:
+		enemy.witch_scream_sound = witch_scream_sound
+	if witch_scream_sound_pitch > 0.0:
+		enemy.witch_scream_sound_pitch = witch_scream_sound_pitch
+	# 攻击挥击音效（空 = 沿用敌人自身 attack_sound）
+	if attack_sound != null:
+		enemy.attack_sound = attack_sound
+	if attack_sound_pitch > 0.0:
+		enemy.attack_sound_pitch = attack_sound_pitch
+	# 击中目标音效（空 = 沿用敌人自身 hit_target_sound）
+	if hit_target_sound != null:
+		enemy.hit_target_sound = hit_target_sound
+	if hit_target_sound_pitch > 0.0:
+		enemy.hit_target_sound_pitch = hit_target_sound_pitch
+	# 死亡音效（空 = 沿用敌人自身 death_sound）
+	if death_sound != null:
+		enemy.death_sound = death_sound
+	if death_sound_pitch > 0.0:
+		enemy.death_sound_pitch = death_sound_pitch
+	# 首狩り起跳/突进音效（空 = 沿用敌人自身 pounce_sound，再回退 attack_sound）
+	if pounce_sound != null:
+		enemy.pounce_sound = pounce_sound
+	if pounce_sound_pitch > 0.0:
+		enemy.pounce_sound_pitch = pounce_sound_pitch
+	# 丸呑み（ハンターγ）
+	enemy.swallow_enabled = swallow_enabled
+	enemy.swallow_trigger_range = swallow_trigger_range
+	enemy.swallow_chance = swallow_chance
+	enemy.swallow_chew_cycles = swallow_chew_cycles
+	enemy.swallow_chew_interval = swallow_chew_interval
+	enemy.swallow_recover_seconds = swallow_recover_seconds
+	enemy.swallow_char_sequence = swallow_char_sequence
+	enemy.swallow_is_lethal = swallow_is_lethal
+	enemy.swallow_weapon_attrition = swallow_weapon_attrition
+	if swallow_texture != null:
+		enemy.swallow_texture = swallow_texture
+	if discover_sound != null:
+		enemy.discover_sound = discover_sound
+	if discover_sound_pitch > 0.0:
+		enemy.discover_sound_pitch = discover_sound_pitch
+	if hurt_sound != null:
+		enemy.hurt_sound = hurt_sound
+	if hurt_sound_pitch > 0.0:
+		enemy.hurt_sound_pitch = hurt_sound_pitch
