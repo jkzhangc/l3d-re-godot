@@ -1870,6 +1870,30 @@ func set_network_crouch_hold(active: bool) -> void:
 	_network_sa_crouch_hold = active
 
 
+# ── 联机丸呑み表现（C3，由 NetworkWorld 的 swallow_presentation / Host 侧
+#    EnemySwallowState._hide_victim/_restore_victim 调用）──
+
+## 被吞锁定标志：true 期间 NetworkWorld 冻结本实体的移动（Host 模拟与 Client
+## 本地预测两处闸门都读它），Host 侧由 EnemySwallowState 置位，Client 侧由表现置位。
+var network_swallow_locked: bool = false
+
+
+## 吞入/吐出表现：隐藏/恢复 + 碰撞闸（与 EnemySwallowState._hide_victim 同款）
+## 并置 network_swallow_locked 锁。Host 权威实体被 _hide_victim 调用时同样生效
+## （重复隐藏无害），关键是为 _simulate_host_players 提供冻结判据。
+func apply_network_swallow_state(active: bool) -> void:
+	if network_swallow_locked == active:
+		return
+	network_swallow_locked = active
+	visible = not active
+	if active:
+		velocity = Vector2.ZERO
+	for c: Node in get_children():
+		if c is CollisionShape2D or c is CollisionPolygon2D:
+			(c as Node2D).set_deferred("disabled", active)
+	print("[敵人] 联机丸呑み表现：%s（peer 表现）" % ("吞入隐藏" if active else "吐出恢复"))
+
+
 ## 联机（C2）：Client 本地实体按帧记录搓招缓冲——_update_motion_input 挂在
 ## _process 非联机分支，network_controlled 实体不会自行记录，由 NetworkWorld
 ## 的 _capture_sa_input 每帧代为驱动。

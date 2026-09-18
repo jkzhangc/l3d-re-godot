@@ -235,6 +235,12 @@ func _hide_victim() -> void:
 	if _victim == null or not is_instance_valid(_victim):
 		return
 	_victim_hidden = true
+	# 联机（C3）：置 network_swallow_locked 锁——NetworkWorld 的 Host 模拟 /
+	# Client 本地预测都据此冻结被吞玩家（否则会从 Hunterγ 肚子里走出去），
+	# 并广播吞入表现让各 Client 隐藏对应玩家节点。
+	if _victim.has_method("apply_network_swallow_state"):
+		_victim.call("apply_network_swallow_state", true)
+	_announce_swallow(true)
 	_victim.visible = false
 	if _victim.has_method("set_physics_process"):
 		_victim.set_physics_process(false)
@@ -250,6 +256,10 @@ func _restore_victim() -> void:
 	if _victim == null or not is_instance_valid(_victim):
 		_victim_hidden = false
 		return
+	# 联机（C3）：解锁 + 广播吐出表现（幂等；见 _hide_victim 注释）。
+	if _victim.has_method("apply_network_swallow_state"):
+		_victim.call("apply_network_swallow_state", false)
+	_announce_swallow(false)
 	_victim.visible = true
 	if _victim.has_method("set_physics_process"):
 		_victim.set_physics_process(true)
@@ -259,6 +269,20 @@ func _restore_victim() -> void:
 		if c is CollisionShape2D or c is CollisionPolygon2D:
 			(c as Node2D).set_deferred("disabled", false)
 	_victim_hidden = false
+
+
+## 联机（C3）：吞入/吐出表现广播。Host 闸在 NetworkWorld 侧；
+## 单机（无 NetworkWorld 节点）no-op。
+func _announce_swallow(active: bool) -> void:
+	var tree := get_tree()
+	if not tree:
+		return
+	var scene := tree.current_scene
+	if not scene:
+		return
+	var world: Node = scene.find_child("NetworkWorld", true, false)
+	if world and world.has_method("announce_enemy_swallow"):
+		world.call("announce_enemy_swallow", character, _victim, active)
 
 
 ## 无视 ガッツ 的致死入口。优先用玩家自带的强制致死方法，

@@ -227,6 +227,7 @@ var _auto_client_director_music := 0
 ## --net-test-features 专用：统计 Client 收到的可靠覚醒染色表现 RPC（C1 回归断言用）。
 var _auto_client_awaken_presentations := 0
 var _auto_client_sa_presentations := 0      ## C2：sa_presentation 回归计数
+var _auto_client_swallow_presentations := 0 ## C3：swallow_presentation 回归计数
 var _sa_crouch_hold_reported: bool = false  ## C2：Client 侧蹲下按住上报边沿记忆
 ## Host：当前覚醒中的玩家 peer 集合（C1）——中途加入的 Client 据此补发染色。
 var _awaken_active_peers := {}
@@ -368,9 +369,13 @@ func _physics_process(delta: float) -> void:
 		return
 	var local_menu_open := _is_local_menu_open()
 	var local_life := _get_local_player_life_state()
-	# 输入冻结条件：菜单打开、本地玩家真死亡、或团灭收束中 —— 三者都把移动输入归零。
+	# 丸呑み（C3）：本地玩家被吞期间输入全冻结（移动按 blocked 归零提交，
+	# Host 侧由 network_swallow_locked 同步冻结，两端一致静止在吞入点）。
+	var local_swallowed := _is_local_player_swallow_locked()
+	# 输入冻结条件：菜单打开、本地玩家真死亡、团灭收束中、或被丸呑み吞入
+	# ——四者都把移动输入归零。
 	# 倒地（local_life == 1）仍可提交移动输入，由 Host 以爬行速度结算。
-	var inputs_frozen := local_menu_open or local_life == 2 or _wipe_active
+	var inputs_frozen := local_menu_open or local_life == 2 or _wipe_active or local_swallowed
 	if not inputs_frozen and local_life == 0:
 		# 救援占用功能键(D)、投掷占用确定键，都必须在普通战斗输入前优先处理。
 		# 倒地/死亡的本地玩家不进入此分支：他们不能开火、装填、投掷或救援他人。
@@ -451,6 +456,15 @@ func _get_local_player_life_state() -> int:
 	if not node.is_network_dead():
 		return 0
 	return 1 if bool(entry.get("downed", false)) else 2
+
+
+## 本地玩家是否处于丸呑み被吞锁定（C3，供输入闸门使用）。
+func _is_local_player_swallow_locked() -> bool:
+	if not is_instance_valid(net):
+		return false
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	return is_instance_valid(node) and node.get("network_swallow_locked") == true
 
 
 # ---------------------------------------------------------------- Host simulation
@@ -1097,6 +1111,14 @@ func _simulate_host_players(_delta: float) -> void:
 			node.move_with_corner_assist()
 			node.update_appearance(crawling, true)
 			_sync_state_from_node(peer_id, node, crawling, true)
+			continue
+		if node.get("network_swallow_locked") == true:
+			# 丸呑み（C3）：被吞玩家由 EnemySwallowState 冻结在吞入点，
+			# 不吃提交输入（_hide_victim 的 set_physics_process(false) 挡不住
+			# 本函数的直接移动，必须在此显式冻结，否则会从 Hunterγ 肚子里走出去）。
+			node.velocity = Vector2.ZERO
+			_set_input(peer_id, Vector2.ZERO, false)
+			_sync_state_from_node(peer_id, node, false, false)
 			continue
 		var direction: Vector2 = entry.get("input", Vector2.ZERO)
 		var walking: bool = bool(entry.get("walking", false))
@@ -2098,6 +2120,39 @@ func heat_presentation(peer_id: int) -> void:
 	if is_instance_valid(node) and node.has_method("apply_network_heat_state"):
 		node.call("apply_network_heat_state")
 	print("[NetworkWorld] CLIENT_HEAT peer=%d" % peer_id)
+
+
+## Host：丸呑み吞入/吐出表现广播（C3）。EnemySwallowState._hide_victim /
+## _restore_victim 经 player.apply_network_swallow_state 之外的统一出口调用；
+## 单机（无 NetworkWorld 节点）与 Client 端 no-op。
+## enemy 尚未收编（entity_id≤0）或受害者不属于任何 peer（不该发生）时丢弃本次
+## 表现——吞入整段约 1.3s，被吞玩家短暂数帧可见可接受，不为此补发快照。
+func announce_enemy_swallow(enemy: Node2D, victim: Node2D, active: bool) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = 0
+	if enemy != null and is_instance_valid(enemy):
+		entity_id = int(enemy.get("network_entity_id"))
+	var peer_id := _peer_id_for_node(victim)
+	if entity_id <= 0 or peer_id <= 0:
+		return
+	swallow_presentation.rpc(entity_id, peer_id, active)
+	print("[NetworkWorld] HOST_SWALLOW entity=%d peer=%d active=%s" % [entity_id, peer_id, active])
+
+
+## Client：被吞玩家隐藏/恢复（与 Host 侧 _hide_victim/_restore_victim 同款：
+## visible + 碰撞闸 + network_swallow_locked 锁；Client 本地预测移动与输入
+## 提交由锁经 inputs_frozen / _predict_client_local_movement 冻结）。
+@rpc("authority", "call_remote", "reliable")
+func swallow_presentation(entity_id: int, peer_id: int, active: bool) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("apply_network_swallow_state"):
+		node.call("apply_network_swallow_state", active)
+	if _is_auto_network_feature_test():
+		_auto_client_swallow_presentations += 1
+	print("[NetworkWorld] CLIENT_SWALLOW entity=%d peer=%d active=%s" % [entity_id, peer_id, active])
 
 
 @rpc("any_peer", "call_remote", "reliable")
