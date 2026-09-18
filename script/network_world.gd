@@ -226,6 +226,8 @@ var _auto_client_enemy_sfx := 0
 var _auto_client_director_music := 0
 ## --net-test-features 专用：统计 Client 收到的可靠覚醒染色表现 RPC（C1 回归断言用）。
 var _auto_client_awaken_presentations := 0
+var _auto_client_sa_presentations := 0      ## C2：sa_presentation 回归计数
+var _sa_crouch_hold_reported: bool = false  ## C2：Client 侧蹲下按住上报边沿记忆
 ## Host：当前覚醒中的玩家 peer 集合（C1）——中途加入的 Client 据此补发染色。
 var _awaken_active_peers := {}
 ## --net-test-enemies 专用：统计 Client 收到的可靠敌人死亡表现 RPC。
@@ -382,6 +384,7 @@ func _physics_process(delta: float) -> void:
 			_capture_shove_input()
 			_capture_fire_input()
 			_capture_awaken_input()
+			_capture_sa_input()
 	if net.is_host:
 		_capture_host_input(inputs_frozen)
 		_simulate_host_players(delta)
@@ -943,6 +946,41 @@ func _capture_awaken_input() -> void:
 		var node := entry.get("node") as CharacterBody2D
 		if is_instance_valid(node) and node.is_weapon_mode_active():
 			awaken_request.rpc_id(1)
+
+
+## SA / 见切 输入收集（C2）：SA 键=技能释放请求；确定键=攻击兼见切（同原作）
+## 的窗口登记请求。Host 不进入本函数——Host 本机玩家由 player._update_sa_state
+## 直读输入并经 _use_skill_core 扣 TP，这里再发请求会双扣；投掷瞄准（占用
+## 确定键）时与开火一样被外层跳过。搓招缓冲由 poll_network_motion_input 按帧
+## 代为驱动，SA 请求信任 Client 的 validate_skill_motion 预校验（Host 无法
+## 重放输入序列，与射击瞄准同类的意图信任）。
+func _capture_sa_input() -> void:
+	if net.is_host or not _client_local_ready:
+		return
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	if not is_instance_valid(node):
+		return
+	node.poll_network_motion_input()
+	# SA 键：技能释放请求（TP/存活由 Host 权威校验）。
+	if Input.is_action_just_pressed("SA键"):
+		if node.validate_skill_motion("SA键"):
+			sa_skill_request.rpc_id(1, "SA键")
+	# 确定键：见切窗口登记请求（窗口/间隔状态登记在 Host 权威实体上；
+	# _try_mukiri_input 只读 Time/Heat，零拆分直调）。
+	if Input.is_action_just_pressed("确定键"):
+		mukiri_request.rpc_id(1)
+	# しゃがみ回避发动中：SA 键按住状态的边沿上报（Host 权威实体据此延长蹲下）。
+	# 表现晚到时按 mismatch 补报：蹲下染色生效瞬间按住=true 而登记=false 会立即上报。
+	var crouch_active: bool = node.get("_sa_crouch_active") == true
+	if crouch_active:
+		var hold := Input.is_action_pressed("SA键")
+		if hold != _sa_crouch_hold_reported:
+			_sa_crouch_hold_reported = hold
+			sa_crouch_hold.rpc_id(1, hold)
+	elif _sa_crouch_hold_reported:
+		_sa_crouch_hold_reported = false
+		sa_crouch_hold.rpc_id(1, false)
 
 
 func _capture_fire_input() -> void:
@@ -1913,6 +1951,153 @@ func awaken_presentation(peer_id: int, active: bool) -> void:
 	if _is_auto_network_feature_test():
 		_auto_client_awaken_presentations += 1
 	print("[NetworkWorld] CLIENT_AWAKEN peer=%d active=%s" % [peer_id, active])
+
+
+# ── C2：SA / 见切 / 反击 请求-表现协议 ──
+
+@rpc("any_peer", "call_remote", "reliable")
+func sa_skill_request(trigger: String) -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_sa_skill(sender, trigger)
+
+
+## Host：SA 技能释放结算（C2）。存活在此校验，搓招（motion_ok=true，信任 Client
+## 预校验）与 TP（PlayerState 权威值）在 _use_skill_core 内完成；效果结算
+## （RECITAL 敌人组 / SEEKER 置位 / CROUCH 蹲下）天然权威，成功后经
+## _execute_skill_effect 尾部的 announce 广播 sa_presentation。
+func _try_host_sa_skill(peer_id: int, trigger: String) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(node) or node.current_hp <= 0.0:
+		return
+	node._use_skill_core(trigger, true)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func mukiri_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	_try_host_mukiri(sender)
+
+
+## Host：见切窗口登记（C2）。_try_mukiri_input 只读 Time/Heat 状态零拆分直调；
+## 窗口登记在 Host 权威实体上，命中无效化判定（_should_negate_hit，受击路径
+## Host 权威）天然生效，见切成功动画经 announce 广播 mukiri_presentation。
+func _try_host_mukiri(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if not is_instance_valid(node) or node.current_hp <= 0.0:
+		return
+	node._try_mukiri_input()
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sa_crouch_hold(active: bool) -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	var node := (_players[sender] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("set_network_crouch_hold"):
+		node.call("set_network_crouch_hold", active)
+
+
+## Host：player 侧 SA/见切/反击/Heat 事件统一出口（C2）。结算发生在哪个实体
+## 就广播哪个 peer（含 Host 本机玩家，Client 据此表现远端 Host 玩家）；
+## 单机（无 NetworkWorld 节点）与 Client 端 no-op。
+## 事件 → 表现分发："sa:<trigger>" / "crouch_end" / "mukiri" / "counter" / "heat"。
+func announce_player_sa_event(node: Node2D, event: String) -> void:
+	if not net.is_host:
+		return
+	var peer_id := _peer_id_for_node(node)
+	if peer_id <= 0:
+		return
+	if event.begins_with("sa:"):
+		var trigger := event.substr(3)
+		sa_presentation.rpc(peer_id, trigger)
+		print("[NetworkWorld] HOST_SA peer=%d trigger=%s" % [peer_id, trigger])
+		return
+	match event:
+		"crouch_end":
+			crouch_end_presentation.rpc(peer_id)
+			print("[NetworkWorld] HOST_CROUCH_END peer=%d" % peer_id)
+		"mukiri":
+			mukiri_presentation.rpc(peer_id)
+			print("[NetworkWorld] HOST_MUKIRI peer=%d" % peer_id)
+		"counter":
+			counter_presentation.rpc(peer_id)
+			print("[NetworkWorld] HOST_COUNTER peer=%d" % peer_id)
+		"heat":
+			heat_presentation.rpc(peer_id)
+			print("[NetworkWorld] HOST_HEAT peer=%d" % peer_id)
+
+
+## Client：SA 技能表现（发起者本人 + 远端玩家同款）——音效/蹲下染色/感覚向上
+## 计时由 player.apply_network_sa_skill 按本地同名技能解析，零资源传输。
+@rpc("authority", "call_remote", "reliable")
+func sa_presentation(peer_id: int, trigger: String) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("apply_network_sa_skill"):
+		node.call("apply_network_sa_skill", trigger)
+	if _is_auto_network_feature_test():
+		_auto_client_sa_presentations += 1
+	print("[NetworkWorld] CLIENT_SA peer=%d trigger=%s" % [peer_id, trigger])
+
+
+## Client：蹲下结束对齐（Host 权威侧超时/TP 尽/死亡广播；幂等）。
+@rpc("authority", "call_remote", "reliable")
+func crouch_end_presentation(peer_id: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("apply_network_crouch_end"):
+		node.call("apply_network_crouch_end")
+	print("[NetworkWorld] CLIENT_CROUCH_END peer=%d" % peer_id)
+
+
+## Client：见切成功动画（远端玩家播同款见切行走图序列）。
+@rpc("authority", "call_remote", "reliable")
+func mukiri_presentation(peer_id: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("_play_mukiri_anim"):
+		node.call("_play_mukiri_anim")
+	print("[NetworkWorld] CLIENT_MUKIRI peer=%d" % peer_id)
+
+
+## Client：反击音效（反击伤害/击退结算在 Host，快照体现）。
+@rpc("authority", "call_remote", "reliable")
+func counter_presentation(peer_id: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("play_network_counter_presentation"):
+		node.call("play_network_counter_presentation")
+	print("[NetworkWorld] CLIENT_COUNTER peer=%d" % peer_id)
+
+
+## Client：Heat 染色 + 本地计时置位（到期褪色由实体自身 _update_network_sa_state 推进）。
+@rpc("authority", "call_remote", "reliable")
+func heat_presentation(peer_id: int) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	if is_instance_valid(node) and node.has_method("apply_network_heat_state"):
+		node.call("apply_network_heat_state")
+	print("[NetworkWorld] CLIENT_HEAT peer=%d" % peer_id)
 
 
 @rpc("any_peer", "call_remote", "reliable")

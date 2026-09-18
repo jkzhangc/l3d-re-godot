@@ -176,6 +176,7 @@ var _tp_regen_timer: float = 0.0
 var _sa_crouch_active: bool = false      ## しゃがみ回避进行中（无敌）
 var _sa_crouch_until_msec: int = 0       ## 无敌截止时间
 var _sa_crouch_skill: SkillData = null   ## 当前しゃがみ技能（取持续消耗参数）
+var _network_sa_crouch_hold: bool = false ## C2：Host 权威实体的しゃがみ按住登记（sa_crouch_hold RPC 写入）
 var _sa_auto_mukiri_until_msec: int = 0  ## 感覚向上：完全见切截止时间
 
 # ── 见切/反击（说明书 §4.3）运行时 ──
@@ -315,6 +316,10 @@ func _process(delta: float) -> void:
 		# TP 扣费与自动解除——与 _update_tp_regen 同款「数值型每帧更新」模式；
 		# 各实体解析各自域的 PlayerState（Host 权威 / Client 本地显示），同速同规则。
 		_update_awaken(delta)
+		# SA/见切/反击（C2）：联机实体的 Heat 计时、しゃがみ维持（按住延长 + TP
+		# 消耗）与超时结束——Host 权威实体读 RPC 登记的按住 flag，Client 本地
+		# 实体直读本机键盘，双域同规则（详见 _update_network_sa_state 注释）。
+		_update_network_sa_state(delta)
 		# 本地预测实体由 NetworkWorld 在物理帧直接移动；权威快照只提供纠偏目标，
 		# 绝不直接写位置 —— 否则预测位置被反复拉回权威坐标，表现为拖影/顿挫。
 		if network_local_prediction and not _is_dying and _network_has_target:
@@ -1335,7 +1340,7 @@ func _update_tp_regen(delta: float) -> void:
 		restore_tp(current_character.tp_regen_amount)
 
 
-## 按搓招触发键释放技能（空壳子：只扣 TP，实际效果待技能系统设计）
+## 按搓招触发键释放技能（单机 / Host 本机玩家的输入入口）。
 ## trigger: 触发键的输入动作名（如 "确定键"/"取消键"），匹配 SkillData.command_trigger
 func use_skill(trigger: String = "") -> void:
 	if not current_character:
@@ -1348,18 +1353,35 @@ func use_skill(trigger: String = "") -> void:
 	if not skill:
 		print("[技能] 没有绑定触发键 %s 的技能" % trigger)
 		return
-	if not _match_motion(skill.command_motion):
+	_use_skill_core(trigger, _match_motion(skill.command_motion))
+
+
+## 释放技能核心（C2 拆分：无 Input / 搓招缓冲读取，联机下 Host 替 Client 玩家
+## 结算经此入口）。motion_ok 由调用方预校验——搓招缓冲只存在于输入方本机，
+## Host 无法重放输入序列，请求协议信任 Client 的本地预校验（与射击瞄准同类
+## 的意图信任）；单机入口传 _match_motion 实测结果，行为不变。
+## TP 走 PlayerState 权威值（Host 上 get_state_for_entity 对权威实体返回权威域）。
+## 返回是否成功释放（校验失败逐项早退）。
+func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
+	if not current_character:
+		return false
+	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
+	if not skill:
+		print("[技能] 没有绑定触发键 %s 的技能" % trigger)
+		return false
+	if not motion_ok:
 		print("[技能] 搓招失败：%s 需要方向指令 [%s]" % [skill.skill_name, skill.command_motion])
-		return
+		return false
 	var state: PlayerState = Players.get_state_for_entity(self)
 	if not state:
-		return
+		return false
 	if skill.tp_cost > 0 and state.current_tp < skill.tp_cost:
 		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, state.current_tp])
-		return
+		return false
 	state.current_tp -= skill.tp_cost
 	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, state.current_tp])
-	_execute_skill_effect(skill)
+	_execute_skill_effect(skill, trigger)
+	return true
 
 
 # ═══════════════════════════════════════
@@ -1367,7 +1389,7 @@ func use_skill(trigger: String = "") -> void:
 # ═══════════════════════════════════════
 
 ## 按 skill_type 分派实际效果。
-func _execute_skill_effect(skill: SkillData) -> void:
+func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 	if skill.sa_sound:
 		var scene: Node = get_tree().current_scene if get_tree() else null
 		Global.play_sfx_managed(skill.sa_sound, scene)
@@ -1388,6 +1410,10 @@ func _execute_skill_effect(skill: SkillData) -> void:
 			print("[SA] バックパック：背包系统未实装（占位）")
 		_:
 			print("[技能] %s：无绑定效果（GENERIC 占位）" % skill.skill_name)
+	# 联机（C2）：Host 侧结算完成后广播表现（Client 解析本地同名技能：
+	# 播 sa_sound / 蹲下染色与计时 / 感覚向上计时；RECITAL 的敌人踉跄由 Host
+	# 结算经快照体现，不在此复现）。单机 / Client 端为 no-op。
+	_announce_network_sa_event("sa:" + (trigger if not trigger.is_empty() else skill.command_trigger))
 
 
 ## リサイタル：半径内所有存活敌人进入踉跄（0 伤害 → 不弹数字；hitstun → 原地冻结）
@@ -1417,9 +1443,13 @@ func _start_crouch_dodge(skill: SkillData) -> void:
 func _end_crouch_dodge() -> void:
 	_sa_crouch_active = false
 	_sa_crouch_skill = null
+	_network_sa_crouch_hold = false  # Host 权威实体的按住登记随蹲下结束一并清除
 	if sprite:
 		sprite.modulate = Color.WHITE
 	print("[SA] しゃがみ回避结束")
+	# 联机（C2）：Host 侧结束（超时/TP 尽/死亡）广播对齐表现；Client 本地结束
+	# 与 crouch_end_presentation 幂等（LAN 漂移 <1s）；单机 no-op。
+	_announce_network_sa_event("crouch_end")
 
 
 ## SA 状态每帧维护：发动输入、しゃがみ持续（按住延长 + TP 消耗）、超时结束。
@@ -1430,13 +1460,15 @@ func _end_crouch_dodge() -> void:
 
 ## Heat 状态：禁止切人、禁止见切（反击无效）、TP 停止回复、Guts 停止。
 func _apply_heat() -> void:
-	if _heat_time > 0.0:
-		_heat_time = HEAT_DURATION  # 刷新
-		return
-	_heat_time = HEAT_DURATION
-	if sprite:
+	var was_active: bool = _heat_time > 0.0
+	_heat_time = HEAT_DURATION  # 刷新与首次置位统一（联机表现同语义）
+	if not was_active and sprite:
 		sprite.modulate = Color(1.8, 0.6, 0.6)
-	print("[状态] Heat！%.0f 秒内禁止见切/反击、TP 停止回复、Guts 停止" % HEAT_DURATION)
+	# 联机（C2）：Heat 染色 + 本地计时广播（否则 Client 不知道自己处于 Heat，
+	# 会误解见切失效的反馈）；单机 / Client 端 no-op。
+	_announce_network_sa_event("heat")
+	if not was_active:
+		print("[状态] Heat！%.0f 秒内禁止见切/反击、TP 停止回复、Guts 停止" % HEAT_DURATION)
 
 
 func is_heat_active() -> bool:
@@ -1629,6 +1661,8 @@ func _should_negate_hit(damage: float) -> bool:
 		_play_hit_feedback(Color(2.0, 2.0, 2.0, 1.0), 0.08)
 		print("[见切] 成功（无伤）")
 		_play_mukiri_anim()
+		# 联机（C2）：见切成功动画广播（Client 远端玩家播同款见切行走图序列）。
+		_announce_network_sa_event("mukiri")
 		if damage > 0.0:
 			_try_counter()
 		return true
@@ -1712,6 +1746,8 @@ func _try_counter() -> void:
 	if current_character.counter_sound:
 		var scene: Node = get_tree().current_scene if get_tree() else null
 		Global.play_sfx_managed(current_character.counter_sound, scene)
+	# 联机（C2）：反击音效广播（反击伤害/击退结算本就在 Host，Client 只需听声）。
+	_announce_network_sa_event("counter")
 	var facing: Vector2 = get_facing_vector()
 	var dmg_mult: float = 2.0
 	var push_force: float = 320.0
@@ -1742,6 +1778,128 @@ func _try_counter() -> void:
 		e.take_damage(dmg, push_force, facing, false, push_stun, 0.0)
 		hit_count += 1
 	print("[反击] %s：命中 %d 个敌人（威力 x%.0f，推力 %.0f%s）" % [ctype, hit_count, dmg_mult, push_force, "，即死" if instant_kill else ""])
+
+
+# ═══════════════════════════════════════
+# 联机 SA / 见切 / 反击接线（C2，由 NetworkWorld 调用 / network_controlled 分支驱动）
+# ═══════════════════════════════════════
+
+## network_controlled 实体的 SA 状态每帧维护（与单机 _update_sa_state 同规则同速度）：
+##   - Host 权威实体：Heat 计时（take_damage→_apply_heat 真实置位，原实现无人推进
+##     会让联机玩家 Heat 永不褪色）；しゃがみ按住延长读 sa_crouch_hold RPC 登记的
+##     _network_sa_crouch_hold，扣权威 TP；
+##   - Client 本地预测实体：Heat 计时（heat_presentation 本地置位）；しゃがみ按住
+##     直读本机键盘，扣显示 TP（双域独立推进，同 C1 覚醒 TP 精度）；
+##   - Client 远端玩家：仅 Heat 计时与蹲下超时（按住延长由 Host 权威侧结算，
+##     结束经 crouch_end_presentation 对齐）。
+## 超时/TP 尽各自结束：Host 侧结束经 _end_crouch_dodge 广播表现；Client 本地结束
+## 与表现幂等；感覚向上/见切窗口是 msec 时间戳比较，无需每帧推进。
+func _update_network_sa_state(delta: float) -> void:
+	if _is_dying:
+		if _sa_crouch_active:
+			_end_crouch_dodge()
+		return
+	# Heat 状态计时与褪色（与单机 _update_sa_state 同条件：蹲下中不覆盖染色）
+	if _heat_time > 0.0:
+		_heat_time -= delta
+		if _heat_time <= 0.0 and sprite and not _sa_crouch_active:
+			sprite.modulate = Color.WHITE
+			print("[状态] Heat 解除")
+	var now: int = Time.get_ticks_msec()
+	if _sa_crouch_active:
+		if now >= _sa_crouch_until_msec:
+			_end_crouch_dodge()
+			return
+		var hold: bool = _network_sa_crouch_hold
+		if network_local_prediction:
+			hold = Input.is_action_pressed("SA键")  # Client 本地实体直读本机键盘
+		if hold and _sa_crouch_skill:
+			var state: PlayerState = Players.get_state_for_entity(self)
+			if state and state.current_tp > 0:
+				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
+				var drain: int = maxi(1, int(round(_sa_crouch_skill.crouch_tp_drain * delta)))
+				state.current_tp = maxi(0, state.current_tp - drain)
+
+
+## 联机表现接口（C2，由 NetworkWorld 的 sa_presentation 调用）：
+## Client 按本地同名技能解析表现——sa_sound、しゃがみ染色/计时、感覚向上计时。
+## RECITAL 的敌人踉跄 / BACKPACK 占位不在此复现（前者由 Host 结算经快照体现）。
+## 技能解析走 _find_skill_by_trigger 同款回退（两端同一 CharacterData 资源，
+## 结果一致），零资源传输。
+func apply_network_sa_skill(trigger: String) -> void:
+	if not current_character:
+		return
+	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
+	if not skill:
+		return
+	if skill.sa_sound:
+		var scene: Node = get_tree().current_scene if get_tree() else null
+		Global.play_sfx_managed(skill.sa_sound, scene)
+	match skill.skill_type:
+		SkillData.SkillType.SA_SEEKER:
+			_sa_auto_mukiri_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
+		SkillData.SkillType.SA_CROUCH:
+			_start_crouch_dodge(skill)
+	print("[SA] 联机表现：%s（peer 表现）" % skill.skill_name)
+
+
+## 联机表现接口（C2，crouch_end_presentation）：Host 权威侧蹲下结束的对齐信号，幂等
+## （Client 本地同规则超时大概率已自行结束）。
+func apply_network_crouch_end() -> void:
+	if _sa_crouch_active:
+		_end_crouch_dodge()
+
+
+## 联机表现接口（C2，counter_presentation）：反击音效（伤害/击退结算在 Host，快照体现）。
+func play_network_counter_presentation() -> void:
+	if current_character and current_character.counter_sound:
+		var scene: Node = get_tree().current_scene if get_tree() else null
+		Global.play_sfx_managed(current_character.counter_sound, scene)
+
+
+## 联机表现接口（C2，heat_presentation）：Heat 染色 + 本地计时置位——
+## _update_network_sa_state 推进计时并在到期褪色，与单机同规则。
+func apply_network_heat_state() -> void:
+	_heat_time = HEAT_DURATION
+	if sprite:
+		sprite.modulate = Color(1.8, 0.6, 0.6)
+
+
+## 联机（C2）：Host 权威实体的しゃがみ按住登记（sa_crouch_hold RPC 写入）。
+func set_network_crouch_hold(active: bool) -> void:
+	_network_sa_crouch_hold = active
+
+
+## 联机（C2）：Client 本地实体按帧记录搓招缓冲——_update_motion_input 挂在
+## _process 非联机分支，network_controlled 实体不会自行记录，由 NetworkWorld
+## 的 _capture_sa_input 每帧代为驱动。
+func poll_network_motion_input() -> void:
+	_update_motion_input()
+
+
+## 联机（C2）：SA 请求的搓招预校验（缓冲在本机，Host 无法重放输入序列——
+## 请求协议信任 Client 预校验，Host 侧 motion_ok 恒 true）。
+func validate_skill_motion(trigger: String) -> bool:
+	if not current_character:
+		return false
+	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
+	if not skill:
+		return false
+	return _match_motion(skill.command_motion)
+
+
+## 联机事件统一出口（C2）：Host 结算侧（技能释放/蹲下结束/见切成功/反击/Heat）
+## 挂 call；单机（无 NetworkWorld 节点）与 Client 端（world 内 host 闸）均 no-op。
+func _announce_network_sa_event(event: String) -> void:
+	var tree := get_tree()
+	if not tree:
+		return
+	var scene := tree.current_scene
+	if not scene:
+		return
+	var world: Node = scene.find_child("NetworkWorld", true, false)
+	if world and world.has_method("announce_player_sa_event"):
+		world.call("announce_player_sa_event", self, event)
 
 
 ## 攻击后硬直是否跳过（说明书被动：コマンドー=机枪/散弹/马格南；かいりき=近战）。
