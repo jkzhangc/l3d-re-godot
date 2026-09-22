@@ -2084,6 +2084,17 @@ func apply_weapon_attrition(extra: float = 0.0) -> void:
 func _die() -> void:
 	BurnEffect.detach(self)  ## 死亡不留火焰（_update_burn_status 死态早退不摘，在此统一摘）
 	if network_controlled:
+		# D2 实测修复：联机此前直接进躺地/死亡流程，オートスプレー（HP=0 自动喷雾
+		# 满血复活）永远不会触发——表现为「空血条后急救喷雾没起作用」。原作语义
+		# 喷雾在 HP=0 拦截，成功则满血继续（HP 经快照 40Hz 同步到 Client 表现）；
+		# 无喷雾才落进倒地/真死亡裁决。
+		if _try_auto_spray_revive():
+			# 伤害信号已在本帧把 entry["downed"] 置 true（先于 _die），必须清除。
+			var world: Node = get_tree().current_scene.find_child("NetworkWorld", true, false) \
+					if get_tree() and get_tree().current_scene else null
+			if world and world.has_method("notify_player_revived"):
+				world.call("notify_player_revived", self)
+			return
 		_apply_network_death_state()
 		return
 	# ── オートスプレー（原作 system.html）：HP=0 时自动使用急救喷雾 → 满血复活 ──

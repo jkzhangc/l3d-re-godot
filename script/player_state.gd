@@ -111,6 +111,16 @@ func init_from_character(cd: CharacterData, source_path: String = "") -> void:
 		active_weapon_slot = slot
 		if weapon.is_ranged:
 			set_magazine_ammo(weapon.item_id, weapon.magazine_capacity)
+			# 初始备弹（D2 实测反馈：开局武器备弹全是 0）：initial_reserve_ammo
+			# 之前只在「从地面拾取该武器」时发放（weapon_pickup），开局直接装备的
+			# 初始武器从未入包 → 换弹无弹可换、HUD 备弹恒 0（单机联机同病）。
+			# 与 weapon_pickup 同款 derive 规则把弹药物品补进背包。
+			if weapon.magazine_capacity > 0 and weapon.initial_reserve_ammo > 0 \
+					and not weapon.ammo_item_id.is_empty():
+				var ammo_resource := _load_ammo_item_resource(weapon.ammo_item_id)
+				if ammo_resource:
+					for _i: int in range(weapon.initial_reserve_ammo):
+						inventory.append(ammo_resource)
 
 
 # ═══════════════════════════════════════
@@ -331,6 +341,44 @@ func consume_ammo_item(ammo_item_id: String, count: int) -> int:
 		inventory.remove_at(idx)
 	print("[PlayerState] 消耗弹药: %s ×%d" % [ammo_item_id, consumed])
 	return consumed
+
+
+## 联机（D2 备弹同步）：把某弹药 id 的库存条目数设置为 count（Host 权威快照下发）。
+## 幂等：count 相同直接跳过，避免 40Hz 快照反复增删条目。
+## prototype 由调用方提供（network_world 按 ammo_item_id derive-load 同一 tres）。
+func set_ammo_item_count(ammo_item_id: String, count: int, prototype: ItemData) -> void:
+	var current := count_ammo_item(ammo_item_id)
+	if current == count:
+		return
+	if prototype == null:
+		return
+	# 先清掉现有条目（不打印 consume 日志——这不是消耗，是权威收敛）
+	var indices_to_remove: Array[int] = []
+	for i: int in range(inventory.size()):
+		var it: ItemData = inventory[i] as ItemData
+		if it and it.item_type == ItemData.ItemType.AMMO and it.item_id == ammo_item_id:
+			indices_to_remove.append(i)
+	indices_to_remove.reverse()
+	for idx: int in indices_to_remove:
+		inventory.remove_at(idx)
+	for _i: int in range(maxi(0, count)):
+		inventory.append(prototype)
+
+
+## 弹药 ItemData 资源 derive（与 weapon_pickup / network_world 同规则）：
+## item_<id>_ammo.tres 优先，回退 item_<id>.tres。
+func _load_ammo_item_resource(ammo_item_id: String) -> ItemData:
+	var derived := "res://object/item_%s_ammo.tres" % ammo_item_id.trim_prefix("ammo_")
+	if ResourceLoader.exists(derived):
+		var resource := load(derived)
+		if resource is ItemData:
+			return resource as ItemData
+	var direct := "res://object/item_%s.tres" % ammo_item_id
+	if ResourceLoader.exists(direct):
+		var resource := load(direct)
+		if resource is ItemData:
+			return resource as ItemData
+	return null
 
 
 # ═══════════════════════════════════════

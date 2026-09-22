@@ -11,6 +11,12 @@ extends Node
 func _ready() -> void:
 	var net: Node = get_node_or_null("/root/Net")
 	if net and net.has_method("is_online_session") and net.is_online_session():
+		# D2 实测修复：联机此前直接 return，跳过 _align_actor_layers —— 预置玩家留在
+		# DecorLayer/PlayerSpawn 中间层，NetworkWorld 的动态玩家也跟着挂进去；
+		# y_sort 只能按 PlayerSpawn 的固定 y 排序整队 → 丧尸层级永远盖过联机玩家。
+		# deferred 先入队先执行：必须先于 _start_network_world 内部的 deferred 建世界，
+		# 这样 NetworkWorld._find_players_parent() 拿到的就是 DecorLayer。
+		call_deferred("_align_actor_layers")
 		_start_network_world()
 		return
 
@@ -138,6 +144,7 @@ func _align_actor_layers() -> void:
 	var tree := get_tree()
 	if tree == null:
 		return
+	var net: Node = get_node_or_null("/root/Net")
 	var players: Array[Node] = tree.get_nodes_in_group("player")
 	if players.is_empty():
 		return
@@ -160,9 +167,15 @@ func _align_actor_layers() -> void:
 	## ② 发出 tree_exiting → PhantomCamera2D 把 _should_follow 关掉（见
 	##    camera_follow.rebind_follow_target 的注释），镜头从此钉死在原地。
 	if not player.get("network_controlled"):
-		Players.register_entity(player)
+		# 联机（D2 实测修复）：此刻 NetworkWorld 尚未创建（deferred 顺序保证 align 先行），
+		# 预置玩家马上会被 Host/Client 初始化接管——座位注册与相机绑定都由
+		# _register_host_player / _client_initialize_world 负责，这里跳过防重复注册。
+		if not (net and net.has_method("is_online_session") and bool(net.is_online_session())):
+			Players.register_entity(player)
 	var cam: Camera2D = get_viewport().get_camera_2d()
 	if cam and cam.has_method("rebind_follow_target"):
+		# 相机 unbind 是 reparent 的副作用（tree_exiting），联机也要重绑：
+		# 预置玩家仍是本地玩家本体，NetworkWorld 的 _set_local_player 会再绑一次（幂等）。
 		cam.rebind_follow_target(player)
 
 	print("[GameInit] 玩家已移入与敌人相同的 y 排序容器 %s（原父节点 %s，镜头与注册已重绑）" % [

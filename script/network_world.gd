@@ -47,6 +47,14 @@ const NETWORK_BAT: WeaponData = preload("res://object/weapon_metal_bat.tres")
 const NETWORK_GRENADE: ThrowableData = preload("res://object/item_grenade.tres")
 const NETWORK_MOLOTOV: ThrowableData = preload("res://object/item_molotov.tres")
 const NETWORK_FLASH: ThrowableData = preload("res://object/throwable_flash.tres")
+## 治疗品白名单（D2 实测修复）：喷雾/药品此前不在联机同步范围——动态刷出的治疗品
+## Client 看不见、预摆的 Client 本地私拿（Host 权威域无感知）→ 倒地时无喷雾可用。
+const NETWORK_SPRAY: ItemData = preload("res://object/item_first_aid_spray.tres")
+const NETWORK_PILLS: ItemData = preload("res://object/item_pills.tres")
+const NETWORK_HEALINGS: Dictionary = {
+	"first_aid_spray": NETWORK_SPRAY,
+	"pills_01": NETWORK_PILLS,
+}
 ## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
 const NETWORK_WEAPONS: Dictionary = {
 	"pistol_01": NETWORK_PISTOL,
@@ -1218,6 +1226,25 @@ func _on_host_player_damage_applied(damage: float, position: Vector2, _is_headsh
 	var node := entry.get("node") as CharacterBody2D
 	if is_instance_valid(node) and node.current_hp <= 0.0:
 		_handle_host_player_downed(peer_id)
+
+
+## Host：HP 归零的玩家被オートスプレー救回（player._die 联机分支）后调用。
+## 伤害信号先于 _die() 把 entry["downed"] 登记为 true，喷雾复活必须清掉，
+## 否则 _update_host_downed 下一帧会把满血玩家 reconcile 回倒地流血。
+func notify_player_revived(node: Node2D) -> void:
+	if not net.is_host:
+		return
+	var peer_id := _peer_id_for_node(node)
+	if peer_id <= 0:
+		return
+	var entry: Dictionary = _players.get(peer_id, {})
+	if bool(entry.get("downed", false)):
+		entry["downed"] = false
+		entry["downed_hp"] = 0.0
+		_players[peer_id] = entry
+		if is_instance_valid(node) and node.has_method("set_network_downed"):
+			node.call("set_network_downed", false)
+		print("[NetworkWorld] HOST_AUTO_SPRAY_REVIVE peer=%d" % peer_id)
 
 
 ## Host：把 HP 归零的玩家登记为倒地（可救援）。流血池从 DOWNED_BLEED_HP 满值起算。
@@ -2830,6 +2857,8 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			"revive_progress": float(packet[23]) if packet.size() > 23 else 0.0,
 			"facing_locked": bool(packet[24]) if packet.size() > 24 else false,
 			"locked_facing": int(packet[25]) if packet.size() > 25 else -1,
+			# D2 备弹同步（尾部追加，旧长度包降级为空 → 不动本地域）。
+			"ammo_counts": (packet[26] as Dictionary).duplicate() if packet.size() > 26 and packet[26] is Dictionary else {},
 		}
 	return {}
 
@@ -2908,6 +2937,14 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 				remote_weapon.item_id,
 				int(public_state.get("magazine_ammo", state.get_magazine_ammo(remote_weapon.item_id)))
 			)
+		# D2 备弹同步：Host 权威弹药库存计数收敛到 Client 域 PlayerState。
+		# set_ammo_item_count 幂等（count 相同跳过），40Hz 快照反复下发无副作用。
+		var ammo_counts: Variant = public_state.get("ammo_counts", {})
+		if ammo_counts is Dictionary:
+			for ammo_id: String in (ammo_counts as Dictionary).keys():
+				var count := int((ammo_counts as Dictionary)[ammo_id])
+				var prototype := _find_ammo_resource_for_weapon(state, ammo_id)
+				state.set_ammo_item_count(ammo_id, count, prototype)
 	# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
 	# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
 	# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
@@ -3106,7 +3143,11 @@ func _collect_network_pickups(root: Node, out: Array[Node2D]) -> void:
 	if root is Node2D and root.has_method("configure_network_pickup"):
 		var weapon := root.get("weapon_data") as WeaponData
 		var item := root.get("item") as ItemData
-		if weapon or (item and item.item_type == ItemData.ItemType.THROWABLE):
+		# D2 实测修复：治疗品（喷雾 HEALING/药品 SUPPORT）一并纳入联机同步，
+		# 否则 Client 端要么看不见动态刷的治疗品、要么本地私拿（Host 无感知）。
+		if weapon or (item and (item.item_type == ItemData.ItemType.THROWABLE
+				or item.item_type == ItemData.ItemType.HEALING
+				or item.item_type == ItemData.ItemType.SUPPORT)):
 			out.append(root as Node2D)
 	for child: Node in root.get_children():
 		_collect_network_pickups(child, out)
@@ -3148,7 +3189,11 @@ func _build_pickup_snapshot() -> Array:
 			continue
 		var weapon := pickup.get("weapon_data") as WeaponData
 		var item := pickup.get("item") as ItemData
-		var pickup_kind := "weapon" if weapon else "throwable" if item and item.item_type == ItemData.ItemType.THROWABLE else ""
+		# kind：weapon / throwable / healing（HEALING+SUPPORT 治疗品家族）
+		var pickup_kind := "weapon" if weapon else \
+				"throwable" if item and item.item_type == ItemData.ItemType.THROWABLE else \
+				"healing" if item and (item.item_type == ItemData.ItemType.HEALING
+					or item.item_type == ItemData.ItemType.SUPPORT) else ""
 		if pickup_kind.is_empty():
 			continue
 		var scene := get_tree().current_scene
@@ -3198,9 +3243,24 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 	var state := entry.get("state") as PlayerState
 	var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
 	var throwable := pickup.get("item") as ThrowableData if is_instance_valid(pickup) else null
-	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state or (not weapon and not throwable):
+	var healing := pickup.get("item") as ItemData if is_instance_valid(pickup) else null
+	var is_healing_pickup: bool = healing != null and (healing.item_type == ItemData.ItemType.HEALING
+		or healing.item_type == ItemData.ItemType.SUPPORT)
+	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state \
+			or (not weapon and not throwable and not is_healing_pickup):
 		return
 	if player.global_position.distance_to(pickup.global_position) > 40.0:
+		return
+	if is_healing_pickup:
+		# D2 实测修复：治疗品（喷雾/药品）Host 权威拾取事务。复用 healing_pickup
+		# 的 _do_pickup（各自持有/上限满转投其他座位的规则都在其中），失败
+		# （全队所持上限满，留在地上）不回执——Client 走 500ms 超时自愈重发。
+		pickup.set("_player_ref", player)
+		if not pickup.call("_do_pickup"):
+			return
+		_pickups.erase(pickup_id)
+		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d healing=%s" % [peer_id, pickup_id, healing.item_id])
 		return
 	if throwable:
 		var old_throwable: ThrowableData = state.throwable
@@ -3246,10 +3306,10 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: Pl
 	var pickup := PICKUP_SCENE.instantiate() as Node2D
 	if not is_instance_valid(pickup):
 		return
-	pickup.set("weapon_data", weapon)
-	pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
-	pickup.set("pickup_char_idx", weapon.pickup_char_idx)
-	pickup.set("pickup_direction", weapon.pickup_direction)
+	# 地面显示参数统一走 WeaponData（2026-09-13 约定，与 item_manager/Client 重建同款）：
+	# 旧实现手动只设 texture/char_idx/direction，pickup_animated / step_frames /
+	# step_duration 留默认 → 掉落物踏步动画与武器数据配置不一致（2026-09-22 实测）。
+	PICKUP_SCRIPT.apply_weapon_ground_display(pickup, weapon)
 	if weapon.is_ranged:
 		pickup.set("pickup_magazine_ammo", state.get_magazine_ammo(weapon.item_id))
 		state.weapon_magazines.erase(weapon.item_id)
@@ -3392,22 +3452,29 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				continue
 			pickup.set("weapon_data", null)
 			pickup.set("item", throwable)
+		elif pickup_kind == "healing":
+			# D2 实测修复：治疗品镜像重建（与投掷物同款白名单解析）。
+			var healing := NETWORK_HEALINGS.get(str(packet.get("item_id", ""))) as ItemData
+			if not healing:
+				continue
+			pickup.set("weapon_data", null)
+			pickup.set("item", healing)
 		else:
 			var weapon := _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
 			if not weapon:
 				continue
 			pickup.set("item", null)
-			pickup.set("weapon_data", weapon)
-			pickup.set("pickup_texture", weapon.pickup_texture if weapon.pickup_texture else weapon.weapon_walk_texture)
+			# 地面显示参数统一走 WeaponData（与 Host 生成侧同款，2026-09-13 约定）：
+			# 旧实现只设 texture/char_idx/direction，pickup_animated / step_frames /
+			# step_duration 留默认 → Client 踏步动画与武器数据配置不一致。
+			PICKUP_SCRIPT.apply_weapon_ground_display(pickup, weapon)
 			pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", 0)))
 			pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
-			pickup.set("pickup_char_idx", int(packet.get("char_idx", 0)))
-			pickup.set("pickup_direction", int(packet.get("direction", 0)))
 		pickup.global_position = _packet_position(packet)
 		pickup.call("_refresh_sprite")
-		# 武器拾取由 WeaponPickup 的客户端交互逻辑处理；投掷物则必须允许本地节点
-		# 向 Host 提交拾取请求。最终距离、物品和替换均仍由 _try_host_pickup() 权威校验。
-		pickup.call("configure_network_pickup", pickup_id, pickup_kind != "throwable")
+		# 武器拾取由 WeaponPickup 的客户端交互逻辑处理；投掷物与治疗品必须允许本地
+		# 节点向 Host 提交拾取请求。最终距离、物品和替换均仍由 _try_host_pickup() 权威校验。
+		pickup.call("configure_network_pickup", pickup_id, pickup_kind == "weapon")
 		pickup.visible = true
 		pickup.call("reset_network_pickup_request")
 	for old_id: Variant in _pickups.keys().duplicate():
@@ -5187,6 +5254,8 @@ func _build_compact_player_snapshot() -> Array:
 			# 倒地扩展字段（尾部追加；_normalize_player_snapshot 对旧长度包向后兼容）。
 			state["downed"], state["bleed_ratio"], state["revive_progress"],
 			state["facing_locked"], state["locked_facing"],
+			# D2 备弹同步（尾部追加）：ammo_item_id → count。
+			state["ammo_counts"],
 		])
 	states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return states
@@ -5227,7 +5296,21 @@ func _public_state(peer_id: int) -> Dictionary:
 		"revive_progress": _get_host_revive_progress_for(peer_id),
 		"facing_locked": node.is_facing_locked() if is_instance_valid(node) else false,
 		"locked_facing": node.get_locked_facing() if is_instance_valid(node) else -1,
+		# D2 备弹同步（尾部追加）：两槽武器对应的弹药库存计数（ammo_item_id → count）。
+		# 备弹此前从不同步 → Client HUD 备弹恒 0、与 Host 域脱钩。
+		"ammo_counts": _ammo_counts_for(state),
 	}
+
+
+func _ammo_counts_for(state: PlayerState) -> Dictionary:
+	var counts: Dictionary = {}
+	if not state:
+		return counts
+	for slot: String in ["primary", "secondary"]:
+		var wd: WeaponData = state.equipment.get(slot) as WeaponData
+		if wd and not wd.ammo_item_id.is_empty():
+			counts[wd.ammo_item_id] = state.count_ammo_item(wd.ammo_item_id)
+	return counts
 
 
 func _weapon_id_for_slot(state: PlayerState, slot: String) -> String:

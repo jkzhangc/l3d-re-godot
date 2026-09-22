@@ -194,6 +194,8 @@ var network_pickup_id: int = 0
 var cap_exempt: bool = false
 var network_presentation_only: bool = false
 var _network_pickup_request_pending: bool = false
+var _network_request_msec: int = 0          ## 请求发出时刻（超时自愈用）
+const NETWORK_REQUEST_RETRY_MS: int = 500
 
 
 # ═══════════════════════════════════════
@@ -479,7 +481,11 @@ func _process_network_pickup(delta: float) -> bool:
 		mark_auto_picked(get_tree(), local_player)
 		_request_network_pickup()
 		return false
-	return _process_hold(delta)
+	## ⚠ 联机下绝不能走单机 _process_hold → _do_pickup()：那会把武器塞进 Client
+	## 本地域 PlayerState 并本地 queue_free —— Host 完全不知情，下一拍快照把
+	## Host 域装备写回，表现为「拾到又消失 / 扔下后永远捡不上」（2026-09-22 实测）。
+	## 这里用网络版按住：满进度只提交请求，事务在 Host。
+	return _process_network_hold(delta)
 
 
 ## 附近（72px）是否有倒地队友：有则功能键优先用于救援（network_world 的 revive 流程）。
@@ -498,8 +504,14 @@ func _downed_player_near() -> bool:
 
 func _request_network_pickup() -> void:
 	if _network_pickup_request_pending:
-		return
+		# 超时自愈（D2 实测）：Host 静默拒绝（距离不足/状态不符等无回执路径）时
+		# 旧实现 pending 永久卡死 → 此后同物再也不发请求，表现为「不能再获取」。
+		# 500ms 无回执即复位允许重发；Host 成功时该 pickup 会随快照消失，无副作用。
+		if Time.get_ticks_msec() - _network_request_msec < NETWORK_REQUEST_RETRY_MS:
+			return
+		_network_pickup_request_pending = false
 	_network_pickup_request_pending = true
+	_network_request_msec = Time.get_ticks_msec()
 	_hold_timer = 0.0
 	var scene := get_tree().current_scene
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
@@ -507,6 +519,31 @@ func _request_network_pickup() -> void:
 		world.request_pickup(network_pickup_id)
 	else:
 		_network_pickup_request_pending = false
+
+
+## 网络版按住流程：交互条件与单机 _process_hold 一致（仲裁/角色限制/救人优先），
+## 但满进度只提交拾取请求，绝不本地入包。
+func _process_network_hold(delta: float) -> bool:
+	if not _can_hold_pickup():
+		_hold_timer = 0.0
+		return false
+	if not _is_nearest_weapon_pickup():
+		_hold_timer = 0.0
+		return false
+	if not _player_can_use():
+		_hold_timer = 0.0
+		return false
+	if _downed_player_near():
+		_hold_timer = 0.0
+		return false
+	if Input.is_action_pressed("功能键"):
+		_hold_timer += delta
+		if _hold_timer >= hold_time:
+			_request_network_pickup()
+			return false
+		return true
+	_hold_timer = 0.0
+	return false
 
 
 func configure_network_pickup(pickup_id: int, presentation_only: bool = false) -> void:

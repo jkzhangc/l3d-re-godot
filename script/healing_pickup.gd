@@ -83,6 +83,8 @@ var _indicator_node: Node2D = null
 var network_pickup_id: int = 0
 var network_presentation_only: bool = false
 var _network_pickup_request_pending: bool = false
+var _network_request_msec: int = 0          ## 请求发出时刻（超时自愈用）
+const NETWORK_REQUEST_RETRY_MS: int = 500
 
 
 func _ready() -> void:
@@ -129,7 +131,13 @@ func _process(delta: float) -> void:
 
 	# 指示器每帧无条件刷新（2026-09-13 残留修复，同 weapon_pickup）
 	var holding: bool = false
-	if _is_online_network_pickup() and item and item.item_type == ItemData.ItemType.THROWABLE:
+	## 联机 Client：HEALING/SUPPORT（喷雾/药品）与投掷物一样走请求式拾取。
+	## 旧实现只放行 THROWABLE → Client 端治疗品走单机 _do_pickup 本地入包，
+	## Host 权威域毫无感知：Client 自己以为捡到了，倒地时 Host 判定没喷雾（2026-09-22 实测）。
+	if _is_online_network_pickup() and item \
+			and (item.item_type == ItemData.ItemType.THROWABLE
+				or item.item_type == ItemData.ItemType.HEALING
+				or item.item_type == ItemData.ItemType.SUPPORT):
 		holding = _process_network_pickup(delta)
 	else:
 		holding = _process_pickup(delta)
@@ -165,8 +173,13 @@ func _process_network_pickup(delta: float) -> bool:
 
 func _request_network_pickup() -> void:
 	if _network_pickup_request_pending:
-		return
+		# 超时自愈（同 weapon_pickup）：Host 静默拒绝（全队所持上限满等）时
+		# 不再永久卡死，500ms 后允许重新请求。
+		if Time.get_ticks_msec() - _network_request_msec < NETWORK_REQUEST_RETRY_MS:
+			return
+		_network_pickup_request_pending = false
 	_network_pickup_request_pending = true
+	_network_request_msec = Time.get_ticks_msec()
 	_hold_timer = 0.0
 	var scene := get_tree().current_scene
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
@@ -240,13 +253,14 @@ func _process_hold(delta: float, throwable_replacement: bool) -> bool:
 	return false
 
 
-func _do_pickup() -> void:
-## 单机/授权后的库存写入：按类型增加治疗品或投掷物，并按规则处理已有投掷物。
+func _do_pickup() -> bool:
+## 单机/Host 权威拾取事务：按类型增加治疗品或投掷物，并按规则处理已有投掷物。
+## 返回是否拾取成功（联机 Host 事务据此决定是否广播快照；失败=留在地上）。
 	if not item:
-		return
+		return false
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if not state:
-		return
+		return false
 
 	# 投掷物单槽位：已持有则先掉落旧的（同副武器替换逻辑）
 	if item.item_type == ItemData.ItemType.THROWABLE and state.throwable:
@@ -260,7 +274,7 @@ func _do_pickup() -> void:
 			placed = Players.try_add_team_spray(item)
 			if not placed:
 				print("[拾取] 喷雾共用池已满（10），留在地上")
-				return
+				return false
 		else:
 			var cap: int = Players.spray_per_seat_cap()
 			placed = state.pickup_consumable(item, cap)
@@ -271,13 +285,14 @@ func _do_pickup() -> void:
 						break
 			if not placed:
 				print("[拾取] 急救喷雾已达全队所持上限，留在地上")
-				return
+				return false
 	else:
 		state.pickup_consumable(item)
 	## 拾取音效：物品数据（ItemData.pickup_sound）可配，留空用全局默认（2026-09-15）。
 	## 放满留在地上的分支在上面已 return，不会响。
 	Global.play_pickup_sfx(item.pickup_sound, item.pickup_sound_pitch)
 	queue_free()
+	return true
 
 
 func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
