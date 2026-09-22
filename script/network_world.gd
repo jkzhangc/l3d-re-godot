@@ -413,6 +413,8 @@ func _physics_process(delta: float) -> void:
 		_check_host_team_wipe()
 		_update_host_wipe()
 		_register_untracked_host_enemies()
+		# 动态掉落物收编（09-22）：ItemManager 运行期投放的喷雾/药品/弹药堆。
+		_register_untracked_host_pickups(delta)
 		_announce_host_enemy_deaths()
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
@@ -957,7 +959,8 @@ func _capture_shove_input() -> void:
 	if net.is_host:
 		_try_host_shove(int(net.my_peer_id))
 	elif _client_local_ready:
-		shove_request.rpc_id(1)
+		# 带本机位置上报（滞后补偿）：Host 按权威坐标做命中查询，需要客户端位置提示。
+		shove_request.rpc_id(1, _local_claim_position())
 
 
 ## 覚醒（集中射撃）输入收集（C1）：構え（武器模式）中按覚醒键上报请求，
@@ -1027,7 +1030,15 @@ func _capture_fire_input() -> void:
 		if now - _last_client_fire_request_msec < interval:
 			return
 		_last_client_fire_request_msec = now
-		fire_request.rpc_id(1)
+		# 带本机位置上报（滞后补偿）：Host 的形状查询/命中判定在权威坐标上做。
+		fire_request.rpc_id(1, _local_claim_position())
+
+
+## 客户端自报位置（滞后补偿用）：本地预测实体当前坐标；无有效实体返回 null。
+func _local_claim_position() -> Variant:
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := entry.get("node") as CharacterBody2D
+	return node.global_position if is_instance_valid(node) else null
 
 
 func _capture_host_input(blocked: bool = false) -> void:
@@ -1586,7 +1597,7 @@ func _get_network_reload_duration(wd: WeaponData, load_count: int) -> float:
 
 
 ## Host 权威推击：客户端只发送一次意图；命中查询、击退和疲劳均只在 Host 执行。
-func _try_host_shove(peer_id: int) -> void:
+func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
@@ -1594,6 +1605,8 @@ func _try_host_shove(peer_id: int) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove() or _is_host_throwable_held(peer_id):
 		return
+	# 滞后补偿：推击的命中查询在权威坐标上做，先对齐客户端自报位置。
+	_apply_lag_compensated_position(peer_id, node, claimed_position)
 	var wd := state.get_active_weapon()
 	if not wd:
 		return
@@ -1660,7 +1673,7 @@ func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2)
 		enemy.take_damage(0.0, wd.shove_knockback_force * falloff, splash_direction, false, wd.shove_knockback_duration * falloff, 0.0, int(Time.get_ticks_msec()))
 
 
-func _try_host_attack(peer_id: int) -> void:
+func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
@@ -1668,6 +1681,9 @@ func _try_host_attack(peer_id: int) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
+	# 滞后补偿：近战形状查询/子弹出生点都在权威坐标上算，先对齐客户端自报位置
+	# （近战尤其敏感——实测 weapon 用例在无补偿时连续挥空）。
+	_apply_lag_compensated_position(peer_id, node, claimed_position)
 	# 武器完全从 Host 当前 PlayerState 读取，客户端 RPC 不携带 weapon_id/目标/伤害等参数。
 	var wd := state.get_active_weapon()
 	if not wd or not node.is_weapon_mode_active():
@@ -1869,23 +1885,23 @@ func facing_lock_presentation(peer_id: int, locked: bool, locked_facing: int) ->
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func fire_request() -> void:
+func fire_request(claimed_position: Variant = null) -> void:
 	if not net.is_host:
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _players.has(sender):
 		return
-	_try_host_attack(sender)
+	_try_host_attack(sender, claimed_position)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func shove_request() -> void:
+func shove_request(claimed_position: Variant = null) -> void:
 	if not net.is_host:
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _players.has(sender):
 		return
-	_try_host_shove(sender)
+	_try_host_shove(sender, claimed_position)
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2613,6 +2629,13 @@ func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Ar
 	_apply_client_snapshot(player_states, true)
 	_apply_client_enemy_snapshot(enemy_states, true)
 	_apply_client_pickup_snapshot(pickup_states)
+	# 回归观测（仅回归会话）：掉落物包明细，便于定位掉落物同步类问题。
+	if _is_net_test_session():
+		var kinds: Array[String] = []
+		for packet_value: Variant in pickup_states:
+			if packet_value is Dictionary:
+				kinds.append("%s:%s" % [packet_value.get("pickup_kind", "?"), packet_value.get("item_id", packet_value.get("weapon_id", ""))])
+		print("[NetworkWorld] CLIENT_PICKUPS_IN_SNAPSHOT n=%d [%s]" % [pickup_states.size(), ", ".join(kinds)])
 	if not _quest_flags_synced:
 		# 首个快照后补拉剧情机关 flag 全量（拾取点/爆破墙/门的状态对客户端可见性至关重要）
 		_quest_flags_synced = true
@@ -3135,6 +3158,51 @@ func _register_initial_host_pickups() -> void:
 	for pickup: Node2D in candidates:
 		_register_host_pickup(pickup)
 	print("[NetworkWorld] HOST_PICKUPS_REGISTERED count=%d" % _pickups.size())
+	# 回归观测：列出注册明细（仅回归会话），便于定位掉落物同步类问题。
+	if _is_net_test_session():
+		for key: Variant in _pickups.keys():
+			var node_p := _pickups[key] as Node2D
+			if not is_instance_valid(node_p):
+				continue
+			var w := node_p.get("weapon_data") as WeaponData
+			var it := node_p.get("item") as ItemData
+			print("[NetworkWorld] HOST_PICKUP_ENTRY id=%d kind=%s item=%s" % [
+				int(key),
+				"weapon" if w else ("throwable" if it and it.item_type == ItemData.ItemType.THROWABLE else ("healing" if it else "?")),
+				w.item_id if w else (it.item_id if it else ""),
+			])
+
+
+## 是否回归会话（`--net-test*` 任一参数）。⚠ 不能用 `"--net-test" in args`：
+## 参数是 `--net-test=client` 这种带值形式，精确匹配恒为 false。
+func _is_net_test_session() -> bool:
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test"):
+			return true
+	return false
+	# 回归确定性（09-22）：random_pickup 在 Client 侧已禁用本地随机刷，「投掷物拾取」
+	# 用例不能再依赖安全屋随机表的运气（Host 可能这一局没 roll 出投掷物）→
+	# 回归模式下由 Host 确保场上存在投掷物掉落物（生产路径生成 + 正常注册广播）。
+	if "--net-test-throwable-pickup" in OS.get_cmdline_user_args():
+		_ensure_auto_host_throwable_source()
+
+
+func _ensure_auto_host_throwable_source() -> void:
+	for value: Variant in _pickups.values():
+		if not is_instance_valid(value):
+			continue
+		var pickup := value as Node2D
+		if not is_instance_valid(pickup):
+			continue
+		var throwable := pickup.get("item") as ThrowableData
+		if throwable:
+			return
+	var player := _find_preplaced_player()
+	var origin := player.global_position if is_instance_valid(player) else Vector2.ZERO
+	## 落点沿用原安全屋手雷位置的经验值（出生点 +260/-20，已被历史用例证明在同一
+	## 可行走走廊内，Client 单轴走位可达）。
+	_spawn_host_dropped_throwable(NETWORK_GRENADE, origin + Vector2(260.0, -20.0))
+	print("[NetworkWorld] AUTO_THROWABLE_SOURCE_SPAWNED（回归夹具：Host 补投掷物源）")
 
 
 func _collect_network_pickups(root: Node, out: Array[Node2D]) -> void:
@@ -3151,6 +3219,39 @@ func _collect_network_pickups(root: Node, out: Array[Node2D]) -> void:
 			out.append(root as Node2D)
 	for child: Node in root.get_children():
 		_collect_network_pickups(child, out)
+
+
+## Host：收编运行期动态生成的掉落物（Director/ItemManager 投放的喷雾/药品/弹药堆）。
+## `_register_initial_host_pickups` 只在世界初始化跑一次，动态投放物不注册就永远
+## 不进快照 —— Client 看不见、拿不了（09-22 实测「Client 看不到投掷物/喷雾」家族）。
+## 用 ground_pickup 组遍历（廉价），节流到每 0.5s 一次，有新登记才广播快照。
+const UNTRACKED_PICKUP_SCAN_INTERVAL := 0.5
+var _untracked_pickup_scan_accumulator: float = 0.0
+
+
+func _register_untracked_host_pickups(delta: float) -> void:
+	if not net.is_host:
+		return
+	_untracked_pickup_scan_accumulator += delta
+	if _untracked_pickup_scan_accumulator < UNTRACKED_PICKUP_SCAN_INTERVAL:
+		return
+	_untracked_pickup_scan_accumulator = fmod(_untracked_pickup_scan_accumulator, UNTRACKED_PICKUP_SCAN_INTERVAL)
+	var tracked_nodes: Dictionary = {}
+	for value: Variant in _pickups.values():
+		var tracked := value as Node
+		if is_instance_valid(tracked):
+			tracked_nodes[tracked.get_instance_id()] = true
+	var registered_any := false
+	for node: Node in get_tree().get_nodes_in_group("ground_pickup"):
+		var pickup := node as Node2D
+		if not is_instance_valid(pickup) or tracked_nodes.has(pickup.get_instance_id()):
+			continue
+		if not pickup.has_method("configure_network_pickup"):
+			continue
+		_register_host_pickup(pickup)
+		registered_any = true
+	if registered_any:
+		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
 
 
 func _register_host_pickup(pickup: Node2D) -> int:
@@ -3218,29 +3319,60 @@ func _build_pickup_snapshot() -> Array:
 	return packets
 
 
-func request_pickup(pickup_id: int) -> void:
+func request_pickup(pickup_id: int, claimed_position: Variant = null) -> void:
 	if net.is_host:
-		_try_host_pickup(int(net.my_peer_id), pickup_id)
+		_try_host_pickup(int(net.my_peer_id), pickup_id, claimed_position)
 	elif _initial_world_received:
-		pickup_request.rpc_id(1, pickup_id)
+		pickup_request.rpc_id(1, pickup_id, claimed_position)
 
 
 @rpc("any_peer", "call_remote", "reliable")
-func pickup_request(pickup_id: int) -> void:
+func pickup_request(pickup_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host:
 		return
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender > 1:
-		_try_host_pickup(sender, pickup_id)
+		_try_host_pickup(sender, pickup_id, claimed_position)
 
 
-func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
+## 联机滞后补偿（09-22 实测）：客户端本地预测位置领先 Host 权威模拟约 速度×RTT
+## （LAN 通常 <16px）。攻击/推击/拾取请求携带客户端当前坐标作为提示，Host 在
+## 权威判定前把权威实体对齐过去 —— 否则范围/距离判定按「落后的权威坐标」计算，
+## 表现为客户端眼看贴在怪身上却挥空、或贴着掉落物却拾取失败。
+## 限幅防作弊；对齐方向与客户端显示一致（客户端本地位置本就在该处，看不到跳变）。
+const LAG_COMPENSATION_MAX_DISTANCE := 32.0
+
+
+func _apply_lag_compensated_position(peer_id: int, node: CharacterBody2D, claimed: Variant) -> void:
+	if not net.is_host or not (claimed is Vector2) or not is_instance_valid(node):
+		return
+	var claimed_pos := claimed as Vector2
+	var offset := claimed_pos - node.global_position
+	var offset_length := offset.length()
+	if offset_length <= 1.0:
+		return
+	if offset_length > LAG_COMPENSATION_MAX_DISTANCE:
+		offset = offset / offset_length * LAG_COMPENSATION_MAX_DISTANCE
+	node.global_position += offset
+	var entry: Dictionary = _players.get(peer_id, {})
+	var state := entry.get("state") as PlayerState
+	if state:
+		state.position = node.global_position
+	if _is_net_test_session():
+		print("[NetworkWorld] LAG_COMPENSATION peer=%d applied=(%.1f, %.1f) len=%.1f" % [peer_id, offset.x, offset.y, offset_length])
+
+
+func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or not _players.has(peer_id) or not _pickups.has(pickup_id):
 		return
-	var pickup := _pickups[pickup_id] as Node2D
+	var pickup_value: Variant = _pickups[pickup_id]
+	var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
 	var entry: Dictionary = _players[peer_id]
 	var player := entry.get("node") as CharacterBody2D
 	var state := entry.get("state") as PlayerState
+	# 滞后补偿：拾取距离按权威坐标校验，先对齐客户端自报位置（客户端贴住掉落物
+	# 却因权威坐标落后而失败是实测高频问题）。
+	_apply_lag_compensated_position(peer_id, player, claimed_position)
 	var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
 	var throwable := pickup.get("item") as ThrowableData if is_instance_valid(pickup) else null
 	var healing := pickup.get("item") as ItemData if is_instance_valid(pickup) else null
@@ -3290,7 +3422,13 @@ func _try_host_pickup(peer_id: int, pickup_id: int) -> void:
 	if weapon.is_ranged:
 		var mag: int = int(pickup.get("pickup_magazine_ammo"))
 		state.set_magazine_ammo(weapon.item_id, clampi(weapon.magazine_capacity if mag < 0 else mag, 0, weapon.magazine_capacity))
-		_add_host_reserve_ammo(state, weapon, int(pickup.get("pickup_reserve_ammo")))
+		# 备弹（09-22 实测「备弹还是 0」根因）：掉落物携带的转移备弹优先，**没有时
+		# 必须回退武器数据的 initial_reserve_ammo** —— 单机 weapon_pickup._do_pickup
+		# 一直有这个回退，网络权威路径漏了：预摆/新生成的掉落物 pickup_reserve_ammo
+		# 恒为 0（只有「捡起再扔下」才带上转移值）→ 网络拾取的武器备弹永远是 0。
+		var pickup_reserve: int = int(pickup.get("pickup_reserve_ammo"))
+		var reserve_to_give: int = pickup_reserve if pickup_reserve > 0 else weapon.initial_reserve_ammo
+		_add_host_reserve_ammo(state, weapon, reserve_to_give)
 	if state.active_weapon_slot == slot and player.is_weapon_mode_active():
 		player.enter_weapon_mode(weapon)
 		player.set_weapon_ready_frame()
@@ -3423,6 +3561,13 @@ func pickup_snapshot(player_states: Array, pickup_states: Array) -> void:
 
 
 func _apply_client_pickup_snapshot(states: Array) -> void:
+	# 先清理已释放条目（09-22 实测）：_pickups 里的 queue_free 节点若残留，
+	# `_pickups.get(id) as Node2D` 会抛 "Trying to cast a freed object" 并**静默
+	# 中止整个应用函数** —— Client 端所有掉落物同步随之失效（表现为看不见/
+	# 拿不了/多出幽灵物件）。
+	for stale_key: Variant in _pickups.keys():
+		if not is_instance_valid(_pickups[stale_key]):
+			_pickups.erase(stale_key)
 	var seen: Dictionary = {}
 	for packet_value: Variant in states:
 		if not packet_value is Dictionary:
@@ -3433,12 +3578,15 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			continue
 		seen[pickup_id] = true
 		var pickup_kind := str(packet.get("pickup_kind", "weapon"))
-		var pickup := _pickups.get(pickup_id) as Node2D
+		# ⚠ 取值必须先判 is_instance_valid 再 as Node2D（对已释放对象做 as 会抛错）。
+		var pickup_value: Variant = _pickups.get(pickup_id)
+		var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
 		var scene_path := str(packet.get("scene_path", ""))
 		if not is_instance_valid(pickup):
 			# 首选客户端启动时缓存的预置节点。直接按路径查找不足以保证清理时
 			# 能识别旧节点，特别是在掉落物被重挂父节点或动态替换之后。
-			pickup = _client_preplaced_pickups_by_path.get(scene_path) as Node2D
+			var preplaced_value: Variant = _client_preplaced_pickups_by_path.get(scene_path)
+			pickup = (preplaced_value as Node2D) if is_instance_valid(preplaced_value) else null
 			if not is_instance_valid(pickup) and not scene_path.is_empty():
 				pickup = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as Node2D
 			if not is_instance_valid(pickup):
@@ -3480,7 +3628,8 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 	for old_id: Variant in _pickups.keys().duplicate():
 		var id: int = int(old_id)
 		if not seen.has(id):
-			var stale := _pickups[id] as Node
+			var stale_value: Variant = _pickups[id]
+			var stale: Node = (stale_value as Node) if is_instance_valid(stale_value) else null
 			_pickups.erase(id)
 			if is_instance_valid(stale):
 				for path_value: Variant in _client_preplaced_pickups_by_path.keys().duplicate():
@@ -4975,11 +5124,19 @@ func _run_auto_client_throwable_pickup_test() -> void:
 	## 燃烧瓶）——泛化为「任一白名单投掷物掉落」，消除 setup 的运气依赖。
 	var td: ThrowableData = null
 	var source: Node2D = null
-	for throwable_id: String in NETWORK_THROWABLES.keys():
-		source = _find_client_pickup_by_throwable_id(throwable_id)
-		if is_instance_valid(source):
-			td = NETWORK_THROWABLES[throwable_id] as ThrowableData
+	## 09-22：random_pickup 在联机 Client 侧已禁用本地随机刷（两端各自 roll 不同步），
+	## 投掷物源改由 Host 下发 —— 既可能是安全屋预摆掉落的快照，也可能是 Host
+	## 收编扫描（≤0.5s）补发的动态掉落物。因此这里必须**轮询等待**而不是一次性查找。
+	deadline = Time.get_ticks_msec() + 10000
+	while Time.get_ticks_msec() < deadline:
+		for throwable_id: String in NETWORK_THROWABLES.keys():
+			source = _find_client_pickup_by_throwable_id(throwable_id)
+			if is_instance_valid(source):
+				td = NETWORK_THROWABLES[throwable_id] as ThrowableData
+				break
+		if is_instance_valid(source) and td != null:
 			break
+		await get_tree().create_timer(0.10).timeout
 	if not is_instance_valid(node) or not is_instance_valid(source) or td == null:
 		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_SETUP_FAILED player=%s source=%s td=%s" % [is_instance_valid(node), is_instance_valid(source), td != null])
 		return
@@ -5029,18 +5186,31 @@ func _run_auto_client_throwable_pickup_test() -> void:
 		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_FAILED pickup=%d acquired=%s removed=%s" % [source_id, acquired, removed])
 
 
+## ⚠ 掉落物查找助手必须**先判 is_instance_valid(value) 再 as Node2D**：
+## 对已释放对象做 `as Node2D` 会抛 "Trying to cast a freed object" 运行时错，
+## 静默中止整个查找函数（2026-09-22 实测：Client 端 _pickups 残留已 queue_free
+## 条目 → 查找恒返回 null → 投掷物拾取用例 SETUP_FAILED）。
 func _find_client_pickup_by_throwable_id(item_id: String) -> Node2D:
 	for value: Variant in _pickups.values():
+		if not is_instance_valid(value):
+			continue
 		var pickup := value as Node2D
-		var throwable := pickup.get("item") as ThrowableData if is_instance_valid(pickup) else null
+		if not is_instance_valid(pickup):
+			continue
+		var throwable := pickup.get("item") as ThrowableData
 		if throwable and throwable.item_id == item_id:
 			return pickup
 	return null
 
+
 func _find_client_pickup_by_weapon_id(weapon_id: String) -> Node2D:
 	for value: Variant in _pickups.values():
+		if not is_instance_valid(value):
+			continue
 		var pickup := value as Node2D
-		var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
+		if not is_instance_valid(pickup):
+			continue
+		var weapon := pickup.get("weapon_data") as WeaponData
 		if weapon and weapon.item_id == weapon_id:
 			return pickup
 	return null
@@ -5048,8 +5218,12 @@ func _find_client_pickup_by_weapon_id(weapon_id: String) -> Node2D:
 
 func _has_client_pickup_weapon_near(weapon_id: String, position: Vector2, max_distance: float) -> bool:
 	for value: Variant in _pickups.values():
+		if not is_instance_valid(value):
+			continue
 		var pickup := value as Node2D
-		var weapon := pickup.get("weapon_data") as WeaponData if is_instance_valid(pickup) else null
+		if not is_instance_valid(pickup):
+			continue
+		var weapon := pickup.get("weapon_data") as WeaponData
 		if weapon and weapon.item_id == weapon_id and pickup.global_position.distance_to(position) <= max_distance:
 			return true
 	return false

@@ -731,8 +731,19 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 
 	_is_dead = false
 	update_moving(moving)
+	# 联机（09-22 实测「客户端丧尸攻击动画反复抽搐」根因）：Client 敌人显示动作帧
+	# （攻击/突进/张嘴等非行走角色格）期间**必须停掉行走动画 timer** —— timer 回调
+	# _on_animation_timer_timeout → _refresh_sprite() 会按 _anim_step 把 walk_char 的
+	# 行走帧插进动作帧之间，与 40Hz 快照互相覆盖，表现为「第二帧瞬间跳第一帧、又跳回
+	# 第二帧」。与 Host 动作状态同规则（动作表激活期间禁 _refresh_sprite）。
+	# 快照 char 与 walk_char 一致时（正常行走/跑步）恢复 timer，行走动画仍本地推进。
 	if visual_char_index >= 0 and visual_char_index != walk_char_index:
+		_anim_step = 0
+		if animation_timer and not animation_timer.is_stopped():
+			animation_timer.stop()
 		_refresh_sprite_with_index(visual_char_index)
+	elif animation_timer and animation_timer.is_stopped():
+		animation_timer.start()
 	# P0-B3 元素染色（炎/雷/氷）随快照同步；-1 = 本包未携带，保持现状。
 	if element_state >= 0:
 		apply_network_element_tint(element_state)

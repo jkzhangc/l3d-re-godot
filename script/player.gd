@@ -157,6 +157,17 @@ var network_local_player: bool = false
 var _network_target_position: Vector2 = Vector2.ZERO
 var _network_has_target: bool = false
 var _network_prediction_initialized: bool = false
+## 本地预测纠偏参数（09-22 实测调优）：小偏差走帧率无关的指数收敛，避免恒定速度
+## 拖拽造成的「莫名短距离瞬移」；超过 SNAP 距离（丢包/传送）才硬校准；DEAD_ZONE 内
+## 视为已对齐并清除目标。
+const NETWORK_CORRECTION_SNAP_DISTANCE := 96.0
+const NETWORK_CORRECTION_DEAD_ZONE := 0.5
+const NETWORK_CORRECTION_MOVE_RATE := 10.0
+## 静止时的收敛速率（09-22 实测定案）：动作（挥刀/推击/拾取）都发生在静止瞬间，
+## 而 Host 的命中查询/距离校验按权威坐标做 —— 移动中保持平滑预测（消除瞬移感），
+## 一旦停下就快速收敛到权威坐标，保证动作时刻两端坐标一致（旧行为靠每拍硬设
+## 位置实现了这一点，代价是移动中的抖动；现在两者兼得）。
+const NETWORK_CORRECTION_IDLE_RATE := 60.0
 ## 远端玩家位置插值：快照样本按固定延迟渲染，取代旧的指数平滑
 ## （旧的每帧 lerp 会让客户端视角下的主机玩家起停带"摩擦力"观感）。
 const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.gd")
@@ -325,18 +336,20 @@ func _process(delta: float) -> void:
 		if network_local_prediction and not _is_dying and _network_has_target:
 			var error := _network_target_position - global_position
 			var error_length := error.length()
-			# 移动中只纠偏明显偏差（LAN 下稳态误差 ≈ 速度×RTT，通常 < 5px），
-			# 避免和本地模拟互相拉扯；停止后快速收敛，消除残余漂移。
-			var moving_now := not velocity.is_zero_approx()
-			var correction_speed := 0.0
-			if not moving_now:
-				correction_speed = 720.0
-			elif error_length > 16.0:
-				correction_speed = 480.0
-			if error_length > 0.5 and correction_speed > 0.0:
-				global_position += error.normalized() * minf(error_length, delta * correction_speed)
-			if error_length <= 0.5:
+			if error_length > NETWORK_CORRECTION_SNAP_DISTANCE:
+				# 大偏差（丢包/传送/切图残留）才硬校准
+				global_position = _network_target_position
 				_network_has_target = false
+			elif error_length <= NETWORK_CORRECTION_DEAD_ZONE:
+				_network_has_target = false
+			else:
+				# 小偏差（LAN 稳态 ≈ 速度×RTT，通常 < 5px）：帧率无关的指数收敛。
+				# 旧实现用恒定速度拖拽（移动中 480 / 停止后 720 px/s），误差稍大时
+				# 玩家位置会被"拽"过去 → 观感为「莫名短距离瞬移」（09-22 实测）。
+				# 指数收敛起步快、尾段柔和，且与帧率解耦。
+				var moving_now := not velocity.is_zero_approx()
+				var rate := NETWORK_CORRECTION_MOVE_RATE if moving_now else NETWORK_CORRECTION_IDLE_RATE
+				global_position += error * (1.0 - exp(-rate * delta))
 		elif not network_local_prediction and not _is_dying and _network_has_target:
 			# 远端玩家：按固定延迟在两个快照样本间插值，起停干脆、匀速贴合。
 			var render_position: Variant = _remote_interp.sample_render_position()
@@ -417,21 +430,26 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		_remote_interp.reset(new_position)
 		return
 	update_appearance(moving, walking)
-	if network_local_player:
+	if network_local_player and not network_local_prediction:
+		# 非预测的本地玩家（历史兼容路径）：直接对齐权威坐标。
 		global_position = new_position
 		_network_target_position = new_position
 		_network_has_target = false
 		_remote_interp.reset(new_position)
 		return
 	# 本地预测玩家的位置由本地输入驱动；快照只提供首次校准和后续平滑纠偏目标。
+	# ⚠ 旧实现先命中 `network_local_player` 分支无条件硬写位置（本地预测玩家两个标志
+	# 都为 true）→ 与 NetworkWorld._predict_client_local_movement 的本地模拟每拍互相
+	# 覆盖，表现为客户端自己看自己的「卡顿/残影/短距离瞬移」（09-22 实测）。
 	if snap:
 		_remote_interp.reset(new_position)
 		global_position = new_position
 		_network_target_position = new_position
 		_network_has_target = false
 	else:
-		if not _network_has_target:
-			global_position = new_position
+		# 只更新纠偏目标 —— 绝不在本函数里硬写预测位置：旧实现在
+		# `_network_has_target == false`（=上一拍纠偏已收敛）时直接贴位置，
+		# 于是每拍 60Hz 微跳一次，正是「莫名短距离瞬移」的观感来源。
 		_remote_interp.push_sample(new_position)
 		_network_target_position = new_position
 		_network_has_target = true

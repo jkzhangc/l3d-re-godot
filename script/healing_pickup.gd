@@ -94,6 +94,11 @@ func _ready() -> void:
 		_refresh_sprite()
 		return
 	_spawn_msec = Time.get_ticks_msec()
+	## 组登记（09-22）：ground_pickup = 全部地面掉落物（落点避让 + NetworkWorld 的
+	## 动态掉落物收编扫描都用它，旧实现治疗品不在任何组里 → 动态投放的治疗品
+	## Host 收编不到、Client 也看不见）。
+	add_to_group(&"ground_pickup")
+	add_to_group(&"healing_pickup")
 	## 自动判定：编辑器摆进场景的实例 owner 非空 → 豁免（运行时刷出 owner 为空）。
 	## 用 or 是为了不覆盖 random_pickup 对预摆实例刷出物的预设豁免。
 	cap_exempt = cap_exempt or owner != null
@@ -184,7 +189,9 @@ func _request_network_pickup() -> void:
 	var scene := get_tree().current_scene
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_pickup"):
-		world.request_pickup(network_pickup_id)
+		# 带本机位置上报（滞后补偿，同 weapon_pickup）。
+		var claim: Variant = _player_ref.global_position if is_instance_valid(_player_ref) else null
+		world.request_pickup(network_pickup_id, claim)
 	else:
 		_network_pickup_request_pending = false
 

@@ -516,7 +516,10 @@ func _request_network_pickup() -> void:
 	var scene := get_tree().current_scene
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_pickup"):
-		world.request_pickup(network_pickup_id)
+		# 带本机位置上报（滞后补偿）：Host 的拾取距离校验在权威坐标上做，
+		# 客户端预测位置领先时会把「贴住掉落物」判成距离不足（实测高频失败）。
+		var claim: Variant = _player_ref.global_position if is_instance_valid(_player_ref) else null
+		world.request_pickup(network_pickup_id, claim)
 	else:
 		_network_pickup_request_pending = false
 

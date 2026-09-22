@@ -36,6 +36,14 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		_editor_preview()
 		return
+	# 联机 Client 不得本地随机刷掉落物（09-22 实测）：两端各自 roll 的结果不同 →
+	# Client 会多出 Host 不认的物件（「莫名多出一个急救喷雾且拿不了」）、同时
+	# 缺少 Host 那侧的物件（位置错乱/不同步）。联机掉落物一律由 Host 生成并经
+	# NetworkWorld 快照下发。
+	if _is_network_client_session():
+		hide()
+		set_process(false)
+		return
 	var picked: Resource = pool.roll() if pool else null
 	if picked == null:
 		print("[随机掉落物] 掉落池为空或全 0 权重，未生成拾取物")
@@ -77,6 +85,16 @@ func _ready() -> void:
 		"武器" if picked is WeaponData else "物品",
 		int(pos.x), int(pos.y)])
 	queue_free()
+
+
+## 联机 Client 判定（与 director.gd / dev_enemy_spawner.gd 同款：用节点路径而非
+## Autoload 标识符，兼容脚本热重载时序）。
+func _is_network_client_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null \
+		and net.has_method("is_online_session") \
+		and net.is_online_session() \
+		and not bool(net.get("is_host"))
 
 
 ## 编辑器预览（@tool）：显示掉落池**第一项**的图当作占位参考。
