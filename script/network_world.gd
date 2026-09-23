@@ -452,7 +452,7 @@ func is_local_weapon_mode_active() -> bool:
 	if not is_instance_valid(net):
 		return false
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	return is_instance_valid(node) and node.is_weapon_mode_active()
 
 
@@ -465,7 +465,7 @@ func _get_local_player_life_state() -> int:
 	if not is_instance_valid(net):
 		return 2
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node):
 		return 2
 	if not node.is_network_dead():
@@ -478,7 +478,7 @@ func _is_local_player_swallow_locked() -> bool:
 	if not is_instance_valid(net):
 		return false
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	return is_instance_valid(node) and node.get("network_swallow_locked") == true
 
 
@@ -587,7 +587,7 @@ func _client_initialize_world() -> void:
 ## 预估目标，Host 仍会重新验证身份、距离与状态。
 func _find_revive_target_for(peer_id: int) -> int:
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as Node2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node) or node.is_network_dead():
 		return 0
 	var closest_id := 0
@@ -599,7 +599,7 @@ func _find_revive_target_for(peer_id: int) -> int:
 		var target_entry: Dictionary = _players[target_id]
 		if not bool(target_entry.get("downed", false)):
 			continue
-		var target_node := target_entry.get("node") as Node2D
+		var target_node := _player_node(target_entry)
 		if is_instance_valid(target_node):
 			var distance := node.global_position.distance_to(target_node.global_position)
 			if distance <= closest_distance:
@@ -661,7 +661,7 @@ func _update_host_revives() -> void:
 		if now - int(attempt.get("started_msec", now)) < REVIVE_DURATION_MSEC:
 			continue
 		var target_entry: Dictionary = _players.get(target_id, {})
-		var target_node := target_entry.get("node") as CharacterBody2D
+		var target_node := _player_node(target_entry)
 		var target_state := target_entry.get("state") as PlayerState
 		# 目标必须是仍在流血期内的倒地玩家：is_network_dead() 无法区分倒地与真死亡
 		# （共用躺地表现），权威依据是 entry["downed"]。目标若已流血耗尽或状态异常，
@@ -695,7 +695,7 @@ func _update_host_downed(delta: float) -> void:
 	for value: Variant in _players.keys():
 		var peer_id := int(value)
 		var entry: Dictionary = _players[peer_id]
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if not is_instance_valid(node):
 			continue
 		var downed := bool(entry.get("downed", false))
@@ -759,7 +759,7 @@ func _check_host_team_wipe() -> void:
 	if not net.is_host or _wipe_active or _players.is_empty():
 		return
 	for entry: Dictionary in _players.values():
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if is_instance_valid(node) and not node.is_network_dead():
 			return
 	_trigger_host_team_wipe()
@@ -907,7 +907,7 @@ func _capture_weapon_raise_input() -> void:
 func _capture_facing_lock_input() -> void:
 	var local_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(local_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or node.player_in_weapon_state:
 		return
 	if Global.facing_lock_mode == 0:
@@ -925,7 +925,7 @@ func _request_facing_lock(toggle: bool, locked: bool) -> void:
 		_try_host_set_facing_lock(local_id, toggle, locked)
 	elif _client_local_ready:
 		var entry: Dictionary = _players.get(local_id, {})
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if not is_instance_valid(node):
 			return
 		var desired_locked: bool = (not node.is_facing_locked()) if toggle else locked
@@ -973,7 +973,7 @@ func _capture_awaken_input() -> void:
 	elif _client_local_ready:
 		# 轻量预校验（本地 node 的武器模式由表现接口维护）减少无效请求；TP 由 Host 权威校验。
 		var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if is_instance_valid(node) and node.is_weapon_mode_active():
 			awaken_request.rpc_id(1)
 
@@ -988,7 +988,7 @@ func _capture_sa_input() -> void:
 	if net.is_host or not _client_local_ready:
 		return
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node):
 		return
 	node.poll_network_motion_input()
@@ -1037,7 +1037,7 @@ func _capture_fire_input() -> void:
 ## 客户端自报位置（滞后补偿用）：本地预测实体当前坐标；无有效实体返回 null。
 func _local_claim_position() -> Variant:
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	return node.global_position if is_instance_valid(node) else null
 
 
@@ -1068,7 +1068,7 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 		return
 	var peer_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node) or node.is_network_dead() or not node.network_local_prediction:
 		return
 	var direction := Vector2.ZERO if blocked else _read_local_direction()
@@ -1112,7 +1112,7 @@ func _simulate_host_players(_delta: float) -> void:
 	for key: Variant in _players.keys():
 		var peer_id := int(key)
 		var entry: Dictionary = _players[peer_id]
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if not is_instance_valid(node):
 			continue
 		if node.has_method("is_network_dead") and node.is_network_dead():
@@ -1234,7 +1234,7 @@ func _on_host_player_damage_applied(damage: float, position: Vector2, _is_headsh
 		return
 	player_hurt_presentation.rpc(peer_id, damage, position)
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if is_instance_valid(node) and node.current_hp <= 0.0:
 		_handle_host_player_downed(peer_id)
 
@@ -1369,7 +1369,7 @@ func _apply_host_throwable_presentation(peer_id: int) -> void:
 	if not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node):
 		return
@@ -1382,7 +1382,7 @@ func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
 		return
@@ -1402,7 +1402,7 @@ func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var throw_state := _get_host_throwable_state(peer_id)
 	var td: ThrowableData = state.throwable if state else null
@@ -1434,7 +1434,7 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var throw_state := _get_host_throwable_state(peer_id)
 	var td: ThrowableData = state.throwable if state else null
@@ -1495,7 +1495,7 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	if slot != "primary" and slot != "secondary":
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
@@ -1513,7 +1513,7 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var wd: WeaponData = state.get_active_weapon() if state else null
 	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
@@ -1533,7 +1533,7 @@ func _try_host_set_facing_lock(peer_id: int, toggle: bool, locked: bool) -> void
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		_send_host_facing_lock_state(peer_id)
 		return
@@ -1546,7 +1546,7 @@ func _try_host_set_facing_lock(peer_id: int, toggle: bool, locked: bool) -> void
 func _send_host_facing_lock_state(peer_id: int) -> void:
 	if not net.is_host or peer_id <= 1 or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(node):
 		return
 	facing_lock_presentation.rpc(peer_id, node.is_facing_locked(), node.get_locked_facing())
@@ -1558,7 +1558,7 @@ func _try_host_reload(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_throwable_held(peer_id):
 		return
@@ -1601,7 +1601,7 @@ func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove() or _is_host_throwable_held(peer_id):
 		return
@@ -1677,7 +1677,7 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
@@ -1722,6 +1722,13 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	print("[NetworkWorld] HOST_MELEE peer=%d weapon=%s" % [peer_id, wd.item_id])
 
 
+## 近战命中窗（2026-09-23 稳定化）：命中帧只做**一次**物理查询时，两端位置差一两像素、
+## 或敌人恰好卡在判定盒边缘，就会整刀挥空（实测 weapon 用例偶发 melee_damage_seen=false，
+## 且 Host 侧完全没有 HOST_MELEE_HIT）。命中帧之后追加一个极短窗口继续查询，直到命中或
+## 窗口耗尽 —— 4 个物理帧≈67ms，肉眼无差、体感更跟手；单机走各自近战状态机不受影响。
+const MELEE_HIT_WINDOW_FRAMES := 4
+
+
 func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
 	# 避免切图释放 NetworkWorld 后，旧协程再访问空的 SceneTree。
 	if not is_inside_tree():
@@ -1734,11 +1741,23 @@ func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot
 		delay += wd.get_melee_attack_frame_duration(index)
 	if delay > 0.0:
 		await tree.create_timer(delay).timeout
-	if is_inside_tree() and is_instance_valid(node) and node.is_inside_tree():
-		_perform_host_melee_attack(node, wd, is_headshot)
+	if not (is_inside_tree() and is_instance_valid(node) and node.is_inside_tree()):
+		return
+	var hits := _perform_host_melee_attack(node, wd, is_headshot)
+	var extra := 0
+	while hits == 0 and extra < MELEE_HIT_WINDOW_FRAMES:
+		extra += 1
+		await tree.physics_frame
+		if not (is_inside_tree() and is_instance_valid(node) and node.is_inside_tree()):
+			break
+		hits = _perform_host_melee_attack(node, wd, is_headshot)
+	if hits == 0:
+		print("[NetworkWorld] HOST_MELEE_WHIFF weapon=%s extra_frames=%d" % [wd.item_id, extra])
 
 
-func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
+## 返回本次命中数（0 = 挥空）。调用方据此决定是否在小窗口内重查（见 _schedule_host_melee_hit）。
+func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> int:
+	var hit_count := 0
 	var shape := RectangleShape2D.new()
 	shape.size = wd.melee_range_size
 	var query := PhysicsShapeQueryParameters2D.new()
@@ -1768,7 +1787,9 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 			var melee_damage: float = wd.get_effective_damage() * (wd.critical_damage if is_headshot else 1.0)
 			enemy.take_damage(melee_damage, 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.element)
 			print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s" % [enemy.name, int(melee_damage), is_headshot])
+			hit_count += 1
 			break
+	return hit_count
 
 
 func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, bd: BulletData, bullet_index: int) -> void:
@@ -1876,7 +1897,7 @@ func facing_lock_request(toggle: bool, locked: bool) -> void:
 func facing_lock_presentation(peer_id: int, locked: bool, locked_facing: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(node):
 		return
 	_facing_lock_requests.erase(peer_id)
@@ -1909,7 +1930,7 @@ func shove_presentation(peer_id: int, weapon_id: String) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var wd := _get_network_weapon_data_by_id(weapon_id)
 	if is_instance_valid(node) and wd:
 		node.play_network_shove_presentation(wd)
@@ -1920,7 +1941,7 @@ func weapon_transition_presentation(peer_id: int, weapon_id: String, raising: bo
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var wd := _get_network_weapon_data_by_id(weapon_id)
 	if is_instance_valid(node) and wd:
 		_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
@@ -1943,7 +1964,7 @@ func reload_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, lo
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var wd := _get_network_weapon_data_by_id(weapon_id)
 	if not state or not is_instance_valid(node) or not wd:
@@ -1969,7 +1990,7 @@ func _try_host_awaken(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0:
 		return
@@ -2015,7 +2036,7 @@ func awaken_presentation(peer_id: int, active: bool) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if is_instance_valid(node) and node.has_method("apply_network_awaken_state"):
 		node.call("apply_network_awaken_state", active)
 	if _is_auto_network_feature_test():
@@ -2042,7 +2063,7 @@ func sa_skill_request(trigger: String) -> void:
 func _try_host_sa_skill(peer_id: int, trigger: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(node) or node.current_hp <= 0.0:
 		return
 	node._use_skill_core(trigger, true)
@@ -2064,7 +2085,7 @@ func mukiri_request() -> void:
 func _try_host_mukiri(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(node) or node.current_hp <= 0.0:
 		return
 	node._try_mukiri_input()
@@ -2077,7 +2098,7 @@ func sa_crouch_hold(active: bool) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _players.has(sender):
 		return
-	var node := (_players[sender] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(sender, {}))
 	if is_instance_valid(node) and node.has_method("set_network_crouch_hold"):
 		node.call("set_network_crouch_hold", active)
 
@@ -2118,7 +2139,7 @@ func announce_player_sa_event(node: Node2D, event: String) -> void:
 func sa_presentation(peer_id: int, trigger: String) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("apply_network_sa_skill"):
 		node.call("apply_network_sa_skill", trigger)
 	if _is_auto_network_feature_test():
@@ -2131,7 +2152,7 @@ func sa_presentation(peer_id: int, trigger: String) -> void:
 func crouch_end_presentation(peer_id: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("apply_network_crouch_end"):
 		node.call("apply_network_crouch_end")
 	print("[NetworkWorld] CLIENT_CROUCH_END peer=%d" % peer_id)
@@ -2142,7 +2163,7 @@ func crouch_end_presentation(peer_id: int) -> void:
 func mukiri_presentation(peer_id: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("_play_mukiri_anim"):
 		node.call("_play_mukiri_anim")
 	print("[NetworkWorld] CLIENT_MUKIRI peer=%d" % peer_id)
@@ -2153,7 +2174,7 @@ func mukiri_presentation(peer_id: int) -> void:
 func counter_presentation(peer_id: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("play_network_counter_presentation"):
 		node.call("play_network_counter_presentation")
 	print("[NetworkWorld] CLIENT_COUNTER peer=%d" % peer_id)
@@ -2164,7 +2185,7 @@ func counter_presentation(peer_id: int) -> void:
 func heat_presentation(peer_id: int) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("apply_network_heat_state"):
 		node.call("apply_network_heat_state")
 	print("[NetworkWorld] CLIENT_HEAT peer=%d" % peer_id)
@@ -2195,7 +2216,7 @@ func announce_enemy_swallow(enemy: Node2D, victim: Node2D, active: bool) -> void
 func swallow_presentation(entity_id: int, peer_id: int, active: bool) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
-	var node := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("apply_network_swallow_state"):
 		node.call("apply_network_swallow_state", active)
 	if _is_auto_network_feature_test():
@@ -2224,7 +2245,7 @@ func revive_presentation(target_peer_id: int, hp: float) -> void:
 	if net.is_host or not _players.has(target_peer_id):
 		return
 	var entry: Dictionary = _players[target_peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if state:
 		state.current_hp = hp
@@ -2269,7 +2290,7 @@ func throwable_state_presentation(peer_id: int, throwable_id: String, held: bool
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var td := _get_network_throwable_data_by_id(throwable_id)
 	# Host 永远只会发白名单 ID；客户端遇到无效包时安全降级为放下，不能保留旧持物状态。
@@ -2298,7 +2319,7 @@ func throwable_presentation(peer_id: int, throwable_id: String, start_position: 
 func player_hurt_presentation(peer_id: int, damage: float, position: Vector2) -> void:
 	if net.is_host or _scene_transitioning:
 		return
-	var node := (_players.get(peer_id, {}) as Dictionary).get("node") as CharacterBody2D
+	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("play_network_hurt_presentation"):
 		node.play_network_hurt_presentation(damage, position)
 		if _is_auto_network_feature_test():
@@ -2468,7 +2489,7 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 	if sender <= 1 or not _players.has(sender):
 		return
 	var entry: Dictionary = _players.get(sender, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	if is_instance_valid(node) and node.is_network_dead():
 		_set_input(sender, Vector2.ZERO, false)
 		return
@@ -2480,7 +2501,7 @@ func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) ->
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not state or not is_instance_valid(node):
 		return
@@ -2896,19 +2917,31 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 	return {}
 
 
-## 安全取玩家节点：`entry.get("node") as CharacterBody2D` 对已释放对象会抛错并静默
-## 中止整个调用函数（freed-cast 家族）。玩家快照走 20Hz 热路径，一次抛错就会让
-## 整帧玩家同步中断，因此这里统一「先判 is_instance_valid 再 as」。
-func _resolve_player_node(entry: Dictionary) -> CharacterBody2D:
+## ── 实体安全取值入口（2026-09-23 审计：freed-cast 家族的结构性收敛）──
+## 对已释放对象做 `as` 会抛错并**静默中止整个调用函数**。本文件所有「取实体」一律走
+## 下面两个入口，不再出现裸 `x.get("node") as T` / `_pickups[id] as Node2D`
+## （原 73 处已机械收敛；新增代码请沿用）。
+## - `_player_node(entry)`：_players 条目 → 玩家节点（已失效返回 null）
+## - `_pickup_node(id)`   ：掉落物 id → 节点（顺手清掉悬垂条目，自愈）
+func _player_node(entry: Dictionary) -> CharacterBody2D:
 	var node_value: Variant = entry.get("node")
 	if not is_instance_valid(node_value):
 		return null
 	return node_value as CharacterBody2D
 
 
+func _pickup_node(pickup_id: int) -> Node2D:
+	var pickup_value: Variant = _pickups.get(pickup_id)
+	if is_instance_valid(pickup_value):
+		return pickup_value as Node2D
+	if _pickups.has(pickup_id):
+		_pickups.erase(pickup_id)   # 悬垂条目当场清理，避免污染后续快照构建/应用
+	return null
+
+
 func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := _resolve_player_node(entry)
+	var node := _player_node(entry)
 	var created := false
 	if not is_instance_valid(node):
 		created = true
@@ -3164,7 +3197,7 @@ func _remove_player(peer_id: int) -> void:
 	if not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as Node
+	var node := _player_node(entry)
 	# Host 释放断线玩家前，先清除所有敌人的目标引用，防止 Chase 状态读取失效实例。
 	if net.is_host and is_instance_valid(node):
 		for enemy_node: Node in get_tree().get_nodes_in_group("enemy"):
@@ -3189,7 +3222,7 @@ func _register_initial_host_pickups() -> void:
 	# 回归观测：列出注册明细（仅回归会话），便于定位掉落物同步类问题。
 	if _is_net_test_session():
 		for key: Variant in _pickups.keys():
-			var node_p := _pickups[key] as Node2D
+			var node_p := _pickup_node(int(key))
 			if not is_instance_valid(node_p):
 				continue
 			var w := node_p.get("weapon_data") as WeaponData
@@ -3407,7 +3440,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	var pickup_value: Variant = _pickups[pickup_id]
 	var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
 	var entry: Dictionary = _players[peer_id]
-	var player := entry.get("node") as CharacterBody2D
+	var player := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	# 滞后补偿：拾取距离按权威坐标校验，先对齐客户端自报位置（客户端贴住掉落物
 	# 却因权威坐标落后而失败是实测高频问题）。
@@ -3548,7 +3581,7 @@ func _try_host_drop_all(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var player := entry.get("node") as CharacterBody2D
+	var player := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(player) or not state or player.current_hp <= 0.0:
 		return
@@ -3749,7 +3782,7 @@ func _try_host_safe_door_ready(peer_id: int, door_key: String) -> void:
 	# 倒地/死亡玩家不能确认安全门（L4D2 规则：必须站立状态交互）；
 	# 他们仍可爬到门边被计入到门人数，由站立的队友执行确认。
 	var entry: Dictionary = _players[peer_id]
-	var requester := entry.get("node") as CharacterBody2D
+	var requester := _player_node(entry)
 	if is_instance_valid(requester) and requester.is_network_dead():
 		return
 	var door := _find_safe_door(door_key)
@@ -3781,7 +3814,7 @@ func _find_safe_door(door_key: String) -> Node2D:
 func _is_host_player_at_safe_door(peer_id: int, door: Node2D) -> bool:
 	if not _players.has(peer_id) or not is_instance_valid(door):
 		return false
-	var player := (_players[peer_id] as Dictionary).get("node") as CharacterBody2D
+	var player := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(player):
 		return false
 	return player.global_position.distance_to(door.global_position) <= float(door.get("interact_range"))
@@ -3797,7 +3830,7 @@ func _are_all_players_at_safe_door(door: Node2D) -> bool:
 		return false
 	for peer_id: int in peer_ids:
 		var entry: Dictionary = _players.get(peer_id, {})
-		var node := entry.get("node") as CharacterBody2D
+		var node := _player_node(entry)
 		if is_instance_valid(node) and node.is_network_dead() and not bool(entry.get("downed", false)):
 			continue
 		if not _is_host_player_at_safe_door(peer_id, door):
@@ -4106,7 +4139,7 @@ func _run_auto_client_slow_host_ready_test() -> void:
 	var deadline := Time.get_ticks_msec() + 12000
 	while (not _initial_world_received or _players.size() < 2) and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
-	var host_node := (_players.get(1, {}) as Dictionary).get("node") as CharacterBody2D
+	var host_node := _player_node(_players.get(1, {}))
 	if not _initial_world_received or _players.size() < 2 or not is_instance_valid(host_node):
 		printerr("[NetworkWorld] AUTO_SLOWHOST_CLIENT_FAILED world=%s players=%d host_node=%s" % [
 			str(_initial_world_received), _players.size(), str(is_instance_valid(host_node))])
@@ -4145,8 +4178,8 @@ func _run_auto_host_team_wipe_test() -> void:
 		if peer_id > 1:
 			client_id = peer_id
 			break
-	var host_node := (_players.get(int(net.my_peer_id), {}) as Dictionary).get("node") as CharacterBody2D
-	var client_node := (_players.get(client_id, {}) as Dictionary).get("node") as CharacterBody2D
+	var host_node := _player_node(_players.get(int(net.my_peer_id), {}))
+	var client_node := _player_node(_players.get(client_id, {}))
 	if client_id <= 1 or not is_instance_valid(host_node) or not is_instance_valid(client_node):
 		printerr("[NetworkWorld] AUTO_TEAM_WIPE_HOST_SETUP_FAILED client=%d" % client_id)
 		get_tree().quit(1)
@@ -4266,7 +4299,7 @@ func _run_auto_client_team_wipe_verify() -> void:
 		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_VERIFY_FAILED no_world")
 		get_tree().quit(1)
 		return
-	var local_node := (_players.get(int(net.my_peer_id), {}) as Dictionary).get("node") as CharacterBody2D
+	var local_node := _player_node(_players.get(int(net.my_peer_id), {}))
 	if not is_instance_valid(local_node) or local_node.is_network_dead() or local_node.current_hp <= 0.0:
 		printerr("[NetworkWorld] AUTO_TEAM_WIPE_CLIENT_VERIFY_FAILED not_standing")
 		get_tree().quit(1)
@@ -4417,8 +4450,8 @@ func _run_auto_host_feature_test() -> void:
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_THROWABLE_FAILED not_consumed")
 		return
 	var host_entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var host_node := host_entry.get("node") as CharacterBody2D
-	var client_node := client_entry.get("node") as CharacterBody2D
+	var host_node := _player_node(host_entry)
+	var client_node := _player_node(client_entry)
 	if not is_instance_valid(host_node) or not is_instance_valid(client_node):
 		printerr("[NetworkWorld] AUTO_FEATURE_HOST_REVIVE_SETUP_FAILED missing_node")
 		return
@@ -4531,12 +4564,12 @@ func _run_auto_client_feature_test() -> void:
 		return
 	# Host 在投掷校验及受伤表现回归结束后会令自己倒地；客户端必须以真实 RPC 请求救援。
 	var host_entry: Dictionary = _players.get(1, {})
-	var host_node := host_entry.get("node") as CharacterBody2D
+	var host_node := _player_node(host_entry)
 	deadline = Time.get_ticks_msec() + 4000
 	while (not is_instance_valid(host_node) or not host_node.is_network_dead()) and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
 		host_entry = _players.get(1, {})
-		host_node = host_entry.get("node") as CharacterBody2D
+		host_node = _player_node(host_entry)
 	if not is_instance_valid(host_node) or not host_node.is_network_dead():
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_REVIVE_SETUP_FAILED host_dead=%s" % [is_instance_valid(host_node) and host_node.is_network_dead()])
 		return
@@ -4555,7 +4588,7 @@ func _run_auto_client_feature_test() -> void:
 		return
 	entry = _players.get(local_id, {})
 	state = entry.get("state") as PlayerState
-	var local_node := entry.get("node") as CharacterBody2D
+	var local_node := _player_node(entry)
 	if not is_instance_valid(local_node):
 		printerr("[NetworkWorld] AUTO_FEATURE_CLIENT_DEATH_SETUP_FAILED missing_local_node")
 		return
@@ -4877,7 +4910,7 @@ func _get_auto_safe_door() -> Node2D:
 
 func _set_auto_test_player_position(peer_id: int, position: Vector2) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node):
 		return
@@ -4966,7 +4999,7 @@ func _run_auto_client_input_test() -> void:
 	for _sample: int in range(8):
 		await get_tree().create_timer(0.08).timeout
 		var sample_entry: Dictionary = _players.get(int(net.my_peer_id), {})
-		var sample_node := sample_entry.get("node") as CharacterBody2D
+		var sample_node := _player_node(sample_entry)
 		if is_instance_valid(sample_node):
 			var sample_sprite := sample_node.get_node_or_null("Sprite2D") as Sprite2D
 			if sample_sprite:
@@ -4974,7 +5007,7 @@ func _run_auto_client_input_test() -> void:
 	Input.action_release("右")
 	await get_tree().create_timer(0.35).timeout
 	entry = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var animation_advanced := animation_frames.size() > 1
 	print("[NetworkWorld] AUTO_CLIENT_INPUT_COMPLETE pos=%s animation_advanced=%s frames=%d" % [
 		node.global_position if is_instance_valid(node) else Vector2.ZERO,
@@ -5030,15 +5063,46 @@ func _run_auto_client_input_test() -> void:
 			required_visual_bullets,
 			final_ammo,
 		])
-	# 第二段：先通过正常的客户端输入移动到 Enemy2 的近战距离内。
-	# 不传送客户端坐标，确保本回归仍覆盖「Client 输入 → Host 模拟移动 → Host 判定」完整链路。
+	# 第二段：先按已知摆位右走（确定性），再**仅在近距离内**按快照里的敌人位置微调贴身。
+	# ⚠ 不能直接去追「最近敌人」：可能追到远处或被墙挡住的敌人，反而走离目标
+	# （实测 in_range=false pos=(1238,4586)，比固定走位更糟）。也不保持纯固定走位：
+	# 敌人由 Director 驱动会挪动，固定走位会走空（实测 HOST_MELEE_WHIFF）。
+	# 两者结合 = 确定性落点 + 最后几像素的动态贴合，仍全程走正常输入、不传送坐标。
 	Input.action_press("右")
 	await get_tree().create_timer(0.72).timeout
 	Input.action_release("右")
-	await get_tree().create_timer(0.35).timeout
+	await get_tree().create_timer(0.30).timeout
+	const APPROACH_MAX_DISTANCE := 200.0
+	const APPROACH_NEAR := 16.0
+	var approach_deadline := Time.get_ticks_msec() + 2000
+	var in_range := false
+	while Time.get_ticks_msec() < approach_deadline:
+		entry = _players.get(int(net.my_peer_id), {})
+		node = _player_node(entry)
+		if not is_instance_valid(node):
+			break
+		var target := _nearest_client_enemy_node(node.global_position)
+		if not is_instance_valid(target) \
+				or node.global_position.distance_to(target.global_position) > APPROACH_MAX_DISTANCE:
+			break     # 附近没有可贴身的目标 → 保持确定性走位结果，直接出手
+		var delta: Vector2 = target.global_position - node.global_position
+		if absf(delta.x) <= APPROACH_NEAR and absf(delta.y) <= APPROACH_NEAR:
+			in_range = true
+			break
+		if absf(delta.x) > 5.0:
+			Input.action_press("右" if delta.x > 0.0 else "左")
+		if absf(delta.y) > 5.0:
+			Input.action_press("下" if delta.y > 0.0 else "上")
+		await get_tree().create_timer(0.05).timeout
+		Input.action_release("右")
+		Input.action_release("左")
+		Input.action_release("下")
+		Input.action_release("上")
+	await get_tree().create_timer(0.25).timeout
 	entry = _players.get(int(net.my_peer_id), {})
-	node = entry.get("node") as CharacterBody2D
-	print("[NetworkWorld] AUTO_CLIENT_KNIFE_POSITION pos=%s" % [node.global_position if is_instance_valid(node) else Vector2.ZERO])
+	node = _player_node(entry)
+	print("[NetworkWorld] AUTO_CLIENT_KNIFE_POSITION in_range=%s pos=%s" % [
+		in_range, node.global_position if is_instance_valid(node) else Vector2.ZERO])
 
 	# 第三段：验证客户端只提交切换/攻击意图，而 Host 以固定副武器（小刀）确认表现与伤害。
 	Input.action_press("副武器键")
@@ -5071,15 +5135,33 @@ func _run_auto_client_input_test() -> void:
 	deadline = Time.get_ticks_msec() + 3000
 	var melee_damage_seen := false
 	var enemy_hp_after := enemy_hp_before
+	## 逐帧差分（2026-09-23 稳定化）：原先只比对「攻击前已存在」的 enemy_id —— 若这一刀
+	## 砍中的是 Director 在这段时间新刷出的敌人，HP 确实掉了却判不出来（实测假红）。
+	## 改为比对相邻两次采样的**同名**敌人：新刷敌人首帧即进入两张表，其后掉血可被捕捉；
+	## 而 scatter 只会抬高总和、不会造成同一 id 掉血，所以不会引入假绿。
+	var hp_map_prev := enemy_hp_map_before
+	## 兜底再挥：敌人可能在逼近后又挪开，导致这一刀落空。窗口内允许补挥 1 次
+	## （仍走正常输入链路），避免把「用例运气」当成回归结论。
+	var reswings := 0
+	var next_swing_at := Time.get_ticks_msec() + 1300
 	while Time.get_ticks_msec() < deadline:
 		enemy_hp_after = _get_client_live_enemy_hp_total()
 		var hp_map_after := _get_client_enemy_hp_map()
-		for enemy_key: int in enemy_hp_map_before.keys():
-			if hp_map_after.has(enemy_key) and hp_map_after[enemy_key] <= float(enemy_hp_map_before[enemy_key]) - NETWORK_KNIFE.get_effective_damage() + 0.1:
+		for enemy_key: int in hp_map_after.keys():
+			if not hp_map_prev.has(enemy_key):
+				continue
+			if float(hp_map_after[enemy_key]) <= float(hp_map_prev[enemy_key]) - NETWORK_KNIFE.get_effective_damage() + 0.1:
 				melee_damage_seen = true
 				break
-		if _auto_client_fire_confirmed and melee_damage_seen:
+		hp_map_prev = hp_map_after
+		if melee_damage_seen:
 			break
+		if _auto_client_fire_confirmed and reswings < 1 and Time.get_ticks_msec() >= next_swing_at:
+			reswings += 1
+			next_swing_at = Time.get_ticks_msec() + 1300
+			Input.action_press("确定键")
+			await get_tree().create_timer(0.12).timeout
+			Input.action_release("确定键")
 		await get_tree().create_timer(0.05).timeout
 	var knife_ok := knife_switched and _auto_client_fire_confirmed and _auto_client_attack_weapon_id == NETWORK_KNIFE.item_id and not _auto_client_bullet_seen and melee_damage_seen
 	print("[NetworkWorld] AUTO_CLIENT_KNIFE_COMPLETE switched=%s confirmed=%s weapon=%s bullet_seen=%s melee_damage_seen=%s enemy_hp_before=%.1f enemy_hp_after=%.1f" % [
@@ -5141,7 +5223,7 @@ func _run_auto_client_pickup_test() -> void:
 		await get_tree().create_timer(0.05).timeout
 		source = _find_client_pickup_by_weapon_id(NETWORK_PISTOL.item_id)
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(source) or not is_instance_valid(node) or not state:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED source=%s node=%s state=%s primary=%s" % [is_instance_valid(source), is_instance_valid(node), state != null, primary_weapon.item_id])
@@ -5200,7 +5282,7 @@ func _run_auto_client_throwable_pickup_test() -> void:
 	while not _initial_world_received and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	## 安全屋开局随机掉落表的投掷物是混合概率（grenade/molotov/flash 只会刷出其一或都不出），
 	## 用例若只找手雷会随掉落随机性摆烂（2026-09-18 连续两轮 SETUP_FAILED，Host 该局刷的是
 	## 燃烧瓶）——泛化为「任一白名单投掷物掉落」，消除 setup 的运气依赖。
@@ -5321,6 +5403,22 @@ func _force_auto_test_player_low_hp(node: CharacterBody2D) -> void:
 	if state:
 		state.current_hp = 1.0
 	node.current_hp = 1.0
+
+
+## --net-test harness 专用：离给定坐标最近的**活**敌（Client 视角镜像节点）。
+## 用于近战用例动态逼近——敌人由 Director 驱动会移动，固定走位会走空。
+func _nearest_client_enemy_node(from_position: Vector2) -> CharacterBody2D:
+	var best: CharacterBody2D = null
+	var best_dist: float = INF
+	for key: Variant in _enemies.keys():
+		var enemy := _resolve_enemy_entry(_enemies[key] as Dictionary)
+		if not is_instance_valid(enemy) or enemy.is_network_dead():
+			continue
+		var dist: float = from_position.distance_squared_to(enemy.global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best = enemy
+	return best
 
 
 ## --net-test harness 专用：Client 视角各活敌的 hp 快照（entity_id → hp）。
@@ -5541,7 +5639,7 @@ func _build_compact_player_snapshot() -> Array:
 
 func _public_state(peer_id: int) -> Dictionary:
 	var entry: Dictionary = _players[peer_id]
-	var node := entry.get("node") as CharacterBody2D
+	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	var weapon: WeaponData = state.get_active_weapon() if state else null
 	return {
@@ -5626,7 +5724,7 @@ func _reconcile_network_seats(peer_ids: Array[int]) -> void:
 		if not _players.has(peer_id):
 			continue
 		var entry: Dictionary = _players[peer_id]
-		var node := entry.get("node") as Node2D
+		var node := _player_node(entry)
 		var seat_index := Players.find_seat_by_owner_peer_id(peer_id)
 		if is_instance_valid(node) and seat_index >= 0:
 			Players.register_entity(node, seat_index)
@@ -5830,7 +5928,7 @@ func _try_host_quest_pickup(peer_id: int, node_path: NodePath) -> void:
 	if not is_instance_valid(pickup) or not pickup.has_method("host_commit_pickup"):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var player := entry.get("node") as CharacterBody2D
+	var player := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(player) or player.global_position.distance_to(pickup.global_position) > 96.0:
 		print("[NetworkWorld] QUEST_PICKUP 拒绝: peer=%d 距离过远 path=%s" % [peer_id, node_path])
@@ -5863,7 +5961,7 @@ func _try_host_wall_place(peer_id: int, node_path: NodePath) -> void:
 	if not is_instance_valid(wall) or not wall.has_method("host_commit_place"):
 		return
 	var entry: Dictionary = _players[peer_id]
-	var player := entry.get("node") as CharacterBody2D
+	var player := _player_node(entry)
 	if not is_instance_valid(player):
 		return
 	## 不在这里做距离校验：墙的层原点可能在地图角落，最近格距离由墙自己算
