@@ -589,6 +589,24 @@ func configure_network_pickup(pickup_id: int, presentation_only: bool = false) -
 func reset_network_pickup_request() -> void:
 	_network_pickup_request_pending = false
 
+
+## 与 healing_pickup 同款：Client 侧镜像被 NetworkWorld 判定为「Host 已不存在」时的
+## 停用入口。修复前 weapon_pickup **缺此方法** → _apply_client_pickup_snapshot 的
+## 清理分支只能退回 hide()，网络态（network_pickup_id / 请求闩锁 / 交互引用）
+## 未被清掉；若该节点因复用路径未立即销毁，残留的 network_pickup_id 仍会向 Host
+## 提交对已消失 id 的拾取请求。
+func disable_network_pickup() -> void:
+	visible = false
+	network_pickup_id = 0
+	network_presentation_only = false
+	_network_pickup_request_pending = false
+	_player_in_range = false
+	_player_ref = null
+	_hold_timer = 0.0
+	if _area:
+		_area.set_deferred("monitoring", false)
+		_area.set_deferred("monitorable", false)
+
 func _can_hold_pickup() -> bool:
 	## 玩家在范围内即可拾取（不再限制武器举起/攻击状态）
 	return _player_ref != null
@@ -754,8 +772,13 @@ func _refresh_sprite() -> void:
 	sprite.region_enabled = true
 
 	# 当前踏步帧（动画关闭时用第一帧，即站立帧）
+	# ⚠ 下标必须夹紧（09-23 实测崩溃 Out of bounds get index '3'）：同一节点会被
+	# 快照复用给不同武器（apply_weapon_ground_display 先设 weapon_data → setter 立刻
+	# 回调本函数，而 pickup_step_frames 要等函数末尾才换掉），期间 _step_idx 仍指向
+	# 旧序列的下标 —— 旧序列 [1,0,1,2] 已走到 3，新序列（如平底锅 [0]）长度 1 → 越界。
 	var frame: int
 	if pickup_animated and pickup_step_frames.size() > 0:
+		_step_idx = clampi(_step_idx, 0, pickup_step_frames.size() - 1)
 		frame = pickup_step_frames[_step_idx]
 	else:
 		frame = pickup_step_frames[0] if pickup_step_frames.size() > 0 else 1

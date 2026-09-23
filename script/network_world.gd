@@ -2534,7 +2534,9 @@ func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2,
 func despawn_bullet(bullet_id: int) -> void:
 	if net.is_host:
 		return
-	var bullet := _bullets.get(bullet_id) as Node
+	# ⚠ 先判 is_instance_valid 再 as（freed-cast 家族）：子弹可能在 finished 之外被释放。
+	var bullet_value: Variant = _bullets.get(bullet_id)
+	var bullet: Node = (bullet_value as Node) if is_instance_valid(bullet_value) else null
 	_bullets.erase(bullet_id)
 	if is_instance_valid(bullet):
 		bullet.queue_free()
@@ -2823,6 +2825,14 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 ## `snap=false` 表示高频移动快照：只能更新已有实体的表现，不能因为丢包而
 ## 删除玩家。玩家快照同时兼容旧的 Dictionary 格式和新的紧凑 Array 格式。
 func _apply_client_snapshot(states: Array, snap: bool) -> void:
+	# ★ 悬垂条目清扫必须放在最前（2026-09-23 审计）：本函数是 20Hz 热路径，
+	# 若某条目的 node 已被释放而未 erase，下面的强转/访问会抛错并**静默中止整个
+	# 函数** —— 而「不在快照即回收」的收敛写在函数末尾，于是收敛永远执行不到，
+	# 故障被固化（客户端玩家同步永久失效）。先把失效条目清掉，收敛才有机会跑。
+	for sweep_key: Variant in _players.keys():
+		var sweep_value: Variant = _players[sweep_key]
+		if sweep_value is Dictionary and not is_instance_valid((sweep_value as Dictionary).get("node")):
+			_remove_player(int(sweep_key))
 	var seen: Dictionary = {}
 	var authoritative_peer_ids: Array[int] = []
 	for value: Variant in states:
@@ -2886,9 +2896,19 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 	return {}
 
 
+## 安全取玩家节点：`entry.get("node") as CharacterBody2D` 对已释放对象会抛错并静默
+## 中止整个调用函数（freed-cast 家族）。玩家快照走 20Hz 热路径，一次抛错就会让
+## 整帧玩家同步中断，因此这里统一「先判 is_instance_valid 再 as」。
+func _resolve_player_node(entry: Dictionary) -> CharacterBody2D:
+	var node_value: Variant = entry.get("node")
+	if not is_instance_valid(node_value):
+		return null
+	return node_value as CharacterBody2D
+
+
 func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
-	var node := entry.get("node") as CharacterBody2D
+	var node := _resolve_player_node(entry)
 	var created := false
 	if not is_instance_valid(node):
 		created = true
@@ -3072,10 +3092,18 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 			return
 		if not scene_path.is_empty() and get_tree().current_scene:
 			node = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as CharacterBody2D
+			# 该节点若已被别的 entity_id 认领，不得复用（同 pickup 侧的一一对应不变量）
+			node = _reject_claimed_enemy(node, entity_id, _claimed_enemy_nodes())
 		if not is_instance_valid(node):
 			node = ENEMY_SCENE.instantiate() as CharacterBody2D
 			if not is_instance_valid(node):
 				return
+			# ★ 唯一名（2026-09-23 审计）：镜像若沿用场景默认名（如 Zombie）直接挂进
+			# 世界容器，会占用与地图预置敌人相同的 scene_path 命名空间 —— 另一个
+			# entity_id 的包带着真正的地图路径过来时 get_node_or_null 会命中本镜像，
+			# 于是两个 id 共用一个节点（位置/血量/动作互相覆盖）。pickup 侧实测过同款
+			# 事故（手雷被喷雾覆盖），这里一并堵死。
+			node.name = "NetEnemy%d" % entity_id
 			# A1 特感复制 / A5 僵尸变体：可靠通道携带 id 时按白名单取同一份 tres，
 			# 用与 Host 完全相同的注入代码（*.apply_to_enemy）重建表现。
 			# 必须在 add_child 之前注入 —— enemy._ready() 的 _refresh_sprite 依赖 walk_texture。
@@ -3282,10 +3310,21 @@ func _prepare_client_preplaced_pickups() -> void:
 
 
 func _build_pickup_snapshot() -> Array:
+	# 先清理已释放条目（2026-09-23，Host 侧此前漏修）：`_pickups[id] as Node2D` 对已
+	# 释放对象会抛 "Trying to cast a freed object" 并**静默中止整个函数**（返回 null）
+	# → 该帧掉落物同步整体失效（客户端看不见/拿不了/物件错乱）。悬垂条目很常见：
+	# GroundItemCap 淘汰、拾取物被外部 queue_free 都不会通知 NetworkWorld。
+	# 客户端 _apply_client_pickup_snapshot 早已有同款清理，二者属同一「freed-cast 家族」。
+	for stale_key: Variant in _pickups.keys():
+		var stale_value: Variant = _pickups[stale_key]
+		if not is_instance_valid(stale_value):
+			_pickups.erase(stale_key)
 	var packets: Array = []
 	for value: Variant in _pickups.keys():
 		var pickup_id: int = int(value)
-		var pickup := _pickups[pickup_id] as Node2D
+		# ⚠ 取值必须先判 is_instance_valid 再 as Node2D（对已释放对象做 as 会抛错）
+		var pickup_value: Variant = _pickups[pickup_id]
+		var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
 		if not is_instance_valid(pickup):
 			continue
 		var weapon := pickup.get("weapon_data") as WeaponData
@@ -3564,6 +3603,28 @@ func pickup_snapshot(player_states: Array, pickup_states: Array) -> void:
 	_apply_client_pickup_snapshot(pickup_states)
 
 
+## 已被认领的镜像节点（instance_id → pickup_id）。
+## ★ 联机不变量：一个节点只能被一个 pickup_id 认领 —— 否则后写的 id 会覆盖前者
+## 的内容（实测：手雷被喷雾覆盖、霰弹被手枪覆盖，客户端再也找不到投掷物源）。
+func _claimed_pickup_nodes() -> Dictionary:
+	var claimed: Dictionary = {}
+	for key: Variant in _pickups.keys():
+		var value: Variant = _pickups[key]
+		if is_instance_valid(value):
+			claimed[(value as Node).get_instance_id()] = int(key)
+	return claimed
+
+
+## 候选节点若已被**别的** id 认领则作废（返回 null，调用方转而新建自己的镜像）。
+func _reject_claimed(candidate: Node2D, pickup_id: int, claimed: Dictionary) -> Node2D:
+	if not is_instance_valid(candidate):
+		return null
+	var owner_id: int = int(claimed.get(candidate.get_instance_id(), 0))
+	if owner_id != 0 and owner_id != pickup_id:
+		return null
+	return candidate
+
+
 func _apply_client_pickup_snapshot(states: Array) -> void:
 	# 先清理已释放条目（09-22 实测）：_pickups 里的 queue_free 节点若残留，
 	# `_pickups.get(id) as Node2D` 会抛 "Trying to cast a freed object" 并**静默
@@ -3572,6 +3633,7 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 	for stale_key: Variant in _pickups.keys():
 		if not is_instance_valid(_pickups[stale_key]):
 			_pickups.erase(stale_key)
+	var claimed: Dictionary = _claimed_pickup_nodes()
 	var seen: Dictionary = {}
 	for packet_value: Variant in states:
 		if not packet_value is Dictionary:
@@ -3591,13 +3653,29 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			# 能识别旧节点，特别是在掉落物被重挂父节点或动态替换之后。
 			var preplaced_value: Variant = _client_preplaced_pickups_by_path.get(scene_path)
 			pickup = (preplaced_value as Node2D) if is_instance_valid(preplaced_value) else null
+			pickup = _reject_claimed(pickup, pickup_id, claimed)
 			if not is_instance_valid(pickup) and not scene_path.is_empty():
 				pickup = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as Node2D
+				pickup = _reject_claimed(pickup, pickup_id, claimed)
 			if not is_instance_valid(pickup):
 				pickup = (HEALING_PICKUP_SCENE if pickup_kind == "throwable" else PICKUP_SCENE).instantiate() as Node2D
+				# ★ 必须改成唯一名（2026-09-23 审计实测）：镜像若沿用场景根名（WeaponPickup /
+				# HealingPickup）直接挂进 GroundLayer，就会**占用与地图节点相同的 scene_path
+				# 命名空间** —— 随后另一个 pickup_id 的包带着真正的地图路径（如
+				# "GroundLayer/WeaponPickup"）过来时，get_node_or_null 命中的是**先建的那个
+				# 镜像**，于是两个 id 指向同一节点、后写者覆盖前者（实测：id9 的手雷被 id12
+				# 的喷雾覆盖 → 客户端找不到投掷物源；id1 的霰弹被 id13 的手枪覆盖）。
+				pickup.name = "NetPickup%d" % pickup_id
+				# 镜像节点生命周期归 NetworkWorld 所有：必须在 add_child **之前**置位 ——
+				# weapon_pickup/healing_pickup._ready() 据此跳过 GroundItemCap.register()。
+				# 否则客户端会按本地「地面物上限 8」淘汰镜像节点（queue_free 且不通知这里）
+				# → _pickups[id] 悬垂 → 下个可靠快照按同一 id 重建 → 再淘汰 …… 形成
+				# 2 秒周期的「消失↔重建」无限轮转。★Host 才是地面物集合的唯一真源。
+				pickup.set("cap_exempt", true)
 				var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 				(parent if parent else get_tree().current_scene).add_child(pickup)
 			_pickups[pickup_id] = pickup
+		claimed[pickup.get_instance_id()] = pickup_id
 		if pickup_kind == "throwable":
 			var throwable := _get_network_throwable_data_by_id(str(packet.get("item_id", "")))
 			if not throwable:
@@ -5408,6 +5486,28 @@ func _resolve_enemy_entry(entry: Dictionary) -> CharacterBody2D:
 	if not is_instance_valid(enemy_value) or not enemy_value is CharacterBody2D:
 		return null
 	return enemy_value as CharacterBody2D
+
+
+## 已被认领的敌人镜像（instance_id → entity_id）。★ 一个节点只能被一个 entity_id
+## 认领；否则后写的一方会覆盖前者的位置/血量/动作（错乱家族）。
+func _claimed_enemy_nodes() -> Dictionary:
+	var claimed: Dictionary = {}
+	for key: Variant in _enemies.keys():
+		var entry_value: Variant = _enemies[key]
+		var node := _resolve_enemy_entry(entry_value as Dictionary) if entry_value is Dictionary else null
+		if is_instance_valid(node):
+			claimed[node.get_instance_id()] = int(key)
+	return claimed
+
+
+## 候选敌人节点若已被**别的** entity_id 认领则作废（返回 null，调用方转而新建镜像）。
+func _reject_claimed_enemy(candidate: CharacterBody2D, entity_id: int, claimed: Dictionary) -> CharacterBody2D:
+	if not is_instance_valid(candidate):
+		return null
+	var owner_id: int = int(claimed.get(candidate.get_instance_id(), 0))
+	if owner_id != 0 and owner_id != entity_id:
+		return null
+	return candidate
 
 
 func _build_snapshot() -> Array:

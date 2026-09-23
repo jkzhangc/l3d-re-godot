@@ -336,6 +336,9 @@ func _refresh_sprite() -> void:
 			frames = [1, 0, 1, 2]
 		var frame: int
 		if item.pickup_animated and frames.size() > 0:
+			# ⚠ 夹紧（与 weapon_pickup 同因，09-23）：item 被换掉时 _step_idx 可能仍
+			# 指向旧序列下标，而新序列更短（item setter 会先回调 _refresh_sprite）。
+			_step_idx = clampi(_step_idx, 0, frames.size() - 1)
 			frame = frames[_step_idx]
 		else:
 			frame = frames[0] if frames.size() > 0 else 1
