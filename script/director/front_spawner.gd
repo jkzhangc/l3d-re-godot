@@ -96,10 +96,12 @@ extends Node
 
 # ── 内部状态 ──
 var _director: Node = null
-var _advance_accum: float = 0.0     ## 距上一批的净位移（触发后归零）
+var _advance_accum: float = 0.0     ## 距上一批的净位移（触发后归零；多人 = 走得最远的那个）
 var _timer: float = 0.0             ## 距上次补位的秒数
-var _last_batch_pos: Vector2 = Vector2.INF  ## 上一批补位时玩家的位置
-var _last_dir: Vector2 = Vector2.DOWN  ## 玩家静止时的朝向兜底
+## instance_id -> 上一批补位时的位置。多人（2026-09-23）：必须逐玩家记账，
+## 否则"主机不动、客户端推进"时净位移永远为 0 → 前方断供。
+var _batch_player_pos: Dictionary = {}
+var _last_dir: Vector2 = Vector2.DOWN  ## 锚点玩家静止时的朝向兜底
 var _rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 ## 最近一次「本帧没有补位」的原因（供现场抓取器与诊断使用）。
@@ -118,6 +120,10 @@ func setup(director_node: Node) -> void:
 
 func update(delta: float, player: Node2D, alive_count: int, phase: StringName = &"build") -> int:
 	## 每帧由 Director 调用。返回本帧实际刷出的数量（0 表示没有动静）。
+	##
+	## 多人（2026-09-23）：几何判定以**锚点玩家**（L4D 式偏好落单/走得远的那位）为圆心，
+	## 但"屏外 / 附近闸 / 前进量"一律对**全体玩家**取并集；旧实现只看座位 0（主机），
+	## 于是客户端跑前面时会看到"怪直接刷在自己面前"、追客户端的怪又按主机距离被回收。
 	if not enabled or _director == null or player == null or not is_instance_valid(player):
 		last_reject = "未启用 / 无玩家"
 		return 0
@@ -138,29 +144,28 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 		last_reject = "尸潮阶段由尸潮事件批供怪，普通补位暂停"
 		return 0
 
-	_timer += delta
-	## 自上一批以来玩家真正走出的距离。用"净位移"而不是"逐帧位移累加"：
-	## 角色顶在墙上时会有 1~2px 的来回抖动，累加式会把它攒够 advance_step → 原地刷怪。
-	if _last_batch_pos == Vector2.INF:
-		_last_batch_pos = player.global_position
-	_advance_accum = player.global_position.distance_to(_last_batch_pos)
+	## ── 本批刷给谁（锚点）──
+	var anchor: Node2D = _pick_anchor(player)
 
-	var dir: Vector2 = _front_dir(player)
+	_timer += delta
+	## 自上一批以来**走得最远的玩家**的净位移。用"净位移"而不是"逐帧位移累加"：
+	## 角色顶在墙上时会有 1~2px 的来回抖动，累加式会把它攒够 advance_step → 原地刷怪。
+	if _batch_player_pos.is_empty():
+		_snapshot_player_positions(player)
+	_advance_accum = _max_advance(player)
+
+	var dir: Vector2 = _team_front_dir(anchor)
 	if dir != Vector2.ZERO:
 		_last_dir = dir
 
-	var speed: float = 0.0
-	var v: Variant = player.get("velocity")
-	if v is Vector2:
-		speed = (v as Vector2).length()
-	var idle: bool = speed < moving_speed_eps
+	var idle: bool = not _any_player_moving(player)
 	if idle and not spawn_when_idle:
-		last_reject = "玩家静止（spawn_when_idle=false）"
+		last_reject = "全体玩家静止（spawn_when_idle=false）"
 		return 0  # 站着不动不补位（避免原地刷怪）
 
 	## 附近闸：附近敌人达标且玩家静止 → 暂停；一动就放行（2026-09-17 用户需求）
 	if nearby_gate_count > 0 and idle:
-		var near: int = _count_nearby(player)
+		var near: int = _count_nearby_all(anchor)
 		if near >= nearby_gate_count:
 			last_reject = "附近已有 %d ≥ %d 只且玩家静止（附近闸）" % [near, nearby_gate_count]
 			return 0
@@ -172,7 +177,7 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	var batch_now: int = batch_peak if is_peak else batch
 	var interval_now: float = interval_min_peak if is_peak else interval_min
 
-	var ahead: int = count_ahead(player)
+	var ahead: int = count_ahead(anchor)
 	if ahead >= target:
 		last_reject = "附近已满 %d/%d（%s）" % [ahead, target, "尸潮" if is_peak else "平常"]
 		return 0  # 附近已经够了 —— "这个范围里有一定数量就不刷"
@@ -190,7 +195,7 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	var spawned: int = 0
 	var picks_failed: int = 0
 	for _i: int in range(want):
-		var pos: Vector2 = pick_ahead_position(player)
+		var pos: Vector2 = pick_ahead_position(anchor)
 		if pos == Vector2.ZERO:
 			picks_failed += 1
 			break
@@ -198,17 +203,155 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 		if enemy:
 			spawned += 1
 	if spawned > 0:
-		_last_batch_pos = player.global_position
+		_snapshot_player_positions(player)
 		_advance_accum = 0.0
 		_timer = 0.0
 		last_reject = "已补位 %d 只" % spawned
-		print("[FrontSpawner] 前方补位 %d 只（带内 %d→%d / 目标 %d %s / 全场 %d）" % [
-			spawned, ahead, ahead + spawned, target, "尸潮" if is_peak else "平常", alive_count])
+		print("[FrontSpawner] 前方补位 %d 只（锚点=%s / 带内 %d→%d / 目标 %d %s / 全场 %d）" % [
+			spawned, anchor.name if is_instance_valid(anchor) else "-",
+			ahead, ahead + spawned, target, "尸潮" if is_peak else "平常", alive_count])
 	elif picks_failed > 0:
 		## 闸门都过了，但"前方扇区 × 屏幕外 × 距离带"里找不到合格点 ——
 		## 一般是地形太狭窄，或者这段扇形采样刚好都不可行走。
 		last_reject = "前方找不到合格落点（尝试 %d 次）" % picks_failed
 	return spawned
+
+
+# ═══════════════════════════════════════
+# 多人：锚点与全体判定（2026-09-23）
+# ═══════════════════════════════════════
+
+func _spawn_players(fallback: Node2D) -> Array[Node2D]:
+	## 参与"屏外 / 附近 / 前进量"判定的玩家集合 = 全体存活玩家。
+	var out: Array[Node2D] = []
+	if _director and _director.has_method("spawn_reference_players"):
+		out = _director.call("spawn_reference_players")
+	if out.is_empty() and fallback != null and is_instance_valid(fallback):
+		out.append(fallback)
+	return out
+
+
+func _pick_anchor(fallback: Node2D) -> Node2D:
+	## 本批补位的圆心。多人时交回 Director 按「落单 / 走得远 / 移动中」加权随机挑。
+	if _director and _director.has_method("pick_spawn_anchor"):
+		var picked: Node2D = _director.call("pick_spawn_anchor")
+		if picked and is_instance_valid(picked):
+			return picked
+	return fallback
+
+
+func _any_player_moving(fallback: Node2D) -> bool:
+	## 任一玩家在移动 → 允许补位（主机站着不动不该掐断正在推进的客户端的补位）。
+	for p: Node2D in _spawn_players(fallback):
+		var v: Variant = p.get("velocity")
+		if v is Vector2 and (v as Vector2).length() >= moving_speed_eps:
+			return true
+	return false
+
+
+func _team_front_dir(fallback: Node2D) -> Vector2:
+	## 队伍前进方向 = **速度最大的那个玩家**（真正在推进的人）的移动方向；
+	## 全队静止时退回锚点（或 fallback）的朝向。
+	##
+	## ⚠ 不能直接用锚点的朝向（2026-09-23 实测复盘）：锚点是按权重**随机**挑的，
+	## 一旦挑中"蹲着不动的主机"，用它朝向取扇形就会把怪刷到推进者（客户端）**背后**，
+	## 客户端视角就是"前方一直空着"。方向必须跟着推进的人走。
+	var best_speed: float = 0.0
+	var best_v: Vector2 = Vector2.ZERO
+	for p: Node2D in _spawn_players(fallback):
+		var v: Variant = p.get("velocity")
+		if v is Vector2:
+			var speed: float = (v as Vector2).length()
+			if speed > best_speed:
+				best_speed = speed
+				best_v = v as Vector2
+	if best_speed >= moving_speed_eps:
+		return best_v.normalized()
+	return _front_dir(fallback)
+
+
+func _max_advance(fallback: Node2D) -> float:
+	## 自上一批以来"走得最远那个玩家"的净位移。
+	var best: float = 0.0
+	for p: Node2D in _spawn_players(fallback):
+		var last: Variant = _batch_player_pos.get(p.get_instance_id())
+		if last is Vector2:
+			best = maxf(best, p.global_position.distance_to(last))
+	return best
+
+
+func _snapshot_player_positions(fallback: Node2D) -> void:
+	_batch_player_pos.clear()
+	for p: Node2D in _spawn_players(fallback):
+		_batch_player_pos[p.get_instance_id()] = p.global_position
+
+
+func reset_batch_tracking() -> void:
+	## 团灭复活 / 换图后调用：清掉旧坐标快照，避免复活瞬间的坐标跳变被当成"前进量"触发补位。
+	_batch_player_pos.clear()
+	_advance_accum = 0.0
+	_timer = 0.0
+
+
+func _player_view_rects(fallback: Node2D) -> Array[Rect2]:
+	## 各玩家的可视矩形（世界坐标）。本地玩家用**真实相机中心**（相机可能带前瞻/平滑偏移，
+	## 直接拿玩家坐标会有偏差）；远端玩家在 Host 侧没有相机 → 用"以自身位置为中心"的近似
+	## （2× 缩放下误差可接受）。判定"是否在某人视野内"必须用**并集**，否则主机屏外的点
+	## 会正好落在客户端画面里 —— 用户实测的"怪直接刷在客户端玩家面前"。
+	var half: Vector2 = _view_half_extents()
+	var cam_center: Vector2 = _camera_center(fallback)
+	var local: Node2D = _owning_player_of_camera(fallback)
+	var out: Array[Rect2] = []
+	for p: Node2D in _spawn_players(fallback):
+		var center: Vector2 = p.global_position
+		if local != null and p == local:
+			center = cam_center
+		out.append(Rect2(center - half, half * 2.0))
+	if out.is_empty():
+		out.append(Rect2(cam_center - half, half * 2.0))
+	return out
+
+
+func _owning_player_of_camera(fallback: Node2D) -> Node2D:
+	## 本机相机跟随的玩家：取离相机中心最近的那位（对不上时返回 null，退回"以位置为中心"）。
+	var cam: Camera2D = _active_camera()
+	if cam == null:
+		return null
+	var best: Node2D = null
+	var best_d: float = INF
+	for p: Node2D in _spawn_players(fallback):
+		var d: float = cam.global_position.distance_to(p.global_position)
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
+
+
+func _visible_to_any_player(pos: Vector2, rects: Array[Rect2]) -> bool:
+	## 落在任一玩家视野矩形（含 offscreen_margin 外扩）内 → 视为"看得见"，不可刷。
+	for r: Rect2 in rects:
+		var dx: float = absf(pos.x - (r.position.x + r.size.x * 0.5))
+		var dy: float = absf(pos.y - (r.position.y + r.size.y * 0.5))
+		if dx <= r.size.x * 0.5 + offscreen_margin and dy <= r.size.y * 0.5 + offscreen_margin:
+			return true
+	return false
+
+
+func _count_nearby_all(anchor: Node2D) -> int:
+	## 附近闸计数（多人）：落在**任一玩家** radius 内的存活敌人数（同一只只算一次）。
+	var n: int = 0
+	var r2: float = nearby_gate_radius * nearby_gate_radius
+	var refs: Array[Node2D] = _spawn_players(anchor)
+	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		for p: Node2D in refs:
+			if e.global_position.distance_squared_to(p.global_position) <= r2:
+				n += 1
+				break
+	return n
 
 
 # ═══════════════════════════════════════
@@ -224,6 +367,8 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 
 	var view_half: Vector2 = _view_half_extents()
 	var cam_center: Vector2 = _camera_center(player)
+	## 屏外判定用**全体玩家视野矩形的并集**（多人：主机屏外可能正好落在客户端画面里）。
+	var view_rects: Array[Rect2] = _player_view_rects(player)
 	var dir: Vector2 = _last_dir
 	var cos_limit: float = cos(deg_to_rad(front_half_angle))
 
@@ -242,7 +387,7 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 			var cand_dir: Vector2 = dir.rotated(deg_to_rad(offset_angle))
 			var pos: Vector2 = player.global_position + cand_dir * dist
 			pos += Vector2(_rng.randf_range(-12.0, 12.0), _rng.randf_range(-12.0, 12.0))
-			if not _is_offscreen(pos, cam_center, view_half):
+			if _visible_to_any_player(pos, view_rects):
 				continue
 			if cand_dir.dot(dir) < cos_limit:
 				continue
@@ -266,6 +411,8 @@ func _pick_author_point(player: Node2D) -> Vector2:
 
 	var view_half: Vector2 = _view_half_extents()
 	var cam_center: Vector2 = _camera_center(player)
+	## 作者刷新点同样要过"全体玩家视野并集"（否则会补在另一个玩家的画面里）。
+	var view_rects: Array[Rect2] = _player_view_rects(player)
 	var usable: Array = []
 	for node: Node2D in all:
 		if not is_instance_valid(node):
@@ -275,7 +422,7 @@ func _pick_author_point(player: Node2D) -> Vector2:
 		var base: Vector2 = _zone_center(node)
 		if not is_in_band(player, base):
 			continue
-		if not _is_offscreen(base, cam_center, view_half):
+		if _visible_to_any_player(base, view_rects):
 			continue
 		usable.append(node)
 	if usable.is_empty():
@@ -288,7 +435,7 @@ func _pick_author_point(player: Node2D) -> Vector2:
 		var pos: Vector2 = _author_point_position(node)
 		if not is_in_band(player, pos):
 			continue
-		if not _is_offscreen(pos, cam_center, view_half):
+		if _visible_to_any_player(pos, view_rects):
 			continue
 		if not _director._is_walkable(pos):
 			continue
@@ -329,9 +476,15 @@ func _collect_spawn_nodes(node: Node, out: Array) -> void:
 # ═══════════════════════════════════════
 
 func is_offscreen(player: Node2D, pos: Vector2) -> bool:
-	## 对外暴露的"是否在屏幕之外"判定 —— 供其它生成路径（作者 SpawnZone 的区域补齐）
-	## 复用同一套屏幕判定，避免"区域补齐"把敌人刷到玩家正看着的地方。
+	## 对外暴露的"是否在屏幕之外"判定（**单相机视角**）—— 保留给旧调用点。
+	## 多人场景请用 is_offscreen_for_all（只看一个玩家会把点刷到另一个玩家的画面里）。
 	return _is_offscreen(pos, _camera_center(player), _view_half_extents())
+
+
+func is_offscreen_for_all(pos: Vector2) -> bool:
+	## 对外暴露的**多人**屏外判定：对全体玩家的视野矩形取并集。
+	## 供其它生成路径（作者 SpawnZone 的区域补齐）复用，避免把敌人刷到某个玩家正看着的地方。
+	return not _visible_to_any_player(pos, _player_view_rects(null))
 
 
 func is_in_band(player: Node2D, pos: Vector2) -> bool:
@@ -407,7 +560,9 @@ func _camera_center(player: Node2D) -> Vector2:
 	var cam: Camera2D = _active_camera()
 	if cam and is_instance_valid(cam):
 		return cam.global_position
-	return player.global_position
+	if player != null and is_instance_valid(player):
+		return player.global_position
+	return Vector2.ZERO
 
 
 func _active_camera() -> Camera2D:

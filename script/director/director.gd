@@ -209,10 +209,22 @@ func _process(delta: float) -> void:
 		if not _frozen_by_death:
 			_freeze_for_death()
 		return
+	if _frozen_by_death:
+		## 全灭结束（新场景实例已就位 / 检查点复活）→ 尸潮计时重新起算，见 _resume_after_death
+		_resume_after_death()
 	_frozen_by_death = false
 	# 跳过濒死/死亡玩家（死亡动画播放中或场景重载中）；仍有队友存活时导演照常运行
 	if player.get("_is_dying") == true:
 		return
+	## ── 刷怪锚点（2026-09-23 多人修复）──
+	## player = 主参考（紧张度 / 战斗状态 / BGM 仍用它）；
+	## anchor = 本帧**刷怪与区域补齐**的圆心：L4D 式偏好"落单 / 走得远 / 移动中"的玩家。
+	## 旧实现所有生成都以 _find_player()（座位 0 = 主机）为圆心 → 客户端跑在前面时，
+	## 按"主机屏外"算出的取点正落在客户端画面里（用户实测「怪直接刷在客户端玩家面前」）。
+	var anchor: Node2D = player
+	var picked_anchor: Node2D = pick_spawn_anchor()
+	if picked_anchor and is_instance_valid(picked_anchor):
+		anchor = picked_anchor
 
 	_check_scene_change()
 
@@ -236,7 +248,7 @@ func _process(delta: float) -> void:
 	# ItemManager 保持运行（补给投放对防守战有益无害）。
 	if not director_suspended and spawn_map:
 		# ── 仅在 SpawnZone 区域内补齐，禁用画面外刷怪，以防“某地满、某地空” ──
-		_update_ambient_zones(delta, player)
+		_update_ambient_zones(delta)
 
 	# ── 紧张度 ──
 	var prev_intensity: float = get_intensity()
@@ -249,7 +261,7 @@ func _process(delta: float) -> void:
 
 	# ── 回收（离玩家太远的敌人直接清除）──
 	# 必须先于存活计数：清掉远处敌人之后，本帧所有生成闸门看到的才是真实余量。
-	_update_recycle(delta, player)
+	_update_recycle(delta)
 
 	# ── 存活敌人计数 ──
 	var alive_count: int = _count_alive_enemies()
@@ -279,16 +291,16 @@ func _process(delta: float) -> void:
 
 		var fs: Node = get_node_or_null("FrontSpawner")
 		if fs and fs.has_method("update"):
-			fs.update(delta, player, alive_count, current_phase)
+			fs.update(delta, anchor, alive_count, current_phase)
 
 		# ── 特感编排：与常规刷怪同一闸门（防守战挂起期间冻结）──
-		_update_specials(delta, player, current_phase)
+		_update_specials(delta, anchor, current_phase)
 
 	# ── Tank 编排 ──
 	# 防守战期间（director_suspended）常规 Tank 冻结，但防守战专属 Tank 照常
 	# （原作 147 图：Tank 是防守战核心压迫源，不能因为挂起导演就一起停掉）。
 	# spawn_map=false 时常规 Tank 也停（列车台：开场静默，防守战才上 T-002）。
-	_update_tanks(delta, player, current_phase, spawn_map)
+	_update_tanks(delta, anchor, current_phase, spawn_map)
 
 	# ── 物品投放 ──
 	var im: Node = get_node_or_null("ItemManager")
@@ -317,9 +329,16 @@ func _freeze_for_death() -> void:
 	## 一次性收尾：peak 强制回 cooldown（解除狂暴/目标锁定/停尸潮 BGM）+ 中止剧本事件与防守战。
 	## 之后每帧提前 return（黑屏-重载期间保持挂起）；重载后玩家复活，状态自然复位。
 	_frozen_by_death = true
+	## ★ 无论当时在哪个阶段都强制回 cooldown（2026-09-23 实测修复）：
+	## 此前只在 peak 时收尾，于是"死亡时正处于 build/cooldown"时 **phase_elapsed 会跨场景重载保留**
+	## （Director 是 autoload、PacingController 是它的子节点，重载不会重建它们）——
+	## 复活后计时接着走，几秒内就推进到 peak，正是用户实测的「全体死亡复活后没多久就尸潮」。
+	## force_cooldown 会清零 elapsed 并**重掷** cooldown 时长（DirectorConfig 的 cooldown_min~max），
+	## 单机与联机（Host 权威）走的是同一条路径。
 	var pc: Node = get_node_or_null("PacingController")
-	if pc and pc.get("current_phase") == 1:  # 1 = Phase.PEAK（与 set_director_suspended 同判定）
+	if pc and pc.has_method("force_cooldown"):
 		pc.force_cooldown()
+	_reset_intensity()
 	_stop_horde_music()
 	## Boss BGM 一并收（2026-09-16 用户反馈「死亡后尸潮/Boss 音乐还在响」）：
 	## 冻结后 _process 每帧早退，_update_boss_music 再也不会被调用 → 必须在这里显式停。
@@ -332,6 +351,29 @@ func _freeze_for_death() -> void:
 			machine.call("abort")
 	abort_scripted_event()
 	print("[Director] 全员死亡：导演冻结（尸潮/Boss/防守战 BGM 停止、剧本事件中止）")
+
+
+func _resume_after_death() -> void:
+	## 全员复活后的第一帧（2026-09-23 实测修复「复活没多久就尸潮」）。
+	## 死亡期间 _process 每帧早退 → 阶段计时不推进，但 phase/elapsed 会跨场景重载保留，
+	## 因此这里再显式重掷一次 cooldown，保证"复活即从新的一段喘息开始"。
+	## 同时归零紧张度：否则残留的高紧张度会让 cooldown 走"3 秒后提前结束"的捷径。
+	var pc: Node = get_node_or_null("PacingController")
+	if pc and pc.has_method("force_cooldown"):
+		pc.force_cooldown()
+	_reset_intensity()
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs and fs.has_method("reset_batch_tracking"):
+		fs.call("reset_batch_tracking")  ## 复活瞬间的坐标跳变不该被当成"前进量"触发补位
+	print("[Director] 全员复活：尸潮计时重新起算（cooldown 重掷 + 紧张度归零）")
+
+
+func _reset_intensity() -> void:
+	## 团灭收尾 / 复活 / 换图时把紧张度归零（IntensityTracker 是普通 Node，无 reset 接口）。
+	if intensity_tracker == null or not is_instance_valid(intensity_tracker):
+		return
+	intensity_tracker.set("_current_intensity", 0.0)
+	intensity_tracker.set("_raw_intensity", 0.0)
 
 
 func _on_phase_changed(phase: StringName) -> void:
@@ -740,7 +782,9 @@ func spawn_ahead_batch(count: int) -> Array[Node2D]:
 	##   · 前方带内数量已达上限时**直接不刷**（"这个范围里已经有一定数量就不刷"）。
 	## 事件编排（散兵 / 尸潮 / 防守战）都应走这个入口，保证分布一致。
 	var out: Array[Node2D] = []
-	var player: Node2D = _find_player()
+	## 锚点 = 本批刷怪的目标玩家（L4D 式偏好"落单 / 走得远"的那位），
+	## 不再是固定的座位 0（主机）—— 见 pick_spawn_anchor 的成因注释。
+	var player: Node2D = pick_spawn_anchor()
 	if player == null:
 		return out
 	var fs: Node = get_node_or_null("FrontSpawner")
@@ -786,7 +830,8 @@ func spawn_horde(count: int, decor_layer: Node) -> int:
 ## 防守战需要逐个给新敌人锁定玩家目标，因此必须拿到节点本身。
 func spawn_horde_nodes(count: int, decor_layer: Node) -> Array[Node2D]:
 	var spawned_nodes: Array[Node2D] = []
-	var player: Node2D = _find_player()
+	## 锚点同 spawn_ahead_batch（多人：偏好落单/走得远的玩家）。
+	var player: Node2D = pick_spawn_anchor()
 	if not player:
 		return spawned_nodes
 
@@ -964,6 +1009,11 @@ func _check_scene_change() -> void:
 		current_config = cfg
 	else:
 		print("[Director] no DirectorConfig in scene, using defaults")
+	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
+	## 开场强制回 cooldown 会把"地图开局立即 build（SpawnManager 立刻散兵刷怪）"变成
+	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。
+	## 团灭复活的重置由 _freeze_for_death + _resume_after_death 负责（不依赖换图钩子）：
+	## 冻结时重掷 cooldown，黑屏-重载期间 _process 早退（计时不推进），复活后第一帧再收一次。
 
 
 func _find_director_config(node: Node) -> DirectorConfig:
@@ -1055,6 +1105,102 @@ func _find_player() -> Node2D:
 	return players[0] if not players.is_empty() else null
 
 
+# ═══════════════════════════════════════
+# 多人刷怪锚点（2026-09-23 实测修复）
+# ═══════════════════════════════════════
+
+## 旧实现：生成 / 回收 / 附近闸全部以 `_find_player()`（= Players.all_entities()[0]，即座位 0
+## 的主机玩家）为圆心。多人实测暴露两个后果：
+##   ① 客户端跑在前面时，按"主机屏外"算出的取点正落在**客户端视野内** → 客户端看到"脸上刷怪"；
+##   ② 追客户端的丧尸一旦离主机超过 recycle_dist 就被回收 → 前线敌人凭空消失。
+## 对照 L4D 导演（Infected 一律刷在**幸存者**视野外、按**幸存者**距离回收；Wanderer 刷在队伍
+## 前方，且更"照顾"走在前面/落单的那个 —— 见 left4dead.fandom.com/wiki/The_Director），
+## 这里统一改为「以玩家为单位」的锚点集合：锚点决定"刷给谁 / 距离带以谁为准"，
+## 判定（视野外 / 回收）则对**全体**玩家取并集。
+
+func spawn_reference_players() -> Array[Node2D]:
+	## 可作为刷怪/回收基准的玩家：存活且非濒死。联机 Host = 全体座位，单机 = 唯一玩家。
+	var out: Array[Node2D] = []
+	for e: Node2D in Players.all_entities():
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		out.append(e)
+	return out
+
+
+func pick_spawn_anchor() -> Node2D:
+	## 本批刷怪以谁为圆心 —— L4D 式偏好「落单 / 走得远 / **移动中**」的玩家
+	## （玩家观感 = "怪基本多刷在走得远的那个玩家那"）。
+	## 权重 = 移动系数 × (1 + 与最近队友的距离/400 + 速度/150)，再按权重**随机**挑选。
+	##
+	## ⚠ 移动系数是必需的（2026-09-23 实测复盘）：只用"落单度 + 速度"时，
+	## "主机原地不动、客户端跑在前面"这一最常见的组合里两人**落单度相同**，
+	## 静止主机仍能分到 ~43% 的刷怪 → 客户端前方照样断供。
+	## 现在静止玩家降权到 0.25（保留少量压力，不至于队友那边一只不刷）。
+	const IDLE_WEIGHT: float = 0.25
+	var list: Array[Node2D] = spawn_reference_players()
+	if list.is_empty():
+		return _find_player()
+	if list.size() == 1:
+		return list[0]
+	var weights: Array[float] = []
+	var total: float = 0.0
+	for p: Node2D in list:
+		var speed: float = _player_speed(p)
+		var base: float = 1.0 if speed >= 20.0 else IDLE_WEIGHT
+		var w: float = base * (1.0 + _player_isolation(p, list) / 400.0 + speed / 150.0)
+		weights.append(w)
+		total += w
+	if total <= 0.0:
+		return list[0]
+	var roll: float = randf() * total
+	var acc: float = 0.0
+	for i: int in range(list.size()):
+		acc += weights[i]
+		if roll <= acc:
+			return list[i]
+	return list[list.size() - 1]
+
+
+func players_moving() -> bool:
+	## 是否**任一**玩家在移动 —— 多人下"主机站着不动"不应切断正在推进的客户端的补位。
+	for p: Node2D in spawn_reference_players():
+		if _player_speed(p) >= 20.0:
+			return true
+	return false
+
+
+func nearest_player_distance(from: Vector2) -> float:
+	## 到**最近**玩家的距离（L4D："幸存者走出范围才回收"）。没有玩家时返回 INF。
+	var best: float = INF
+	for p: Node2D in spawn_reference_players():
+		var d: float = from.distance_to(p.global_position)
+		if d < best:
+			best = d
+	return best
+
+
+func _player_isolation(p: Node2D, list: Array[Node2D]) -> float:
+	## 与最近队友的距离：越大越"落单"（L4D 导演更愿意把压力给掉队/带头的人）。
+	var best: float = INF
+	for other: Node2D in list:
+		if other == p:
+			continue
+		var d: float = p.global_position.distance_to(other.global_position)
+		if d < best:
+			best = d
+	return 0.0 if best == INF else best
+
+
+func _player_speed(p: Node2D) -> float:
+	var v: Variant = p.get("velocity")
+	if v is Vector2:
+		return (v as Vector2).length()
+	return 0.0
+
+
 ## 附近闸（2026-09-17 用户需求）：附近敌人 ≥ 阈值且玩家静止 → 暂停刷怪
 ## （散兵/事件批统一入口 spawn_ahead_batch 调用）。参数挂 FrontSpawner
 ## （nearby_gate_count / nearby_gate_radius，由 DirectorConfig 注入）；玩家开始移动立即放行。
@@ -1064,18 +1210,24 @@ func _nearby_spawn_blocked() -> bool:
 	var gate: int = int(fs.get("nearby_gate_count")) if fs else 10
 	if gate <= 0:
 		return false
-	var player: Node2D = _find_player()
-	if player == null:
+	## 多人（2026-09-23）：任一玩家在移动就放行 —— 主机站着不动不应掐断正在推进的客户端的补位。
+	if players_moving():
 		return false
-	var vel: Variant = player.get("velocity")
-	if vel is Vector2 and (vel as Vector2).length() >= 20.0:
-		return false  ## 玩家在移动 → 放行
+	var refs: Array[Node2D] = spawn_reference_players()
+	if refs.is_empty():
+		return false
 	var radius: float = float(fs.get("nearby_gate_radius")) if fs else 600.0
 	var r2: float = radius * radius
 	var count: int = 0
 	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
-		if is_instance_valid(e) and e.global_position.distance_squared_to(player.global_position) <= r2:
-			count += 1
+		if not is_instance_valid(e):
+			continue
+		var ep: Vector2 = e.global_position
+		## 任一玩家半径内即计入（去重：同一只只算一次）。
+		for p: Node2D in refs:
+			if ep.distance_squared_to(p.global_position) <= r2:
+				count += 1
+				break
 	return count >= gate
 
 
@@ -1552,14 +1704,22 @@ func notify_holdout_finished() -> void:
 # 回收（离玩家太远的敌人清除）
 # ═══════════════════════════════════════
 
-func _update_recycle(delta: float, player: Node2D) -> void:
+func _update_recycle(delta: float) -> void:
 	## 对应原作 #506「★☆敵の回収設定☆★」：把离玩家太远的敌人收回。
 	##
 	## 没有回收时（实测学校地图 60 秒）：被甩在身后的敌人只增不减（0 → 28 只），
 	## 全场存活 29 秒即顶满上限 50 → 前方补位被"全场存活已达上限"永久掐断
 	## （用户报的"前面刷得多、后面越来越少"），同时它们还在继续跑 A*（用户报的卡顿）。
 	## 死亡动画中（_is_dying）不参与回收 —— 播完变尸体后下一轮按尸体清。
-	if not recycle_enabled or player == null or not is_instance_valid(player):
+	##
+	## ⚠ 回收基准必须是**全体玩家**（2026-09-23 实测修复）：旧实现用单一玩家（座位 0 = 主机），
+	## 于是追着跑在前面的客户端的丧尸，一旦离主机超过 recycle_dist 就被回收 ——
+	## 玩家观感是"前线怪凭空消失"。L4D 的规则是"幸存者**走出范围**才回收"，
+	## 即按到**最近**玩家的距离判定。
+	if not recycle_enabled:
+		return
+	var refs: Array[Node2D] = spawn_reference_players()
+	if refs.is_empty():
 		return
 	_recycle_timer += delta
 	if _recycle_timer < recycle_interval:
@@ -1575,7 +1735,13 @@ func _update_recycle(delta: float, player: Node2D) -> void:
 			continue
 		if e.get("_is_dying") == true:
 			continue
-		if e.global_position.distance_to(player.global_position) <= recycle_dist:
+		## 离任一玩家在回收距离内 → 保留（多人：取"最近玩家"的距离）。
+		var keep: bool = false
+		for p: Node2D in refs:
+			if e.global_position.distance_to(p.global_position) <= recycle_dist:
+				keep = true
+				break
+		if keep:
 			continue
 		if e.get("_is_dead") == true:
 			if not recycle_clear_corpses:
@@ -1724,7 +1890,7 @@ func _find_walkable_near_player(player: Node2D) -> Vector2:
 	return Vector2.ZERO
 
 
-func _update_ambient_zones(delta: float, player: Node2D) -> void:
+func _update_ambient_zones(delta: float) -> void:
 	# 仅按区域预算补齐：不再从画面外批量刷丧尸，避免某地满、某地空。
 	var tree: SceneTree = get_tree()
 	if not tree:
@@ -1743,7 +1909,7 @@ func _update_ambient_zones(delta: float, player: Node2D) -> void:
 		var zone: SpawnZone = sp as SpawnZone
 		if not zone.enabled:
 			continue
-		var dist: float = player.global_position.distance_to(zone.global_position)
+		var dist: float = nearest_player_distance(zone.global_position)
 		if dist < zone.ambient_min_player_dist:
 			continue
 		if zone.poll_ambient_timer(delta) == false:
@@ -1766,12 +1932,14 @@ func _update_ambient_zones(delta: float, player: Node2D) -> void:
 			continue
 		for _i: int in range(shortage):
 			var pos: Vector2 = zone.get_random_position()
-			if pos.distance_to(player.global_position) < zone.ambient_min_player_dist:
+			## 多人（2026-09-23）：距离与屏外判定都必须对**全体玩家**生效 ——
+			## 只看座位 0 会让"客户端在区域旁"的补齐永远不触发，或正好补在另一个玩家眼前。
+			if nearest_player_distance(pos) < zone.ambient_min_player_dist:
 				continue
 			# 必须在屏幕之外：区域是关卡作者摆的"刷在哪里"，但"何时刷"仍要避开玩家视野，
-			# 否则会出现"眼睁睁看着敌人凭空冒出来"（复用 FrontSpawner 的屏幕判定）。
+			# 否则会出现"眼睁睁看着敌人凭空冒出来"（复用 FrontSpawner 的多人屏幕判定）。
 			var fs_node: Node = get_node_or_null("FrontSpawner")
-			if fs_node and fs_node.get("enabled") == true and not fs_node.is_offscreen(player, pos):
+			if fs_node and fs_node.get("enabled") == true and not fs_node.is_offscreen_for_all(pos):
 				continue
 			if not _is_walkable(pos):
 				continue

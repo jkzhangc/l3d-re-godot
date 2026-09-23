@@ -3691,7 +3691,13 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				pickup = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as Node2D
 				pickup = _reject_claimed(pickup, pickup_id, claimed)
 			if not is_instance_valid(pickup):
-				pickup = (HEALING_PICKUP_SCENE if pickup_kind == "throwable" else PICKUP_SCENE).instantiate() as Node2D
+				# ★ 场景类型必须按「是不是武器」分派（2026-09-23 实测修复）：此前只判 "throwable"，
+				# 于是 kind=="healing"（急救喷雾/药丸）也落到 WeaponPickup 上 ——
+				# `set("item", …)` 被静默忽略（WeaponPickup 没有 item 属性）、weapon_data 为空 →
+				# 用武器默认贴图与默认踏步帧 (012) 渲染（看着就是"武器掉落物"），且随后
+				# `configure_network_pickup(id, true)` 把它标成武器 → **客户端拾取判定失败**。
+				# healing_pickup.tscn 才是 ItemData 家族（含 THROWABLE + HEALING/SUPPORT）的通用载体。
+				pickup = (PICKUP_SCENE if pickup_kind == "weapon" else HEALING_PICKUP_SCENE).instantiate() as Node2D
 				# ★ 必须改成唯一名（2026-09-23 审计实测）：镜像若沿用场景根名（WeaponPickup /
 				# HealingPickup）直接挂进 GroundLayer，就会**占用与地图节点相同的 scene_path
 				# 命名空间** —— 随后另一个 pickup_id 的包带着真正的地图路径（如
@@ -5063,32 +5069,45 @@ func _run_auto_client_input_test() -> void:
 			required_visual_bullets,
 			final_ammo,
 		])
-	# 第二段：先按已知摆位右走（确定性），再**仅在近距离内**按快照里的敌人位置微调贴身。
-	# ⚠ 不能直接去追「最近敌人」：可能追到远处或被墙挡住的敌人，反而走离目标
+	# 第二段：先按已知摆位右走（确定性），再在**有上限的近距离内**按快照里的敌人位置贴身。
+	# ⚠ 不能无脑去追「最近敌人」：可能追到远处或被墙挡住的敌人，反而走离目标
 	# （实测 in_range=false pos=(1238,4586)，比固定走位更糟）。也不保持纯固定走位：
 	# 敌人由 Director 驱动会挪动，固定走位会走空（实测 HOST_MELEE_WHIFF）。
-	# 两者结合 = 确定性落点 + 最后几像素的动态贴合，仍全程走正常输入、不传送坐标。
+	# ⚠ 上界必须覆盖「前方补位带」（360~560px）——2026-09-23 第三轮实测：客户端成为刷怪锚点
+	# 后，最近的敌人常常就是刚补在它前方约 400px 的那只，旧的 200px 上界会直接放弃贴身、
+	# 原地挥空（HOST_MELEE_WHIFF，3/3 失败）。近战判定矩形是「朝向前方 48×32」，
+	# 所以贴身收在 ≤30px 并保持朝向即可稳定命中。
 	Input.action_press("右")
 	await get_tree().create_timer(0.72).timeout
 	Input.action_release("右")
 	await get_tree().create_timer(0.30).timeout
-	const APPROACH_MAX_DISTANCE := 200.0
-	const APPROACH_NEAR := 16.0
-	var approach_deadline := Time.get_ticks_msec() + 2000
+	const APPROACH_MAX_DISTANCE := 700.0
+	const APPROACH_NEAR := 30.0
+	var approach_deadline := Time.get_ticks_msec() + 5000
 	var in_range := false
+	var sticky: CharacterBody2D = null
 	while Time.get_ticks_msec() < approach_deadline:
 		entry = _players.get(int(net.my_peer_id), {})
 		node = _player_node(entry)
 		if not is_instance_valid(node):
 			break
-		var target := _nearest_client_enemy_node(node.global_position)
-		if not is_instance_valid(target) \
-				or node.global_position.distance_to(target.global_position) > APPROACH_MAX_DISTANCE:
-			break     # 附近没有可贴身的目标 → 保持确定性走位结果，直接出手
-		var delta: Vector2 = target.global_position - node.global_position
-		if absf(delta.x) <= APPROACH_NEAR and absf(delta.y) <= APPROACH_NEAR:
+		if not is_instance_valid(sticky):
+			sticky = _nearest_client_enemy_node(node.global_position)
+		if not is_instance_valid(sticky):
+			break
+		var delta: Vector2 = sticky.global_position - node.global_position
+		var dist: float = delta.length()
+		if dist <= APPROACH_NEAR:
 			in_range = true
 			break
+		if dist > APPROACH_MAX_DISTANCE:
+			## 目标跑远了 → 换一个最近的目标再判断一次（仍不追超距目标）
+			sticky = _nearest_client_enemy_node(node.global_position)
+			if not is_instance_valid(sticky):
+				break
+			delta = sticky.global_position - node.global_position
+			if delta.length() > APPROACH_MAX_DISTANCE:
+				break     # 附近没有可贴身的目标 → 保持确定性走位结果，直接出手
 		if absf(delta.x) > 5.0:
 			Input.action_press("右" if delta.x > 0.0 else "左")
 		if absf(delta.y) > 5.0:
@@ -5132,7 +5151,7 @@ func _run_auto_client_input_test() -> void:
 	Input.action_press("确定键")
 	await get_tree().create_timer(0.12).timeout
 	Input.action_release("确定键")
-	deadline = Time.get_ticks_msec() + 3000
+	deadline = Time.get_ticks_msec() + 6000
 	var melee_damage_seen := false
 	var enemy_hp_after := enemy_hp_before
 	## 逐帧差分（2026-09-23 稳定化）：原先只比对「攻击前已存在」的 enemy_id —— 若这一刀
@@ -5140,10 +5159,12 @@ func _run_auto_client_input_test() -> void:
 	## 改为比对相邻两次采样的**同名**敌人：新刷敌人首帧即进入两张表，其后掉血可被捕捉；
 	## 而 scatter 只会抬高总和、不会造成同一 id 掉血，所以不会引入假绿。
 	var hp_map_prev := enemy_hp_map_before
-	## 兜底再挥：敌人可能在逼近后又挪开，导致这一刀落空。窗口内允许补挥 1 次
+	## 兜底再挥：敌人可能在逼近后又挪开，导致这一刀落空。窗口内允许补挥若干次
 	## （仍走正常输入链路），避免把「用例运气」当成回归结论。
+	## 2026-09-23 第三轮：补挥次数 1 → 4、窗口 3s → 6s，并在窗口内**持续贴身**
+	## （客户端成为刷怪锚点后身边的怪一直在换，贴身一次不等于下一刀还在范围内）。
 	var reswings := 0
-	var next_swing_at := Time.get_ticks_msec() + 1300
+	var next_swing_at := Time.get_ticks_msec() + 1200
 	while Time.get_ticks_msec() < deadline:
 		enemy_hp_after = _get_client_live_enemy_hp_total()
 		var hp_map_after := _get_client_enemy_hp_map()
@@ -5156,13 +5177,18 @@ func _run_auto_client_input_test() -> void:
 		hp_map_prev = hp_map_after
 		if melee_damage_seen:
 			break
-		if _auto_client_fire_confirmed and reswings < 1 and Time.get_ticks_msec() >= next_swing_at:
+		_auto_client_steer_toward_nearest_enemy()
+		if _auto_client_fire_confirmed and reswings < 4 and Time.get_ticks_msec() >= next_swing_at:
 			reswings += 1
-			next_swing_at = Time.get_ticks_msec() + 1300
+			next_swing_at = Time.get_ticks_msec() + 1200
 			Input.action_press("确定键")
 			await get_tree().create_timer(0.12).timeout
 			Input.action_release("确定键")
 		await get_tree().create_timer(0.05).timeout
+		Input.action_release("右")
+		Input.action_release("左")
+		Input.action_release("下")
+		Input.action_release("上")
 	var knife_ok := knife_switched and _auto_client_fire_confirmed and _auto_client_attack_weapon_id == NETWORK_KNIFE.item_id and not _auto_client_bullet_seen and melee_damage_seen
 	print("[NetworkWorld] AUTO_CLIENT_KNIFE_COMPLETE switched=%s confirmed=%s weapon=%s bullet_seen=%s melee_damage_seen=%s enemy_hp_before=%.1f enemy_hp_after=%.1f" % [
 		knife_switched,
@@ -5419,6 +5445,25 @@ func _nearest_client_enemy_node(from_position: Vector2) -> CharacterBody2D:
 			best_dist = dist
 			best = enemy
 	return best
+
+
+## --net-test harness 专用：把客户端朝「最近的活敌」推进一小步（走正常输入键，不传送坐标）。
+## 2026-09-23 第三轮稳定化：客户端成为刷怪锚点后，前方补位带（360~560px）里的怪会持续
+## 补充/移动，近战用例必须"边贴边砍"才能在挥刀瞬间处于判定范围内。
+## 调用方负责在随后的等待帧里松开方向键（与既有走位循环同款约定）。
+func _auto_client_steer_toward_nearest_enemy() -> void:
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := _player_node(entry)
+	if not is_instance_valid(node):
+		return
+	var target := _nearest_client_enemy_node(node.global_position)
+	if not is_instance_valid(target):
+		return
+	var delta: Vector2 = target.global_position - node.global_position
+	if absf(delta.x) > 4.0:
+		Input.action_press("右" if delta.x > 0.0 else "左")
+	if absf(delta.y) > 4.0:
+		Input.action_press("下" if delta.y > 0.0 else "上")
 
 
 ## --net-test harness 专用：Client 视角各活敌的 hp 快照（entity_id → hp）。
