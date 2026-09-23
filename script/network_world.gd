@@ -3401,7 +3401,8 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 			state.throwable_count += 1
 		else:
 			if old_throwable:
-				_spawn_host_dropped_throwable(old_throwable, player.global_position)
+				## 落点推远（2026-09-23）：与武器掉落同规则，避免旧投掷物刚脱手被自己捡回。
+				_spawn_host_dropped_throwable(old_throwable, PICKUP_SCRIPT.drop_landing_position(player))
 			state.throwable = throwable
 			state.throwable_count = 1
 		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
@@ -3417,7 +3418,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	var slot: String = weapon.get_slot_key()
 	var old: WeaponData = state.get_equipped_weapon(slot)
 	if old:
-		_spawn_host_dropped_weapon(old, player.global_position, state)
+		_spawn_host_dropped_weapon(old, player, state)
 	state.equipment[slot] = weapon
 	if weapon.is_ranged:
 		var mag: int = int(pickup.get("pickup_magazine_ammo"))
@@ -3440,7 +3441,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
 
 
-func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: PlayerState) -> void:
+func _spawn_host_dropped_weapon(weapon: WeaponData, player: Node2D, state: PlayerState) -> void:
 	var pickup := PICKUP_SCENE.instantiate() as Node2D
 	if not is_instance_valid(pickup):
 		return
@@ -3457,9 +3458,12 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, position: Vector2, state: Pl
 			state.consume_ammo_item(weapon.ammo_item_id, reserve)
 	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 	(parent if parent else get_tree().current_scene).add_child(pickup)
-	## 落点避让（2026-09-16 用户反馈②）：与已有地面掉落物保持 ≥24px。
-	## 必须在 add_child（=入组）之后算，否则看不到刚掉下的那一件。
-	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(get_tree(), position)
+	## 落点：先沿玩家朝向推远（2026-09-23 用户：丢下的离玩家远一些，且拾取范围 24→16，
+	## 落点须在拾取范围外，否则刚脱手就被自己的自动拾取捡回），再做
+	## ≥24px 的掉落物间距避让（2026-09-16 反馈②）。必须在 add_child（=入组）之后算，
+	## 否则看不到刚掉下的那一件。
+	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(
+		get_tree(), PICKUP_SCRIPT.drop_landing_position(player))
 	_register_host_pickup(pickup)
 
 
@@ -3516,7 +3520,7 @@ func _try_host_drop_all(peer_id: int) -> void:
 		var wd: WeaponData = state.get_equipped_weapon(slot)
 		if wd == null:
 			continue
-		_spawn_host_dropped_weapon(wd, player.global_position, state)
+		_spawn_host_dropped_weapon(wd, player, state)
 		state.unequip_slot(slot)
 		_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + 200
 		dropped += 1

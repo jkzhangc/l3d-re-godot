@@ -42,6 +42,15 @@ const PICKUP_GROUP := &"ground_pickup"          ## 全部地面掉落物（武�
 const WEAPON_PICKUP_GROUP := &"weapon_pickup"   ## 仅武器拾取物 → 最近者仲裁用
 const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
 const AUTO_REARM_DISTANCE: float = 64.0         ## 自动拾取后走开多远才重新武装
+## 拾取范围（像素）。**必须与 weapon_pickup.tscn / healing_pickup.tscn 的 Area2D
+## CircleShape2D.radius 保持一致**（24 → 16，2026-09-23 用户：拾取范围调小一些）。
+const PICKUP_RANGE: float = 16.0
+## 联机路径的本地距离判定 = PICKUP_RANGE(16) + 玩家碰撞半宽(12)，与单机 Area2D
+## 触发半径等价（单机走物理重叠，联机走中心距 —— 两者须同值，否则两端手感不一致）。
+const PICKUP_REACH: float = 28.0
+## 掉落落点沿玩家朝向推远的距离（像素）。2026-09-23 用户：丢下的武器要离玩家远一些
+## —— 落点必须落在 PICKUP_REACH(28) 之外，否则刚脱手就会被自己的自动拾取捡回。
+const DROP_PUSH_DISTANCE: float = 40.0
 
 ## 自动拾取闩锁（static 跨实例共享；换场景或走远自动解除）
 static var _auto_pick_latch: bool = false
@@ -71,6 +80,26 @@ static func mark_auto_picked(tree: SceneTree, player: Node2D) -> void:
 	_auto_pick_latch = true
 	_auto_pick_pos = player.global_position if is_instance_valid(player) else Vector2.ZERO
 	_auto_pick_scene = tree.current_scene.scene_file_path if tree and tree.current_scene else ""
+
+
+## 掉落落点的朝向推远向量：优先取玩家的朝向单位向量，取不到则退回「朝下」。
+## 单机与联机（Host 权威掉落）共用，保证两端落点规则一致。
+static func drop_push_vector(player: Node2D) -> Vector2:
+	var facing: Vector2 = Vector2(0, 1)
+	if is_instance_valid(player) and player.has_method("get_facing_vector"):
+		var raw: Variant = player.call("get_facing_vector")
+		if raw is Vector2 and (raw as Vector2) != Vector2.ZERO:
+			facing = raw as Vector2
+	return facing * DROP_PUSH_DISTANCE
+
+
+## 掉落落点基准 = 玩家位置沿朝向推远 DROP_PUSH_DISTANCE。
+## 单机（drop_weapon_for_player）与联机 Host 权威掉落（network_world._spawn_host_dropped_weapon）
+## 共用同一入口，保证两端落点规则一致、且都在拾取范围外（刚丢下不会被自己自动捡回）。
+static func drop_landing_position(player: Node2D) -> Vector2:
+	if not is_instance_valid(player):
+		return Vector2.ZERO
+	return player.global_position + drop_push_vector(player)
 
 
 ## 找一个与已有地面掉落物保持 ≥min_gap 的落点：先试基准点，再按环形由近及远扩散。
@@ -120,8 +149,10 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 		if reserve > 0:
 			pickup.pickup_reserve_ammo = reserve
 			state.consume_ammo_item(wd.ammo_item_id, reserve)
-	## 落点避让：与已有掉落物保持间距（用户 2026-09-16 反馈②）
-	pickup.position = find_free_drop_position(tree, player.global_position)
+	## 落点：沿玩家朝向推远 DROP_PUSH_DISTANCE（2026-09-23 用户：丢下的武器要离玩家
+	## 远一些，避免刚脱手就被自己的自动拾取捡回），再做与已有掉落物的间距避让。
+	var base: Vector2 = drop_landing_position(player)
+	pickup.position = find_free_drop_position(tree, base)
 	var parent: Node = null
 	if tree.current_scene:
 		parent = tree.current_scene.find_child("GroundLayer", true, false)
@@ -465,7 +496,7 @@ func _process_network_pickup(delta: float) -> bool:
 		_hold_timer = 0.0
 		return false
 	var local_player := Players.get_local_entity() as CharacterBody2D
-	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
+	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= PICKUP_REACH
 	_player_ref = local_player if in_range else null
 	_player_in_range = in_range
 	if not in_range or not weapon_data:

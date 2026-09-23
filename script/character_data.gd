@@ -96,11 +96,6 @@ class_name CharacterData extends Resource
 ## 图标行走图的朝向行（0=下 1=左 2=右 3=上；这张表不同朝向行指向不同角色）
 @export var select_icon_direction: int = 0
 
-@export_group("特效偏移")
-## 攻击特效偏移（按武器 × 方向）。键=weapon_state_name（如 "Pistol"/"Shotgun"），值=WeaponEffectOffsets 资源。
-## 某武器在此字典中没有条目时，回退到 WeaponData.attack_effect_offset_override。
-@export var attack_effect_offsets: Dictionary = {}
-
 @export_group("音效")
 @export var hurt_sound: AudioStream = null   ## 受伤音效
 @export var death_sound: AudioStream = null  ## 死亡音效
@@ -225,18 +220,8 @@ func can_use_weapon(wd: WeaponData) -> bool:
 	return restrictions.has(wd.item_id)
 
 
-## 获取指定武器 + 朝向的攻击特效偏移。
-## 角色字典有此武器 → 从 WeaponEffectOffsets 按朝向取值；否则返回 fallback。
-func get_attack_effect_offset(weapon_state_name: String, facing: int, fallback: Vector2 = Vector2.ZERO) -> Vector2:
-	if attack_effect_offsets.has(weapon_state_name):
-		var off: WeaponEffectOffsets = attack_effect_offsets[weapon_state_name] as WeaponEffectOffsets
-		if off:
-			return off.get_offset(facing)
-	return fallback
-
-
 ## 稳定数据键：优先 character_id，留空回退 tres 文件名（character_nobita.tres → nobita）。
-## 供「按角色」配置的资源做字典键（如 WeaponData.bullet_spawn_offsets）。
+## 供「按角色」配置的资源做字典键（如 WeaponData.bullet_spawn_offsets / attack_effect_offsets）。
 func get_character_key() -> String:
 	if not character_id.is_empty():
 		return character_id

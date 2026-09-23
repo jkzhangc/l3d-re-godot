@@ -824,7 +824,9 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 				Global.play_sfx_managed(wd.attack_sound, scene)
 			var effect_scene := wd.get_attack_effect_anim(facing)
 			if effect_scene and scene:
-				var offset := current_character.get_attack_effect_offset(wd.weapon_state_name, facing, wd.attack_effect_offset_override) if current_character else wd.attack_effect_offset_override
+				## 特效偏移（2026-09-23 迁移）：改由武器数据按角色提供，与子弹偏移同构。
+				## 未配置条目的角色 → 回退武器级 attack_effect_offset_override。
+				var offset := wd.get_attack_effect_offset(current_character, facing, wd.attack_effect_offset_override)
 				var follow: Node2D = self if wd.attack_effect_follow else null
 				VXAnimSprite.play_scene(effect_scene, global_position, scene, 10.0, follow, offset)
 		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else wd.get_melee_attack_frame_duration(index)
@@ -2327,6 +2329,9 @@ func request_drop_all_weapons() -> void:
 	var net: Node = get_node_or_null("/root/Net")
 	var online: bool = net != null and net.has_method("is_online_session") and bool(net.is_online_session())
 	if online and world and world.has_method("request_drop_all"):
+		## 丢弃即视为一次拾取：置位闩锁，避免 Client 端本地判定把刚脱手的武器又请求回来
+		## （2026-09-23 用户反馈：丢下的武器被自己立刻捡回）。
+		WEAPON_PICKUP_SCRIPT.mark_auto_picked(get_tree(), self)
 		world.call("request_drop_all")
 		return
 	_drop_all_weapons_locally()
@@ -2347,6 +2352,9 @@ func _drop_all_weapons_locally() -> void:
 		dropped += 1
 	if dropped == 0:
 		return
+	## 丢弃即视为一次拾取：置位自动拾取闩锁 —— 否则刚脱手的武器（落点在脚下附近）
+	## 会被自己的自动拾取立刻捡回一件（2026-09-23 用户反馈）。走开即重新武装。
+	WEAPON_PICKUP_SCRIPT.mark_auto_picked(get_tree(), self)
 	## 手里空了 → 收起武器模式（状态机在 _wd == null 时会自愈回 Idle）
 	if is_weapon_mode_active():
 		exit_weapon_mode()

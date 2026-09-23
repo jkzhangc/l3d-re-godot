@@ -3,7 +3,7 @@
 [ext_resource type="Script" uid="uid://34kj0v461dqe" path="res://script/healing_pickup.gd" id="1_se1gw"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_g0v8u"]
-radius = 24.0
+radius = 16.0
 
 [node name="HealingPickup" type="Node2D" unique_id=1138821195]
 script = ExtResource("1_se1gw")

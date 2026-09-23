@@ -70,6 +70,12 @@ script = ExtResource("9wspawn")
 left = Vector2(0, -16)
 right = Vector2(0, -16)
 
+[sub_resource type="Resource" id="AEO_shotgun_01_bigg"]
+script = ExtResource("9wspawn")
+down = Vector2(0, -10)
+left = Vector2(0, -6)
+right = Vector2(0, -6)
+
 [resource]
 script = ExtResource("6_0fguu")
 attack_power = 45
@@ -101,6 +107,9 @@ bullet_spawn_offsets = {
 "nobita": SubResource("WSO_shotgun_01_nobita"),
 "shizuka": SubResource("WSO_shotgun_01_shizuka"),
 "suneo": SubResource("WSO_shotgun_01_suneo")
+}
+attack_effect_offsets = {
+"bigg": SubResource("AEO_shotgun_01_bigg")
 }
 magazine_capacity = 5
 ammo_item_id = "ammo_shotgun"

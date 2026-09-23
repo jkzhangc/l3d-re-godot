@@ -33,6 +33,9 @@ const PICKUP_SCENE := preload("res://object/healing_pickup.tscn")
 const PICKUP_DELAY_MSEC: int = 600
 
 const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
+## 拾取范围的单一真源（与武器拾取物同规则，2026-09-23 用户：拾取范围调小一些）。
+## ⚠ tscn 的 Area2D 半径须同为 WEAPON_PICKUP_SCRIPT.PICKUP_RANGE(16)。
+const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 
 @export var item: ItemData:
 	set(v):
@@ -160,7 +163,7 @@ func _process_network_pickup(delta: float) -> bool:
 		_hold_timer = 0.0
 		return false
 	var local_player := Players.get_local_entity() as CharacterBody2D
-	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= 28.0
+	var in_range := is_instance_valid(local_player) and local_player.global_position.distance_to(global_position) <= WEAPON_PICKUP_SCRIPT.PICKUP_REACH
 	_player_ref = local_player if in_range else null
 	_player_in_range = in_range
 	if not in_range or not item:
@@ -309,7 +312,10 @@ func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 		return
 	var drop: Node2D = PICKUP_SCENE.instantiate()
 	drop.item = old
-	drop.position = body.global_position
+	## 落点与武器掉落统一（2026-09-23）：沿朝向推远 + 与已有掉落物避让 —— 否则旧投掷物
+	## 掉在脚下会被自己的自动拾取立刻捡回（同「丢下的武器又被捡回」问题）。
+	drop.position = WEAPON_PICKUP_SCRIPT.find_free_drop_position(
+		get_tree(), WEAPON_PICKUP_SCRIPT.drop_landing_position(body))
 	var parent: Node = get_parent()
 	if not parent:
 		parent = get_tree().current_scene

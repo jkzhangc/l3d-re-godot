@@ -156,6 +156,44 @@ func get_bullet_spawn_offset(cd: CharacterData, facing: int) -> Vector2:
 	return offs.get_offset(facing)
 
 
+@export_group("攻击特效位置（按角色 × 方向）")
+## 每个角色的攻击特效额外偏移。键 = CharacterData.character_id（如 "nobita"；留空回退 tres 文件名），
+## 值 = WeaponEffectOffsets（四方向 Vector2）。与 bullet_spawn_offsets 完全同构。
+##
+## **配置了条目的角色 → 该角色拿这把武器时的特效位置用本偏移**；未配置 → 回退
+## attack_effect_offset_override（武器级兜底，默认 (0,0) = 特效 .tscn 内置位置）。
+## 何时需要：同一把枪在不同角色手里，行走图枪口像素位置不同，攻击特效会偏。
+##
+## 2026-09-23 用户定稿：原先在 CharacterData.attack_effect_offsets（键为武器 state 名），
+## 现全部迁到武器数据（键为角色 id），与子弹偏移统一「以后都在武器数据里设置」。
+@export var attack_effect_offsets: Dictionary = {}
+
+
+## 该角色是否配置了特效偏移条目（键存在且值为 WeaponEffectOffsets）。
+## 判定与「值是否为零」解耦：显式 (0,0) = 无额外偏移，不再触发回退。
+func has_attack_effect_offset(cd: CharacterData) -> bool:
+	if cd == null or attack_effect_offsets.is_empty():
+		return false
+	var key: String = cd.get_character_key()
+	if key.is_empty() or not attack_effect_offsets.has(key):
+		return false
+	return attack_effect_offsets[key] is WeaponEffectOffsets
+
+
+## 取某角色在该武器下的攻击特效偏移（按朝向）。无条目 / 值类型不对 → 返回 fallback，
+## 调用方传 attack_effect_offset_override（武器级兜底）。
+func get_attack_effect_offset(cd: CharacterData, facing: int, fallback: Vector2 = Vector2.ZERO) -> Vector2:
+	if cd == null or attack_effect_offsets.is_empty():
+		return fallback
+	var key: String = cd.get_character_key()
+	if key.is_empty() or not attack_effect_offsets.has(key):
+		return fallback
+	var offs: WeaponEffectOffsets = attack_effect_offsets[key] as WeaponEffectOffsets
+	if offs == null:
+		return fallback
+	return offs.get_offset(facing)
+
+
 @export_group("远程攻击")
 @export var magazine_capacity: int = 0        ## 弹夹容量（0=无需弹药/近战武器）
 @export var ammo_item_id: String = ""         ## 对应弹药 ItemData.item_id

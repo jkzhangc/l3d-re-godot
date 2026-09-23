@@ -4,7 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="2"]
 
 [sub_resource type="CircleShape2D" id="pickup_shape"]
-radius = 24.0
+radius = 16.0
 
 [node name="WeaponPickup" type="Node2D" unique_id=857466232]
 script = ExtResource("1")
