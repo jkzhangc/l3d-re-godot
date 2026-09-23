@@ -10,6 +10,16 @@
 [ext_resource type="Resource" path="res://object/skill_test.tres" id="7_skill"]
 [ext_resource type="Resource" path="res://object/skill_sa_kankaku.tres" id="9_skill"]
 [ext_resource type="AudioStream" uid="uid://drnowuxstl1o1" path="res://sound/(効果音)打撃1.ogg" id="10_counter"]
+[ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="20_knife"]
+[ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="21_mag"]
+[ext_resource type="Texture2D" uid="uid://r04meep8xkd2" path="res://art/Characters/のび太セットフライパン.png" id="22_fp"]
+[ext_resource type="Texture2D" uid="uid://ivldoltn11wm" path="res://art/Characters/のび太セットボウガン.png" id="23_bg"]
+[ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="24_ar"]
+[ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="25_sg"]
+[ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="26_smg"]
+[ext_resource type="Texture2D" uid="uid://csoysbu3j0wy" path="res://art/Characters/のび太グレネードランチャー.png" id="27_gl"]
+[ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="28_rpg"]
+[ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="29_snp"]
 
 [resource]
 script = ExtResource("1")
@@ -23,6 +33,19 @@ walk_texture = ExtResource("1_8a3k1")
 run_texture = ExtResource("2_dd21q")
 death_texture = ExtResource("1_8a3k1")
 death_char_index = 6
+weapon_walk_textures = {
+"Bowgun": ExtResource("23_bg"),
+"Frypan": ExtResource("22_fp"),
+"Knife": ExtResource("20_knife"),
+"Launcher": ExtResource("27_gl"),
+"Magnum": ExtResource("21_mag"),
+"Pistol": ExtResource("1_8a3k1"),
+"RLauncher": ExtResource("28_rpg"),
+"Rifle": ExtResource("24_ar"),
+"Shotgun": ExtResource("25_sg"),
+"Smg": ExtResource("26_smg"),
+"Sniper": ExtResource("29_snp")
+}
 allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01"])
 shove_walk_texture = ExtResource("6_o5s41")

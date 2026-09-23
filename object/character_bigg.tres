@@ -11,7 +11,7 @@
 [ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="8_yottv"]
 [ext_resource type="Texture2D" uid="uid://bybbxf1d78dfm" path="res://art/Characters/ジャイアンセットショットガン.png" id="9_w6m76"]
 [ext_resource type="Texture2D" uid="uid://nu308684slfr" path="res://art/Characters/ジャイアンセットアサルトライフル.png" id="10_lxnma"]
-[ext_resource type="Resource" path="res://object/skill_sa_recital.tres" id="11_recital"]
+[ext_resource type="Resource" uid="uid://cof45ah0o3bfn" path="res://object/skill_sa_recital.tres" id="11_recital"]
 [ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="12_counter"]
 [ext_resource type="Texture2D" uid="uid://de4kjicfqi7p8" path="res://art/Characters/ジャイアンセットマグナム.png" id="13_rk"]
 [ext_resource type="Texture2D" uid="uid://vlfxr36oa2sc" path="res://art/Characters/ジャイアンセットグレネードランチャー.png" id="14_rk"]
@@ -19,6 +19,7 @@
 [ext_resource type="Texture2D" uid="uid://7m3ea8wuwlf2" path="res://art/Characters/ジャイアンセットフライパン.png" id="16_fp"]
 [ext_resource type="Texture2D" uid="uid://dkcp52ael5rev" path="res://art/Characters/ジャイアンセットボウガン.png" id="17_bg"]
 [ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="18_bat"]
+[ext_resource type="Texture2D" uid="uid://bogmeh8ficukd" path="res://art/Characters/ジャイアンセットスナイパー.png" id="19_snp"]
 
 [sub_resource type="Resource" id="Resource_1lk36"]
 script = ExtResource("1_yottv")
@@ -54,7 +55,8 @@ weapon_walk_textures = {
 "RLauncher": ExtResource("15_rk"),
 "Rifle": ExtResource("10_lxnma"),
 "Shotgun": ExtResource("9_w6m76"),
-"Smg": ExtResource("10_lxnma")
+"Smg": ExtResource("10_lxnma"),
+"Sniper": ExtResource("19_snp")
 }
 allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "magnum_01", "frypan_01", "bat_01"])

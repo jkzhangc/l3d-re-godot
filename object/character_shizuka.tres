@@ -40,7 +40,8 @@ weapon_walk_textures = {
 "RLauncher": ExtResource("14"),
 "Rifle": ExtResource("9"),
 "Shotgun": ExtResource("10"),
-"Smg": ExtResource("9")
+"Smg": ExtResource("9"),
+"Sniper": ExtResource("9")
 }
 allowed_primary_weapons = Array[String](["sniper_01", "smg_01", "rifle_01", "shotgun_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01"])
