@@ -1307,7 +1307,8 @@ func heal(amount: float) -> void:
 	print("[玩家] 回复 HP: %d | HP: %.0f/%.0f" % [int(amount), current_hp, max_hp])
 
 
-## 使用治疗品。单机=队伍共用池（2026-09-13）；联机=自己座位优先，没有 → 其他座位。
+## 使用治疗品。单机=队伍共用池（2026-09-13）；联机=**只用自己那一格**（每人独立槽位，
+## 自己没有就用不了；2026-09-24 用户定稿，取消「自己→其他座位」的借用）。
 ## 联机 Client **不本地预测**：只提交请求，真实扣减/加血由 Host 权威域结算后经快照回灌
 ## （2026-09-24 实测：「客户端用喷雾却扣了主机那边的账」根因就是两端各记一本账）。
 func use_healing_item() -> bool:
@@ -2273,11 +2274,13 @@ func _create_fade_overlay() -> void:
 		_death_phase = 1
 
 
-## オートスプレー（原作 §4）：HP=0 时自动消耗急救喷雾（单机=共用池；联机=自己→其他座位），
+## オートスプレー（原作 §4）：HP=0 时自动消耗急救喷雾（单机=共用池；联机=**自己那一格**），
 ## 满血复活。返回 true = 已复活，跳过死亡流程。
+## ⚠ 联机「只用自己那一格」（2026-09-24 用户定稿）：自己没有喷雾就不再自动复活，
+##   直接进入倒地/死亡裁决（等队友救援）—— 不再借队友的喷雾。
 func _try_auto_spray_revive() -> bool:
 	var own: PlayerState = Players.get_state_for_entity(self)
-	# 消耗规则统一走 Players.consume_spray_for（单机共用池 / 联机自己优先→其他座位），
+	# 消耗规则统一走 Players.consume_spray_for（单机共用池 / 联机只用自己那一格），
 	# 与联机 Host 权威侧（network_world._try_host_use_healing）共用同一条规则。
 	var used: ItemData = Players.consume_spray_for(own)
 	if not used:

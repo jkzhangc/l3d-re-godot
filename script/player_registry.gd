@@ -94,27 +94,22 @@ func consume_team_spray() -> ItemData:
 	return team_spray_item
 
 
-## 消耗一支急救喷雾的**唯一规则入口**：单机=共用池；联机=自己座位优先 → 其他座位。
+## 消耗一支急救喷雾的**唯一规则入口**：
+##   单机 = 队伍共用池；
+##   联机 = **只用自己那一格**（2026-09-24 用户定稿：每人独立槽位，自己捡自己用）
+##          —— 自己没有就消耗失败（返回 null），绝不扣队友的。
 ## 返回被消耗的 ItemData（无则 null）。
 ##
 ## 【为什么必须共用】2026-09-24 用户实测「联机里喷雾像是共用的」：单机玩家（player.gd
 ## use_healing_item / _try_auto_spray_revive）与 Host 权威侧（network_world 的
-## healing_use_request 处理）各写一份「自己优先→他座」的循环，两端规则一旦漂移就会出现
-## 「客户端扣了但主机没扣」这类账目不一致。收敛到本函数后两端必然同一条规则。
+## healing_use_request 处理）各写一份消耗逻辑，两端规则一旦漂移就会出现「客户端扣了但
+## 主机没扣」这类账目不一致。收敛到本函数后两端必然同一条规则。
 func consume_spray_for(state: PlayerState) -> ItemData:
 	if not is_online_session():
 		return consume_team_spray()
 	if not state:
 		return null
-	var used: ItemData = state.use_healing_item()
-	if used:
-		return used
-	for s: PlayerState in seats:
-		if s and s != state:
-			used = s.use_healing_item()
-			if used:
-				return used
-	return null
+	return state.use_healing_item()
 
 
 ## HUD「急救喷雾」数字的取值口径（2026-09-24 用户定稿）：

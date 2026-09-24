@@ -3483,9 +3483,9 @@ func healing_use_request() -> void:
 		_try_host_use_healing(sender)
 
 
-## Host：对 sender 的权威座位执行一次「使用急救喷雾」事务（自己座位优先 → 其他座位，
+## Host：对 sender 的权威座位执行一次「使用急救喷雾」事务（**只用该玩家自己那一格**，
 ## 规则统一在 Players.consume_spray_for）。成功即回灌玩家快照，让喷雾计数与 HP
-## 在同一帧内收敛。失败（全队都没喷雾）静默返回，Client 侧不会白扣。
+## 在同一帧内收敛。失败（自己没喷雾）静默返回，Client 侧不会白扣、也不会扣到队友头上。
 func _try_host_use_healing(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
@@ -3496,7 +3496,7 @@ func _try_host_use_healing(peer_id: int) -> void:
 		return
 	var used: ItemData = Players.consume_spray_for(state)
 	if not used:
-		print("[NetworkWorld] HOST_HEALING_USE_REJECTED peer=%d（全队无喷雾）" % peer_id)
+		print("[NetworkWorld] HOST_HEALING_USE_REJECTED peer=%d（自己座位无喷雾）" % peer_id)
 		return
 	if node.has_method("apply_item_effects"):
 		node.call("apply_item_effects", used)
