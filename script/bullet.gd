@@ -11,6 +11,10 @@ extends Node2D
 ## 子弹实体 — 由远程武器射击生成
 
 signal finished(network_entity_id: int)
+## 爆炸发生（仅单机/Host 的权威子弹会触发）。NetworkWorld 用它把爆心坐标广播给 Client：
+## 客户端镜像子弹关闭了碰撞与扫掠（network_visual_only），只能靠本事件在**爆心**位置
+## 播爆炸表现 —— 否则爆炸特效只能落在镜像子弹的射程尽头，与真正命中点差出几十像素。
+signal exploded(network_entity_id: int, position: Vector2)
 ##
 ## 使用单张水平帧条图片渲染：
 ##   图片被均分为 bullet_anim_frames 列，每帧宽 = 图宽 / 帧数，高 = 图高
@@ -417,6 +421,8 @@ func _explode() -> void:
 		VXAnimSprite.play_scene(_explode_effect_anim, center, get_tree().current_scene)
 	if _explode_sound:
 		Global.play_sfx_managed(_explode_sound, get_tree().current_scene)
+	# 联机：把爆心与弹丸标识交给 NetworkWorld 广播（Client 用它播同一套爆炸表现）。
+	exploded.emit(network_entity_id, center)
 
 	var applied_force: float = _knockback_force if _knockback_force > 0.0 else 300.0
 	for e: Node in get_tree().get_nodes_in_group("enemy"):

@@ -702,6 +702,10 @@ func _run_network_weapon_transition(token: int, wd: WeaponData, raising: bool) -
 	if not raising:
 		unlock_facing()
 		set_weapon_ready_frame()
+	# 举起/放下音效（2026-09-24 音效审计）：单机在各自序列的起始帧播放
+	# （PlayerPistolState / PlayerKnifeState 的 raise_sound / lower_sound），
+	# 联机表现此前完全不播 —— 换枪全程静音。
+	_play_network_sfx(wd.raise_sound if raising else wd.lower_sound)
 	var start_index := 1 if raising else sequence.size() - 2
 	var end_index := sequence.size() if raising else -1
 	var step := 1 if raising else -1
@@ -769,6 +773,10 @@ func _run_network_shove_presentation(token: int, wd: WeaponData) -> void:
 	for index: int in range(wd.get_shove_char_sequence().size()):
 		if token != _network_attack_token or not is_inside_tree():
 			return
+		# 推击音效（2026-09-24 音效审计）：单机在 shove_hit_at_sequence_idx 帧触发，
+		# 联机表现此前完全不播声音。
+		if index == wd.shove_hit_at_sequence_idx:
+			_play_network_sfx(wd.shove_sound)
 		set_attack_char_index(wd.get_shove_char_sequence()[index])
 		await get_tree().create_timer(wd.shove_frame_duration).timeout
 	if token == _network_attack_token and is_inside_tree():
@@ -778,19 +786,31 @@ func _run_network_shove_presentation(token: int, wd: WeaponData) -> void:
 
 
 func _run_network_reload_presentation(token: int, wd: WeaponData, loaded_count: int) -> void:
+	# 装填音效（2026-09-24 用户实测「联机装填没有声音」）：单机由 PlayerReloadState 在
+	# 三个时点播放（NORMAL=装填音 / SHOTGUN=每发循环音 + 结束上膛音），联机表现此前只播
+	# 动画不播声音 → 联机全程静音装填。这里与单机逐时点对齐。
 	if wd.reload_mode == WeaponData.ReloadMode.SHOTGUN:
 		for _shell: int in range(loaded_count):
+			if token != _network_attack_token or not is_inside_tree():
+				return
+			_play_network_sfx(wd.shotgun_reload_loop_sound)
 			for index: int in range(wd.get_shotgun_loop_char_sequence().size()):
 				if token != _network_attack_token or not is_inside_tree():
 					return
 				set_attack_char_index(wd.get_shotgun_loop_char_sequence()[index])
 				await get_tree().create_timer(wd.get_shotgun_loop_frame_duration(index)).timeout
+		if token != _network_attack_token or not is_inside_tree():
+			return
+		_play_network_sfx(wd.shotgun_reload_end_sound)
 		for index: int in range(wd.get_shotgun_end_char_sequence().size()):
 			if token != _network_attack_token or not is_inside_tree():
 				return
 			set_attack_char_index(wd.get_shotgun_end_char_sequence()[index])
 			await get_tree().create_timer(wd.get_shotgun_end_frame_duration(index)).timeout
 	else:
+		if token != _network_attack_token or not is_inside_tree():
+			return
+		_play_network_sfx(wd.reload_sound)
 		for index: int in range(wd.get_reload_char_sequence().size()):
 			if token != _network_attack_token or not is_inside_tree():
 				return
@@ -836,6 +856,26 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 		if not wait_tree:
 			return
 		await wait_tree.create_timer(duration).timeout
+	# 攻击后动画 + 其音效（2026-09-24 音效审计）：单机在攻击序列结束后由
+	# PlayerPistolAttackState 播放（散弹枪配了 post_attack_char_sequence=[5,3,2] 与
+	# post_attack_sound），联机表现此前整段缺失（既无动画也无声音）。
+	# コマンドー 被动（Smg/Shotgun/Magnum 无硬直）同规则跳过。
+	if token != _network_attack_token or not is_instance_valid(self) or not is_inside_tree():
+		return
+	var post_sequence: Array[int] = wd.get_post_attack_char_sequence()
+	if not post_sequence.is_empty() and not skip_post_attack(wd.weapon_state_name):
+		_play_network_sfx(wd.post_attack_sound)
+		for index: int in range(post_sequence.size()):
+			if token != _network_attack_token or not is_instance_valid(self) or not is_inside_tree():
+				return
+			set_attack_char_index(post_sequence[index])
+			var post_duration := wd.get_post_attack_frame_duration(index)
+			if not is_inside_tree():
+				return
+			var post_tree := get_tree()
+			if not post_tree:
+				return
+			await post_tree.create_timer(post_duration).timeout
 	if token == _network_attack_token and is_instance_valid(self) and is_inside_tree():
 		set_weapon_ready_frame()
 		player_in_weapon_state = false
@@ -1268,32 +1308,51 @@ func heal(amount: float) -> void:
 
 
 ## 使用治疗品。单机=队伍共用池（2026-09-13）；联机=自己座位优先，没有 → 其他座位。
+## 联机 Client **不本地预测**：只提交请求，真实扣减/加血由 Host 权威域结算后经快照回灌
+## （2026-09-24 实测：「客户端用喷雾却扣了主机那边的账」根因就是两端各记一本账）。
 func use_healing_item() -> bool:
+	if _submit_network_healing_use():
+		return true
 	var state: PlayerState = Players.get_state_for_entity(self)
-	var used: ItemData = null
-	if Players.using_shared_spray_pool():
-		used = Players.consume_team_spray()
-	else:
-		used = state.use_healing_item() if state else null
-		if not used:
-			for s: PlayerState in Players.seats:
-				if s and s != state:
-					used = s.use_healing_item()
-					if used:
-						break
+	var used: ItemData = Players.consume_spray_for(state)
 	if not used:
 		return false
 	apply_item_effects(used)
-	# 看护（说明书 §6.2，静香被动）：手动使用治疗品 → 全队同时回复相同 HP
-	if current_character and current_character.nursing and used.hp_restore > 0:
-		for p: Node2D in Players.all_entities():
-			if is_instance_valid(p) and p != self and not p.get("_is_dying"):
-				p.heal(used.hp_restore)
-		print("[被动] 看护：全队各回复 %d HP" % used.hp_restore)
+	apply_nursing_passive(used)
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
-	if chapter_stats and chapter_stats.has_method("record_healing_item"):
+	if chapter_stats and chapter_stats.has_method("record_healing_item") and state:
 		chapter_stats.record_healing_item(state.seat_index)
 	return true
+
+
+## 联机 Client 的喷雾使用提交。返回 true = 已转交 Host（本机不结算）。
+## Host 本地与单机一律返回 false，走下面的本地权威结算。
+func _submit_network_healing_use() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	if not net or not net.has_method("is_online_session") or not bool(net.is_online_session()):
+		return false
+	if bool(net.get("is_host")):
+		return false
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree else null
+	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
+	if world and world.has_method("request_healing_use"):
+		world.call("request_healing_use")
+		return true
+	return false
+
+
+## 看护（说明书 §6.2，静香被动）：手动使用治疗品 → 全队同时回复相同 HP。
+## 提为独立方法是为了让联机 Host 权威侧（network_world._try_host_use_healing）复用同一规则。
+func apply_nursing_passive(used: ItemData) -> void:
+	if not used or used.hp_restore <= 0:
+		return
+	if not (current_character and current_character.nursing):
+		return
+	for p: Node2D in Players.all_entities():
+		if is_instance_valid(p) and p != self and not p.get("_is_dying"):
+			p.heal(used.hp_restore)
+	print("[被动] 看护：全队各回复 %d HP" % used.hp_restore)
 
 
 ## 使用当前座位的辅助品。
@@ -1536,6 +1595,13 @@ func _activate_awaken_core() -> bool:
 
 func is_awaken_active() -> bool:
 	return _awaken_active
+
+
+## 覚醒（集中射撃）射撃威力倍率。暴露成方法是因为联机 Host 侧持有的 shooter 变量
+## 静态类型为 CharacterBody2D，读不到本脚本的 const（2026-09-24：Host 权威弹补上
+## 覚醒伤害倍率时使用，避免在 network_world 里再写一份硬编码常量）。
+func get_awaken_damage_mult() -> float:
+	return AWAKEN_DAMAGE_MULT
 
 
 ## 每帧：发动中 TP 缓慢消耗；TP 耗尽 / 死亡 / 切人 → 解除。
@@ -2211,32 +2277,17 @@ func _create_fade_overlay() -> void:
 ## 满血复活。返回 true = 已复活，跳过死亡流程。
 func _try_auto_spray_revive() -> bool:
 	var own: PlayerState = Players.get_state_for_entity(self)
-	if Players.using_shared_spray_pool():
-		# 单机共用池：当前角色直接用（2026-09-13 用户定稿）
-		if Players.team_spray_count <= 0:
-			return false
-		Players.consume_team_spray()
-	else:
-		# 联机：自己座位优先 → 其他座位
-		var donor: PlayerState = null
-		if own and own.healing_item_count > 0:
-			donor = own
-		else:
-			for s: PlayerState in Players.seats:
-				if s and s.healing_item_count > 0:
-					donor = s
-					break
-		if donor == null:
-			return false
-		donor.healing_item_count -= 1
-		if donor.healing_item_count <= 0:
-			donor.healing_item = null
-			donor.healing_item_count = 0
+	# 消耗规则统一走 Players.consume_spray_for（单机共用池 / 联机自己优先→其他座位），
+	# 与联机 Host 权威侧（network_world._try_host_use_healing）共用同一条规则。
+	var used: ItemData = Players.consume_spray_for(own)
+	if not used:
+		return false
 	current_hp = max_hp
 	if own:
 		own.current_hp = current_hp
 	_play_hit_feedback(Color(1.6, 2.0, 1.6, 1.0), 0.4)
-	print("[自动喷雾] HP=0 → 自动使用急救喷雾，满血复活（队伍剩余 %d）" % Players.spray_total())
+	print("[自动喷雾] HP=0 → 自动使用急救喷雾（%s），满血复活（队伍剩余 %d）" % [
+		used.item_id, Players.spray_total()])
 	return true
 
 
@@ -2367,6 +2418,15 @@ func _drop_all_weapons_locally() -> void:
 
 func _play_sound(stream: AudioStream) -> void:
 	if not stream:
+		return
+	Global.play_sfx_managed(stream, self)
+
+
+## 联机表现专用音效入口（装填/攻击后/推击等）。与单机同一套 SFX 管理器与并发上限，
+## 用**调用当刻**的节点自身作宿主：协程里 await 之后缓存的 SceneTree 可能已失效，
+## 而本节点只要仍在树内就是合法宿主（2026-09-24 联机装填静音修复一并收口）。
+func _play_network_sfx(stream: AudioStream) -> void:
+	if not stream or not is_inside_tree():
 		return
 	Global.play_sfx_managed(stream, self)
 

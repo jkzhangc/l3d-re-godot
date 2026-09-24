@@ -59,6 +59,7 @@ empty_fire_sound = ExtResource("7")
 raise_sound = ExtResource("8")
 lower_sound = ExtResource("8")
 reload_char_sequence = Array[int]([2, 1])
+reload_sound = ExtResource("11_4ooyv")
 initial_reserve_ammo = 20
 bullet_spawn_offsets = {
 "bigg": SubResource("WSO_rocket_01_bigg"),

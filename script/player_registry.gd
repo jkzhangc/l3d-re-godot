@@ -93,6 +93,41 @@ func consume_team_spray() -> ItemData:
 	team_spray_count -= 1
 	return team_spray_item
 
+
+## 消耗一支急救喷雾的**唯一规则入口**：单机=共用池；联机=自己座位优先 → 其他座位。
+## 返回被消耗的 ItemData（无则 null）。
+##
+## 【为什么必须共用】2026-09-24 用户实测「联机里喷雾像是共用的」：单机玩家（player.gd
+## use_healing_item / _try_auto_spray_revive）与 Host 权威侧（network_world 的
+## healing_use_request 处理）各写一份「自己优先→他座」的循环，两端规则一旦漂移就会出现
+## 「客户端扣了但主机没扣」这类账目不一致。收敛到本函数后两端必然同一条规则。
+func consume_spray_for(state: PlayerState) -> ItemData:
+	if not is_online_session():
+		return consume_team_spray()
+	if not state:
+		return null
+	var used: ItemData = state.use_healing_item()
+	if used:
+		return used
+	for s: PlayerState in seats:
+		if s and s != state:
+			used = s.use_healing_item()
+			if used:
+				return used
+	return null
+
+
+## HUD「急救喷雾」数字的取值口径（2026-09-24 用户定稿）：
+##   单机 = 队伍共用池总数（沿用 2026-09-13 定稿）；
+##   联机 = **本地座位自己的持有数** —— 联机喷雾是每个玩家独立的槽位（自己捡自己用），
+##          旧实现显示 spray_total()（全座位求和）会让客户端看到主机的数量、自己恒 0，
+##          表现成「捡到的喷雾算在主机头上」。
+func spray_display_count() -> int:
+	if not is_online_session():
+		return team_spray_count
+	var state := get_active_state()
+	return state.healing_item_count if state else 0
+
 # ═══════════════════════════════════════
 # 实体（节点层）
 # ═══════════════════════════════════════

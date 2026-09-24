@@ -706,17 +706,27 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		_play_sound(hurt_sound, hurt_sound_pitch)
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	_network_headshot_death = is_headshot
-	if snap:
-		_remote_interp.reset(new_position)
-		global_position = new_position
-		_network_target_position = new_position
-		_network_has_target = false
-	else:
-		if not _network_has_target:
+	## 尸体位置冻结（2026-09-24 用户实测「客户端丧尸变成尸体后位置有时会变一下」）：
+	## 已经是尸体的实体不再接受任何权威坐标矫正。Host 的死亡坐标比客户端看到的最后位置
+	## 领先约一个 RTT（客户端是在本地插值出来的位置上定格成尸体的），把快照坐标写回去
+	## 就是肉眼可见的瞬移 —— 而 apply_network_death 早已把 _network_has_target 清空并
+	## 期望尸体原地不动，此处却因「_network_has_target == false → 直接写 global_position」
+	## 又把它拉回权威坐标。
+	## ⚠ 只拦「已成尸体」：晚加入的 Client 首次从快照拿到一具尸体时 _is_dead 还是 false，
+	## 必须照常吃 spawn/快照坐标，否则尸体会落在原点。
+	var corpse_frozen: bool = _is_dead and is_dead
+	if not corpse_frozen:
+		if snap:
+			_remote_interp.reset(new_position)
 			global_position = new_position
-		_remote_interp.push_sample(new_position)
-		_network_target_position = new_position
-		_network_has_target = true
+			_network_target_position = new_position
+			_network_has_target = false
+		else:
+			if not _network_has_target:
+				global_position = new_position
+			_remote_interp.push_sample(new_position)
+			_network_target_position = new_position
+			_network_has_target = true
 
 	if is_dead:
 		_is_dead = true

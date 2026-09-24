@@ -129,8 +129,9 @@ func _update_tp() -> void:
 
 
 func _update_spray() -> void:
-	# 急救喷雾队伍共用：HUD 显示队伍总数（单机=共用池；联机=各座位之和）
-	var total: int = Players.spray_total()
+	# 单机=队伍共用池总数；联机=本地玩家自己的喷雾槽位（2026-09-24 用户定稿）。
+	# 不要改回 spray_total()：联机那是各座位求和，客户端会显示主机的数量而自己恒 0。
+	var total: int = Players.spray_display_count()
 	var n: int = clampi(total, 0, SPRAY_TEXTS.size() - 1)
 	if spray_count:
 		spray_count.texture = SPRAY_TEXTS[n]

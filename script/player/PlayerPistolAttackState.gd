@@ -164,38 +164,12 @@ func _fire_bullet() -> void:
 			damage *= character.AWAKEN_DAMAGE_MULT
 
 		if bullet.has_method("setup"):
-			bullet.setup({
-				"direction": dir_vec,
-				"speed": bd.speed,
-				"max_range": bd.max_range,
-				"damage": damage,
-				"destroy_on_hit": bd.destroy_on_hit,
-				"penetration": bd.penetration,
-				"critical_rate": _wd.critical_rate,
-				"critical_damage": _wd.critical_damage,
-				"element": _wd.element,
-				"instant_kill": awaken or bd.instant_kill,
-				"explosion_radius": bd.explosion_radius,
-				"explosion_hurts_players": bd.explosion_hurts_players,
-				"explosion_player_radius": bd.explosion_player_radius,
-				"breaks_blast_wall": bd.breaks_blast_wall,
-				"explode_effect_anim": bd.explode_effect_anim,
-				"explode_sound": bd.explode_sound,
-				"hit_effect_anim": _wd.hit_effect_anim,
-				"hit_effect_follow": _wd.hit_effect_follow,
-				"hit_effect_offset_override": _wd.hit_effect_offset_override,
-				"hit_sound": _wd.hit_sound,
-				"texture": bd.bullet_texture,
-				"anim_frames": bd.bullet_anim_frames,
-				"frame_duration": bd.bullet_frame_duration,
-				"collision_size": bd.collision_size,
-				"collision_offset": bd.collision_offset,
-				"spawn_offset": bd.spawn_offset,
-				"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
-				"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
-				"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else _wd.hitstun_duration,
-				"shooter": character,
-			})
+			# 参数由 BulletData.build_setup_params 统一给出（与联机 Host 同一入口，
+			# 避免任一侧新增字段时漏传 —— 2026-09-24「联机弓弩不爆炸」的教训）。
+			var params: Dictionary = bd.build_setup_params(_wd, damage, awaken or bd.instant_kill)
+			params["direction"] = dir_vec
+			params["shooter"] = character
+			bullet.setup(params)
 
 		# 子弹初始位置 = 角色位置 + 前方偏移 + 枪口偏移
 		# 枪口偏移（2026-09-16）：角色专属（WeaponData.bullet_spawn_offsets）**配置了条目即生效**

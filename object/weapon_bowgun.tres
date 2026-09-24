@@ -61,6 +61,7 @@ empty_fire_sound = ExtResource("8")
 raise_sound = ExtResource("9")
 lower_sound = ExtResource("9")
 reload_char_sequence = Array[int]([2, 1])
+reload_sound = ExtResource("11_ijc1i")
 initial_reserve_ammo = 50
 attack_effect_follow = true
 bullet_spawn_offsets = {

@@ -1700,6 +1700,12 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 			return
 		var current := state.get_magazine_ammo(wd.item_id)
 		if current <= 0:
+			# 空弹「咔嚓」（2026-09-24 音效审计）：单机在攻击状态 enter 时会播
+			# empty_fire_sound，联机此前静默返回 —— 客户端按开火键毫无反馈。
+			# 与 attack_presentation 同款：Host 本地直接播，Client 走同一 RPC 广播。
+			if wd.empty_fire_sound:
+				Global.play_sfx_managed(wd.empty_fire_sound, node)
+				empty_fire_presentation.rpc(peer_id, wd.item_id)
 			return
 		state.set_magazine_ammo(wd.item_id, current - 1)
 		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
@@ -1809,43 +1815,57 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	var bullet := BULLET_SCENE.instantiate() as Node2D
 	if not bullet:
 		return
-	bullet.setup({
-		"network_entity_id": bullet_id,
-		"network_visual_only": false,
-		"direction": direction,
-		"speed": bd.speed,
-		"max_range": bd.max_range,
-		"damage": bd.get_effective_damage(wd.attack_power),
-		"destroy_on_hit": bd.destroy_on_hit,
-		"penetration": bd.penetration,
-		"critical_rate": wd.critical_rate,
-		"critical_damage": wd.critical_damage,
-		"element": wd.element,
-		"hit_effect_anim": wd.hit_effect_anim,
-		"hit_effect_follow": wd.hit_effect_follow,
-		"hit_effect_offset_override": wd.hit_effect_offset_override,
-		"hit_sound": wd.hit_sound,
-		"texture": bd.bullet_texture,
-		"anim_frames": bd.bullet_anim_frames,
-		"frame_duration": bd.bullet_frame_duration,
-		"collision_size": bd.collision_size,
-		"collision_offset": bd.collision_offset,
-		"spawn_offset": bd.spawn_offset,
-		"knockback_force": bd.knockback_force if bd.knockback_enabled else 0.0,
-		"knockback_stun": bd.knockback_stun_duration if bd.knockback_enabled else 0.0,
-		"hitstun_duration": bd.hitstun_duration if bd.hitstun_duration > 0.0 else wd.hitstun_duration,
-		"shooter": shooter,
-		# 覚醒（集中射撃）即死・怯み（C1 补缺）：单机走 PlayerPistolAttackState 同款
-		# 判定（awaken or bd.instant_kill）；Host node 的 _awaken_active 由
-		# awaken_request 权威流程维护，Host 权威弹据此携带即死标志。
-		"instant_kill": shooter.is_awaken_active() or bd.instant_kill,
-	})
+	# 参数统一由 BulletData.build_setup_params 给出（与单机 PlayerPistolAttackState 同一入口）。
+	# 2026-09-24 实测修复：旧实现手写字典漏了 explosion_* 一整族 —— Host 权威弹的
+	# _explosion_radius 恒为 0，联机里弓弩/榴弹炮/RPG 全都既不炸也不结算范围伤害。
+	var shoot_damage: float = bd.get_effective_damage(wd.attack_power)
+	var shoot_awaken: bool = bool(shooter.call("is_awaken_active")) if shooter.has_method("is_awaken_active") else false
+	if shoot_awaken and shooter.has_method("get_awaken_damage_mult"):
+		# 覚醒「集中射撃」伤害 ×1.5（C1 补缺：旧实现联机只带了 instant_kill 标志，
+		# 漏了伤害倍率 → 联机覚醒射击威力显著低于单机）。
+		shoot_damage *= float(shooter.call("get_awaken_damage_mult"))
+	var setup_params: Dictionary = bd.build_setup_params(wd, shoot_damage, shoot_awaken or bd.instant_kill)
+	setup_params["network_entity_id"] = bullet_id
+	setup_params["network_visual_only"] = false
+	setup_params["direction"] = direction
+	setup_params["shooter"] = shooter
+	bullet.setup(setup_params)
 	bullet.global_position = start_position
 	get_tree().current_scene.add_child(bullet)
 	_bullets[bullet_id] = bullet
 	bullet.finished.connect(_on_host_bullet_finished)
+	# 爆炸表现同步（2026-09-24）：Client 的镜像子弹不参与碰撞/扫掠，只在 finished 时被
+	# despawn —— 它自己永远不知道真实爆心。Host 权威弹爆炸时把爆心坐标可靠广播出去。
+	if bullet.has_signal("exploded"):
+		bullet.connect("exploded", _on_host_bullet_exploded.bind(wd.item_id, bullet_index))
 	# Client 只从 Host 确认的白名单 weapon_id + 弹丸索引还原视觉弹道，绝不接收伤害或子弹数据对象。
 	spawn_bullet.rpc(bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index)
+
+
+## Host 权威弹爆炸 → 广播爆心（Client 播同一套爆炸特效/音效）。
+func _on_host_bullet_exploded(_network_entity_id: int, position: Vector2, weapon_id: String, bullet_index: int) -> void:
+	if not net.is_host:
+		return
+	bullet_explode_effect.rpc(position, weapon_id, bullet_index)
+
+
+@rpc("authority", "call_remote", "reliable")
+func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: int) -> void:
+	if net.is_host:
+		return
+	# 资源只从白名单武器的弹丸表解析 —— 远端包只携带 id 与索引。
+	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
+	if not bd:
+		return
+	var scene: Node = get_tree().current_scene
+	if not scene:
+		return
+	if bd.explode_effect_anim:
+		VXAnimSprite.play_scene(bd.explode_effect_anim, position, scene)
+	if bd.explode_sound:
+		Global.play_sfx_managed(bd.explode_sound, scene)
+	print("[NetworkWorld] CLIENT_BULLET_EXPLODE weapon=%s index=%d pos=(%.0f, %.0f)" % [
+		weapon_id, bullet_index, position.x, position.y])
 
 
 func _on_host_bullet_finished(bullet_id: int) -> void:
@@ -2521,6 +2541,23 @@ func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) ->
 		_auto_client_attack_weapon_id = wd.item_id
 
 
+## 空弹「咔嚓」表现（2026-09-24 音效审计）：Host 拒绝一次空弹开火时广播，
+## 只有开火者本人播放（音效挂在开火者节点上，与单机 _play_attack_sound 同源）。
+@rpc("authority", "call_remote", "reliable")
+func empty_fire_presentation(peer_id: int, weapon_id: String) -> void:
+	if net.is_host or not _players.has(peer_id):
+		return
+	if peer_id != int(net.my_peer_id):
+		return
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if not wd or not wd.empty_fire_sound:
+		return
+	var node := _player_node(_players[peer_id] as Dictionary)
+	if not is_instance_valid(node):
+		return
+	Global.play_sfx_managed(wd.empty_fire_sound, node)
+
+
 @rpc("authority", "call_remote", "reliable")
 func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2, direction: Vector2, weapon_id: String, bullet_index: int) -> void:
 	if net.is_host or bullet_id <= 0 or _bullets.has(bullet_id):
@@ -2913,6 +2950,10 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			"locked_facing": int(packet[25]) if packet.size() > 25 else -1,
 			# D2 备弹同步（尾部追加，旧长度包降级为空 → 不动本地域）。
 			"ammo_counts": (packet[26] as Dictionary).duplicate() if packet.size() > 26 and packet[26] is Dictionary else {},
+			# 急救喷雾库存（尾部追加，2026-09-24）。旧长度包降级为「空 id + 0」，
+			# 调用方据此判定为「本包未携带」而不是错误地清空客户端已同步的喷雾。
+			"healing_id": str(packet[27]) if packet.size() > 27 else "",
+			"healing_count": int(packet[28]) if packet.size() > 28 else -1,
 		}
 	return {}
 
@@ -3021,6 +3062,19 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 				var count := int((ammo_counts as Dictionary)[ammo_id])
 				var prototype := _find_ammo_resource_for_weapon(state, ammo_id)
 				state.set_ammo_item_count(ammo_id, count, prototype)
+		# 急救喷雾库存收敛（2026-09-24）。-1 = 旧长度包未携带本字段 → 不动本地域。
+		# 幂等：Host 权威值直接覆盖客户端副本，40Hz 快照反复下发无副作用（与备弹同款）。
+		var healing_count := int(public_state.get("healing_count", -1))
+		if healing_count >= 0:
+			if healing_count == 0:
+				state.healing_item = null
+				state.healing_item_count = 0
+			else:
+				# 资源只从白名单解析（联机铁律：远端包只携带 id，绝不 load 任意路径）。
+				var healing_proto := NETWORK_HEALINGS.get(str(public_state.get("healing_id", ""))) as ItemData
+				if healing_proto:
+					state.healing_item = healing_proto
+					state.healing_item_count = healing_count
 	# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
 	# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
 	# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
@@ -3405,6 +3459,57 @@ func pickup_request(pickup_id: int, claimed_position: Variant = null) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender > 1:
 		_try_host_pickup(sender, pickup_id, claimed_position)
+
+
+# ---------------------------------------------------------------- 急救喷雾使用（Host 权威事务）
+
+## 联机喷雾是**每个玩家独立的槽位**（自己捡自己用，2026-09-13 定稿）。Client 本地
+## 不预测消耗：真实扣减必须由 Host 在自己的权威座位上执行一次，再经快照回灌客户端
+## 副本 —— 否则出现 2026-09-24 用户实测的「客户端用了喷雾，账却动在主机那边」。
+func request_healing_use() -> void:
+	if net.is_host:
+		# Host 本地玩家：PlayerState 本身就是权威域，player.gd 已直接结算，不能再走一遍。
+		return
+	if _initial_world_received:
+		healing_use_request.rpc_id(1)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func healing_use_request() -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_use_healing(sender)
+
+
+## Host：对 sender 的权威座位执行一次「使用急救喷雾」事务（自己座位优先 → 其他座位，
+## 规则统一在 Players.consume_spray_for）。成功即回灌玩家快照，让喷雾计数与 HP
+## 在同一帧内收敛。失败（全队都没喷雾）静默返回，Client 侧不会白扣。
+func _try_host_use_healing(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state:
+		return
+	var used: ItemData = Players.consume_spray_for(state)
+	if not used:
+		print("[NetworkWorld] HOST_HEALING_USE_REJECTED peer=%d（全队无喷雾）" % peer_id)
+		return
+	if node.has_method("apply_item_effects"):
+		node.call("apply_item_effects", used)
+	# 看护被动与章节统计与单机同规则（player.gd 的同一对入口）。
+	if node.has_method("apply_nursing_passive"):
+		node.call("apply_nursing_passive", used)
+	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+	if chapter_stats and chapter_stats.has_method("record_healing_item"):
+		chapter_stats.record_healing_item(state.seat_index)
+	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
+	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+	print("[NetworkWorld] HOST_HEALING_USE peer=%d item=%s left=%d hp=%.0f" % [
+		peer_id, used.item_id, state.healing_item_count, node.current_hp])
 
 
 ## 联机滞后补偿（09-22 实测）：客户端本地预测位置领先 Host 权威模拟约 速度×RTT
@@ -5677,6 +5782,8 @@ func _build_compact_player_snapshot() -> Array:
 			state["facing_locked"], state["locked_facing"],
 			# D2 备弹同步（尾部追加）：ammo_item_id → count。
 			state["ammo_counts"],
+			# 急救喷雾库存（尾部追加，2026-09-24）：id + 数量，与 _normalize 的末两位对应。
+			state["healing_id"], state["healing_count"],
 		])
 	states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return states
@@ -5720,6 +5827,12 @@ func _public_state(peer_id: int) -> Dictionary:
 		# D2 备弹同步（尾部追加）：两槽武器对应的弹药库存计数（ammo_item_id → count）。
 		# 备弹此前从不同步 → Client HUD 备弹恒 0、与 Host 域脱钩。
 		"ammo_counts": _ammo_counts_for(state),
+		# 急救喷雾库存（2026-09-24 实测修复，尾部追加）：此前 healing_item /
+		# healing_item_count 完全不在快照里 —— Host 权威域把客户端捡到的喷雾记在
+		# 客户端座位上，客户端却永远看不到（HUD 恒 0），于是用户判断为「喷雾是共用的、
+		# 捡到算在主机头上」。联机喷雾是每人独立槽位，必须随快照同步。
+		"healing_id": state.healing_item.item_id if state and state.healing_item else "",
+		"healing_count": state.healing_item_count if state else 0,
 	}
 
 

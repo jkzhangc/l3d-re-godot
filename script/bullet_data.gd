@@ -107,6 +107,53 @@ class_name BulletData extends Resource
 # 方法
 # ═══════════════════════════════════════
 
+## 弹丸 setup 参数字典的**唯一构建入口**：键与 bullet.gd::setup() 逐项对应。
+##
+## 单机（PlayerPistolAttackState._fire_bullet）与联机 Host（NetworkWorld._spawn_host_bullet）
+## 必须共用本函数 —— 2026-09-24 用户实测「联机里弓弩射出来不爆炸，榴弹炮/RPG 同样」
+## 的根因就是 Host 侧手写字典漏了 explosion_radius / explosion_hurts_players /
+## explosion_player_radius / breaks_blast_wall / explode_effect_anim / explode_sound：
+## 数据层配置齐全，Host 权威弹却一颗都不炸（既不结算范围伤害也无爆炸特效/音效）。
+##
+## 调用方只需再补身份字段：direction / shooter /（联机）network_entity_id /
+## network_visual_only。damage 与 instant_kill 由调用方按「覚醒倍率 / 数据即死」算好传入。
+func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Dictionary:
+	return {
+		"speed": speed,
+		"max_range": max_range,
+		"damage": damage,
+		"destroy_on_hit": destroy_on_hit,
+		"penetration": penetration,
+		"critical_rate": wd.critical_rate if wd else 0.0,
+		"critical_damage": wd.critical_damage if wd else 2.0,
+		"element": wd.element if wd else 0,
+		"instant_kill": instant_kill,
+		# 爆炸家族（弓弩/榴弹发射器/火箭筒/属性榴弹共用）
+		"explosion_radius": explosion_radius,
+		"explosion_hurts_players": explosion_hurts_players,
+		"explosion_player_radius": explosion_player_radius,
+		"breaks_blast_wall": breaks_blast_wall,
+		"explode_effect_anim": explode_effect_anim,
+		"explode_sound": explode_sound,
+		# 命中表现
+		"hit_effect_anim": wd.hit_effect_anim if wd else null,
+		"hit_effect_follow": wd.hit_effect_follow if wd else false,
+		"hit_effect_offset_override": wd.hit_effect_offset_override if wd else Vector2.ZERO,
+		"hit_sound": wd.hit_sound if wd else null,
+		# 外观与碰撞
+		"texture": bullet_texture,
+		"anim_frames": bullet_anim_frames,
+		"frame_duration": bullet_frame_duration,
+		"collision_size": collision_size,
+		"collision_offset": collision_offset,
+		"spawn_offset": spawn_offset,
+		# 击退/硬直
+		"knockback_force": knockback_force if knockback_enabled else 0.0,
+		"knockback_stun": knockback_stun_duration if knockback_enabled else 0.0,
+		"hitstun_duration": hitstun_duration if hitstun_duration > 0.0 else (wd.hitstun_duration if wd else 0.0),
+	}
+
+
 ## 获取有效伤害（子弹伤害优先，否则用武器攻击力）
 func get_effective_damage(attack_power: float) -> float:
 	return damage if damage > 0.0 else attack_power
