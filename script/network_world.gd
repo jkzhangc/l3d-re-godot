@@ -2271,6 +2271,16 @@ func revive_presentation(target_peer_id: int, hp: float) -> void:
 		state.current_hp = hp
 	if is_instance_valid(node):
 		node.apply_network_revive_state(hp)
+	# ⚠ 2026-09-24：entry 是客户端「谁可以被救援」的唯一判据（_find_revive_target_for 读它），
+	# 必须在这里立刻复位。否则客户端在下一个快照（最多 2s）之前仍以为该玩家是倒地 →
+	# 长按功能键只会对着一个已经站起来的队友发起救援（Host 复核不过 → 拒绝），
+	# 而真正倒地的队友又因为目标选择指向了错误的最近者而救不上 —— 用户实测「没办法救援」。
+	entry["downed"] = false
+	entry["dead"] = false
+	entry["bleed_ratio"] = -1.0
+	entry["revive_progress"] = 0.0
+	_players[target_peer_id] = entry
+	_update_network_revive_indicator(node, 0.0)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -3210,11 +3220,17 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 		node.configure_network_entity(entity_id, true)
 		entry = {"node_id": node.get_instance_id(), "scene_path": scene_path}
 		_enemies[entity_id] = entry
-	# 可靠死亡广播后，乱序迟到的不可靠位置包（死亡前发出、死亡后送达）不得
-	# 把尸体重新拉回行走状态；可靠快照本身按序到达，仍可幂等刷新尸体表现。
-	# （established 实体的可靠重同步按 snap=false 生效，因此这里同样拦截尸体。）
-	if not snap and node.is_network_dead():
-		return
+	# ⚠ 2026-09-24 实测修复：这里原本是「尸体一律跳过整包」：
+	#     if not snap and node.is_network_dead(): return
+	# 它把**死亡位置、倒地标志、流血比、救援进度**也一并冻结了，造成两个用户可见的问题：
+	#   ① 客户端自己的角色死亡后，尸体停在**本地预测位置**（与主机画面里的尸体不是同一处，
+	#      要等 2s 一次的可靠重同步才被拉正）；
+	#   ② 某玩家倒地后客户端 entry["downed"] 永远停在 true —— 队友把他救起来 / 他流血耗尽
+	#      真死亡后，客户端仍以为他是倒地：长按功能键会对一个已站起/已死的人发起救援
+	#      （Host 侧 _find_revive_target_for 复核不过 → 直接拒绝）＝「玩家之间没办法救援」。
+	# 「不许把尸体拉回行走状态」这件事其实已由 player.apply_network_presentation 的
+	# _is_dying 分支保证：它只对齐权威坐标并丢弃插值目标，绝不再调 update_appearance。
+	# 而可靠包与不可靠包同走 ENet 有序通道，不存在「死亡后仍收到死亡前位置」的乱序。
 	node.apply_network_presentation(
 		_packet_position(public_state),
 		int(public_state.get("facing", 0)),

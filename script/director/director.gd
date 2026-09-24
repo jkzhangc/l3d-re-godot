@@ -470,6 +470,13 @@ func play_boss_music(watch: Node2D = null) -> void:
 	_announce_music("boss", true)
 	print("[Director] ★ Boss BGM 开始")
 
+## Boss BGM 是否正在播。防守战（HoldoutMachine）BGM 的互斥判定用：
+## 那台机器必须在「开始/重播」时也查一次，不能只依赖 boss_music_changed 信号
+## （信号只在状态切换时发，而 play() 会复位 stream_paused）——见 holdout_machine。
+func is_boss_music_active() -> bool:
+	return _boss_music_active
+
+
 ## Boss 全灭 / 全员死亡冻结时调用。resume_horde=true 且尸潮仍在 peak 时接回尸潮 BGM。
 func stop_boss_music(resume_horde: bool = false) -> void:
 	if not _boss_music_active:

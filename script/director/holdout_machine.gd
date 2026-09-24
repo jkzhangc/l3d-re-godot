@@ -242,6 +242,23 @@ func _ready() -> void:
 func _on_boss_music_changed(active: bool) -> void:
 	if _music_player and is_instance_valid(_music_player):
 		_music_player.stream_paused = active
+
+
+## Boss BGM 是否正在播（Director 权威）。防守战 BGM 与它互斥（Boss 优先）。
+## ⚠ 只监听 boss_music_changed 信号**不够**：信号只在状态**切换**时发出，而防守战 BGM
+## 会在「单曲循环重播（finished → play()）」和「重新开始」时把 stream_paused 复位。
+## 若此刻 Boss BGM 已在播，两首就叠加了（2026-09-24 用户实测「防守战 BGM 与坦克
+## Boss BGM 重叠播放」）。因此每一处「开始 / 重播」都必须按当前权威状态重新判定。
+func _boss_music_playing() -> bool:
+	var director: Node = get_node_or_null("/root/Director")
+	return director != null and director.has_method("is_boss_music_active") \
+			and bool(director.call("is_boss_music_active"))
+
+
+## 统一闸门：按当前 Boss BGM 状态同步防守战 BGM 的可听性。
+func _sync_holdout_music_gate() -> void:
+	if _music_player and is_instance_valid(_music_player):
+		_music_player.stream_paused = _boss_music_playing()
 		print("[HoldoutMachine] 防守战 BGM %s（Boss BGM 优先）" % ("挂起" if active else "恢复"))
 
 
@@ -1032,6 +1049,8 @@ func _play_holdout_music() -> void:
 	_music_player.stream = holdout_music
 	_music_player.volume_db = holdout_music_volume_db
 	_music_player.play()
+	# play() 会复位 stream_paused → 必须按当前 Boss BGM 状态重新上闸（见 _boss_music_playing）
+	_sync_holdout_music_gate()
 
 
 func _on_holdout_music_finished() -> void:
@@ -1041,6 +1060,8 @@ func _on_holdout_music_finished() -> void:
 		return
 	if _active and _music_player:
 		_music_player.play()
+		# 循环重播同样会复位暂停位 → 重新上闸，否则 Boss BGM 期间会两首叠加
+		_sync_holdout_music_gate()
 
 
 ## 防守战结束 / 中止时停止专属 BGM。

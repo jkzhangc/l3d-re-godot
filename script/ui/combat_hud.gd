@@ -124,7 +124,8 @@ func _update_hp() -> void:
 func _configure_tp_label() -> void:
 	# TP 数值标签（场景节点 $TPLabel）—— 与伤害数字同款像素字体
 	# 资源路径/位置在场景里设置；字号和效果属性在代码里设置（_ready 阶段覆盖 _enter_tree 的 Global 默认值）
-	tp_label.text_font_size = 32
+	# 字号铁律 12 的整数倍（2026-09-24 用户确认）：32 非整倍 → 像素字体非整数缩放会糊，改 36=12×3
+	tp_label.text_font_size = 36
 	tp_label.color_index = 1
 	tp_label.color_row = 0
 	tp_label.bold = false

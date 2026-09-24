@@ -158,14 +158,14 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = "准备防守"
 
 [node name="TimeLabel" type="Control" parent="HoldoutCountdown/Margin/VBox" unique_id=1118143495]
 layout_mode = 2
 script = ExtResource("6_aeqfj")
 text = "1:00"
-text_font_size = 32
+text_font_size = 36
 color_index = 1
 shadow = true
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
@@ -178,5 +178,5 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 16
+theme_override_font_sizes/font_size = 12
 text = "守住机器！"
