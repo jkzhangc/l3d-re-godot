@@ -109,7 +109,8 @@ func _ensure_hint() -> void:
 		return
 	_hint = Label.new()
 	var settings := LabelSettings.new()
-	settings.font = load(FONT_PATH)
+	## 字体跟随「设置 → 界面字体」（2026-09-24，12px 基底，12 整倍）
+	settings.font = Global.get_ui_font() if Global.has_method("get_ui_font") else load(FONT_PATH)
 	settings.font_size = 12  # fusion-pixel 12 基底，12 整倍
 	settings.font_color = Color(1, 1, 1, 0.95)
 	settings.shadow_color = Color(0, 0, 0, 0.7)

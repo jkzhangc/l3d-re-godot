@@ -38,7 +38,8 @@ enum EasingType {
 # ═══════════════════════════════════════
 
 @export var amount: float = 0.0            ## 伤害数值
-@export var font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"  ## 字体路径（2026-09-17 与界面定稿统一）
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24，12px 基底）。
+@export var font_path: String = ""  ## 字体路径（填值即固定该字体，不随设置开关变化）
 @export var color_index: int = 1           ## 色表颜色索引（0–19，默认 1 = 标题画面同款白）
 @export var color_row: int = 0             ## 色表颜色行（0–3，同一色相明暗变体）
 @export var font_size: int = 24            ## 字号（1280×960 基准；fusion-pixel 12 基底，取 12 整倍）

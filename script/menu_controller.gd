@@ -34,7 +34,9 @@ const BAR_H: float = 16.0
 @export var settings_item_start_y: float = 20.0
 
 @export_group("资源路径")
-@export var font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。GradientLabel 会经
+## Global.resolve_ui_font_path 解析，所以填可切换字体族的路径同样跟随开关。
+@export var font_path: String = ""
 @export var color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var window_bg_path: String = "res://art/System/Window background color.png"
 @export var window_frame_path: String = "res://art/System/Window frame.png"

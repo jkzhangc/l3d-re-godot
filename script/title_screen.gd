@@ -77,7 +77,9 @@ const WINDOW_TITLE: String = "のび太的求生之路"
 @export var cursor_override_width: float = 0.0
 
 @export_group("资源路径")
-@export var font_path: String = "res://art/System/DotGothic16-Regular.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。旧默认 DotGothic16 是纯日文字体，
+## 实测缺字 506/1733；填具体路径 = 本窗口固定用该字体（不随开关变化）。
+@export var font_path: String = ""
 @export var bg_pattern_path: String = "res://art/System/Background pattern for menu screens (16 x 16).png"
 @export var cursor_frame_path: String = "res://art/System/Frames for command cursor 2 types (each 32 x 32).png"
 @export var arrow_down_path: String = "res://art/System/arrow_down.png"
@@ -115,7 +117,7 @@ var _settings_labels: Array[GradientLabel] = []
 var _settings_value_labels: Array[GradientLabel] = []
 var _settings_bar_bg: Array[ColorRect] = []
 var _settings_bar_fill: Array[ColorRect] = []
-const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "返回"]
+const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "返回"]
 ## 设置页窗口尺寸（2026-09-14）：音量条/数值标签比菜单项宽，进设置时窗口加宽、退出还原
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(520, 336)
 ## 音量条宽度——背景条与填充条必须同宽（旧版填充刷新写死 80、背景 160，
@@ -164,6 +166,9 @@ func _ready() -> void:
 	_create_menu_window()
 	_base_window_size = window_size
 	_refresh_all()
+	## 字体切换后重排本窗口（2026-09-24）：字号宽度随字体变，居中/量宽要重算。
+	if Global.has_signal("font_changed") and not Global.font_changed.is_connected(_on_global_font_changed):
+		Global.font_changed.connect(_on_global_font_changed)
 	_start_cursor_blink()
 	_build_footer_info()
 	_build_update_log_icon()
@@ -385,9 +390,10 @@ func _load_defaults_from_global() -> void:
 	var g = get_node_or_null("/root/Global")
 	if not g:
 		return
-	## 字体路径以场景导出为准（2026-09-15）：节点化后各界面自管字体，不再被 Global
-	## 覆盖——否则设置页等代码构建文字会退回 Global 的 DotGothic（用户截图复现）。
-	## 色表路径同理。颜色/阴影等样式参数仍从 Global 同步。
+	## 字体（2026-09-24）：font_path 只是**本窗口的偏好路径**，实际取值一律经
+	## Global.resolve_and_load_font / GradientLabel 的 resolve_ui_font_path 解析 ——
+	## 留空或值属于可切换字体族（fusion/ark 12px）时跟随「设置 → 界面字体」。
+	## 色表路径仍以场景导出为准。颜色/阴影等样式参数从 Global 同步。
 	if g.text_color_sheet_path != "" and color_sheet_path.is_empty():
 		color_sheet_path = g.text_color_sheet_path
 	text_color_index = g.text_color_index
@@ -463,6 +469,11 @@ func _input(event: InputEvent) -> void:
 # ═══════════════════════════════════════
 
 func _load_pixel_font(_base_size: int = 16) -> Font:
+	## 2026-09-24：字体改由 Global 单一入口解析 —— font_path 留空、或值属于可切换
+	## 字体族（fusion/ark 12px）时跟随「设置 → 界面字体」的当前选择；真正自定义的值原样用。
+	var g: Node = get_node_or_null("/root/Global")
+	if g and g.has_method("resolve_and_load_font"):
+		return g.resolve_and_load_font(font_path)
 	var font_file: FontFile = load(font_path) as FontFile
 	if not font_file:
 		printerr("[标题画面] 无法加载字体: %s" % font_path)
@@ -761,6 +772,17 @@ func _apply_window_size(s: Vector2) -> void:
 		_window_frame.size = s
 
 
+## 设置页行距。默认与主菜单同（item_height + item_spacing），行数多到超出设置窗时
+## 自动压缩 —— 2026-09-24 加了「界面字体」后共 6 行，56×6 会顶出 336 高的窗口。
+func _settings_row_step() -> float:
+	var step: float = item_height + item_spacing
+	var count: int = SETTINGS_ITEMS.size()
+	if count <= 0:
+		return step
+	var avail: float = SETTINGS_WINDOW_SIZE.y - item_start_y - 8.0
+	return minf(step, avail / float(count))
+
+
 func _enter_settings() -> void:
 	_in_settings = true
 	_settings_cursor_idx = 0
@@ -780,7 +802,7 @@ func _exit_settings() -> void:
 
 func _build_settings_items() -> void:
 	var win: Control = $MenuWindow
-	var row_step: float = item_height + item_spacing
+	var row_step: float = _settings_row_step()
 	var start_y: float = item_start_y
 	var label_x: float = item_text_x
 	var bar_x: float = label_x + _measure_text("  音乐音量", item_font_size).x + 16.0
@@ -831,6 +853,12 @@ func _build_settings_items() -> void:
 			var center_label := _make_menu_gradient_label(center_text, Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(center_label)
 			_settings_value_labels.append(center_label)
+		elif i == 4:
+			# 界面字体（2026-09-24 新增）：左右或确定键切换，立即重套全 UI
+			var font_label := _make_menu_gradient_label(
+				Global.font_option_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(font_label)
+			_settings_value_labels.append(font_label)
 		else:
 			# "返回" — 无额外控件
 			_settings_value_labels.append(null)
@@ -892,7 +920,9 @@ func _handle_settings_input(event: InputEvent) -> void:
 				_clear_settings_ui()
 				_build_settings_items()
 				_refresh_settings_cursor()
-			4:  # 返回
+			4:  # 界面字体（2026-09-24 新增）：循环切换 + 立即重套全 UI
+				_cycle_ui_font(1)
+			5:  # 返回
 				_exit_settings()
 		return
 
@@ -912,13 +942,38 @@ func _handle_settings_input(event: InputEvent) -> void:
 		1:  # 音效音量
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_settings_volume_display(1)
+		4:  # 界面字体：左右 = 上一个 / 下一个
+			_cycle_ui_font(-1 if delta_vol < 0 else 1)
+
+
+## 循环切换界面字体并刷新该行显示（Global 会广播 font_changed → 本窗口重排）。
+func _cycle_ui_font(delta: int) -> void:
+	if Global.ui_font_option_count() <= 0:
+		return
+	var count: int = Global.ui_font_option_count()
+	var next: int = posmod(Global.font_option + delta, count)
+	Global.set_font_option(next)
+	if _settings_value_labels.size() > 4 and _settings_value_labels[4]:
+		_settings_value_labels[4].text = Global.font_option_label()
+
+
+## 字体切换回调（Global.font_changed）：设置页里只重建设置行 —— 不能调
+## _rebuild_menu_items()，它会把隐藏中的主菜单项 show() 回来。
+func _on_global_font_changed(_font_path: String) -> void:
+	if _in_settings:
+		_clear_settings_ui()
+		_build_settings_items()
+		_refresh_settings_cursor()
+	else:
+		_rebuild_menu_items()
+		_refresh_all()
 
 
 func _refresh_settings_cursor() -> void:
 	if not _cursor_frame:
 		return
 	var cur_h := _cursor_frame.size.y
-	_cursor_frame.position.y = item_start_y + _settings_cursor_idx * (item_height + item_spacing) + (item_height - cur_h) / 2.0 + cursor_offset_y
+	_cursor_frame.position.y = item_start_y + _settings_cursor_idx * _settings_row_step() + (item_height - cur_h) / 2.0 + cursor_offset_y
 	_cursor_frame.size.x = _cursor_rect_w()
 	_cursor_frame.position.x = _cursor_rect_x()
 

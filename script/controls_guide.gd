@@ -37,15 +37,16 @@ func _ready() -> void:
 	Global.play_lobby_music()   # 与战役/角色选择共用大厅 BGM（切界面不中断）
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
-		if g.text_font_path != "":
-			_font = load(g.text_font_path) as Font
+		## 字体（2026-09-24）：统一走 Global —— 跟随「设置 → 界面字体」。
+		## 旧实现硬编码 ark-pixel-16px（实测缺字 1513/1733，绝大多数中文会走系统字体）。
+		_font = g.get_ui_font() if g.has_method("get_ui_font") else g.get_text_font(16)
 		var sheet_path: String = g.text_color_sheet_path if g.text_color_sheet_path != "" else COLOR_SHEET_PATH
 		var sheet := load(sheet_path) as Texture2D
 		_color_img = sheet.get_image() if sheet else null
 		_text_color_index = g.text_color_index
 		_text_color_row = g.text_color_row
 	if _font == null:
-		_font = load("res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf") as Font
+		_font = ThemeDB.fallback_font
 	_build_backdrop()
 	_build_window()
 

@@ -159,14 +159,27 @@ Global 启动时自动创建 `SFX` / `Music` 总线。SFX 音效→SFX 总线，
 
 ### 字体
 
-使用 **方舟像素字体 (Ark Pixel)** monospaced 中文版：
+界面字体**可切换**（2026-09-24 用户需求）：标题画面 → 设置 → 界面字体，两套都是 **12px 基底**，
+所以字号铁律（12 的整数倍：12/24/36）对两者通用，切换只换字体资源、不动任何字号。
 
-| 字体 | 原生尺寸 | 完美字号 | 用途 |
-|------|----------|----------|------|
-| 16px (`text_font_path`) | 16px | 16、32 | 全局默认，正文/标题 |
-| 12px (`text_font_path_small`) | 12px | 12、24 | 小字/说明/HP/ATK |
+| 选项 | 字体文件 | 实测缺字（1733 字样本） | 说明 |
+|------|----------|------------------------|------|
+| 缝合像素 12px（默认） | `fusion-pixel-12px-monospaced-zh_hans.ttf` | **0** | 界面定稿 |
+| 方舟像素 12px | `ark-pixel-12px-monospaced-zh_cn.ttf` | 56 | 玩家可选 |
+| ~~ark-pixel-16px~~ | `ark-pixel-16px-monospaced-zh_cn.ttf` | 1513 | ⚠ 纯日文覆盖，**不可**作界面字体 |
+| ~~DotGothic16~~ | `DotGothic16-Regular.ttf` | 506 | ⚠ 仅作 ∞ 等特殊字形的兜底链 |
 
-**铁律**：只能在原生尺寸或其整数倍下渲染。导入参数：`antialiasing=0`、`hinting=0`、`subpixel_positioning=0`、`oversampling=1.0`。
+**为什么需要这个开关**：像素字体字形覆盖差异极大，缺字时 Godot 会走 `allow_system_fallback` →
+拿**玩家机器上的系统字体**顶上，于是同一份游戏在不同电脑上字形不同、系统缺 CJK 字体时直接豆腐块
+（用户 2026-09 反馈「玩家下载的版本没问题但电脑上缺字」）。所以：①所有 UI 一律经
+`Global.get_ui_font() / resolve_ui_font_path() / apply_ui_font()` 取字体，**禁止硬编码 .ttf 路径**；
+②场景树根挂 `Global.ensure_root_ui_theme()` 的默认主题，未显式指定字体的控件也吃到像素字体。
+
+**取字体入口（唯一真源）**：`Global.get_ui_font_path()` / `get_ui_font()` / `resolve_ui_font_path(path)`
+（空或属于字体族的路径 → 跟随开关，其它 → 原样）/ `resolve_and_load_font(path)` / `apply_ui_font(label, size)`。
+字体切换会广播 `Global.font_changed`，并整树重套当前场景。
+
+导入参数：缝合像素 `antialiasing=1`、其余 `antialiasing=0`、`hinting=0`、`subpixel_positioning=0`、`oversampling=1.0`。
 
 ### 文字渲染
 

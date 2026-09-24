@@ -6,7 +6,6 @@
 [ext_resource type="Texture2D" uid="uid://chm1obiay2ndt" path="res://art/Ui/回復薬×０.png" id="4_q34ws"]
 [ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="5_5nspm"]
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6_aeqfj"]
-[ext_resource type="FontFile" uid="uid://dwngyyjcuaet3" path="res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf" id="7_font"]
 
 [sub_resource type="StyleBoxFlat" id="HoldoutPanel"]
 bg_color = Color(0, 0, 0, 0.55)
@@ -76,7 +75,6 @@ offset_bottom = 101.0
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_fonts/font = ExtResource("7_font")
 theme_override_font_sizes/font_size = 36
 text = "×15"
 
@@ -106,7 +104,6 @@ offset_bottom = 152.0
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_fonts/font = ExtResource("7_font")
 theme_override_font_sizes/font_size = 36
 text = "12/96"
 
@@ -118,7 +115,6 @@ offset_bottom = 275.0
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
-theme_override_fonts/font = ExtResource("7_font")
 theme_override_font_sizes/font_size = 36
 text = "7/48"
 
@@ -132,7 +128,6 @@ offset_bottom = 174.0
 scale = Vector2(2, 2)
 script = ExtResource("6_aeqfj")
 text = "0"
-font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
 [node name="HoldoutCountdown" type="PanelContainer" parent="." unique_id=1952354651]
@@ -163,7 +158,6 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_fonts/font = ExtResource("7_font")
 theme_override_font_sizes/font_size = 16
 text = "准备防守"
 
@@ -174,7 +168,6 @@ text = "1:00"
 text_font_size = 32
 color_index = 1
 shadow = true
-font_path_override = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
 [node name="MessageLabel" type="Label" parent="HoldoutCountdown/Margin/VBox" unique_id=1966756493]
@@ -185,6 +178,5 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_fonts/font = ExtResource("7_font")
 theme_override_font_sizes/font_size = 16
 text = "守住机器！"

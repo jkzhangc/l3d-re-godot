@@ -131,6 +131,23 @@ func _enter_tree() -> void:
 	_resolve_paths()
 	_ensure_children()
 	_request_render()
+	## 字体切换时重新解析路径并重排（2026-09-24）：字体换了，字号宽度也变，
+	## 居中/量宽（title_screen._center_label 用 size.x）必须跟着重算。
+	var g := _get_global()
+	if g and g.has_signal("font_changed") and not g.font_changed.is_connected(_on_global_font_changed):
+		g.font_changed.connect(_on_global_font_changed)
+
+
+func _exit_tree() -> void:
+	var g := _get_global()
+	if g and g.has_signal("font_changed") and g.font_changed.is_connected(_on_global_font_changed):
+		g.font_changed.disconnect(_on_global_font_changed)
+
+
+func _on_global_font_changed(_path: String) -> void:
+	_font_dirty = true
+	_resolve_paths()
+	_request_render()
 
 
 # ═══════════════════════════════════════
@@ -164,13 +181,18 @@ func _load_defaults_from_global() -> void:
 
 func _resolve_paths() -> void:
 	var g := _get_global()
-	var g_font := ""
 	var g_sheet := ""
 	if g:
-		g_font = g.text_font_path
 		g_sheet = g.text_color_sheet_path
 
-	_resolved_font_path = font_path_override if not font_path_override.is_empty() else g_font
+	## 字体（2026-09-24）：**一律经 Global.resolve_ui_font_path 解析** ——
+	## 空覆盖、或旧场景里烘死的可切换字体族路径（fusion/ark 12px）都会跟随
+	## 「设置 → 界面字体」的当前选择；只有真正自定义的字体路径才原样使用。
+	## 这样切换字体不需要逐个改 .tscn/.tres 里的 font_path_override。
+	if g and g.has_method("resolve_ui_font_path"):
+		_resolved_font_path = g.resolve_ui_font_path(font_path_override)
+	else:
+		_resolved_font_path = font_path_override
 	_resolved_color_sheet_path = color_sheet_path_override if not color_sheet_path_override.is_empty() else g_sheet
 
 

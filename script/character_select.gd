@@ -13,7 +13,10 @@ extends Control
 
 
 @export var title_screen_scene: String = "res://scene/title_screen.tscn"
-@export var font_path: String = "res://art/System/DotGothic16-Regular.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。原值 DotGothic16 是纯日文字体，
+## 实测对项目文本缺字 506/1733（缺的字由**玩家机器上的系统字体**顶替）——
+## 已改为跟随界面字体，避免同一份游戏在不同电脑上字形不同。
+@export var font_path: String = ""
 
 
 func _ready() -> void:
@@ -66,10 +69,9 @@ func _create_ui() -> void:
 
 
 func _load_font(base_size: int = 16) -> Font:
-	var ff: FontFile = load(font_path) as FontFile
-	if not ff:
-		return ThemeDB.fallback_font
-	return ff
+	## 2026-09-24：统一经 Global 解析 —— font_path 留空（或属于可切换字体族）时
+	## 跟随「设置 → 界面字体」的当前选择。
+	return Global.resolve_and_load_font(font_path)
 
 
 func _make_label(text: String, pos: Vector2, font_size: int, color: Color) -> Label:

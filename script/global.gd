@@ -56,8 +56,11 @@ const CHARACTER_NAME_ZH: Dictionary = {
 # 文字渲染全局设置（各 UI 场景读取这些默认值）
 # ═══════════════════════════════════════
 @export_group("文字默认")
-@export var text_font_path: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
-@export var text_font_path_small: String = "res://art/System/ark-pixel-12px-monospaced-zh_cn.ttf"  ## 12px 小字专用
+## ⚠ 2026-09-24：字体路径**不再从这里取**。界面字体统一由「设置 → 界面字体」选择，
+## 并经 get_ui_font() / resolve_ui_font_path() / apply_ui_font() 三个入口提供
+## （见下方「界面字体」区块）。旧的 text_font_path(ark-16px，实测缺字 1513/1733)
+## 与 text_font_path_small(ark-12px，缺 56) 已删除 —— 它们是「同一界面两套字体家族
+## 混用」与「玩家机器上缺字」的来源之一。
 @export var text_color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var text_color_index: int = 0
 @export var text_color_row: int = 0
@@ -98,12 +101,10 @@ func get_cached_color_image() -> Image:
 ## 用这两个方法套上全局字体与阴影；参数一律以本文件的 text_* 导出项为准，
 ## 改这里的值即可整体调整全游戏字体效果。
 
-## 取全局像素字体。font_size <= 12 时用 12px 小字变体（16px 字体缩到过小会模糊）。
-func get_text_font(font_size: int = 16) -> Font:
-	var path := text_font_path
-	if font_size <= 12 and not text_font_path_small.is_empty():
-		path = text_font_path_small
-	var ff := load(path) as Font
+## 取全局界面字体。2026-09-24 起**不再按字号分 12/16px 两个家族** —— 界面字体统一为
+## 可切换的 12px 基底字体，字号只由调用方给（须是 12 的整数倍，见 apply_ui_font）。
+func get_text_font(_font_size: int = UI_FONT_BASE_SIZE) -> Font:
+	var ff := get_ui_font()
 	return ff if ff else ThemeDB.fallback_font
 
 
@@ -118,21 +119,239 @@ func apply_text_shadow(lbl: Label) -> void:
 		lbl.add_theme_constant_override("shadow_offset_y", int(round(text_shadow_offset.y)))
 
 
-## 提示文字统一字体（2026-09-17）：界面定稿 fusion-pixel-12px-monospaced-zh_hans，
-## 字号收敛到 12 的整倍（原 11/14/16 等裸字号在像素字体上会糊）。
-## 代码创建的 HintLabel（传送点/安全门/拾取点/医疗箱/防守战/事件/Boss/爆破墙）一律走这里。
-const HINT_FONT_PATH: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
-var _hint_font: FontFile = null
+# ═══════════════════════════════════════
+# 界面字体（可切换）—— 全 UI 取字体的唯一入口
+# ═══════════════════════════════════════
+## 玩家可在「标题画面 → 设置 → 界面字体」切换的两套像素字体。两套都是 **12px 基底**，
+## 所以字号铁律（12 的整数倍：12/24/36）对两者通用，切换只换字体资源、不动任何字号。
+##
+## 【为什么需要这个开关】2026-09 用户反馈「玩家下载的版本没问题，但电脑上字体缺字」。
+## 像素字体的字形覆盖差异极大，缺字时 Godot 会走 FontFile.allow_system_fallback →
+## 拿**玩家机器上的系统字体**顶上：同一份游戏在不同电脑上字形不同，系统里没有合适
+## CJK 字体时直接显示豆腐块。实测覆盖（对全项目 1733 个中日文字符取样，
+## 探针脚本 .workbuddy/tmp/probe_font.gd）：
+##   fusion-pixel-12px-monospaced-zh_hans   缺 0      ← 界面定稿（默认）
+##   ark-pixel-12px-monospaced-zh_cn        缺 56
+##   ark-pixel-16px-monospaced-zh_cn        缺 1513   ⚠ 纯日文覆盖，不可作界面字体
+##   DotGothic16-Regular（日文字体）         缺 506    ⚠ 不可作界面字体
+##
+## 【铁律】任何 UI 都不许再硬编码 .ttf 路径 —— 一律经 resolve_ui_font_path() /
+## get_ui_font() / apply_ui_font() 取值。否则「切换字体」覆盖不到那个窗口。
+const FONT_OPTION_PATHS: Array[String] = [
+	"res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf",
+	"res://art/System/ark-pixel-12px-monospaced-zh_cn.ttf",
+]
+const FONT_OPTION_LABELS: Array[String] = ["缝合像素 12px", "方舟像素 12px"]
+## 各选项对上述 1733 字样本的实测缺字数（仅用于日志提示，不参与取字体逻辑）。
+const FONT_OPTION_MISSING_HINT: Array[int] = [0, 56]
+## 界面字号基底（铁律：界面字号必须是它的整数倍，否则像素字体缩放会糊）
+const UI_FONT_BASE_SIZE: int = 12
+## 自检样本（缺任何一个都会在启动日志里点名，用来直接回答「为什么缺字」）
+const FONT_SELF_CHECK_TEXT: String = "开始游戏联机设置退出操作说明装备物品难度简单普通困难专家急救喷雾武器弹药章节安全屋のび太ゾンビ"
 
-func apply_hint_font(lbl: Label, size: int = 12) -> void:
+## 字体切换广播（运行中需要立刻换字的 UI 可连它重新套字体；常规路径由
+## set_font_option → reapply_ui_font_recursive 统一处理，一般不必自己连）。
+signal font_changed(font_path: String)
+
+var font_option: int = 0
+var _ui_font_cache: Dictionary = {}      ## path → FontFile（null 表示加载失败，避免重复报错）
+var _ui_root_theme: Theme = null         ## 挂在场景树根上的默认主题（提供默认字体）
+
+
+func ui_font_option_count() -> int:
+	return FONT_OPTION_PATHS.size()
+
+
+## 当前选项的显示名（设置面板用）。
+func font_option_label() -> String:
+	return FONT_OPTION_LABELS[clampi(font_option, 0, FONT_OPTION_LABELS.size() - 1)]
+
+
+## 当前界面字体路径（**唯一真源**）。
+func get_ui_font_path() -> String:
+	return FONT_OPTION_PATHS[clampi(font_option, 0, FONT_OPTION_PATHS.size() - 1)]
+
+
+## 按路径取字体（带缓存）。加载失败时**醒目报错**：静默回退会让「字体没打进包」
+## 表现为「字形变了 / 缺字」，极难排查（2026-09-24 用户反馈的那类现象）。
+func load_ui_font(path: String) -> FontFile:
+	if path.is_empty():
+		return null
+	if _ui_font_cache.has(path):
+		return _ui_font_cache[path]
+	var ff := load(path) as FontFile
+	if ff == null:
+		printerr("[Global] ★界面字体加载失败（将回退系统字体，字形与设计不一致）: %s" % path)
+	_ui_font_cache[path] = ff
+	return ff
+
+
+## 当前界面字体资源。加载失败返回 null（调用方自行回退 ThemeDB.fallback_font）。
+func get_ui_font() -> FontFile:
+	return load_ui_font(get_ui_font_path())
+
+
+## 解析一个「可能被场景或脚本烘死的字体路径」：
+##   空 → 当前选择（跟随开关）；
+##   属于可切换字体族（== FONT_OPTION_PATHS 之一）→ 当前选择
+##     （**旧场景里烘的界面字体路径自动跟随开关**，不必逐个改 .tscn/.tres）；
+##   其它 → 原样返回（真正自定义的字体，例如只为某个特殊字形准备的兜底字体）。
+func resolve_ui_font_path(path: String) -> String:
+	if path.is_empty():
+		return get_ui_font_path()
+	if path in FONT_OPTION_PATHS:
+		return get_ui_font_path()
+	return path
+
+
+## 解析路径并加载（给「自己持有字体路径」的窗口用）。
+## 解析规则见 resolve_ui_font_path；加载失败回退系统字体并醒目报错。
+func resolve_and_load_font(path: String) -> Font:
+	var resolved := resolve_ui_font_path(path)
+	var ff := load_ui_font(resolved)
+	return ff if ff else ThemeDB.fallback_font
+
+
+## 把界面字体套到 Label 上。字号被夹到 UI_FONT_BASE_SIZE 的整数倍（像素字体铁律）。
+## 代码创建的提示字（传送点/安全门/拾取点/医疗箱/防守战/事件/Boss/爆破墙）一律走这里。
+func apply_ui_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 	if lbl == null:
 		return
-	if _hint_font == null:
-		_hint_font = load(HINT_FONT_PATH) as FontFile
-	if _hint_font:
-		lbl.add_theme_font_override("font", _hint_font)
-	var s: int = maxi(12, int(round(float(size) / 12.0)) * 12)
+	var font := get_ui_font()
+	if font:
+		lbl.add_theme_font_override("font", font)
+	var s: int = maxi(UI_FONT_BASE_SIZE, int(round(float(size) / float(UI_FONT_BASE_SIZE))) * UI_FONT_BASE_SIZE)
 	lbl.add_theme_font_size_override("font_size", s)
+
+
+## 兼容旧名（2026-09-17 起各玩法节点调用）：等价 apply_ui_font。
+func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
+	apply_ui_font(lbl, size)
+
+
+## 根 Theme：让**未显式指定字体**的控件（Label/Button/RichTextLabel…）也拿到界面字体。
+## 没有它时这些控件走 ThemeDB.fallback_font + 系统字体回退 —— 同一份游戏在不同机器上
+## 字形不同，系统缺 CJK 字体时直接豆腐块（scene/network_lobby.tscn 的 13 个 Label、
+## map_output.tscn 的 Button 此前都属于这一类）。
+## 只设 default_font/default_font_size，其余样式照旧落到 Godot 内置主题。
+func ensure_root_ui_theme() -> Theme:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return _ui_root_theme
+	if _ui_root_theme == null:
+		_ui_root_theme = Theme.new()
+	_ui_root_theme.default_font = get_ui_font()
+	_ui_root_theme.default_font_size = UI_FONT_BASE_SIZE
+	if tree.root.theme != _ui_root_theme:
+		tree.root.theme = _ui_root_theme
+	return _ui_root_theme
+
+
+## 该 Label 是否「跟随界面字体」（无字体覆盖，或覆盖的就是可切换字体族之一）。
+## 带 fallbacks 的运行时字体副本（如战斗 HUD 弹药标签为 ∞ 字形补 DotGothic16）
+## 与真正自定义的字体一律返回 false —— 切换字体时不动它们。
+## ⚠ Godot 4 没有 get_theme_font_override（只有 get_theme_font，会沿主题链解析），
+##    所以这里用「解析后的字体的 resource_path 是否属于字体族」来判定；
+##    运行时构造的字体副本用 ui_font_custom 元数据显式排除。
+func _label_follows_ui_font(lbl: Label) -> bool:
+	if lbl.has_meta(&"ui_font_custom"):
+		return false
+	var cur: Font = lbl.get_theme_font("font")
+	if cur == null:
+		return true
+	var p: String = cur.resource_path
+	if p.is_empty():
+		# 主题默认 / ThemeDB 兜底（含未入树的 Label）→ 视为跟随
+		return true
+	return p in FONT_OPTION_PATHS
+
+
+## 递归给一棵 UI 树换字体（运行中切换字体用）。返回改动过的 Label 数。
+## Label 是 GradientLabel 的内部节点，会被自然遍历到（套同一份字体无副作用）。
+func reapply_ui_font_recursive(root: Node) -> int:
+	if root == null or not is_instance_valid(root):
+		return 0
+	var font := get_ui_font()
+	if font == null:
+		return 0
+	var touched: int = 0
+	if root is Label:
+		var lbl := root as Label
+		if _label_follows_ui_font(lbl):
+			lbl.add_theme_font_override("font", font)
+			touched += 1
+	elif root is RichTextLabel:
+		var rtl := root as RichTextLabel
+		rtl.add_theme_font_override("normal_font", font)
+		rtl.add_theme_font_override("bold_font", font)
+		touched += 1
+	for child: Node in root.get_children():
+		touched += reapply_ui_font_recursive(child)
+	return touched
+
+
+## 切换界面字体：写盘 + 立刻重套当前场景可见 UI + 广播。
+func set_font_option(index: int) -> void:
+	var i: int = clampi(index, 0, FONT_OPTION_PATHS.size() - 1)
+	if i == font_option:
+		return
+	font_option = i
+	ensure_root_ui_theme()
+	var tree := get_tree()
+	if tree != null and tree.current_scene != null:
+		var touched: int = reapply_ui_font_recursive(tree.current_scene)
+		print("[Global] 界面字体已重套到当前场景 %d 个 Label" % touched)
+	save_config()
+	font_changed.emit(get_ui_font_path())
+	print("[Global] 界面字体 → %s（%s｜实测缺字 %d/1733，缺处由系统字体顶替）" % [
+		font_option_label(), get_ui_font_path().get_file(),
+		FONT_OPTION_MISSING_HINT[clampi(font_option, 0, FONT_OPTION_MISSING_HINT.size() - 1)]])
+
+
+## 启动自检：把「字体能不能用、缺哪些字」直接写进日志。
+## 用户反馈的「玩家电脑上缺字」需要一条能对证的线索，而不是让它表现为字形突变。
+func _log_font_self_check() -> void:
+	var path := get_ui_font_path()
+	var font := get_ui_font()
+	if font == null:
+		printerr("[Global] ★界面字体不可用：%s —— 已回退系统字体，字形将与其他机器不同。" % path)
+		return
+	var missing: String = ""
+	for i: int in range(FONT_SELF_CHECK_TEXT.length()):
+		var ch: String = FONT_SELF_CHECK_TEXT[i]
+		if not font.has_char(ch.unicode_at(0)):
+			missing += ch
+	if missing.is_empty():
+		print("[Global] 界面字体自检 OK: %s（%d 个可选字体，自检样本字形全覆盖）" % [
+			path.get_file(), FONT_OPTION_PATHS.size()])
+	else:
+		printerr("[Global] ★界面字体缺字形：%s 缺少「%s」—— 这些字会由系统字体顶替（各机器表现不同）。" % [
+			path.get_file(), missing])
+
+
+## UI 字体审计：找出**没有跟随界面字体**的可见 Label（漏接全局链接的窗口）。
+## 返回 {"total": int, "foreign": Array[String]}。供 harness / 手动排查使用。
+func audit_ui_fonts(root: Node) -> Dictionary:
+	var foreign: Array[String] = []
+	var total: int = _audit_ui_fonts_recursive(root, foreign)
+	return {"total": total, "foreign": foreign}
+
+
+func _audit_ui_fonts_recursive(node: Node, foreign: Array[String]) -> int:
+	if node == null or not is_instance_valid(node):
+		return 0
+	var total: int = 0
+	if node is Label:
+		total += 1
+		if not _label_follows_ui_font(node as Label):
+			var cur: Font = (node as Label).get_theme_font("font")
+			var p: String = cur.resource_path if cur else "<null>"
+			if p.is_empty():
+				p = "<无资源的运行时字体>"
+			foreign.append("%s → %s" % [String(node.get_path()), p])
+	for child: Node in node.get_children():
+		total += _audit_ui_fonts_recursive(child, foreign)
+	return total
 
 
 # ═══════════════════════════════════════
@@ -206,6 +425,9 @@ func _ready() -> void:
 	_load_config()
 	_ensure_audio_buses()
 	_setup_debug_capture()
+	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
+	ensure_root_ui_theme()
+	_log_font_self_check()
 
 
 ## 现场抓取器（F2 连拍+报告 / F4 只写报告）。挂在 Global 上，所有场景都能用，
@@ -407,6 +629,7 @@ func _load_config() -> void:
 				music_volume = cfg.get("music_volume", 80)
 				sfx_volume = cfg.get("sfx_volume", 80)
 				facing_lock_mode = cfg.get("facing_lock_mode", 0)
+				font_option = clampi(int(cfg.get("font_option", 0)), 0, FONT_OPTION_PATHS.size() - 1)
 
 
 func save_config() -> void:
@@ -414,7 +637,8 @@ func save_config() -> void:
 		"debug": debug_enabled,
 		"music_volume": music_volume,
 		"sfx_volume": sfx_volume,
-		"facing_lock_mode": facing_lock_mode
+		"facing_lock_mode": facing_lock_mode,
+		"font_option": font_option
 	}
 	var f: FileAccess = FileAccess.open(CONFIG_FILE, FileAccess.WRITE)
 	if f:

@@ -23,7 +23,7 @@ extends Control
 @export var window_pos: Vector2 = Vector2(100, 60)
 
 @export_group("资源路径")
-@export var font_path: String = "res://art/System/DotGothic16-Regular.ttf"
+@export var font_path: String = ""
 @export var color_sheet_path: String = "res://art/System/Text color, 20 types (each 16 x 16).png"
 @export var cursor_frame_path: String = "res://art/System/Frames for command cursor 2 types (each 32 x 32).png"
 @export var title_screen_scene: String = "res://scene/title_screen.tscn"
@@ -44,8 +44,8 @@ extends Control
 
 @export_group("列表项字体")
 ## 列表项是代码动态构建的 GradientLabel，字体在此配置（Inspector 可改）。
-## 留空回退 font_path（会被 Global 同步覆盖）。列表项编辑器里不可见，进游戏看效果。
-@export var item_font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。列表项编辑器里不可见，进游戏看效果。
+@export var item_font_path: String = ""
 
 @export_group("文字")
 @export var text_color_index: int = 1
@@ -54,8 +54,8 @@ extends Control
 @export_group("描述文字")
 ## DescLabel 是普通 Label（需自动换行，用不了 GradientLabel），字体在此配置；
 ## 与 tscn 里 DescLabel 的 theme override 保持一致，编辑器所见即运行时所得。
-## 留空回退 Global → ark-pixel。字号取 12px 基底整倍（24/36），非整倍会糊。
-@export var desc_font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。字号取 12px 基底整倍（24/36），非整倍会糊。
+@export var desc_font_path: String = ""
 @export var desc_font_size: int = 24
 
 ## 场景节点引用
@@ -96,15 +96,17 @@ func _ready() -> void:
 
 ## 描述文字是普通 Label（需要自动换行，走不了单行渐变纹理），
 ## 这里补上字体 + 色表取色 + 阴影。字体/字号走 desc_font_path/desc_font_size
-## （Inspector 可改，2026-09-15）；留空回退 Global → ark-pixel。
+## （Inspector 可改，2026-09-15）；留空 = 跟随「设置 → 界面字体」（2026-09-24）。
 func _style_plain_labels(color_img: Image) -> void:
-	var path := desc_font_path
-	if path.is_empty():
-		var g = get_node_or_null("/root/Global")
-		path = str(g.text_font_path) if g and str(g.text_font_path) != "" else "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+	var g: Node = get_node_or_null("/root/Global")
+	var font: Font = null
+	if g and g.has_method("resolve_and_load_font"):
+		font = g.resolve_and_load_font(desc_font_path)
+	else:
+		font = load(desc_font_path) as Font if not desc_font_path.is_empty() else ThemeDB.fallback_font
 	GradientLabel.style_plain_label(
 		_desc_label, color_img, text_color_index, text_color_row,
-		load(path) as Font, desc_font_size
+		font, desc_font_size
 	)
 
 
@@ -125,7 +127,10 @@ func _load_defaults_from_global() -> void:
 	var g = get_node_or_null("/root/Global")
 	if not g:
 		return
-	if g.text_font_path != "":  font_path = g.text_font_path
+	## 字体（2026-09-24）：不再从 Global 拷路径过来 —— font_path / item_font_path /
+	## desc_font_path 留空即跟随「设置 → 界面字体」，实际取值由
+	## Global.resolve_ui_font_path 统一解析（GradientLabel 侧同样走它）。
+	## 只有想「本窗口固定用某个字体」时才在 Inspector 里显式填路径。
 	if g.text_color_sheet_path != "":  color_sheet_path = g.text_color_sheet_path
 	text_color_index = g.text_color_index
 	text_color_row = g.text_color_row
@@ -173,7 +178,7 @@ func _build_list() -> void:
 		gl.color_row = text_color_row
 		gl.bold = true
 		gl.shadow = true
-		## 列表项字体：item_font_path 优先（Inspector 可改），留空回退 font_path
+		## 列表项字体：item_font_path 优先（Inspector 可改），留空 = 跟随界面字体
 		gl.font_path_override = item_font_path if not item_font_path.is_empty() else font_path
 		gl.color_sheet_path_override = color_sheet_path
 		if color_img:

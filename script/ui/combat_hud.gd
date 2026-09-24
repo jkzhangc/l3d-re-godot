@@ -20,9 +20,9 @@ class_name CombatHud extends CanvasLayer
 ## 地图里每张图都实例化了 scene/ui/combat_hud.tscn，因此正常只有一个。
 const GROUP_NAME: StringName = &"combat_hud"
 
-## 弹药/投掷物数字字体：fusion-pixel-12px（2026-09-17 与界面定稿统一，字号 36=12×3）。
-## 若缺 ∞ 字形（无限备弹符号），回退到 DotGothic16 补齐 —— 数字仍是 fusion-pixel。
-const AMMO_FONT_PATH: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 弹药/投掷物数字字体：跟随「设置 → 界面字体」（2026-09-24，12px 基底，字号 36=12×3）。
+## 若缺 ∞ 字形（无限备弹符号），回退到 DotGothic16 补齐 —— 这是**只为特殊字形**保留的
+## 自定义兜底字体：它本身缺 506/1733 常用字，绝不能当界面字体用。
 const AMMO_FONT_FALLBACK_PATH: String = "res://art/System/DotGothic16-Regular.ttf"
 
 const SPRAY_TEXTS: Array[Texture2D] = [
@@ -67,22 +67,36 @@ func _ready() -> void:
 		_holdout_root.visible = false
 	_configure_tp_label()
 	_apply_ammo_font()
+	## 字体切换时重建弹药标签字体（本 HUD 的标签带 ∞ 兜底链，不能走整树字体重套）
+	if Global.has_signal("font_changed") and not Global.font_changed.is_connected(_on_global_font_changed):
+		Global.font_changed.connect(_on_global_font_changed)
 	# HP 填充用 scale.x 横向缩放（配合 HPFill expand_mode=IGNORE_SIZE 自动贴合纹理）
 	refresh()
 
 
-## 给弹药标签挂上带 ∞ 回退的字体（一次性构造，见 AMMO_FONT_* 常量注释）
+## 给弹药标签挂上带 ∞ 回退的字体（一次性构造，见 AMMO_FONT_FALLBACK_PATH 注释）。
+## 基字体跟随「设置 → 界面字体」；字体切换时由 _on_global_font_changed 重建。
 func _apply_ammo_font() -> void:
-	var base := load(AMMO_FONT_PATH) as FontFile
+	var base := Global.get_ui_font() if Global.has_method("get_ui_font") else null
 	if base == null:
 		return
 	var out := base.duplicate() as FontFile
+	if out == null:
+		return
 	var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
 	if fallback:
 		out.fallbacks = [fallback]
 	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
 		if label:
+			## 标记为「自定义字体」：Global 的整树字体重套会跳过它们，
+			## 由本文件自己在 font_changed 时重建（否则会丢掉 ∞ 的 fallbacks 链）。
+			label.set_meta(&"ui_font_custom", true)
 			label.add_theme_font_override("font", out)
+
+
+## 字体切换：重建弹药标签字体（基字体换成新选项，∞ 兜底链保持不变）。
+func _on_global_font_changed(_font_path: String) -> void:
+	_apply_ammo_font()
 
 
 func _process(delta: float) -> void:

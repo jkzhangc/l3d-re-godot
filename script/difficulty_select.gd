@@ -51,8 +51,8 @@ const DIFFICULTY_DESCRIPTIONS: Array[String] = [
 @export_group("描述文字")
 ## DescLabel 是普通 Label（需自动换行，用不了 GradientLabel），字体在此配置；
 ## 与 tscn 里 DescLabel 的 theme override 保持一致，编辑器所见即运行时所得。
-## 留空回退 Global → ark-pixel。字号取 12px 基底整倍（24/36），非整倍会糊。
-@export var desc_font_path: String = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。字号取 12px 基底整倍（24/36），非整倍会糊。
+@export var desc_font_path: String = ""
 @export var desc_font_size: int = 24
 
 ## 场景节点引用
@@ -94,15 +94,17 @@ func _ready() -> void:
 
 ## 描述文字是普通 Label（需要自动换行，用不了 GradientLabel），
 ## 字体/字号走 desc_font_path/desc_font_size（Inspector 可改，2026-09-15）；
-## 留空回退 Global → ark-pixel。
+## 留空 = 跟随「设置 → 界面字体」（2026-09-24）。
 func _style_plain_labels(color_img: Image) -> void:
-	var path := desc_font_path
-	if path.is_empty():
-		var g = get_node_or_null("/root/Global")
-		path = str(g.text_font_path) if g and str(g.text_font_path) != "" else "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+	var g: Node = get_node_or_null("/root/Global")
+	var font: Font = null
+	if g and g.has_method("resolve_and_load_font"):
+		font = g.resolve_and_load_font(desc_font_path)
+	else:
+		font = load(desc_font_path) as Font if not desc_font_path.is_empty() else ThemeDB.fallback_font
 	GradientLabel.style_plain_label(
 		_desc_label, color_img, text_color_index, text_color_row,
-		load(path) as Font, desc_font_size
+		font, desc_font_size
 	)
 
 

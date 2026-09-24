@@ -24,7 +24,8 @@ signal seat_confirmed(seat_index: int)
 @export var summary_music: AudioStream
 @export var summary_music_volume_db: float = 0.0
 
-const FONT_PATH: String = "res://art/System/ark-pixel-16px-monospaced-zh_cn.ttf"
+## 字体不再硬编码：见 _ready() 里经 Global.get_ui_font() 取「设置 → 界面字体」。
+## （旧常量 FONT_PATH = ark-pixel-16px 实测缺字 1513/1733，已删除。）
 const GOLD: Color = Color("e8c44b")
 const PALE: Color = Color("e7e4d7")
 const MUTED: Color = Color("8d9186")
@@ -56,7 +57,12 @@ var _music_player: AudioStreamPlayer
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	layer = 100
-	_font = load(FONT_PATH) as Font if ResourceLoader.exists(FONT_PATH) else ThemeDB.fallback_font
+	## 字体：跟随「设置 → 界面字体」（2026-09-24）。旧实现硬编码 ark-pixel-16px，
+	## 实测对项目文本缺字 1513/1733 —— 中文几乎全靠玩家机器上的系统字体顶替。
+	var g: Node = get_node_or_null("/root/Global")
+	_font = g.get_ui_font() if g and g.has_method("get_ui_font") else null
+	if _font == null:
+		_font = ThemeDB.fallback_font
 	if chapter_title.is_empty():
 		var director: Node = get_node_or_null("/root/Director")
 		## ⚠ current_config 可能指向上一张图已被释放的 DirectorConfig（换图瞬间新配置尚未应用）
