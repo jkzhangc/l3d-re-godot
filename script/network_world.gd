@@ -3562,8 +3562,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		return
 	if is_healing_pickup:
 		# D2 实测修复：治疗品（喷雾/药品）Host 权威拾取事务。复用 healing_pickup
-		# 的 _do_pickup（各自持有/上限满转投其他座位的规则都在其中），失败
-		# （全队所持上限满，留在地上）不回执——Client 走 500ms 超时自愈重发。
+		# 的 _do_pickup（**自己座位**持有/上限判定都在其中；2026-09-24 用户定稿取消
+		# 「满了转投队友」，自己满 = 留在地上），失败不回执 —— Client 走 500ms
+		# 超时自愈重发。
 		pickup.set("_player_ref", player)
 		if not pickup.call("_do_pickup"):
 			return

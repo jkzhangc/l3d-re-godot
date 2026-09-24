@@ -277,7 +277,9 @@ func _do_pickup() -> bool:
 		_drop_old_throwable(_player_ref, state)
 	# 治疗品（急救喷雾）：
 	#   单机 → 队伍共用池（上限 10，2026-09-13 用户定稿），满了留在地上；
-	#   联机 → 各自持有（每人上限 3），自己满转投其他座位；全满 = 留在地上。
+	#   联机 → **只看自己的槽位**（每人上限 3）。2026-09-24 用户定稿：自己满了就
+	#   不再自动拾取（留在地上给队友），取消旧实现「满了转投其他座位」的回退 ——
+	#   那会让队友凭空多出一支、且与本作「每人独立槽位（自己捡自己用）」的语义相悖。
 	if item.item_type == ItemData.ItemType.HEALING:
 		var placed: bool = false
 		if Players.using_shared_spray_pool():
@@ -289,12 +291,7 @@ func _do_pickup() -> bool:
 			var cap: int = Players.spray_per_seat_cap()
 			placed = state.pickup_consumable(item, cap)
 			if not placed:
-				for s: PlayerState in Players.seats:
-					if s and s != state and s.pickup_consumable(item, cap):
-						placed = true
-						break
-			if not placed:
-				print("[拾取] 急救喷雾已达全队所持上限，留在地上")
+				print("[拾取] 自己座位喷雾已满（%d），留在地上" % cap)
 				return false
 	else:
 		state.pickup_consumable(item)
