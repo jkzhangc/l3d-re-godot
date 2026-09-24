@@ -216,13 +216,20 @@ func _process(delta: float) -> void:
 	# 跳过濒死/死亡玩家（死亡动画播放中或场景重载中）；仍有队友存活时导演照常运行
 	if player.get("_is_dying") == true:
 		return
+	## ── 队伍单位（2026-09-24）──
+	## 本帧的「全体存活玩家」集合：刷怪锚点、紧张度、战斗状态一律以它为单位
+	## （旧实现一律以 `_find_player()` = 座位 0 的主机为基准）。
+	## 一帧只算一次后传给各消费者，避免在 60Hz 热路径上重复遍历玩家表。
+	var teammates: Array[Node2D] = spawn_reference_players()
+	if teammates.is_empty():
+		teammates.append(player)  ## 兜底：极端时序下至少保留主参考
+
 	## ── 刷怪锚点（2026-09-23 多人修复）──
-	## player = 主参考（紧张度 / 战斗状态 / BGM 仍用它）；
 	## anchor = 本帧**刷怪与区域补齐**的圆心：L4D 式偏好"落单 / 走得远 / 移动中"的玩家。
 	## 旧实现所有生成都以 _find_player()（座位 0 = 主机）为圆心 → 客户端跑在前面时，
 	## 按"主机屏外"算出的取点正落在客户端画面里（用户实测「怪直接刷在客户端玩家面前」）。
 	var anchor: Node2D = player
-	var picked_anchor: Node2D = pick_spawn_anchor()
+	var picked_anchor: Node2D = pick_spawn_anchor(teammates)
 	if picked_anchor and is_instance_valid(picked_anchor):
 		anchor = picked_anchor
 
@@ -250,12 +257,12 @@ func _process(delta: float) -> void:
 		# ── 仅在 SpawnZone 区域内补齐，禁用画面外刷怪，以防“某地满、某地空” ──
 		_update_ambient_zones(delta)
 
-	# ── 紧张度 ──
+	# ── 紧张度（按全体存活玩家取「最吃紧的那位」，2026-09-24）──
 	var prev_intensity: float = get_intensity()
 	var new_intensity: float = prev_intensity
 	if intensity_tracker and intensity_tracker.has_method("evaluate"):
-		new_intensity = intensity_tracker.evaluate(player, delta)
-		_update_combat_state(player)
+		new_intensity = intensity_tracker.evaluate(teammates, delta)
+		_update_combat_state(teammates)
 		if abs(new_intensity - prev_intensity) > 0.05:
 			intensity_changed.emit(new_intensity)
 
@@ -1130,7 +1137,7 @@ func spawn_reference_players() -> Array[Node2D]:
 	return out
 
 
-func pick_spawn_anchor() -> Node2D:
+func pick_spawn_anchor(teammates: Array[Node2D] = []) -> Node2D:
 	## 本批刷怪以谁为圆心 —— L4D 式偏好「落单 / 走得远 / **移动中**」的玩家
 	## （玩家观感 = "怪基本多刷在走得远的那个玩家那"）。
 	## 权重 = 移动系数 × (1 + 与最近队友的距离/400 + 速度/150)，再按权重**随机**挑选。
@@ -1140,7 +1147,9 @@ func pick_spawn_anchor() -> Node2D:
 	## 静止主机仍能分到 ~43% 的刷怪 → 客户端前方照样断供。
 	## 现在静止玩家降权到 0.25（保留少量压力，不至于队友那边一只不刷）。
 	const IDLE_WEIGHT: float = 0.25
-	var list: Array[Node2D] = spawn_reference_players()
+	## teammates 由 Director._process 传入（同一帧的玩家集合只算一次）；
+	## 留空则自行获取 —— 兼容其它调用点（FrontSpawner / 回归 harness）。
+	var list: Array[Node2D] = teammates if not teammates.is_empty() else spawn_reference_players()
 	if list.is_empty():
 		return _find_player()
 	if list.size() == 1:
@@ -1793,10 +1802,21 @@ func _count_alive_enemies() -> int:
 # 内部 — 战斗状态
 # ═══════════════════════════════════════
 
-func _update_combat_state(player: Node2D) -> void:
+func _update_combat_state(players: Array) -> void:
+	## 「任一存活玩家附近 500px 内有敌人」= 队伍在战斗中（2026-09-24 多玩家口径）。
+	## 旧实现只盯座位 0（主机）→ 主机蹲在后方时全队被判"脱战"，战斗因子恒 0.2，
+	## 紧张度被人为压低、尸潮来得更晚（与"刷怪只围绕主机"属同一族问题）。
 	var tree: SceneTree = get_tree()
 	if not tree:
 		return
+	## 先 `is_instance_valid` 后 `as`（freed-cast 家族铁律）。
+	var list: Array[Node2D] = []
+	for value: Variant in players:
+		if not is_instance_valid(value):
+			continue
+		var p: Node2D = value as Node2D
+		if p != null:
+			list.append(p)
 	var enemies: Array = tree.get_nodes_in_group("enemy")
 	var in_combat: bool = false
 	for e: Node2D in enemies:
@@ -1804,8 +1824,12 @@ func _update_combat_state(player: Node2D) -> void:
 			continue
 		if e.get("_is_dying") == true or e.get("_is_dead") == true:
 			continue
-		if player.global_position.distance_to(e.global_position) < 500.0:
-			in_combat = true
+		var epos: Vector2 = e.global_position
+		for p: Node2D in list:
+			if p.global_position.distance_to(epos) < 500.0:
+				in_combat = true
+				break
+		if in_combat:
 			break
 	set_combat(in_combat)
 
