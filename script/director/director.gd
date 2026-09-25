@@ -697,6 +697,7 @@ func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
 	if not _enemy_scene:
 		printerr("[Director] enemy scene not loaded")
 		return null
+	_warn_if_spawn_visible(pos, "common")
 
 	var enemy = _enemy_scene.instantiate()
 	enemy.global_position = pos
@@ -762,6 +763,7 @@ func spawn_special_enemy(pos: Vector2, data: SpecialEnemyData, decor_layer: Node
 	if decor_layer == null:
 		printerr("[Director] spawn_special aborted: decor layer is null")
 		return null
+	_warn_if_spawn_visible(pos, "special")
 
 	var enemy = _enemy_scene.instantiate()
 	enemy.global_position = pos
@@ -889,20 +891,76 @@ func spawn_horde_nodes(count: int, decor_layer: Node) -> Array[Node2D]:
 	return spawned_nodes
 
 
+## 刷怪取点的**唯一可见性闸门**：该点是否不在任一玩家视野内（多人取矩形并集，含余量）。
+## 与 FrontSpawner.pick_ahead_position 内部判据同源。
+## ⚠ 2026-09-25 用户实测「偶发贴脸刷怪」——真根因是**并集缺失 + 距离量错了对象**：
+## 作者点回退（_pick_spawn_position）与「玩家外围随机取点」（_find_walkable_near_player）
+## **完全不查任何人的视野**，唯一的安全条件是 _get_valid_spawn_points 里的
+## `dist >= spawn_min_dist(400)`，而那个距离是**只对锚点玩家**量的
+## （`player.global_position.distance_to(sp.global_position)`，player = pick_spawn_anchor()）。
+## 于是「锚点 = 跑在前面的那位」时，一个离锚点 500px（通过筛选）、却离**另一名玩家**
+## 只有 120px 的点会被直接采用 → 怪刷在另一名玩家脸上（主机/客户端两个方向都会发生）。
+##
+## 注：`spawn_min_dist` 取 400 恰好等于可视矩形角点距离 √(320²+240²)=400，
+## 所以"只比欧氏距离"对**单人、且以被比较者为中心**的视野是够用的 ——
+## 漏洞不在"欧氏 vs 矩形"，而在**比较对象**：
+##   · 锚点可能是任何一个玩家（pick_spawn_anchor 偏好落单/走得远/移动中者）；
+##   · 另一名玩家的视野从头到尾没参与判定。
+## FrontSpawner 缺失属病态配置：放行并只告警一次（宁可维持旧行为，也不要整图停刷）。
+var _spawn_gate_missing_warned: bool = false
+
+
+func _spawn_pos_is_hidden(pos: Vector2) -> bool:
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs == null or not fs.has_method("is_offscreen_for_all"):
+		if not _spawn_gate_missing_warned:
+			_spawn_gate_missing_warned = true
+			printerr("[Director] FrontSpawner 缺失 → 刷怪屏外闸门失效（本局只告警一次）")
+		return true
+	return bool(fs.call("is_offscreen_for_all", pos))
+
+
+## 生成自检：落点若落在任一玩家**真实可视矩形**内 → 打一条醒目告警。
+## 挂在 spawn_enemy / spawn_special_enemy 这两个唯一汇聚点上，
+## 一次覆盖所有刷怪路径（尸潮 / 前方补位 / 作者点 / 区域补齐 / 防守战事件批 / 特感 / Boss）。
+func _warn_if_spawn_visible(pos: Vector2, kind: String) -> void:
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs == null or not fs.has_method("is_visible_to_any_player_exact"):
+		return
+	if not bool(fs.call("is_visible_to_any_player_exact", pos)):
+		return
+	## 用**全体实体**（含倒地/濒死）算最近距离：倒地的队友照样能看见怪刷在自己脸上。
+	var best: float = INF
+	for e: Node2D in Players.all_entities():
+		if is_instance_valid(e):
+			best = minf(best, pos.distance_to(e.global_position))
+	print("[SpawnWarn] ★贴脸刷怪 kind=%s pos=(%d,%d) 最近玩家=%.0fpx（该点在玩家实际画面内）" % [
+		kind, int(pos.x), int(pos.y), best])
+
+
 func _pick_spawn_position(player: Node2D, spawn_points: Array, spawned_count: int) -> Vector2:
+	## 作者生成点：按优先级顺序找一个**不在任一玩家视野内**的点（找不到返回 ZERO 交给调用方回退）。
 	if not spawn_points.is_empty():
-		var sp: Node2D = spawn_points[spawned_count % spawn_points.size()] as Node2D
-		if sp is SpawnZone:
-			return (sp as SpawnZone).get_random_position()
-		else:
-			return sp.global_position
+		for i: int in range(spawn_points.size()):
+			var sp: Node2D = spawn_points[(spawned_count + i) % spawn_points.size()] as Node2D
+			if not is_instance_valid(sp):
+				continue
+			var cand: Vector2 = (sp as SpawnZone).get_random_position() if sp is SpawnZone else sp.global_position
+			if _spawn_pos_is_hidden(cand):
+				return cand
+		return Vector2.ZERO
 	return _find_walkable_near_player(player)
 
 
 func _add_spawn_scatter(pos: Vector2) -> Vector2:
 	## 散步 + 避开现有敌人碰撞体（间距 28px）。若附近都不可用，保留已验证的原始位置。
+	## ⚠ 2026-09-25：散点发生在**屏外判定之后**，这里复检一次可见性 ——
+	## ±36 抖动会把"刚离开屏幕"的点重新拉近（余量从 64 压到 28 以内），
+	## 在客户端分辨率 / 相机前瞻存在差异时可能露出画面。属防守性收紧，不单独构成贴脸根因。
 	for _attempt: int in range(20):
 		var scattered: Vector2 = pos + Vector2(randf_range(-36, 36), randf_range(-36, 36))
+		if not _spawn_pos_is_hidden(scattered):
+			continue
 		if _is_walkable(scattered) and not _is_occupied_by_enemy(scattered) and not _was_recently_used(scattered):
 			return scattered
 	return pos
@@ -1475,6 +1533,13 @@ func _find_tilemaps(node: Node) -> void:
 		_find_tilemaps(child)
 
 
+## 掉落物落点是否可用（2026-09-25）：复用刷怪的"可行走"判定 —— 含地图范围闸、
+## 作者禁刷层、图块碰撞多边形。供武器/治疗品掉落避墙（用户实测：换武器时掉落物
+## 偶尔卡进墙壁里，旧实现只做与其它掉落物的间距避让）。
+func is_drop_spot_free(global_pos: Vector2) -> bool:
+	return _is_walkable(global_pos)
+
+
 func _is_walkable(global_pos: Vector2) -> bool:
 	## 禁刷怪层优先：作者标注的 NoSpawn 格子一律不可作为刷怪落点（可通行但禁刷）。
 	if _is_no_spawn(global_pos):
@@ -1916,6 +1981,11 @@ func _find_walkable_near_player(player: Node2D) -> Vector2:
 		var dist: float = randf_range(spawn_min_dist, spawn_min_dist + 320.0)
 		var pos: Vector2 = player.global_position + Vector2.RIGHT.rotated(angle) * dist
 		pos += Vector2(randf_range(-16, 16), randf_range(-16, 16))
+		## 屏外闸（2026-09-25 补）：这里过去只查"可行走/无怪/近期没用过"，而距离下限
+		## `spawn_min_dist` 是**只对锚点玩家**量的、且完全不查并集 —— 锚点偏好"跑得最远
+		## 的那位"，另一名玩家完全可能就站在采样点旁边 → 怪刷在他脸上。
+		if not _spawn_pos_is_hidden(pos):
+			continue
 		if _is_walkable(pos) and not _is_occupied_by_enemy(pos) and not _was_recently_used(pos):
 			return pos
 	return Vector2.ZERO

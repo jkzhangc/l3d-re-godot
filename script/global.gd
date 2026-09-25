@@ -234,6 +234,14 @@ func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 ## 字形不同，系统缺 CJK 字体时直接豆腐块（scene/network_lobby.tscn 的 13 个 Label、
 ## map_output.tscn 的 Button 此前都属于这一类）。
 ## 只设 default_font/default_font_size，其余样式照旧落到 Godot 内置主题。
+## 自动化用例专用：抑制受击表现（闪红 Tween + 伤害数字）。
+## 【为什么需要它】2026-09-25：给灼烧 DoT 补上权威侧表现后，headless harness 里反复 tick
+## 会累积活 Tween，退出时必踩引擎
+## BUG: Unreferenced static string to 0: Physics2DConstraintSolveIslands -> 进程挂死。
+## 只影响测试进程（游戏内正常运行无此问题）；**默认 false**，任何游戏逻辑都不得依赖它。
+var suppress_hit_presentation: bool = false
+
+
 func ensure_root_ui_theme() -> Theme:
 	var tree := get_tree()
 	if tree == null or tree.root == null:

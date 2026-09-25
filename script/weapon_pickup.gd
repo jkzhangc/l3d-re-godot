@@ -102,29 +102,58 @@ static func drop_landing_position(player: Node2D) -> Vector2:
 	return player.global_position + drop_push_vector(player)
 
 
-## 找一个与已有地面掉落物保持 ≥min_gap 的落点：先试基准点，再按环形由近及远扩散。
-static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: float = DROP_MIN_GAP) -> Vector2:
+## 找一个可用落点：**不压进墙里**，且与已有地面掉落物保持 ≥min_gap。
+## 先试基准点，再按环形由近及远扩散。`is_free` 可注入（默认走 Director 的可行走判定），
+## 便于 harness 用假判定做单测。
+##
+## ⚠ 2026-09-25 用户实测「换武器时掉落物有时会掉进墙壁里」：
+## 旧实现**只**做与其它掉落物的间距避让（`others.is_empty()` 时更是直接返回基准点），
+## 完全不看地图碰撞；而基准点 = "玩家位置 + 朝向推远 40px"（drop_push_vector），
+## 贴着墙换武器就会把掉落物推进墙里。
+static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: float = DROP_MIN_GAP,
+		is_free: Callable = Callable()) -> Vector2:
 	if tree == null:
 		return base
+	var free_check: Callable = is_free if is_free.is_valid() else _default_free_check(tree)
 	var others: Array[Vector2] = []
 	for n: Node in tree.get_nodes_in_group(PICKUP_GROUP):
-		if n is Node2D and is_instance_valid(n):
+		if n is Node2D and is_instance_valid(n) and not n.is_queued_for_deletion():
 			others.append((n as Node2D).global_position)
-	if others.is_empty():
-		return base
 	var radii: Array[float] = [0.0, min_gap, min_gap * 1.5, min_gap * 2.0]
-	for radius: float in radii:
-		for i: int in 8:
-			var ang: float = TAU * float(i) / 8.0
-			var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
-			var ok: bool = true
-			for o: Vector2 in others:
-				if cand.distance_to(o) < min_gap - 0.01:
-					ok = false
-					break
-			if ok:
-				return cand
-	return base + Vector2(min_gap, 0.0)
+	## 两轮：
+	##  ① 既不在墙里、也满足间距（正常路径）
+	##  ② 仅满足间距（放宽）—— 关键：可行走判定可能把**所有**候选都否掉
+	##     （地图外/禁刷层/无地图的 harness），此时绝不能退化成"叠在别的掉落物上"，
+	##     间距是硬不变量（09-25 实测：只有一轮时间距断言被打到 0px）。
+	var require_free: bool = true
+	for _round: int in 2:
+		for radius: float in radii:
+			for i: int in 8:
+				var ang: float = TAU * float(i) / 8.0
+				var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
+				if require_free and not bool(free_check.call(cand)):
+					continue
+				var ok: bool = true
+				for o: Vector2 in others:
+					if cand.distance_to(o) < min_gap - 0.01:
+						ok = false
+						break
+				if ok:
+					return cand
+		require_free = false
+	## 环形全部不可用（例如四面贴墙的角落）：退回基准点，保持旧行为而不是掉进墙里再乱飞。
+	return base
+
+
+## 默认"落点可用"判定：复用 Director 的可行走判定
+##（含地图范围闸 / 作者禁刷层 / 图块碰撞多边形；无 Director 时不加限制）。
+static func _default_free_check(tree: SceneTree) -> Callable:
+	var director: Node = null
+	if tree != null and tree.root != null:
+		director = tree.root.get_node_or_null("Director")
+	if director != null and director.has_method("is_drop_spot_free"):
+		return Callable(director, "is_drop_spot_free")
+	return func(_pos: Vector2) -> bool: return true
 
 
 ## 静态入口：把一把武器作为掉落物放到 player 附近（替换掉落 / 玩家主动丢弃共用）。

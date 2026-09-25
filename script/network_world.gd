@@ -181,6 +181,12 @@ var _weapon_transition_state: Dictionary = {}
 ## Client 尚未收到 Host 确认的朝向锁定意图：peer_id -> desired locked state。
 var _facing_lock_requests: Dictionary = {}
 const REVIVE_RANGE := 52.0
+## 持续救援的**滞回距离**（2026-09-25 用户实测「有时救不了队友」）：
+## 倒地玩家按设计**保留移动碰撞**（见 _update_host_downed 注释），施救时两人互相推挤、
+## 倒地者还会爬行 —— 3 秒施救期间一旦漂出 REVIVE_RANGE(52px) 就会被 _update_host_revives
+## **静默取消**，表现为"按了没反应 / 进度环莫名其妙归零"。
+## 起救仍按 REVIVE_RANGE；只有"已在施救中"才享受放宽，不会让人隔着老远把人拉起来。
+const REVIVE_HOLD_RANGE := 88.0
 const REVIVE_DURATION_MSEC := 3000
 const REVIVE_HP_RATIO := 0.30
 ## 倒地（L4D2 式 incapacitated）：HP=0 不再直接死亡，而是先倒地 —— 躺地表现、
@@ -585,13 +591,13 @@ func _client_initialize_world() -> void:
 ## 因此倒地玩家无法救他人，其未完成的救援尝试也会在 _update_host_revives 中自动取消。
 ## Host 用它做权威校验；Client 在 _capture_revive_input 里基于快照同步来的 downed
 ## 预估目标，Host 仍会重新验证身份、距离与状态。
-func _find_revive_target_for(peer_id: int) -> int:
+func _find_revive_target_for(peer_id: int, max_range: float = REVIVE_RANGE) -> int:
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := _player_node(entry)
 	if not is_instance_valid(node) or node.is_network_dead():
 		return 0
 	var closest_id := 0
-	var closest_distance := REVIVE_RANGE
+	var closest_distance := max_range
 	for value: Variant in _players.keys():
 		var target_id := int(value)
 		if target_id == peer_id:
@@ -636,10 +642,20 @@ func _capture_revive_input() -> bool:
 func _try_host_start_revive(reviver_id: int, target_id: int) -> void:
 	if not net.is_host or reviver_id == target_id or not _players.has(reviver_id) or not _players.has(target_id):
 		return
-	if _is_host_combat_busy(reviver_id) or _find_revive_target_for(reviver_id) != target_id:
+	## 起救仍用 REVIVE_RANGE（严格）；一旦受理，后续按 REVIVE_HOLD_RANGE 滞回。
+	if _is_host_combat_busy(reviver_id) or _find_revive_target_for(reviver_id, REVIVE_RANGE) != target_id:
 		return
 	_revive_attempts[reviver_id] = {"target": target_id, "started_msec": Time.get_ticks_msec()}
 	print("[NetworkWorld] HOST_REVIVE_START reviver=%d target=%d" % [reviver_id, target_id])
+
+
+## 诊断用：施救者与目标当前距离（目标无效时返回 -1）。配合上面的取消日志定位"为什么中断"。
+func _revive_distance_to(reviver_id: int, target_id: int) -> float:
+	var a := _player_node(_players.get(reviver_id, {}))
+	var b := _player_node(_players.get(target_id, {}))
+	if not is_instance_valid(a) or not is_instance_valid(b):
+		return -1.0
+	return a.global_position.distance_to(b.global_position)
 
 
 func _cancel_host_revive(reviver_id: int) -> void:
@@ -655,7 +671,12 @@ func _update_host_revives() -> void:
 		var reviver_id := int(value)
 		var attempt: Dictionary = _revive_attempts[reviver_id]
 		var target_id := int(attempt.get("target", 0))
-		if _find_revive_target_for(reviver_id) != target_id:
+		## 施救中放宽到 REVIVE_HOLD_RANGE（滞回）：见该常量注释 —— 碰撞推挤/倒地爬行
+		## 导致的"中途静默取消"是用户实测「有时救不了」的直接成因。
+		if _find_revive_target_for(reviver_id, REVIVE_HOLD_RANGE) != target_id:
+			var lost_range: float = _revive_distance_to(reviver_id, target_id)
+			print("[NetworkWorld] HOST_REVIVE_CANCEL reviver=%d target=%d reason=超出滞回距离(%.0f) 或目标已非倒地"
+				% [reviver_id, target_id, lost_range])
 			_cancel_host_revive(reviver_id)
 			continue
 		if now - int(attempt.get("started_msec", now)) < REVIVE_DURATION_MSEC:
@@ -1222,6 +1243,11 @@ func _connect_host_enemy_damage_signal(entity_id: int, node: CharacterBody2D) ->
 	var callback := Callable(self, "_on_host_enemy_damage_applied").bind(entity_id)
 	if not node.is_connected("network_damage_applied", callback):
 		node.connect("network_damage_applied", callback)
+	## 正面抗性「無効」表现（0 伤害，独立通道；2026-09-25 用户实测客户端看不到）
+	if node.has_signal("network_block_applied"):
+		var block_cb := Callable(self, "_on_host_enemy_block_applied").bind(entity_id)
+		if not node.is_connected("network_block_applied", block_cb):
+			node.connect("network_block_applied", block_cb)
 
 
 ## Host 收到玩家实体受伤信号（player.take_damage → network_damage_applied）。
@@ -1272,6 +1298,11 @@ func _handle_host_player_downed(peer_id: int) -> void:
 	entry["downed_hp"] = DOWNED_BLEED_HP
 	_players[peer_id] = entry
 	print("[NetworkWorld] HOST_DOWNED peer=%d bleed_hp=%.0f" % [peer_id, DOWNED_BLEED_HP])
+
+
+func _on_host_enemy_block_applied(position: Vector2, entity_id: int) -> void:
+	if net.is_host:
+		enemy_block_presentation.rpc(entity_id, position)
 
 
 func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool, entity_id: int) -> void:
@@ -2369,6 +2400,19 @@ func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, i
 			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s" % [entity_id, damage, is_headshot])
 
 
+## 正面抗性「無効」表现（Host → Client，2026-09-25）。
+## 与 enemy_hurt_presentation 分开的原因：那条通道带 `damage > 0.0` 闸，
+## 而正面抗性恰好是 0 伤害（Hunter β 正面 120° 完全回避）→ 客户端此前什么都看不到。
+@rpc("authority", "call_remote", "reliable")
+func enemy_block_presentation(entity_id: int, position: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var node := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if is_instance_valid(node) and node.has_method("play_network_block_presentation"):
+		node.play_network_block_presentation(position)
+		print("[NetworkWorld] CLIENT_ENEMY_BLOCK_PRESENTATION entity=%d" % entity_id)
+
+
 ## Host：EnemySpitState 出酸瞬间调用（A2 酸弹镜像）。单机/Client 调用为 no-op。
 ## 只传 entity_id + 出口坐标 + 方向；速度/特效/音效由 Client 从本地 enemy 节点字段解析
 ## （A1 的 apply_to_enemy 注入保证特感节点有值），资源不经网络传输（白名单铁律）。
@@ -2645,7 +2689,11 @@ func spawn_network_enemy(public_state: Dictionary) -> void:
 	if entity_id <= 0:
 		return
 	_ensure_client_enemy(entity_id, public_state, true)
-	print("[NetworkWorld] CLIENT_ENEMY_SPAWN id=%d" % entity_id)
+	## 补落点（2026-09-25）：此前只打 id，客户端日志无法自证"怪刷在哪"，
+	## 用户报「贴脸刷怪」时给的正是客户端日志，却看不到坐标。
+	var spawn_pos: Vector2 = public_state.get("position", Vector2.ZERO)
+	print("[NetworkWorld] CLIENT_ENEMY_SPAWN id=%d pos=(%d,%d)" % [
+		entity_id, int(spawn_pos.x), int(spawn_pos.y)])
 
 
 ## Host：把一只敌人从全端（含 Client）移除 —— 供 Director 的「远处回收」使用。
@@ -2746,7 +2794,14 @@ func player_position_snapshot(player_states: Array) -> void:
 
 
 func _on_game_scene_ready_received(peer_id: int, ready_scene_path: String) -> void:
-	if not net.is_host or ready_scene_path != _scene_path:
+	if not net.is_host:
+		return
+	## 场景身份比较（2026-09-25）：uid:// 与 res:// 必须视为同一张图（见 Net.scene_identity_matches）。
+	## net 在本文件里允许是 harness 注入的 stub，故先探方法再退化为字符串比较。
+	var same_scene: bool = net.scene_identity_matches(ready_scene_path, _scene_path) \
+			if net.has_method("scene_identity_matches") \
+			else ready_scene_path == _scene_path
+	if not same_scene:
 		return
 	net.clear_pending_scene_ready(peer_id)
 	_accept_ready_peer(peer_id)
@@ -6022,6 +6077,10 @@ func _instantiate_player(position: Vector2, peer_id: int = 0) -> CharacterBody2D
 	# Player._ready() 会在 add_child() 时执行，必须预先关闭单机状态机和自动座位注册。
 	if peer_id > 0:
 		node.configure_network_entity(peer_id, peer_id)
+		# 显式命名（2026-09-25）：地图里本来就有个叫 "Player" 的本地玩家，于是镜像入树时被
+		# Godot 自动改名为 "@CharacterBody2D@<id>"（实测确认），日志里完全看不出是谁。
+		# 与 NetPickup%d / NetEnemy%d 同一约定，便于按名字定位镜像实体。
+		node.name = "NetPlayer%d" % peer_id
 	node.global_position = position
 	_players_parent.add_child(node)
 	return node

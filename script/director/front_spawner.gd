@@ -70,6 +70,9 @@ extends Node
 @export var max_dist: float = 560.0
 ## 至少离开相机可视矩形这么多像素才算"屏幕外"。
 @export var offscreen_margin: float = 64.0
+## 远端玩家的视野矩形**额外外扩**（px）：Host 看不到客户端的真实相机（前瞻/平滑/边界钳制
+## 都会让实际可视矩形偏离"以玩家坐标为中心"），只能保守外扩，宁可少刷一点也不刷在脸上。
+@export var remote_view_padding: float = 48.0
 ## 未指定相机时的可视半宽/半高兜底（本工程视口 1280×960、相机缩放 2× → 640×480）。
 @export var fallback_view_size: Vector2 = Vector2(640.0, 480.0)
 
@@ -304,9 +307,11 @@ func _player_view_rects(fallback: Node2D) -> Array[Rect2]:
 	var out: Array[Rect2] = []
 	for p: Node2D in _spawn_players(fallback):
 		var center: Vector2 = p.global_position
+		var pad: float = remote_view_padding
 		if local != null and p == local:
 			center = cam_center
-		out.append(Rect2(center - half, half * 2.0))
+			pad = 0.0
+		out.append(Rect2(center - half - Vector2(pad, pad), half * 2.0 + Vector2(pad, pad) * 2.0))
 	if out.is_empty():
 		out.append(Rect2(cam_center - half, half * 2.0))
 	return out
@@ -327,12 +332,14 @@ func _owning_player_of_camera(fallback: Node2D) -> Node2D:
 	return best
 
 
-func _visible_to_any_player(pos: Vector2, rects: Array[Rect2]) -> bool:
+func _visible_to_any_player(pos: Vector2, rects: Array[Rect2], margin: float = -1.0) -> bool:
 	## 落在任一玩家视野矩形（含 offscreen_margin 外扩）内 → 视为"看得见"，不可刷。
+	## margin < 0 → 用 offscreen_margin（刷怪判据）；传 0.0 = 真实可视边界（诊断用）。
+	var m: float = offscreen_margin if margin < 0.0 else margin
 	for r: Rect2 in rects:
 		var dx: float = absf(pos.x - (r.position.x + r.size.x * 0.5))
 		var dy: float = absf(pos.y - (r.position.y + r.size.y * 0.5))
-		if dx <= r.size.x * 0.5 + offscreen_margin and dy <= r.size.y * 0.5 + offscreen_margin:
+		if dx <= r.size.x * 0.5 + m and dy <= r.size.y * 0.5 + m:
 			return true
 	return false
 
@@ -482,9 +489,16 @@ func is_offscreen(player: Node2D, pos: Vector2) -> bool:
 
 
 func is_offscreen_for_all(pos: Vector2) -> bool:
-	## 对外暴露的**多人**屏外判定：对全体玩家的视野矩形取并集。
-	## 供其它生成路径（作者 SpawnZone 的区域补齐）复用，避免把敌人刷到某个玩家正看着的地方。
+	## 对外暴露的**多人**屏外判定：对全体玩家的视野矩形取并集（含 offscreen_margin）。
+	## 供其它生成路径（作者 SpawnZone 的区域补齐、作者 SpawnPoint 回退等）复用，
+	## 避免把敌人刷到某个玩家正看着的地方。
 	return not _visible_to_any_player(pos, _player_view_rects(null))
+
+
+func is_visible_to_any_player_exact(pos: Vector2) -> bool:
+	## 诊断用：该点是否落在任一玩家的**真实可视矩形**内（不含 offscreen_margin）。
+	## 刷怪闸门请用 is_offscreen_for_all()；这个用于"是不是真刷到玩家眼前了"的自检告警。
+	return _visible_to_any_player(pos, _player_view_rects(null), 0.0)
 
 
 func is_in_band(player: Node2D, pos: Vector2) -> bool:

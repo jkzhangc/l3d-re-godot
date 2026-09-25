@@ -77,6 +77,9 @@ static var _shared_color_img: Image = null
 ## 快速生成伤害数字。
 ## text_override 非空时显示该文本（如「無効」），忽略 dmg 数值（2026-09-16）。
 static func spawn(world_pos: Vector2, dmg: float, parent: Node, col_idx: int = 1, mod_col: Color = Color.WHITE, text_override: String = "") -> DamageNumber:
+	## 自动化用例开关（默认 false）：见 Global.suppress_hit_presentation 注释。
+	if Global.suppress_hit_presentation:
+		return null
 	var dn := DamageNumber.new()
 	dn.amount = dmg
 	dn.global_position = world_pos

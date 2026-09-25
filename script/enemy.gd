@@ -9,6 +9,10 @@ extends CharacterBody2D
 
 ## Host 伤害判定完成后由 NetworkWorld 转发给客户端的纯表现事件。
 signal network_damage_applied(damage: float, position: Vector2, is_headshot: bool)
+## Host：正面抗性「無効」表现转发（2026-09-25）。0 伤害**走不了** network_damage_applied
+## （那条通道在 NetworkWorld 侧有 `damage > 0.0` 闸），于是客户端永远看不到弹开/「無効」飘字
+## —— 用户实测「红色猎杀者正面无敌提示文字客户端不显示」。
+signal network_block_applied(position: Vector2)
 
 ## 死亡信号（2026-09-15）：_die() 是全部死亡路径的唯一入口，在这里发一次。
 ## 挂点用途：HoldoutMachine 杀怪式（KILL_COUNT）击杀计数等。
@@ -1070,6 +1074,8 @@ func _apply_frontal_resist(damage: float, direction: Vector2) -> float:
 			if tree and tree.current_scene:
 				DamageNumber.spawn(global_position + hurt_effect_offset, 0.0,
 					tree.current_scene, 0, Color(1.0, 0.95, 0.6), "無効")
+			## 联机：整段表现必须一起转发（0 伤害走不了伤害通道，见 network_block_applied 注释）。
+			network_block_applied.emit(global_position + hurt_effect_offset)
 		print("[敵人] 正面抗性: %d → %d（扇区 ±%d°）" % [int(before), int(damage), int(arc)])
 	return damage
 
@@ -1228,6 +1234,17 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 	_play_sound(hurt_sound, hurt_sound_pitch)
 
 
+## Client 表现接口（NetworkWorld.enemy_block_presentation 调用）：重放正面抗性的
+## 「弹开」表现 —— 金色偏白闪 + 弹开音效 + 「無効」飘字。只做表现，不动 HP。
+func play_network_block_presentation(impact_position: Vector2 = global_position) -> void:
+	_play_hit_feedback(Color(1.0, 0.95, 0.6, 1.0), 0.08)
+	_play_sound(frontal_block_sound, frontal_block_sound_pitch)
+	var tree := get_tree()
+	if tree and tree.current_scene:
+		DamageNumber.spawn(impact_position, 0.0, tree.current_scene, 0,
+			Color(1.0, 0.95, 0.6), "無効")
+
+
 func _clean_expired_damage_sources(now: int) -> void:
 	## 清理超过冷却时间的伤害源记录，防止字典无限增长
 	var to_erase: Array[int] = []
@@ -1241,6 +1258,9 @@ func _clean_expired_damage_sources(now: int) -> void:
 ## hit_color: 变色目标颜色（受击=红，推击=亮白）
 ## duration: 持续时间（秒），<0 则使用节点默认 hit_feedback_duration
 func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) -> void:
+	## 自动化用例开关（默认 false）：见 Global.suppress_hit_presentation 注释。
+	if Global.suppress_hit_presentation:
+		return
 	if duration < 0.0:
 		duration = hit_feedback_duration
 	if not sprite:
@@ -1394,6 +1414,11 @@ func _lay_corpse_on_ground() -> void:
 # 属性状态（炎/雷/氷）
 # ═══════════════════════════════════════
 
+## 灼烧 tick 的伤害数字/受击闪光颜色（与玩家侧燃烧数字一致：橙红）。
+## 元素染色是覆层 modulate，数字颜色必须走这里的字面色，否则会被染色带偏。
+const BURN_HIT_FLASH_COLOR: Color = Color(1.0, 0.55, 0.2)
+
+
 ## 每帧更新：燃烧 DoT（燃烧中仍会攻击，非即效性）+ 状态计时与褪色。
 func _update_element_status(delta: float) -> void:
 	if _is_dead:
@@ -1403,10 +1428,24 @@ func _update_element_status(delta: float) -> void:
 		_burn_tick -= delta
 		if _burn_tick <= 0.0:
 			_burn_tick = 0.5
-			current_hp = maxf(0.0, current_hp - BURN_DPS * 0.5)
-			if current_hp <= 0.0:
-				_die(false)
-				return
+			## ⚠ HP 只在**权威侧**扣（2026-09-25）：客户端镜像的 HP 一律来自快照，
+			## 此前镜像也在本地扣血，会先于 Host 自行死亡/露血条空，属越权预测。
+			if not network_presentation_only:
+				var tick_damage: float = BURN_DPS * 0.5
+				current_hp = maxf(0.0, current_hp - tick_damage)
+				## 表现与普通受击一致（2026-09-25 用户实测：敌人被灼烧扣血时
+				## 「主机端没有伤害数字与受击闪烁、客户端反而有、单机也显示不出来」）。
+				## 成因：客户端镜像在 apply_network_presentation 里按"快照 HP 下降"自己弹
+				## 数字+闪红，而权威侧（单机/Host）这里是直接改 current_hp —— 什么都不播。
+				## 因此权威侧必须自己播；镜像侧**不播**（否则它会同时收到快照差与本次表现 → 弹两个）。
+				_play_hit_feedback(BURN_HIT_FLASH_COLOR, 0.12)
+				var burn_tree := get_tree()
+				if burn_tree and burn_tree.current_scene:
+					DamageNumber.spawn(global_position + hurt_effect_offset, tick_damage,
+						burn_tree.current_scene, 0, BURN_HIT_FLASH_COLOR)
+				if current_hp <= 0.0:
+					_die(false)
+					return
 	if _frozen_time > 0.0:
 		_frozen_time -= delta
 	if _electro_time > 0.0:

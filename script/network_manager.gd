@@ -408,7 +408,9 @@ func _get_default_character_path() -> String:
 ## 真正的 change_scene 被延后到双方 scene_transition_ack 均到达之后。
 @rpc("authority", "call_local", "reliable")
 func start_game(scene_path: String, arrival_id: String = "", arrival_position: Variant = null, difficulty: int = -1) -> void:
-	active_scene_path = scene_path
+	## 存**规范形式**（uid:// → res://），与 current_scene.scene_file_path 同口径，
+	## 避免"安全门发 uid、客户端报路径"这类混用（2026-09-25 安全屋不同步的根因）。
+	active_scene_path = canonical_scene_path(scene_path)
 	active_arrival_id = arrival_id.strip_edges()
 	active_arrival_position = arrival_position if arrival_position is Vector2 else null
 	# P0-B1 难度同步：Host 把 selected_difficulty 随开局 RPC 广播，Client 写入本地 Global，
@@ -452,7 +454,9 @@ func _host_commit_scene_transition(scene_path: String, arrival_id: String, arriv
 ## Host 广播切图提交。serial 使迟到的旧轮次 ACK/commit 无法影响当前场景切换。
 @rpc("authority", "call_local", "reliable")
 func scene_transition_commit(scene_path: String, arrival_id: String, arrival_position: Variant, transition_serial: int) -> void:
-	if transition_serial != _scene_transition_serial or scene_path != active_scene_path or arrival_id != active_arrival_id:
+	if transition_serial != _scene_transition_serial \
+			or not scene_identity_matches(scene_path, active_scene_path) \
+			or arrival_id != active_arrival_id:
 		return
 	active_arrival_position = arrival_position if arrival_position is Vector2 else null
 	call_deferred("_change_scene_after_flush", scene_path, transition_serial)
@@ -472,7 +476,8 @@ func _change_scene_after_flush(scene_path: String, transition_serial: int) -> vo
 
 @rpc("any_peer", "call_remote", "reliable")
 func scene_transition_ack(transition_serial: int, scene_path: String) -> void:
-	if not is_host or transition_serial != _scene_transition_serial or scene_path != active_scene_path:
+	if not is_host or transition_serial != _scene_transition_serial \
+			or not scene_identity_matches(scene_path, active_scene_path):
 		return
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _player_names.has(sender):
@@ -521,6 +526,37 @@ func _change_scene_safely(scene_path: String) -> void:
 	if err != OK:
 		printerr("[Net] CHANGE_SCENE_FAILED path=%s error=%s" % [scene_path, error_string(err)])
 
+## ── 场景身份比较（2026-09-25）──────────────────────────────────────────────
+## 同一张场景在两端可能以两种形式出现：**.tscn 里 Godot 4.4+ 默认把场景引用存成 `uid://…`**
+## （安全门这类作者摆的节点就是这么存的），而 `current_scene.scene_file_path` **永远是
+## `res://…` 路径**。直接比字符串会把"同一张图"判成不同图。
+##
+## 实测（用户 2026-09-25 日志，第二关结尾安全屋）：
+##   [Net] SCENE_TRANSITION_QUIET current=res://…/突袭-第二关-学校内部.tscn target=uid://brbcwrrdswh2l
+##   [Net] ignore scene-ready peer=1619477033 path=res://…/突袭-第二关-结尾安全屋.tscn expected=uid://brbcwrrdswh2l
+## → Host 直接丢掉客户端的就绪上报 → 客户端永远等不到初始世界快照
+##   （表现：客户端看到主机"卡在原地踏步"、掉落物/敌人不同步）。
+##
+## 规范化方向统一取 **res:// 路径**（能解析出路径时）；解析不出来就原样返回 —— 不引入新的失败模式。
+func canonical_scene_path(path_or_uid: String) -> String:
+	if path_or_uid.is_empty() or not path_or_uid.begins_with("uid://"):
+		return path_or_uid
+	var uid: int = ResourceUID.text_to_id(path_or_uid)
+	if uid == ResourceUID.INVALID_ID:
+		return path_or_uid
+	var resolved := ResourceUID.get_id_path(uid)
+	return resolved if not resolved.is_empty() else path_or_uid
+
+
+## 两张"场景标识"是否指同一张图（uid:// 与 res:// 视为等价）。
+func scene_identity_matches(a: String, b: String) -> bool:
+	if a == b:
+		return true
+	if a.is_empty() or b.is_empty():
+		return false
+	return canonical_scene_path(a) == canonical_scene_path(b)
+
+
 ## Client/Host 的新场景 NetworkWorld 准备好后上报。Host 以该记录决定何时发送初始世界快照，
 ## 防止 RPC 先于接收端节点创建而丢失。
 @rpc("any_peer", "call_remote", "reliable")
@@ -530,7 +566,7 @@ func report_game_scene_ready(scene_path: String) -> void:
 	var sender := multiplayer.get_remote_sender_id()
 	if sender <= 1 or not _player_names.has(sender):
 		return
-	if scene_path != active_scene_path:
+	if not scene_identity_matches(scene_path, active_scene_path):
 		printerr("[Net] ignore scene-ready peer=%d path=%s expected=%s" % [sender, scene_path, active_scene_path])
 		return
 	_pending_scene_ready[sender] = scene_path
@@ -540,7 +576,7 @@ func take_pending_scene_ready(scene_path: String) -> Array[int]:
 	var result: Array[int] = []
 	for value: Variant in _pending_scene_ready.keys():
 		var peer_id := int(value)
-		if str(_pending_scene_ready[value]) == scene_path:
+		if scene_identity_matches(str(_pending_scene_ready[value]), scene_path):
 			result.append(peer_id)
 			_pending_scene_ready.erase(value)
 	return result

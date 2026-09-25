@@ -5,6 +5,13 @@ class_name EnemyAcidSpit extends Area2D
 ## 联机：Host/单机生成权威弹（结算伤害与相消）；Client 经 enemy_acid_spit_presentation
 ##       RPC 生成 _authoritative=false 镜像弹（A2）——只做视觉与音效：撞墙/寿命/穿身播
 ##       特效音效即焚，伤害与相消全部 Host 判定。
+## ★碰撞层铁律（2026-09-25 用户实测「硫酸不按物理层1来」）：
+##   `collision_mask = 100` = 4(玩家本体) | 32(图块 physics_layer_1「阻挡」) | 64(玩家弹·相消)。
+##   **绝不能带 layer 1** —— 那是图块 physics_layer_0（角色用的墙体/家具层）：
+##   学校内部的桌子椅子只挂在 layer 1 上，于是旧值 101(=1|4|32|64) 的酸弹被桌椅挡住，
+##   而玩家子弹（mask 56 = 8|16|32，只认 physics_layer_1）却能穿过去。
+##   现在两者判定口径一致：只有被 physics_layer_1 标记过的图块才挡。
+##
 ## 职责：ブレインディモス 的酸弹 —— 全工程首个敌方投射物：
 ##       直飞 → 命中玩家（伤害 + element=酸 → 削り自动触发）/ 撞墙销毁 / 与玩家子弹相消。
 ## 依赖：art/misc/ブレインディモス酸弾.png（12 帧动画）、sound/酸着弾.ogg
