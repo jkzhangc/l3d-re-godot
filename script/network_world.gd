@@ -1869,6 +1869,9 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	# despawn —— 它自己永远不知道真实爆心。Host 权威弹爆炸时把爆心坐标可靠广播出去。
 	if bullet.has_signal("exploded"):
 		bullet.connect("exploded", _on_host_bullet_exploded.bind(wd.item_id, bullet_index))
+	# 命中特效同步（2026-09-25）：与爆炸表现同范式（见 bullet.hit_effect_applied 注释）。
+	if bullet.has_signal("hit_effect_applied"):
+		bullet.connect("hit_effect_applied", _on_host_bullet_hit_effect.bind(wd.item_id, bullet_index))
 	# Client 只从 Host 确认的白名单 weapon_id + 弹丸索引还原视觉弹道，绝不接收伤害或子弹数据对象。
 	spawn_bullet.rpc(bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index)
 
@@ -1897,6 +1900,40 @@ func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: i
 		Global.play_sfx_managed(bd.explode_sound, scene)
 	print("[NetworkWorld] CLIENT_BULLET_EXPLODE weapon=%s index=%d pos=(%.0f, %.0f)" % [
 		weapon_id, bullet_index, position.x, position.y])
+
+
+## Host 权威弹命中 → 广播命中特效（Client 镜子不参与碰撞，永远不知道命中了谁）。
+func _on_host_bullet_hit_effect(position: Vector2, follow_entity_id: int, weapon_id: String, bullet_index: int) -> void:
+	if not net.is_host:
+		return
+	bullet_hit_effect.rpc(position, weapon_id, bullet_index, follow_entity_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func bullet_hit_effect(position: Vector2, weapon_id: String, bullet_index: int, follow_entity_id: int) -> void:
+	if net.is_host:
+		return
+	var scene: Node = get_tree().current_scene
+	if not scene:
+		return
+	## 资源只从白名单武器解析（远端包只带 id 与索引）——同 bullet_explode_effect 的铁律。
+	var wd: WeaponData = _get_network_weapon_data_by_id(weapon_id)
+	if wd == null or wd.hit_effect_anim == null:
+		return
+	var follow: Node2D = null
+	var offset: Vector2 = wd.hit_effect_offset_override
+	if follow_entity_id > 0:
+		var target := _resolve_enemy_entry(_enemies.get(follow_entity_id, {}) as Dictionary)
+		if is_instance_valid(target):
+			follow = target
+			## 偏移优先级同 Host 侧：武器覆盖为 0 时用目标自身 hurt_effect_offset（大体型敌人抬到躯干）。
+			if offset == Vector2.ZERO and "hurt_effect_offset" in target:
+				offset = target.hurt_effect_offset
+	VXAnimSprite.play_scene(wd.hit_effect_anim, position, scene, 10.0, follow, offset)
+	if wd.hit_sound:
+		Global.play_sfx_managed(wd.hit_sound, scene)
+	print("[NetworkWorld] CLIENT_BULLET_HIT_EFFECT weapon=%s index=%d follow=%d pos=(%.0f, %.0f)" % [
+		weapon_id, bullet_index, follow_entity_id, position.x, position.y])
 
 
 func _on_host_bullet_finished(bullet_id: int) -> void:

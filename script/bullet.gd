@@ -15,6 +15,11 @@ signal finished(network_entity_id: int)
 ## 客户端镜像子弹关闭了碰撞与扫掠（network_visual_only），只能靠本事件在**爆心**位置
 ## 播爆炸表现 —— 否则爆炸特效只能落在镜像子弹的射程尽头，与真正命中点差出几十像素。
 signal exploded(network_entity_id: int, position: Vector2)
+## 命中特效播报（2026-09-25）：Client 的镜像子弹**不参与碰撞/扫掠**（设计如此，只做视觉弹道），
+## 因此它永远不知道自己命中了谁 —— 带 `hit_effect_anim` 的武器在客户端**完全看不到命中特效**
+##（用户实测「Tank 被击中的特效动画客户端不显示」，实际影响所有带命中特效的武器）。
+## Host 权威弹命中时把 坐标 + 跟随目标 id 交给 NetworkWorld 广播，Client 播同一套特效。
+signal hit_effect_applied(position: Vector2, follow_entity_id: int)
 ##
 ## 使用单张水平帧条图片渲染：
 ##   图片被均分为 bullet_anim_frames 列，每帧宽 = 图宽 / 帧数，高 = 图高
@@ -381,6 +386,12 @@ func _hit(target: Node2D) -> void:
 		if fx_offset == Vector2.ZERO and "hurt_effect_offset" in damageable:
 			fx_offset = damageable.hurt_effect_offset
 		VXAnimSprite.play_scene(_hit_effect_anim, damageable.global_position, get_tree().current_scene, 10.0, bf, fx_offset)
+		## 联机表现转发（见 hit_effect_applied 声明处注释）。单机也会 emit，
+		## NetworkWorld 侧有 is_host 闸；单机没连监听者，无副作用。
+		var follow_id: int = 0
+		if _hit_effect_follow and "network_entity_id" in damageable:
+			follow_id = int(damageable.network_entity_id)
+		hit_effect_applied.emit(damageable.global_position, follow_id)
 	# 播放命中音效
 	if _hit_sound:
 		Global.play_sfx_managed(_hit_sound, get_tree().current_scene)
