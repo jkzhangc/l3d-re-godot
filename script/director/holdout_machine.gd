@@ -242,6 +242,7 @@ func _ready() -> void:
 func _on_boss_music_changed(active: bool) -> void:
 	if _music_player and is_instance_valid(_music_player):
 		_music_player.stream_paused = active
+		print("[HoldoutMachine] 防守战 BGM %s（Boss BGM 优先）" % ("挂起" if active else "恢复"))
 
 
 ## Boss BGM 是否正在播（Director 权威）。防守战 BGM 与它互斥（Boss 优先）。
@@ -256,10 +257,15 @@ func _boss_music_playing() -> bool:
 
 
 ## 统一闸门：按当前 Boss BGM 状态同步防守战 BGM 的可听性。
+## 状态未变时不打印、不赋值（循环重播每首都会走一次，避免刷日志）。
 func _sync_holdout_music_gate() -> void:
-	if _music_player and is_instance_valid(_music_player):
-		_music_player.stream_paused = _boss_music_playing()
-		print("[HoldoutMachine] 防守战 BGM %s（Boss BGM 优先）" % ("挂起" if active else "恢复"))
+	if _music_player == null or not is_instance_valid(_music_player):
+		return
+	var boss_playing: bool = _boss_music_playing()
+	if _music_player.stream_paused == boss_playing:
+		return
+	_music_player.stream_paused = boss_playing
+	print("[HoldoutMachine] 防守战 BGM %s（Boss BGM 优先）" % ("挂起" if boss_playing else "恢复"))
 
 
 func _process(delta: float) -> void:
@@ -346,6 +352,7 @@ func _ensure_children() -> void:
 		add_child(sprite)
 
 	var label: Label = get_node_or_null("HintLabel") as Label
+	var label_created: bool = false
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -353,13 +360,20 @@ func _ensure_children() -> void:
 		label.size = Vector2(160, 28)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
-		## 阴影参数统一走 Global；本脚本是 @tool 且此处在编辑器也会执行，
-		## 编辑器进程里没有 autoload，必须判空。
-		var g: Node = get_node_or_null("/root/Global")
-		if g:
-			g.apply_hint_font(label, 12)  ## 字体统一（2026-09-17）：fusion-pixel + 12 整倍
-			g.apply_text_shadow(label)
 		label.hide()
+		label_created = true
+
+	## 字体/阴影**每次进树都套**（2026-09-25 修）：此前这两行写在「新创建 Label」分支内，
+	## 于是 object/holdout_machine.tscn 里预置的 HintLabel 永远拿不到界面字体
+	## （走 ThemeDB 兜底 = 16px + 系统字体 → 机器提示文字不跟随「设置 → 界面字体」开关，
+	## 也正是「同一份游戏在不同电脑上字形不同」的来源）。一律经 Global 单一入口取字体。
+	## 本脚本是 @tool、编辑器里也会执行此函数，autoload 必须判空。
+	var g: Node = get_node_or_null("/root/Global")
+	if g:
+		g.apply_hint_font(label, 12)  ## 12px 基底（字号只取 12 的整倍）
+		g.apply_text_shadow(label)
+
+	if label_created:
 		add_child(label)
 
 	# ── 32×32 碰撞体：机器是实体，玩家/敌人不能穿过去 ──

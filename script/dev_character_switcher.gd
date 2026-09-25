@@ -14,7 +14,8 @@ class_name DevCharacterSwitcher extends Node2D
 ##      装备/弹药/位置全部保留（只是换人，不是回出生点）。
 ##   4. 与 CharacterSwitchManager 的 Ctrl+1~3 不冲突：试验场单人 team=1，那套不启用。
 
-const FONT_PATH := "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+## 界面字体一律经 Global.get_ui_font() 取（跟随「设置 → 界面字体」开关）；
+## 这里不再保留硬编码 .ttf 兜底（2026-09-25），Global 缺失时退回引擎主题字体。
 
 ## 触发半径（px）：玩家距本点小于此值才能按键换人
 @export var trigger_radius: float = 120.0
@@ -110,7 +111,7 @@ func _ensure_hint() -> void:
 	_hint = Label.new()
 	var settings := LabelSettings.new()
 	## 字体跟随「设置 → 界面字体」（2026-09-24，12px 基底，12 整倍）
-	settings.font = Global.get_ui_font() if Global.has_method("get_ui_font") else load(FONT_PATH)
+	settings.font = Global.get_ui_font() if Global.has_method("get_ui_font") else ThemeDB.fallback_font
 	settings.font_size = 12  # fusion-pixel 12 基底，12 整倍
 	settings.font_color = Color(1, 1, 1, 0.95)
 	settings.shadow_color = Color(0, 0, 0, 0.7)
