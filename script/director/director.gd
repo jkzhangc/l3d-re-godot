@@ -816,7 +816,9 @@ func spawn_ahead_batch(count: int) -> Array[Node2D]:
 	var want: int = count
 	if fs and fs.get("enabled") == true:
 		var ahead: int = fs.count_ahead(player)
-		var target: int = int(fs.get("target_ahead"))
+		## 带内目标数按真人数放大（2026-09-25）：这里是散兵/尸潮/事件批的**共同闸门**，
+		## 只放大 FrontSpawner 内部而不放大这道闸门 = 倍率被原地掐死（1 人和 4 人一样稀）。
+		var target: int = Players.scale_spawn_count(int(fs.get("target_ahead")))
 		# 前方带里已经够了 → 一只都不刷（这是"别太密"的主要闸门）
 		if ahead >= target:
 			return out

@@ -256,6 +256,13 @@ func _update_scripted_event(delta: float, alive_count: int) -> void:
 		var max_active: int = int(_event_config.get("max_active", sm.get("max_active_common") if sm else 12))
 		var per_wave: int = int(_event_config.get("spawn_per_wave", sm.get("horde_batch_size") if sm else 3))
 		var interval: float = float(_event_config.get("spawn_interval", sm.get("horde_batch_interval") if sm else 3.0))
+		## 每批数量与存活上限按真人数放大（2026-09-25 用户需求）：
+		## 防守战与尸潮事件批都走这里，是它们的唯一生成点。
+		## ⚠ max_active 语义是"上限"，只在 >0 时放大（0 = 沿用全局 SpawnManager，此时上面已取到 40）。
+		## 批次间隔（interval）**不**缩放：人数越多越靠"量"而不是"频率"加压，
+		## 否则 4 人下刷怪节奏会碎成滴答声。
+		per_wave = Players.scale_spawn_count(per_wave)
+		max_active = Players.scale_spawn_count(max_active)
 
 		if alive_count < max_active:
 			var to_spawn: int = mini(per_wave, max_active - alive_count)

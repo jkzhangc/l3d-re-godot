@@ -185,6 +185,47 @@ func next_living_seat(from: int) -> int:
 
 
 # ═══════════════════════════════════════
+# 刷怪倍率（按**真人**玩家数）
+# ═══════════════════════════════════════
+#
+# 2026-09-25 用户需求：多人模式刷怪量随人数递增（防守战 / 导演尸潮 / 普通刷怪统一口径）。
+#   1~2 人 = 1.0×，3 人 = 1.5×，4 人 = 2.0×（≥4 人沿用 2.0×）。
+#
+# ★ 人数 ≠ seat_count()：单机里一名玩家可以编 3 个角色（Q 切人），座位数是 3，
+#   但真人只有 1 个 —— 用座位数当人数会让**单人游戏**误吃 1.5~2.0 倍刷怪。
+#   因此这里只统计「已被 peer 认领的座位」（联机会话由 rebuild_network_seats 写入
+#   owner_peer_id）；单机（无 peer 认领）恒为 1。
+
+const SPAWN_SCALE_TABLE: Array[float] = [1.0, 1.0, 1.5, 2.0]   ## index = 真人玩家数 - 1
+
+
+## 本局真人数（联机 = 认领了座位的 peer 数；单机 = 1）。
+func spawn_player_count() -> int:
+	var owned: int = 0
+	for s: PlayerState in seats:
+		if s != null and s.owner_peer_id > 0:
+			owned += 1
+	return maxi(owned, 1)
+
+
+## 当前刷怪倍率。
+func spawn_scale() -> float:
+	var n: int = spawn_player_count()
+	var idx: int = mini(n, SPAWN_SCALE_TABLE.size()) - 1
+	return SPAWN_SCALE_TABLE[maxi(idx, 0)]
+
+
+## 把基准刷怪数量按人数放大。
+## base <= 0 原样返回 —— 本工程里 0/负数是"关闭 / 沿用全局"的哨兵值，放大它会改变语义。
+## minimum = 放大后的下限（默认 1：倍率再大也不把"该刷 0 只"变成 1 只；
+## 反之 base>0 时也不会因为倍率被截断成 0）。
+func scale_spawn_count(base: int, minimum: int = 1) -> int:
+	if base <= 0:
+		return base
+	return maxi(minimum, int(round(float(base) * spawn_scale())))
+
+
+# ═══════════════════════════════════════
 # 座位维护
 # ═══════════════════════════════════════
 

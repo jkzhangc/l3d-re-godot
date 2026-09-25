@@ -133,10 +133,13 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	if pause_in_cooldown and phase == &"cooldown":
 		last_reject = "喘息(cooldown)阶段暂停"
 		return 0
-	if alive_count >= max_active_common:
+	## 存活上限按真人数放大（2026-09-25 用户需求：1~2 人 1.0× / 3 人 1.5× / 4 人 2.0×）。
+	## 上限不跟着放大时，多人下"倍率"会被这道闸门直接吃掉（1 人和 4 人刷得一样多）。
+	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	if alive_count >= active_cap:
 		## 注意：这里的 alive_count 是**全场**存活数，包含已经被玩家甩在身后、
 		## 仍在慢慢追的老敌人。没有回收机制时它会只增不减 → 前方被这道闸门永久掐断。
-		last_reject = "全场存活已达上限 %d/%d" % [alive_count, max_active_common]
+		last_reject = "全场存活已达上限 %d/%d" % [alive_count, active_cap]
 		return 0
 
 	## 尸潮（peak）阶段普通补位暂停（2026-09-17 用户：尸潮期间普通刷怪不要刷）——
@@ -176,8 +179,9 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	## 按阶段取「附近维持目标 / 每批补几只 / 最短间隔」：
 	## 平常（build/cooldown）零星补位；尸潮（peak）又密又猛，且**到量即停**（用户 2026-09-16）。
 	var is_peak: bool = phase == &"peak"
-	var target: int = target_ahead_peak if is_peak else target_ahead
-	var batch_now: int = batch_peak if is_peak else batch
+	## 目标数 / 每批数同样按真人数放大（倍率唯一入口 = Players.scale_spawn_count）。
+	var target: int = Players.scale_spawn_count(target_ahead_peak if is_peak else target_ahead)
+	var batch_now: int = Players.scale_spawn_count(batch_peak if is_peak else batch)
 	var interval_now: float = interval_min_peak if is_peak else interval_min
 
 	var ahead: int = count_ahead(anchor)
@@ -194,7 +198,7 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 		return 0
 
 	var want: int = mini(batch_now, target - ahead)
-	want = mini(want, max_active_common - alive_count)
+	want = mini(want, active_cap - alive_count)
 	var spawned: int = 0
 	var picks_failed: int = 0
 	for _i: int in range(want):
@@ -607,8 +611,9 @@ func _view_half_extents() -> Vector2:
 func debug_state(player: Node2D) -> String:
 	## 供现场抓取器 / 调试打印使用的一行摘要。
 	var view_half: Vector2 = _view_half_extents()
-	return "前方刷怪: 启用=%s 带内=%d/%d 距离=%.0f~%.0f 扇区=±%.0f° 屏外余量=%.0f 可视=%.0f×%.0f 前进累计=%.0f/%.0f 上次未刷=%s" % [
+	return "前方刷怪: 启用=%s 带内=%d/%d(×%.1f人=%d) 距离=%.0f~%.0f 扇区=±%.0f° 屏外余量=%.0f 可视=%.0f×%.0f 前进累计=%.0f/%.0f 上次未刷=%s" % [
 		str(enabled), count_ahead(player) if player else -1, target_ahead,
+		Players.spawn_scale(), Players.scale_spawn_count(target_ahead),
 		min_dist, max_dist, front_half_angle, offscreen_margin,
 		view_half.x * 2.0, view_half.y * 2.0, _advance_accum, advance_step, last_reject]
 

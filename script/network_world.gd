@@ -28,6 +28,10 @@ const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://object/weapon_pickup.tscn")
 ## 武器拾取物脚本（静态工具：落点避让 find_free_drop_position 等）
 const PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
+## 落点避墙工具（2026-09-25）：用 preload 常量而不是全局类名调用 ——
+## 新建脚本的 class_name 要等编辑器重扫才会写进 global_script_class_cache，
+## headless 跑用例时那份缓存是旧的，按类名引用会直接 Parse Error。
+const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
 const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
 const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
@@ -6090,7 +6094,9 @@ func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> void:
 	)
 	if not arrival_position is Vector2:
 		return
-	player.global_position = arrival_position as Vector2
+	## 抵达落点同样要避墙（2026-09-25）：关卡作者摆的 ArrivalPoint 只要压到图块碰撞，
+	## 传送过去就是"卡在墙里"。修正由 SpawnSpotResolver 统一做（确定性 → 两端一致）。
+	player.global_position = SPOT_RESOLVER.resolve(player, arrival_position as Vector2)
 	print("[NetworkWorld] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
 
 
@@ -6123,10 +6129,19 @@ func _instantiate_player(position: Vector2, peer_id: int = 0) -> CharacterBody2D
 	return node
 
 
+## 多人补位落点：以锚点玩家为原点按固定间距排开，再交给 SpawnSpotResolver 避墙修正。
+##
+## ⚠ 2026-09-25 用户实测「3 人传送进学校内部三楼，第 3 个人卡在墙壁里」：
+## 旧实现只有 `origin + 56 × index` 这条**纯几何偏移**，不看任何地图碰撞。锚点贴着墙时，
+## 第 2/3 个偏移点必然落进墙内；而学校内部的墙是**图块碰撞**（不是实体节点），
+## 玩家被砌进墙里后连推都推不出来。序号越大偏移越远 → 只有第 3 人 (index=2) 出事，
+## 与用户"第 3 个人"的描述完全吻合。
 func _spawn_position(index: int) -> Vector2:
 	var anchor := _find_preplaced_player()
-	var origin := anchor.global_position if is_instance_valid(anchor) else Vector2.ZERO
-	return origin + Vector2(SPAWN_SEPARATION * index, 0.0)
+	if not is_instance_valid(anchor):
+		return Vector2(SPAWN_SEPARATION * index, 0.0)
+	var base: Vector2 = anchor.global_position + Vector2(SPAWN_SEPARATION * index, 0.0)
+	return SPOT_RESOLVER.resolve(anchor, base)
 
 
 func _set_local_player(node: Node2D, seat_index: int) -> void:

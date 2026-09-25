@@ -106,7 +106,9 @@ func get_horde_progress() -> float:
 # 内部 — 散兵生成
 # ═══════════════════════════════════════
 func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
-	if alive_count >= max_active_common:
+	## 存活上限按真人数放大（见 Players.scale_spawn_count；倍率唯一入口）。
+	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	if alive_count >= active_cap:
 		return
 
 	_scatter_timer -= delta
@@ -124,11 +126,13 @@ func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
 	else:
 		count = randi_range(scatter_min, scatter_max)
 
-	count = mini(count, max_active_common - alive_count)
+	count = Players.scale_spawn_count(count)
+	count = mini(count, active_cap - alive_count)
 	if count <= 0:
 		return
 
-	print("[SpawnManager] scatter spawn: %d enemies" % count)
+	print("[SpawnManager] scatter spawn: %d enemies（倍率 %.1f× / %d 人）" % [
+		count, Players.spawn_scale(), Players.spawn_player_count()])
 	# 位置改由 Director.spawn_ahead_batch（前方扇区 + 屏幕外 + 前方带数量闸门）决定，
 	# 不再走"作者点缺失时全图随机撒点"的旧回退。
 	_director.spawn_ahead_batch(count)
@@ -144,7 +148,8 @@ func _reset_scatter_timer() -> void:
 # ═══════════════════════════════════════
 func _start_horde() -> void:
 	_horde_active = true
-	_horde_total = randi_range(horde_total_min, horde_total_max)
+	## 尸潮总量按真人数放大（用户需求：尸潮也在倍率内）。
+	_horde_total = Players.scale_spawn_count(randi_range(horde_total_min, horde_total_max))
 	_horde_spawned = 0
 	_horde_remaining = _horde_total
 	_horde_batch_timer = 0.0  # 第一批立即生成
@@ -165,13 +170,14 @@ func _update_horde(delta: float, alive_count: int) -> void:
 		_horde_active = false
 		return
 
-	if alive_count >= max_active_common:
+	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	if alive_count >= active_cap:
 		_horde_batch_timer = 1.0
 		return
 
-	# 当前批次数量
-	var batch: int = mini(horde_batch_size, _horde_remaining)
-	batch = mini(batch, max_active_common - alive_count)
+	# 当前批次数量（基准值按真人数放大后，再受剩余量与存活上限约束）
+	var batch: int = mini(Players.scale_spawn_count(horde_batch_size), _horde_remaining)
+	batch = mini(batch, active_cap - alive_count)
 
 	print("[SpawnManager] horde batch: %d enemies (remaining=%d)" % [batch, _horde_remaining])
 	var spawned: int = _director.spawn_ahead_batch(batch).size()
