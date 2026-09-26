@@ -41,6 +41,13 @@ const PICKUP_SCENE := preload("res://object/weapon_pickup.tscn")
 const PICKUP_GROUP := &"ground_pickup"          ## 全部地面掉落物（武器/治疗/投掷物）→ 落点避让用
 const WEAPON_PICKUP_GROUP := &"weapon_pickup"   ## 仅武器拾取物 → 最近者仲裁用
 const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
+## 落点避墙判据（2026-09-26）：与传送落点 / 多人补位 / 固定刷怪点**共用同一个解析器**
+## —— 图块碰撞（任一物理层，含 physics_layer_0 角色层）+ 物理探测 + require_tile。
+## 用 preload 常量而不是全局类名：新建脚本的 class_name 要等编辑器重扫才进
+## global_script_class_cache，headless 跑用例时那份缓存是旧的（会直接 Parse Error）。
+const SPOT_SCRIPT := preload("res://script/director/spawn_spot_resolver.gd")
+## 落点探测半径（px）：掉落物贴图约半格，取玩家盒半宽同级即可。
+const DROP_PROBE_RADIUS: float = 14.0
 const AUTO_REARM_DISTANCE: float = 64.0         ## 自动拾取后走开多远才重新武装
 ## 拾取范围（像素）。**必须与 weapon_pickup.tscn / healing_pickup.tscn 的 Area2D
 ## CircleShape2D.radius 保持一致**（24 → 16，2026-09-23 用户：拾取范围调小一些）。
@@ -102,14 +109,15 @@ static func drop_landing_position(player: Node2D) -> Vector2:
 	return player.global_position + drop_push_vector(player)
 
 
-## 找一个可用落点：**不压进墙里**，且与已有地面掉落物保持 ≥min_gap。
-## 先试基准点，再按环形由近及远扩散。`is_free` 可注入（默认走 Director 的可行走判定），
+## 找一个可用落点：**绝不压进有物理层的图块**，且尽量与已有地面掉落物保持 ≥min_gap。
+## 先试基准点，再按环形由近及远扩散。`is_free` 可注入（默认走 SpawnSpotResolver），
 ## 便于 harness 用假判定做单测。
 ##
-## ⚠ 2026-09-25 用户实测「换武器时掉落物有时会掉进墙壁里」：
-## 旧实现**只**做与其它掉落物的间距避让（`others.is_empty()` 时更是直接返回基准点），
-## 完全不看地图碰撞；而基准点 = "玩家位置 + 朝向推远 40px"（drop_push_vector），
-## 贴着墙换武器就会把掉落物推进墙里。
+## ⚠ 2026-09-25 用户实测「换武器时掉落物有时会掉进墙壁里」→ 加了避墙。
+## ⚠ 2026-09-26 用户复测「**还是**会掉进有物理层的图块里（墙壁、屋顶）」→ 根因是
+##   旧实现的第 ② 轮把 **"不在墙里"这条也一并放宽了**（只要间距够，墙里照收）。
+##   现在：「不压进有物理层的图块」是**硬不变量**，任何一轮都不放宽；
+##   逐轮放宽的只有**掉落物之间的间距**，并按「近环 → 远环」三段搜索兜底。
 static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: float = DROP_MIN_GAP,
 		is_free: Callable = Callable()) -> Vector2:
 	if tree == null:
@@ -119,41 +127,77 @@ static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: flo
 	for n: Node in tree.get_nodes_in_group(PICKUP_GROUP):
 		if n is Node2D and is_instance_valid(n) and not n.is_queued_for_deletion():
 			others.append((n as Node2D).global_position)
-	var radii: Array[float] = [0.0, min_gap, min_gap * 1.5, min_gap * 2.0]
-	## 两轮：
-	##  ① 既不在墙里、也满足间距（正常路径）
-	##  ② 仅满足间距（放宽）—— 关键：可行走判定可能把**所有**候选都否掉
-	##     （地图外/禁刷层/无地图的 harness），此时绝不能退化成"叠在别的掉落物上"，
-	##     间距是硬不变量（09-25 实测：只有一轮时间距断言被打到 0px）。
-	var require_free: bool = true
-	for _round: int in 2:
+	## 三个搜索段（**每段都要求 free_check 通过**）：
+	##  ① 近环 + 间距 ≥ min_gap（正常路径，与旧实现第 ① 轮完全一致）
+	##  ② 近环 + 只要求不与别的掉落物**完全重合**（≥2px）—— 掉落物密集的角落
+	##  ③ 远环 + ≥2px —— 四面贴墙/窄道，宁可放远一点也不放进墙里
+	var scan := func(radii: Array, gap: float) -> Variant:
 		for radius: float in radii:
 			for i: int in 8:
 				var ang: float = TAU * float(i) / 8.0
 				var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
-				if require_free and not bool(free_check.call(cand)):
+				if not bool(free_check.call(cand)):
 					continue
 				var ok: bool = true
 				for o: Vector2 in others:
-					if cand.distance_to(o) < min_gap - 0.01:
+					if cand.distance_to(o) < gap:
 						ok = false
 						break
 				if ok:
 					return cand
-		require_free = false
-	## 环形全部不可用（例如四面贴墙的角落）：退回基准点，保持旧行为而不是掉进墙里再乱飞。
+		return null
+	var near: Array[float] = [0.0, min_gap, min_gap * 1.5, min_gap * 2.0]
+	var far: Array[float] = [min_gap * 3.0, min_gap * 4.0, min_gap * 6.0, min_gap * 8.0]
+	var found: Variant = scan.call(near, min_gap - 0.01)
+	if not (found is Vector2):
+		found = scan.call(near, 1.99)
+	if not (found is Vector2):
+		found = scan.call(far, 1.99)
+	if found is Vector2:
+		return found as Vector2
+	## 四周确实无处可放（极端狭窄 / 根本没有图块层）：退回基准点并告警 ——
+	## 掉落物必须有位置，不能凭空消失；但这条路径现在是**最后**兜底，正常地图到不了。
+	push_warning("[WeaponPickup] 掉落落点四周无空位，退回基准点 %s" % base)
 	return base
 
 
-## 默认"落点可用"判定：复用 Director 的可行走判定
-##（含地图范围闸 / 作者禁刷层 / 图块碰撞多边形；无 Director 时不加限制）。
+## 默认「落点可用」判定（2026-09-26 换源）：走 **SpawnSpotResolver.is_free**
+## —— 与传送落点 / 多人补位 / 固定刷怪点**同一套**判据：
+##   ① 图块碰撞：**任一物理层**有碰撞多边形即算墙（墙壁 / 屋顶 / 桌椅都在
+##      physics_layer_0「角色层」= collision_layer 1 上）；
+##   ② 物理探测 mask 1|4|8：抓铁门 / 防守战机器这类**节点式**碰撞体（图块查不到）；
+##   ③ `require_tile`：必须落在**有效图块**上（房间外的黑区既无碰撞也无图块，
+##      只查碰撞会被误判成"空位"）。
+##
+## 【为什么不再用 Director.is_drop_spot_free】它依赖 Director 的图块缓存 ——
+## 缓存没建好（无玩家 / 场景刚加载）时**直接放行**；而且会把作者 NoSpawn（禁刷怪层）
+## 也算成"不能放"，但 NoSpawn 的语义是"这里别刷怪"，与"掉落物能不能躺在这里"无关。
 static func _default_free_check(tree: SceneTree) -> Callable:
-	var director: Node = null
-	if tree != null and tree.root != null:
-		director = tree.root.get_node_or_null("Director")
-	if director != null and director.has_method("is_drop_spot_free"):
-		return Callable(director, "is_drop_spot_free")
+	var world: Node2D = _resolve_world_node(tree)
+	if world != null:
+		return func(pos: Vector2) -> bool:
+			return SPOT_SCRIPT.is_free(world, pos, DROP_PROBE_RADIUS, true)
 	return func(_pos: Vector2) -> bool: return true
+
+
+## 取一个**已入树**的 Node2D 作为判据锚点（SpawnSpotResolver 需要它取 World2D 与扫描根）。
+## 优先当前场景根（地图场景根就是 Node2D），其次本机玩家实体；都没有则返回 null
+## （判据退化成"无限制"，与旧行为一致，不会更严）。
+static func _resolve_world_node(tree: SceneTree) -> Node2D:
+	if tree == null:
+		return null
+	var scene: Node = tree.current_scene
+	if scene != null:
+		var as_2d: Node2D = scene as Node2D
+		if as_2d != null and is_instance_valid(as_2d) and as_2d.is_inside_tree():
+			return as_2d
+	if tree.root != null:
+		var players: Node = tree.root.get_node_or_null("Players")
+		if players != null and players.has_method("get_local_entity"):
+			var entity: Node2D = players.call("get_local_entity") as Node2D
+			if entity != null and is_instance_valid(entity) and entity.is_inside_tree():
+				return entity
+	return null
 
 
 ## 静态入口：把一把武器作为掉落物放到 player 附近（替换掉落 / 玩家主动丢弃共用）。

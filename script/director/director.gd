@@ -948,9 +948,21 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 		return spawned_nodes
 	var probe_node: Node2D = _spot_probe_node(decor_layer)
 	var assignment: Array[int] = distribute_point_indices(count, point_count, wave_index)
+	## 玩家画面内 / 近旁的屏蔽判据（FrontSpawner 持有视野矩形与半径配置）。
+	var fs: Node = get_node_or_null("FrontSpawner")
 	var fell_back: int = 0
+	var blocked_swapped: int = 0
 	for i: int in range(count):
 		var point: Vector2 = points[assignment[i]] as Vector2
+		## ★「玩家画面内 / 近旁的点位 → 本批暂时屏蔽」（2026-09-26 用户需求）：
+		## 该只改走屏幕外刷法 —— 供给不断，也绝不会出现在玩家眼前。
+		## 单机与联机同规则（判据本身按"全体玩家"取并集）。
+		if fs != null and fs.has_method("is_holdout_point_blocked") \
+				and bool(fs.call("is_holdout_point_blocked", point)):
+			blocked_swapped += 1
+			var swapped: Array[Node2D] = spawn_horde_nodes(1, decor_layer)
+			spawned_nodes.append_array(swapped)
+			continue
 		var pos: Vector2 = Vector2.ZERO
 		if probe_node != null:
 			var found: Variant = SPOT_RESOLVER.find_near(
@@ -966,6 +978,9 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 		var enemy: Node2D = spawn_enemy(pos, decor_layer, -1)
 		if enemy != null:
 			spawned_nodes.append(enemy)
+	if blocked_swapped > 0:
+		print("[Director] 固定刷怪点 %d 只被「玩家画面/近旁」暂时屏蔽 → 改走屏幕外刷法（本批 %d 只，点位 %d 个）"
+			% [blocked_swapped, count, point_count])
 	if fell_back > 0:
 		push_warning("[Director] 固定刷怪点有 %d 只找不到空位，已退回屏幕外刷法（%d 个点位，请检查是否压墙/被占）"
 			% [fell_back, point_count])

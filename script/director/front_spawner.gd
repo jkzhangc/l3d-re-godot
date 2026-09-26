@@ -75,6 +75,11 @@ extends Node
 @export var remote_view_padding: float = 48.0
 ## 未指定相机时的可视半宽/半高兜底（本工程视口 1280×960、相机缩放 2× → 640×480）。
 @export var fallback_view_size: Vector2 = Vector2(640.0, 480.0)
+## 防守战**固定刷怪点**的「玩家近旁」屏蔽半径（px，2026-09-26 用户需求）：
+## 点位落在任一玩家视野矩形（含 offscreen_margin）内、**或**距任一玩家小于本半径
+## → 本批**暂时屏蔽**该点（不在那里刷敌人）。单机与联机同规则。
+## 0 = 只按屏外判定屏蔽（不加半径）。
+@export var holdout_spot_block_radius: float = 240.0
 
 @export_group("节奏")
 ## 玩家累计前进这么多像素，才允许补下一批（防止原地不动狂刷）。
@@ -497,6 +502,23 @@ func is_offscreen_for_all(pos: Vector2) -> bool:
 	## 供其它生成路径（作者 SpawnZone 的区域补齐、作者 SpawnPoint 回退等）复用，
 	## 避免把敌人刷到某个玩家正看着的地方。
 	return not _visible_to_any_player(pos, _player_view_rects(null))
+
+
+## 防守战固定刷怪点是否被「玩家画面内 / 近旁」**暂时屏蔽**（2026-09-26 用户需求）：
+##   ① 落在任一玩家视野矩形（含 `offscreen_margin` 外扩）内 → 屏蔽（屏幕里凭空冒怪）；
+##   ② 距任一玩家 < `holdout_spot_block_radius` → 屏蔽（窄走廊里"屏外但贴脸"也算）。
+## 拒绝纪律与 `is_offscreen_for_all` 同源：判定用**全体玩家**的并集，只挡一个玩家
+## 会把点刷进另一个玩家的画面里。调用方（Director）按批过滤点位，被屏蔽的那几只
+## 改走屏幕外刷法，供给不断。
+func is_holdout_point_blocked(pos: Vector2) -> bool:
+	if _visible_to_any_player(pos, _player_view_rects(null)):
+		return true
+	if holdout_spot_block_radius > 0.0:
+		var r2: float = holdout_spot_block_radius * holdout_spot_block_radius
+		for p: Node2D in _spawn_players(null):
+			if is_instance_valid(p) and p.global_position.distance_squared_to(pos) <= r2:
+				return true
+	return false
 
 
 func is_visible_to_any_player_exact(pos: Vector2) -> bool:

@@ -1737,12 +1737,22 @@ func _try_host_reload(peer_id: int) -> void:
 		return
 	var current := state.get_magazine_ammo(wd.item_id)
 	var missing := maxi(0, wd.magazine_capacity - current)
-	var available := state.count_ammo_item(wd.ammo_item_id)
-	var load_count := mini(missing, available)
-	if load_count <= 0:
+	if missing <= 0:
 		return
-	if state.consume_ammo_item(wd.ammo_item_id, load_count) != load_count:
-		return
+	## 无限备弹（WeaponData.ammo_is_infinite，如手枪）分支 —— 2026-09-26 用户实测
+	## 「手枪无限备弹不是无限的，还是会被打完」的根因：本函数是联机装填的**唯一**权威
+	## 路径，旧实现直接 `count_ammo_item` → 手枪根本不消耗 ammo_item，库存恒 0 →
+	## `load_count = 0` → 静默 return → 弹夹打空后再也装不上（单机走 PlayerReloadState，
+	## 那里一直有 `has_infinite_ammo()` 分支，所以只有联机坏）。规则与单机
+	## PlayerReloadState._do_reload / _load_one_shell 完全对齐：装到满、不扣库存。
+	var load_count: int = missing
+	if not wd.has_infinite_ammo():
+		var available := state.count_ammo_item(wd.ammo_item_id)
+		load_count = mini(missing, available)
+		if load_count <= 0:
+			return
+		if state.consume_ammo_item(wd.ammo_item_id, load_count) != load_count:
+			return
 	state.set_magazine_ammo(wd.item_id, current + load_count)
 	var duration := _get_network_reload_duration(wd, load_count)
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
@@ -4308,6 +4318,30 @@ func holdout_completed(token: int) -> void:
 	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
 		if machine.has_method("apply_remote_completion"):
 			machine.apply_remote_completion(token)
+
+
+## 终章 ED 启动广播（2026-09-26 用户实测：多人模式下**客户端没触发 ED 流程**，
+## 反而还能在地图附近走动、也没有章节结算）。
+## 根因：ED 由 HoldoutMachine._start_ending 起，而那里对 Client 直接 return ——
+## 客户端既没黑幕、也没结算页，世界不停帧，于是继续自由行动。
+## 与 holdout_completed 同款：Host 广播 → 各端机器按本地演出重放（黑幕 → 结算页
+## → ED BGM + 角色话语 → 滚动名单）。
+func broadcast_campaign_ending(fade_seconds: float) -> void:
+	if not net or not net.is_host:
+		return
+	campaign_ending_start.rpc(fade_seconds)
+
+
+@rpc("authority", "call_remote", "reliable")
+func campaign_ending_start(fade_seconds: float) -> void:
+	if net.is_host or not is_inside_tree() or _scene_transitioning:
+		return
+	var scene := get_tree().current_scene if get_tree() else null
+	if not scene:
+		return
+	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
+		if machine.has_method("apply_remote_ending"):
+			machine.apply_remote_ending(fade_seconds)
 
 
 # ---------------------------------------------------------------- Automated smoke input

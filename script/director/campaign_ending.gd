@@ -209,10 +209,16 @@ func _go_credits() -> void:
 	get_tree().paused = false
 	# 联机：Host 统一拉所有客户端进名单（单机等价于空操作）
 	var net: Node = get_node_or_null("/root/Net")
-	if net and net.has_method("is_online_session") and bool(net.is_online_session()) \
-			and net.has_method("request_scene_change"):
+	var online: bool = net != null and net.has_method("is_online_session") \
+		and bool(net.is_online_session())
+	if online and net.has_method("request_scene_change"):
 		net.request_scene_change(CREDITS_SCENE)
-	get_tree().change_scene_to_file.call_deferred(CREDITS_SCENE)
+	## 本地 raw 切图只在**单机 / Host**端做：联机 Client 必须由 Host 的 start_game
+	##（带 scene_transition 静默握手 + 就绪确认）把它带过去 —— Client 自己抢跑会与
+	## 握手协议打架（同类根因见 2026-09-25 安全屋 scene_identity 那轮）。
+	var is_client: bool = online and not bool(net.get("is_host"))
+	if not is_client:
+		get_tree().change_scene_to_file.call_deferred(CREDITS_SCENE)
 	# 2026-09-14：本节点**不** queue_free —— 黑幕退到 credits 背板（95）之后，
 	# ED BGM 继续压进名单；名单结束/跳过时 credits 会调 stop_ending_music() 收尾。
 	# 保险丝：万一 credits 未能回调，30 秒后自裁，避免黑幕残留在标题画面上。

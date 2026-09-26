@@ -43,6 +43,15 @@ func _ready() -> void:
 		set_process(false)
 		set_process_input(false)
 		return
+	## 联机 **不启用**（2026-09-26）：每个 peer 只拥有一个座位，"换人"在这里没有意义，
+	## 反而会把人换绑到别人的座位上（`Players.set_active_seat` 会改写
+	## `_seat_of_entity`），造成 HUD 读数 / 可用物资与真实持有错位、并在联机下冒出
+	## 其它座位的替身精灵。联机沿用「死亡后自动切人」那条独立链路即可。
+	if _is_online_session():
+		set_process(false)
+		set_process_input(false)
+		print("[SwitchMgr] 联机会话 → 手动切人停用（每人一座位）")
+		return
 	_player = Players.get_local_entity() as CharacterBody2D
 	_camera = _find_camera()
 	if show_teammate_standins:
@@ -197,6 +206,13 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("切换角色键"):
 		target_index = _find_next_living_member()
 	else:
+		## 「选择队员1/2/3键」的动作本身就绑在**裸数字 1/2/3** 上，与
+		## 主武器键(1) / 副武器键(2) / 治疗品键(3) **完全撞车**（2026-09-26 用户实测
+		## 「急救喷雾按3用不了」）。操作说明.txt 第 44 行写的口径是 **Ctrl+1/2/3**，
+		## 因此这里必须显式要求 Ctrl —— 否则按 1/2/3 会同时切人 + 举武器/用喷雾，
+		## 在联机下更会把人换绑到**别人的座位**，后续 HUD 读数与真实持有完全对不上。
+		if not _ctrl_held(event):
+			return
 		for i: int in range(_team_size):
 			if event.is_action_pressed("选择队员%d键" % (i + 1)):
 				target_index = i
@@ -222,9 +238,25 @@ func _input(event: InputEvent) -> void:
 	_cooldown_timer = switch_cooldown
 
 
+## 输入事件是否按住 Ctrl（「选择队员」动作的限定修饰键，见 _input 注释）。
+func _ctrl_held(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	if key != null:
+		return key.ctrl_pressed
+	var mouse := event as InputEventMouseButton
+	if mouse != null:
+		return mouse.ctrl_pressed
+	return false
+
+
 func _process(delta: float) -> void:
 	if _cooldown_timer > 0.0:
 		_cooldown_timer -= delta
+
+
+func _is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and bool(net.is_online_session())
 
 
 func _find_next_living_member() -> int:

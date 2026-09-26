@@ -198,6 +198,7 @@ var _started: bool = false          ## 是否已经启动过（配合 one_shot�
 var _active: bool = false           ## 防守战是否进行中
 var _completed: bool = false        ## 是否已完成
 var _ending_started: bool = false   ## 终章 ED 流程是否已触发（终章配置时，完成后再交互 = 进 ED）
+var _ending_local_started: bool = false   ## 本端是否已经真正起了 ED 演出（联机 Client 由广播触发）
 var _can_interact: bool = false
 var _step_index: int = 0
 var _step_timer: float = 0.0
@@ -316,19 +317,39 @@ func _start_ending() -> void:
 	if _ending_started:
 		return
 	_ending_started = true
+	## 联机 Client 只等 Host 的广播（apply_remote_ending）—— 本地按键不自行起 ED，
+	## 否则两端各起一份、时序分叉。
 	if _is_network_client():
 		return
+	## Host（联机）：把「进 ED」广播给所有 Client（2026-09-26 用户实测根因见下）。
+	var world: Node = _find_network_world()
+	if _is_online_session() and world != null and world.has_method("broadcast_campaign_ending"):
+		world.broadcast_campaign_ending(ending_fade_seconds)
+	_begin_ending(ending_fade_seconds)
+
+
+## Client 收到 Host 的「终章 ED 启动」广播：重放同一段本地演出
+##（黑屏淡出 → 章节结算 → ED BGM + 角色结局话语 → 滚动名单）。
+func apply_remote_ending(fade_seconds_value: float) -> void:
 	var label: Label = get_node_or_null("HintLabel") as Label
 	if label:
 		label.hide()
+	_begin_ending(fade_seconds_value)
+
+
+## 真正起 ED 演出（Host / 单机 / 被广播唤起的 Client 共用同一条路径）。
+func _begin_ending(fade_seconds_value: float) -> void:
+	if _ending_local_started:
+		return
+	_ending_local_started = true
 	if ending_sound:
 		Global.play_sfx_managed(ending_sound, get_tree().current_scene)
 	var ending: CampaignEnding = CampaignEnding.new()
-	ending.fade_seconds = ending_fade_seconds
+	ending.fade_seconds = fade_seconds_value
 	# 挂 root：本节点可能藏在"列车门"子树下，且后续场景切换会释放本节点
 	get_tree().root.add_child(ending)
 	ending.start()
-	print("[HoldoutMachine] ★ 终章 ED 启动")
+	print("[HoldoutMachine] ★ 终章 ED 启动（client=%s）" % str(_is_network_client()))
 
 
 func _draw() -> void:

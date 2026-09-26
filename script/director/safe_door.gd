@@ -118,10 +118,14 @@ func _ensure_children() -> void:
 		label.position = Vector2(-72, -62)
 		label.size = Vector2(144, 28)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		Global.apply_hint_font(label, 12)  ## 字体统一（2026-09-17）：fusion-pixel + 12 整倍
-		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
-		Global.apply_text_shadow(label)  ## 阴影参数统一走 Global（原来是写死的 2,2 黑影）
 		add_child(label)
+	## 字体 / 颜色 / 阴影**无条件套**（2026-09-26 用户实测「安全门提示文字没同步全局
+	## 字体、也没有阴影」）：safe_door.tscn 里**预置了 HintLabel 节点**，而旧实现把这三行
+	## 写在 `if not label` 里 → 预置节点永远拿不到样式（与机器 HintLabel 是同一个坑，
+	## 见 MEMORY 的「@tool 里『新建才套样式』是陷阱」铁律）。
+	Global.apply_hint_font(label, 12)  ## 字体统一（2026-09-17）：fusion-pixel + 12 整倍
+	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
+	Global.apply_text_shadow(label)  ## 阴影参数统一走 Global（原来是写死的 2,2 黑影）
 
 
 func _refresh_sprite() -> void:
