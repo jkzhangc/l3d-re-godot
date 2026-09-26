@@ -42,10 +42,12 @@ class_name DirectorConfig extends Node
 @export var scatter_interval_max: float = 10.0  ## 两次散兵生成之间最多隔几秒。实际间隔在此范围内随机，避免节奏感太机械
 
 @export_group("生成 — 尸潮（Peak 阶段大量敌人）")
-@export var horde_total_min: int = 5            ## 一波尸潮最少一共出几个敌人。实际数量在此范围内随机
-@export var horde_total_max: int = 25            ## 一波尸潮最多一共出几个敌人。地图大可以多设，地图小设少点
+@export var horde_total_min: int = 5            ## 尸潮期间**同时维持**多少只存活（不再是"一共出几个"）。缺多少补多少
+@export var horde_total_max: int = 25            ## 尸潮期间同时维持的存活数上限。地图大可以多设，地图小设少点
 @export var horde_batch_size: int = 8            ## 尸潮每批同时生成几个。不会一次性刷出全部，而是分批来，模拟"从四面八方涌来"的感觉（2026-09-17：5→8）
 @export var horde_batch_interval: float = 5.0    ## 尸潮批次之间的基础间隔秒数。设短=连续涌出，设长=一波一波有节奏（2026-09-17：3→5，慢刷）
+@export var horde_duration_min: float = 25.0  ## 一波尸潮持续多久（秒）下限。尸潮结束条件 = 这个窗口走完；期间「缺多少补多少」，被击杀 / 被远处回收都会腾出名额继续补
+@export var horde_duration_max: float = 40.0  ## 一波尸潮持续多久（秒）上限。实际值在此范围内随机，并被 peak_timeout 截断（尸潮不会比峰值阶段更长）
 
 @export_group("附近闸")
 ## 附近（半径内）存活敌人达到该数量且玩家静止 → 暂停普通补位与散兵/事件批，

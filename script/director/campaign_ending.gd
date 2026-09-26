@@ -98,6 +98,12 @@ func start() -> void:
 	# 黑幕淡出前先清场：触发 ED 前残留的伤害数字飘字（layer 100 > 黑幕 90）会
 	# 压在黑幕和总结页上直到切场景——直接全清。
 	DamageNumber.clear_all()
+	## ★BGM 交接（2026-09-26）：终章演出开始 = 战斗结束，先收掉 Boss/尸潮 BGM。
+	## 它们挂 /root/Director 下不进场景树释放，且 AudioStreamPlayer 在树暂停时照常出声
+	## —— 不收就会压在结算页 summary_music / ED 的 l3d_ed 上（用户实测两首一起响）。
+	var director: Node = get_node_or_null("/root/Director")
+	if director and director.has_method("stop_battle_music"):
+		director.call("stop_battle_music")
 	# 淡出瞬间冻结全场（用户 2026-09-13：黑屏过程玩家/敌人全部暂停、不能移动）。
 	# 本层 PROCESS_MODE_ALWAYS，计时/补间不受影响。
 	get_tree().paused = true

@@ -281,6 +281,13 @@ func _process(delta: float) -> void:
 		_refresh_sprite()
 		return
 
+	## ★BGM 互斥自校正（2026-09-26）：`boss_music_changed` 只在状态**切换**时发出，
+	## 而任何 play()（起播 / 单曲循环重播）都会把 stream_paused 复位 —— 只靠信号在
+	## 客户端会漏（用户实测「多人下 Tank BGM 与防守战 BGM 同时播放」）。
+	## 这里每帧按权威状态(`Director.is_boss_music_active()`)重新上闸：状态没变就早退，
+	## 成本只是几次属性读取，且客户端也照常执行（客户端的 _active 为 false，但 BGM 要管）。
+	_sync_holdout_music_gate()
+
 	# 踏步动画（静态机器也要继续跑距离检测，不能在这里 return）
 	if animated and step_frames.size() > 1:
 		_step_timer -= delta
@@ -319,16 +326,35 @@ func _unhandled_input(event: InputEvent) -> void:
 func _start_ending() -> void:
 	if _ending_started:
 		return
-	_ending_started = true
-	## 联机 Client 只等 Host 的广播（apply_remote_ending）—— 本地按键不自行起 ED，
-	## 否则两端各起一份、时序分叉。
+	## 联机 Client：本地按键**不**自起 ED（两端各起一份会时序分叉），改为**请求 Host**。
+	## ⚠ 旧实现在这里先 `_ending_started = true` 再 return —— 客户端按了键既不产生任何动静，
+	## 还把自己后续的请求路径一起封死（用户实测「多人下打完防守战就没然后了」）。
 	if _is_network_client():
+		request_remote_ending()
 		return
+	_ending_started = true
 	## Host（联机）：把「进 ED」广播给所有 Client（2026-09-26 用户实测根因见下）。
 	var world: Node = _find_network_world()
 	if _is_online_session() and world != null and world.has_method("broadcast_campaign_ending"):
 		world.broadcast_campaign_ending(ending_fade_seconds)
 	_begin_ending(ending_fade_seconds)
+
+
+## 客户端按键 → 请求 Host 起 ED（Host 权威；演出由 Host 经 broadcast_campaign_ending
+## 广播给所有端重放）。Host 端的 `_ending_started` 幂等闸保证连点/多人同时按只起一次。
+func request_remote_ending() -> void:
+	var world: Node = _find_network_world()
+	if world != null and world.has_method("holdout_ending_request"):
+		world.call("holdout_ending_request")
+	else:
+		push_warning("[HoldoutMachine] 联机 Client 请求进 ED，但找不到 NetworkWorld（请求未发出）")
+
+
+## Host 收到客户端「进 ED」请求后调用：由主机权威地起 ED 并广播。
+func start_ending_from_peer() -> void:
+	if _is_network_client():
+		return  ## 只认 Host 端；客户端再怎么被调也不本地起 ED
+	_start_ending()
 
 
 ## Client 收到 Host 的「终章 ED 启动」广播：重放同一段本地演出
@@ -935,7 +961,15 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 ## boss_music_changed 信号 → _on_boss_music_changed 的 stream_paused 照常工作。
 func _drive_remote_holdout_music(phase: int) -> void:
 	if phase == Phase.ACTIVE:
-		if _music_player and is_instance_valid(_music_player) and _music_player.playing:
+		## ⚠ `playing` 在 stream_paused = true 时返回 **false**（Godot 4.6 实测）。
+		## 旧判据只查 playing → Boss BGM 挂起期间，500ms 周期包每来一次就把防守战 BGM
+		## 拆了重播（play() 会复位暂停位、紧接着又被闸门挂起）→ 每半秒漏出一小段
+		## ラッシュ１ 叠在 Boss BGM 上，正是用户实测的「多人下两首 BGM 同时播放」。
+		## 判据改为「正在播 **或** 已挂起」= 这一场已经起过，不再重播；同时重新上闸。
+		var started: bool = _music_player != null and is_instance_valid(_music_player) \
+				and (_music_player.playing or _music_player.stream_paused)
+		if started:
+			_sync_holdout_music_gate()
 			return  ## 幂等：周期包重复到达不重头播
 		_play_holdout_music()
 	elif phase == Phase.IDLE or phase == Phase.SETTLE:

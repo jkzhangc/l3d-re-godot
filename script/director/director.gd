@@ -290,8 +290,14 @@ func _process(delta: float) -> void:
 	# ── 节奏控制 ──
 	# spawn_map=false 时 Pacing 冻结（无尸潮节奏；phase 维持初值供 EventManager 读取）
 	var pc: Node = get_node_or_null("PacingController")
+	## 尸潮窗口是否仍在（SpawnManager 正在维持数量）：告诉节奏控制器别因"一时清空"提前结束峰值。
+	## 取的是上一帧的状态；峰值刚进入那一帧 horde_active 还是 false，但 phase_elapsed=0 不会触发提前结束。
+	var horde_running: bool = false
+	var sm_probe: Node = get_node_or_null("SpawnManager")
+	if sm_probe != null and sm_probe.has_method("is_horde_active"):
+		horde_running = bool(sm_probe.call("is_horde_active"))
 	if pc and pc.has_method("update") and spawn_map:
-		pc.update(delta, new_intensity, alive_count)
+		pc.update(delta, new_intensity, alive_count, horde_running)
 	var current_phase: StringName = &"cooldown"
 	if pc:
 		match pc.current_phase:
@@ -546,6 +552,17 @@ func apply_network_music(music_key: String, active: bool) -> void:
 				stop_boss_music(false)  # 尸潮接回由随后到达的 horde=true 事件驱动
 		_:
 			push_warning("[Director] 未知 BGM key: %s" % music_key)
+
+## 终章演出 / 章节结算开始时调用：一次性收掉「战斗 BGM」（Boss + 尸潮）。
+## Boss/尸潮 BGM 挂在本 autoload 下、**不随场景释放**，而 AudioStreamPlayer 在
+## `get_tree().paused` 期间照常出声（播放由 AudioServer 驱动）→ 若不收，
+## 结算页的 summary_music 与 ED 的 l3d_ed 会与它叠着响（用户 2026-09-26 实测
+## 「结算里 Tank BGM 与防守战 BGM 同时播放」）。Host 调用会经 _announce_music
+## 广播，Client 端一并收。
+func stop_battle_music() -> void:
+	stop_boss_music(false)
+	_stop_horde_music()
+
 
 ## 每帧调用：Boss 全灭（tank 组空 + 监视列表全灭）→ 收 Boss BGM。
 func _update_boss_music() -> void:
@@ -1167,6 +1184,16 @@ func _evaluate_spawn_map() -> bool:
 	return true
 
 
+## 场景配置刷新入口（由 GameInit 在联机会话下调用）。
+## ⚠ 为什么需要：`_process` 在联机客户端**整体早退**，`_check_scene_change` 从来不跑
+## → 客户端的 `current_config` 恒为 null → `play_boss_music` / `_play_horde_music`
+## 第一行 `stream == null` 就 return，A6 广播过来的 BGM 全成 no-op；防守战 BGM 也永远
+## 拿不到「Boss 正在播」这个状态去上闸（用户实测「多人下 Tank BGM 与防守战 BGM 同时播放」）。
+## 幂等：同一场景重复调用会在 `scene == _last_scene` 处早退。
+func refresh_scene_config() -> void:
+	_check_scene_change()
+
+
 func _check_scene_change() -> void:
 	var tree: SceneTree = get_tree()
 	if not tree:
@@ -1280,7 +1307,8 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		_copy_props(cfg, sm, ["scatter_min", "scatter_max",
 			"scatter_interval_min", "scatter_interval_max",
 			"horde_total_min", "horde_total_max",
-			"horde_batch_size", "horde_batch_interval", "max_active_common"])
+			"horde_batch_size", "horde_batch_interval",
+			"horde_duration_min", "horde_duration_max", "max_active_common"])
 	print("[Director] config applied: spawn=%s cooldown=%.0f-%.0fs" % [cfg.spawn_enabled, cfg.cooldown_min, cfg.cooldown_max])
 
 

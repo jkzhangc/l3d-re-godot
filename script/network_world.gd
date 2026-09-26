@@ -2110,6 +2110,23 @@ func weapon_switch_request(slot: String) -> void:
 	_try_host_weapon_switch(sender, slot)
 
 
+## Client → Host：请求把「防守战完成 → 终章 ED」推起来（2026-09-26）。
+## 客户端**不能**自己起 ED（Host 权威；两端各起一份会时序分叉），此前客户端按键
+## 完全是静默无反应（用户实测「多人下打完防守战就没然后了」）。
+## Host 收到后照旧走 broadcast_campaign_ending → 所有端一起重放演出。
+@rpc("any_peer", "call_remote", "reliable")
+func holdout_ending_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
+		if machine.has_method("start_ending_from_peer"):
+			machine.call("start_ending_from_peer")
+			return
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func weapon_toggle_request() -> void:
 	if not net.is_host:

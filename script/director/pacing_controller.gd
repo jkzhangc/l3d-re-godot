@@ -46,7 +46,9 @@ var paused: bool = false
 # ═══════════════════════════════════════
 # 每帧由 director 调用
 # ═══════════════════════════════════════
-func update(delta: float, intensity: float, alive_enemy_count: int) -> void:
+## `horde_active`：SpawnManager 的尸潮窗口是否仍在维持数量（见下面的 PEAK 分支）。
+func update(delta: float, intensity: float, alive_enemy_count: int,
+		horde_active: bool = false) -> void:
 	if paused or not enabled:
 		return
 
@@ -61,7 +63,9 @@ func update(delta: float, intensity: float, alive_enemy_count: int) -> void:
 				should_transition = true
 
 		Phase.PEAK:
-			if alive_enemy_count <= 0 and phase_elapsed > 3.0:
+			## ★2026-09-26：尸潮窗口（SpawnManager 正在维持数量）内**不**因"场上一时清空"提前结束。
+			## 否则"刚补来的几只被清光 → 3 秒后 peak 结束"，玩家看到的尸潮就只有几只。
+			if alive_enemy_count <= 0 and phase_elapsed > 3.0 and not horde_active:
 				should_transition = true
 			elif phase_elapsed >= peak_timeout:
 				should_transition = true

@@ -18,6 +18,13 @@ func _ready() -> void:
 		# 这样 NetworkWorld._find_players_parent() 拿到的就是 DecorLayer。
 		call_deferred("_align_actor_layers")
 		_start_network_world()
+		## ★两端都要应用本图 DirectorConfig（2026-09-26）：Director._process 在
+		## 联机**客户端**整体早退，配置从来不会被应用 → current_config 恒为 null →
+		## A6 广播来的尸潮/Boss BGM 在客户端是 no-op，夜晚视界也不生效。
+		## 音源只在本机解析，资源不经网络（白名单铁律）。
+		var director: Node = get_node_or_null("/root/Director")
+		if director and director.has_method("refresh_scene_config"):
+			director.call("refresh_scene_config")
 		return
 
 	Global.try_load_or_init()
