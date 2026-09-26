@@ -254,9 +254,11 @@ func _pick_anchor(fallback: Node2D) -> Node2D:
 
 func _any_player_moving(fallback: Node2D) -> bool:
 	## 任一玩家在移动 → 允许补位（主机站着不动不该掐断正在推进的客户端的补位）。
+	## ⚠ 必须走 Director 的**实测速度**（2026-09-26）：Host 侧远端玩家的 velocity 恒为 0，
+	## 旧实现只读 velocity → 只有客户机在推进时被判成"全队静止" → 与 spawn_when_idle=false
+	## 组合起来**一只都不刷**（多人下某些图不刷的根因之一）。
 	for p: Node2D in _spawn_players(fallback):
-		var v: Variant = p.get("velocity")
-		if v is Vector2 and (v as Vector2).length() >= moving_speed_eps:
+		if _speed_of(p) >= moving_speed_eps:
 			return true
 	return false
 
@@ -268,18 +270,39 @@ func _team_front_dir(fallback: Node2D) -> Vector2:
 	## ⚠ 不能直接用锚点的朝向（2026-09-23 实测复盘）：锚点是按权重**随机**挑的，
 	## 一旦挑中"蹲着不动的主机"，用它朝向取扇形就会把怪刷到推进者（客户端）**背后**，
 	## 客户端视角就是"前方一直空着"。方向必须跟着推进的人走。
+	## ⚠ 方向同样必须走实测（2026-09-26）：Host 侧远端玩家的 velocity 恒为 0，
+	## 旧实现只读 velocity → 客户机推进时拿不到方向，只能退回"锚点朝向"，
+	## 于是扇形对着错误的方向取点（用户观感：前方一直空、回头才见到怪）。
 	var best_speed: float = 0.0
-	var best_v: Vector2 = Vector2.ZERO
+	var best_dir: Vector2 = Vector2.ZERO
 	for p: Node2D in _spawn_players(fallback):
-		var v: Variant = p.get("velocity")
-		if v is Vector2:
-			var speed: float = (v as Vector2).length()
-			if speed > best_speed:
+		var speed: float = _speed_of(p)
+		if speed > best_speed:
+			var d: Vector2 = _motion_dir_of(p)
+			if d != Vector2.ZERO:
 				best_speed = speed
-				best_v = v as Vector2
-	if best_speed >= moving_speed_eps:
-		return best_v.normalized()
+				best_dir = d
+	if best_speed >= moving_speed_eps and best_dir != Vector2.ZERO:
+		return best_dir.normalized()
 	return _front_dir(fallback)
+
+
+## 玩家速度（px/s）：优先走 Director 的实测（单机/联机同一口径）；Director 缺失时退回 velocity。
+func _speed_of(p: Node2D) -> float:
+	if _director != null and _director.has_method("player_speed"):
+		return float(_director.call("player_speed", p))
+	var v: Variant = p.get("velocity")
+	return (v as Vector2).length() if v is Vector2 else 0.0
+
+
+## 玩家运动方向（单位向量）：同上，走 Director 实测；不可用时退回 velocity。
+func _motion_dir_of(p: Node2D) -> Vector2:
+	if _director != null and _director.has_method("player_motion_dir"):
+		return _director.call("player_motion_dir", p)
+	var v: Variant = p.get("velocity")
+	if v is Vector2 and (v as Vector2).length() >= moving_speed_eps:
+		return (v as Vector2).normalized()
+	return Vector2.ZERO
 
 
 func _max_advance(fallback: Node2D) -> float:
@@ -391,11 +414,22 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 	## 有效下限 = max(距离带下限, 沿该方向"刚好出屏"的距离)。
 	## 否则采样点里有一半必然被屏外条件否掉，白白浪费迭代（水平方向尤其明显：
 	## 可视半宽 320 + 余量 64 = 384 > min_dist 360）。
-	var eff_min: float = maxf(min_dist, _offscreen_distance(dir, view_half))
+	var band_lo: float = maxf(min_dist, _offscreen_distance(dir, view_half))
+	## ★采样区间必须按**全体玩家**的视野求空隙（2026-09-26 多人实测修复）：
+	## 旧实现只用本机相机算 eff_min，候选却要再过"全体视野并集" —— 队友（尤其走在
+	## 前面的那位）会把可用区间整体推到 max_dist 之外，于是**每一环采样都被否掉** →
+	## 返回 ZERO（日志里就是"前方找不到合格落点"）。单机没有队友所以看不出来，
+	## 多人下表现为"走廊图走很久才迟刷 / 回头才刷一些 / 总量比单机少"。
+	var span: Array = _team_free_span(player.global_position, dir, view_rects,
+		offscreen_margin, band_lo, max_dist)
+	if span.is_empty():
+		return Vector2.ZERO
+	var eff_min: float = float(span[0])
+	var eff_max: float = maxf(float(span[1]), eff_min)
 	for ring: int in range(ring_count):
 		# 由近到远：近处的点刚好在屏外，敌人更快能咬到玩家
 		var t: float = (float(ring) + 1.0) / float(ring_count)
-		var dist: float = lerpf(eff_min, max_dist, t)
+		var dist: float = lerpf(eff_min, eff_max, t)
 		for a: int in range(angle_steps):
 			var offset_angle: float = 0.0
 			if angle_steps > 1:
@@ -594,6 +628,71 @@ func _front_dir(player: Node2D) -> Vector2:
 			3: return Vector2.UP
 			_: return Vector2.DOWN
 	return _last_dir
+
+
+## 从 anchor 沿 dir 出发、在 [lo, hi] 距离区间里第一段「对**全体**玩家都不可见」的
+## 距离空隙（返回 [gap_start, gap_end]；没有可用空隙返回 []）。
+## 每个视野矩形在射线上落在"外扩 margin 的矩形内"的 t 集合是一段闭区间
+## （两轴投影求交），合并所有区间后取第一段空隙 —— 纯数学，无物理查询、无随机。
+func _team_free_span(anchor: Vector2, dir: Vector2, rects: Array[Rect2], margin: float,
+		lo: float, hi: float) -> Array:
+	if hi <= lo:
+		return []
+	var blocked: Array = []
+	for r: Rect2 in rects:
+		var s: Array = _ray_rect_visible_span(anchor, dir, r, margin)
+		if s.size() == 2:
+			blocked.append(s)
+	blocked.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var merged: Array = []
+	for s: Array in blocked:
+		var s0: float = float(s[0])
+		var s1: float = float(s[1])
+		if s1 <= lo:
+			continue
+		if merged.is_empty() or s0 > float(merged[-1][1]) + 0.001:
+			merged.append([s0, s1])
+		else:
+			merged[-1][1] = maxf(float(merged[-1][1]), s1)
+	var cursor: float = lo
+	for s: Array in merged:
+		var s0: float = float(s[0])
+		var s1: float = float(s[1])
+		if s1 <= cursor:
+			continue
+		if s0 > cursor:
+			return [cursor, minf(s0, hi)]
+		cursor = maxf(cursor, s1)
+		if cursor >= hi:
+			return []
+	if cursor < hi:
+		return [cursor, hi]
+	return []
+
+
+## 射线 anchor + dir*t 落在「矩形外扩 margin」内的 t 区间（不含则返回 []）。
+func _ray_rect_visible_span(anchor: Vector2, dir: Vector2, r: Rect2, margin: float) -> Array:
+	var c: Vector2 = r.position + r.size * 0.5
+	var xs: Array = _axis_visible_interval(anchor.x, dir.x, c.x, r.size.x * 0.5 + margin)
+	if xs.is_empty():
+		return []
+	var ys: Array = _axis_visible_interval(anchor.y, dir.y, c.y, r.size.y * 0.5 + margin)
+	if ys.is_empty():
+		return []
+	var lo: float = maxf(float(xs[0]), float(ys[0]))
+	var hi: float = minf(float(xs[1]), float(ys[1]))
+	if hi < lo:
+		return []
+	return [lo, hi]
+
+
+## 单轴解 |a + d*t - c| <= h。d≈0 时该轴恒在带内（全轴可见）或恒在带外。
+func _axis_visible_interval(a: float, d: float, c: float, h: float) -> Array:
+	if absf(d) < 0.0001:
+		return [-INF, INF] if absf(a - c) <= h else []
+	var t1: float = (c - h - a) / d
+	var t2: float = (c + h - a) / d
+	return [minf(t1, t2), maxf(t1, t2)]
 
 
 func _camera_center(player: Node2D) -> Vector2:

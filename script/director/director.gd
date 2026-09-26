@@ -228,6 +228,9 @@ func _process(delta: float) -> void:
 	var teammates: Array[Node2D] = spawn_reference_players()
 	if teammates.is_empty():
 		teammates.append(player)  ## 兜底：极端时序下至少保留主参考
+	## ★玩家运动实测（2026-09-26）：必须在 pick_spawn_anchor / fs.update **之前**采样，
+	## 否则本帧的锚点权重与前方方向用的还是上一帧的数据（首帧更是全 0）。
+	sample_player_motion(teammates, delta)
 
 	## ── 刷怪锚点（2026-09-23 多人修复）──
 	## anchor = 本帧**刷怪与区域补齐**的圆心：L4D 式偏好"落单 / 走得远 / 移动中"的玩家。
@@ -1288,6 +1291,91 @@ func _find_player() -> Node2D:
 
 
 # ═══════════════════════════════════════
+# 玩家运动实测（2026-09-26）
+# ═══════════════════════════════════════
+## 【为什么需要】Host 侧对**远端玩家**只镜像 position/facing/moving/walking，
+## **从不写 `velocity`** → 旧 `_player_speed()` 读到的恒为 0。而它喂给三条关键判定：
+##   ① `pick_spawn_anchor` 的「移动系数」（静止玩家降权 IDLE_WEIGHT=0.25）；
+##   ② `FrontSpawner._team_front_dir`（前方扇区取哪个方向）；
+##   ③ `players_moving()` / `_any_player_moving()`（静止闸；`spawn_when_idle=false` 时
+##      全队被判"静止"= **一只都不刷**）。
+## 于是「主机站着不动、客户机推进」或「客户机才是走得最远那位」时，前方补位会按主机
+## 算、甚至被静止闸掐死 —— 表现就是多人下某些图**一开始不刷、很久才迟刷、回头才刷
+## 一些、总量比单机少**（2026-09-26 用户实测：学校内部 / 矿洞 / 实验室走廊）。
+## 改为**按位置差实测**速度与方向（单机与联机同一套口径），`velocity` 仅作补充 ——
+## 单机下两者一致，不会改变单机行为。
+const MOTION_SMOOTH: float = 0.35    ## 速度平滑系数（抗单帧抖动）
+const MOTION_EPS: float = 8.0        ## 低于此速度视为静止（px/s）
+const MOTION_STEP_EPS: float = 0.5   ## 单帧位移大于此值才更新方向（px）
+## 单帧位移超过此值视为**传送**（调试键 Ctrl+R / 换图就位 / 复活归位），
+## 不参与速度与方向统计 —— 否则一次 500px 瞬移会把速度冲到上万，锚点权重被它独占十来帧。
+const MOTION_TELEPORT_STEP: float = 64.0
+var _motion_prev: Dictionary = {}    ## instance_id -> Vector2 上一帧位置
+var _motion_speed: Dictionary = {}   ## instance_id -> float 平滑速度（px/s）
+var _motion_dir: Dictionary = {}     ## instance_id -> Vector2 单位方向
+
+
+## 每帧由 _process 调用：记录各玩家位移 → 平滑速度与方向。
+## 同时清理已离场玩家，避免字典无限增长（换图/掉线）。
+func sample_player_motion(players: Array[Node2D], delta: float) -> void:
+	if delta <= 0.0:
+		return
+	var seen: Dictionary = {}
+	for p: Node2D in players:
+		if p == null or not is_instance_valid(p):
+			continue
+		var id: int = p.get_instance_id()
+		seen[id] = true
+		var pos: Vector2 = p.global_position
+		var prev: Variant = _motion_prev.get(id)
+		if prev is Vector2:
+			var step: Vector2 = pos - (prev as Vector2)
+			var moved: float = step.length()
+			if moved > MOTION_TELEPORT_STEP:
+				## 传送：只重置基线，不污染速度/方向
+				_motion_speed[id] = 0.0
+			else:
+				var inst: float = moved / delta
+				var old: float = float(_motion_speed.get(id, 0.0))
+				_motion_speed[id] = inst if old <= 0.0 else lerpf(old, inst, MOTION_SMOOTH)
+				if moved > MOTION_STEP_EPS:
+					_motion_dir[id] = step.normalized()
+		_motion_prev[id] = pos
+	for id: Variant in _motion_prev.keys():
+		if not seen.has(id):
+			_motion_prev.erase(id)
+			_motion_speed.erase(id)
+			_motion_dir.erase(id)
+
+
+## 玩家速度（px/s）= max(实测位移速度, velocity 字段)。
+## 单机走 velocity（精确，且与实测一致）；联机远端走实测（velocity 恒 0）。
+func player_speed(p: Node2D) -> float:
+	if p == null or not is_instance_valid(p):
+		return 0.0
+	var measured: float = float(_motion_speed.get(p.get_instance_id(), 0.0))
+	var v: Variant = p.get("velocity")
+	var field: float = (v as Vector2).length() if v is Vector2 else 0.0
+	return maxf(measured, field)
+
+
+## 玩家前进方向（单位向量）：实测位移方向优先（联机远端唯一可用来源），
+## 静止时退回 velocity，仍不可用则返回 ZERO（由调用方决定兜底）。
+func player_motion_dir(p: Node2D) -> Vector2:
+	if p == null or not is_instance_valid(p):
+		return Vector2.ZERO
+	var id: int = p.get_instance_id()
+	if float(_motion_speed.get(id, 0.0)) >= MOTION_EPS:
+		var d: Variant = _motion_dir.get(id)
+		if d is Vector2:
+			return d as Vector2
+	var v: Variant = p.get("velocity")
+	if v is Vector2 and (v as Vector2).length() >= MOTION_EPS:
+		return (v as Vector2).normalized()
+	return Vector2.ZERO
+
+
+# ═══════════════════════════════════════
 # 多人刷怪锚点（2026-09-23 实测修复）
 # ═══════════════════════════════════════
 
@@ -1299,6 +1387,20 @@ func _find_player() -> Node2D:
 ## 前方，且更"照顾"走在前面/落单的那个 —— 见 left4dead.fandom.com/wiki/The_Director），
 ## 这里统一改为「以玩家为单位」的锚点集合：锚点决定"刷给谁 / 距离带以谁为准"，
 ## 判定（视野外 / 回收）则对**全体**玩家取并集。
+
+## 队伍前进方向（单位向量）= 各玩家**实测**运动方向的合向量（无人在动时返回 ZERO）。
+## 2026-09-26：不能只读 velocity —— Host 侧远端玩家的 velocity 恒为 0，
+## 只读 velocity 会让"客户机在前方推进"这一最常见的组合拿不到方向。
+func team_forward_dir(players: Array[Node2D]) -> Vector2:
+	var sum: Vector2 = Vector2.ZERO
+	for p: Node2D in players:
+		if p == null or not is_instance_valid(p):
+			continue
+		sum += player_motion_dir(p)
+	if sum.length() < 0.001:
+		return Vector2.ZERO
+	return sum.normalized()
+
 
 func spawn_reference_players() -> Array[Node2D]:
 	## 可作为刷怪/回收基准的玩家：存活且非濒死。联机 Host = 全体座位，单机 = 唯一玩家。
@@ -1329,12 +1431,26 @@ func pick_spawn_anchor(teammates: Array[Node2D] = []) -> Node2D:
 		return _find_player()
 	if list.size() == 1:
 		return list[0]
+	## 队伍前进方向（2026-09-26）：用**实测**运动求和，联机远端同样有效。
+	var fwd: Vector2 = team_forward_dir(list)
+	var centroid: Vector2 = Vector2.ZERO
+	for p: Node2D in list:
+		centroid += p.global_position
+	centroid /= float(list.size())
 	var weights: Array[float] = []
 	var total: float = 0.0
 	for p: Node2D in list:
 		var speed: float = _player_speed(p)
-		var base: float = 1.0 if speed >= 20.0 else IDLE_WEIGHT
-		var w: float = base * (1.0 + _player_isolation(p, list) / 400.0 + speed / 150.0)
+		var base: float = 1.0 if speed >= MOTION_EPS else IDLE_WEIGHT
+		## 「队伍前方偏移」项（2026-09-26 多人实测修复）：锚点决定"刷给谁 / 距离带以谁为准"，
+		## 而"锚点前方"要再过**全体玩家视野并集** —— 锚点若落在队伍后方，那一带正好在
+		## 前方队友的视野里 → 采样全被否掉 → 该批一只不刷（多人下走廊图稀疏的根因之一）。
+		## 把沿前进方向的靠前程度计入权重后，锚点自然落在推进最前方的人身上。
+		var ahead_offset: float = 0.0
+		if fwd != Vector2.ZERO:
+			ahead_offset = maxf((p.global_position - centroid).dot(fwd), 0.0)
+		var w: float = base * (1.0 + _player_isolation(p, list) / 400.0 + speed / 150.0
+			+ ahead_offset / 300.0)
 		weights.append(w)
 		total += w
 	if total <= 0.0:
@@ -1379,10 +1495,7 @@ func _player_isolation(p: Node2D, list: Array[Node2D]) -> float:
 
 
 func _player_speed(p: Node2D) -> float:
-	var v: Variant = p.get("velocity")
-	if v is Vector2:
-		return (v as Vector2).length()
-	return 0.0
+	return player_speed(p)
 
 
 ## 附近闸（2026-09-17 用户需求）：附近敌人 ≥ 阈值且玩家静止 → 暂停刷怪
