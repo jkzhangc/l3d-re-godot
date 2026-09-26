@@ -29,6 +29,11 @@ signal scripted_event_triggered(event: String)
 # ═══════════════════════════════════════
 const ENEMY_SCENE_PATH = "res://object/enemy.tscn"
 const DEBUG_SPAWN_COUNT = 5
+## 固定刷怪点落点安全用的探测半径与工具（2026-09-26）。
+## 敌人碰撞盒 20×28 → 半宽 10 / 半高 14，取 14 保证整盒不压墙。
+## 用 preload 常量而不是裸全局类名（新建脚本的 class_name 要等编辑器重扫才进全局缓存）。
+const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
+const ENEMY_SPOT_PROBE_RADIUS: float = 14.0
 ## 内置默认僵尸池（关卡 DirectorConfig.zombie_pool 留空时使用）。
 ## 按关卡定制：把 tres/zombies/ 下的变体拖进关卡 DirectorConfig 的 zombie_pool。
 const DEFAULT_ZOMBIE_POOL: Array = [
@@ -891,6 +896,76 @@ func spawn_horde_nodes(count: int, decor_layer: Node) -> Array[Node2D]:
 	if spawned == 0 and spawn_points.is_empty():
 		printerr("[Director] no valid spawn points or nearby walkable fallback")
 	return spawned_nodes
+
+
+## 轮转均分（纯函数，便于单测）：把 `count` 个单位分给 `point_count` 个点，
+## 返回每个单位对应的**点位索引**序列。
+##   例：count=5 / point_count=3 → [0,1,2,0,1]（点数 2、2、1）；
+##       count=5 / point_count=1 → [0,0,0,0,0]（只有 1 个点就全放它）；
+##       `wave_index` 轮转起点 → 每批"多出来的那一只"换点（避免永远同一个点多一只）。
+func distribute_point_indices(count: int, point_count: int, wave_index: int = 0) -> Array[int]:
+	var out: Array[int] = []
+	if count <= 0 or point_count <= 0:
+		return out
+	var start: int = posmod(wave_index, point_count)
+	for i: int in range(count):
+		out.append((start + i) % point_count)
+	return out
+
+
+## 防守战**固定刷怪点**批（2026-09-26 用户需求）：把 count 只敌人**轮转均分**到 positions 上。
+##   例：5 只 / 3 点 → 2、2、1；`wave_index` 让每批的起点轮转（避免永远同一个点多一只）。
+##
+## 「生成时就避开墙 / 玩家 / 敌人」：每个落点先过 `SpawnSpotResolver.find_near`
+##   （①图块碰撞（同步读 TileData）②物理探测 mask 1|4|8 = 图块角色层 + 玩家 + 敌人
+##    ③`_is_walkable` 的地图范围闸与作者禁刷层），挪到最近的可站空位。
+##   连空位都找不到的那一只**退回屏幕外刷法**（宁可不从作者点出，也不能出现在墙里），
+##   并打一条告警，方便作者照着修点位。
+##
+## 倍率：调用方（EventManager）传入的 count 已在按真人数放大之后，因此天然继承倍率。
+func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node,
+		wave_index: int = 0) -> Array[Node2D]:
+	var spawned_nodes: Array[Node2D] = []
+	var point_count: int = points.size()
+	if point_count <= 0 or count <= 0 or decor_layer == null:
+		return spawned_nodes
+	var probe_node: Node2D = _spot_probe_node(decor_layer)
+	var assignment: Array[int] = distribute_point_indices(count, point_count, wave_index)
+	var fell_back: int = 0
+	for i: int in range(count):
+		var point: Vector2 = points[assignment[i]] as Vector2
+		var pos: Vector2 = Vector2.ZERO
+		if probe_node != null:
+			var found: Variant = SPOT_RESOLVER.find_near(
+				probe_node, point, ENEMY_SPOT_PROBE_RADIUS, Callable(self, "_is_walkable"))
+			if found is Vector2:
+				pos = found as Vector2
+		if pos == Vector2.ZERO:
+			var fallback: Array[Node2D] = spawn_horde_nodes(1, decor_layer)
+			fell_back += fallback.size()
+			spawned_nodes.append_array(fallback)
+			continue
+		var enemy: Node2D = spawn_enemy(pos, decor_layer, -1)
+		if enemy != null:
+			spawned_nodes.append(enemy)
+	if fell_back > 0:
+		push_warning("[Director] 固定刷怪点有 %d 只找不到空位，已退回屏幕外刷法（%d 个点位，请检查是否压墙/被占）"
+			% [fell_back, point_count])
+	return spawned_nodes
+
+
+## 物理探测用的节点：必须是已入树的 Node2D（Director 是纯 Node，没有 World2D）。
+## 优先用敌人容器 DecorLayer，退回任一玩家。
+func _spot_probe_node(decor_layer: Node) -> Node2D:
+	var layer := decor_layer as Node2D
+	if layer != null and is_instance_valid(layer) and layer.is_inside_tree():
+		return layer
+	var player: Node2D = _find_player()
+	if player != null and is_instance_valid(player) and player.is_inside_tree():
+		return player
+	return null
+
+
 
 
 ## 刷怪取点的**唯一可见性闸门**：该点是否不在任一玩家视野内（多人取矩形并集，含余量）。

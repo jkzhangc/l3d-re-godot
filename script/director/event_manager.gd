@@ -45,6 +45,9 @@ var _event_config: Dictionary = {}
 var _event_timer: float = 0.0
 var _event_spawn_timer: float = 0.0
 var _event_total_spawned: int = 0
+## 固定刷怪点的轮转起点（2026-09-26）：每批 +1，让"多出来的那一只"在点位之间轮换，
+## 避免永远同一个点多刷一只（5 只 / 3 点：这批 2、2、1，下批换个点 2、2、1）。
+var _event_wave_index: int = 0
 ## 防守战期间被锁定目标的敌人；事件结束时逐个解锁，恢复普通 AI。
 var _locked_enemies: Array[Node2D] = []
 
@@ -103,6 +106,8 @@ func start_scripted_event(config: Dictionary) -> void:
 	_event_timer = config.get("event_duration", 60.0)
 	_event_spawn_timer = 0.0  # 第一批立即生成
 	_event_total_spawned = 0
+	## 固定刷怪点的轮转起点（2026-09-26）：每批 +1，让"多出来的那一只"在点位间轮换。
+	_event_wave_index = 0
 	_locked_enemies.clear()
 
 	var event_name: String = config.get("event_name", "Unnamed")
@@ -268,7 +273,17 @@ func _update_scripted_event(delta: float, alive_count: int) -> void:
 			var to_spawn: int = mini(per_wave, max_active - alive_count)
 			var decor: Node = _find_decor()
 			if decor:
-				var new_enemies: Array[Node2D] = _director.spawn_horde_nodes(to_spawn, decor)
+				var new_enemies: Array[Node2D] = []
+				## 固定刷怪点（2026-09-26 用户需求）：事件配置里带了点位就用点位轮转均分，
+				## 没带就**完全沿用原来的"前方屏外刷"**。倍率已在上面按真人数放大过，
+				## 因此「均分」天然继承按人数的刷怪倍率（先放大、后分散）。
+				var fixed_points: Array = _event_config.get("spawn_positions", [])
+				if not fixed_points.is_empty():
+					new_enemies = _director.spawn_horde_nodes_at_positions(
+						fixed_points, to_spawn, decor, _event_wave_index)
+				else:
+					new_enemies = _director.spawn_horde_nodes(to_spawn, decor)
+				_event_wave_index += 1
 				_event_total_spawned += new_enemies.size()
 				if bool(_event_config.get("target_lock", false)):
 					_lock_new_enemies(new_enemies)

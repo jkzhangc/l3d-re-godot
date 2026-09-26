@@ -38,6 +38,9 @@ const DIRECTIONS: int = 4
 const COLLISION_NODE: String = "Collision"
 const COLLISION_SHAPE_NODE: String = "Shape"
 const COLLISION_SIZE: float = 32.0
+## 固定刷怪点节点脚本（2026-09-26）。用 preload 常量做类型判定 ——
+## 新建脚本的 class_name 要等编辑器重扫才进全局类缓存，headless 下按类名引用会 Parse Error。
+const HOLDOUT_SPAWN_POINT := preload("res://script/director/holdout_spawn_point.gd")
 
 # 显式 preload 保证类型在编辑器热重载期间也已注册
 const TELEPORT_POINT_SCRIPT := preload("res://script/director/teleport_point.gd")
@@ -765,6 +768,9 @@ func _build_config() -> Dictionary:
 	## target_lock = true：每批新刷出的丧尸锁定「最近玩家」并直接追击（无视视野）。
 	## lock_nearby_at_start / center / radius：开局把机器附近已存在的丧尸也一并锁定，
 	## 让"附近已刷出来的丧尸"在防守战一开始就扑向玩家。
+	## 固定刷怪点（2026-09-26 用户需求）：有就把坐标写进事件配置 → EventManager 按点均分；
+	## 一个都没有 → 配置里不带该字段 → 完全沿用原来的"屏幕外刷"。
+	var spawn_points: Array[Vector2] = _collect_spawn_points()
 	var cfg: Dictionary = {
 		"event_name": event_name,
 		"event_type": ScriptedEventTrigger.EventType.CRESCENDO,
@@ -782,7 +788,45 @@ func _build_config() -> Dictionary:
 		cfg["event_duration"] = 3600.0
 	if max_active > 0:
 		cfg["max_active"] = max_active
+	if not spawn_points.is_empty():
+		cfg["spawn_positions"] = spawn_points
+		print("[HoldoutMachine] 固定刷怪点 %d 个：%s" % [spawn_points.size(), str(spawn_points)])
 	return cfg
+
+
+# ═══════════════════════════════════════
+# 固定刷怪点收集（2026-09-26）
+# ═══════════════════════════════════════
+
+## 收集本次防守战可用的固定刷怪点坐标。
+##   ① 优先：**本节点的子树**（含孙节点）—— 归属明确，一台机器一套点；
+##   ② 兜底：**全场景扫描** —— 允许作者把点集中摆在一处。
+## 未启用（enabled=false）的点不参与；返回值顺序 = 树序（保证每批轮转可预期）。
+func _collect_spawn_points() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	_collect_spawn_points_recursive(self, out)
+	if out.is_empty():
+		var tree: SceneTree = get_tree()
+		if tree != null and tree.current_scene != null:
+			_collect_spawn_points_recursive(tree.current_scene, out)
+	return out
+
+
+func _collect_spawn_points_recursive(node: Node, out: Array[Vector2]) -> void:
+	for child: Node in node.get_children():
+		if _is_spawn_point(child) and bool(child.get("enabled")):
+			out.append((child as Node2D).global_position)
+		_collect_spawn_points_recursive(child, out)
+
+
+func _is_spawn_point(node: Node) -> bool:
+	if not (node is Node2D):
+		return false
+	var script: Script = node.get_script()
+	if script == null:
+		return false
+	return script == HOLDOUT_SPAWN_POINT \
+		or String(script.resource_path).ends_with("holdout_spawn_point.gd")
 
 
 # ═══════════════════════════════════════

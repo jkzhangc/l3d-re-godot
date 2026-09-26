@@ -409,6 +409,18 @@ func reset_network_prediction_sync() -> void:
 		_network_prediction_initialized = false
 
 
+## 调试瞬移（仅调试热键 Ctrl+R 用）：硬切位置 + 清空插值目标，不播任何过渡。
+## 常规表现路径（apply_network_presentation / authority_target）都是**平滑插值**，
+## 跨半张地图的调试瞬移会变成"一路滑过去"；调试键要的就是"立刻到"，所以单独开这个口子。
+func debug_hard_teleport(new_position: Vector2) -> void:
+	global_position = new_position
+	_network_target_position = new_position
+	_network_has_target = false
+	_remote_interp.reset(new_position)
+	velocity = Vector2.ZERO
+	_moving = false
+
+
 func apply_network_local_spawn_position(new_position: Vector2) -> void:
 	if not network_local_prediction or _network_prediction_initialized:
 		return

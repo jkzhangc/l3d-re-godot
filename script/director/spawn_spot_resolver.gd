@@ -32,28 +32,37 @@ const BLOCKING_MASK: int = 1 | 4 | 8
 
 
 ## 该点是否可以站人。`world_node` 必须已入树（取它的 World2D）。
-static func is_free(world_node: Node2D, pos: Vector2) -> bool:
-	if world_node == null or not is_instance_valid(world_node) or not world_node.is_inside_tree():
-		## 无法判定时保守放行（与 Director._is_walkable 的无玩家兜底同口径）。
-		return true
-	if _tile_blocked(world_node, pos):
-		return false
-	return _body_free(world_node, pos)
+## `probe_radius` 供不同体积的使用者覆盖（玩家盒 24×27 → 14；敌人盒 20×28 → 14 同样够用）。
+static func is_free(world_node: Node2D, pos: Vector2, probe_radius: float = PROBE_RADIUS) -> bool:
+	return _acceptable(world_node, pos, probe_radius, Callable())
 
 
-## 修正落点：原落点是空的就原样返回；否则由近及远环形找最近的可站点（确定性，无随机）。
-static func resolve(world_node: Node2D, base: Vector2) -> Vector2:
-	if is_free(world_node, base):
+## 找 `base` 附近最近的可站位置；**一个都没有时返回 null** ——
+## 调用方据此决定回退策略（玩家落点=保留原地，敌人刷怪=退回屏幕外刷法）。
+## `extra_ok` 是附加判据（例如 `Director._is_walkable`：地图范围闸 + 作者禁刷层）。
+static func find_near(world_node: Node2D, base: Vector2, probe_radius: float = PROBE_RADIUS,
+		extra_ok: Callable = Callable()) -> Variant:
+	if _acceptable(world_node, base, probe_radius, extra_ok):
 		return base
 	for ring: int in range(1, RING_COUNT + 1):
 		var radius: float = RING_STEP * float(ring)
 		for i: int in range(ANGLE_STEPS):
 			var ang: float = TAU * float(i) / float(ANGLE_STEPS)
 			var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
-			if is_free(world_node, cand):
-				print("[SpawnSpot] 落点避墙修正 %s → %s（原落点有物理层碰撞）" % [
-					base.round(), cand.round()])
+			if _acceptable(world_node, cand, probe_radius, extra_ok):
 				return cand
+	return null
+
+
+## 修正落点：原落点是空的就原样返回；否则由近及远环形找最近的可站点（确定性，无随机）。
+static func resolve(world_node: Node2D, base: Vector2) -> Vector2:
+	var found: Variant = find_near(world_node, base)
+	if found is Vector2:
+		var fixed: Vector2 = found as Vector2
+		if fixed != base:
+			print("[SpawnSpot] 落点避墙修正 %s → %s（原落点有物理层碰撞）" % [
+				base.round(), fixed.round()])
+		return fixed
 	## 四周全不可用（极端狭窄处）：保留原落点，不要乱丢到更远的地方。
 	push_warning("[SpawnSpot] 落点四周无空位，保留原落点 %s" % base)
 	return base
@@ -62,6 +71,20 @@ static func resolve(world_node: Node2D, base: Vector2) -> Vector2:
 # ═══════════════════════════════════════
 # 内部判定
 # ═══════════════════════════════════════
+
+## 综合判据：无法判定时保守放行（与 `Director._is_walkable` 的无玩家兜底同口径）；
+## 否则必须同时通过 ①图块碰撞 ②物理探测 ③调用方附加判据。
+static func _acceptable(world_node: Node2D, pos: Vector2, probe_radius: float,
+		extra_ok: Callable) -> bool:
+	if world_node == null or not is_instance_valid(world_node) or not world_node.is_inside_tree():
+		return true
+	if _tile_blocked(world_node, pos):
+		return false
+	if not _body_free(world_node, pos, probe_radius):
+		return false
+	if extra_ok.is_valid() and not bool(extra_ok.call(pos)):
+		return false
+	return true
 
 ## 图块碰撞检查：任一 TileMapLayer 在该格有 physics layer 0 的碰撞多边形 → 挡住。
 ## physics layer 0 ↔ tileset 的 `physics_layer_0/collision_layer = 1`（角色层），
@@ -113,11 +136,11 @@ static func _topmost_scene_node(world_node: Node2D, tree: SceneTree) -> Node:
 	return top
 
 
-## 物理探测：以 PROBE_RADIUS 圆在 pos 取形，命中 BLOCKING_MASK 上任何碰撞体 → 不空。
+## 物理探测：以 probe_radius 圆在 pos 取形，命中 BLOCKING_MASK 上任何碰撞体 → 不空。
 ## 排除世界节点自身（传送时"玩家已在原点附近"不该把自己算成障碍）。
-static func _body_free(world_node: Node2D, pos: Vector2) -> bool:
+static func _body_free(world_node: Node2D, pos: Vector2, probe_radius: float) -> bool:
 	var shape := CircleShape2D.new()
-	shape.radius = PROBE_RADIUS
+	shape.radius = probe_radius
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
 	query.transform = Transform2D(0.0, pos)

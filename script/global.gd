@@ -433,6 +433,7 @@ func _ready() -> void:
 	_load_config()
 	_ensure_audio_buses()
 	_setup_debug_capture()
+	_setup_debug_hotkeys()
 	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
 	ensure_root_ui_theme()
 	_log_font_self_check()
@@ -446,6 +447,16 @@ func _setup_debug_capture() -> void:
 	var cap: Node = (load("res://script/debug_capture.gd") as GDScript).new()
 	cap.name = "DebugCapture"
 	add_child(cap)
+
+
+## 主机调试热键（Ctrl+R 集结队友 / Ctrl+H 全体满血+复活）。同样不落 .tscn。
+## 见 script/debug_host_hotkeys.gd（触发口）与 NetworkWorld.debug_*（权威结算）。
+func _setup_debug_hotkeys() -> void:
+	if get_node_or_null("DebugHotkeys") != null:
+		return
+	var node: Node = (load("res://script/debug_host_hotkeys.gd") as GDScript).new()
+	node.name = "DebugHotkeys"
+	add_child(node)
 
 
 # ═══════════════════════════════════════

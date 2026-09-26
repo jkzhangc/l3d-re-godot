@@ -144,6 +144,111 @@ const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
 
+
+# ═══════════════════════════════════════
+# 调试热键（Ctrl+R 集结 / Ctrl+H 全体满血+复活）—— 2026-09-26 用户需求
+# ═══════════════════════════════════════
+#
+# 触发口在 script/debug_host_hotkeys.gd（Global 动态挂载）；**权威结算一律在本文件**，
+# 因为玩家坐标与生死都是 Host 权威数据。Client 侧不改任何权威状态：
+# 位置与 HP 由常规快照（玩家 60Hz）回灌，只有"硬吸附"需要一次专门 RPC
+# —— 否则客户端本地预测会把自己平滑地"滑"过去而不是瞬移。
+
+## 集结时围绕主机排开的小环（px）。第一位落在正旁边，后续依次换方位，避免多人叠在一点。
+const DEBUG_GATHER_OFFSETS: Array[Vector2] = [
+	Vector2(56.0, 0.0), Vector2(-56.0, 0.0), Vector2(0.0, 56.0), Vector2(0.0, -56.0),
+]
+
+
+## Host：把其他玩家硬瞬移到自己身边（绕自己排开 + 自动避墙）。返回实际瞬移人数。
+func debug_gather_players_to_host() -> int:
+	if not net.is_host:
+		return 0
+	var host_id: int = int(net.my_peer_id)
+	var host_node := _player_node(_players.get(host_id, {}) as Dictionary)
+	if not is_instance_valid(host_node):
+		return 0
+	var base: Vector2 = host_node.global_position
+	var moved: int = 0
+	for value: Variant in _players.keys():
+		var peer_id: int = int(value)
+		if peer_id == host_id:
+			continue
+		var entry: Dictionary = _players[peer_id]
+		var node := _player_node(entry)
+		if not is_instance_valid(node):
+			continue
+		var wanted: Vector2 = base + DEBUG_GATHER_OFFSETS[moved % DEBUG_GATHER_OFFSETS.size()]
+		## 落点避墙（与传送/补位同一套工具）：撞到物理层就挪到最近的空位，别把队友瞬进墙里。
+		var target: Vector2 = SPOT_RESOLVER.resolve(node, wanted)
+		if node.has_method("debug_hard_teleport"):
+			node.call("debug_hard_teleport", target)
+		else:
+			node.global_position = target
+		var state := entry.get("state") as PlayerState
+		if state != null:
+			state.position = target
+		entry["input"] = Vector2.ZERO
+		entry["moving"] = false
+		entry["walking"] = false
+		_players[peer_id] = entry
+		## 只发给"被移动的那位"：其他客户端通过常规快照看到他的新位置（远端本来就走插值）。
+		debug_snap_player.rpc_id(peer_id, target)
+		moved += 1
+	print("[DebugHotkey] HOST_GATHER moved=%d base=%s" % [moved, str(base.round())])
+	return moved
+
+
+## Host → 被移动的 Client：硬吸附到权威坐标（清掉本地预测的插值目标）。
+@rpc("authority", "call_remote", "reliable")
+func debug_snap_player(target_peer_id: int, position: Vector2) -> void:
+	if net.is_host:
+		return
+	var node := _player_node(_players.get(target_peer_id, {}) as Dictionary)
+	if not is_instance_valid(node):
+		return
+	if node.has_method("debug_hard_teleport"):
+		node.call("debug_hard_teleport", position)
+	else:
+		node.global_position = position
+	print("[DebugHotkey] CLIENT_SNAP peer=%d pos=%s" % [target_peer_id, str(position.round())])
+
+
+## Host：全体玩家满血 + 复活（倒地与真死亡都拉起来，并收掉进行中的救援尝试）。
+## 返回处理的玩家数。表现侧统一走 apply_network_revive_state —— 它本身就是
+## "清 _is_dying / 复位死亡相位 / 恢复移动碰撞与受击区 / set_network_downed(false)" 的完整复位。
+func debug_heal_all_players() -> int:
+	if not net.is_host:
+		return 0
+	var healed: int = 0
+	for value: Variant in _players.keys():
+		var peer_id: int = int(value)
+		var entry: Dictionary = _players[peer_id]
+		var state := entry.get("state") as PlayerState
+		if state == null:
+			continue
+		var hp: float = state.get_max_hp()
+		state.current_hp = hp
+		entry["downed"] = false
+		entry["dead"] = false
+		entry["downed_hp"] = DOWNED_BLEED_HP
+		entry["bleed_ratio"] = -1.0
+		entry["revive_progress"] = 0.0
+		_players[peer_id] = entry
+		## 指向该玩家的救援尝试一并收掉：倒地标记已清，留着会在下一帧刷多余的 CANCEL 日志。
+		for reviver: Variant in _revive_attempts.keys().duplicate():
+			var attempt: Dictionary = _revive_attempts[reviver]
+			if int(attempt.get("target", 0)) == peer_id:
+				_revive_attempts.erase(reviver)
+		var node := _player_node(entry)
+		if is_instance_valid(node):
+			node.apply_network_revive_state(hp)
+			_update_network_revive_indicator(node, 0.0)
+		healed += 1
+	print("[DebugHotkey] HOST_HEAL_ALL players=%d" % healed)
+	return healed
+
+
 ## 当前场景的玩家表：peer_id → {node, state, input, walking, moving, ...}。
 ## node 是临时场景节点；state 是 Host 的 PlayerState（跨图持久化副本在 Net 中），
 ## input 仅保存客户端最近一次意图，绝不可把它当作已验证的游戏结果。
