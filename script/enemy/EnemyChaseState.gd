@@ -98,6 +98,12 @@ const NO_CELL: Vector2i = Vector2i(-999999, -999999)  ## _find_nearest_walkable 
 const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模式
 const PUSH_APART_RADIUS: float = 36.0   ## 敌人推开检测半径
 const PUSH_APART_FORCE: float = 220.0   ## 推开速度（像素/秒，强力分离）
+## 推挤的空间分桶边长。必须 > PUSH_APART_RADIUS，保证"自身格 + 相邻 8 格"能覆盖所有
+## 可能互相推挤的同伴（否则会漏推）。
+const PUSH_BUCKET_SIZE: float = 48.0
+## 推挤的施加节流：每 N 个物理帧推一次，位移按 delta × N 补偿（总冲量不变）。
+## 2026-09-26 性能优化：软分离不需要 60Hz —— 密集尸群时它是 physics 时间里的大头。
+const PUSH_APART_STEP: int = 2
 
 # ── 航点推进失败 → 跳过并重算（避免"死死按着不可达航点撞墙、拐不了弯"）──
 ## 【判据必须是"进度"而不是"位移"】顶在墙上时敌人会被沿墙滑行带着来回蹭，
@@ -463,51 +469,102 @@ static func _cached_enemy_group(tree: SceneTree) -> Array[Node]:
 	return _enemy_group_cache
 
 
+## ── 推挤用的"每物理帧缓存"（2026-09-26 性能优化）──
+## 旧实现的 `_push_apart_from_other_enemies` 是 O(N²)，且**每一对**都要做
+## `other.get("_is_dead")` / `other.get_node_or_null("StateMachine")` / 状态名比较 ——
+## 全是对 C++ 的字符串查表。实测 20 只敌人就把每帧 process 从 1.2ms 顶到 20ms、
+## 40 只 37ms（headless 且不含渲染）。这里把"状态查询"下沉成每帧一次的 O(N) 预处理，
+## 再把"和谁比距离"收窄到相邻粗格，推挤循环里只剩浮点运算。
+static var _push_buckets: Dictionary = {}      ## Vector2i(粗格) → Array[Node]
+static var _push_skip_ids: Dictionary = {}     ## 死亡 / 击退 / 硬直 的敌人 instance_id
+static var _push_cache_frame: int = -1
+
+
+static func _ensure_push_cache(tree: SceneTree) -> void:
+	var cf: int = Engine.get_physics_frames()
+	if _push_cache_frame == cf:
+		return
+	_push_cache_frame = cf
+	_push_buckets.clear()
+	_push_skip_ids.clear()
+	for node: Node in _cached_enemy_group(tree):
+		if not is_instance_valid(node):
+			continue
+		var oid: int = node.get_instance_id()
+		if node.get("_is_dead") == true:
+			_push_skip_ids[oid] = true
+			continue
+		var sm: Node = node.get_node_or_null("StateMachine")
+		if sm != null and sm.current_state != null:
+			var sname: StringName = sm.current_state.name
+			if sname == &"Knockback" or sname == &"Hitstun":
+				_push_skip_ids[oid] = true
+				continue
+		var pos: Vector2 = (node as Node2D).global_position
+		var key := Vector2i(floori(pos.x / PUSH_BUCKET_SIZE), floori(pos.y / PUSH_BUCKET_SIZE))
+		var bucket: Variant = _push_buckets.get(key)
+		if bucket is Array:
+			(bucket as Array).append(node)
+		else:
+			_push_buckets[key] = [node]
+
+
 func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vector2 = Vector2.ZERO) -> void:
 	## 自然推开挡路敌人：沿移动方向推开，而非盲目径向挤
 	var tree: SceneTree = enemy.get_tree()
 	if not tree:
 		return
 
-	var enemies: Array[Node] = _cached_enemy_group(tree)
+	_ensure_push_cache(tree)
 	var my_pos: Vector2 = enemy.global_position
 	var has_move_dir: bool = move_dir.length() > 0.3
+	var my_id: int = enemy.get_instance_id()
+	var radius_sq: float = PUSH_APART_RADIUS * PUSH_APART_RADIUS
+	## 限流：每 PUSH_APART_STEP 个物理帧推一次，位移按倍数补偿（总冲量不变）。
+	var physics_frame: int = Engine.get_physics_frames()
+	if physics_frame % PUSH_APART_STEP != 0:
+		return
+	var step_delta: float = delta * float(PUSH_APART_STEP)
+	var key := Vector2i(floori(my_pos.x / PUSH_BUCKET_SIZE), floori(my_pos.y / PUSH_BUCKET_SIZE))
+	var pushed_any: bool = false
 
-	for other in enemies:
-		if other == enemy:
-			continue
-		if not is_instance_valid(other):
-			continue
-		if other.get("_is_dead") == true:
-			continue
-		var sm: Node = other.get_node_or_null("StateMachine")
-		if sm and sm.current_state:
-			var sname: String = sm.current_state.name
-			if sname == "Knockback" or sname == "Hitstun":
+	for dx: int in range(-1, 2):
+		for dy: int in range(-1, 2):
+			var bucket: Variant = _push_buckets.get(Vector2i(key.x + dx, key.y + dy))
+			if not (bucket is Array):
 				continue
+			for other_value: Variant in (bucket as Array):
+				var other: Node = other_value as Node
+				if other == null or other.get_instance_id() == my_id:
+					continue
+				if _push_skip_ids.has(other.get_instance_id()):
+					continue
+				var other_pos: Vector2 = (other as Node2D).global_position
+				var dist_sq: float = my_pos.distance_squared_to(other_pos)
+				if dist_sq >= radius_sq or dist_sq <= 0.0001:
+					continue
+				var dist: float = sqrt(dist_sq)
+				var push_dir: Vector2
+				if has_move_dir:
+					var radial: Vector2 = (other_pos - my_pos) / dist
+					var side: Vector2 = Vector2(-move_dir.y, move_dir.x)
+					var side_dot: float = radial.dot(side)
+					push_dir = (move_dir * 0.75 + side * side_dot * 0.25).normalized()
+				else:
+					push_dir = (my_pos - other_pos) / dist
 
-		var other_pos: Vector2 = other.global_position
-		var dist: float = my_pos.distance_to(other_pos)
-		if dist < PUSH_APART_RADIUS and dist > 0.01:
-			var push_dir: Vector2
-			if has_move_dir:
-				var radial: Vector2 = (other_pos - my_pos).normalized()
-				var side: Vector2 = Vector2(-move_dir.y, move_dir.x)
-				var side_dot: float = radial.dot(side)
-				push_dir = (move_dir * 0.75 + side * side_dot * 0.25).normalized()
-			else:
-				push_dir = (my_pos - other_pos).normalized()
+				var push_strength: float = (1.0 - dist / PUSH_APART_RADIUS) * PUSH_APART_FORCE
+				var motion: Vector2 = push_dir * push_strength * step_delta
+				if other is CharacterBody2D:
+					other.move_and_collide(motion)
+				else:
+					other.global_position += motion
+				pushed_any = true
 
-			var push_strength: float = (1.0 - dist / PUSH_APART_RADIUS) * PUSH_APART_FORCE
-			var motion: Vector2 = push_dir * push_strength * delta
-			if other is CharacterBody2D:
-				other.move_and_collide(motion)
-			else:
-				other.global_position += motion
-
-			if has_move_dir:
-				var self_push: Vector2 = move_dir * push_strength * 0.5 * delta
-				enemy.move_and_collide(self_push)
+	## 配套的「自己也往前挪」：原实现写在循环里、用最后一个同伴的强度（同一帧里强度还会变），
+	## 这里改成"本帧确实推到了人 → 按半力推自己一次"，语义稳定且与推挤同节流。
+	if pushed_any and has_move_dir:
+		enemy.move_and_collide(move_dir * PUSH_APART_FORCE * 0.5 * step_delta)
 
 
 # ═══════════════════════════════════════

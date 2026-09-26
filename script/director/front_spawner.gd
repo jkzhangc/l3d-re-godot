@@ -133,9 +133,9 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	if pause_in_cooldown and phase == &"cooldown":
 		last_reject = "喘息(cooldown)阶段暂停"
 		return 0
-	## 存活上限按真人数放大（2026-09-25 用户需求：1~2 人 1.0× / 3 人 1.5× / 4 人 2.0×）。
-	## 上限不跟着放大时，多人下"倍率"会被这道闸门直接吃掉（1 人和 4 人刷得一样多）。
-	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	## 存活上限按真人数**温和**放大（见 Players.scaled_active_cap 的成本说明）：
+	## 上限完全不放大时多人会被闸门吃掉；但跟刷怪量一样线性翻倍会让物理成本爆炸。
+	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		## 注意：这里的 alive_count 是**全场**存活数，包含已经被玩家甩在身后、
 		## 仍在慢慢追的老敌人。没有回收机制时它会只增不减 → 前方被这道闸门永久掐断。

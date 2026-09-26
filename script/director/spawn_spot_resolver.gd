@@ -33,30 +33,61 @@ const BLOCKING_MASK: int = 1 | 4 | 8
 
 ## 该点是否可以站人。`world_node` 必须已入树（取它的 World2D）。
 ## `probe_radius` 供不同体积的使用者覆盖（玩家盒 24×27 → 14；敌人盒 20×28 → 14 同样够用）。
-static func is_free(world_node: Node2D, pos: Vector2, probe_radius: float = PROBE_RADIUS) -> bool:
-	return _acceptable(world_node, pos, probe_radius, Callable())
+## `require_tile` = 还必须**落在有效图块上**（见 `_has_any_tile` 的成因说明）。
+static func is_free(world_node: Node2D, pos: Vector2, probe_radius: float = PROBE_RADIUS,
+		require_tile: bool = false) -> bool:
+	return _acceptable(world_node, pos, probe_radius, Callable(), require_tile)
 
 
 ## 找 `base` 附近最近的可站位置；**一个都没有时返回 null** ——
 ## 调用方据此决定回退策略（玩家落点=保留原地，敌人刷怪=退回屏幕外刷法）。
 ## `extra_ok` 是附加判据（例如 `Director._is_walkable`：地图范围闸 + 作者禁刷层）。
 static func find_near(world_node: Node2D, base: Vector2, probe_radius: float = PROBE_RADIUS,
-		extra_ok: Callable = Callable()) -> Variant:
-	if _acceptable(world_node, base, probe_radius, extra_ok):
+		extra_ok: Callable = Callable(), require_tile: bool = false) -> Variant:
+	if _acceptable(world_node, base, probe_radius, extra_ok, require_tile):
 		return base
 	for ring: int in range(1, RING_COUNT + 1):
 		var radius: float = RING_STEP * float(ring)
 		for i: int in range(ANGLE_STEPS):
 			var ang: float = TAU * float(i) / float(ANGLE_STEPS)
 			var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
-			if _acceptable(world_node, cand, probe_radius, extra_ok):
+			if _acceptable(world_node, cand, probe_radius, extra_ok, require_tile):
+				return cand
+	return null
+
+
+## 以**锚点**为中心找第 N 个可站落点（多人补位专用）。
+##
+## 【为什么不是"锚点 + 固定偏移再修正"】旧做法先算 `锚点 + 56 × 序号`，再把这个点往外挪。
+## 2026-09-26 实测（第二关结尾安全屋）：锚点贴着墙/水时，第 2、3 个固定偏移点直接落在
+## 墙或水面上，而它**附近的环**也大多被墙水占满 → 找不到空位 → 退回原点 → 第 3 人卡墙。
+## 改成以锚点（必然是关卡作者摆好的可站点）为圆心、由近及远找空位，天然避开这个问题。
+##
+## `preferred_ring` = 期望半径序号（= 第 index 个玩家 → min_sep × index）；
+## 该环找不到就向外扩，最后再回头试内环。全部失败返回 null（调用方决定兜底）。
+static func find_around_anchor(world_node: Node2D, anchor: Vector2, min_sep: float,
+		preferred_ring: int = 1, max_ring: int = 5, angle_steps: int = 12,
+		probe_radius: float = PROBE_RADIUS, require_tile: bool = true,
+		extra_ok: Callable = Callable()) -> Variant:
+	var start: int = maxi(preferred_ring, 1)
+	var order: Array[int] = []
+	for r: int in range(start, max_ring + 1):
+		order.append(r)
+	for r: int in range(1, start):
+		order.append(r)
+	for ring: int in order:
+		var radius: float = min_sep * float(ring)
+		for i: int in range(angle_steps):
+			var ang: float = TAU * float(i) / float(angle_steps)
+			var cand: Vector2 = anchor + Vector2(cos(ang), sin(ang)) * radius
+			if _acceptable(world_node, cand, probe_radius, extra_ok, require_tile):
 				return cand
 	return null
 
 
 ## 修正落点：原落点是空的就原样返回；否则由近及远环形找最近的可站点（确定性，无随机）。
-static func resolve(world_node: Node2D, base: Vector2) -> Vector2:
-	var found: Variant = find_near(world_node, base)
+static func resolve(world_node: Node2D, base: Vector2, require_tile: bool = false) -> Vector2:
+	var found: Variant = find_near(world_node, base, PROBE_RADIUS, Callable(), require_tile)
 	if found is Vector2:
 		var fixed: Vector2 = found as Vector2
 		if fixed != base:
@@ -75,10 +106,12 @@ static func resolve(world_node: Node2D, base: Vector2) -> Vector2:
 ## 综合判据：无法判定时保守放行（与 `Director._is_walkable` 的无玩家兜底同口径）；
 ## 否则必须同时通过 ①图块碰撞 ②物理探测 ③调用方附加判据。
 static func _acceptable(world_node: Node2D, pos: Vector2, probe_radius: float,
-		extra_ok: Callable) -> bool:
+		extra_ok: Callable, require_tile: bool = false) -> bool:
 	if world_node == null or not is_instance_valid(world_node) or not world_node.is_inside_tree():
 		return true
 	if _tile_blocked(world_node, pos):
+		return false
+	if require_tile and not _has_any_tile(world_node, pos):
 		return false
 	if not _body_free(world_node, pos, probe_radius):
 		return false
@@ -121,6 +154,28 @@ static func _tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
 
 
 ## 收集场景内全部 TileMapLayer（含 NoSpawn 层 —— 判据只看碰撞，不看禁刷标注）。
+## 该点是否落在**有效图块**上（任一层在该格有图块）。
+##
+## 【为什么需要它（2026-09-26 实测）】旧判据只查"有没有碰撞"——而地图**外面**的虚空
+## （房间黑区/未铺图块的区域）既没有碰撞也没有地板 → 被判成"空位"，
+## 于是多人补位会把玩家放到房间外的黑区里（那里走不回房间，表现为"卡在墙里"）。
+## 只查碰撞永远查不出"这里根本没有地图"。没有图块层时（harness / 纯节点场景）返回 true。
+static func _has_any_tile(world_node: Node2D, pos: Vector2) -> bool:
+	var tree: SceneTree = world_node.get_tree()
+	if tree == null:
+		return true
+	var layers: Array[TileMapLayer] = []
+	_collect_tilemaps(_topmost_scene_node(world_node, tree), layers)
+	if layers.is_empty():
+		return true
+	for tm: TileMapLayer in layers:
+		if not is_instance_valid(tm) or tm.tile_set == null:
+			continue
+		if tm.get_cell_source_id(tm.local_to_map(tm.to_local(pos))) != -1:
+			return true
+	return false
+
+
 static func _collect_tilemaps(node: Node, out: Array[TileMapLayer]) -> void:
 	if node is TileMapLayer:
 		out.append(node as TileMapLayer)

@@ -809,7 +809,26 @@ func _collect_spawn_points() -> Array[Vector2]:
 		var tree: SceneTree = get_tree()
 		if tree != null and tree.current_scene != null:
 			_collect_spawn_points_recursive(tree.current_scene, out)
+	_warn_points_in_no_spawn(out)
 	return out
+
+
+## 点位落在作者禁刷层（NoSpawnLayer）里时告警一次。
+## 这不影响行为（显式点位优先于禁刷层，见 `Director.is_holdout_spot_ok`），
+## 只是提示作者"你的点位和禁刷区重叠了"，便于判断是不是摆错位置。
+func _warn_points_in_no_spawn(points: Array[Vector2]) -> void:
+	if points.is_empty():
+		return
+	var director: Node = get_node_or_null("/root/Director")
+	if director == null or not director.has_method("_is_no_spawn"):
+		return
+	var overlapped: int = 0
+	for p: Vector2 in points:
+		if bool(director.call("_is_no_spawn", p)):
+			overlapped += 1
+	if overlapped > 0:
+		push_warning("[HoldoutMachine] 固定刷怪点有 %d/%d 个落在作者禁刷层（NoSpawn）内 —— 按「显式点位优先」仍会照常使用；若本意是不要这个点，请把该节点 enabled 关掉"
+			% [overlapped, points.size()])
 
 
 func _collect_spawn_points_recursive(node: Node, out: Array[Vector2]) -> void:

@@ -898,6 +898,23 @@ func spawn_horde_nodes(count: int, decor_layer: Node) -> Array[Node2D]:
 	return spawned_nodes
 
 
+## 固定刷怪点的落点判据（2026-09-26 实测修正）。
+##
+## ⚠ 与普通刷怪**故意不同**：**不受作者禁刷层（NoSpawn）否决**。
+## 依据：学校内部图里作者摆的 4 个 `HoldoutSpawnPoint` 全部落在 NoSpawn 区域内
+## （5811/65704 格），若沿用 `_is_walkable`（含禁刷层判定）→ 4 个点全被否 → 每只都退回
+## 屏幕外刷法 = 用户实测的「刷怪点没起效」。语义上：**显式摆下的点位是比区域标记更强的意图**；
+## 作者若想废掉某个点，用该节点的 `enabled = false`。
+## 仍然保留：①必须在有效图块上（`_is_inside_map`）②不被现有敌人占住 ③由调用方
+## 通过物理探测（mask 1|4|8）排除墙/玩家/敌人。
+func is_holdout_spot_ok(global_pos: Vector2) -> bool:
+	if not _is_inside_map(global_pos):
+		return false
+	if _is_occupied_by_enemy(global_pos):
+		return false
+	return true
+
+
 ## 轮转均分（纯函数，便于单测）：把 `count` 个单位分给 `point_count` 个点，
 ## 返回每个单位对应的**点位索引**序列。
 ##   例：count=5 / point_count=3 → [0,1,2,0,1]（点数 2、2、1）；
@@ -937,7 +954,8 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 		var pos: Vector2 = Vector2.ZERO
 		if probe_node != null:
 			var found: Variant = SPOT_RESOLVER.find_near(
-				probe_node, point, ENEMY_SPOT_PROBE_RADIUS, Callable(self, "_is_walkable"))
+				probe_node, point, ENEMY_SPOT_PROBE_RADIUS,
+				Callable(self, "is_holdout_spot_ok"))
 			if found is Vector2:
 				pos = found as Vector2
 		if pos == Vector2.ZERO:

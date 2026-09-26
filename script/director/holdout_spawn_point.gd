@@ -25,13 +25,36 @@ class_name HoldoutSpawnPoint extends Node2D
 @export_range(4.0, 40.0, 2.0) var marker_radius: float = 10.0
 
 
+## 运行时默认不画标记（只在编辑器可见）；按 TAB 打开 `Global.debug_visuals` 才在游戏里显示。
+## ⚠ 2026-09-26 用户实测：初版 `_draw()` 没有这层闸门，红点直接出现在游戏画面里。
+var _marker_shown: bool = false
+
+
 func _ready() -> void:
-	## @tool：编辑器里也要画出标记（只在编辑器绘制，运行时零开销）。
-	set_process(false)
+	_marker_shown = _marker_wanted()
+	set_process(not Engine.is_editor_hint())
 	queue_redraw()
 
 
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint():
+		return
+	var want: bool = _marker_wanted()
+	if want != _marker_shown:
+		_marker_shown = want
+		queue_redraw()
+
+
+func _marker_wanted() -> bool:
+	if Engine.is_editor_hint():
+		return true
+	var g: Node = get_node_or_null("/root/Global")
+	return g != null and bool(g.get("debug_visuals"))
+
+
 func _draw() -> void:
+	if not _marker_wanted():
+		return
 	var col: Color = marker_color if enabled else Color(0.55, 0.55, 0.55, 1.0)
 	draw_arc(Vector2.ZERO, marker_radius, 0.0, TAU, 24, col, 2.0)
 	draw_line(Vector2(-marker_radius, 0.0), Vector2(marker_radius, 0.0), col, 1.0)

@@ -138,6 +138,21 @@ const NETWORK_VARIANTS: Dictionary = {
 ## - 玩家位置单独以 60Hz 发送；敌人位置与玩家表现合并为 40Hz 快照。
 ## - 高频快照使用 unreliable_ordered，因为旧位置没有保存价值；可靠快照只用于
 ##   首次进图、掉落物变化、实体列表收敛等结构性同步。
+## 作者摆的「玩家出生槽位」脚本（2026-09-26 用户需求）。
+## 用 preload 常量做类型判定 —— 新建脚本的 class_name 要等编辑器重扫才进全局类缓存。
+const PLAYER_SPAWN_SLOT := preload("res://script/director/player_spawn_slot.gd")
+
+## 本场景作者摆的玩家出生槽位：槽位号(1~4) → 全局坐标。场景初始化时收集一次。
+var _player_spawn_slots: Dictionary = {}
+## 本次进图是否应用了"传送抵达点" —— 应用了就**不使用槽位**：
+## 槽位表达"关卡起点"，而抵达点是"从楼梯/安全门上来时站哪"，后者优先。
+var _arrival_applied: bool = false
+
+## 本场景初始化期间"已经分配给某个玩家"的补位落点（2026-09-26）。
+## 用途：分配下一个玩家的落点时把它们排除掉。
+## ⚠ 不能只依赖物理探测 —— 刚 `add_child` 的碰撞体在**当帧**可能还没进物理空间，
+## 于是第二名玩家会和第一名落在同一格（引擎要过几帧才把两人推开）。
+var _spawn_assignments: Array[Vector2] = []
 const SNAPSHOT_INTERVAL := 1.0 / 40.0
 const PLAYER_SNAPSHOT_INTERVAL := 1.0 / 60.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
@@ -607,11 +622,17 @@ func _is_local_player_swallow_locked() -> bool:
 func _host_initialize_world() -> void:
 	# Scene switching must only discard old node bindings. Persistent PlayerState lives in Net.
 	Players.clear_entity_bindings()
+	_spawn_assignments.clear()
+	_player_spawn_slots = _collect_player_slots()
+	_arrival_applied = false
 	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var host_node := _find_preplaced_player()
-	_apply_arrival_to_preplaced_player(host_node)
+	_arrival_applied = _apply_arrival_to_preplaced_player(host_node)
 	if host_node:
+		## 作者摆了 1 号槽位、且没有抵达点要应用 → 本机玩家先站到槽位上；
+		## 随后其他玩家的兜底环形搜索也是以它（而非场景 PlayerSpawn）为锚点。
+		_apply_own_spawn_slot(host_node, 1)
 		_register_host_player(local_id, host_node, true)
 	else:
 		_register_host_player(local_id, _instantiate_player(_spawn_position(0), local_id), true)
@@ -653,10 +674,13 @@ func _finish_host_world_initialization() -> void:
 func _client_initialize_world() -> void:
 	# Keep snapshot data during map loads, only invalidate scene-node bindings.
 	Players.clear_entity_bindings()
+	_spawn_assignments.clear()
+	_player_spawn_slots = _collect_player_slots()
+	_arrival_applied = false
 	_claim_local_network_state()
 	var local_id: int = int(net.my_peer_id)
 	var local_node := _find_preplaced_player()
-	_apply_arrival_to_preplaced_player(local_node)
+	_arrival_applied = _apply_arrival_to_preplaced_player(local_node)
 	if not local_node:
 		local_node = _instantiate_player(_spawn_position(0), local_id)
 	var state := _find_or_create_player_state(local_id, "", local_node.current_hp)
@@ -665,6 +689,12 @@ func _client_initialize_world() -> void:
 	if state.current_hp <= 0.0:
 		state.current_hp = state.get_max_hp()
 	state.owner_peer_id = local_id
+	## 作者定点槽位（客户端本地预置）：按**自己的座位号**取，与 HUD 的「NP玩家」一致。
+	## Host 的权威坐标随后会经快照确认；两端用同一套规则就不会出现"先站错再被拽过去"。
+	if not _arrival_applied:
+		var own_seat: int = Players.find_seat_by_owner_peer_id(local_id)
+		if own_seat >= 0:
+			_apply_own_spawn_slot(local_node, own_seat + 1)
 	state.position = local_node.global_position
 	state.facing = local_node.facing
 	var seat_index := _ensure_player_state_seat(state)
@@ -5586,15 +5616,31 @@ func _run_auto_client_pickup_test() -> void:
 	# 先用正常客户端输入移动到测试图里的手枪范围内，使 Host 仍会执行距离校验。
 	# 随后按确定的 network_pickup_id 精确提交一次请求：测试图内相邻的多个掉落物都会监听同一个“确定键”，
 	# 长按自动化有概率先命中路过的另一个物品，导致回归用例误报；正式的按住交互仍由 weapon_pickup.gd 覆盖。
-	var travel_delta := source.global_position - node.global_position
-	var move_action := "右" if absf(travel_delta.x) >= absf(travel_delta.y) and travel_delta.x > 0.0 else "左"
-	if absf(travel_delta.y) > absf(travel_delta.x):
-		move_action = "下" if travel_delta.y > 0.0 else "上"
-	Input.action_press(move_action)
-	deadline = Time.get_ticks_msec() + 3000
-	while Time.get_ticks_msec() < deadline and node.global_position.distance_to(source.global_position) > 18.0:
+	## 【2026-09-26 修】原实现只在开始时选一个轴、按住不放 3 秒：
+	## 落点稍远或有拐角就走不到位 —— 实测把"多人补位落点"改成**绕锚点环形搜索**后，
+	## 客户端出生点变了（距掉落物 ~380px），步行速度下 3 秒连直线都走不到，3 次尝试全失败。
+	## 改成每 0.05s 重新判定方向（需要时同时按两个轴），截止时间放宽到 6 秒。
+	deadline = Time.get_ticks_msec() + 6000
+	var pressed_actions: Array[String] = []
+	while Time.get_ticks_msec() < deadline \
+			and node.global_position.distance_to(source.global_position) > 18.0:
+		var delta_to_go: Vector2 = source.global_position - node.global_position
+		var want: Array[String] = []
+		if absf(delta_to_go.x) > 6.0:
+			want.append("右" if delta_to_go.x > 0.0 else "左")
+		if absf(delta_to_go.y) > 6.0:
+			want.append("下" if delta_to_go.y > 0.0 else "上")
+		for action: String in want:
+			if not pressed_actions.has(action):
+				Input.action_press(action)
+				pressed_actions.append(action)
+		for action: String in pressed_actions.duplicate():
+			if not want.has(action):
+				Input.action_release(action)
+				pressed_actions.erase(action)
 		await get_tree().create_timer(0.05).timeout
-	Input.action_release(move_action)
+	for action: String in pressed_actions:
+		Input.action_release(action)
 	await get_tree().create_timer(0.08).timeout
 	var in_range := node.global_position.distance_to(source.global_position) <= 28.0
 	if not in_range:
@@ -6190,19 +6236,96 @@ func _packet_position(packet: Dictionary) -> Vector2:
 	return Vector2.ZERO
 
 
-func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> void:
+## 返回是否**真的**应用了抵达点（NetworkWorld 据此决定要不要用作者槽位）。
+func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> bool:
 	if not is_instance_valid(player):
-		return
+		return false
 	var arrival_id: String = str(net.active_arrival_id)
 	var arrival_position: Variant = ArrivalResolver.resolve(
 		get_tree().current_scene, arrival_id, net.active_arrival_position
 	)
 	if not arrival_position is Vector2:
-		return
+		return false
 	## 抵达落点同样要避墙（2026-09-25）：关卡作者摆的 ArrivalPoint 只要压到图块碰撞，
 	## 传送过去就是"卡在墙里"。修正由 SpawnSpotResolver 统一做（确定性 → 两端一致）。
-	player.global_position = SPOT_RESOLVER.resolve(player, arrival_position as Vector2)
+	player.global_position = SPOT_RESOLVER.resolve(player, arrival_position as Vector2, true)
 	print("[NetworkWorld] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
+	return true
+
+
+# ═══════════════════════════════════════
+# 玩家出生槽位（PlayerSpawnSlot，2026-09-26）
+# ═══════════════════════════════════════
+
+## 收集本场景作者摆的槽位：槽位号 → 全局坐标（同号取树序第一个）。
+func _collect_player_slots() -> Dictionary:
+	var out: Dictionary = {}
+	var tree: SceneTree = get_tree()
+	var root: Node = tree.current_scene if tree != null else null
+	if root == null:
+		return out
+	var found: Array[Node] = []
+	_collect_slot_nodes(root, found)
+	for node: Node in found:
+		if not bool(node.get("enabled")):
+			continue
+		var slot: int = int(node.get("peer_slot"))
+		if slot <= 0 or out.has(slot):
+			continue
+		out[slot] = (node as Node2D).global_position
+	if not out.is_empty():
+		print("[NetworkWorld] 玩家出生槽位 %d 个：%s" % [out.size(), str(out.keys())])
+	return out
+
+
+func _collect_slot_nodes(node: Node, out: Array[Node]) -> void:
+	for child: Node in node.get_children():
+		if _is_player_slot_node(child):
+			out.append(child)
+		_collect_slot_nodes(child, out)
+
+
+func _is_player_slot_node(node: Node) -> bool:
+	if not (node is Node2D):
+		return false
+	var script: Script = node.get_script()
+	if script == null:
+		return false
+	return script == PLAYER_SPAWN_SLOT \
+		or String(script.resource_path).ends_with("player_spawn_slot.gd")
+
+
+## 槽位是否可用：在有效图块上、不压墙、不与已分配落点（含本人当前站位）过近。
+func _slot_available(pos: Vector2) -> bool:
+	var anchor := _find_preplaced_player()
+	if not is_instance_valid(anchor):
+		return false
+	if not SPOT_RESOLVER.is_free(anchor, pos, 14.0, true):
+		return false
+	for assigned: Vector2 in _spawn_assignments:
+		if pos.distance_to(assigned) < SPAWN_SEPARATION * 0.6:
+			return false
+	return true
+
+
+## 本机玩家站到自己的槽位上（Host 是 1 号，Client 按座位号）。
+## 返回是否命中；槽位不合法时挪到最近可用点并告警，**绝不放进墙里/虚空**。
+func _apply_own_spawn_slot(node: CharacterBody2D, slot: int) -> bool:
+	if _arrival_applied or not is_instance_valid(node):
+		return false
+	var value: Variant = _player_spawn_slots.get(slot)
+	if not (value is Vector2):
+		return false
+	var slot_pos: Vector2 = value as Vector2
+	var target: Vector2 = slot_pos
+	if not _slot_available(slot_pos):
+		target = SPOT_RESOLVER.resolve(node, slot_pos, true)
+		push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
+			% [slot, str(slot_pos.round()), str(target.round())])
+	node.global_position = target
+	_spawn_assignments.append(target)
+	print("[NetworkWorld] PLAYER_SLOT 第 %d 位（本机）→ %s" % [slot, str(target.round())])
+	return true
 
 
 func _find_players_parent() -> Node:
@@ -6245,8 +6368,64 @@ func _spawn_position(index: int) -> Vector2:
 	var anchor := _find_preplaced_player()
 	if not is_instance_valid(anchor):
 		return Vector2(SPAWN_SEPARATION * index, 0.0)
-	var base: Vector2 = anchor.global_position + Vector2(SPAWN_SEPARATION * index, 0.0)
-	return SPOT_RESOLVER.resolve(anchor, base)
+	var origin: Vector2 = anchor.global_position
+	if index <= 0:
+		return origin
+	## ① 作者定点槽位优先（第 index 位玩家 → 槽位 index + 1）。
+	##    "传送抵达"时不使用槽位：那是入口位置，不是关卡起点。
+	if not _arrival_applied:
+		var slot_value: Variant = _player_spawn_slots.get(index + 1)
+		if slot_value is Vector2:
+			var slot_pos: Vector2 = slot_value as Vector2
+			if _slot_available(slot_pos):
+				_spawn_assignments.append(slot_pos)
+				print("[NetworkWorld] PLAYER_SLOT 第 %d 位 → %s" % [index + 1, str(slot_pos.round())])
+				return slot_pos
+			## 槽位摆在不合法位置（压墙/虚空/与队友重叠）：挪到最近可用点，仍优先于环形搜索。
+			var nudged: Vector2 = SPOT_RESOLVER.resolve(anchor, slot_pos, true)
+			push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
+				% [index + 1, str(slot_pos.round()), str(nudged.round())])
+			if nudged.distance_to(slot_pos) > 0.5 or _slot_available(nudged):
+				_spawn_assignments.append(nudged)
+				return nudged
+	## 锚点自己也算"已占用"，保证队形从锚点往外展开。
+	if _spawn_assignments.is_empty():
+		_spawn_assignments.append(origin)
+	## 排除已分配落点：两者距离 < SPAWN_SEPARATION × 0.6 视为过近（引擎才知道要几帧才推开，
+	## 这里直接不让它发生）。
+	var min_gap: float = SPAWN_SEPARATION * 0.6
+	var assigned: Array[Vector2] = _spawn_assignments
+	var avoid_ok: Callable = func(p: Vector2) -> bool:
+		for a: Vector2 in assigned:
+			if p.distance_to(a) < min_gap:
+				return false
+		return true
+	## 以锚点（关卡作者摆好的可站点）为圆心、由近及远找空位：
+	## 期望半径 = 第 index 个 → `SPAWN_SEPARATION × index`（保持原来的间距语义），
+	## 该环被占满/被墙水挡住就向外扩，最后回头试内环。
+	var found: Variant = SPOT_RESOLVER.find_around_anchor(
+		anchor, origin, SPAWN_SEPARATION, index, 5, 12, 14.0, true, avoid_ok)
+	if found == null:
+		## 放宽间距到 24px：小房间（如第二关结尾安全屋，大半格是水/墙）真的挤不下时，
+		## 宁可贴紧一点，也不能把人放进墙里或房间外的黑区。
+		var tight_gap: float = 24.0
+		var tight_ok: Callable = func(q: Vector2) -> bool:
+			for a: Vector2 in assigned:
+				if q.distance_to(a) < tight_gap:
+					return false
+			return true
+		found = SPOT_RESOLVER.find_around_anchor(
+			anchor, origin, SPAWN_SEPARATION, index, 5, 12, 14.0, true, tight_ok)
+	if found == null:
+		## 最后手段：允许与队友重叠（引擎会在几帧内把两人推开）。
+		## 这一层**仍然**要求"在有效图块上 + 不压墙"，绝不退回原点。
+		found = SPOT_RESOLVER.find_around_anchor(
+			anchor, origin, SPAWN_SEPARATION, index, 5, 12, 14.0, true)
+	if found is Vector2:
+		_spawn_assignments.append(found as Vector2)
+		return found as Vector2
+	## 极端情况（锚点周围连一格"有图块且不压墙"都没有）：保留旧几何偏移 + 避墙修正。
+	return SPOT_RESOLVER.resolve(anchor, origin + Vector2(SPAWN_SEPARATION * index, 0.0), true)
 
 
 func _set_local_player(node: Node2D, seat_index: int) -> void:

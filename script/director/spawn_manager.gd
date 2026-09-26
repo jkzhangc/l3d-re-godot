@@ -106,8 +106,8 @@ func get_horde_progress() -> float:
 # 内部 — 散兵生成
 # ═══════════════════════════════════════
 func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
-	## 存活上限按真人数放大（见 Players.scale_spawn_count；倍率唯一入口）。
-	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	## 存活上限按真人数**温和**放大（见 Players.scaled_active_cap 的成本说明）。
+	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		return
 
@@ -170,7 +170,7 @@ func _update_horde(delta: float, alive_count: int) -> void:
 		_horde_active = false
 		return
 
-	var active_cap: int = Players.scale_spawn_count(max_active_common)
+	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		_horde_batch_timer = 1.0
 		return
