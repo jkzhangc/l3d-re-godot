@@ -35,8 +35,11 @@ class_name DirectorConfig extends Node
 @export_group("生成 — 散兵（爬升阶段零星敌人）")
 @export var scatter_min: int = 2                 ## 每次生成散兵的最少个数。爬升阶段定时触发，紧张度低时取此值
 @export var scatter_max: int = 5                 ## 每次生成散兵的最多个数。紧张度越高越接近此值
-@export var scatter_interval_min: float = 1.0   ## 两次散兵生成之间最少隔几秒。设短=敌人连绵不断，设长=玩家有大段空闲
-@export var scatter_interval_max: float = 6.0   ## 两次散兵生成之间最多隔几秒。实际间隔在此范围内随机，避免节奏感太机械
+## ⚠ 2026-09-26 用户实测「普通刷怪频率太快，保持击杀节奏可以无限刷下去」：
+## 旧的 1.0s 就是"一秒左右又来几只"的直接来源（散兵是普通补位的主供怪路径）。
+## 现在收到 4.0s：站着对枪时不再连绵不断，但也不会长时间空场。
+@export var scatter_interval_min: float = 4.0   ## 两次散兵生成之间最少隔几秒。设短=敌人连绵不断，设长=玩家有大段空闲
+@export var scatter_interval_max: float = 10.0  ## 两次散兵生成之间最多隔几秒。实际间隔在此范围内随机，避免节奏感太机械
 
 @export_group("生成 — 尸潮（Peak 阶段大量敌人）")
 @export var horde_total_min: int = 5            ## 一波尸潮最少一共出几个敌人。实际数量在此范围内随机

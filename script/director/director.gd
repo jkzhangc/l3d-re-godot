@@ -58,6 +58,12 @@ const PREFERRED_SPAWN_MAX_DISTANCE := 900.0
 var recycle_enabled: bool = true
 var recycle_interval: float = 1.0
 var recycle_dist: float = 1400.0
+## 尸潮期间的回收距离系数（2026-09-26 用户诉求：尸潮里我一直跑，前面就一直不刷了；
+## 丧尸被刷掉后前面应当立马补几个过来，但不要超过上限）。
+## 根因：`max_active` 数的是**全场**存活（含甩在身后的掉队者）——跑起来时上限被身后占满，
+## 尸潮事件批就被"同屏存活已达上限"挡住 → 前方空场。尸潮期间收紧到 0.6×，
+## 掉队者更快清掉、上限腾出，事件批照旧在**前方屏外**补回（仍受 max_active / 每批量限制）。
+const PEAK_RECYCLE_SCALE: float = 0.6
 var recycle_clear_corpses: bool = true
 var _zombie_pool: Array = []          ## ZombieVariant 池（_apply_config 注入；空则用默认池）
 var _horde_rage: bool = false         ## 尸潮（peak 阶段）期间 = true，僵尸切换クリムゾンヘッド形态
@@ -2030,6 +2036,14 @@ func _update_recycle(delta: float) -> void:
 		return
 	_recycle_timer = 0.0
 
+	## 尸潮期间用收紧后的回收距离（见 PEAK_RECYCLE_SCALE 的成因说明）。
+	## ⚠ current_phase 只在 _process 里是局部变量；这里从 PacingController 直接读
+	##（枚举值 1 = PEAK，与 _process 里的 match 同口径）。
+	var clear_dist: float = recycle_dist
+	var pc: Node = get_node_or_null("PacingController")
+	if pc != null and int(pc.get("current_phase")) == 1:
+		clear_dist = recycle_dist * PEAK_RECYCLE_SCALE
+
 	var cleared_alive: int = 0
 	var cleared_corpses: int = 0
 	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
@@ -2042,7 +2056,7 @@ func _update_recycle(delta: float) -> void:
 		## 离任一玩家在回收距离内 → 保留（多人：取"最近玩家"的距离）。
 		var keep: bool = false
 		for p: Node2D in refs:
-			if e.global_position.distance_to(p.global_position) <= recycle_dist:
+			if e.global_position.distance_to(p.global_position) <= clear_dist:
 				keep = true
 				break
 		if keep:

@@ -52,6 +52,7 @@ shove_fatigue_limit = 10
 select_icon_direction = 2
 hurt_sound = ExtResource("4_ckl1d")
 death_sound = ExtResource("3_xbmbw")
+safehouse_lines = Array[String](["哼，这点程度算什么！", "别拖我后腿啊，你们几个！", "肚子饿了……有吃的吗？", "谁敢挡路，我一拳揍飞他！"])
 skills = Array[ExtResource("8_yottv")]([ExtResource("11_recital")])
 counter_type = "heavy"
 counter_sound = ExtResource("12_counter")

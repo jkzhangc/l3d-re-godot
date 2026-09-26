@@ -42,6 +42,9 @@ func item_key_just_pressed(action: StringName) -> bool:
 const CHARACTER_NAME_ZH: Dictionary = {
 	"のび太": "野比大雄",
 	"ジャイアン": "刚田武（胖虎）",
+	## character_bigg.tres 的 character_name 实际是「ジャイ」（原作资源名就这么短），
+	## 别名必须一并登记，否则该角色在 ED 台词表 / 战报里都会回退成默认名与共通台词。
+	"ジャイ": "刚田武（胖虎）",
 	"静香": "源静香",
 	"スネ夫": "骨川小夫",
 	"聖奈": "绿川圣奈",

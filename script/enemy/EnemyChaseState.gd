@@ -96,6 +96,18 @@ const REPATH_FAIL_MOVE_DIST: float = 48.0   ## 失败后玩家移动多远才重
 const WAYPOINT_RADIUS: float = 10.0
 const NO_CELL: Vector2i = Vector2i(-999999, -999999)  ## _find_nearest_walkable 的"无解"返回值
 const FALLBACK_THRESHOLD: int = 2  ## 连续失败多少次切到直接追击模式
+## 让位方向配比（2026-09-26）：**横向为主**，前向只留一点点用于从缓行者身侧挤过。
+## 旧实现是 `move×0.75 + side×0.25` —— 前向为主等于把挡路者往**前方**推：
+## 队列里后面的人一路把前面的人推快（用户实测"被后面的敌人推会加速"），
+## 而且永远排成一列纵队。改横向为主后，挡路者往侧面让位，自然形成**肩并肩**横排。
+const PUSH_SIDE_WEIGHT: float = 0.85
+const PUSH_FORWARD_WEIGHT: float = 0.15
+## 身后多少以内不算"挡路"（radial·move_dir 的下限）。身后的人不该把我往侧面挤 ——
+## 让路是**后面那个**自己的事（它会把我看成前方障碍），否则队列里前后互相抖。
+const PUSH_BEHIND_IGNORE: float = -0.35
+## 几乎正对/正背（横向分量过小）时，按 instance_id 定侧，保证同队两侧分开且不左右抖。
+const PUSH_ALIGN_EPS: float = 0.15
+
 const PUSH_APART_RADIUS: float = 36.0   ## 敌人推开检测半径
 const PUSH_APART_FORCE: float = 220.0   ## 推开速度（像素/秒，强力分离）
 ## 推挤的空间分桶边长。必须 > PUSH_APART_RADIUS，保证"自身格 + 相邻 8 格"能覆盖所有
@@ -520,13 +532,18 @@ func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vecto
 	var has_move_dir: bool = move_dir.length() > 0.3
 	var my_id: int = enemy.get_instance_id()
 	var radius_sq: float = PUSH_APART_RADIUS * PUSH_APART_RADIUS
-	## 限流：每 PUSH_APART_STEP 个物理帧推一次，位移按倍数补偿（总冲量不变）。
+	## 限流：每 PUSH_APART_STEP 个物理帧处理一次（位移按倍数补偿，总冲量不变）。
 	var physics_frame: int = Engine.get_physics_frames()
 	if physics_frame % PUSH_APART_STEP != 0:
 		return
 	var step_delta: float = delta * float(PUSH_APART_STEP)
+	## ★单步位移上限 = 一只敌人的满强度推力。推的人再多也不会超过它
+	##（旧实现是逐个 move_and_collide 别人 → 位移线性叠加 = 排队推着加速 + 挤穿墙）。
+	var max_step_push: float = PUSH_APART_FORCE * step_delta
 	var key := Vector2i(floori(my_pos.x / PUSH_BUCKET_SIZE), floori(my_pos.y / PUSH_BUCKET_SIZE))
-	var pushed_any: bool = false
+	var push_sum: Vector2 = Vector2.ZERO
+	var contributors: int = 0
+	var side: Vector2 = Vector2.UP if not has_move_dir else Vector2(-move_dir.y, move_dir.x)
 
 	for dx: int in range(-1, 2):
 		for dy: int in range(-1, 2):
@@ -544,27 +561,38 @@ func _push_apart_from_other_enemies(enemy: Node2D, delta: float, move_dir: Vecto
 				if dist_sq >= radius_sq or dist_sq <= 0.0001:
 					continue
 				var dist: float = sqrt(dist_sq)
+				var radial: Vector2 = (other_pos - my_pos) / dist
 				var push_dir: Vector2
 				if has_move_dir:
-					var radial: Vector2 = (other_pos - my_pos) / dist
-					var side: Vector2 = Vector2(-move_dir.y, move_dir.x)
+					## 身后的人不算挡路（让路是后面那个自己的事），否则队列前后会互相抖。
+					if radial.dot(move_dir) < PUSH_BEHIND_IGNORE:
+						continue
 					var side_dot: float = radial.dot(side)
-					push_dir = (move_dir * 0.75 + side * side_dot * 0.25).normalized()
+					## ★符号：现在推的是**自己**，所以侧向必须**背离**挡路者
+					##（radial 是我→对方；side_dot 大于 0 = 对方在我 +side 侧 → 我要往 -side 让）。
+					## 旧实现推的是对方，方向恰好相反；改成推自己时漏取负 = 往对方身上挤（自检抓到）。
+					var away_sign: float = -1.0 if side_dot >= 0.0 else 1.0
+					if absf(side_dot) < PUSH_ALIGN_EPS:
+						## 几乎正对/正背（排成一列）：按 instance_id 定侧 —— 同一对必然分向两侧、
+						## 且不随帧抖动（旧实现用 side_dot 符号，正对时符号会在正负之间跳）。
+						away_sign = 1.0 if my_id > other.get_instance_id() else -1.0
+					push_dir = (side * away_sign * PUSH_SIDE_WEIGHT
+						+ move_dir * PUSH_FORWARD_WEIGHT).normalized()
 				else:
-					push_dir = (my_pos - other_pos) / dist
-
+					push_dir = -radial  # 静止：纯径向分离
 				var push_strength: float = (1.0 - dist / PUSH_APART_RADIUS) * PUSH_APART_FORCE
-				var motion: Vector2 = push_dir * push_strength * step_delta
-				if other is CharacterBody2D:
-					other.move_and_collide(motion)
-				else:
-					other.global_position += motion
-				pushed_any = true
+				push_sum += push_dir * push_strength * step_delta
+				contributors += 1
 
-	## 配套的「自己也往前挪」：原实现写在循环里、用最后一个同伴的强度（同一帧里强度还会变），
-	## 这里改成"本帧确实推到了人 → 按半力推自己一次"，语义稳定且与推挤同节流。
-	if pushed_any and has_move_dir:
-		enemy.move_and_collide(move_dir * PUSH_APART_FORCE * 0.5 * step_delta)
+	if push_sum == Vector2.ZERO:
+		return
+	## ★钳制：所有同伴的推力求和后**只施加一次**，且不超过单推力上限。
+	if push_sum.length() > max_step_push:
+		push_sum = push_sum.normalized() * max_step_push
+	if enemy is CharacterBody2D:
+		enemy.move_and_collide(push_sum)
+	else:
+		enemy.global_position += push_sum
 
 
 # ═══════════════════════════════════════

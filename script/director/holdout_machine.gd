@@ -208,6 +208,9 @@ var _phase_timer: float = 0.0
 var _phase_total: float = 0.0
 var _local_hud_shown: bool = false  ## 本机 CombatHUD 是否已 show_holdout（用于幂等，防止重复叠加）
 var _net_token: int = 0             ## 联网权威令牌：标识一次防守战实例，用于丢弃旧场景残留包
+## 被「结束哨兵」覆盖掉的那一场 token（2026-09-26）：Host 的完成广播必须能对上号，
+## 否则节点显隐在客户端不执行。
+var _last_net_token: int = 0
 var _music_player: AudioStreamPlayer = null  ## 防守战专属 BGM（懒创建，挂在机器下）
 ## KILL_COUNT 杀怪式运行时
 var _kills: int = 0                 ## ACTIVE 期间已击杀敌人数
@@ -913,6 +916,12 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 		return  # 旧场景残留包，忽略
 	_net_token = token
 	if phase <= 0:
+		## ★结束哨兵：必须**记住是哪一场结束了**（2026-09-26）——
+		## Host 的 _finish_holdout 先广播 IDLE（本行把 _net_token 置 -1）、
+		## 紧接着广播 holdout_completed(同一 token)；两条可靠包**同序到达**，
+		## 旧实现因为 `_net_token == -1` 而把完成广播判成"旧场景残留包"直接丢弃 →
+		## 客户端既不隐藏也不显示那些节点（用户实测必现，不是偶发）。
+		_last_net_token = token
 		_net_token = -1  # 结束哨兵：后续迟到包一律忽略，直到下一场 trigger 重置
 	_drive_local_hud(phase, remaining, total)
 	_drive_remote_holdout_music(phase)
@@ -935,10 +944,23 @@ func _drive_remote_holdout_music(phase: int) -> void:
 
 
 ## Client 收到防守战完成广播后执行本地完成事件（节点显隐等；传送点仅 Host 创建）。
+## token 校验放行三种情况：①尚未开始（_net_token==0，中途加入/补发）
+## ②就是当前这一场 ③当前这场已置结束哨兵（-1）但 token 与 **记录下的结束场次** 一致。
 func apply_remote_completion(token: int) -> void:
-	if _net_token != 0 and token != _net_token:
+	if token == 0:
 		return
+	var acceptable: bool = (_net_token == 0) or (token == _net_token) \
+		or (_net_token == -1 and token == _last_net_token)
+	if not acceptable:
+		return
+	## 与权威端保持一致：客户端也把本场标记为已结束（否则还能再"完成"一次、
+	## 提示文字/标签状态与权威端不一致）。
+	_active = false
+	_completed = true
+	_local_hud_shown = false
 	_run_completion_events()
+	print("[HoldoutMachine] 完成事件已在本端执行（client=%s token=%d）" % [
+		str(_is_network_client()), token])
 
 
 ## 联网时把权威状态交给 NetworkWorld 广播；单机无 NetworkWorld 时为空操作，

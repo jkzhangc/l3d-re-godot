@@ -20,6 +20,11 @@ signal seat_confirmed(seat_index: int)
 @export var pause_game: bool = true
 @export var auto_show: bool = true
 @export var force_multiplayer_preview: bool = false
+## 过场模式（2026-09-26）：终章 ED 这类"剧本演出里的结算页"用。
+## 打开后不再走"全员准备"闸门 —— 本端按键即关闭本端页面，Host 关闭时广播让其余端一并关闭。
+## 理由：过场页只负责展示战报，沿用安全屋的等待闸门会在网络身份/座位绑定/时序任一环节
+## 出问题时**永久卡住两端流程**（用户实测：客户端按确定键不能准备、走不下去）。
+@export var cutscene_mode: bool = false
 @export_group("音频")
 @export var summary_music: AudioStream
 @export var summary_music_volume_db: float = 0.0
@@ -109,7 +114,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("确定键"):
 		get_viewport().set_input_as_handled()
-		if not _multiplayer_mode:
+		if cutscene_mode:
+			## 过场页：本端按键即推进本端（不等别人、不发 RPC）。
+			_finish_summary()
+		elif not _multiplayer_mode:
 			_finish_summary()
 		else:
 			_submit_local_confirmation()
@@ -384,6 +392,9 @@ func _finish_summary() -> void:
 	if _finishing:
 		return
 	_finishing = true
+	## 过场模式：Host 关闭时通知其余端一起关闭（没按键的客户端不该卡在这一页）。
+	if cutscene_mode and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		_network_summary_complete.rpc()
 	visible = false
 	if _music_player:
 		_music_player.stop()

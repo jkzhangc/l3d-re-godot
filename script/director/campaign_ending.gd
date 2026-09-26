@@ -25,6 +25,8 @@ const DIALOGUE_BY_NAME: Dictionary = {
 	"のび太": "不用靠哆啦A梦，\n我也能靠自己的力量做到！",
 	# ドラえもんに頼らなくたって、僕ひとりの力でやれるんだ！
 	"ジャイアン": "真不争气！\n你连一只都杀不了吗！？",
+	## 别名：character_bigg.tres 的 character_name 是「ジャイ」（见 global.gd 同名注释）。
+	"ジャイ": "真不争气！\n你连一只都杀不了吗！？",
 	# だらしねえな！俺ひとりも殺せないのかよ！？
 	"静香": "太好了！我们成功了！",
 	# やった！　やったんだわ！
@@ -113,6 +115,11 @@ func _show_summary() -> void:
 		_after_summary()
 		return
 	var summary: Node = packed.instantiate()
+	## 终章 ED 的结算页是**过场页**（2026-09-26 用户实测：客户端按确定键不能准备、
+	## 流程走不下去）—— 打开 cutscene_mode 后不再走"全员准备"闸门：
+	## 本端按键即推进本端，Host 关闭时广播让其余端一并关闭。
+	## ⚠ 必须在 add_child 之前置位：ChapterSummary._ready 会立即 show_summary() 读它。
+	summary.set("cutscene_mode", true)
 	# 进 ED 时不允许 auto_show 关闭形态；确认由 ChapterSummary 自身的确定键流程处理
 	add_child(summary)
 	if summary.has_signal("summary_finished"):
