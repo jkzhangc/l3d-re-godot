@@ -26,8 +26,10 @@ const AUTO_HOST_TIMEOUT := 30.0
 
 @onready var name_edit: LineEdit = %NameEdit
 @onready var ip_edit: LineEdit = %IpEdit
-## 端口输入框（建主与加入共用；默认 27015，可改为内网穿透服务分配的 UDP 端口）。
+## 端口输入框（**加入房间**用；默认 27015，可改为内网穿透服务分配的 UDP 端口）。
 @onready var port_edit: SpinBox = %PortEdit
+## ★创建房间的本机监听端口（2026-09-27 用户需求：与"加入端口"分开，各自独立可调）。
+@onready var host_port_edit: SpinBox = %HostPortEdit
 ## 建主时是否尝试 UPnP 自动端口映射（路由器不支持时改用 frp/樱花等穿透工具）。
 @onready var upnp_check: CheckBox = %UpnpCheck
 @onready var create_btn: Button = %CreateBtn
@@ -39,6 +41,16 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var status_label: Label = %StatusLabel
 @onready var players_label: Label = %PlayersLabel
 @onready var log_label: Label = %LogLabel
+## ── 两界面结构（2026-09-27 用户需求：大厅 / 房间分离）──
+## 大厅 = 开房/加入；房间 = 选角色/难度/开局 + 四个玩家槽位（L4D2 版式）。
+@onready var connect_panel: Control = $ConnectPanel
+@onready var room_panel: Control = $RoomPanel
+@onready var difficulty_select: OptionButton = %DifficultySelect
+@onready var room_name_label: Label = %RoomNameLabel
+@onready var room_info_label: Label = %RoomInfoLabel
+@onready var room_log_label: Label = %RoomLogLabel
+## 演示用未类型化 Array：`%` 取到的节点静态类型未知，写死 Array[Label] 会在赋值时校验失败。
+@onready var slot_labels: Array = [%SlotName1, %SlotName2, %SlotName3, %SlotName4]
 
 var _connected := false
 var _log_lines: Array[String] = []
@@ -78,6 +90,9 @@ func _ready() -> void:
 	_refresh_ui()
 	_add_back_button()
 
+	_setup_room_panel()
+	_sync_panels()
+
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
 		_run_auto_host()
@@ -85,12 +100,71 @@ func _ready() -> void:
 		_run_auto_client()
 
 
+# ---------------------------------------------------------------- 两界面结构（2026-09-27）
+
+## 房间界面的一次性初始化：难度选项 + 只读信息栏。
+## 难度是本局属性（Global.selected_difficulty：0 简单 / 1 中等 / 2 困难 / 3 专家），
+## 只有主机可改；客户端看到的是主机同步过来的值，下拉框置灰。
+func _setup_room_panel() -> void:
+	for label: String in ["简单", "中等", "困难", "专家"]:
+		difficulty_select.add_item(label)
+	difficulty_select.select(clampi(Global.selected_difficulty, 0,
+		maxi(difficulty_select.item_count - 1, 0)))
+	difficulty_select.item_selected.connect(_on_difficulty_selected)
+	_refresh_room_info()
+
+
+func _on_difficulty_selected(index: int) -> void:
+	if net == null or not bool(net.get("is_host")):
+		_refresh_room_info()
+		return
+	Global.selected_difficulty = index
+	_log("难度已设为：%s" % difficulty_select.get_item_text(index))
+
+
+func _refresh_room_info() -> void:
+	var host_side: bool = net != null and bool(net.get("is_host"))
+	difficulty_select.disabled = not host_side
+	room_name_label.text = "房间：%s" % ("本机（主机）" if host_side else "已加入")
+	room_info_label.text = "战役：第一章 · 突袭（当前关卡与进度由主机推进）"
+
+
+## 大厅 / 房间两个界面按"是否已连接"切换。
+func _sync_panels() -> void:
+	if connect_panel:
+		connect_panel.visible = not _connected
+	if room_panel:
+		room_panel.visible = _connected
+
+
+## 右侧四个玩家槽位（L4D2 版式）：按 peer 顺序填，空位显示「有空位」。
+## 同一个函数也给隐藏的 `%PlayersLabel` 供旧文本（回归用例仍在读它）。
+func _refresh_slots(names: Dictionary, peer_ids: Array[int]) -> void:
+	if slot_labels.is_empty():
+		return
+	for i: int in range(slot_labels.size()):
+		var label: Variant = slot_labels[i]
+		if not (label is Label):
+			continue
+		if i >= peer_ids.size():
+			(label as Label).text = "○ 有空位\n　 等待玩家加入"
+			continue
+		var peer_id: int = peer_ids[i]
+		var character_path: String = str(net.get_player_character_path(peer_id))
+		var character_name: String = str(net.get_character_display_name(character_path)) \
+			if not character_path.is_empty() else "未选择角色"
+		var tag: String = "（主机）" if peer_id == 1 else ""
+		var ready: String = "已选角色" if not character_path.is_empty() else "待选角色"
+		(label as Label).text = "● %s%s\n　 角色：%s · %s" % [
+			str(names[peer_id]), tag, character_name, ready]
+
+
 # ---------------------------------------------------------------- 表现层小件
 
 ## 「返回标题」按钮（2026-09-14 用户要求）：不必重开游戏就能回标题；
 ## 已连接时先离开房间，再停大厅 BGM 切回标题（标题有自己的 BGM）。
 func _add_back_button() -> void:
-	var vbox: Control = get_node_or_null("VBox")
+	var vbox: Control = _connect_vbox()
 	if vbox == null:
 		return
 	var back_btn := Button.new()
@@ -98,6 +172,12 @@ func _add_back_button() -> void:
 	back_btn.text = "返回标题界面"
 	back_btn.pressed.connect(_on_back_to_title_pressed)
 	vbox.add_child(back_btn)
+
+
+## 大厅（连接）界面的纵向容器。2026-09-27 拆成「大厅 / 房间」两界面后，路径从 `VBox`
+## 变成 `ConnectPanel/VBox` —— 「返回标题」与 WIP 提示都只属于大厅界面，房间界面不放它们。
+func _connect_vbox() -> Control:
+	return get_node_or_null("ConnectPanel/VBox") as Control
 
 
 func _on_back_to_title_pressed() -> void:
@@ -112,7 +192,7 @@ func _on_back_to_title_pressed() -> void:
 
 ## 联机暂未完成提示（2026-09-14 用户要求）：挂在标题下方，黄字醒目。
 func _add_wip_notice() -> void:
-	var vbox: Control = get_node_or_null("VBox")
+	var vbox: Control = _connect_vbox()
 	if vbox == null:
 		return
 	var notice := Label.new()
@@ -261,9 +341,9 @@ func _get_game_scene_for_launch() -> String:
 func _on_create_pressed() -> void:
 	net.player_name = name_edit.text
 	net.upnp_enabled = upnp_check.button_pressed
-	# 端口由大厅输入框提供：默认 27015。使用 frp 等端口映射型内网穿透时，
-	# 这里应填穿透隧道指向本机的本地 UDP 端口（或保持默认并在穿透服务侧映射它）。
-	var port := int(port_edit.value)
+	# ★创建房间用**独立的本机监听端口**（2026-09-27 用户需求：建主端口与加入端口分开设置）。
+	# 使用 frp 等端口映射型内网穿透时，这里填穿透隧道指向本机的本地 UDP 端口。
+	var port := int(host_port_edit.value)
 	var err: Error = net.host_game(port)
 	if err != OK:
 		_log("创建房间失败：%s" % error_string(err))
@@ -400,6 +480,10 @@ func _refresh_ui() -> void:
 		var character_name: String = str(net.get_character_display_name(character_path)) if not character_path.is_empty() else "未选择"
 		lines.append("  · %s（%s，peer %d）" % [str(names[peer_id]), character_name, peer_id])
 	players_label.text = "\n".join(lines)
+	## 两界面切换 + 房间槽位 + 只读信息（2026-09-27：大厅 / 房间分离）
+	_sync_panels()
+	_refresh_room_info()
+	_refresh_slots(names, peer_ids)
 
 
 func _refresh_character_select(selection_ready: bool) -> void:
@@ -443,3 +527,6 @@ func _log(msg: String) -> void:
 	if _log_lines.size() > 14:
 		_log_lines.pop_front()
 	log_label.text = "\n".join(_log_lines)
+	## 房间界面也有一个日志栏（两个界面互斥，各自显示同一份日志）
+	if room_log_label:
+		room_log_label.text = "\n".join(_log_lines)
