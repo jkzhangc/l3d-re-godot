@@ -1232,6 +1232,11 @@ func _check_scene_change() -> void:
 		print("[Director] applying DirectorConfig from: %s" % scene.scene_file_path)
 		_apply_config(cfg)
 		current_config = cfg
+		## ★开场立即刷怪（2026-09-27 用户需求，图级开关）：勾了的图不停在喘息阶段，
+		## 直接 build + 放开前方补位的时间闸门 → 进图即有敌人。
+		## ⚠ 没勾的图**不动 pacing**（换图重置 pacing 会踩 2026-09-23 的坑，见下方注释）。
+		if bool(cfg.get("spawn_immediate_on_start")):
+			_apply_immediate_spawn_start()
 	else:
 		print("[Director] no DirectorConfig in scene, using defaults")
 	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
@@ -1239,6 +1244,20 @@ func _check_scene_change() -> void:
 	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。
 	## 团灭复活的重置由 _freeze_for_death + _resume_after_death 负责（不依赖换图钩子）：
 	## 冻结时重掷 cooldown，黑屏-重载期间 _process 早退（计时不推进），复活后第一帧再收一次。
+
+
+## 开场立即刷怪（图级开关 spawn_immediate_on_start）：
+## ① 跳出喘息阶段直接 build —— SpawnManager 进 build 时会把散兵计时清零，第一批立刻落地；
+## ② 让前方补位的时间闸门（距上批间隔 / 前进距离）一次性放行。
+## ⚠ 只在勾了开关的图上调用：其它图不碰 pacing（换图重置 pacing 是 2026-09-23 的坑）。
+func _apply_immediate_spawn_start() -> void:
+	var pc: Node = get_node_or_null("PacingController")
+	if pc and pc.has_method("force_build"):
+		pc.call("force_build")
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs and fs.has_method("prime_immediate_spawn"):
+		fs.call("prime_immediate_spawn")
+	print("[Director] 开场立即刷怪：跳过喘息，直接 build + 前方补位放行")
 
 
 func _find_director_config(node: Node) -> DirectorConfig:

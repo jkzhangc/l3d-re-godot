@@ -83,6 +83,12 @@ func update(delta: float, intensity: float, alive_enemy_count: int,
 # ═══════════════════════════════════════
 # 手动切换阶段
 # ═══════════════════════════════════════
+## ★开场立即刷怪（2026-09-27）：让 Director 在勾了 spawn_immediate_on_start 的图上，
+## 于场景加载时直接跳出喘息进入 build（SpawnManager 进 build 时会把散兵计时清零 → 立刻刷第一批）。
+func force_build() -> void:
+	_set_phase(Phase.BUILD)
+
+
 func force_peak() -> void:
 	_set_phase(Phase.PEAK)
 

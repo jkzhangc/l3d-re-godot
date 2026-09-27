@@ -321,11 +321,24 @@ func _snapshot_player_positions(fallback: Node2D) -> void:
 		_batch_player_pos[p.get_instance_id()] = p.global_position
 
 
-func reset_batch_tracking() -> void:
+func reset_batch_tracking(clear_interval_timer: bool = false) -> void:
 	## 团灭复活 / 换图后调用：清掉旧坐标快照，避免复活瞬间的坐标跳变被当成"前进量"触发补位。
+	## ⚠ 2026-09-27：默认**不再清 `_timer`** —— 它是"距上一批多久"，换图时留着旧值才能让新图
+	## 第一批立刻放行；清零反而会让新图头 `interval_min` 秒一只不刷（与"换图后前面怪很少"相反）。
+	## 只有确实要重新计时的调用方（团灭复活后的重新武装）才传 true。
 	_batch_player_pos.clear()
 	_advance_accum = 0.0
-	_timer = 0.0
+	if clear_interval_timer:
+		_timer = 0.0
+
+
+## 开场立即刷怪（2026-09-27）：把两道时间闸门一次性放开，让进图后的第一批尽快落地。
+## 之后 `_timer` / `_advance_accum` 照常在补位成功时归零，节奏回到正常。
+## 由 Director 在应用本图 DirectorConfig 之后调用（仅当 spawn_immediate_on_start 为 true）。
+func prime_immediate_spawn() -> void:
+	reset_batch_tracking()
+	_advance_accum = advance_step          ## 移动中也直接放行"前进距离"闸
+	_timer = maxf(_timer, interval_min)    ## 直接放行"距上批间隔"闸
 
 
 func _player_view_rects(fallback: Node2D) -> Array[Rect2]:
