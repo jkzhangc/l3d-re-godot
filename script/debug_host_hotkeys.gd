@@ -17,10 +17,126 @@ extends Node
 const GATHER_KEY: int = KEY_R
 const HEAL_KEY: int = KEY_H
 
+## ── 调试用「跳转章节」按钮（2026-09-27 用户需求）──
+## 多人模式下**仅主机**画面左下角出现一个按钮，点开可在战役关卡之间直接跳转
+## （走 Net.request_scene_change → Host 的 start_game 握手把全部端一起带过去），
+## 省掉"每次都从头跑到要测的那一关"。章节表来自 CampaignData.collect_chapter_entries()。
+var _jump_layer: CanvasLayer = null
+var _jump_btn: Button = null
+var _jump_panel: PanelContainer = null
+
 
 func _ready() -> void:
-	set_process(false)
+	set_process(true)
 	print("[DebugHotkey] 就绪 —— Ctrl+R 集结队友 / Ctrl+H 全体满血+复活（仅主机 / 单机）")
+	print("[DebugHotkey] 就绪 —— 多人主机左下角有「跳转章节」按钮（调试用）")
+
+
+## 每帧只做两件廉价的事：判断该不该显示按钮、同步按钮可见性（UI 懒创建）。
+func _process(_delta: float) -> void:
+	var show_jump: bool = _can_jump()
+	if show_jump:
+		_ensure_jump_ui()
+	if _jump_btn != null and is_instance_valid(_jump_btn):
+		_jump_btn.visible = show_jump
+		if not show_jump and _jump_panel != null and is_instance_valid(_jump_panel):
+			_jump_panel.visible = false
+
+
+## 只有「在游戏里 + 联机会话 + 我是主机」才给这个入口（用户要求：多人模式下主机）。
+func _can_jump() -> bool:
+	return _in_game() and _online() and _is_host()
+
+
+func _ensure_jump_ui() -> void:
+	if _jump_layer != null and is_instance_valid(_jump_layer):
+		return
+	_jump_layer = CanvasLayer.new()
+	_jump_layer.name = "DebugChapterJump"
+	## 层 85：在游戏世界之上、黑幕(90)/结算页(100) 之下 —— 过场时会被黑幕正常盖住。
+	_jump_layer.layer = 85
+	add_child(_jump_layer)
+
+	var root: Control = Control.new()
+	root.name = "Root"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE   ## 别挡住游戏输入
+	_jump_layer.add_child(root)
+
+	_jump_btn = Button.new()
+	_jump_btn.name = "JumpBtn"
+	_jump_btn.text = "跳转章节"
+	_jump_btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_jump_btn.offset_left = 12.0
+	_jump_btn.offset_top = -44.0
+	_jump_btn.offset_right = 132.0
+	_jump_btn.offset_bottom = -12.0
+	_apply_debug_font(_jump_btn)
+	_jump_btn.pressed.connect(_toggle_jump_panel)
+	root.add_child(_jump_btn)
+
+	_jump_panel = PanelContainer.new()
+	_jump_panel.name = "JumpPanel"
+	_jump_panel.visible = false
+	_jump_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_jump_panel.offset_left = 12.0
+	_jump_panel.offset_top = -430.0
+	_jump_panel.offset_right = 344.0
+	_jump_panel.offset_bottom = -52.0
+	root.add_child(_jump_panel)
+
+	var box: VBoxContainer = VBoxContainer.new()
+	box.name = "List"
+	box.add_theme_constant_override("separation", 2)
+	_jump_panel.add_child(box)
+
+	var title: Label = Label.new()
+	title.text = "跳转章节（调试 · 仅主机）"
+	_apply_debug_font(title)
+	box.add_child(title)
+
+	for entry: Dictionary in CampaignData.collect_chapter_entries():
+		var btn: Button = Button.new()
+		btn.text = str(entry.get("label", "?"))
+		_apply_debug_font(btn)
+		var scene_path: String = str(entry.get("scene", ""))
+		btn.pressed.connect(func(): _jump_to_chapter(scene_path))
+		box.add_child(btn)
+
+	var close_btn: Button = Button.new()
+	close_btn.text = "关闭"
+	_apply_debug_font(close_btn)
+	close_btn.pressed.connect(func(): _jump_panel.visible = false)
+	box.add_child(close_btn)
+
+
+## 调试 UI 字体也走全局唯一入口（项目铁律：禁硬编码 .ttf / 字号取 12 的整倍）。
+func _apply_debug_font(ctrl: Control) -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	var font: Font = null
+	if g and g.has_method("get_ui_font"):
+		font = g.get_ui_font()
+	if font != null:
+		ctrl.add_theme_font_override("font", font)
+	ctrl.add_theme_font_size_override("font_size", 12)
+
+
+func _toggle_jump_panel() -> void:
+	if _jump_panel != null and is_instance_valid(_jump_panel):
+		_jump_panel.visible = not _jump_panel.visible
+
+
+func _jump_to_chapter(scene_path: String) -> void:
+	if scene_path.is_empty() or not _can_jump():
+		return
+	var net: Node = _net()
+	if net == null or not net.has_method("request_scene_change"):
+		return
+	net.call("request_scene_change", scene_path)
+	print("[DebugHotkey] 跳转章节: %s" % scene_path)
+	if _jump_panel != null and is_instance_valid(_jump_panel):
+		_jump_panel.visible = false
+
 
 
 func _input(event: InputEvent) -> void:

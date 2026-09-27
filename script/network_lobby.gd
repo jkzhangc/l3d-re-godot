@@ -51,6 +51,12 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var room_log_label: Label = %RoomLogLabel
 ## 演示用未类型化 Array：`%` 取到的节点静态类型未知，写死 Array[Label] 会在赋值时校验失败。
 @onready var slot_labels: Array = [%SlotName1, %SlotName2, %SlotName3, %SlotName4]
+## 房间信息卡的容器（代码往里面插「选择章节」一行，避免再改 .tscn）。
+@onready var room_info_box: Control = $RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox
+## 房间内「选择章节」（代码创建）：主机可选从战役的哪一关开始，客户端只显示。
+var chapter_select: OptionButton = null
+var _chapter_entries: Array[Dictionary] = []
+var _selected_chapter: int = 0
 
 var _connected := false
 var _log_lines: Array[String] = []
@@ -111,6 +117,8 @@ func _setup_room_panel() -> void:
 	difficulty_select.select(clampi(Global.selected_difficulty, 0,
 		maxi(difficulty_select.item_count - 1, 0)))
 	difficulty_select.item_selected.connect(_on_difficulty_selected)
+	_setup_visual_style()
+	_setup_chapter_select()
 	_refresh_room_info()
 
 
@@ -126,7 +134,12 @@ func _refresh_room_info() -> void:
 	var host_side: bool = net != null and bool(net.get("is_host"))
 	difficulty_select.disabled = not host_side
 	room_name_label.text = "房间：%s" % ("本机（主机）" if host_side else "已加入")
-	room_info_label.text = "战役：第一章 · 突袭（当前关卡与进度由主机推进）"
+	var campaign_name: String = "—"
+	if _chapter_entries.size() > 0:
+		campaign_name = str(_chapter_entries[clampi(_selected_chapter, 0,
+			_chapter_entries.size() - 1)].get("campaign", "—"))
+	room_info_label.text = "战役：%s\n起始章节：%s" % [campaign_name, _selected_chapter + 1]
+	_refresh_chapter_select()
 
 
 ## 大厅 / 房间两个界面按"是否已连接"切换。
@@ -157,6 +170,153 @@ func _refresh_slots(names: Dictionary, peer_ids: Array[int]) -> void:
 		var ready: String = "已选角色" if not character_path.is_empty() else "待选角色"
 		(label as Label).text = "● %s%s\n　 角色：%s · %s" % [
 			str(names[peer_id]), tag, character_name, ready]
+
+
+# ---------------------------------------------------------------- 视觉样式（2026-09-27）
+# 与「选择角色 / 选择战役」同款：下滚全景背景 + RM2K3 窗口皮（底色块 + 九宫格边框）
+# + 左上角渐变页标题。刻意在代码里搭而不是写进 .tscn —— 这些资源路径与九宫格边距已在
+# 那两个界面验证过，代码复刻不会有"编辑器重存丢属性"的风险。字体一律走全局唯一入口。
+const BACKDROP_PATH := "res://art/Panorama/地下.png"
+const WINDOW_BG_PATH := "res://art/System/Window background color.png"
+const WINDOW_FRAME_PATH := "res://art/System/Window frame.png"
+const COLOR_SHEET_PATH := "res://art/System/Text color, 20 types (each 16 x 16).png"
+const WINDOW_MARGIN := 24.0
+
+
+func _setup_visual_style() -> void:
+	_add_backdrop()
+	_add_page_title()
+	_skin_panel(connect_panel)
+	_skin_panel(room_panel)
+	_style_window_title("ConnectPanel/VBox/Title", "创建 / 加入房间")
+	_style_window_title("RoomPanel/Margin/Column/Title", "游戏大厅")
+
+
+func _add_backdrop() -> void:
+	if not ResourceLoader.exists(BACKDROP_PATH):
+		return
+	var backdrop: PanoramaBackdrop = PanoramaBackdrop.new()
+	backdrop.texture_path = BACKDROP_PATH
+	backdrop.bg_scale = 2.0
+	backdrop.scroll_speed = 20.0
+	backdrop.dim_alpha = 0.35
+	add_child(backdrop)
+	move_child(backdrop, 0)   ## 垫底：add_child 默认加到末尾，会盖住窗口
+
+
+## 左上角页标题：与选择角色 / 选择战役同款渐变大字（60px = 12 × 5）。
+func _add_page_title() -> void:
+	var gl: GradientLabel = GradientLabel.new()
+	gl.name = "PageTitle"
+	gl.text = "多人大厅"
+	gl.position = Vector2(40.0, 16.0)
+	gl.size = Vector2(340.0, 84.0)
+	gl.text_font_size = 60
+	gl.color_index = 1
+	gl.bold = true
+	gl.shadow = true
+	gl.color_sheet_path_override = COLOR_SHEET_PATH
+	var img: Image = _color_sheet_image()
+	if img:
+		gl.set_color_image(img)
+	add_child(gl)
+
+
+func _color_sheet_image() -> Image:
+	var tex: Texture2D = ResourceLoader.load(COLOR_SHEET_PATH) as Texture2D
+	return tex.get_image() if tex != null else null
+
+
+## 给一个面板套窗口皮：底色块 + 九宫格边框，插在最底层且不吃鼠标事件。
+func _skin_panel(panel: Control) -> void:
+	if panel == null:
+		return
+	var bg: TextureRect = TextureRect.new()
+	bg.name = "WindowBg"
+	bg.texture = ResourceLoader.load(WINDOW_BG_PATH) as Texture2D
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.offset_left = WINDOW_MARGIN
+	bg.offset_top = WINDOW_MARGIN
+	bg.offset_right = -WINDOW_MARGIN
+	bg.offset_bottom = -WINDOW_MARGIN
+	panel.add_child(bg)
+	panel.move_child(bg, 0)
+
+	var frame: NinePatchRect = NinePatchRect.new()
+	frame.name = "WindowFrame"
+	frame.texture = ResourceLoader.load(WINDOW_FRAME_PATH) as Texture2D
+	frame.patch_margin_left = 20
+	frame.patch_margin_top = 20
+	frame.patch_margin_right = 20
+	frame.patch_margin_bottom = 20
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.offset_left = WINDOW_MARGIN
+	frame.offset_top = WINDOW_MARGIN
+	frame.offset_right = -WINDOW_MARGIN
+	frame.offset_bottom = -WINDOW_MARGIN
+	panel.add_child(frame)
+	panel.move_child(frame, 1)
+
+
+func _style_window_title(path: String, text_value: String) -> void:
+	var label := get_node_or_null(path) as Label
+	if label == null:
+		return
+	label.text = text_value
+	label.add_theme_font_size_override("font_size", 36)
+	label.add_theme_color_override("font_color", Color("e8c44b"))
+
+
+## 房间内「选择章节」：主机可选从战役的哪一关开始；客户端只显示。
+## 章节表与调试「跳转章节」共用 CampaignData.collect_chapter_entries()。
+func _setup_chapter_select() -> void:
+	if room_info_box == null or chapter_select != null:
+		return
+	var row: HBoxContainer = HBoxContainer.new()
+	row.name = "ChapterRow"
+	row.add_theme_constant_override("separation", 8)
+	var tag: Label = Label.new()
+	tag.text = "选择章节："
+	row.add_child(tag)
+	chapter_select = OptionButton.new()
+	chapter_select.name = "ChapterSelect"
+	chapter_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(chapter_select)
+	room_info_box.add_child(row)
+	_chapter_entries = CampaignData.collect_chapter_entries()
+	for entry: Dictionary in _chapter_entries:
+		chapter_select.add_item(str(entry.get("label", "?")))
+	chapter_select.item_selected.connect(_on_chapter_selected)
+	_refresh_chapter_select()
+
+
+func _on_chapter_selected(index: int) -> void:
+	if net == null or not bool(net.get("is_host")):
+		_refresh_chapter_select()
+		return
+	_selected_chapter = index
+	_log("起始章节已设为：%s" % chapter_select.get_item_text(index))
+	_refresh_room_info()
+
+
+func _refresh_chapter_select() -> void:
+	if chapter_select == null:
+		return
+	var host_side: bool = net != null and bool(net.get("is_host"))
+	chapter_select.disabled = not host_side or chapter_select.item_count == 0
+	if chapter_select.item_count > 0:
+		chapter_select.select(clampi(_selected_chapter, 0, chapter_select.item_count - 1))
+
+
+## 开始游戏用哪张图：选了章节就用它，否则回退到默认第一关。
+func _current_start_scene() -> String:
+	if _selected_chapter >= 0 and _selected_chapter < _chapter_entries.size():
+		var scene_path: String = str(_chapter_entries[_selected_chapter].get("scene", ""))
+		if not scene_path.is_empty():
+			return scene_path
+	return GAME_SCENE
 
 
 # ---------------------------------------------------------------- 表现层小件
@@ -376,7 +536,9 @@ func _on_start_pressed() -> void:
 	_log("全部角色已确认，广播开始游戏 ...")
 	# B1 难度同步（D2 用例暴露）：开局广播必须携带难度 —— 原调用漏参（默认 -1 不覆盖），
 	# 联机开局的 Client 难度从未被同步，只有中途切图（request_scene_change）才带上。
-	net.start_game.rpc(GAME_SCENE, "", null, Global.selected_difficulty)
+	## 起始关卡 = 房间里选的章节（2026-09-27 用户需求：主机可选战役/章节）；
+	## 没选就回退到默认第一关。这样"不想从头测"可以直接从房间跳到目标关。
+	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty)
 
 
 func _on_leave_pressed() -> void:
