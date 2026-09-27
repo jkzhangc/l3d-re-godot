@@ -2127,6 +2127,50 @@ func holdout_ending_request() -> void:
 			return
 
 
+## ── 终章 ED 结算页的「全员已准备」（2026-09-27）──
+## 为什么走这里而不是 ChapterSummary 自己的 RPC：ED 结算页是**运行时创建**的场景实例
+##（挂在 /root/CampaignEnding/ 下），节点路径两端不保证一致；而 RPC 是按**节点路径**寻址的 →
+## 客户端按下确认时 Host 收不到，表现为"ED 里客户端都点不了准备"（用户实测）。
+## 这里与已经跑通的 holdout_ending_request / campaign_ending_start 用同一个节点、同一种寻址方式。
+signal ending_summary_peer_confirmed(peer_id: int)   ## Host 收到某 peer 的确认 / Client 收到回声
+signal ending_summary_all_confirmed                   ## 全员确认 → 各端据此关闭结算页
+
+@rpc("any_peer", "call_remote", "reliable")
+func holdout_ending_confirm_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1:
+		return
+	print("[NetworkWorld] ED_CONFIRM_RX peer=%d" % sender)
+	ending_summary_peer_confirmed.emit(sender)
+	_ending_confirm_echo.rpc(sender)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _ending_confirm_echo(peer_id: int) -> void:
+	ending_summary_peer_confirmed.emit(peer_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func _ending_all_confirmed_notice() -> void:
+	ending_summary_all_confirmed.emit()
+
+
+## 本端确认：Host 直接回报自己；Client 发请求给 Host。
+func request_ending_summary_confirm() -> void:
+	if net.is_host:
+		ending_summary_peer_confirmed.emit(int(net.get("my_peer_id")))
+		return
+	holdout_ending_confirm_request.rpc_id(1)
+
+
+## Host：全员确认 → 广播（各端据此关闭结算页）。
+func announce_ending_summary_all_confirmed() -> void:
+	if net.is_host:
+		_ending_all_confirmed_notice.rpc()
+
+
 @rpc("any_peer", "call_remote", "reliable")
 func weapon_toggle_request() -> void:
 	if not net.is_host:

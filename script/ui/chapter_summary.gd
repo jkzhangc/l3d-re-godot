@@ -51,6 +51,10 @@ var _pending_local_confirmations: Dictionary = {} # seat_index -> true
 ## 章节结算由 Host 汇总 peer_id；Client 只呈现确认状态，完成信号由 Host 可靠下发。
 var _confirmed_peer_ids: Dictionary = {}
 var _network_completion_started: bool = false
+## 终章 ED 结算页：按 **peer id** 记录已确认的人。
+## ⚠ 不能用本页自己的 `_server_confirm` RPC 通道 —— ED 页是运行时创建的场景实例、
+## 节点路径两端不保证一致（详见 network_world.gd 的 `holdout_ending_confirm_request` 注释）。
+var _ed_confirmed_peers: Dictionary = {}
 var _root_control: Control
 var _players_box: VBoxContainer
 var _status_label: Label
@@ -92,6 +96,7 @@ func show_summary() -> void:
 	_pending_remote_confirmations.clear()
 	_pending_local_confirmations.clear()
 	_confirmed_peer_ids.clear()
+	_ed_confirmed_peers.clear()
 	_network_completion_started = false
 	_finishing = false
 	_input_armed = false
@@ -102,7 +107,10 @@ func show_summary() -> void:
 	_refresh_status()
 	## 客户端：拉 Host 的权威统计（否则四个数值全是 0）。Host 侧是空操作。
 	_request_stats_from_host()
-	## 过场页（ED）在联机下走闸门 → Host 必须挂保险丝，防止有人不确认时两端永久卡住。
+	## 过场页（ED）：接上 NetworkWorld 的确认通道（本页节点路径不稳定，不能用自身 RPC）。
+	if cutscene_mode and _multiplayer_mode:
+		_bind_cutscene_network()
+	## Host 必须挂保险丝，防止有人不确认时两端永久卡住。
 	if cutscene_mode and _multiplayer_mode and multiplayer.is_server():
 		_start_cutscene_watchdog()
 	_play_summary_music()
@@ -120,13 +128,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("确定键"):
 		get_viewport().set_input_as_handled()
 		if cutscene_mode:
-			## ★2026-09-27 实测修复：过场页（终章 ED 结算页）以前是"本端按键即推进本端"，
-			## 于是每个玩家各按各的确定键、各自独立进入 ED 与名单（用户报"每个玩家都是独立的"，
-			## 而且"看名单前一定要每个玩家同步"）。现在联机下沿用安全屋那套 **peer 权威闸门**：
-			## 本端只提交确认，Host 汇总后广播 `_network_summary_complete` 统一推进；
-			## 单机仍即时关闭。防死锁由 `_start_cutscene_watchdog()` 兜底（见 show_summary）。
+			## ★2026-09-27 二审（用户报"ED 里客户端都点不了准备"）：
+			## 过场页的确认**不能**走本页自己的 RPC 通道 —— ED 结算页是运行时创建的场景实例
+			##（挂在 /root/CampaignEnding/ 下），节点路径两端不保证一致，而 RPC 按**节点路径**
+			## 寻址 → 客户端的确认到不了 Host。改走 NetworkWorld 的专用通道
+			##（与已跑通的 holdout_ending_request 同节点、同寻址方式），并且**本端先标记**，
+			## 保证按下去立刻有"已准备"反馈，不会"点了没反应"。
 			if _multiplayer_mode:
-				_submit_local_confirmation()
+				_submit_cutscene_confirmation()
 			else:
 				_finish_summary()
 		elif not _multiplayer_mode:
@@ -135,11 +144,91 @@ func _unhandled_input(event: InputEvent) -> void:
 			_submit_local_confirmation()
 
 
-## ── 过场结算页的全员同步兜底（2026-09-27）──
-## 闸门本身是安全屋那套成熟机制（peer 名单 + 延迟重试 + 确认广播），这里只补一个**保险丝**：
-## 万一有人一直不确认（掉线 / 输入卡住 / 座位绑定异常），Host 到点强制收口 ——
-## 这正是当初用 cutscene_mode 绕开闸门的原因，不能再让"防卡死"和"要同步"二选一。
+## ── 过场结算页（ED）的全员同步 ────────────────────────────────────────
+## 通道：NetworkWorld 的 `request_ending_summary_confirm` →
+## `ending_summary_peer_confirmed`（回声）/ `ending_summary_all_confirmed`（收口）。
+## 为什么不用本页的 `_server_confirm`：见上面 _unhandled_input 的注释（节点路径不稳定）。
+## 保险丝：Host 侧 25s 到点强制收口 —— 不能再让"防卡死"和"要同步"二选一。
 const CUTSCENE_CONFIRM_TIMEOUT: float = 25.0
+
+
+func _submit_cutscene_confirmation() -> void:
+	var my_peer: int = _get_local_peer_id()
+	if _ed_confirmed_peers.get(my_peer, false):
+		return
+	_ed_confirmed_peers[my_peer] = true
+	print("[ChapterSummary] ED_CONFIRM_LOCAL peer=%d host=%s" % [my_peer, str(multiplayer.is_server())])
+	## 本端即时反馈：把自己的那一行标成已准备（纯本地，不依赖任何网络往返）。
+	var seat: int = _find_seat_owned_by_peer(my_peer)
+	if seat < 0:
+		seat = Players.active_seat_index
+	confirm_seat(seat)
+	var world: Node = _find_network_world()
+	if world == null:
+		return
+	if multiplayer.is_server():
+		_refresh_cutscene_completion()
+	elif world.has_method("request_ending_summary_confirm"):
+		world.call("request_ending_summary_confirm")
+
+
+func _bind_cutscene_network() -> void:
+	var world: Node = _find_network_world()
+	if world == null:
+		push_warning("[ChapterSummary] 过场结算页找不到 NetworkWorld，回退为仅 Host 收口")
+		return
+	if world.has_signal("ending_summary_peer_confirmed") \
+			and not world.ending_summary_peer_confirmed.is_connected(_on_ed_peer_confirmed):
+		world.connect("ending_summary_peer_confirmed", _on_ed_peer_confirmed)
+	if world.has_signal("ending_summary_all_confirmed") \
+			and not world.ending_summary_all_confirmed.is_connected(_on_ed_all_confirmed):
+		world.connect("ending_summary_all_confirmed", _on_ed_all_confirmed)
+
+
+func _find_network_world() -> Node:
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return null
+	return tree.current_scene.get_node_or_null("NetworkWorld")
+
+
+func _on_ed_peer_confirmed(peer_id: int) -> void:
+	_ed_confirmed_peers[peer_id] = true
+	print("[ChapterSummary] ED_CONFIRM_PEER peer=%d host=%s" % [peer_id, str(multiplayer.is_server())])
+	## Client 收到 Host 的回声 → 别人的行也一起同步。
+	var seat: int = _find_seat_owned_by_peer(peer_id)
+	if seat >= 0:
+		confirm_seat(seat)
+	if multiplayer.is_server():
+		_refresh_cutscene_completion()
+
+
+## Host：全员到齐 → 广播收口 + 本端关闭。
+func _refresh_cutscene_completion() -> void:
+	if not multiplayer.is_server():
+		return
+	for peer_id: int in _get_expected_session_peer_ids():
+		if not _ed_confirmed_peers.get(peer_id, false):
+			return
+	print("[ChapterSummary] ED_ALL_CONFIRMED host=%s peers=%s" % [
+		str(multiplayer.is_server()), str(_get_expected_session_peer_ids())])
+	var world: Node = _find_network_world()
+	if world != null and world.has_method("announce_ending_summary_all_confirmed"):
+		world.call("announce_ending_summary_all_confirmed")
+	call_deferred("_finish_after_ed_all_confirmed")
+
+
+func _on_ed_all_confirmed() -> void:
+	if multiplayer.is_server():
+		return   ## Host 自己已在 _refresh_cutscene_completion 里收口
+	print("[ChapterSummary] ED_ALL_CONFIRMED_RX（Client 收口）")
+	call_deferred("_finish_after_ed_all_confirmed")
+
+
+func _finish_after_ed_all_confirmed() -> void:
+	if not is_instance_valid(self) or _finishing:
+		return
+	_finish_summary()
 
 
 func _start_cutscene_watchdog() -> void:
@@ -152,12 +241,15 @@ func _start_cutscene_watchdog() -> void:
 			return
 		var missing: Array = []
 		for peer_id: int in _get_expected_session_peer_ids():
-			if not _confirmed_peer_ids.get(peer_id, false):
+			if not _ed_confirmed_peers.get(peer_id, false):
 				missing.append(peer_id)
 		if missing.is_empty():
 			return
 		push_warning("[ChapterSummary] 过场结算页等待确认超时，强制收口（未确认 peer=%s）" % str(missing))
-		call_deferred("_finish_network_summary_after_flush"))
+		var world: Node = _find_network_world()
+		if world != null and world.has_method("announce_ending_summary_all_confirmed"):
+			world.call("announce_ending_summary_all_confirmed")
+		call_deferred("_finish_after_ed_all_confirmed"))
 
 
 ## 客户端拉取 Host 的权威统计 → 结算页数值不再全 0（2026-09-27）。
