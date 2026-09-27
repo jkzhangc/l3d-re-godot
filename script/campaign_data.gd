@@ -63,6 +63,29 @@ static func _chapter_title_of(scene_path: String) -> String:
 ## 调试「跳转关卡」与房间「选择章节」都需要"想跳哪张就跳哪张"，因此这里**直接扫地图目录**：
 ## ① 名字带「突袭」的按「关 → 关内顺序」排前面（标签 = "第一关 · 街道"）
 ## ② 其余地图（测试图等）排后面，标签加 `[其它]` 前缀。
+##
+## ★★ 2026-09-27 打包后为空的事故（务必保留这条注释）★★
+## 用户打包后发现「房间里显示不了章节、跳转章节也是空的」。根因：**导出包里靠 DirAccess
+## 枚举 `res://scene/maps` 拿不到 `.tscn`** —— 导出预设开了资源加密
+##（`export_presets.cfg: encryption_include_filters="*.gd,*.tscn,*.tres"`），被加密/转换过的
+## 场景在目录里是 **`xxx.tscn.remap`** 形态，`file_name.ends_with(".tscn")` 全部落空 → 列表空。
+## 修法：**显式清单为主（导出包唯一可靠来源）+ 目录发现为辅（编辑器里自动带上新地图）**，
+## 与 `campaign_select` / `character_catalog` 同一套做法。**新增地图请把路径补进 MAP_SCENE_PATHS。**
+const MAP_SCENE_PATHS: Array[String] = [
+	"res://scene/maps/突袭-第一关-开头安全屋-户外.tscn",
+	"res://scene/maps/突袭-第一关-街道.tscn",
+	"res://scene/maps/突袭-第一关-结尾安全屋-室内.tscn",
+	"res://scene/maps/突袭-第二关-学校门口.tscn",
+	"res://scene/maps/突袭-第二关-学校内部.tscn",
+	"res://scene/maps/突袭-第二关-结尾安全屋.tscn",
+	"res://scene/maps/突袭-第三关-矿洞.tscn",
+	"res://scene/maps/突袭-第三关-结尾安全屋.tscn",
+	"res://scene/maps/突袭-第四关-实验室走廊.tscn",
+	"res://scene/maps/突袭-第四关-列车台（最终场景）.tscn",
+	"res://scene/maps/test.tscn",
+	"res://scene/maps/测试-敌人试验场.tscn",
+]
+
 const _CN_NUMBERS: Dictionary = {
 	"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
 }
@@ -86,16 +109,32 @@ static func collect_all_level_entries(map_dir: String = "res://scene/maps") -> A
 	return out
 
 
+## 目录项名 → 场景路径（返回空 = 不是场景）。
+## 导出包里被加密/转换过的资源是 `xxx.tscn.remap`（见上方事故注释），必须一并认。
+static func scene_path_from_dir_entry(map_dir: String, file_name: String) -> String:
+	if file_name.ends_with(".tscn"):
+		return map_dir + "/" + file_name
+	if file_name.ends_with(".tscn.remap"):
+		return map_dir + "/" + file_name.trim_suffix(".remap")
+	return ""
+
+
+## 关卡场景清单 = 显式清单 ∪ 目录发现（各自去重，并过滤掉真正不存在的路径）。
 static func _list_scene_paths(map_dir: String) -> Array[String]:
 	var paths: Array[String] = []
+	for preset: String in MAP_SCENE_PATHS:
+		if not preset.is_empty() and ResourceLoader.exists(preset) and preset not in paths:
+			paths.append(preset)
+
 	var dir: DirAccess = DirAccess.open(map_dir)
 	if dir == null:
 		return paths
 	dir.list_dir_begin()
 	var file_name: String = dir.get_next()
 	while not file_name.is_empty():
-		if file_name.ends_with(".tscn"):
-			paths.append(map_dir + "/" + file_name)
+		var found: String = scene_path_from_dir_entry(map_dir, file_name)
+		if not found.is_empty() and ResourceLoader.exists(found) and found not in paths:
+			paths.append(found)
 		file_name = dir.get_next()
 	dir.list_dir_end()
 	paths.sort()
