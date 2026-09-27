@@ -9,8 +9,10 @@ extends CanvasLayer
 ##   · 原「[もっとも演技のよかったキャスト]」角色平铺段移除，替换为 L4D2 式
 ##     「幸存者战报」排名段（击杀/爆头/受伤/死亡最多 + 最终生死状态），
 ##     数据取 ChapterStats 战役累计（跨章节），运行时填入 @@STATS@@ 占位行。
-##   · BGM 接管：CampaignEnding 的 ED BGM 从对话段连续压进来（单机/Host）；
-##     找不到该节点（如直接跑本场景 / 联机 Client）时自播 l3d_ed.mp3。
+##   · BGM 接管：CampaignEnding 的 ED BGM 从对话段连续压进来（单机/Host）。
+##     ★2026-09-27 收敛：交接裁决统一走 `CampaignEnding.take_over_ending_music()` ——
+##     由 ED 节点自己回答"这份 BGM 还能不能继续用"，返回 false（找不到实例 / 实例连播放器
+##     都没有）时本场景才自播 l3d_ed.mp3。避免"两处各判一次、判假就多起一份"的双 BGM。
 ## CanvasLayer 95：压过终章黑幕（90，进本场景后仍由 CampaignEnding 持有 BGM）与世界（0）。
 
 const TITLE_SCENE := "res://scene/title_screen.tscn"
@@ -136,20 +138,24 @@ func _ready() -> void:
 		if stats_node.has_method("request_sync_from_host"):
 			stats_node.call("request_sync_from_host")
 
-	# ED 音乐：优先接 CampaignEnding 的连续 BGM（对话段已在播）；没有才自播
+	# ED 音乐：优先接 CampaignEnding 的连续 BGM（对话段已在播）；没有才自播。
+	## ★2026-09-27：交接判定**收敛到 CampaignEnding.take_over_ending_music()** —— 由它裁决
+	## "这份 BGM 能不能继续用"，返回 false 才允许本场景自播。旧写法是这里自己读
+	## is_ending_music_playing()，判据一旦为假就会**同时存在两份 l3d_ed**
+	##（用户实测「进入制作人员名单时 ED BGM 又再次播放了」）。
 	_external_ending = _find_external_ending()
-	if _external_ending == null or not _external_ending.is_ending_music_playing():
+	if _external_ending != null and not _external_ending.take_over_ending_music():
 		_external_ending = null
+	if _external_ending == null:
 		if ResourceLoader.exists(ED_MUSIC_PATH):
 			_music = AudioStreamPlayer.new()
+			_music.name = "CreditsMusic"
 			_music.stream = load(ED_MUSIC_PATH)
 			_music.bus = "Music"
 			add_child(_music)
 			_music.play()
-	else:
-		## 已接管连续 BGM = credits 正常起来了：解除 CampaignEnding 的 30s 保险丝，
-		## 否则滚动超过 30 秒时 BGM 会被保险丝半路掐断（名单全程远超 30s，实测教训）。
-		_external_ending.notify_credits_attached()
+	print("[Credits] ED_BGM 来源=%s" % (
+		"CampaignEnding 接管" if _external_ending != null else "本场景自播"))
 
 	# 0.5s 输入防误触（上一场景的确定键残留）
 	get_tree().create_timer(0.5).timeout.connect(func(): _armed = true)
@@ -180,20 +186,40 @@ func _finish() -> void:
 	_finished = true
 	if _external_ending and is_instance_valid(_external_ending):
 		_external_ending.stop_ending_music()  ## 收连续 BGM 并撤掉它手上的黑幕层
+		_external_ending = null
 	if _music:
 		_music.stop()
 	# 回标题
 	get_tree().change_scene_to_file.call_deferred(TITLE_SCENE)
 
 
+## ★credits 只是这份 ED BGM 的**临时代管者**：只要本场景被拆掉（正常结束、跳过名单、
+## 用调试跳转直接离开……）就必须顺手把 CampaignEnding 一起收掉 —— 否则它会带着那份
+## 仍在播放的 l3d_ed 永远挂在 /root 下，下一轮 ED 就变成两份 BGM 叠着响。
+func _exit_tree() -> void:
+	if _external_ending != null and is_instance_valid(_external_ending):
+		_external_ending.stop_ending_music()
+	_external_ending = null
+
+
+## 找外部的终章 ED 节点（CampaignEnding 挂在 /root 下）。
+## 优先返回**此刻真在播**的那个实例：上一轮 ED 若因为调试跳转/异常路径没被回收，会留下
+## 一个"播放器还在、但已经播完"的实例挂在 /root 下；按"第一个匹配"取就会误判成
+## "没有在播" → credits 再自播一份，用户听到的就是 ED BGM 又从头放一遍。
 func _find_external_ending() -> CampaignEnding:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return null
+	var fallback: CampaignEnding = null
 	for child: Node in tree.root.get_children():
-		if child is CampaignEnding:
-			return child as CampaignEnding
-	return null
+		var ending: CampaignEnding = child as CampaignEnding
+		if ending == null:
+			continue
+		if ending.is_ending_music_playing():
+			return ending
+		if fallback == null and ending.has_ending_music():
+			fallback = ending
+	return fallback
 
 
 ## Host 的权威统计到达 → 用**同一套**占位替换重排文本（滚动位置保持不变）。

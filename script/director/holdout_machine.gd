@@ -371,6 +371,14 @@ func _begin_ending(fade_seconds_value: float) -> void:
 	if _ending_local_started:
 		return
 	_ending_local_started = true
+	## ★单一所有者不变量（2026-09-27）：先收掉任何残留的 CampaignEnding。
+	## 上一轮 ED 若因为调试跳转 / 异常路径离开名单，旧实例会带着它那份仍在播的 l3d_ed
+	## 永远挂在 /root 下 → 新一轮 ED 变成两份 BGM 叠响，而且 credits 找第一个匹配实例时
+	## 可能取到"已播完"的那份 → 误判"没在播"再自播一份（用户实测「进入制作人员名单时
+	## ED BGM 又再次播放了」）。这里保证"同一时刻只有一个 ED 所有者"。
+	for node: Node in get_tree().root.get_children():
+		if node is CampaignEnding:
+			(node as CampaignEnding).stop_ending_music()
 	if ending_sound:
 		Global.play_sfx_managed(ending_sound, get_tree().current_scene)
 	var ending: CampaignEnding = CampaignEnding.new()

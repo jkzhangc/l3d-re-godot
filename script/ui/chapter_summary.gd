@@ -157,6 +157,9 @@ func _submit_cutscene_confirmation() -> void:
 	if _ed_confirmed_peers.get(my_peer, false):
 		return
 	_ed_confirmed_peers[my_peer] = true
+	## ★先按**网络身份**记账：seat 映射未就绪时 `confirm_seat()` 会早退（seat 不在
+	## _required_seats 就 return），只靠它是记不上的 —— 会让自己和别人都少算一人。
+	_confirmed_peer_ids[my_peer] = true
 	print("[ChapterSummary] ED_CONFIRM_LOCAL peer=%d host=%s" % [my_peer, str(multiplayer.is_server())])
 	## 本端即时反馈：把自己的那一行标成已准备（纯本地，不依赖任何网络往返）。
 	var seat: int = _find_seat_owned_by_peer(my_peer)
@@ -167,6 +170,13 @@ func _submit_cutscene_confirmation() -> void:
 	if world == null:
 		return
 	if multiplayer.is_server():
+		## ★2026-09-27 实测修复（"客户端看到的准备人数恒少 1"）：
+		## Host 自己的确认此前**从未广播给 Client** —— 只在自己这边记账，而 Client 只能
+		## 通过回声知道别人的确认（`_ending_confirm_echo.rpc()` 是广播）。于是三个玩家的
+		## 会话里：主机准备后客户端显示 0、第二人准备后显示 1…… 永远比真实少一人
+		##（少的那一人就是主机）。这里补一次广播，让各端都看到主机的行。
+		if world.has_method("announce_ending_summary_peer_confirmed"):
+			world.call("announce_ending_summary_peer_confirmed", my_peer)
 		_refresh_cutscene_completion()
 	elif world.has_method("request_ending_summary_confirm"):
 		world.call("request_ending_summary_confirm")
@@ -194,11 +204,17 @@ func _find_network_world() -> Node:
 
 func _on_ed_peer_confirmed(peer_id: int) -> void:
 	_ed_confirmed_peers[peer_id] = true
+	## 先按网络身份记账再刷 UI：`confirm_seat()` 在 seat 映射尚未建立时会早退，
+	## 那样这一位的行会一直显示"等待"、计数也少一人（自己/别人都受影响）。
+	_confirmed_peer_ids[peer_id] = true
 	print("[ChapterSummary] ED_CONFIRM_PEER peer=%d host=%s" % [peer_id, str(multiplayer.is_server())])
-	## Client 收到 Host 的回声 → 别人的行也一起同步。
+	## Client 收到 Host 的广播 → 别人的行也一起同步。
 	var seat: int = _find_seat_owned_by_peer(peer_id)
 	if seat >= 0:
 		confirm_seat(seat)
+	else:
+		_rebuild_player_rows()
+		_refresh_status()
 	if multiplayer.is_server():
 		_refresh_cutscene_completion()
 

@@ -2132,7 +2132,12 @@ func holdout_ending_request() -> void:
 ##（挂在 /root/CampaignEnding/ 下），节点路径两端不保证一致；而 RPC 是按**节点路径**寻址的 →
 ## 客户端按下确认时 Host 收不到，表现为"ED 里客户端都点不了准备"（用户实测）。
 ## 这里与已经跑通的 holdout_ending_request / campaign_ending_start 用同一个节点、同一种寻址方式。
-signal ending_summary_peer_confirmed(peer_id: int)   ## Host 收到某 peer 的确认 / Client 收到回声
+##
+## ⚠ 广播语义（2026-09-27 二审"客户端准备人数恒少 1"）：`rpc()` 是**广播给所有 peer**，
+## 所以 `_ending_confirm_echo` 本来就能让各端看到彼此的确认；此前唯一漏掉的是
+## **Host 自己**的确认 —— 它只在自己这边 emit，从未广播出去 → 客户端永远比真实少一人。
+## 现在 Host 确认后走 `announce_ending_summary_peer_confirmed()` 补一次广播。
+signal ending_summary_peer_confirmed(peer_id: int)   ## 某 peer 的确认（Host 收到 / 各端收到广播）
 signal ending_summary_all_confirmed                   ## 全员确认 → 各端据此关闭结算页
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2150,6 +2155,15 @@ func holdout_ending_confirm_request() -> void:
 @rpc("authority", "call_remote", "reliable")
 func _ending_confirm_echo(peer_id: int) -> void:
 	ending_summary_peer_confirmed.emit(peer_id)
+
+
+## Host：把某个 peer 的确认广播给所有端（含 Host 自己那一条）。
+## `_ending_confirm_echo.rpc()` 是广播（不是只回给提出者）——这正是"各端能看到彼此"的机制，
+## 但 Host 自己的确认此前没走这条广播，导致客户端上的 "n / N" 恒少 1（用户实测）。
+func announce_ending_summary_peer_confirmed(peer_id: int) -> void:
+	if net.is_host:
+		print("[NetworkWorld] ED_CONFIRM_ANNOUNCE peer=%d" % peer_id)
+		_ending_confirm_echo.rpc(peer_id)
 
 
 @rpc("authority", "call_remote", "reliable")

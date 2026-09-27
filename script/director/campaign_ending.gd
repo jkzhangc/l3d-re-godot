@@ -160,15 +160,49 @@ func _start_ed_music() -> void:
 	_ed_music.play()
 
 
-## 供 credits 判断是否接管本节点的 BGM（Client 端没有本节点 → credits 自播）。
+## 本节点是否**持有**可用的 ED 播放器（不代表此刻正在出声：可能被暂停或已播完）。
+func has_ending_music() -> bool:
+	return _ed_music != null and is_instance_valid(_ed_music) and _ed_music.stream != null
+
+
+## 此刻是否确实在出声。
+## ⚠ Godot 4.6 实测（本轮探针 `.workbuddy/tmp/probe_audio_playing.gd`）：
+## `playing` 在 **stream_paused = true 时返回 false**；process_mode 为 INHERIT 的播放器在
+## **场景树暂停**时同样返回 false（ALWAYS 节点不受影响 —— 本层是 ALWAYS，故正常情况下安全）。
+## 判据取 `playing or stream_paused`；节点被释放后直接读 `_ed_music.playing` 会报错
+## → 必须先 is_instance_valid。
 func is_ending_music_playing() -> bool:
-	return _ed_music != null and _ed_music.playing
+	if not has_ending_music():
+		return false
+	return _ed_music.playing or _ed_music.stream_paused
 
 
-## 名单结束 / 跳过时由 credits 调用：收 BGM 并整体退场。
+## ★credits 交接的唯一入口（2026-09-27）：返回 true = 本节点继续持有并在播 ED BGM，
+## credits **不要**再自播一份；返回 false = 本节点没有可用播放器，credits 自行起播。
+##
+## 为什么收敛成"一个入口 + 明确裁决"：旧写法是 credits 自己读 is_ending_music_playing()
+## 判断，判据一旦为假（被暂停 / 已播完 / 找到的是上一轮残留实例）就会**同时存在两份
+## l3d_ed** —— 用户实测「进入制作人员名单时 ED BGM 又再次播放了」。
+func take_over_ending_music() -> bool:
+	if not has_ending_music():
+		return false
+	## 保险丝只为"credits 根本没起来"兜底；既然 credits 起来了就必须解除，
+	## 否则滚动超过 30 秒时 BGM 会被半路掐断（2026-09-15 实测教训）。
+	_cancel_fuse()
+	if _ed_music.stream_paused:
+		_ed_music.stream_paused = false      ## 只解暂停，**不**从头重播
+	elif not _ed_music.playing:
+		_ed_music.play()                     ## 已被打断 / 已播完 → 原地接回，总比名单静音好
+	print("[CampaignEnding] ED_BGM 已交接给 credits（playing=%s paused=%s）" % [
+		str(_ed_music.playing), str(_ed_music.stream_paused)])
+	return true
+
+
+## 名单结束 / 跳过时由 credits 调用（幂等：重复调用安全）。
 func stop_ending_music() -> void:
-	if _ed_music:
+	if _ed_music != null and is_instance_valid(_ed_music):
 		_ed_music.stop()
+		_ed_music = null
 	queue_free()
 
 
@@ -255,7 +289,11 @@ func _go_credits() -> void:
 
 ## credits 场景已正常接管 ED BGM：解除保险丝（名单滚动可远超 30 秒，BGM 必须一直压到底）。
 func notify_credits_attached() -> void:
+	_cancel_fuse()
+
+
+func _cancel_fuse() -> void:
 	if _fuse_timer != null and is_instance_valid(_fuse_timer):
 		_fuse_timer.stop()
 		_fuse_timer.queue_free()
-		_fuse_timer = null
+	_fuse_timer = null
