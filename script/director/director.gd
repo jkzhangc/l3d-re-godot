@@ -1208,6 +1208,13 @@ func _check_scene_change() -> void:
 	# 场景切换 → 同步清空禁刷怪层缓存（NoSpawnLayer）
 	_no_spawn_layers.clear()
 	_no_spawn_cache_ready = false
+	# 场景切换 → 复位前方补位记账（09-27 实测修复）：_batch_player_pos 里存的是**旧图玩家的
+	# instance_id**，字典非空会让新图的 _max_advance 查不到坐标恒返回 0 → 必须真实走满
+	# advance_step 才开始补位。表现就是用户报的「从安全屋/换图出来后前面怪很少、很迟」
+	# （单机同样受影响，联机因锚点常落在远端玩家身上而更明显）。
+	var fs_reset: Node = get_node_or_null("FrontSpawner")
+	if fs_reset and fs_reset.has_method("reset_batch_tracking"):
+		fs_reset.call("reset_batch_tracking")
 	# 场景切换 → 复位防守战挂起状态：旧场景的 HoldoutMachine 已随场景释放，
 	# 不会再来 resume；残留的挂起计数会让节奏永久冻结（且让幂等早退吞掉新防守战
 	# 的尸潮收尾，尸潮 BGM 停不下来）。

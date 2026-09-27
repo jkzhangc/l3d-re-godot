@@ -20,6 +20,7 @@ const _CORE_CHARACTER_RESOURCES := [
 	preload("res://object/character_nobita.tres"),
 	preload("res://object/character_bigg.tres"),
 	preload("res://object/character_suneo.tres"),
+	preload("res://object/character_shizuka.tres"),
 ]
 
 

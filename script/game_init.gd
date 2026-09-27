@@ -25,6 +25,16 @@ func _ready() -> void:
 		var director: Node = get_node_or_null("/root/Director")
 		if director and director.has_method("refresh_scene_config"):
 			director.call("refresh_scene_config")
+		## ★联机章节计时（09-27 实测修复）：本分支此前直接 return，跳过了 ChapterStats
+		## 初始化 → started_msec 恒 0 → 章节总结的「用时」主机与客户端都显示 00:00。
+		## 安全屋沿用单机口径（不重置章节计时）；其余场景两端各起一份本地计时（误差 <1s，
+		## 结算只读本端值，无需额外同步）。
+		if get_tree() and get_tree().current_scene:
+			var mp_path: String = get_tree().current_scene.scene_file_path
+			if not ("安全屋" in mp_path or "safe" in mp_path.to_lower()):
+				var mp_stats: Node = get_node_or_null("/root/ChapterStats")
+				if mp_stats and mp_stats.has_method("ensure_chapter"):
+					mp_stats.ensure_chapter(mp_path)
 		return
 
 	Global.try_load_or_init()
