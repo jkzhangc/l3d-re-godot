@@ -131,7 +131,8 @@ func _explode() -> void:
 		if e is Node2D and (e as Node2D).global_position.distance_to(global_position) <= radius_px:
 			if (e as Node2D).has_method("take_damage"):
 				var dir: Vector2 = (e as Node2D).global_position - global_position
-				(e as Node2D).take_damage(_td.damage, 200.0, dir.normalized(), false, 0.3, 0.2, get_instance_id(), _td.element)
+				## 末位 true = 爆炸家族：Tank 也会被投掷物爆炸击退/硬直（用户定稿：只有爆炸类可打断）
+				(e as Node2D).take_damage(_td.damage, 200.0, dir.normalized(), false, 0.3, 0.2, get_instance_id(), _td.element, true)
 	## 可爆破墙体（blast_wall）：只有 breaks_blast_wall=true 的投掷物（炸药）计入破坏；
 	## 手雷等炸得响但炸不开（2026-09-16 用户定稿）。
 	## 只有 Host/单机的授权爆炸会走到这里（_authoritative 前提），Client 只看 flag 广播的表现。

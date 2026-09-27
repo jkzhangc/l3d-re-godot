@@ -1092,7 +1092,9 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 # 伤害
 # ═══════════════════════════════════════
 
-func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0) -> void:
+## source_is_explosive：本次伤害是否来自**爆炸家族**（RPG/榴弹/弩等，即 bullet 的
+## explosion_radius > 0）。2026-09-27 新增，专供 Tank（暴君）抗打断判定 —— 见下方抗打断门。
+func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false) -> void:
 	if _is_dead:
 		return
 
@@ -1169,6 +1171,16 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 播放受伤音效（0 伤害不播放）
 	if damage > 0.0:
 		_play_sound(hurt_sound, hurt_sound_pitch)
+
+	## ★Tank（暴君）抗打断（2026-09-27 用户定稿）：只有**爆炸家族**（RPG/榴弹/弩等，即
+	## bullet 的 explosion_radius > 0）能击退或打出硬直；手枪/步枪/冲锋枪/霰弹/马格南/
+	## 推击/闪光弹/近战一律免疫。此前 Tank 毫无抗打断配置，而"即死降级成 0.8s 硬直"
+	## 让觉醒期的手枪都能打断它。雷/氷元素注入的硬直同样在下闸之内（属性榴弹本身是爆炸源，
+	## 会带 source_is_explosive = true 通过）。
+	if is_in_group("tank_enemies") and not source_is_explosive:
+		knockback_force = 0.0
+		knockback_stun = 0.0
+		hitstun_duration = 0.0
 
 	# 设置击退参数（所有状态统一设置，包括 Idle）
 	var has_knockback: bool = knockback_force > 0.0 and knockback_stun > 0.0

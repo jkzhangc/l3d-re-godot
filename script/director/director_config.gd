@@ -85,9 +85,11 @@ class_name DirectorConfig extends Node
 ## 至少离开相机可视边缘这么多像素才算"屏幕外"。嫌"眼睁睁看着刷新"就调大。
 @export var front_offscreen_margin: float = 64.0
 ## 玩家累计前进这么多像素才允许补下一批 —— 走得快就补得快（修"走得快时前方空窗"）。
-@export var front_advance_step: float = 160.0
+## 2026-09-27 用户实测「3 人数量可以、频率偏快」→ 160 → 200（要走更远才补下一批）。
+@export var front_advance_step: float = 200.0
 ## 两批之间的最短间隔（秒），防止一帧内连补。
-@export var front_interval_min: float = 2.0
+## 2026-09-27 同上：2.0 → 2.5（只降频，不动每批数量）。
+@export var front_interval_min: float = 2.5
 ## 原地不动时是否也补怪。false（默认）= 站着不动不会刷怪，避免"脸上刷怪"。
 @export var front_spawn_when_idle: bool = true
 

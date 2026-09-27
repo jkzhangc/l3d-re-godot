@@ -374,7 +374,7 @@ func _hit(target: Node2D) -> void:
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(final_damage)])
 	var hp_before: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else 0.0
-	damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element)
+	damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0)
 	var hp_after: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else hp_before
 	_record_chapter_damage(hp_before, hp_after, is_headshot)
 
@@ -459,7 +459,7 @@ func _explode() -> void:
 				blast_damage = maxf(blast_damage, 99999.0)
 				blast_hitstun = 0.1
 		var hp_before: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else 0.0
-		enemy.take_damage(blast_damage, applied_force, dir, false, 0.3, blast_hitstun, _source_id, element)
+		enemy.take_damage(blast_damage, applied_force, dir, false, 0.3, blast_hitstun, _source_id, element, true)
 		var hp_after: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else hp_before
 		_record_chapter_damage(hp_before, hp_after, false)
 
