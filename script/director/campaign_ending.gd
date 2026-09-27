@@ -220,17 +220,21 @@ func _go_credits() -> void:
 	_dialogue_label.visible = false
 	# 解除冻结：名单是独立 UI 场景，需要自己的 _process 驱动滚动
 	get_tree().paused = false
-	# 联机：Host 统一拉所有客户端进名单（单机等价于空操作）
 	var net: Node = get_node_or_null("/root/Net")
 	var online: bool = net != null and net.has_method("is_online_session") \
 		and bool(net.is_online_session())
-	if online and net.has_method("request_scene_change"):
-		net.request_scene_change(CREDITS_SCENE)
-	## 本地 raw 切图只在**单机 / Host**端做：联机 Client 必须由 Host 的 start_game
-	##（带 scene_transition 静默握手 + 就绪确认）把它带过去 —— Client 自己抢跑会与
-	## 握手协议打架（同类根因见 2026-09-25 安全屋 scene_identity 那轮）。
 	var is_client: bool = online and not bool(net.get("is_host"))
-	if not is_client:
+	## ★2026-09-27 实测修复（"在看名单的玩家会重新看"）：
+	## 旧实现里**每个 peer 都各自发起一次换场** —— Host 自己调 request_scene_change
+	##（内部 start_game.rpc 带 call_local），每个 Client 也发 request_scene_change_rpc，
+	## Host 收到后**又**跑一次 start_game.rpc。谁晚到 credits，谁就触发一次全量换场，
+	## 把已经在看名单的人整场重建 → 从底部重新滚。
+	## 现在：**Host 是唯一驱动者**，Client 到这一步只等 Host 的 start_game 握手把它带过去；
+	## 单机（无联机会话）才直接本地换场。
+	if online:
+		if not is_client and net.has_method("request_scene_change"):
+			net.request_scene_change(CREDITS_SCENE)
+	else:
 		get_tree().change_scene_to_file.call_deferred(CREDITS_SCENE)
 	# 2026-09-14：本节点**不** queue_free —— 黑幕退到 credits 背板（95）之后，
 	# ED BGM 继续压进名单；名单结束/跳过时 credits 会调 stop_ending_music() 收尾。

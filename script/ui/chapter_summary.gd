@@ -100,6 +100,11 @@ func show_summary() -> void:
 	_sync_required_multiplayer_seats()
 	_rebuild_player_rows()
 	_refresh_status()
+	## 客户端：拉 Host 的权威统计（否则四个数值全是 0）。Host 侧是空操作。
+	_request_stats_from_host()
+	## 过场页（ED）在联机下走闸门 → Host 必须挂保险丝，防止有人不确认时两端永久卡住。
+	if cutscene_mode and _multiplayer_mode and multiplayer.is_server():
+		_start_cutscene_watchdog()
 	_play_summary_music()
 	if pause_game:
 		get_tree().paused = true
@@ -115,12 +120,65 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("确定键"):
 		get_viewport().set_input_as_handled()
 		if cutscene_mode:
-			## 过场页：本端按键即推进本端（不等别人、不发 RPC）。
-			_finish_summary()
+			## ★2026-09-27 实测修复：过场页（终章 ED 结算页）以前是"本端按键即推进本端"，
+			## 于是每个玩家各按各的确定键、各自独立进入 ED 与名单（用户报"每个玩家都是独立的"，
+			## 而且"看名单前一定要每个玩家同步"）。现在联机下沿用安全屋那套 **peer 权威闸门**：
+			## 本端只提交确认，Host 汇总后广播 `_network_summary_complete` 统一推进；
+			## 单机仍即时关闭。防死锁由 `_start_cutscene_watchdog()` 兜底（见 show_summary）。
+			if _multiplayer_mode:
+				_submit_local_confirmation()
+			else:
+				_finish_summary()
 		elif not _multiplayer_mode:
 			_finish_summary()
 		else:
 			_submit_local_confirmation()
+
+
+## ── 过场结算页的全员同步兜底（2026-09-27）──
+## 闸门本身是安全屋那套成熟机制（peer 名单 + 延迟重试 + 确认广播），这里只补一个**保险丝**：
+## 万一有人一直不确认（掉线 / 输入卡住 / 座位绑定异常），Host 到点强制收口 ——
+## 这正是当初用 cutscene_mode 绕开闸门的原因，不能再让"防卡死"和"要同步"二选一。
+const CUTSCENE_CONFIRM_TIMEOUT: float = 25.0
+
+
+func _start_cutscene_watchdog() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var timer: SceneTreeTimer = tree.create_timer(CUTSCENE_CONFIRM_TIMEOUT, true)
+	timer.timeout.connect(func():
+		if not is_instance_valid(self) or _finishing or not visible:
+			return
+		var missing: Array = []
+		for peer_id: int in _get_expected_session_peer_ids():
+			if not _confirmed_peer_ids.get(peer_id, false):
+				missing.append(peer_id)
+		if missing.is_empty():
+			return
+		push_warning("[ChapterSummary] 过场结算页等待确认超时，强制收口（未确认 peer=%s）" % str(missing))
+		call_deferred("_finish_network_summary_after_flush"))
+
+
+## 客户端拉取 Host 的权威统计 → 结算页数值不再全 0（2026-09-27）。
+func _request_stats_from_host() -> void:
+	if not _multiplayer_mode:
+		return
+	var stats_node: Node = get_node_or_null("/root/ChapterStats")
+	if stats_node == null:
+		return
+	if stats_node.has_signal("remote_stats_applied") \
+			and not stats_node.remote_stats_applied.is_connected(_on_remote_stats_applied):
+		stats_node.connect("remote_stats_applied", _on_remote_stats_applied)
+	if stats_node.has_method("request_sync_from_host"):
+		stats_node.call("request_sync_from_host")
+
+
+func _on_remote_stats_applied() -> void:
+	if not is_instance_valid(self) or not visible:
+		return
+	_rebuild_player_rows()
+	_refresh_status()
 
 
 ## 供未来联机层或自动化测试直接提交某个座位的确认。

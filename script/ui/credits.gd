@@ -124,6 +124,18 @@ func _ready() -> void:
 	_label.position = Vector2(0.0, vp_size.y)
 	_label.size.x = vp_size.x
 
+	## ★联机同步（2026-09-27）：客户端本地没有全队战役统计（击杀只在 Host 上累计）→
+	## `@@STATS@@` 段要么整段空白、要么与主机不同（用户实测"客户端跟主机内容好像不一样"）。
+	## 先按本地渲染，再向 Host 拉一次权威文本，到达后**原地重排**（不动滚动位置，
+	## 避免"正在看名单的人从头重看"）。
+	var stats_node: Node = get_node_or_null("/root/ChapterStats")
+	if stats_node:
+		if stats_node.has_signal("remote_stats_applied") \
+				and not stats_node.remote_stats_applied.is_connected(_refresh_text_from_remote):
+			stats_node.connect("remote_stats_applied", _refresh_text_from_remote)
+		if stats_node.has_method("request_sync_from_host"):
+			stats_node.call("request_sync_from_host")
+
 	# ED 音乐：优先接 CampaignEnding 的连续 BGM（对话段已在播）；没有才自播
 	_external_ending = _find_external_ending()
 	if _external_ending == null or not _external_ending.is_ending_music_playing():
@@ -182,6 +194,22 @@ func _find_external_ending() -> CampaignEnding:
 		if child is CampaignEnding:
 			return child as CampaignEnding
 	return null
+
+
+## Host 的权威统计到达 → 用**同一套**占位替换重排文本（滚动位置保持不变）。
+func _refresh_text_from_remote() -> void:
+	if _finished or _label == null:
+		return
+	var updated: String = credits_text.replace(STATS_PLACEHOLDER, _build_stats_block())
+	if updated == _label.text:
+		return
+	_label.text = updated
+	_label.reset_size()
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	_label.size.x = vp_size.x
+	if _label.position.y > vp_size.y - 64.0:
+		_label.position.y = vp_size.y   ## 还没滚起来 → 重新贴到底部，保证完整可读
+	print("[Credits] 已按 Host 权威统计重排名单内容")
 
 
 # ═══════════════════════════════════════
