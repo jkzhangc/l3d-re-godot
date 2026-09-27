@@ -43,7 +43,7 @@ weapon_walk_textures = {
 "Smg": ExtResource("9"),
 "Sniper": ExtResource("9")
 }
-allowed_primary_weapons = Array[String](["sniper_01", "smg_01", "rifle_01", "shotgun_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
+allowed_primary_weapons = Array[String](["smg_01", "rifle_01", "shotgun_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01"])
 shove_walk_texture = ExtResource("5")
 select_icon_index = 3

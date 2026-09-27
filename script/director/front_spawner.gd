@@ -436,6 +436,21 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 	var span: Array = _team_free_span(player.global_position, dir, view_rects,
 		offscreen_margin, band_lo, max_dist)
 	if span.is_empty():
+		## ★2026-09-27（用户报"走廊 / 换图后前方还是偏少"）：
+		## 距离带 [band_lo, max_dist] ≈ 384~560，**有效宽度只有约 176px**，而单个玩家的
+		## 视野矩形沿射线方向就要覆盖 ±384px。走廊里 2~3 人前后一拉开，并集便把整条带盖满
+		## → `_team_free_span` 返回空 → 这里直接 ZERO → **整帧一只都不刷**
+		##（日志表现就是"前方找不到合格落点"）。单人时几乎不会出现，所以只有多人报。
+		## 修法：整条带向外扩一档重试。`_team_free_span` 本身已保证返回的空隙对**全体玩家
+		## 都不可见**，扩带只是给它更多空间去找那条缝；取 2.2 是为了让上限（560×2.2≈1232）
+		## 仍留在 `recycle_dist`(1400) 之内，避免刚刷出来就被"离得太远"回收。
+		var fallback_scale: float = 2.2
+		span = _team_free_span(player.global_position, dir, view_rects,
+			offscreen_margin, band_lo, max_dist * fallback_scale)
+		if not span.is_empty():
+			last_reject = "常规带被队友视野盖满 → 外扩到 %.0f~%.0f" % [
+				float(span[0]), float(span[1])]
+	if span.is_empty():
 		return Vector2.ZERO
 	var eff_min: float = float(span[0])
 	var eff_max: float = maxf(float(span[1]), eff_min)
