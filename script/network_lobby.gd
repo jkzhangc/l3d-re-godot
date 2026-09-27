@@ -181,6 +181,11 @@ const WINDOW_BG_PATH := "res://art/System/Window background color.png"
 const WINDOW_FRAME_PATH := "res://art/System/Window frame.png"
 const COLOR_SHEET_PATH := "res://art/System/Text color, 20 types (each 16 x 16).png"
 const WINDOW_MARGIN := 24.0
+## 页标题（60px ＋留白）占用的顶部高度。面板内容与窗口皮都要整体下移这么多，
+## 否则窗内标题会和页标题叠在同一行（用户实测："大厅有两个标题、旧标题没删"）。
+const PAGE_TITLE_BAND := 92.0
+## 内容相对窗口内边的缩进（窗口皮的内边距之外再留一点，文字不贴框）。
+const CONTENT_PADDING := 12.0
 
 
 func _setup_visual_style() -> void:
@@ -188,8 +193,29 @@ func _setup_visual_style() -> void:
 	_add_page_title()
 	_skin_panel(connect_panel)
 	_skin_panel(room_panel)
+	## ⚠ 必须在 _skin_panel 之后：这样连窗口皮（WindowBg/WindowFrame）一起下移。
+	_push_down_content(connect_panel)
+	_push_down_content(room_panel)
 	_style_window_title("ConnectPanel/VBox/Title", "创建 / 加入房间")
 	_style_window_title("RoomPanel/Margin/Column/Title", "游戏大厅")
+
+
+## 把面板下的控件排进「窗口」里：窗口皮下移到页标题之下，内容再往里缩 CONTENT_PADDING。
+func _push_down_content(panel: Control) -> void:
+	if panel == null:
+		return
+	var skin_top: float = WINDOW_MARGIN + PAGE_TITLE_BAND
+	var inner: float = skin_top + CONTENT_PADDING
+	for child: Node in panel.get_children():
+		var ctrl: Control = child as Control
+		if ctrl == null:
+			continue
+		if ctrl.name == "WindowBg" or ctrl.name == "WindowFrame":
+			ctrl.offset_top = skin_top
+			continue
+		ctrl.offset_top = inner
+		ctrl.offset_left = inner
+		ctrl.offset_right = -inner
 
 
 func _add_backdrop() -> void:
@@ -285,7 +311,7 @@ func _setup_chapter_select() -> void:
 	chapter_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(chapter_select)
 	room_info_box.add_child(row)
-	_chapter_entries = CampaignData.collect_chapter_entries()
+	_chapter_entries = CampaignData.collect_all_level_entries()
 	for entry: Dictionary in _chapter_entries:
 		chapter_select.add_item(str(entry.get("label", "?")))
 	chapter_select.item_selected.connect(_on_chapter_selected)
