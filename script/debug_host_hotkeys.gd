@@ -80,22 +80,33 @@ func _ensure_jump_ui() -> void:
 	_jump_panel.visible = false
 	_jump_panel.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_jump_panel.offset_left = 12.0
-	_jump_panel.offset_top = -430.0
-	_jump_panel.offset_right = 344.0
+	_jump_panel.offset_top = -520.0
+	_jump_panel.offset_right = 420.0
 	_jump_panel.offset_bottom = -52.0
 	root.add_child(_jump_panel)
 
+	## 关卡列表可能很长（要能跳到全部地图）→ 套一层滚动容器。
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.name = "Scroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_jump_panel.add_child(scroll)
+
 	var box: VBoxContainer = VBoxContainer.new()
 	box.name = "List"
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 2)
-	_jump_panel.add_child(box)
+	scroll.add_child(box)
 
 	var title: Label = Label.new()
-	title.text = "跳转章节（调试 · 仅主机）"
+	title.text = "跳转关卡（调试 · 仅主机）"
 	_apply_debug_font(title)
 	box.add_child(title)
 
-	for entry: Dictionary in CampaignData.collect_chapter_entries():
+	## ★用「全部可跳转关卡」而不是战役表：战役表 `level_scenes` 只登记了 5 关
+	##（第一关 3 张 + 第二关 2 张），而 `scene/maps/` 下有 12 张 —— 矿洞 / 实验室走廊 /
+	## 列车台 / 各安全屋 / 测试图都没登记。调试要的是"想跳哪张就跳哪张"。
+	for entry: Dictionary in CampaignData.collect_all_level_entries():
 		var btn: Button = Button.new()
 		btn.text = str(entry.get("label", "?"))
 		_apply_debug_font(btn)
