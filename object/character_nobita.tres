@@ -31,6 +31,7 @@ base_attack = 12
 base_defense = 4
 mp_growth = 3
 portrait = ExtResource("5_egp5s")
+portrait_index = 12
 walk_texture = ExtResource("1_8a3k1")
 run_texture = ExtResource("2_dd21q")
 death_texture = ExtResource("1_8a3k1")
