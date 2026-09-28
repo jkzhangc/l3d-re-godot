@@ -13,9 +13,10 @@ extends RefCounted
 ## ★ 原作把「谁说什么」直接写在文本里（说话人行 `\>\C[4]大雄\C[0]\<`），
 ##   所以这里是**精确的角色映射**，不是靠顺序推断的台词池。
 ##
-## 【批次】原作每张图放了两段结构独立的分支：
-##   "a" = 刚进入安全屋的感叹/吐槽    → 本作「进入安全屋」时触发
-##   "b" = 决定下一步行动 / 出发      → 本作「章节总结结束后」触发
+## 【批次】原作每张图放了两段分支，二者是**同一段对话的连续两屏**（2026-09-28 用户核对原作确认）：
+##   "a" = 刚进入安全屋的感叹/吐槽   → 窗口**第 1 屏**（该批多行**同屏显示**）
+##   "b" = 接着说的下一步行动/出发   → 按确定键翻到**第 2 屏**，再按一次关闭
+## 触发**只有一个时机**（进入安全屋），两屏由窗口内部翻页完成 —— 见 `pages_for()`。
 ##
 ## 【角色 id】本作已实装 4 人：nobita / shizuka / suneo / bigg。
 ##   另 6 名原作可操作角色（dekisugi / sakuya / kenji / yasuo / sena / sasha）
@@ -182,6 +183,23 @@ static func characters_for(key: String, stage: String = STAGE_ENTER) -> Array:
 	if not stages.has(stage):
 		return []
 	return (stages[stage] as Dictionary).keys()
+
+
+## 取该角色的**页**：每页 = 一个批次的多行台词，**同一屏一起显示**。
+##
+## ★原作口径（2026-09-28 用户核对）：A 批与 B 批是**同一段对话的连续两页** ——
+##   A 批先出，按确定键继续到 B 批，再按确定键关闭。
+##   而**同一批次里的多行是同时显示的**（原作对话框一次显示说话人 + 数行正文），
+##   不应该一句一屏地翻页。
+##
+## 返回：`Array[Array[String]]` —— 外层是页，内层是该页的多行。角色无台词时返回空数组。
+static func pages_for(key: String, char_id: String) -> Array:
+	var pages: Array = []
+	for stage: String in [STAGE_ENTER, STAGE_AFTER_SUMMARY]:
+		var lines: Array = lines_for(key, char_id, stage)
+		if not lines.is_empty():
+			pages.append(lines)
+	return pages
 
 
 static func has_key(key: String) -> bool:

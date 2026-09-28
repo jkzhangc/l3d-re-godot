@@ -110,10 +110,28 @@ func is_open() -> bool:
 
 
 ## 显示**某角色的专有台词**。
-## ★原作把「谁说什么」写死在事件文本里（说话人行 = `\>\C[4]名字\C[0]\<`），**不随机抽**，
-##   所以这里按顺序显示该角色的句子；超过 max_pages 的截断（窗口一次只显示一句，按确定键翻页）。
-func open_character(lines: Array, speaker_name: String, portrait: Texture2D = null) -> void:
-	open(lines, speaker_name, portrait)
+## ★原作把「谁说什么」写死在事件文本里（说话人行 = `\>\C[4]名字\C[0]\<`），**不随机抽**。
+##
+## `pages` 是**页数组**（外层一页、内层该页的多行）：
+##   - **同一页的多行同屏显示**（原作对话框一次显示说话人 + 数行正文）；
+##   - 按确定键翻到下一页 —— 原作里 A 批（刚进安全屋）与 B 批（接着说）就是连续两页。
+## 也兼容直接传扁平的 `Array[String]`（每个元素各自成一页）。
+func open_character(pages: Array, speaker_name: String, portrait: Texture2D = null) -> void:
+	var flat: Array = []
+	for page: Variant in pages:
+		if page is Array:
+			var lines: Array = []
+			for ln: Variant in (page as Array):
+				var s: String = str(ln).strip_edges()
+				if not s.is_empty():
+					lines.append(s)
+			if not lines.is_empty():
+				flat.append("\n".join(lines))
+			continue
+		var one: String = str(page).strip_edges()
+		if not one.is_empty():
+			flat.append(one)
+	open(flat, speaker_name, portrait)
 
 
 func _render_page() -> void:

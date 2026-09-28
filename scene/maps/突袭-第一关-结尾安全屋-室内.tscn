@@ -31,6 +31,7 @@
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="21_278n4"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="22_8d8vq"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="23_8d8vq"]
+[ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="32_13v0d"]
 
 [sub_resource type="Resource" id="Resource_id55e"]
 script = ExtResource("12_e6jfg")
@@ -218,3 +219,8 @@ bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLa
 [node name="DirectorConfig" type="Node" parent="." unique_id=1546911546]
 script = ExtResource("2_dcfg")
 spawn_enabled = false
+
+[node name="ScreenTone" parent="." unique_id=1176570684 instance=ExtResource("32_13v0d")]
+tone_color = Color(0.8509804, 0.8509804, 0.8509804, 1)
+intensity = 0.5
+excluded_nodes = Array[NodePath]([NodePath("../CombatHUD")])

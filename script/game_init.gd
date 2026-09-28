@@ -146,19 +146,17 @@ func _spawn_safehouse_dialogue() -> void:
 	if key.is_empty():
 		return
 	## 总结页还开着就先等它关闭再说话（否则台词会被总结页盖住）。
-	## ★这同时决定说**哪一批**台词（原作每张图放了两段独立分支）：
-	##   立刻说       = A 批「刚进安全屋的感叹」
-	##   总结关闭后说 = B 批「决定下一步行动 / 准备出发」
+	## ★时机只有一个：原作里 A 批（刚进安全屋）与 B 批（接着说）是**同一段对话的连续两页**，
+	##   由窗口内部按确定键翻页完成，不再是两个独立的触发时机。
 	var summary: Node = tree.current_scene.find_child("ChapterSummary", true, false)
 	if summary != null and summary.visible and summary.has_signal("summary_finished"):
 		summary.summary_finished.connect(
-			func() -> void: _open_safehouse_dialogue(
-				key, SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY), CONNECT_ONE_SHOT)
+			func() -> void: _open_safehouse_dialogue(key), CONNECT_ONE_SHOT)
 		return
-	_open_safehouse_dialogue(key, SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER)
+	_open_safehouse_dialogue(key)
 
 
-func _open_safehouse_dialogue(key: String, stage: String) -> void:
+func _open_safehouse_dialogue(key: String) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null or tree.current_scene == null:
 		return
@@ -176,14 +174,15 @@ func _open_safehouse_dialogue(key: String, stage: String) -> void:
 			jp, Global.CHARACTER_NAME_ZH.get(jp, jp)))
 		char_id = state.character.get_character_key()
 		portrait = state.character.portrait_texture()
-	var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key, char_id, stage)
-	if lines.is_empty():
+	## ★一次给出全部**页**（A 批一屏 → 按确定键 → B 批一屏），每页内部的多行同屏显示。
+	var pages: Array = SAFEHOUSE_DIALOGUE_DATA.pages_for(key, char_id)
+	if pages.is_empty():
 		return
 	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
 	tree.current_scene.add_child(dlg)
-	dlg.call("open_character", lines, speaker, portrait)
-	print("[GameInit] 安全屋台词：%s/%s（角色=%s，%d 句，说话人=%s，头像=%s）" % [
-		key, stage, char_id, lines.size(), speaker, "有" if portrait != null else "无"])
+	dlg.call("open_character", pages, speaker, portrait)
+	print("[GameInit] 安全屋台词：%s（角色=%s，%d 页，说话人=%s，头像=%s）" % [
+		key, char_id, pages.size(), speaker, "有" if portrait != null else "无"])
 
 
 ## ── 触摸操作层（2026-09-28 用户需求）──
