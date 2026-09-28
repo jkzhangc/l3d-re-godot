@@ -73,6 +73,11 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	_restore_layers()
+	## ★松开材质引用：脚本成员持有 ShaderMaterial 时，退出会报
+	## `ERROR: resources still in use at exit`（用 --quit-after 强退时 `_exit_tree`
+	## 之后的清理顺序不受我们控制，提前松手最稳）。
+	## 松手后若节点被重新加回树，`_push_params()` 会懒取一次，不会失效。
+	_mat = null
 
 
 ## 立即套用色调（intensity 默认 1 = 完全套用）。
@@ -106,7 +111,13 @@ func is_active() -> bool:
 
 func _push_params() -> void:
 	if _mat == null:
-		return   ## _ready 之前的 Inspector 赋值：先记下，_ready 里统一推一次
+		## 懒取（_ready 之前 / 被移出树后重新入树时）：_mat 只在这里与 _ready 里赋值，
+		## 绝不常驻持有，避免退出时的资源占用告警。
+		var ov0: ColorRect = get_node_or_null("Overlay")
+		if ov0 != null:
+			_mat = ov0.material as ShaderMaterial
+	if _mat == null:
+		return   ## 节点还没就绪：值已存在属性里，_ready 会统一推一次
 	_mat.set_shader_parameter("tone_color", tone_color)
 	_mat.set_shader_parameter("intensity", intensity)
 	_mat.set_shader_parameter("brightness", brightness)
