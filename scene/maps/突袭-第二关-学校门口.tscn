@@ -24,7 +24,6 @@
 [ext_resource type="Resource" uid="uid://dtwr8d4xchwiw" path="res://tres/specials/ハンターβ.tres" id="19_oqsjd"]
 [ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="20_kvv51"]
 [ext_resource type="Resource" uid="uid://b8fm67dg4gjwk" path="res://tres/specials/ブレアウィッチ.tres" id="20_x5jg0"]
-[ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="21_gu674"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="22_sjh6m"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="23_oqsjd"]
@@ -32,7 +31,8 @@
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="25_bpola"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="26_tgu80"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="27_0s3xi"]
-[ext_resource type="Resource" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
+[ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
+[ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 
 [sub_resource type="Resource" id="Resource_21b8x"]
 script = ExtResource("27_0s3xi")
@@ -101,11 +101,10 @@ scatter_min = 1
 scatter_max = 2
 scatter_interval_min = 22.0
 scatter_interval_max = 36.0
-horde_total_min = 5
 horde_total_max = 20
+spawn_immediate_on_start = true
 zombie_pool = Array[ExtResource("11_7ot67")]([ExtResource("12_fstvt"), ExtResource("13_h3ljj"), ExtResource("14_kfi8g"), ExtResource("15_wsc62"), ExtResource("16_fstvt")])
 special_pool = Array[ExtResource("17_gu674")]([ExtResource("18_sjh6m"), ExtResource("19_oqsjd"), ExtResource("20_x5jg0"), ExtResource("90_90_gm"), ExtResource("91_demos")])
 special_max_alive = 3
-max_active_common = 40
 drop_pool = SubResource("Resource_21b8x")
 metadata/_custom_type_script = "uid://blx0cs5m3w80f"

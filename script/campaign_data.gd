@@ -82,8 +82,6 @@ const MAP_SCENE_PATHS: Array[String] = [
 	"res://scene/maps/突袭-第三关-结尾安全屋.tscn",
 	"res://scene/maps/突袭-第四关-实验室走廊.tscn",
 	"res://scene/maps/突袭-第四关-列车台（最终场景）.tscn",
-	"res://scene/maps/test.tscn",
-	"res://scene/maps/测试-敌人试验场.tscn",
 ]
 
 const _CN_NUMBERS: Dictionary = {

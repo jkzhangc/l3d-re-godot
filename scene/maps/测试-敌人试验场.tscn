@@ -33,7 +33,7 @@
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 [ext_resource type="Script" uid="uid://cceesvgqn00di" path="res://script/dev_enemy_spawner.gd" id="99_devspawn"]
-[ext_resource type="Script" path="res://script/dev_character_switcher.gd" id="100_devswitch"]
+[ext_resource type="Script" uid="uid://b3yjaoofgn0j1" path="res://script/dev_character_switcher.gd" id="100_devswitch"]
 
 [sub_resource type="Resource" id="Resource_uqcpj"]
 script = ExtResource("6_rx6vf")
@@ -81,7 +81,7 @@ special_fixed = ExtResource("91_demos")
 special_interval = 1.0
 special_max_alive = 1
 
-[node name="DevCharacterSwitcher" type="Node2D" parent="DecorLayer"]
+[node name="DevCharacterSwitcher" type="Node2D" parent="DecorLayer" unique_id=903941586]
 position = Vector2(560, 938)
 script = ExtResource("100_devswitch")
 

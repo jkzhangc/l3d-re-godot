@@ -134,7 +134,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "加入房间"
 
-[node name="UpnpCheck" type="CheckBox" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=2741916322]
+[node name="UpnpCheck" type="CheckBox" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=-1553050974]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
@@ -322,7 +322,6 @@ vertical_alignment = 1
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 12
-text = ""
 autowrap_mode = 2
 
 [node name="RoomHint" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000035]

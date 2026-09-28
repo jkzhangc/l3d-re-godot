@@ -121,21 +121,22 @@ text = "7/48"
 [node name="TPLabel" type="Control" parent="." unique_id=918184148]
 layout_mode = 3
 anchors_preset = 0
-offset_left = 82.0
-offset_top = 158.0
-offset_right = 90.0
-offset_bottom = 174.0
-scale = Vector2(2, 2)
+offset_left = 86.0
+offset_top = 164.0
+offset_right = 100.0
+offset_bottom = 198.0
+scale = Vector2(1.5, 1.5)
 script = ExtResource("6_aeqfj")
 text = "0"
+text_font_size = 24
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
 [node name="HoldoutCountdown" type="PanelContainer" parent="." unique_id=1952354651]
-offset_left = 47.0
-offset_top = 18.0
-offset_right = 167.0
-offset_bottom = 96.0
-scale = Vector2(2, 2)
+offset_left = 49.0
+offset_top = 28.0
+offset_right = 169.0
+offset_bottom = 106.0
+scale = Vector2(1.5, 1.5)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("HoldoutPanel")
 
