@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Shader" path="res://shader/screen_tone.gdshader" id="1_shader"]
+[ext_resource type="Script" path="res://script/fx/screen_tone.gd" id="2_script"]
+
+[sub_resource type="ShaderMaterial" id="mat_tone"]
+shader = ExtResource("1_shader")
+shader_parameter/tone_color = Color(1, 1, 1, 1)
+shader_parameter/intensity = 0.0
+shader_parameter/brightness = 1.0
+shader_parameter/saturation = 1.0
+shader_parameter/contrast = 1.0
+
+[node name="ScreenTone" type="CanvasLayer"]
+layer = 50
+script = ExtResource("2_script")
+
+[node name="Overlay" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+material = SubResource("mat_tone")
