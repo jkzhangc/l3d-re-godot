@@ -1,0 +1,348 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://script/ui/touch_controls.gd" id="1_root"]
+[ext_resource type="Script" path="res://script/ui/touch_joystick.gd" id="2_joy"]
+[ext_resource type="Script" path="res://script/ui/touch_button.gd" id="3_btn"]
+
+[sub_resource type="StyleBoxFlat" id="SB_big"]
+bg_color = Color(0.85, 0.62, 0.16, 0.42)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.94, 0.78, 0.75)
+corner_radius_top_left = 110
+corner_radius_top_right = 110
+corner_radius_bottom_right = 110
+corner_radius_bottom_left = 110
+
+[sub_resource type="StyleBoxFlat" id="SB_mid"]
+bg_color = Color(0.85, 0.62, 0.16, 0.34)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 0.94, 0.78, 0.65)
+corner_radius_top_left = 70
+corner_radius_top_right = 70
+corner_radius_bottom_right = 70
+corner_radius_bottom_left = 70
+
+[sub_resource type="StyleBoxFlat" id="SB_blue"]
+bg_color = Color(0.20, 0.55, 0.85, 0.34)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.80, 0.92, 1, 0.65)
+corner_radius_top_left = 70
+corner_radius_top_right = 70
+corner_radius_bottom_right = 70
+corner_radius_bottom_left = 70
+
+[sub_resource type="StyleBoxFlat" id="SB_gray"]
+bg_color = Color(0.15, 0.16, 0.18, 0.38)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.90, 0.90, 0.90, 0.55)
+corner_radius_top_left = 70
+corner_radius_top_right = 70
+corner_radius_bottom_right = 70
+corner_radius_bottom_left = 70
+
+[sub_resource type="StyleBoxFlat" id="SB_pressed"]
+bg_color = Color(1, 0.85, 0.45, 0.62)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 1, 1, 0.9)
+corner_radius_top_left = 110
+corner_radius_top_right = 110
+corner_radius_bottom_right = 110
+corner_radius_bottom_left = 110
+
+[sub_resource type="StyleBoxFlat" id="SB_knob"]
+bg_color = Color(0.92, 0.95, 1, 0.55)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(1, 1, 1, 0.8)
+corner_radius_top_left = 60
+corner_radius_top_right = 60
+corner_radius_bottom_right = 60
+corner_radius_bottom_left = 60
+
+[node name="TouchControls" type="CanvasLayer"]
+layer = 80
+script = ExtResource("1_root")
+
+[node name="Joystick" type="Control" parent="."]
+layout_mode = 1
+offset_left = 20.0
+offset_top = 610.0
+offset_right = 320.0
+offset_bottom = 910.0
+script = ExtResource("2_joy")
+knob = NodePath("Knob")
+up_action = &"上"
+down_action = &"下"
+left_action = &"左"
+right_action = &"右"
+
+[node name="Knob" type="Panel" parent="Joystick"]
+layout_mode = 0
+offset_left = 90.0
+offset_top = 90.0
+offset_right = 210.0
+offset_bottom = 210.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SB_knob")
+
+[node name="ActionPad" type="Control" parent="."]
+layout_mode = 1
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 1280.0
+offset_bottom = 960.0
+mouse_filter = 2
+
+[node name="BtnAttack" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 880.0
+offset_top = 630.0
+offset_right = 1100.0
+offset_bottom = 850.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("SB_big")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "攻击"
+script = ExtResource("3_btn")
+action = &"确定键"
+
+[node name="BtnFunc" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 710.0
+offset_top = 555.0
+offset_right = 850.0
+offset_bottom = 695.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_mid")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "功能"
+script = ExtResource("3_btn")
+action = &"功能键"
+
+[node name="BtnReload" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 1105.0
+offset_top = 555.0
+offset_right = 1245.0
+offset_bottom = 695.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_mid")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "装填"
+script = ExtResource("3_btn")
+action = &"装填键"
+
+[node name="BtnSA" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 710.0
+offset_top = 775.0
+offset_right = 850.0
+offset_bottom = 915.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_mid")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "SA"
+script = ExtResource("3_btn")
+action = &"SA键"
+
+[node name="BtnPush" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 1105.0
+offset_top = 775.0
+offset_right = 1245.0
+offset_bottom = 915.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_mid")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "推击"
+script = ExtResource("3_btn")
+action = &"推击键"
+
+[node name="ItemPad" type="Control" parent="."]
+layout_mode = 1
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 1280.0
+offset_bottom = 960.0
+mouse_filter = 2
+
+[node name="BtnWeapon" type="Button" parent="ItemPad"]
+layout_mode = 0
+offset_left = 720.0
+offset_top = 40.0
+offset_right = 850.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_blue")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "武器"
+script = ExtResource("3_btn")
+action = &"主武器键"
+
+[node name="BtnHeal" type="Button" parent="ItemPad"]
+layout_mode = 0
+offset_left = 860.0
+offset_top = 40.0
+offset_right = 990.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_blue")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "治疗"
+script = ExtResource("3_btn")
+action = &"治疗品键"
+
+[node name="BtnSupport" type="Button" parent="ItemPad"]
+layout_mode = 0
+offset_left = 1000.0
+offset_top = 40.0
+offset_right = 1130.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_blue")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "辅助"
+script = ExtResource("3_btn")
+action = &"辅助品键"
+
+[node name="BtnThrow" type="Button" parent="ItemPad"]
+layout_mode = 0
+offset_left = 1140.0
+offset_top = 40.0
+offset_right = 1270.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_blue")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "投掷"
+script = ExtResource("3_btn")
+action = &"投掷物键"
+
+[node name="SystemPad" type="Control" parent="."]
+layout_mode = 1
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 1280.0
+offset_bottom = 960.0
+mouse_filter = 2
+
+[node name="BtnMenu" type="Button" parent="SystemPad"]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 40.0
+offset_right = 170.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "菜单"
+script = ExtResource("3_btn")
+action = &"菜单键"
+
+[node name="BtnCancel" type="Button" parent="SystemPad"]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 40.0
+offset_right = 310.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "取消"
+script = ExtResource("3_btn")
+action = &"取消键"
+
+[node name="BtnDrop" type="Button" parent="SystemPad"]
+layout_mode = 0
+offset_left = 320.0
+offset_top = 40.0
+offset_right = 450.0
+offset_bottom = 170.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "丢弃"
+script = ExtResource("3_btn")
+action = &"丢弃武器键"
+
+[node name="BtnSwitch" type="Button" parent="SystemPad"]
+layout_mode = 0
+offset_left = 1120.0
+offset_top = 230.0
+offset_right = 1250.0
+offset_bottom = 360.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "切人"
+script = ExtResource("3_btn")
+action = &"切换角色键"

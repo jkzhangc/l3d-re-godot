@@ -27,7 +27,7 @@ anchor_bottom = 1.0
 offset_left = 16.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = -16.0
+offset_bottom = -72.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 8
@@ -48,7 +48,7 @@ layout_mode = 2
 size_flags_vertical = 3
 
 [node name="Window" type="PanelContainer" parent="ConnectPanel/VBox/Center" unique_id=2110000004]
-custom_minimum_size = Vector2(460, 0)
+custom_minimum_size = Vector2(640, 0)
 layout_mode = 2
 
 [node name="Form" type="VBoxContainer" parent="ConnectPanel/VBox/Center/Window" unique_id=2110000005]
@@ -171,7 +171,7 @@ anchor_bottom = 1.0
 offset_left = 16.0
 offset_top = 16.0
 offset_right = -16.0
-offset_bottom = -16.0
+offset_bottom = -72.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -266,7 +266,7 @@ disabled = true
 text = "离开该大厅"
 
 [node name="Right" type="VBoxContainer" parent="RoomPanel/Margin/Column/Row" unique_id=2110000025]
-custom_minimum_size = Vector2(300, 0)
+custom_minimum_size = Vector2(420, 0)
 layout_mode = 2
 theme_override_constants/separation = 8
 

@@ -444,6 +444,8 @@ const CONFIG_FILE: String = "res://config.json"
 func _ready() -> void:
 	_load_config()
 	_ensure_audio_buses()
+	## 移动平台：横屏 + 全屏（4:3 画布居中留黑边）；桌面端直接早退，行为不变。
+	_setup_platform_display()
 	## ★2026-09-28：调试工具只在 debug_enabled 时创建 —— 导出包（release）里该值恒 false
 	##（见 _refresh_debug_enabled），所以打包即自动关闭调试功能，无需手动改配置。
 	if debug_enabled:
@@ -454,6 +456,26 @@ func _ready() -> void:
 	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
 	ensure_root_ui_theme()
 	_log_font_self_check()
+
+
+## ── 移动平台画面适配（2026-09-28 用户需求）──
+## 手机：锁定横屏 + 全屏；画面保持 1280×960 的 **4:3 画布**，靠 `stretch/mode=viewport`
+## ＋ `aspect=keep` ＋ 整数倍缩放自动居中，多余方向留黑边（用户选定「4:3 + 黑边」策略）。
+## 桌面端行为完全不变 —— 所以这里第一句就是平台早退。
+func _setup_platform_display() -> void:
+	if not is_mobile_platform():
+		return
+	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+	var win: Window = get_window()
+	if win != null:
+		win.mode = Window.MODE_FULLSCREEN
+	print("[Global] 移动平台：横屏 + 全屏（4:3 画布居中，多余方向留黑边）")
+
+
+## 是否移动平台（Android / iOS）。**触摸按钮与画面适配都以它为准**：
+## 触摸层只在移动平台实例化；桌面端可用调试开关强制显示以便调布局。
+func is_mobile_platform() -> bool:
+	return OS.has_feature("mobile") or OS.get_name() in ["Android", "iOS"]
 
 
 ## 现场抓取器（F2 连拍+报告 / F4 只写报告）。挂在 Global 上，所有场景都能用，

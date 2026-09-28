@@ -1,0 +1,111 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://script/ui/safehouse_dialogue.gd" id="1_root"]
+[ext_resource type="Texture2D" path="res://art/System/Window background color.png" id="2_bg"]
+[ext_resource type="Texture2D" path="res://art/System/Window frame.png" id="3_frame"]
+
+[sub_resource type="StyleBoxFlat" id="SB_portrait"]
+bg_color = Color(0.07, 0.08, 0.09, 0.55)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.85, 0.78, 0.55, 0.85)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="SafehouseDialogue" type="CanvasLayer"]
+layer = 95
+script = ExtResource("1_root")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Window" type="Control" parent="Root"]
+offset_left = 240.0
+offset_top = 660.0
+offset_right = 1040.0
+offset_bottom = 916.0
+mouse_filter = 2
+
+[node name="WindowBg" type="TextureRect" parent="Root/Window"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_bg")
+stretch_mode = 1
+
+[node name="WindowFrame" type="NinePatchRect" parent="Root/Window"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("3_frame")
+patch_margin_left = 20
+patch_margin_top = 20
+patch_margin_right = 20
+patch_margin_bottom = 20
+
+[node name="Content" type="HBoxContainer" parent="Root/Window"]
+offset_left = 26.0
+offset_top = 26.0
+offset_right = -26.0
+offset_bottom = -22.0
+mouse_filter = 2
+theme_override_constants/separation = 20
+
+[node name="PortraitBox" type="PanelContainer" parent="Root/Window/Content"]
+custom_minimum_size = Vector2(150, 150)
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SB_portrait")
+
+[node name="Portrait" type="TextureRect" parent="Root/Window/Content/PortraitBox"]
+custom_minimum_size = Vector2(150, 150)
+mouse_filter = 2
+expand_mode = 3
+stretch_mode = 5
+
+[node name="TextBox" type="VBoxContainer" parent="Root/Window/Content"]
+size_flags_horizontal = 3
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_constants/separation = 12
+
+[node name="SpeakerLabel" type="Label" parent="Root/Window/Content/TextBox"]
+mouse_filter = 2
+text = "角色名"
+
+[node name="LineLabel" type="Label" parent="Root/Window/Content/TextBox"]
+mouse_filter = 2
+text = "台词"
+autowrap_mode = 3
+
+[node name="ContinueMark" type="Label" parent="Root/Window"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -58.0
+offset_top = -48.0
+offset_right = -22.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+text = "▼"
+horizontal_alignment = 2
+vertical_alignment = 2

@@ -9,6 +9,12 @@ extends Node
 ## 游戏启动器 — 场景加载时初始化玩家数据 + 创建 CharacterSwitchManager
 
 func _ready() -> void:
+	## 触摸操作层（2026-09-28）：**仅移动平台**创建；放在最前面，单机与联机分支都能覆盖到
+	## （联机分支会在下方 return，放末尾就漏了）。
+	_spawn_touch_controls()
+	## 安全屋台词（2026-09-28）：进入安全屋 / 章节总结结束后随机说 1~2 句。
+	## 纯本地表现（各端显示自己角色的台词），不暂停游戏；延后一帧等场景节点就绪。
+	call_deferred("_spawn_safehouse_dialogue")
 	var net: Node = get_node_or_null("/root/Net")
 	if net and net.has_method("is_online_session") and net.is_online_session():
 		# D2 实测修复：联机此前直接 return，跳过 _align_actor_layers —— 预置玩家留在
@@ -118,6 +124,77 @@ func _create_network_world() -> void:
 	world.name = "NetworkWorld"
 	tree.current_scene.add_child(world)
 	print("[GameInit] 已进入 Phase 1 Host 权威联机世界")
+
+## ── 安全屋台词（2026-09-28 用户需求）──
+## 台词数据来自原作事件数据（见 `原作安全屋台词数据.md`），每张安全屋一张台词池。
+## 触发：初始安全屋进图即说；**有章节总结的安全屋在总结关闭后**说（与到达音乐同一时机）。
+## 联机：各端本地执行、显示**自己角色**的台词（中文名 + `CharacterData.portrait`），零 RPC。
+const SAFEHOUSE_DIALOGUE_SCENE := preload("res://scene/ui/safehouse_dialogue.tscn")
+const SAFEHOUSE_DIALOGUE_DATA := preload("res://script/safehouse_dialogue_data.gd")
+
+
+func _spawn_safehouse_dialogue() -> void:
+	## ★无头（headless）回归下**不创建**台词窗口：它靠「确定键」翻页并
+	## `set_input_as_handled()`，会抢走自动化用例推进流程用的按键（安全门 / 结算页 
+	## 都在等同一个键）→ 用例一直收不到确认而超时。真实游戏里按键属于玩家，照常显示。
+	if DisplayServer.get_name() == "headless":
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	var key: String = SAFEHOUSE_DIALOGUE_DATA.key_for_scene(tree.current_scene.scene_file_path)
+	if key.is_empty():
+		return
+	## 总结页还开着就先等它关闭再说话（否则台词会被总结页盖住）。
+	var summary: Node = tree.current_scene.find_child("ChapterSummary", true, false)
+	if summary != null and summary.visible and summary.has_signal("summary_finished"):
+		summary.summary_finished.connect(
+			func() -> void: _open_safehouse_dialogue(key), CONNECT_ONE_SHOT)
+		return
+	_open_safehouse_dialogue(key)
+
+
+func _open_safehouse_dialogue(key: String) -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key)
+	if lines.is_empty():
+		return
+	var speaker: String = ""
+	var portrait: Texture2D = null
+	var state: PlayerState = Players.get_active_state()
+	if state != null and state.character != null:
+		var jp: String = state.character.character_name
+		speaker = str(Global.CHARACTER_NAME_ZH.get(jp, jp))
+		portrait = state.character.portrait
+	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
+	tree.current_scene.add_child(dlg)
+	dlg.call("open_random", lines, speaker, portrait)
+	print("[GameInit] 安全屋台词：%s（台词池 %d 条，说话人=%s，头像=%s）" % [
+		key, lines.size(), speaker, "有" if portrait != null else "无"])
+
+
+## ── 触摸操作层（2026-09-28 用户需求）──
+## 只在移动平台挂载 `scene/ui/touch_controls.tscn`；桌面端连节点都不加，零开销。
+## 场景内每个按钮是独立节点（映射到既有 InputMap 动作），位置/尺寸在编辑器里直接调。
+const TOUCH_CONTROLS_SCENE := preload("res://scene/ui/touch_controls.tscn")
+
+
+func _spawn_touch_controls() -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("is_mobile_platform"):
+		return
+	if not bool(g.call("is_mobile_platform")):
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	if tree.current_scene.get_node_or_null("TouchControls") != null:
+		return
+	## 本帧场景仍在 _ready 中，直接 add_child 会被拒绝 → 延后一帧（与 NetworkWorld 同一做法）。
+	tree.current_scene.call_deferred("add_child", TOUCH_CONTROLS_SCENE.instantiate())
+
 
 func _spawn_switch_manager() -> void:
 	## 如果队伍 > 1人且场景中不存在，自动创建 CharacterSwitchManager
