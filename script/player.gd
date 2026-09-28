@@ -149,6 +149,9 @@ var network_controlled: bool = false
 ## 联机倒地：HP=0 但仍可被队友救援（由 NetworkWorld 权威写入）。
 ## 表现与死亡同为躺地精灵，区别是保留移动碰撞（缓慢爬行）与红色染色。
 var network_downed: bool = false
+## 玩家本体的**原始碰撞层**。倒地时临时归零、复活时还原 ——
+## 用 @onready 取，才能在场景/预制体改了 layer 之后依然正确。
+@onready var _base_collision_layer: int = collision_layer
 ## true 表示本实体由 NetworkWorld 管理；单机实体才允许走 Players 注册和本地状态机。
 ## true 表示本实体由 NetworkWorld 管理；单机实体才允许走 Players 注册和本地状态机。
 ## 本地客户端实体开启预测；Host 仍是最终权威，快照只用于纠偏。
@@ -538,10 +541,23 @@ func set_network_downed(enabled: bool) -> void:
 		sprite.modulate = Color(1.0, 0.55, 0.55) if enabled else Color.WHITE
 	if $CollisionShape2D:
 		$CollisionShape2D.set_deferred("disabled", enabled == false)
+	## ★倒地时**别人应该能穿过我**（队友走位、敌人不被躺地的玩家卡住），
+	##   但**我自己仍要与地形碰撞**（倒地爬行不能穿墙）。
+	##   做法 = 只把 `collision_layer` 归零（"我不再被别人检测到"），
+	##   `collision_mask` 保持不动（"我照样撞墙"）。
+	##   2026-09-28 实测反馈：此前倒地保留完整碰撞 → 敌人被倒地的玩家卡住。
+	_set_body_collision_layer(0 if enabled else _base_collision_layer)
 	if enabled and hurt_area:
 		hurt_area.set_deferred("monitoring", false)
 		hurt_area.set_deferred("monitorable", false)
 	print("[玩家] 联机倒地状态: %s" % str(enabled))
+
+
+## 改本体碰撞层（延迟写，避免在物理回调里直接改）。
+func _set_body_collision_layer(layer_value: int) -> void:
+	if collision_layer == layer_value:
+		return
+	set_deferred("collision_layer", layer_value)
 
 
 func apply_network_health_state(new_hp: float, is_dead: bool, play_feedback: bool = true) -> void:
@@ -2145,6 +2161,9 @@ func _apply_network_death_state() -> void:
 		sprite.region_rect = Rect2(char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W, char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H, FRAME_W, FRAME_H)
 	if $CollisionShape2D:
 		$CollisionShape2D.set_deferred("disabled", true)
+	## 真死亡的尸体同样不该阻挡别人：上面虽已整体禁用碰撞体，这里再加一道保险 ——
+	## 即使某条路径把 shape 又打开，敌人/队友也检测不到尸体（layer 归零）。
+	_set_body_collision_layer(0)
 	if hurt_area:
 		hurt_area.set_deferred("monitoring", false)
 		hurt_area.set_deferred("monitorable", false)

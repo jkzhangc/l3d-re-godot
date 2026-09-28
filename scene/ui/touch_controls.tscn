@@ -271,6 +271,23 @@ text = "投掷"
 script = ExtResource("3_btn")
 action = &"投掷物键"
 
+[node name="BtnSubWeapon" type="Button" parent="ItemPad"]
+layout_mode = 0
+offset_left = 720.0
+offset_top = 180.0
+offset_right = 850.0
+offset_bottom = 310.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.88, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_blue")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "副武器"
+script = ExtResource("3_btn")
+action = &"副武器键"
+
 [node name="SystemPad" type="Control" parent="."]
 layout_mode = 1
 offset_left = 0.0
