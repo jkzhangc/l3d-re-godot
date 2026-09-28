@@ -58,3 +58,5 @@ tools/**/*.exe
 /rpg2003.chm
 .workbuddy/
 release/*.exe
+release/*.apk
+release/*.pck
