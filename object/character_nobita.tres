@@ -5,6 +5,7 @@
 [ext_resource type="AudioStream" uid="uid://gjqqcva5ucwt" path="res://sound/死んだ.ogg" id="1_dgx65"]
 [ext_resource type="Texture2D" uid="uid://j0u8qai8kpvk" path="res://art/Characters/のび太歩行セット.png" id="2_dd21q"]
 [ext_resource type="AudioStream" uid="uid://bol0wtfln05v2" path="res://sound/のび太[6].ogg" id="3_o5s41"]
+[ext_resource type="Texture2D" uid="uid://dfg4otovkga7k" path="res://art/Face/主人公顔.png" id="5_egp5s"]
 [ext_resource type="Texture2D" uid="uid://b8xq3152r8cpm" path="res://art/Characters/のび太反撃セット.png" id="6_o5s41"]
 [ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="7_iwmu5"]
 [ext_resource type="Resource" path="res://object/skill_test.tres" id="7_skill"]
@@ -29,6 +30,7 @@ max_mp = 30
 base_attack = 12
 base_defense = 4
 mp_growth = 3
+portrait = ExtResource("5_egp5s")
 walk_texture = ExtResource("1_8a3k1")
 run_texture = ExtResource("2_dd21q")
 death_texture = ExtResource("1_8a3k1")

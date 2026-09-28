@@ -41,7 +41,7 @@ func process_update(_delta: float) -> void:
 		_try_weapon_state()
 		return
 
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = Global.move_input()
 	if move_dir == Vector2.ZERO:
 		return
 

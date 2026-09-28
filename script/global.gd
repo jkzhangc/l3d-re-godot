@@ -45,6 +45,35 @@ var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置�
 func item_key_just_pressed(action: StringName) -> bool:
 	return Input.is_action_just_pressed(action) and not Input.is_physical_key_pressed(KEY_CTRL)
 
+
+# ═══════════════════════════════════════
+# 移动输入闸门（安全屋台词等「临时不让玩家走动」的场合）
+# ═══════════════════════════════════════
+## 是否临时封锁移动轴。为 true 时 move_input() 恒返回零向量。
+## ★只锁**移动**（左/右/上/下），不锁攻击/开火/使用物品 —— 台词期间玩家站着看完即可。
+var movement_locked: bool = false
+## 锁计数：多个来源同时锁时，最后一个解锁前一直保持锁定（防互相覆盖）。
+var _movement_lock_count: int = 0
+
+
+## 玩家移动输入的**唯一入口**。单机（各 Player*State）与联机（NetworkWorld._read_local_direction）
+## 都必须走这里，否则闸门会漏掉其中一条路径。
+func move_input() -> Vector2:
+	if movement_locked:
+		return Vector2.ZERO
+	return Input.get_vector("左", "右", "上", "下")
+
+
+func lock_movement() -> void:
+	_movement_lock_count += 1
+	movement_locked = true
+
+
+func unlock_movement() -> void:
+	_movement_lock_count = maxi(0, _movement_lock_count - 1)
+	movement_locked = _movement_lock_count > 0
+
+
 ## 角色显示名映射（CharacterData.character_name 日文键 → 中文显示）。
 ## 终章 ED 对话与 credits 战报共用（2026-09-14）。查不到的键原样返回。
 const CHARACTER_NAME_ZH: Dictionary = {
@@ -61,6 +90,23 @@ const CHARACTER_NAME_ZH: Dictionary = {
 	"安雄": "手雷安雄",
 	"サーシャ": "莎莎",
 	"咲夜": "樱井咲夜",
+}
+
+## 角色**短名**映射（同上表的日文键 → 短名）。
+## ★只给「安全屋台词框」用 —— 原作台词框显示的就是短名（大雄/静香/小夫/胖虎）；
+## 全名版（CHARACTER_NAME_ZH）继续给 ED 对话与战报用。
+const CHARACTER_NAME_SHORT: Dictionary = {
+	"のび太": "大雄",
+	"ジャイアン": "胖虎",
+	"ジャイ": "胖虎",
+	"静香": "静香",
+	"スネ夫": "小夫",
+	"聖奈": "圣奈",
+	"健治": "健治",
+	"出木杉": "出木杉",
+	"安雄": "安雄",
+	"サーシャ": "萨夏",
+	"咲夜": "咲夜",
 }
 
 # ═══════════════════════════════════════

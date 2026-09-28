@@ -1243,7 +1243,7 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 
 
 func _read_local_direction() -> Vector2:
-	return Input.get_vector("左", "右", "上", "下")
+	return Global.move_input()
 
 
 func _set_input(peer_id: int, direction: Vector2, walking: bool) -> void:

@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://c3d7f5o21iu65" path="res://art/Characters/スネ夫歩行セット.png" id="3"]
 [ext_resource type="Texture2D" uid="uid://bwev3yun5ys1c" path="res://art/Characters/スネ夫反撃セット.png" id="4"]
 [ext_resource type="Texture2D" uid="uid://cjcmcsqg1ngct" path="res://art/Characters/スネ夫マグナムセット.png" id="5"]
+[ext_resource type="Texture2D" uid="uid://dfg4otovkga7k" path="res://art/Face/主人公顔.png" id="5_u5evs"]
 [ext_resource type="Texture2D" uid="uid://cfqqfq0a03ov7" path="res://art/Characters/スネ夫セットアサルトライフル.png" id="6"]
 [ext_resource type="Texture2D" uid="uid://hdcuwj8s3s86" path="res://art/Characters/スネ夫セットショットガン.png" id="7"]
 [ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="7_1imh2"]
@@ -28,6 +29,8 @@ max_mp = 40
 base_attack = 13
 base_defense = 3
 mp_growth = 4
+portrait = ExtResource("5_u5evs")
+portrait_index = 4
 walk_texture = ExtResource("2")
 run_texture = ExtResource("3")
 death_texture = ExtResource("2")

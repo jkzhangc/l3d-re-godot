@@ -170,7 +170,10 @@ func _open_safehouse_dialogue(key: String, stage: String) -> void:
 	var state: PlayerState = Players.get_active_state()
 	if state != null and state.character != null:
 		var jp: String = state.character.character_name
-		speaker = str(Global.CHARACTER_NAME_ZH.get(jp, jp))
+		## ★台词框用**短名**（原作口径：大雄 / 静香 / 小夫 / 胖虎）；
+		## 全名版 CHARACTER_NAME_ZH 继续留给 ED 对话与 credits 战报。
+		speaker = str(Global.CHARACTER_NAME_SHORT.get(
+			jp, Global.CHARACTER_NAME_ZH.get(jp, jp)))
 		char_id = state.character.get_character_key()
 		portrait = state.character.portrait_texture()
 	var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key, char_id, stage)

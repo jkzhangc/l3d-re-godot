@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://d1idwrngv2tqq"]
 
 [ext_resource type="AudioStream" uid="uid://c14qvbstir5iw" path="res://sound/(ジャイアン)かーちゃん.ogg" id="3_xbmbw"]
+[ext_resource type="Texture2D" uid="uid://dfg4otovkga7k" path="res://art/Face/主人公顔.png" id="4_0uj3i"]
 [ext_resource type="AudioStream" uid="uid://b0mpgi1y87oa4" path="res://sound/(ジャイアン)オッ.ogg" id="4_ckl1d"]
 [ext_resource type="Texture2D" uid="uid://b8bejwcsh2fga" path="res://art/Characters/ジャイアン歩行セット.png" id="4_lxnma"]
 [ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="5_lxnma"]
@@ -29,6 +30,8 @@ max_mp = 30
 base_attack = 12
 base_defense = 4
 mp_growth = 3
+portrait = ExtResource("4_0uj3i")
+portrait_index = 8
 walk_texture = ExtResource("7_yottv")
 run_texture = ExtResource("4_lxnma")
 death_char_index = 6

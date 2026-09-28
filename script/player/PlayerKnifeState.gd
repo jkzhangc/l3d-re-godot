@@ -81,7 +81,7 @@ func process_update(delta: float) -> void:
 				elif character.is_facing_locked():
 					character.unlock_facing()
 
-			var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+			var move_dir: Vector2 = Global.move_input()
 			character.update_appearance(move_dir != Vector2.ZERO, false)
 			if move_dir != Vector2.ZERO:
 				character.update_facing(move_dir)
@@ -134,7 +134,7 @@ func process_update(delta: float) -> void:
 
 func physics_update(delta: float) -> void:
 	if _phase == Phase.READY:
-		character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+		character.velocity = Global.move_input() * character.run_speed
 	else:
 		character.velocity = Vector2.ZERO
 	character.move_with_corner_assist()

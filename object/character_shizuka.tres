@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://bs4dx4jjr4f8m" path="res://art/Characters/静香セット.png" id="2"]
 [ext_resource type="Texture2D" uid="uid://dcyvvvxaojww7" path="res://art/Characters/静香歩行セット.png" id="3"]
 [ext_resource type="Texture2D" uid="uid://t83wv5svjh3w" path="res://art/Characters/静香セットナイフ.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://dfg4otovkga7k" path="res://art/Face/主人公顔.png" id="4_fonk6"]
 [ext_resource type="Texture2D" uid="uid://c83wsv1mmjgoj" path="res://art/Characters/静香反撃セット.png" id="5"]
 [ext_resource type="AudioStream" uid="uid://mqx3gck4bgu" path="res://sound/静香_被弾１.ogg" id="6"]
 [ext_resource type="Resource" path="res://object/skill_sa_crouch.tres" id="7"]
@@ -26,6 +27,8 @@ max_mp = 30
 tp_regen_interval = 4.0
 base_attack = 11
 base_defense = 4
+portrait = ExtResource("4_fonk6")
+portrait_index = 14
 walk_texture = ExtResource("2")
 run_texture = ExtResource("3")
 death_texture = ExtResource("2")

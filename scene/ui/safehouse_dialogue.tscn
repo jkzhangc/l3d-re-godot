@@ -43,7 +43,6 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 texture = ExtResource("2_bg")
-stretch_mode = 1
 
 [node name="WindowFrame" type="NinePatchRect" parent="Root/Window"]
 anchors_preset = 15

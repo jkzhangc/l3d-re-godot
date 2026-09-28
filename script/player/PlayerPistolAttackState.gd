@@ -113,7 +113,7 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = Global.move_input()
 	character.velocity = move_dir * character.run_speed
 	character.move_with_corner_assist()
 	# 攻击中允许转向

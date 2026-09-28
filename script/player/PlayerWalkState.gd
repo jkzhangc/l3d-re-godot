@@ -40,7 +40,7 @@ func process_update(_delta: float) -> void:
 		_try_weapon_state()
 		return
 
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = Global.move_input()
 	if move_dir == Vector2.ZERO:
 		transition_requested.emit("Idle")
 		return
@@ -72,5 +72,5 @@ func _try_throwable() -> void:
 
 
 func physics_update(delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.walk_speed
+	character.velocity = Global.move_input() * character.walk_speed
 	character.move_with_corner_assist()

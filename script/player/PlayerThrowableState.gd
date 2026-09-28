@@ -73,7 +73,7 @@ func _process_ready() -> void:
 	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
 		transition_requested.emit("Idle")
 		return
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = Global.move_input()
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)
 	character.update_appearance(move_dir != Vector2.ZERO, false)
@@ -110,7 +110,7 @@ func _process_aim() -> void:
 	if Input.is_action_just_released("确定键"):
 		_throw()
 		return
-	var move_dir: Vector2 = Input.get_vector("左", "右", "上", "下")
+	var move_dir: Vector2 = Global.move_input()
 	character.update_appearance(move_dir != Vector2.ZERO, false)
 	if _aim_indicator:
 		_aim_indicator.direction = character.get_facing_vector()
@@ -118,7 +118,7 @@ func _process_aim() -> void:
 
 
 func physics_update(_delta: float) -> void:
-	character.velocity = Input.get_vector("左", "右", "上", "下") * character.run_speed
+	character.velocity = Global.move_input() * character.run_speed
 	character.move_with_corner_assist()
 
 

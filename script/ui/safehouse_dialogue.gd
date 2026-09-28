@@ -6,10 +6,13 @@ extends CanvasLayer
 ##       原作的口径就是这样"各说各的"；同步反而会让四个人的台词互相覆盖。
 ## 职责：RM2K3 风格的台词窗口（窗口皮 + 头像 + 名字 + 台词 + ▼ 继续标记）。
 ##       按「确定键」翻到下一段；最后一段再按即关闭。
-## 依赖：Global.apply_ui_font（字体唯一入口）、CharacterData.portrait_texture()（按索引裁好的头像）
+## 依赖：Global.apply_ui_font（字体唯一入口）、CharacterData.portrait_texture()（按索引裁好的头像）、
+##       Global.lock_movement/unlock_movement（台词期间锁本地移动）
 ##
-## 【不暂停】用户定稿：台词**不暂停游戏**，玩家可以无视它继续打（联机时也不会阻塞别人）。
-## 因此本层所有节点 mouse_filter = IGNORE，绝不拦截游戏输入。
+## 【不暂停游戏，但锁本地移动】（用户定稿）：
+##   - 不暂停 SceneTree → 联机时**不会阻塞别人**，敌人与队友照常跑；
+##   - 但**本地玩家自己不能走动**（`Global.movement_locked`，只锁移动轴，攻击/开火仍可用）。
+## 本层所有节点 mouse_filter = IGNORE，绝不拦截鼠标。
 
 signal dialogue_closed
 
@@ -69,6 +72,7 @@ func open(pages: Array, speaker_name: String, portrait: Texture2D = null) -> voi
 	_portrait_box.visible = portrait != null
 	_opened = true
 	_window.visible = true
+	_lock_movement()
 	_render_page()
 
 
@@ -77,8 +81,28 @@ func close() -> void:
 		return
 	_opened = false
 	_window.visible = false
+	_unlock_movement()
 	_last_closed_msec = Time.get_ticks_msec()
 	dialogue_closed.emit()
+
+
+## ★保险：窗口被直接释放（换场景 / 父节点销毁）时也要解锁，
+## 否则 movement_locked 一直为 true → 玩家再也走不动。
+func _exit_tree() -> void:
+	if _opened:
+		_unlock_movement()
+
+
+func _lock_movement() -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("lock_movement"):
+		g.call("lock_movement")
+
+
+func _unlock_movement() -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("unlock_movement"):
+		g.call("unlock_movement")
 
 
 func is_open() -> bool:
@@ -96,8 +120,9 @@ func _render_page() -> void:
 	if _page_index < 0 or _page_index >= _pages.size():
 		return
 	_line.text = _pages[_page_index]
-	## 还有下一段才显示 ▼（最后一段不显示，提示"按下去就关掉了"）。
-	_mark.visible = _page_index < _pages.size() - 1
+	## ★每段都显示 ▼（用户 09-28：翻到第二句箭头就没了 —— 原著窗口里 ▼ 一直都在，
+	## 它表示"按确定键继续"，而不是"后面还有一句"）。
+	_mark.visible = true
 
 
 func _advance() -> void:
