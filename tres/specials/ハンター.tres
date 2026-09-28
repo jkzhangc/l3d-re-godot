@@ -28,5 +28,6 @@ attack_sound = ExtResource("1_75b4g")
 attack_sound_pitch = 1.2
 death_sound = ExtResource("3")
 pounce_enabled = true
-pounce_dash_speed = 400.0
+pounce_dash_seconds = 1.0
+pounce_speed_mult = 2.0
 pounce_sound = ExtResource("5_cdtb0")
