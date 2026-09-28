@@ -33,7 +33,19 @@ func _ready() -> void:
 
 
 ## 每帧只做两件廉价的事：判断该不该显示按钮、同步按钮可见性（UI 懒创建）。
+## ★2026-09-28：本节点整体受调试总开关 `Global.debug_enabled` 约束 —— 导出包（release）
+## 里该值为 false（见 global.gd 的 `_refresh_debug_enabled`），于是 Ctrl+R/Ctrl+H 的输入回调
+## 与「跳转章节」按钮一起失效，打包即自动关闭，不需要在导出前手动改任何设置。
 func _process(_delta: float) -> void:
+	var debug_on: bool = bool(Global.get("debug_enabled"))
+	if is_processing_input() != debug_on:
+		set_process_input(debug_on)
+	if not debug_on:
+		if _jump_btn != null and is_instance_valid(_jump_btn):
+			_jump_btn.visible = false
+		if _jump_panel != null and is_instance_valid(_jump_panel):
+			_jump_panel.visible = false
+		return
 	var show_jump: bool = _can_jump()
 	if show_jump:
 		_ensure_jump_ui()

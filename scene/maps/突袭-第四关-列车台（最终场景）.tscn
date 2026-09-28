@@ -123,6 +123,7 @@ prepare_sound = ExtResource("6_oj32u")
 alert_sound = ExtResource("6_5fbns")
 ending_enabled = true
 finished_interact_label = "进入列车"
+shutdown_director_on_finish = true
 
 [node name="GameInit" type="Node" parent="." unique_id=956443968]
 script = ExtResource("4_hf72w")

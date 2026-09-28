@@ -92,10 +92,11 @@ class_name DirectorConfig extends Node
 @export var front_interval_min: float = 2.5
 ## 原地不动时是否也补怪。false（默认）= 站着不动不会刷怪，避免"脸上刷怪"。
 @export var front_spawn_when_idle: bool = true
-## ★开场立即刷怪（2026-09-27 用户需求）：进入本图时**不停在喘息（cooldown）阶段** ——
-## 直接切到 build 并放开前方补位的时间闸门，进图就有敌人；之后回到正常节奏
-##（间隔 / 前进距离 / 尸潮照旧生效）。想让"一进图就开打"的图勾上；安全屋/空图保持 false。
-@export var spawn_immediate_on_start: bool = false
+## ★开场立即刷怪（2026-09-27 用户需求；**2026-09-28 起默认开启**）：进入本图时**不停在
+## 喘息（cooldown）阶段** —— 直接切到 build 并放开前方补位的时间闸门，进图就有敌人；
+## 之后回到正常节奏（间隔 / 前进距离 / 尸潮照旧生效）。
+## 默认 true；安全屋 / 不想开局就开打的图，在该图 DirectorConfig 上单独取消勾选即可。
+@export var spawn_immediate_on_start: bool = true
 
 @export_group("生成 — 僵尸变体池（ZombieVariant）")
 ## 本关可刷的僵尸池：刷出时按 weight 随机选一种。**留空 = 用内置默认池**（男性/女性/学生）。

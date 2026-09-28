@@ -559,8 +559,21 @@ func _finish_summary() -> void:
 		return
 	_finishing = true
 	## 过场模式：Host 关闭时通知其余端一起关闭（没按键的客户端不该卡在这一页）。
+	## ★2026-09-28 修复（用户实测：客户端控制台刷 `Node not found: "@CanvasLayer@6334/ChapterSummary"`
+	##   与 `Failed to get path from RPC` / `Requested node was not found`）：
+	## ED 结算页是**运行时创建**的场景实例，节点路径两端不保证一致，而 RPC 按**节点路径**寻址
+	## → 从本节点 `.rpc()` 广播必然在客户端寻址失败。这与 09-27 二审「客户端点不了准备」同一根因，
+	## 那一次只改了确认通道，漏掉了这里的收口广播。
+	## 改走 NetworkWorld 的稳定通道（与 `_ending_confirm_echo` 同节点、同寻址方式）；
+	## `_refresh_cutscene_completion` 已经广播过一次，这里是幂等补发
+	##（覆盖 Host 从 watchdog 超时或其它路径关闭的情形）。全部路径都在同一场景内触发，
+	## 所以 `_find_network_world()` 此时一定可用。
 	if cutscene_mode and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		_network_summary_complete.rpc()
+		var world: Node = _find_network_world()
+		if world != null and world.has_method("announce_ending_summary_all_confirmed"):
+			world.call("announce_ending_summary_all_confirmed")
+		else:
+			push_warning("[ChapterSummary] ED 收口找不到 NetworkWorld，跳过补广播")
 	visible = false
 	if _music_player:
 		_music_player.stop()

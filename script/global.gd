@@ -13,6 +13,14 @@ extends Node
 # ═══════════════════════════════════════
 # Debug 开关
 # ═══════════════════════════════════════
+## config.json 里的**用户意图**（编辑器里可开，会持久化到磁盘）。
+var debug_requested: bool = true
+## **有效值** = `debug_requested and OS.is_debug_build()`。
+## ★2026-09-28 用户需求「打包时自动把 debug 功能关掉」：导出包（release）里恒为 false ——
+## 抓图器 / 主机调试热键 / 跳转章节按钮 / TAB 可视化全部不生效，**无需手动改配置**。
+## 编辑器与调试模板（headless 回归同理）仍尊重 config.json 的 `debug` 字段。
+## 接线点：`_ready`（是否创建 DebugCapture/DebugHotkeys）、`_input`（TAB 可视化闸门）、
+## `debug_host_hotkeys._can_jump()`（跳转章节按钮）。
 var debug_enabled: bool = true:
 	set(v):
 		debug_enabled = v
@@ -131,10 +139,11 @@ func apply_text_shadow(lbl: Label) -> void:
 ## 【为什么需要这个开关】2026-09 用户反馈「玩家下载的版本没问题，但电脑上字体缺字」。
 ## 像素字体的字形覆盖差异极大，缺字时 Godot 会走 FontFile.allow_system_fallback →
 ## 拿**玩家机器上的系统字体**顶上：同一份游戏在不同电脑上字形不同，系统里没有合适
-## CJK 字体时直接显示豆腐块。实测覆盖（对全项目 1733 个中日文字符取样，
-## 探针脚本 .workbuddy/tmp/probe_font.gd）：
+## CJK 字体时直接显示豆腐块。实测覆盖（对全项目文本取样 1769 个中日文字符，
+## 探针 `.workbuddy/tmp/probe_font_zpix.gd`）：
 ##   fusion-pixel-12px-monospaced-zh_hans   缺 0      ← 界面定稿（默认）
-##   ark-pixel-12px-monospaced-zh_cn        缺 56
+##   zpix_12px                              缺 0      ← 2026-09-28 起替代方舟（用户自备）
+##   ark-pixel-12px-monospaced-zh_cn        缺 56     ⚠ 2026-09-28 已移出选项（缺"旋/窗/然/热/警/避/酸/雾/骤"等常用字）
 ##   ark-pixel-16px-monospaced-zh_cn        缺 1513   ⚠ 纯日文覆盖，不可作界面字体
 ##   DotGothic16-Regular（日文字体）         缺 506    ⚠ 不可作界面字体
 ##
@@ -142,11 +151,11 @@ func apply_text_shadow(lbl: Label) -> void:
 ## get_ui_font() / apply_ui_font() 取值。否则「切换字体」覆盖不到那个窗口。
 const FONT_OPTION_PATHS: Array[String] = [
 	"res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf",
-	"res://art/System/ark-pixel-12px-monospaced-zh_cn.ttf",
+	"res://art/System/zpix_12px.ttf",
 ]
-const FONT_OPTION_LABELS: Array[String] = ["缝合像素 12px", "方舟像素 12px"]
-## 各选项对上述 1733 字样本的实测缺字数（仅用于日志提示，不参与取字体逻辑）。
-const FONT_OPTION_MISSING_HINT: Array[int] = [0, 56]
+const FONT_OPTION_LABELS: Array[String] = ["缝合像素 12px", "zpix 像素 12px"]
+## 各选项对上述 1769 字样本的实测缺字数（仅用于日志提示，不参与取字体逻辑）。
+const FONT_OPTION_MISSING_HINT: Array[int] = [0, 0]
 ## 界面字号基底（铁律：界面字号必须是它的整数倍，否则像素字体缩放会糊）
 const UI_FONT_BASE_SIZE: int = 12
 ## 自检样本（缺任何一个都会在启动日志里点名，用来直接回答「为什么缺字」）
@@ -435,8 +444,13 @@ const CONFIG_FILE: String = "res://config.json"
 func _ready() -> void:
 	_load_config()
 	_ensure_audio_buses()
-	_setup_debug_capture()
-	_setup_debug_hotkeys()
+	## ★2026-09-28：调试工具只在 debug_enabled 时创建 —— 导出包（release）里该值恒 false
+	##（见 _refresh_debug_enabled），所以打包即自动关闭调试功能，无需手动改配置。
+	if debug_enabled:
+		_setup_debug_capture()
+		_setup_debug_hotkeys()
+	else:
+		print("[Global] 调试功能未启用（导出包 / config.debug=false）")
 	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
 	ensure_root_ui_theme()
 	_log_font_self_check()
@@ -619,6 +633,8 @@ func get_team_size() -> int:
 
 
 func _input(event: InputEvent) -> void:
+	if not debug_enabled:
+		return  ## 打包后 TAB 调试可视化一并关闭（见 debug_enabled 的说明）
 	if event.is_action_pressed("调试可视化键"):
 		debug_visuals = not debug_visuals
 		print("[Global] 调试可视化: %s" % ("开启" if debug_visuals else "关闭"))
@@ -647,16 +663,25 @@ func _load_config() -> void:
 			f.close()
 			var cfg: Dictionary = JSON.parse_string(text) if text else {}
 			if cfg:
-				debug_enabled = cfg.get("debug", false)
+				debug_requested = bool(cfg.get("debug", false))
 				music_volume = cfg.get("music_volume", 80)
 				sfx_volume = cfg.get("sfx_volume", 80)
 				facing_lock_mode = cfg.get("facing_lock_mode", 0)
 				font_option = clampi(int(cfg.get("font_option", 0)), 0, FONT_OPTION_PATHS.size() - 1)
+	_refresh_debug_enabled()
+
+
+## 收敛 debug 的**有效值**（2026-09-28）：导出包（release）一律关闭；
+## 编辑器 / 调试模板（headless 回归同理）尊重 config.json 的 `debug` 字段。
+func _refresh_debug_enabled() -> void:
+	debug_enabled = debug_requested and OS.is_debug_build()
 
 
 func save_config() -> void:
 	var cfg: Dictionary = {
-		"debug": debug_enabled,
+		## 写**用户意图**而不是有效值：导出包跑过之后 `debug_enabled` 已被压成 false，
+		## 若直接写回，会连编辑器里的调试开关一起永久关掉（配置被运行环境污染）。
+		"debug": debug_requested,
 		"music_volume": music_volume,
 		"sfx_volume": sfx_volume,
 		"facing_lock_mode": facing_lock_mode,

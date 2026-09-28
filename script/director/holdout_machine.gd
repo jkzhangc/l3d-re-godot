@@ -157,6 +157,14 @@ enum KillFilter { ALL = 0, TANK = 1 }
 ## 确认进入列车时播放的音效（与黑屏淡出同时；留空=不播）
 @export var ending_sound: AudioStream
 @export_range(0.5, 6.0, 0.1) var ending_fade_seconds: float = 1.5   ## 黑屏淡出时长（秒）
+## 防守战**正常打完**后是否保持"导演挂起"，不再恢复常规编排（2026-09-28 用户需求）。
+## 默认 false = 老行为（打完 → `set_director_suspended(false)`，节奏/常规刷怪从喘息重新开始）。
+## 开启后：打完不再恢复 → PacingController / SpawnManager / FrontSpawner / AmbientZone 全部保持冻结，
+## 不会出现"防守战都结束了还在往场上刷敌人"（最终章专用：这一段之后直接走终章演出，不需要再刷怪）。
+## ⚠ 只作用于 `_finish_holdout()`（正常完成）；`abort()`（提前中止，如全灭冻结）照常恢复。
+## ⚠ 挂起计数由 Director 在**换图**时自动复位（Director 是 autoload，见 `_check_scene_change`），
+##    所以这里"保持挂起"不会污染下一张图 / 下一局。
+@export var shutdown_director_on_finish: bool = false
 @export_file("*.tscn") var credits_scene_path: String = "res://scene/ui/credits.tscn"  ## 名单场景（流程终点）
 
 # ═══════════════════════════════════════
@@ -797,7 +805,13 @@ func _finish_holdout() -> void:
 	if not _is_network_client():
 		var director: Node = get_node_or_null("/root/Director")
 		if director and director.has_method("set_director_suspended"):
-			director.set_director_suspended(false)
+			if shutdown_director_on_finish:
+				## ★2026-09-28 用户需求（最终章）：打完**不恢复**常规编排 —— 保持挂起，
+				## 导演不再往场上刷敌人（消除"防守战都结束了还在刷"）。挂起计数会在换图时由
+				## Director._check_scene_change 自动复位，不会污染下一张图。
+				print("[HoldoutMachine] 防守战结束：保持导演挂起，不再恢复常规刷怪")
+			else:
+				director.set_director_suspended(false)
 		if director and director.has_method("set_holdout_rage"):
 			director.set_holdout_rage(false)  ## 防守战丧尸恢复普通形态
 		if director and director.has_method("notify_holdout_finished"):

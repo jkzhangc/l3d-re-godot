@@ -98,6 +98,9 @@ func _ready() -> void:
 
 	_setup_room_panel()
 	_sync_panels()
+	## 两界面正文字号统一放大（2026-09-28 用户反馈"文字太小"）：正文 24 / 窗内标题 36。
+	## 放在最后调用，连 `_add_wip_notice()` / `_add_back_button()` 新建的控件一起覆盖。
+	_apply_panel_font_sizes()
 
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
@@ -107,6 +110,30 @@ func _ready() -> void:
 
 
 # ---------------------------------------------------------------- 两界面结构（2026-09-27）
+
+## 大厅 / 房间两界面的正文字号统一（2026-09-28 用户反馈「文字太小」）。
+## 档位：正文 24、窗内标题 36（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
+## 刻意用代码统一覆盖而不写进 .tscn：既避免「编辑器重存丢属性」，也让之后新增的控件自动跟随。
+func _apply_panel_font_sizes() -> void:
+	const BODY: int = 24
+	const PANEL_TITLE: int = 36
+	for panel: Control in [connect_panel, room_panel]:
+		if panel == null:
+			continue
+		for node: Node in panel.find_children("*", "Control", true, false):
+			if node is Label:
+				Global.apply_ui_font(node as Label, BODY)
+			elif node is BaseButton:
+				## Button / OptionButton / CheckBox 都走这里（OptionButton 继承 Button）。
+				(node as BaseButton).add_theme_font_size_override("font_size", BODY)
+			elif node is LineEdit:
+				(node as LineEdit).add_theme_font_size_override("font_size", BODY)
+	## 窗内标题比正文大一档，保住层级。
+	for title_path: String in ["ConnectPanel/VBox/Title", "RoomPanel/Margin/Column/Title"]:
+		var title: Label = get_node_or_null(title_path) as Label
+		if title != null:
+			Global.apply_ui_font(title, PANEL_TITLE)
+
 
 ## 房间界面的一次性初始化：难度选项 + 只读信息栏。
 ## 难度是本局属性（Global.selected_difficulty：0 简单 / 1 中等 / 2 困难 / 3 专家），
