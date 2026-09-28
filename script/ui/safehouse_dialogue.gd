@@ -6,7 +6,7 @@ extends CanvasLayer
 ##       原作的口径就是这样"各说各的"；同步反而会让四个人的台词互相覆盖。
 ## 职责：RM2K3 风格的台词窗口（窗口皮 + 头像 + 名字 + 台词 + ▼ 继续标记）。
 ##       按「确定键」翻到下一段；最后一段再按即关闭。
-## 依赖：Global.apply_ui_font（字体唯一入口）、CharacterData.portrait（头像）
+## 依赖：Global.apply_ui_font（字体唯一入口）、CharacterData.portrait_texture()（按索引裁好的头像）
 ##
 ## 【不暂停】用户定稿：台词**不暂停游戏**，玩家可以无视它继续打（联机时也不会阻塞别人）。
 ## 因此本层所有节点 mouse_filter = IGNORE，绝不拦截游戏输入。
@@ -14,8 +14,8 @@ extends CanvasLayer
 signal dialogue_closed
 
 @export_group("行为")
-## 台词窗口出现时最多显示几段（原作"有时候会有两段"）。
-@export var max_pages: int = 2
+## 台词最多显示几段（原作每名角色 1~3 句，窗口一次显示一句、按确定键翻页）。
+@export var max_pages: int = 3
 ## 台词出现的最小间隔（秒）——防止反复进出安全屋时刷屏。
 @export var cooldown_seconds: float = 3.0
 
@@ -85,11 +85,11 @@ func is_open() -> bool:
 	return _opened
 
 
-## 从台词池随机抽 1~2 段并打开（原作的口径是"有时候会有两段"）。
-func open_random(pool: Array, speaker_name: String, portrait: Texture2D = null) -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	open(pick_pages(pool, rng), speaker_name, portrait)
+## 显示**某角色的专有台词**。
+## ★原作把「谁说什么」写死在事件文本里（说话人行 = `\>\C[4]名字\C[0]\<`），**不随机抽**，
+##   所以这里按顺序显示该角色的句子；超过 max_pages 的截断（窗口一次只显示一句，按确定键翻页）。
+func open_character(lines: Array, speaker_name: String, portrait: Texture2D = null) -> void:
+	open(lines, speaker_name, portrait)
 
 
 func _render_page() -> void:
@@ -117,17 +117,3 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("取消键"):
 		get_viewport().set_input_as_handled()
 		close()
-
-
-## 从台词池里抽 1~2 段：原作是"有时候会有两段"，这里用随机决定。
-static func pick_pages(pool: Array, rng: RandomNumberGenerator) -> Array:
-	if pool.is_empty():
-		return []
-	var first: int = rng.randi_range(0, pool.size() - 1)
-	var pages: Array = [pool[first]]
-	## 有一半概率带上前一条做第二段（保持原作的"连续两句话"语感）。
-	if rng.randi_range(0, 1) == 1:
-		var idx: int = 0 if first == 0 else first - 1
-		if idx != first:
-			pages.insert(0, pool[idx])
-	return pages

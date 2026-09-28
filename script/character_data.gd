@@ -41,7 +41,16 @@ class_name CharacterData extends Resource
 @export var def_growth: int = 2
 
 @export_group("外观")
-@export var portrait: Texture2D              ## 角色立绘/头像
+## 头像图。★RM2K3 的 FaceSet 惯例是**一张图装多个头像**的网格（本项目 art/Face/ 的
+## 素材均为 384×384，4 列 × 4 行，每格 96×96），用 portrait_index 挑其中一格。
+@export var portrait: Texture2D
+## 头像在头像表里的**格号**。★索引规则与行走图一致：`index = 行 × 列数 + 列`（从 0 起，
+## 一行 portrait_grid_cols 个）。设 0 即左上角第一个头像。只有一格时该值被忽略。
+@export var portrait_index: int = 0
+## 头像表每行几个头像（列数）。
+@export var portrait_grid_cols: int = 4
+## 头像表共几行。
+@export var portrait_grid_rows: int = 4
 @export var walk_texture: Texture2D          ## 行走图精灵表
 @export var walk_char_index: int = 0         ## 行走图角色索引
 ## 步行动画帧时长（秒）。0 = 按全局基准与 walk_speed 自动算（2026-09-15：
@@ -228,3 +237,23 @@ func get_character_key() -> String:
 	if resource_path and not resource_path.is_empty():
 		return resource_path.get_file().get_basename()
 	return character_name
+
+
+## 取「按 portrait_index 裁好」的头像纹理，供台词窗口 / 名牌等直接用。
+## 未设头像返回 null；网格只有一格时原样返回整图；索引越界会钳到最后一格（不返回空纹理）。
+func portrait_texture() -> Texture2D:
+	if portrait == null:
+		return null
+	var cols: int = maxi(1, portrait_grid_cols)
+	var rows: int = maxi(1, portrait_grid_rows)
+	var total: int = cols * rows
+	if total <= 1:
+		return portrait
+	var idx: int = clampi(portrait_index, 0, total - 1)
+	var img_size: Vector2 = portrait.get_size()
+	var cell: Vector2 = Vector2(img_size.x / float(cols), img_size.y / float(rows))
+	var atlas := AtlasTexture.new()
+	atlas.atlas = portrait
+	atlas.region = Rect2(
+		Vector2(float(idx % cols) * cell.x, float(idx / cols) * cell.y), cell)
+	return atlas
