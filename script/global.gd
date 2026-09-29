@@ -558,6 +558,14 @@ func dispatch_virtual_action(act: StringName, pressed: bool) -> void:
 ## 手机端额外锁横屏 + 全屏；桌面端不加任何窗口操作。
 const BASE_VIEWPORT_SIZE: Vector2 = Vector2(1280, 960)
 
+## ── 逻辑画布横向扩展上限（2026-09-29 手机端「按键放两侧」需求）──
+## 手机屏普遍 16:9~20:9，而基准画布是 4:3 → 左右黑边能吃掉 40% 屏宽。
+## 而黑边在 viewport **之外**（实测 viewport / canvas_items 两种 stretch 模式都放不进 UI），
+## 所以改成把**逻辑画布按屏幕比例横向加宽**（上限 16:9）：视野变宽后，摇杆与按键就能摆到
+## 屏幕两侧的空位上，中间视野干净。
+## ⚠ 副作用：视野宽度随设备变 → 「屏外刷怪」判定必须钉死，见 `FrontSpawner.LOGIC_VIEW_HALF`。
+const MAX_LOGICAL_ASPECT: float = 16.0 / 9.0
+
 ## ★为什么缩放口径必须**运行时**按分辨率算，而不是写死在 project.godot：
 ## `stretch/scale_mode="integer"` 只能放大、**不能缩小** —— 可用倍率 < 1 时 Godot 把它钳到 1，
 ## 画布就按 1280×960 原尺寸**左上角对齐**，右/下溢出的部分被窗口直接**裁掉**。
@@ -581,10 +589,41 @@ func _setup_adaptive_stretch() -> void:
 	var win: Window = get_window()
 	if win == null:
 		return
-	if not win.size_changed.is_connected(_refresh_content_scale_stretch):
-		win.size_changed.connect(_refresh_content_scale_stretch)
+	if not win.size_changed.is_connected(_on_window_resized):
+		win.size_changed.connect(_on_window_resized)
+	_on_window_resized()
+	call_deferred("_on_window_resized")
+
+
+## 窗口尺寸/朝向变化：先按屏幕比例定逻辑画布宽度，再定缩放口径（顺序不能反 ——
+## 缩放口径要按**扩展后**的画布算）。
+func _on_window_resized() -> void:
+	_refresh_logical_canvas()
 	_refresh_content_scale_stretch()
-	call_deferred("_refresh_content_scale_stretch")
+
+
+## 移动端：把逻辑画布按屏幕比例横向加宽（上限 `MAX_LOGICAL_ASPECT`）。
+## 桌面端不动（仍是 1280×960），保证桌面行为零变化。
+## 注意：`content_scale_size` 同时也决定了 UI（含触摸层）的坐标空间 ——
+## 所以触摸层里靠右的按钮必须用 **右锚点** 定位，否则会跟着画布加宽而偏左。
+func _refresh_logical_canvas() -> void:
+	if not is_mobile_platform():
+		return
+	var win: Window = get_window()
+	if win == null:
+		return
+	var ws: Vector2 = Vector2(win.size)
+	if ws.x < 256.0 or ws.y < 192.0:
+		return
+	var aspect: float = ws.x / ws.y
+	var size: Vector2i = Vector2i(BASE_VIEWPORT_SIZE)
+	if aspect > BASE_VIEWPORT_SIZE.x / BASE_VIEWPORT_SIZE.y:
+		var w: float = minf(BASE_VIEWPORT_SIZE.y * aspect, BASE_VIEWPORT_SIZE.y * MAX_LOGICAL_ASPECT)
+		size = Vector2i(roundi(w), int(BASE_VIEWPORT_SIZE.y))
+	if win.content_scale_size == size:
+		return
+	win.content_scale_size = size
+	print("[Global] 逻辑画布扩展：窗口 %s（比例 %.3f）→ %s" % [ws, aspect, size])
 
 
 ## 按当前窗口尺寸选「整数缩放 / 分数缩放」。这是**唯一的缩放口径入口**。

@@ -74,6 +74,8 @@ extends Node
 ## 都会让实际可视矩形偏离"以玩家坐标为中心"），只能保守外扩，宁可少刷一点也不刷在脸上。
 @export var remote_view_padding: float = 48.0
 ## 未指定相机时的可视半宽/半高兜底（本工程视口 1280×960、相机缩放 2× → 640×480）。
+## ⚠ 2026-09-29 起**已不再被 `_view_half_extents()` 使用**（改由 `LOGIC_VIEW_HALF` 钉死）——
+## 仅保留字段，免得旧 .tscn 里已有的赋值报"未知属性"。
 @export var fallback_view_size: Vector2 = Vector2(640.0, 480.0)
 ## 防守战**固定刷怪点**的「玩家近旁」屏蔽半径（px，2026-09-26 用户需求）：
 ## 点位落在任一玩家视野矩形（含 offscreen_margin）内、**或**距任一玩家小于本半径
@@ -428,13 +430,19 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 	## 否则采样点里有一半必然被屏外条件否掉，白白浪费迭代（水平方向尤其明显：
 	## 可视半宽 320 + 余量 64 = 384 > min_dist 360）。
 	var band_lo: float = maxf(min_dist, _offscreen_distance(dir, view_half))
+	## ★2026-09-29：逻辑画布横向加宽后 `_view_half_extents()` 钉死到 16:9 上限（half.x=853），
+	## 屏外距离（≈720）会**超过配置的 `max_dist`(560)** → 常规带恒为空，每帧都走下面
+	## "外扩 2.2 倍"的兜底（刷怪距离被动变远、last_reject 刷满）。
+	## 所以把带上限按实际屏外距离抬起来。
+	## ⚠ 4:3 设备上 band_lo≈556、max_dist=560 → 取 max 仍是 560，**行为零变化**。
+	var eff_max_dist: float = maxf(max_dist, band_lo + 4.0)
 	## ★采样区间必须按**全体玩家**的视野求空隙（2026-09-26 多人实测修复）：
 	## 旧实现只用本机相机算 eff_min，候选却要再过"全体视野并集" —— 队友（尤其走在
 	## 前面的那位）会把可用区间整体推到 max_dist 之外，于是**每一环采样都被否掉** →
 	## 返回 ZERO（日志里就是"前方找不到合格落点"）。单机没有队友所以看不出来，
 	## 多人下表现为"走廊图走很久才迟刷 / 回头才刷一些 / 总量比单机少"。
 	var span: Array = _team_free_span(player.global_position, dir, view_rects,
-		offscreen_margin, band_lo, max_dist)
+		offscreen_margin, band_lo, eff_max_dist)
 	if span.is_empty():
 		## ★2026-09-27（用户报"走廊 / 换图后前方还是偏少"）：
 		## 距离带 [band_lo, max_dist] ≈ 384~560，**有效宽度只有约 176px**，而单个玩家的
@@ -446,7 +454,7 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 		## 仍留在 `recycle_dist`(1400) 之内，避免刚刷出来就被"离得太远"回收。
 		var fallback_scale: float = 2.2
 		span = _team_free_span(player.global_position, dir, view_rects,
-			offscreen_margin, band_lo, max_dist * fallback_scale)
+			offscreen_margin, band_lo, eff_max_dist * fallback_scale)
 		if not span.is_empty():
 			last_reject = "常规带被队友视野盖满 → 外扩到 %.0f~%.0f" % [
 				float(span[0]), float(span[1])]
@@ -739,18 +747,23 @@ func _active_camera() -> Camera2D:
 	return vp.get_camera_2d()
 
 
+## ── 逻辑视野（钉死，2026-09-29）──
+## 手机端逻辑画布按屏幕比例横向加宽（16:9 → 1706），若这里直接读 viewport，**「屏外」的范围
+## 就随设备变**：Host 窄、Client 宽时，Client 会看到敌人凭空出现在自己画面里。
+## 统一钉死到**扩展上限（16:9）**的半尺寸 → 任何设备刷怪都落在真正的屏外。
+## （代价：4:3 设备的敌人要多走约 210px 才进画面，不影响正确性。）
+const LOGIC_VIEW_HALF: Vector2 = Vector2(853.0, 480.0)
+
+
 func _view_half_extents() -> Vector2:
-	## 相机可视范围的一半（世界单位）：视口尺寸 ÷ 相机缩放 ÷ 2。
-	var half: Vector2 = fallback_view_size * 0.5
-	var vp: Viewport = get_viewport()
+	## 相机可视范围的一半（世界单位）。尺寸**钉死**（见 LOGIC_VIEW_HALF），只按相机缩放换算。
 	var cam: Camera2D = _active_camera()
-	if vp == null or cam == null:
-		return half
+	if cam == null:
+		return LOGIC_VIEW_HALF
 	var zoom: Vector2 = cam.zoom
 	if zoom.x <= 0.001 or zoom.y <= 0.001:
-		return half
-	var size: Vector2 = vp.get_visible_rect().size
-	return Vector2(size.x * 0.5 / zoom.x, size.y * 0.5 / zoom.y)
+		return LOGIC_VIEW_HALF
+	return Vector2(LOGIC_VIEW_HALF.x / zoom.x, LOGIC_VIEW_HALF.y / zoom.y)
 
 
 # ═══════════════════════════════════════

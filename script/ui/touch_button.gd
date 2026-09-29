@@ -35,6 +35,13 @@ extends Button
 ## `["character_select_menu"]`（全项目只有它读 `开始游戏键`，其余菜单显示它纯属干扰）。
 @export var menu_scene_filter: PackedStringArray = PackedStringArray()
 
+## ★多点触控（2026-09-29 手机实测「按住摇杆时其他按钮全失灵」）：
+## Godot 的 `Input.emulate_mouse_from_touch` **只把第一个触点模拟成鼠标事件**，
+## 而 `Button` 的按下完全依赖鼠标事件 → 第一根手指占着摇杆时，第二根手指按攻击键
+## 什么都收不到。所以触摸按钮改为**自己处理 `InputEventScreenTouch`**，各按钮按触点
+## index 独立跟踪，与摇杆互不干扰。（桌面端鼠标点击照常处理，调试不受影响。）
+var _touch_index: int = -2   ## 本按钮当前负责的触点；-2 = 空闲
+var _mouse_held: bool = false
 var _held: bool = false
 var _base_text: String = ""
 var _global: Node = null
@@ -44,11 +51,39 @@ func _ready() -> void:
 	_base_text = text
 	focus_mode = Control.FOCUS_NONE
 	_global = get_node_or_null("/root/Global")
-	button_down.connect(_on_down)
-	button_up.connect(_on_up)
-	## 手指滑出按钮范围时 Button 不一定发 button_up → 用 mouse_exited 兜底，
-	## 否则会出现"动作一直按着"（角色一直走 / 一直开枪）。
-	mouse_exited.connect(_on_up)
+	## ⚠ 刻意**不接** `button_down`/`button_up`：那两个信号来自鼠标模拟，只有第一个
+	## 触点会触发（见上）。改由 `_input()` 自己按触点 index 处理。
+	## ⚠ `_input` 在 GUI 之前收到事件，所以 Button 自己那套鼠标处理不会把它吃掉。
+
+
+func _input(event: InputEvent) -> void:
+	if not visible or action == &"":
+		return
+	if event is InputEventScreenTouch:
+		var t: InputEventScreenTouch = event
+		if t.pressed:
+			if _touch_index == -2 and get_global_rect().has_point(t.position):
+				_touch_index = t.index
+				_on_down()
+		elif t.index == _touch_index:
+			_on_up()
+	elif event is InputEventScreenDrag:
+		## 手指滑出按钮范围 → 松开。多点触控下 Button 的 `mouse_exited` 兜底不可靠，
+		## 少了这一步会出现"动作一直按着"（角色一直走 / 一直开枪）。
+		var d: InputEventScreenDrag = event
+		if d.index == _touch_index and not get_global_rect().has_point(d.position):
+			_on_up()
+	elif event is InputEventMouseButton:
+		var mb: InputEventMouseButton = event
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mb.pressed:
+			if not _mouse_held and get_global_rect().has_point(mb.position):
+				_mouse_held = true
+				_on_down()
+		elif _mouse_held:
+			_mouse_held = false
+			_on_up()
 
 
 ## ★一律走 Global.dispatch_virtual_action()（2026-09-29 手机实测）：
@@ -82,6 +117,8 @@ func _on_down() -> void:
 
 
 func _on_up() -> void:
+	_touch_index = -2
+	_mouse_held = false
 	if action == &"" or not _held:
 		return
 	_held = false

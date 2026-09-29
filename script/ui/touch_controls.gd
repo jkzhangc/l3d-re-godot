@@ -19,8 +19,12 @@ extends CanvasLayer
 ## 桌面端也显示（调布局用）。导出包（release）里 `debug_enabled` 恒 false，故不会误开。
 @export var force_show_on_desktop: bool = false
 
-## 触摸层在游戏 HUD 之上、黑幕(90)/结算页(100) 之下。
+## 关卡模式层级：在游戏 HUD 之上、黑幕(90)/结算页(100) 之下。
 @export var control_layer: int = 80
+## 菜单模式层级：**必须高于结算页**（章节总结 / 终章 ED 在 `layer = 100`）。
+## ★2026-09-29 手机实测：章节总结页把触摸层整个盖住 → 手机上「按钮消失、确定键也按不了」，
+## ED 流程卡死。菜单模式下抬到 110 让触摸层压在结算页之上。
+@export var menu_layer: int = 110
 
 ## 判定「关卡场景」的标志节点名：每张地图都有 1 个 `GameInit`；其余（标题 / 菜单 /
 ## 联机大厅 / 结算页）都算菜单。
@@ -67,6 +71,8 @@ func _apply_mode(scene_key_override: String = "") -> void:
 	## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
 	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
 	_menu_mode = not gameplay
+	## 菜单里要压在结算页(100)之上，关卡里要留在黑幕(90)/结算页之下。
+	layer = menu_layer if _menu_mode else control_layer
 	_propagate(self, _menu_mode, scene_key_override if not scene_key_override.is_empty() else _current_scene_key(cs))
 
 
