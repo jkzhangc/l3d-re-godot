@@ -531,6 +531,26 @@ func _setup_touch_controls() -> void:
 	tc.name = "TouchControls"
 	add_child(tc)
 
+## ── 虚拟按钮 / 摇杆的统一「动作派发」入口（2026-09-29 手机实测修复）──
+## ★`Input.action_press()` **只改动作状态、不派发任何事件**（探针实测收到 0 个 InputEventAction）：
+##   玩法侧 `Input.get_vector()` / `is_action_pressed()` 靠**轮询状态** → 生效；
+##   但 RM2K3 光标式菜单读的是 `_input(event).is_action_pressed()` → **收不到事件 → 按了没反应**。
+##   所以虚拟输入必须「改状态 + 补发真事件」两步都做，才能与真键盘完全等价。
+##   （实测症状：手机上菜单里「取消」点不动、摇杆也推不动 —— 都是这一步缺的。）
+func dispatch_virtual_action(act: StringName, pressed: bool) -> void:
+	if act == &"":
+		return
+	if pressed:
+		Input.action_press(act)
+	else:
+		Input.action_release(act)
+	## 补发真事件：只认 `_input` 的代码（菜单 / 一次性按键动作）靠它才能收到。
+	var ev: InputEventAction = InputEventAction.new()
+	ev.action = act
+	ev.pressed = pressed
+	ev.strength = 1.0 if pressed else 0.0
+	Input.parse_input_event(ev)
+
 
 ## ── 移动平台画面适配（2026-09-28 用户需求）──
 ## 手机：锁定横屏 + 全屏；画面保持 1280×960 的 **4:3 画布**，靠 `stretch/mode=viewport`

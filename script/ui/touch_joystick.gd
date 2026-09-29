@@ -4,7 +4,7 @@ extends Control
 ## 系统：触摸操作 ｜ 层：表现（Control）
 ## 联机：不涉及
 ## 职责：虚拟摇杆：在摇杆区域内触摸拖动 → 输出 上/下/左/右 四个 InputMap 动作的按下与松开。
-## 依赖：无
+## 依赖：`Global.dispatch_virtual_action()`（改动作状态 + 补发 InputEventAction，唯一入口）
 ##
 ## 用法：把本节点放在左下角，尺寸即摇杆的触摸热区（建议 280~320px）。
 ## 摇杆头（Knob）可选：在编辑器里把子节点拖到 `knob` 上，拖动时会跟随手指。
@@ -32,13 +32,24 @@ var _origin: Vector2 = Vector2.ZERO
 var _dir: Vector2 = Vector2.ZERO
 var _pressed: Dictionary = {}
 var _knob_home: Vector2 = Vector2.ZERO
+var _global: Node = null
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_global = get_node_or_null("/root/Global")
 	if knob != null and is_instance_valid(knob):
 		_knob_home = knob.position
 	_origin = size * 0.5
+
+
+## ★一律走 Global.dispatch_virtual_action()（2026-09-29 手机实测）：只按 `Input.action_press()`
+## 不会派发事件 → 菜单光标（读 `_input` 事件）推不动。
+func _forward(act: StringName, pressed: bool) -> void:
+	if _global != null and _global.has_method("dispatch_virtual_action"):
+		_global.call("dispatch_virtual_action", act, pressed)
+	else:
+		push_warning("[TouchJoystick] 找不到 /root/Global，摇杆输入未派发（act=%s）" % act)
 
 
 ## 由 TouchControls 调用：菜单模式默认保留（摇杆正好用来走菜单光标）。
@@ -103,10 +114,10 @@ func _apply() -> void:
 		var held: bool = bool(_pressed.get(act, false))
 		if want and not held:
 			_pressed[act] = true
-			Input.action_press(act)
+			_forward(act, true)
 		elif not want and held:
 			_pressed[act] = false
-			Input.action_release(act)
+			_forward(act, false)
 
 
 func _release_all() -> void:
@@ -114,7 +125,7 @@ func _release_all() -> void:
 	_dir = Vector2.ZERO
 	for key: Variant in _pressed.keys():
 		if bool(_pressed[key]):
-			Input.action_release(key)
+			_forward(key, false)
 	_pressed.clear()
 	if knob != null and is_instance_valid(knob):
 		knob.position = _knob_home
