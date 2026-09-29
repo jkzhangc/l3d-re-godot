@@ -16,6 +16,10 @@ extends Control
 ## 摇杆头节点（可选，拖动时跟随）。
 @export var knob: Control = null
 
+## ── 菜单模式（2026-09-29）──
+## 菜单界面的光标也是靠 `上/下` 动作走的，所以摇杆默认在菜单里**保留**。
+@export var show_in_menu: bool = true
+
 @export_group("输出动作")
 @export var up_action: StringName = &"上"
 @export var down_action: StringName = &"下"
@@ -35,6 +39,14 @@ func _ready() -> void:
 	if knob != null and is_instance_valid(knob):
 		_knob_home = knob.position
 	_origin = size * 0.5
+
+
+## 由 TouchControls 调用：菜单模式默认保留（摇杆正好用来走菜单光标）。
+func set_menu_mode(menu_mode: bool) -> void:
+	visible = (not menu_mode) or show_in_menu
+	if not visible:
+		## ★隐藏时必须先松开：否则角色会一直朝最后的方向走。
+		_release_all()
 
 
 func _gui_input(event: InputEvent) -> void:

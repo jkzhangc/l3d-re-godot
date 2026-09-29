@@ -172,6 +172,22 @@ func _ready() -> void:
 	_start_cursor_blink()
 	_build_footer_info()
 	_build_update_log_icon()
+	_maybe_show_update_log_on_first_launch()
+
+
+## 首次启动 / 换版本时自动打开更新日志（2026-09-29 用户需求）。
+## 【为什么需要】手机上只有虚拟按钮、没有 F1 键，新玩家根本不知道更新了什么。
+## 用 `Global.changelog_seen_version` 记录「已看过的版本」：为空（首次启动）或与当前
+## 版本不符（更新后第一次进）时自动弹一次并立即记下；之后按 F1 仍可随时打开。
+func _maybe_show_update_log_on_first_launch() -> void:
+	if CHANGELOG_VERSION_TEXT.is_empty():
+		return
+	if Global.changelog_seen_version == CHANGELOG_VERSION_TEXT:
+		return
+	Global.changelog_seen_version = CHANGELOG_VERSION_TEXT
+	Global.save_config()
+	## 本帧窗口还在 _ready 里搭，延后一帧再开面板（面板也依赖本帧建好的字体主题）。
+	call_deferred("_open_update_log")
 
 
 ## ── F1 更新日志（2026-09-17 用户需求）──

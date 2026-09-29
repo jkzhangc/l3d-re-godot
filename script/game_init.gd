@@ -9,9 +9,8 @@ extends Node
 ## 游戏启动器 — 场景加载时初始化玩家数据 + 创建 CharacterSwitchManager
 
 func _ready() -> void:
-	## 触摸操作层（2026-09-28）：**仅移动平台**创建；放在最前面，单机与联机分支都能覆盖到
-	## （联机分支会在下方 return，放末尾就漏了）。
-	_spawn_touch_controls()
+	## 触摸操作层已改为**全局创建**（2026-09-29，见 `Global._setup_touch_controls`）：
+	## 原先挂在这里 → 标题画面 / 角色选择等**非地图场景**没有按钮，手机卡死在标题画面。
 	## 安全屋台词（2026-09-28）：进入安全屋 / 章节总结结束后随机说 1~2 句。
 	## 纯本地表现（各端显示自己角色的台词），不暂停游戏；延后一帧等场景节点就绪。
 	call_deferred("_spawn_safehouse_dialogue")
@@ -183,27 +182,6 @@ func _open_safehouse_dialogue(key: String) -> void:
 	dlg.call("open_character", pages, speaker, portrait)
 	print("[GameInit] 安全屋台词：%s（角色=%s，%d 页，说话人=%s，头像=%s）" % [
 		key, char_id, pages.size(), speaker, "有" if portrait != null else "无"])
-
-
-## ── 触摸操作层（2026-09-28 用户需求）──
-## 只在移动平台挂载 `scene/ui/touch_controls.tscn`；桌面端连节点都不加，零开销。
-## 场景内每个按钮是独立节点（映射到既有 InputMap 动作），位置/尺寸在编辑器里直接调。
-const TOUCH_CONTROLS_SCENE := preload("res://scene/ui/touch_controls.tscn")
-
-
-func _spawn_touch_controls() -> void:
-	var g: Node = get_node_or_null("/root/Global")
-	if g == null or not g.has_method("is_mobile_platform"):
-		return
-	if not bool(g.call("is_mobile_platform")):
-		return
-	var tree: SceneTree = get_tree()
-	if tree == null or tree.current_scene == null:
-		return
-	if tree.current_scene.get_node_or_null("TouchControls") != null:
-		return
-	## 本帧场景仍在 _ready 中，直接 add_child 会被拒绝 → 延后一帧（与 NetworkWorld 同一做法）。
-	tree.current_scene.call_deferred("add_child", TOUCH_CONTROLS_SCENE.instantiate())
 
 
 func _spawn_switch_manager() -> void:

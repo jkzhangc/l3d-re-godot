@@ -9,12 +9,26 @@ extends CanvasLayer
 ## 【为什么是一个独立场景】用户要求"触摸按钮做成一个场景，每个按钮是独立节点，方便调整"：
 ## 全部按钮都在 `scene/ui/touch_controls.tscn` 里，位置 / 尺寸 / 贴图 / 映射动作
 ## 都能在编辑器里直接改，改完不必动任何脚本。
+##
+## 【挂载点改了（2026-09-29）】原先挂在每张地图的 `GameInit` 上 → 标题画面（= 主场景）与
+## 角色选择 / 难度 / 章节选择这些**非地图场景**根本没有触摸层；而它们全是 RM2K3 光标式
+##（Button 数 = 0，只认 `确定键`/`上`/`下`/`取消键`，且这些动作只绑键盘）
+## → **手机上卡死在标题画面**。现在由 `Global._setup_touch_controls()` 全局创建一次，
+## 本脚本按当前场景自动切「菜单模式 / 关卡模式」。
 
 ## 桌面端也显示（调布局用）。导出包（release）里 `debug_enabled` 恒 false，故不会误开。
 @export var force_show_on_desktop: bool = false
 
 ## 触摸层在游戏 HUD 之上、黑幕(90)/结算页(100) 之下。
 @export var control_layer: int = 80
+
+## 判定「关卡场景」的标志节点名：每张地图都有 1 个 `GameInit`；其余（标题 / 菜单 /
+## 联机大厅 / 结算页）都算菜单。
+@export var gameplay_marker: String = "GameInit"
+
+## 当前是否菜单模式（调试与用例读取）。
+var _menu_mode: bool = false
+var _last_scene: Node = null
 
 
 func _ready() -> void:
@@ -25,8 +39,40 @@ func _ready() -> void:
 		mobile = bool(g.call("is_mobile_platform"))
 	var debug_on: bool = g != null and bool(g.get("debug_enabled"))
 	visible = mobile or (force_show_on_desktop and debug_on)
-	print("[TouchControls] 移动平台=%s 调试=%s → 触摸层 visible=%s（%d 个按钮节点）" % [
-		mobile, debug_on, visible, _count_buttons()])
+	_apply_mode()
+	print("[TouchControls] 移动平台=%s 调试=%s → 触摸层 visible=%s（%d 个按钮节点，菜单模式=%s）" % [
+		mobile, debug_on, visible, _count_buttons(), _menu_mode])
+
+
+## 场景切换时重新判定模式。每帧只做一次引用比较，开销可忽略。
+##（Global 是 autoload，创建本层时主场景可能还没挂上 → 必须靠这里补一次判定。）
+func _process(_delta: float) -> void:
+	var cs: Node = get_tree().current_scene if get_tree() != null else null
+	if cs != _last_scene:
+		_apply_mode()
+
+
+## 是否菜单模式（菜单里只留摇杆 + 确定 + 取消）。
+func is_menu_mode() -> bool:
+	return _menu_mode
+
+
+## 用「当前场景里有没有 GameInit」区分关卡与菜单，再把模式下发到每个按钮。
+func _apply_mode() -> void:
+	var tree: SceneTree = get_tree()
+	var cs: Node = tree.current_scene if tree != null else null
+	_last_scene = cs
+	## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
+	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
+	_menu_mode = not gameplay
+	_propagate(self, _menu_mode)
+
+
+func _propagate(node: Node, menu_mode: bool) -> void:
+	for child: Node in node.get_children():
+		if child.has_method("set_menu_mode"):
+			child.call("set_menu_mode", menu_mode)
+		_propagate(child, menu_mode)
 
 
 func _count_buttons() -> int:

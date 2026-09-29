@@ -92,6 +92,7 @@ up_action = &"上"
 down_action = &"下"
 left_action = &"左"
 right_action = &"右"
+show_in_menu = true
 
 [node name="Knob" type="Panel" parent="Joystick"]
 layout_mode = 0
@@ -126,6 +127,8 @@ theme_override_styles/focus = SubResource("SB_pressed")
 text = "攻击"
 script = ExtResource("3_btn")
 action = &"确定键"
+show_in_menu = true
+menu_text = "确定"
 
 [node name="BtnFunc" type="Button" parent="ActionPad"]
 layout_mode = 0
@@ -329,6 +332,7 @@ theme_override_styles/focus = SubResource("SB_pressed")
 text = "取消"
 script = ExtResource("3_btn")
 action = &"取消键"
+show_in_menu = true
 
 [node name="BtnDrop" type="Button" parent="SystemPad"]
 layout_mode = 0

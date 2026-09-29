@@ -212,6 +212,8 @@ const FONT_SELF_CHECK_TEXT: String = "开始游戏联机设置退出操作说明
 signal font_changed(font_path: String)
 
 var font_option: int = 0
+## 已看过的更新日志版本（首次启动 / 换版本时自动弹一次；见 title_screen._maybe_show_update_log）。
+var changelog_seen_version: String = ""
 var _ui_font_cache: Dictionary = {}      ## path → FontFile（null 表示加载失败，避免重复报错）
 var _ui_root_theme: Theme = null         ## 挂在场景树根上的默认主题（提供默认字体）
 
@@ -492,6 +494,8 @@ func _ready() -> void:
 	_ensure_audio_buses()
 	## 移动平台：横屏 + 全屏（4:3 画布居中留黑边）；桌面端直接早退，行为不变。
 	_setup_platform_display()
+	## 触摸操作层（2026-09-29 改为全局创建）：见 _setup_touch_controls 的注释。
+	_setup_touch_controls()
 	## ★2026-09-28：调试工具只在 debug_enabled 时创建 —— 导出包（release）里该值恒 false
 	##（见 _refresh_debug_enabled），所以打包即自动关闭调试功能，无需手动改配置。
 	if debug_enabled:
@@ -502,6 +506,27 @@ func _ready() -> void:
 	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
 	ensure_root_ui_theme()
 	_log_font_self_check()
+
+
+## ── 触摸操作层（2026-09-29 从「按地图挂」改为「全局挂」）──
+## 【为什么必须全局】触摸层原先由每张地图的 `GameInit._spawn_touch_controls()` 创建 →
+## 标题画面（= 主场景）与角色选择 / 难度 / 章节选择 / 结算页这些**非地图场景**没有触摸层；
+## 而它们全是 RM2K3 光标式（Button 数 = 0，只认 `确定键`/`上`/`下`/`取消键`，且这些动作只绑键盘）
+## → **手机上卡死在标题画面**。现在挂到 Global 上只创建一次、跨场景常驻；
+## 触摸层自己按当前场景切「菜单模式 / 关卡模式」，决定显示哪些按钮。
+const TOUCH_CONTROLS_SCENE: PackedScene = preload("res://scene/ui/touch_controls.tscn")
+
+
+func _setup_touch_controls() -> void:
+	## 桌面端：只在调试开关打开时创建（release 里 debug_enabled 恒 false → 零开销）。
+	## 移动平台一律创建；是否可见由触摸层自己按平台 / force_show_on_desktop 决定。
+	if not is_mobile_platform() and not debug_enabled:
+		return
+	if get_node_or_null("TouchControls") != null:
+		return
+	var tc: Node = TOUCH_CONTROLS_SCENE.instantiate()
+	tc.name = "TouchControls"
+	add_child(tc)
 
 
 ## ── 移动平台画面适配（2026-09-28 用户需求）──
@@ -736,6 +761,7 @@ func _load_config() -> void:
 				sfx_volume = cfg.get("sfx_volume", 80)
 				facing_lock_mode = cfg.get("facing_lock_mode", 0)
 				font_option = clampi(int(cfg.get("font_option", 0)), 0, FONT_OPTION_PATHS.size() - 1)
+				changelog_seen_version = str(cfg.get("changelog_seen_version", ""))
 	_refresh_debug_enabled()
 
 
@@ -753,7 +779,8 @@ func save_config() -> void:
 		"music_volume": music_volume,
 		"sfx_volume": sfx_volume,
 		"facing_lock_mode": facing_lock_mode,
-		"font_option": font_option
+		"font_option": font_option,
+		"changelog_seen_version": changelog_seen_version
 	}
 	var f: FileAccess = FileAccess.open(CONFIG_FILE, FileAccess.WRITE)
 	if f:
