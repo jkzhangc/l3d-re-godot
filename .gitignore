@@ -60,3 +60,9 @@ tools/**/*.exe
 release/*.exe
 release/*.apk
 release/*.pck
+
+# 安卓签名密钥库 —— 切勿入库（泄露 = 别人能冒名签发你的应用）
+*.keystore
+*.jks
+# 导出预设的手改备份
+export_presets.cfg.bak
