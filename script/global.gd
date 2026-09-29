@@ -487,6 +487,9 @@ var corpse_list: Array = []
 @export var death_black_hold: float = 2.0     ## 死亡全黑后等待时长（秒）
 @export var death_music_volume_db: float = -10.0  ## 死亡音乐音量（dB, 0 为原始音量）
 const CONFIG_FILE: String = "res://config.json"
+## ★移动端 `res://` 是 **APK 内的只读资源** → 运行时写入必须落 `user://`（2026-09-29 修复）。
+## 读：先 `res://`（随包默认 / 开发时手改的那个）→ 再 `user://` 覆盖；写：移动端 `user://`，桌面端仍 `res://`。
+const CONFIG_FILE_USER: String = "user://config.json"
 
 
 func _ready() -> void:
@@ -749,20 +752,33 @@ func _trigger_redraw_recursive(node: Node) -> void:
 
 
 func _load_config() -> void:
-	if FileAccess.file_exists(CONFIG_FILE):
-		var f: FileAccess = FileAccess.open(CONFIG_FILE, FileAccess.READ)
-		if f:
-			var text: String = f.get_as_text()
-			f.close()
-			var cfg: Dictionary = JSON.parse_string(text) if text else {}
-			if cfg:
-				debug_requested = bool(cfg.get("debug", false))
-				music_volume = cfg.get("music_volume", 80)
-				sfx_volume = cfg.get("sfx_volume", 80)
-				facing_lock_mode = cfg.get("facing_lock_mode", 0)
-				font_option = clampi(int(cfg.get("font_option", 0)), 0, FONT_OPTION_PATHS.size() - 1)
-				changelog_seen_version = str(cfg.get("changelog_seen_version", ""))
+	## ① 随包发布的默认配置（开发时手改的就是这个；移动端 res:// 只读）
+	_apply_config_file(CONFIG_FILE)
+	## ② 运行时写入的配置（**覆盖** ① 的同名字段）。★移动端只能写这里：
+	##    旧实现只读写 res://config.json → 手机上 res:// 是 APK 内只读资源，
+	##    任何设置都存不下来（音量 / 字体 / 已看更新日志每次启动都被重置）。
+	_apply_config_file(CONFIG_FILE_USER)
 	_refresh_debug_enabled()
+
+
+## 把单个配置文件的字段叠加到当前值上（缺字段保留原值 → ② 天然成为 ① 的覆盖层）。
+func _apply_config_file(path: String) -> void:
+	if not FileAccess.file_exists(path):
+		return
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var text: String = f.get_as_text()
+	f.close()
+	var cfg: Dictionary = JSON.parse_string(text) if text else {}
+	if not cfg:
+		return
+	debug_requested = bool(cfg.get("debug", debug_requested))
+	music_volume = int(cfg.get("music_volume", music_volume))
+	sfx_volume = int(cfg.get("sfx_volume", sfx_volume))
+	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
+	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
+	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 
 
 ## 收敛 debug 的**有效值**（2026-09-28）：导出包（release）一律关闭；
@@ -782,10 +798,15 @@ func save_config() -> void:
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version
 	}
-	var f: FileAccess = FileAccess.open(CONFIG_FILE, FileAccess.WRITE)
+	## ★移动端 res:// 只读 → 写 user://；桌面端仍写 res://config.json，
+	## 保持「开发时手改 config.json 切 debug」的既有工作流不变。
+	var path: String = CONFIG_FILE_USER if is_mobile_platform() else CONFIG_FILE
+	var f: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(cfg, "\t"))
 		f.close()
+	else:
+		printerr("[Global] 配置写入失败: %s" % path)
 
 
 # ═══════════════════════════════════════
