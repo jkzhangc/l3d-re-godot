@@ -113,7 +113,10 @@ func _migrate(path: String) -> void:
 		if td == null:
 			_fails.append("%s 找不到图块 %s" % [path.get_file(), str(coords)])
 			continue
-		if bool(td.get_custom_data_by_layer_id(idx)):
+		## ★先 `has_custom_data()` 探测：图块从没赋过自定义值时它内部的 custom_data 是**空数组**，
+		## 直接按 layer_id 取值会报 "Index p_layer_id = 0 is out of bounds"（详见 EnemyChaseState
+		## 的 `_cell_path_blocked` 注释）；也**不能**写 `bool(...)`（GDScript 没有 bool() 构造）。
+		if td.has_custom_data(StringName(LAYER_NAME)) and td.get_custom_data(StringName(LAYER_NAME)) == true:
 			continue   ## 已标注
 		td.set_custom_data_by_layer_id(idx, true)
 		changed += 1

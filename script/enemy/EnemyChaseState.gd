@@ -1127,6 +1127,19 @@ static func _find_block_layer(tm: TileMapLayer) -> int:
 			return i
 	return -1
 
+## 该格 TileData 是否勾了 `path_blocked`。**★两个坑（2026-09-29 电脑端实测报错）**：
+##   ① **TileSet 有这一层 ≠ 每个图块都存过这个值** —— 图块从未赋过值时它内部的 `custom_data`
+##      还是**空数组**，直接 `get_custom_data_by_layer_id(idx)` 会报
+##      `Index p_layer_id = 0 is out of bounds (custom_data.size() = 0)` 并每帧刷屏
+##      （生成器产出的地图大量图块从未赋值）。必须先 `has_custom_data()` 探测 —— 越界时它返回 false。
+##   ② **不能写 `bool(td.get_custom_data(...))`** —— GDScript 没有 `bool()` 构造，
+##      会报 `Invalid call. Nonexistent 'bool' constructor.`（同一个错同时刷两条）。直接与 `true` 比。
+static func _cell_path_blocked(td: TileData) -> bool:
+	if td == null:
+		return false
+	return td.has_custom_data(PATH_BLOCKED_LAYER) and td.get_custom_data(PATH_BLOCKED_LAYER) == true
+
+
 static func _search_tilemaps(node: Node) -> void:
 	if node is TileMapLayer:
 		_tilemaps.append(node)
@@ -1252,7 +1265,7 @@ static func _scan_cell(gp: Vector2i, blocks: Array[Rect2]) -> int:
 		##   不论它挂在哪一层（ground / upper / wall），该格一律按整格阻挡处理。
 		##   这一层要解决的问题是「碰撞体只占格子一部分」——只靠立足点判定会被从旁边挤过去。
 		var blk: int = _tilemap_block_layers[i]
-		if blk >= 0 and bool(td.get_custom_data_by_layer_id(blk)):
+		if blk >= 0 and _cell_path_blocked(td):
 			mask |= SCAN_WALL
 			blocks.append(Rect2(0.0, 0.0, _cell_size, _cell_size))
 			continue

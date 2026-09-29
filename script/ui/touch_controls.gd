@@ -36,6 +36,10 @@ var _last_scene: Node = null
 
 
 func _ready() -> void:
+	## ★暂停时也必须能操作（2026-09-29 用户实测「手机暂停画面里摇杆与按钮都动不了」）：
+	## 触摸按钮改走 `_input()` 之后，整层一旦被 `paused` 停掉就收不到任何事件 ——
+	## 而暂停菜单恰恰**只能靠虚拟按键**操作，等于功能死锁。触摸层整层设为 ALWAYS。
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = control_layer
 	var g: Node = get_node_or_null("/root/Global")
 	var mobile: bool = false
