@@ -16,13 +16,24 @@ extends Button
 ## 单次触发的动作（如丢弃武器）也无需改 —— 松开本来就该结束。
 @export var release_on_up: bool = true
 
-## ── 菜单模式（2026-09-29）──
+## ── 可见性规则（2026-09-29）──
 ## 前端菜单（标题 / 角色选择 / 难度 / 章节选择 / 结算页）是 RM2K3 光标式，只认
 ## `确定键` / `上` / `下` / `取消键`。菜单里显示整套战斗按钮会盖住菜单 →
 ## 只让「确定 / 取消」留下。由 TouchControls 按当前场景自动调用 set_menu_mode()。
+##
+## 三种常用组合：
+##   ① 两模式都要（攻击=确定、取消、摇杆）→ `show_in_menu = true`
+##   ② **只在菜单里**（如「开始游戏」）      → `show_in_menu = true` + `hide_in_gameplay = true`
+##   ③ 只在关卡里（装填 / 物品 / 切人…）    → 两个都用默认 false
 @export var show_in_menu: bool = false
+## 关卡模式下隐藏（配合 `show_in_menu` 得到「只在菜单里出现」的按钮）。
+@export var hide_in_gameplay: bool = false
 ## 菜单模式下替换的文字（留空 = 不改）。例：攻击键（=确定键）在菜单里显示「确定」。
 @export var menu_text: String = ""
+## 菜单模式下**只在这些场景**显示（按场景脚本文件名匹配，**不含**扩展名）。
+## 留空 = 所有菜单场景都显示。例：「开始游戏」只在角色选择界面有意义 →
+## `["character_select_menu"]`（全项目只有它读 `开始游戏键`，其余菜单显示它纯属干扰）。
+@export var menu_scene_filter: PackedStringArray = PackedStringArray()
 
 var _held: bool = false
 var _base_text: String = ""
@@ -49,9 +60,13 @@ func _forward(act: StringName, pressed: bool) -> void:
 		push_warning("[TouchButton] 找不到 /root/Global，虚拟按键未派发（act=%s）" % act)
 
 
-## 由 TouchControls 调用：菜单模式隐藏非菜单按钮，并可选替换文字。
-func set_menu_mode(menu_mode: bool) -> void:
-	visible = (not menu_mode) or show_in_menu
+## 由 TouchControls 调用：按模式（+ 当前菜单场景）决定显隐，并可选替换文字。
+## `scene_key` = 当前场景脚本的文件名（不含扩展名），供 `menu_scene_filter` 过滤。
+func set_menu_mode(menu_mode: bool, scene_key: String = "") -> void:
+	if menu_mode:
+		visible = show_in_menu and (menu_scene_filter.is_empty() or menu_scene_filter.has(scene_key))
+	else:
+		visible = not hide_in_gameplay
 	if not visible:
 		## ★隐藏时必须先松开：按钮被隐藏后收不到 button_up → 动作会永远保持按下
 		##（角色一直走 / 一直开枪）。切场景那一帧正好会走到这里。

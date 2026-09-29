@@ -58,21 +58,32 @@ func is_menu_mode() -> bool:
 
 
 ## 用「当前场景里有没有 GameInit」区分关卡与菜单，再把模式下发到每个按钮。
-func _apply_mode() -> void:
+## `scene_key_override`：仅用例用 —— 直接指定「当前菜单场景的脚本名」，
+## 以便在同一个测试场景里验证菜单场景白名单（见 BtnStart 的 menu_scene_filter）。
+func _apply_mode(scene_key_override: String = "") -> void:
 	var tree: SceneTree = get_tree()
 	var cs: Node = tree.current_scene if tree != null else null
 	_last_scene = cs
 	## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
 	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
 	_menu_mode = not gameplay
-	_propagate(self, _menu_mode)
+	_propagate(self, _menu_mode, scene_key_override if not scene_key_override.is_empty() else _current_scene_key(cs))
 
 
-func _propagate(node: Node, menu_mode: bool) -> void:
+## 当前菜单场景的脚本文件名（不含扩展名），如 `character_select_menu`。
+## 场景没挂脚本 / 取不到路径时返回空串（= 不匹配任何白名单 → 只显示无过滤的按钮）。
+func _current_scene_key(cs: Node) -> String:
+	if cs == null or cs.get_script() == null:
+		return ""
+	var path: String = (cs.get_script() as Script).resource_path
+	return path.get_file().get_basename()
+
+
+func _propagate(node: Node, menu_mode: bool, scene_key: String) -> void:
 	for child: Node in node.get_children():
 		if child.has_method("set_menu_mode"):
-			child.call("set_menu_mode", menu_mode)
-		_propagate(child, menu_mode)
+			child.call("set_menu_mode", menu_mode, scene_key)
+		_propagate(child, menu_mode, scene_key)
 
 
 func _count_buttons() -> int:

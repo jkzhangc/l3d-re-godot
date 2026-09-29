@@ -552,18 +552,72 @@ func dispatch_virtual_action(act: StringName, pressed: bool) -> void:
 	Input.parse_input_event(ev)
 
 
-## ── 移动平台画面适配（2026-09-28 用户需求）──
-## 手机：锁定横屏 + 全屏；画面保持 1280×960 的 **4:3 画布**，靠 `stretch/mode=viewport`
-## ＋ `aspect=keep` ＋ 整数倍缩放自动居中，多余方向留黑边（用户选定「4:3 + 黑边」策略）。
-## 桌面端行为完全不变 —— 所以这里第一句就是平台早退。
+## ── 画面适配（2026-09-28 移动端需求 / 2026-09-29 改为运行时自适应）──
+## 基准画布 1280×960（4:3）。缩放口径由 `stretch/mode=viewport` ＋ `aspect=keep` 决定：
+## 「按较紧的一边缩放，另一方向留黑边」（用户选定「4:3 + 黑边」策略）。
+## 手机端额外锁横屏 + 全屏；桌面端不加任何窗口操作。
+const BASE_VIEWPORT_SIZE: Vector2 = Vector2(1280, 960)
+
+## ★为什么缩放口径必须**运行时**按分辨率算，而不是写死在 project.godot：
+## `stretch/scale_mode="integer"` 只能放大、**不能缩小** —— 可用倍率 < 1 时 Godot 把它钳到 1，
+## 画布就按 1280×960 原尺寸**左上角对齐**，右/下溢出的部分被窗口直接**裁掉**。
+## 玩家实测（1280×720 的 720p 手机）：底部 240px 内容消失、「开始游戏」下面那个按钮只剩半截、
+## 圆形按钮贴边残缺 —— 用户报的「比例不对」就是它。
+## 各机型分辨率/屏幕比例千差万别，写死任何单一 `scale_mode` 都会在某一类机器上出错。
 func _setup_platform_display() -> void:
-	if not is_mobile_platform():
-		return
-	DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+	if is_mobile_platform():
+		DisplayServer.screen_set_orientation(DisplayServer.SCREEN_SENSOR_LANDSCAPE)
+		var win: Window = get_window()
+		if win != null:
+			win.mode = Window.MODE_FULLSCREEN
+		print("[Global] 移动平台：横屏 + 全屏（4:3 画布居中，多余方向留黑边）")
+	_setup_adaptive_stretch()
+
+
+## 挂上「窗口尺寸变化 → 重算缩放口径」的钩子，并立刻判一次。
+## ⚠ Android 全屏 / 旋转后真实分辨率是在**稍后**才写进 `Window.size` 的，
+## 所以首帧判一次之外，再延后一帧补判一次（否则会按旧尺寸定错口径）。
+func _setup_adaptive_stretch() -> void:
 	var win: Window = get_window()
-	if win != null:
-		win.mode = Window.MODE_FULLSCREEN
-	print("[Global] 移动平台：横屏 + 全屏（4:3 画布居中，多余方向留黑边）")
+	if win == null:
+		return
+	if not win.size_changed.is_connected(_refresh_content_scale_stretch):
+		win.size_changed.connect(_refresh_content_scale_stretch)
+	_refresh_content_scale_stretch()
+	call_deferred("_refresh_content_scale_stretch")
+
+
+## 按当前窗口尺寸选「整数缩放 / 分数缩放」。这是**唯一的缩放口径入口**。
+## 规则（fit = min(宽/1280, 高/960)，与 aspect=keep 同口径）：
+##   ① fit < 1  → **只能分数缩放**：整数缩放做不到 1 倍以下，硬用会溢出裁切（见上）；
+##   ② 移动端   → **一律分数缩放**：手机屏幕比例几乎不可能是 4:3，fit 永远不是整数，
+##                此刻整数缩放只会把画面压到屏幕中间一小块（1080p 机只占 55% 宽）。
+##                手机屏小、像素密度高，1.125 倍这种分数缩放肉眼几乎无差 → 优先**填满屏幕**；
+##   ③ 其余（桌面且 fit ≥ 1）→ **整数缩放**：与改动前行为完全一致（默认窗口 1280×960 时 fit=1.0）。
+func _refresh_content_scale_stretch() -> void:
+	var win: Window = get_window()
+	if win == null:
+		return
+	var ws: Vector2 = Vector2(win.size)
+	## 窗口还没定尺寸时（headless / 启动瞬间，实测为 64×64）不要拍板，否则会白切一次。
+	if ws.x < 256.0 or ws.y < 192.0:
+		return
+	var want: int = pick_content_scale_stretch(ws, is_mobile_platform())
+	if win.content_scale_stretch == want:
+		return
+	win.content_scale_stretch = want
+	print("[Global] 自适应缩放：窗口 %s → %s（可用倍率 %.4f）" % [
+		ws, "整数" if want == Window.CONTENT_SCALE_STRETCH_INTEGER else "分数",
+		minf(ws.x / BASE_VIEWPORT_SIZE.x, ws.y / BASE_VIEWPORT_SIZE.y)])
+
+
+## ★缩放口径的**唯一决策**（纯函数，不碰窗口 → 可在无窗口环境下被用例逐分辨率验证）。
+## `fit` = 较紧一边的可用倍率，与 `aspect=keep` 同口径。
+static func pick_content_scale_stretch(win_size: Vector2, mobile: bool) -> int:
+	var fit: float = minf(win_size.x / BASE_VIEWPORT_SIZE.x, win_size.y / BASE_VIEWPORT_SIZE.y)
+	if fit < 1.0 or mobile:
+		return Window.CONTENT_SCALE_STRETCH_FRACTIONAL
+	return Window.CONTENT_SCALE_STRETCH_INTEGER
 
 
 ## 是否移动平台（Android / iOS）。**触摸按钮与画面适配都以它为准**：

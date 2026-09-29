@@ -403,14 +403,16 @@ func _on_back_to_title_pressed() -> void:
 		printerr("[NetworkLobby] 返回标题失败: %d" % err)
 
 
-## 联机暂未完成提示（2026-09-14 用户要求）：挂在标题下方，黄字醒目。
+## 联机提示（2026-09-14 用户要求挂在标题下方，黄字醒目）。
+## 2026-09-29 用户改口径：原先写「暂未完成 —— 请以单人模式为准」太劝退，
+## 改成「有问题请到交流群反馈」—— 联机已经是可用功能，需要的是反馈而不是劝退。
 func _add_wip_notice() -> void:
 	var vbox: Control = _connect_vbox()
 	if vbox == null:
 		return
 	var notice := Label.new()
 	notice.name = "WipNotice"
-	notice.text = "※ 联机模式暂未完成 —— 目前仅为基础联机同步（Host 权威），内容与存档请以单人模式为准；遇到异常请先回单人确认。"
+	notice.text = "※ 联机模式仍有 bug 在处理 —— 遇到问题请到交流群反馈，我们会尽快修。"
 	notice.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
 	notice.add_theme_font_size_override("font_size", 15)
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -7,14 +7,21 @@ extends Control
 ## 依赖：`Global.dispatch_virtual_action()`（改动作状态 + 补发 InputEventAction，唯一入口）
 ##
 ## 用法：把本节点放在左下角，尺寸即摇杆的触摸热区（建议 280~320px）。
-## 摇杆头（Knob）可选：在编辑器里把子节点拖到 `knob` 上，拖动时会跟随手指。
+## 视觉：子节点 `Base`（圆形底盘，铺满热区）+ `Knob`（摇杆头，居中）。
+## ★按下处即摇杆中心（**浮动摇杆**）：整组随按下点平移，摇杆头再按拖动方向偏移，松手全部复位。
 
 ## 死区：位移比例小于它就不触发方向（避免误触）。
 @export_range(0.0, 0.9, 0.01) var dead_zone: float = 0.28
 ## 摇杆头最大位移比例（相对半径）。
 @export_range(0.1, 1.0, 0.01) var knob_max_ratio: float = 0.42
-## 摇杆头节点（可选，拖动时跟随）。
-@export var knob: Control = null
+
+## ── 视觉节点（都走 **NodePath**）──
+## ★为什么不能用 `@export var knob: Control`：
+##   .tscn 里只能写成 `knob = NodePath("Knob")`，而 Godot 不会把它解析成 Control
+##   （实测读回 **null**）→ 摇杆头永远不动 = 用户报的「拖摇杆时头不跟着动」（2026-09-29）。
+##   导出成 NodePath 再自己 get_node 才是可靠的绑定方式。
+@export var base_path: NodePath = ^"Base"
+@export var knob_path: NodePath = ^"Knob"
 
 ## ── 菜单模式（2026-09-29）──
 ## 菜单界面的光标也是靠 `上/下` 动作走的，所以摇杆默认在菜单里**保留**。
@@ -31,6 +38,9 @@ var _active_index: int = -2
 var _origin: Vector2 = Vector2.ZERO
 var _dir: Vector2 = Vector2.ZERO
 var _pressed: Dictionary = {}
+var _base: Control = null
+var _knob: Control = null
+var _base_home: Vector2 = Vector2.ZERO
 var _knob_home: Vector2 = Vector2.ZERO
 var _global: Node = null
 
@@ -38,9 +48,17 @@ var _global: Node = null
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_global = get_node_or_null("/root/Global")
-	if knob != null and is_instance_valid(knob):
-		_knob_home = knob.position
+	## ⚠ 铁律：先拿 Node 再 `is` 判定，**禁**「先 as 后判 valid」（对已释放对象 `as` 会抛错）。
+	var nb: Node = get_node_or_null(base_path)
+	if nb is Control:
+		_base = nb
+		_base_home = _base.position
+	var nk: Node = get_node_or_null(knob_path)
+	if nk is Control:
+		_knob = nk
+		_knob_home = _knob.position
 	_origin = size * 0.5
+	_sync_visual()
 
 
 ## ★一律走 Global.dispatch_virtual_action()（2026-09-29 手机实测）：只按 `Input.action_press()`
@@ -53,7 +71,8 @@ func _forward(act: StringName, pressed: bool) -> void:
 
 
 ## 由 TouchControls 调用：菜单模式默认保留（摇杆正好用来走菜单光标）。
-func set_menu_mode(menu_mode: bool) -> void:
+## `scene_key` 只有按钮用得上（菜单场景白名单），摇杆忽略。
+func set_menu_mode(menu_mode: bool, _scene_key: String = "") -> void:
 	visible = (not menu_mode) or show_in_menu
 	if not visible:
 		## ★隐藏时必须先松开：否则角色会一直朝最后的方向走。
@@ -88,15 +107,31 @@ func _gui_input(event: InputEvent) -> void:
 		_update((event as InputEventMouseMotion).position)
 
 
+## 触摸热区的等效半径（取较短边的一半）。
+func _radius() -> float:
+	return maxf(minf(size.x, size.y) * 0.5, 1.0)
+
+
 func _update(pos: Vector2) -> void:
-	var radius: float = maxf(minf(size.x, size.y) * 0.5, 1.0)
+	var radius: float = _radius()
 	var v: Vector2 = pos - _origin
 	if v.length() > radius:
 		v = v.normalized() * radius
 	_dir = v / radius
-	if knob != null and is_instance_valid(knob):
-		knob.position = _knob_home + _dir * radius * knob_max_ratio
 	_apply()
+	_sync_visual()
+
+
+## 把「底盘 + 摇杆头」画到当前手指位置与方向上。
+## 浮动摇杆：整组按「按下点 − 热区中心」平移（按下处即摇杆中心）；摇杆头再沿 _dir 偏移。
+func _sync_visual() -> void:
+	var shift: Vector2 = Vector2.ZERO
+	if _active_index != -2:
+		shift = _origin - size * 0.5
+	if _base != null and is_instance_valid(_base):
+		_base.position = _base_home + shift
+	if _knob != null and is_instance_valid(_knob):
+		_knob.position = _knob_home + shift + _dir * _radius() * knob_max_ratio
 
 
 func _apply() -> void:
@@ -127,8 +162,7 @@ func _release_all() -> void:
 		if bool(_pressed[key]):
 			_forward(key, false)
 	_pressed.clear()
-	if knob != null and is_instance_valid(knob):
-		knob.position = _knob_home
+	_sync_visual()
 
 
 ## 换场景 / 节点被移除时兜底松开，避免"角色一直往一个方向走"。

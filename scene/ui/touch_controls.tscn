@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://script/ui/touch_controls.gd" id="1_root"]
 [ext_resource type="Script" path="res://script/ui/touch_joystick.gd" id="2_joy"]
@@ -76,6 +76,18 @@ corner_radius_top_right = 60
 corner_radius_bottom_right = 60
 corner_radius_bottom_left = 60
 
+[sub_resource type="StyleBoxFlat" id="SB_joy_base"]
+bg_color = Color(0.12, 0.13, 0.16, 0.34)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.94, 0.78, 0.42)
+corner_radius_top_left = 150
+corner_radius_top_right = 150
+corner_radius_bottom_right = 150
+corner_radius_bottom_left = 150
+
 [node name="TouchControls" type="CanvasLayer"]
 layer = 80
 script = ExtResource("1_root")
@@ -87,12 +99,20 @@ offset_top = 610.0
 offset_right = 320.0
 offset_bottom = 910.0
 script = ExtResource("2_joy")
-knob = NodePath("Knob")
+base_path = NodePath("Base")
+knob_path = NodePath("Knob")
 up_action = &"上"
 down_action = &"下"
 left_action = &"左"
 right_action = &"右"
 show_in_menu = true
+
+[node name="Base" type="Panel" parent="Joystick"]
+layout_mode = 0
+offset_right = 300.0
+offset_bottom = 300.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("SB_joy_base")
 
 [node name="Knob" type="Panel" parent="Joystick"]
 layout_mode = 0
@@ -129,6 +149,26 @@ script = ExtResource("3_btn")
 action = &"确定键"
 show_in_menu = true
 menu_text = "确定"
+
+[node name="BtnStart" type="Button" parent="ActionPad"]
+layout_mode = 0
+offset_left = 880.0
+offset_top = 390.0
+offset_right = 1100.0
+offset_bottom = 610.0
+focus_mode = 0
+theme_override_colors/font_color = Color(1, 0.96, 0.86, 1)
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("SB_big")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "开始"
+script = ExtResource("3_btn")
+action = &"开始游戏键"
+show_in_menu = true
+hide_in_gameplay = true
+menu_scene_filter = PackedStringArray("character_select_menu")
 
 [node name="BtnFunc" type="Button" parent="ActionPad"]
 layout_mode = 0
