@@ -113,9 +113,16 @@ func _exit_tree() -> void:
 func _on_quest_flag_changed(flag_name: String, value: bool) -> void:
 	## 联机 Client / 其他路径收到 flag 广播 → 本地做纯表现
 	if not wall_flag.is_empty() and flag_name == wall_flag and value:
+		## ★幂等闸（2026-09-30）：权威端 `_commit_destroy_flag()` 会经 `apply_quest_flag`
+		## **本地回环**到本函数（flag false→true 必 emit）。少了这道闸，同一面墙会**播两遍**
+		## 爆裂动画与炸开音效（客户端首次到达时 `_destroyed` 仍为 false，所以照常播一次）。
+		if _destroyed:
+			return
 		_destroyed = true
 		_placed = false
-		_apply_destroyed_visual()
+		## 广播路径也要出声：客户端 `_ready` 时若 flag 已置会走静默分支，
+		## 但"打到这面墙那一刻"的爆炸音必须两端都有（与外观同源）。
+		_apply_destroyed_visual(Vector2.INF, true)
 	elif not place_flag.is_empty() and flag_name == place_flag and value:
 		_placing = false
 		if not _placed:
@@ -181,7 +188,7 @@ func apply_explosion(pos: Vector2, radius_px: float, can_break: bool = true) -> 
 	_hits_left -= 1
 	if _hits_left <= 0:
 		_destroyed = true
-		_apply_destroyed_visual(pos)
+		_apply_destroyed_visual(pos, true)
 		_commit_destroy_flag()
 		print("[BlastWall] %s 被炸开" % name)
 	else:
@@ -265,7 +272,7 @@ func _explode_placed() -> void:
 		at = global_position
 	_destroyed = true
 	_placed = false
-	_apply_destroyed_visual(at)
+	_apply_destroyed_visual(at, true)
 	_commit_destroy_flag()
 	print("[BlastWall] %s 放置的炸药引爆" % name)
 
@@ -320,7 +327,14 @@ func _is_client_session() -> bool:
 
 
 ## flag 回环去重：本节点自己结算时已置 _destroyed，广播回来不会重复播表现。
-func _apply_destroyed_visual(blast_pos: Vector2 = Vector2.INF) -> void:
+##
+## `play_sound`（2026-09-30 用户实测「矿洞里可炸的墙爆炸音效没播」）：
+## `destroy_sound` 此前**只声明、从未播放** —— 作者在 `突袭-第三关-矿洞.tscn` 里
+## 明明配了音效却听不到任何动静，正是这个漏播。只有"真的被炸开"的三条路径
+##（投掷物 `apply_explosion` / 引线 `_explode_placed` / 客户端收到 flag 广播）才置 true；
+## **`_ready()` 的 flag 恢复路径（存档 / 重新进图 / 中途加入）必须保持静默** ——
+## 那是"已经炸过的墙"，重进游戏时不该补响一声。
+func _apply_destroyed_visual(blast_pos: Vector2 = Vector2.INF, play_sound: bool = false) -> void:
 	var had_cells: bool = not get_used_cells().is_empty()
 	for gp in get_used_cells():
 		erase_cell(gp)
@@ -335,6 +349,10 @@ func _apply_destroyed_visual(blast_pos: Vector2 = Vector2.INF) -> void:
 	if rubble_anim:
 		var at: Vector2 = blast_pos if blast_pos != Vector2.INF else global_position
 		VXAnimSprite.play_scene(rubble_anim, at, get_tree().current_scene)
+	## 炸开音效（与爆裂动画同时）。位置用爆炸点，广播路径回退层原点，
+	## 与上面 rubble 的回退口径保持一致。
+	if play_sound and destroy_sound:
+		Global.play_sfx_managed(destroy_sound, get_tree().current_scene)
 
 
 # ═══════════════════════════════════════

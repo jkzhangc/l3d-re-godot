@@ -101,8 +101,15 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if _in_settings:
-		_handle_settings_input(event)
-		_mark_handled()
+		## ★必须"**消费了才标记**"（2026-09-30 用户实测：手机进设置后虚拟按键全失效）。
+		## 旧实现这里无条件 `_mark_handled()` → `set_input_as_handled()` 会把**所有**事件
+		## 从输入队列里掐掉，包括触摸层赖以工作的 `InputEventScreenTouch`：
+		## 触摸按钮收不到按下事件 → 连虚拟动作都发不出来 → 手机端进设置页后
+		## **摇杆推不动、确定/取消点不动**（画面还停在关卡里，所以只有设置子页坏，
+		## 主暂停菜单不坏 —— 那边只对已知动作标记，触摸事件能照常穿过去）。
+		## 现在与主菜单分支口径一致：只有真正被设置页吃掉的事件才标记。
+		if _handle_settings_input(event):
+			_mark_handled()
 		return
 
 	if event.is_action_pressed("菜单键") or event.is_action_pressed("取消键"):
@@ -413,11 +420,14 @@ func _clear_settings_ui() -> void:
 	_settings_bar_fill.clear()
 
 
-func _handle_settings_input(event: InputEvent) -> void:
+## 设置页输入。**返回是否消费了该事件** —— 调用方据此决定要不要 `_mark_handled()`。
+## ★不要改回"无条件消费"：那会把触摸层的 `InputEventScreenTouch` 一起吞掉，
+## 手机端直接失去全部虚拟按键（见 `_input` 顶部注释）。
+func _handle_settings_input(event: InputEvent) -> bool:
 	if event.is_action_pressed("取消键"):
 		Global.play_ui_sfx("cancel", sfx_cancel_path)
 		_exit_settings()
-		return
+		return true
 
 	var items: Array[String] = _settings_items()
 	var item_count: int = items.size()
@@ -425,12 +435,12 @@ func _handle_settings_input(event: InputEvent) -> void:
 		_settings_cursor_idx = (_settings_cursor_idx - 1 + item_count) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_settings_cursor()
-		return
+		return true
 	if event.is_action_pressed("下"):
 		_settings_cursor_idx = (_settings_cursor_idx + 1) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_settings_cursor()
-		return
+		return true
 
 	## ★按**项名**分派，不硬编码序号（2026-09-30）：移动端多一项「按键布局」，序号会变。
 	var cur: String = items[_settings_cursor_idx] if _settings_cursor_idx < items.size() else ""
@@ -446,7 +456,7 @@ func _handle_settings_input(event: InputEvent) -> void:
 				_enter_touch_layout_edit()
 			"返回":
 				_exit_settings()
-		return
+		return true
 
 	# 左/右 调音量
 	var delta_vol: int = 0
@@ -455,7 +465,7 @@ func _handle_settings_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("右"):
 		delta_vol = 5
 	else:
-		return
+		return false
 
 	match cur:
 		"音乐音量":
@@ -464,6 +474,7 @@ func _handle_settings_input(event: InputEvent) -> void:
 		"音效音量":
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_volume_display(1)
+	return true
 
 
 ## ── 按键布局调整（2026-09-30，仅移动端）──

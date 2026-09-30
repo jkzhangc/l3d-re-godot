@@ -144,6 +144,14 @@ enum KillFilter { ALL = 0, TANK = 1 }
 @export_group("音效")
 @export var prepare_sound: AudioStream                    ## 预备音效：PREPARE 阶段开始时播放（留空=不播）
 @export var alert_sound: AudioStream                      ## 特殊预警音效：ACTIVE 正式开始时播放（留空=不播）
+## ★防守战**正常打完**的结束音效（2026-09-30 用户需求）。默认 = `カギ開け`（开锁声），
+## 对应原作「防守战结束 → 开门放行」的听感。
+## ⚠ 与「终章 ED」的 `ending_sound` **不是同一个东西**：`ending_sound` 是防
+##    守完成后再交互、进入黑屏结局演出时才响；本项在**防守战结束那一刻**就响。
+## ⚠ 只在 `_finish_holdout()`（正常完成，含客户端收到完成广播）播；
+##    `abort()`（全灭冻结 / 换图中止）不播 —— 那不是"打完"。
+## ⚠ 留空 = 不播；一场防守战最多响一次（`_play_finish_sound_once` 幂等）。
+@export var finish_sound: AudioStream = preload("res://sound/カギ開け.ogg")
 
 # ═══════════════════════════════════════
 # 配置 — 终章 ED（战役最终防守战专用，2026-09-13）
@@ -223,6 +231,9 @@ var _music_player: AudioStreamPlayer = null  ## 防守战专属 BGM（懒创建�
 ## KILL_COUNT 杀怪式运行时
 var _kills: int = 0                 ## ACTIVE 期间已击杀敌人数
 var _tree_hooked: bool = false      ## 是否已挂 SceneTree.node_added（补连新刷丧尸的死亡信号）
+## 结束音效是否已播（一场防守战只响一次）—— Host 的 `_finish_holdout` 与客户端的
+## `apply_remote_completion` 都可能到达，中途加入补发也会重放完成广播，必须幂等。
+var _finish_sound_played: bool = false
 
 
 # ═══════════════════════════════════════
@@ -595,6 +606,7 @@ func trigger() -> void:
 	_phase_timer = prepare_duration
 	_phase_total = prepare_duration
 	_local_hud_shown = false
+	_finish_sound_played = false  ## 新一场防守战：结束音效重新武装
 	# 本次防守战实例令牌：Client 用它校验收到的包是否来自当前场景的这场战斗，
 	# 丢弃旧场景残留的过期 RPC，避免在新场景里弹出幽灵 HUD。
 	_net_token = randi_range(1, 1000000)
@@ -803,6 +815,9 @@ func _finish_holdout() -> void:
 	_drive_local_hud(Phase.IDLE, 0.0, 0.0)
 	_broadcast_state(Phase.IDLE, 0.0, 0.0, true)  # 通知所有 Client 隐藏 HUD
 	_stop_holdout_music()
+	## 结束音效（2026-09-30 用户需求）：防守战打完那一刻响一声（默认 カギ開け）。
+	## 放在 _broadcast_completion() **之前** —— 客户端由广播触发同一个幂等入口。
+	_play_finish_sound_once()
 	_update_label()
 	# 恢复常规导演编排（节奏/常规刷怪从喘息重新开始）——仅权威端，Client 的 Director 本就不跑生成
 	if not _is_network_client():
@@ -824,6 +839,25 @@ func _finish_holdout() -> void:
 		_run_completion_events()
 		holdout_finished.emit(event_name)
 		_broadcast_completion()  # Client 也执行节点显隐（传送点仅 Host 创建）
+
+
+# ═══════════════════════════════════════
+# 结束音效（2026-09-30 用户需求）
+# ═══════════════════════════════════════
+
+## 防守战正常打完的结束音效，**一场只响一次**。
+## 三条到达路径都要靠它去重：① 权威端 `_finish_holdout()`
+## ② 客户端 `apply_remote_completion()`（Host 广播）③ 中途加入补发完成广播。
+## 与 `ending_sound`（终章 ED 黑屏演出时响）**互不相干**，别把两者合并。
+func _play_finish_sound_once() -> void:
+	if _finish_sound_played:
+		return
+	_finish_sound_played = true
+	if not finish_sound:
+		return
+	## 走 Global 的托管播放器（与 prepare_sound / alert_sound / ending_sound 同一入口，
+	## 受全局音效音量与并发上限管理），不另建 AudioStreamPlayer。
+	Global.play_sfx_managed(finish_sound, get_tree().current_scene)
 
 
 func is_active() -> bool:
@@ -1017,6 +1051,9 @@ func apply_remote_completion(token: int) -> void:
 	_active = false
 	_completed = true
 	_local_hud_shown = false
+	## 结束音效也两端同源（与外观/节点显隐一样）：客户端听到的完成音效由本路径负责。
+	## ⚠ 幂等：Host 若因本地回环也走到这里，`_finish_holdout` 已经响过 → 不叠响。
+	_play_finish_sound_once()
 	_run_completion_events()
 	print("[HoldoutMachine] 完成事件已在本端执行（client=%s token=%d）" % [
 		str(_is_network_client()), token])

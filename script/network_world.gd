@@ -549,17 +549,30 @@ func _physics_process(delta: float) -> void:
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
 		_player_snapshot_accumulator += delta
+		## ★快照「只构一次，再发给所有 Client」（2026-09-30 排查手机端联机卡顿）。
+		## 旧实现把 `_build_compact_player_snapshot()` / `_build_enemy_snapshot(true)`
+		## 写在 `for peer_id in _ready_client_peers` **里面** → N 个 Client 就把同一份
+		## 快照重建 N 次：玩家快照 27 个字段/人、敌人快照要遍历全部敌人（每只还先分配一个
+		## 13 键 Dictionary 再拆成 9 元素数组）并排序。4 人局（3 个 Client）时，
+		## 60Hz 与 40Hz 两条路径合计 ≈ 300 次构建/秒 —— 而结果**完全相同**。
+		## 手机做 Host 时这是最重的一笔纯浪费（构建在 Host CPU 上，编码/带宽本来就省不掉）。
+		## 构建结果是只读的，同一份 Array 交给多次 `rpc_id` 是安全的。
 		if _player_snapshot_accumulator >= PLAYER_SNAPSHOT_INTERVAL:
 			_player_snapshot_accumulator = fmod(_player_snapshot_accumulator, PLAYER_SNAPSHOT_INTERVAL)
-			for peer_id: int in _ready_client_peers.keys():
-				if net.get_peer_ids().has(peer_id):
-					player_position_snapshot.rpc_id(peer_id, _build_compact_player_snapshot())
+			var position_targets: Array = _active_client_peer_ids()
+			if not position_targets.is_empty():
+				var player_states: Array = _build_compact_player_snapshot()
+				for peer_id: int in position_targets:
+					player_position_snapshot.rpc_id(peer_id, player_states)
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
-			for peer_id: int in _ready_client_peers.keys():
-				if net.get_peer_ids().has(peer_id):
-					player_snapshot.rpc_id(peer_id, _build_compact_player_snapshot(), _build_enemy_snapshot(true))
+			var snapshot_targets: Array = _active_client_peer_ids()
+			if not snapshot_targets.is_empty():
+				var player_states: Array = _build_compact_player_snapshot()
+				var enemy_states: Array = _build_enemy_snapshot(true)
+				for peer_id: int in snapshot_targets:
+					player_snapshot.rpc_id(peer_id, player_states, enemy_states)
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
@@ -568,6 +581,17 @@ func _physics_process(delta: float) -> void:
 	else:
 		_predict_client_local_movement(inputs_frozen)
 		_capture_client_input(delta, inputs_frozen)
+
+
+## 当前真正可发快照的 Client 列表（已纳入同步名单 ∧ 仍在 ENet peer 列表里）。
+## ★快照构建很贵（见 `_physics_process` 的说明），所以**先算出目标集合，
+## 再决定要不要构建** —— 名单非空但没有有效 peer 时不应该白构一份。
+func _active_client_peer_ids() -> Array:
+	var out: Array = []
+	for peer_id: int in _ready_client_peers.keys():
+		if net.get_peer_ids().has(peer_id):
+			out.append(peer_id)
+	return out
 
 
 func _is_local_menu_open() -> bool:

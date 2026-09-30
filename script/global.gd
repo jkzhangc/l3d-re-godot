@@ -343,17 +343,26 @@ func load_ui_font(path: String) -> FontFile:
 	return ff
 
 
-## ★把字体设成「像素字体」应有的样子：**关抗锯齿 + 关次像素定位**。
+## ★把字体设成「像素字体」应有的样子：**关抗锯齿 + 关次像素定位 + 固定 1:1 栅格化**。
 ## TTF 导入默认是 Grayscale 抗锯齿 + Auto 次像素定位 —— 12px 原尺寸下几乎看不出，
 ## 但**字号一放大**（弹药数字是 36px = 3 倍）字形边缘就渗出**零散的灰白像素点**；
 ## 两个像素字体（缝合像素 / zpix）都有这个问题（2026-09-30 用户实测）。
 ## **凡是从磁盘新 load 一份字体的地方，都必须过这里** ——
 ## 只改内存实例，不会写回 .import / 磁盘资源，所以对同一个字体反复调用是幂等的。
+##
+## ★`oversampling` 也必须钉成 1.0（2026-09-30 用户实测「手机端弹药数字仍有白点」）：
+## `oversampling = 0` 的语义是「跟随视口自动超采样」。手机端走的是**分数缩放**
+##（`pick_content_scale_stretch()` 对移动端一律返回 FRACTIONAL，本例 1.125 倍），
+## 字形被按 1.125 倍栅格化、再缩回 36px 画进 1280×960 的固定画布 →
+## 边缘丢像素/多像素，正是那些"零散白点"。像素字体要的是 **1:1 硬边栅格化**，
+## 所以这里与两份 `.import`（也写死 1.0）双保险：资源层管"任何加载路径"，
+## 这里管"运行时新 load 的实例"。
 func make_pixel_crisp(ff: FontFile) -> void:
 	if ff == null:
 		return
 	ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+	ff.oversampling = 1.0
 
 
 ## 当前界面字体资源。加载失败返回 null（调用方自行回退 ThemeDB.fallback_font）。

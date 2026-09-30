@@ -85,21 +85,27 @@ func _apply_ammo_font() -> void:
 		return
 	var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
 	if fallback:
-		## fallback（DotGothic16）同样要关抗锯齿 + 次像素定位：
+		## fallback（DotGothic16）同样要关抗锯齿 + 次像素定位 + 钉 1:1 栅格化：
 		## 否则 ∞ 这类走兜底的字形照样会在 36px 下渗出零散白点（2026-09-30 用户实测）。
 		fallback.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 		fallback.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+		fallback.oversampling = 1.0
 		out.fallbacks = [fallback]
 	## duplicate() 出来的副本也要显式关一遍（基字体已在 Global.load_ui_font 里关过，
 	## 但这里再做一次可保证「本标签的字体链」整体干净）。
+	## ⚠ `oversampling` 是手机端残留白点的关键项：移动端是分数缩放，留 0（跟随视口）
+	## 会让字形被按 1.125 倍栅格化再缩回 36px → 边缘零散白点。
 	out.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	out.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+	out.oversampling = 1.0
+	## 描边一律关掉：像素字体加描边等于在字形周围再糊一圈（用户报的就是"周围有像素点"）。
 	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
 		if label:
 			## 标记为「自定义字体」：Global 的整树字体重套会跳过它们，
 			## 由本文件自己在 font_changed 时重建（否则会丢掉 ∞ 的 fallbacks 链）。
 			label.set_meta(&"ui_font_custom", true)
 			label.add_theme_font_override("font", out)
+			label.add_theme_constant_override("outline_size", 0)
 
 
 ## 字体切换：重建弹药标签字体（基字体换成新选项，∞ 兜底链保持不变）。

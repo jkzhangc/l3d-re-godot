@@ -3,7 +3,8 @@ extends Node
 ## ── 架构定位 ──
 ## 系统：联机连接层 ｜ 层：单例（autoload: Net）
 ## 联机：Host 权威 v2.1
-## 职责：ENet 连接、握手协议、玩家名单与角色表校验、场景 ready 与安全切图协议；不管理游戏实体。
+## 职责：ENet 连接、握手协议、玩家名单与角色表校验、场景 ready 与安全切图协议、
+##       网络延迟测量与左下角延迟 HUD；不管理游戏实体。
 ## 依赖：ENetMultiplayerPeer、UPnP；NetworkWorld 为其场景内搭档
 
 ## 主项目联机连接层（Host 权威 v2.1）。
@@ -16,7 +17,8 @@ extends Node
 ## 4. start_game()/scene_transition_commit()/scene_transition_ack() 用“旧场景静默 → 短暂排空 → 同步换图”
 ##    的顺序规避 RPC 仍指向已释放 NetworkWorld 节点的竞态；
 ## 5. _session_player_states 在换图期间保存 Host 权威 PlayerState。具体玩家、敌人和掉落物的
-##    生命周期、输入和快照均在场景内的 NetworkWorld 中处理。
+##    生命周期、输入和快照均在场景内的 NetworkWorld 中处理；
+## 6. 文件末尾的「网络延迟显示」区块：自测 RTT（ENet 无公开延迟接口）+ 左下角常驻 HUD。
 ##
 ## 本脚本不模拟战斗，也不相信客户端给出的资源或角色数据；它只维护联机会话的连接级事实。
 
@@ -155,6 +157,12 @@ func leave() -> void:
 	_pending_scene_transition_acks.clear()
 	_scene_transition_serial = 0
 	_session_player_states.clear()
+	## 延迟测量一并复位：新会话要重新量，不能沿用上一局残留的数值/界面。
+	rtt_ms = -1
+	_peer_rtt_ms.clear()
+	_ping_accum = 0.0
+	if _ping_layer != null and is_instance_valid(_ping_layer):
+		_ping_layer.visible = false
 	if _upnp_mapped_port > 0:
 		_remove_upnp_mapping_async(_upnp_mapped_port)
 		_upnp_mapped_port = 0
@@ -659,3 +667,145 @@ func _sanitize_name(value: String) -> String:
 	if result.is_empty():
 		return "玩家"
 	return result.left(16)
+
+
+# ═══════════════════════════════════════
+# 网络延迟显示（左下角，2026-09-30 用户需求）
+# ═══════════════════════════════════════
+##
+## 【为什么要自己量】`ENetMultiplayerPeer` / `MultiplayerPeer` **没有公开的延迟读取接口**
+## （GDScript 侧拿不到 ENet 的对等端 RTT），所以用一对 RPC 自测往返时间。
+##
+## 【协议】非主机每 `PING_INTERVAL` 秒发一次：
+##     `net_ping(本机单调毫秒, 我上一次测到的 RTT)`
+##   · 主机收到后**原样回传**该毫秒（`net_pong`），并把对方上报的 RTT 记进
+##     `_peer_rtt_ms` —— 于是主机**不用自己发起**就知道每条连接的延迟，显示"最差的一条"。
+##   · 发起方收到回传后用 `Time.get_ticks_msec() - 回传值` 得到**往返**延迟。
+##   ⚠ 两端 `Time.get_ticks_msec()` 的零点不同，所以**绝不做跨机时间比较** ——
+##     该值只被原样送回发起方、由发起方自己相减，天生免疫时钟不同步。
+##
+## 【显示口径】按游戏惯例显示**往返** RTT（= 常说的 ping），单位 ms：
+##   Client → `延迟 42ms`（自己到主机）；Host → `最差 87ms`（各 Client 里最差的一条）。
+##   还没测到 → `延迟 —`。
+##
+## 【为什么挂在 Net 上】联机 RTT 是**跨场景**的状态（大厅 → 各张地图），
+## 而 NetworkWorld 每张图都会重建；且 RPC 需要两端同路径的节点，autoload 最合适。
+## 左下角 HUD 同理：跟着 Net 常驻，切图不会闪断。
+const PING_INTERVAL: float = 1.0
+## 左下角文字位置：**锚在底边**（x 距左、y 距底为负），画布尺寸变化时自然贴底。
+const PING_RECT := Rect2(12.0, -46.0, 280.0, 34.0)
+## HUD 层级：在战斗 HUD(10) 之上、触摸层(80)/黑幕(90)/菜单(100) 之下。
+const PING_LAYER: int = 20
+
+var rtt_ms: int = -1                   ## 本机 ↔ 主机的往返延迟；-1 = 尚未测到
+var _peer_rtt_ms: Dictionary = {}      ## 主机专用：client peer_id → 它上报的往返延迟
+var _ping_accum: float = 0.0
+var _ping_layer: CanvasLayer = null
+var _ping_label: Label = null
+
+
+func _process(delta: float) -> void:
+	_update_ping(delta)
+
+
+## 每帧：保证 HUD 存在/显隐正确（仅联机会话显示），并按间隔量一次延迟。
+func _update_ping(delta: float) -> void:
+	if not is_online_session():
+		if _ping_layer != null and is_instance_valid(_ping_layer):
+			_ping_layer.visible = false
+		_ping_accum = 0.0
+		return
+	_ensure_ping_ui()
+	if _ping_layer != null and is_instance_valid(_ping_layer):
+		_ping_layer.visible = true
+	if _ping_label != null and is_instance_valid(_ping_label):
+		_ping_label.text = _ping_text()
+	## 主机不主动发 ping（延迟由各 Client 上报，见文件头协议说明）。
+	if is_host:
+		return
+	_ping_accum += delta
+	if _ping_accum < PING_INTERVAL:
+		return
+	_ping_accum = fmod(_ping_accum, PING_INTERVAL)
+	net_ping.rpc_id(1, Time.get_ticks_msec(), rtt_ms)
+
+
+func _ping_text() -> String:
+	if is_host:
+		var worst: int = _host_worst_rtt()
+		if worst < 0:
+			return "延迟 —"
+		return "最差 %dms" % worst
+	if rtt_ms < 0:
+		return "延迟 —"
+	return "延迟 %dms" % rtt_ms
+
+
+## 主机视角：所有**仍在连接中**的 Client 里最差的一条往返延迟；一条都没有 → -1。
+## 顺手把已断开 peer 的记录清掉（不必依赖 peer_disconnected 的时序）。
+func _host_worst_rtt() -> int:
+	var alive: Array[int] = get_peer_ids()
+	var worst: int = -1
+	for key: Variant in _peer_rtt_ms.keys():
+		var peer_id: int = int(key)
+		if not alive.has(peer_id):
+			_peer_rtt_ms.erase(key)
+			continue
+		worst = maxi(worst, int(_peer_rtt_ms[key]))
+	return worst
+
+
+## Client → Host：上报自己的往返延迟，并请求回传时间戳。
+@rpc("any_peer", "call_remote", "reliable")
+func net_ping(sent_msec: int, sender_rtt_ms: int) -> void:
+	if not is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender <= 1:
+		return
+	## 首次上报时 sender_rtt_ms 还是 -1（自己都还没测到）→ 不记录，避免显示成 0ms。
+	if sender_rtt_ms >= 0:
+		_peer_rtt_ms[sender] = sender_rtt_ms
+	net_pong.rpc_id(sender, sent_msec)
+
+
+## Host → Client：把时间戳原样回传，由发起方自己算往返。
+@rpc("authority", "call_remote", "reliable")
+func net_pong(sent_msec: int) -> void:
+	rtt_ms = maxi(0, int(Time.get_ticks_msec()) - sent_msec)
+
+
+## 左下角 HUD 懒创建（一次）。挂在 Net 下 → 跨场景常驻，不随地图重建。
+func _ensure_ping_ui() -> void:
+	if _ping_layer != null and is_instance_valid(_ping_layer):
+		return
+	_ping_layer = CanvasLayer.new()
+	_ping_layer.name = "NetworkPingHud"
+	_ping_layer.layer = PING_LAYER
+	add_child(_ping_layer)
+
+	var root := Control.new()
+	root.name = "Root"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE  ## 绝不吃触摸/鼠标
+	_ping_layer.add_child(root)
+
+	_ping_label = Label.new()
+	_ping_label.name = "PingLabel"
+	## 锚在左下角：offset 相对**底边**，窗口/画布换尺寸时自动贴底。
+	_ping_label.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	_ping_label.offset_left = PING_RECT.position.x
+	_ping_label.offset_top = PING_RECT.position.y
+	_ping_label.offset_right = PING_RECT.position.x + PING_RECT.size.x
+	_ping_label.offset_bottom = PING_RECT.position.y + PING_RECT.size.y
+	_ping_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ping_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ping_label.add_theme_color_override("font_color", Color(0.88, 0.94, 1.0))
+	## 字体一律走 Global 单一入口（跟随「设置 → 界面字体」，24px = 12 的整倍）。
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null:
+		if g.has_method("apply_ui_font"):
+			g.call("apply_ui_font", _ping_label, 24)
+		if g.has_method("apply_text_shadow"):
+			g.call("apply_text_shadow", _ping_label)
+	root.add_child(_ping_label)

@@ -80,9 +80,12 @@ func _ensure_jump_ui() -> void:
 	_jump_btn.text = "跳转章节"
 	_jump_btn.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_jump_btn.offset_left = 12.0
-	_jump_btn.offset_top = -44.0
+	## ★上移一行（2026-09-30）：最底下一行（-44 ~ -12）让给联机延迟 HUD
+	##（`Net.PING_RECT`，左下角常驻）。两者在"调试 + 做主机"时才会同时出现，
+	## 叠在一起会互相压字，所以调试按钮让开这一行。
+	_jump_btn.offset_top = -86.0
 	_jump_btn.offset_right = 132.0
-	_jump_btn.offset_bottom = -12.0
+	_jump_btn.offset_bottom = -54.0
 	_apply_debug_font(_jump_btn)
 	_jump_btn.pressed.connect(_toggle_jump_panel)
 	root.add_child(_jump_btn)
