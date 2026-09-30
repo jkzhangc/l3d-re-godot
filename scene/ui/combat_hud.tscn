@@ -68,11 +68,11 @@ expand_mode = 1
 stretch_mode = 5
 
 [node name="ThrowableCountLabel" type="Label" parent="." unique_id=1700000005]
+z_index = 2
 offset_left = 765.0
 offset_top = 77.0
 offset_right = 917.0
 offset_bottom = 129.0
-z_index = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
@@ -98,11 +98,11 @@ mouse_filter = 2
 texture = ExtResource("5_5nspm")
 
 [node name="PrimaryAmmoLabel" type="Label" parent="." unique_id=1700000001]
+z_index = 2
 offset_left = 989.0
 offset_top = 128.0
 offset_right = 1141.0
 offset_bottom = 180.0
-z_index = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
@@ -110,11 +110,11 @@ theme_override_font_sizes/font_size = 36
 text = "12/96"
 
 [node name="SecondaryAmmoLabel" type="Label" parent="." unique_id=1700000002]
+z_index = 2
 offset_left = 1098.0
 offset_top = 238.0
 offset_right = 1230.0
 offset_bottom = 290.0
-z_index = 2
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
@@ -126,8 +126,8 @@ layout_mode = 3
 anchors_preset = 0
 offset_left = 86.0
 offset_top = 164.0
-offset_right = 100.0
-offset_bottom = 198.0
+offset_right = 98.0
+offset_bottom = 188.0
 scale = Vector2(1.5, 1.5)
 script = ExtResource("6_aeqfj")
 text = "0"
