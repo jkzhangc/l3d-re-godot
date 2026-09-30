@@ -56,13 +56,25 @@ func _ready() -> void:
 	## ⚠ `_input` 在 GUI 之前收到事件，所以 Button 自己那套鼠标处理不会把它吃掉。
 
 
+## ★把触摸事件的坐标换成 **viewport 逻辑坐标**（2026-09-30 用户实测「按下的位置与按钮视觉位置对不上」）。
+## 根因：Godot 只对 `InputEventMouse` 系列做 content-scale 变换，**`InputEventScreenTouch` /
+## `ScreenDrag` 的 `position` 保持屏幕坐标** —— 而 `get_global_rect()` 是逻辑坐标。
+## 一旦画面有非 1:1 缩放（手机端分数缩放 0.75 / 1.125），两者就整体错位。
+## ⚠ 摇杆走 `_gui_input`，坐标由 GUI 系统自动转过，所以没这个问题 —— 只有本文件（`_input`）要自己转。
+func _to_logical(screen_pos: Vector2) -> Vector2:
+	var vp: Viewport = get_viewport()
+	if vp == null:
+		return screen_pos
+	return vp.get_final_transform().affine_inverse() * screen_pos
+
+
 func _input(event: InputEvent) -> void:
 	if not visible or action == &"":
 		return
 	if event is InputEventScreenTouch:
 		var t: InputEventScreenTouch = event
 		if t.pressed:
-			if _touch_index == -2 and get_global_rect().has_point(t.position):
+			if _touch_index == -2 and get_global_rect().has_point(_to_logical(t.position)):
 				_touch_index = t.index
 				_on_down()
 		elif t.index == _touch_index:
@@ -71,9 +83,10 @@ func _input(event: InputEvent) -> void:
 		## 手指滑出按钮范围 → 松开。多点触控下 Button 的 `mouse_exited` 兜底不可靠，
 		## 少了这一步会出现"动作一直按着"（角色一直走 / 一直开枪）。
 		var d: InputEventScreenDrag = event
-		if d.index == _touch_index and not get_global_rect().has_point(d.position):
+		if d.index == _touch_index and not get_global_rect().has_point(_to_logical(d.position)):
 			_on_up()
 	elif event is InputEventMouseButton:
+		## 鼠标事件 Godot 已经变换过了 → 直接用 `mb.position`（不要重复变换）。
 		var mb: InputEventMouseButton = event
 		if mb.button_index != MOUSE_BUTTON_LEFT:
 			return
