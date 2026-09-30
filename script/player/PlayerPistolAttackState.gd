@@ -27,10 +27,12 @@ func enter() -> void:
 		transition_requested.emit("Idle")
 		return
 
-	# 远程武器：弹夹为空则播放空弹音效，不进入攻击动画
+	# 远程武器：弹夹为空 → 先尝试**自动换弹**；真的打光了才播空弹音效，不进入攻击动画
 	if _wd.is_ranged and _wd.magazine_capacity > 0:
 		var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 		if current <= 0:
+			if _try_auto_reload():
+				return
 			print("[手枪] 弹夹为空！咔嚓——")
 			if _wd.empty_fire_sound:
 				_play_attack_sound(_wd.empty_fire_sound)
@@ -213,11 +215,14 @@ func _on_attack_complete() -> void:
 
 func _try_continue_attack() -> bool:
 	## HOLD 模式下按住确定键 → 重新开始一轮攻击。
-	## 返回 true 表示已重新开始攻击。
+	## 返回 true 表示已重新开始攻击（含"已请求装填"——调用方不要再切回 Pistol）。
 	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
 		# HOLD 模式下检查弹药（空弹则终止连发）
-		if _wd.is_ranged and _wd.magazine_capacity > 0 and not _wd.has_infinite_ammo():
+		if _wd.is_ranged and _wd.magazine_capacity > 0:
 			if get_player_state().get_magazine_ammo(_wd.item_id) <= 0:
+				# ★自动换弹（2026-09-30）：还有备弹 → 直接接装填；真打光了才播空弹音效。
+				if _try_auto_reload():
+					return true
 				if _wd.empty_fire_sound:
 					_play_attack_sound(_wd.empty_fire_sound)
 				return false
@@ -229,6 +234,25 @@ func _try_continue_attack() -> bool:
 		_set_attack_frame(_seq_idx)
 		return true
 	return false
+
+
+## ★自动换弹（2026-09-30 用户需求）：弹夹空 + 还有备弹（无限备弹武器恒成立）
+## → 自动请求进入装填状态，免去每次手动按装填键。
+##
+## 与联机 Host 侧 `NetworkWorld._try_host_attack` 里那段 `HOST_AUTO_RELOAD` 是**同一规则**，
+## 两端手感必须一致（联机时本状态机被 _disable_network_state_machine 停用，输入走 NetworkWorld）。
+## 返回 true 表示已发出装填请求，调用方必须立即 return（不要再 emit 切回 Pistol）。
+func _try_auto_reload() -> bool:
+	if _wd == null or not _wd.is_ranged or _wd.magazine_capacity <= 0:
+		return false
+	if get_player_state().get_magazine_ammo(_wd.item_id) > 0:
+		return false
+	# 备弹无限 → 恒可装填；否则必须有真实备用弹药（与 PlayerReloadState.enter 同一判据）
+	if not _wd.has_infinite_ammo() and get_player_state().count_ammo_item(_wd.ammo_item_id) <= 0:
+		return false
+	print("[自动换弹] 弹夹为空且有备弹 → 自动装填 %s" % _wd.item_name)
+	transition_requested.emit("Reload")
+	return true
 
 
 func _play_attack_sound(stream: AudioStream) -> void:

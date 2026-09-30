@@ -1659,6 +1659,28 @@ func _clear_host_weapon_transition_after(peer_id: int, duration: float) -> void:
 		_weapon_transition_state.erase(peer_id)
 
 
+## Host 侧武器举/放的**唯一发起入口**（「举起放下武器键」与「主/副武器键」共用）。
+## 过渡期间锁住其它战斗输入；两端表现由 weapon_transition_presentation 统一驱动。
+func _begin_host_weapon_transition(peer_id: int, node: Node2D, wd: WeaponData, raising: bool) -> void:
+	var duration := _get_network_weapon_transition_duration(wd)
+	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
+	_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
+	node.play_network_weapon_transition(wd, raising)
+	weapon_transition_presentation.rpc(peer_id, wd.item_id, raising)
+	_clear_host_weapon_transition_after(peer_id, duration)
+
+
+## ★主/副武器键（数字键 1/2、手机「主武器」按钮）在联机下的语义 —— 必须与单机
+## PlayerIdleState / PlayerWalkState / PlayerRunState / PlayerPistolState / PlayerKnifeState 完全一致：
+##   未举枪 → **举起**该槽位武器；已举枪 + 同槽位 → 放下；已举枪 + 异槽位 → 切换并举起。
+##
+## 【2026-09-30 修复「手机端多人模式举不起武器」的根因】
+## 旧实现只有一个分支：`if state.active_weapon_slot == slot: return` 然后
+## `if node.is_weapon_mode_active(): node.enter_weapon_mode(wd)` —— 也就是说**未举枪时按
+## 主武器键什么都不做**（未举枪时 active_weapon_slot 本就默认 primary，第一道闸门直接返回）。
+## 结果：联机里唯一能举枪的入口只剩「举起放下武器键」(PC=Shift)。
+## 手机端此前**没有**该按钮（BtnHold 是 09-30 才补的），玩家只能按「主武器」→ 永久举不起来。
+## 单机同键走 PlayerIdleState._try_raise_weapon 能举起，所以只有联机坏 —— 与玩家反馈一致。
 func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
@@ -1669,13 +1691,24 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
-	var wd := state.get_equipped_weapon(slot)
-	if not wd or state.active_weapon_slot == slot:
+	var wd: WeaponData = state.get_equipped_weapon(slot)
+	if not wd or wd.weapon_state_name.is_empty():
 		return
+	var previous_slot: String = state.active_weapon_slot
 	state.active_weapon_slot = slot
-	if node.is_weapon_mode_active():
-		node.enter_weapon_mode(wd)
-		node.set_weapon_ready_frame()
+	if not node.is_weapon_mode_active():
+		## 未举枪 → 举起（走与「举起放下武器键」同一条过渡链，保持表现一致）
+		_begin_host_weapon_transition(peer_id, node, wd, true)
+		print("[NetworkWorld] HOST_WEAPON_SWITCH peer=%d slot=%s weapon=%s raise=true" % [peer_id, slot, wd.item_id])
+		return
+	if previous_slot == slot:
+		## 已举枪 + 同槽位 → 放下（与单机 PlayerPistolState / PlayerKnifeState
+		## 「同槽位→放下」对齐；旧实现是静默 return，与单机不一致）。
+		_begin_host_weapon_transition(peer_id, node, wd, false)
+		print("[NetworkWorld] HOST_WEAPON_SWITCH peer=%d slot=%s lower=true" % [peer_id, slot])
+		return
+	node.enter_weapon_mode(wd)
+	node.set_weapon_ready_frame()
 	print("[NetworkWorld] HOST_WEAPON_SWITCH peer=%d slot=%s weapon=%s" % [peer_id, slot, wd.item_id])
 
 
@@ -1689,12 +1722,7 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
 	var raising: bool = not node.is_weapon_mode_active()
-	var duration := _get_network_weapon_transition_duration(wd)
-	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
-	_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
-	node.play_network_weapon_transition(wd, raising)
-	weapon_transition_presentation.rpc(peer_id, wd.item_id, raising)
-	_clear_host_weapon_transition_after(peer_id, duration)
+	_begin_host_weapon_transition(peer_id, node, wd, raising)
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 
 
@@ -1724,21 +1752,23 @@ func _send_host_facing_lock_state(peer_id: int) -> void:
 
 ## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
 ## 这样客户端永远不能伪造备用弹药或通过重复 RPC 多扣/多装。
-func _try_host_reload(peer_id: int) -> void:
+## ★返回值 = 是否**真的**开始了这次装填（2026-09-30）：空弹开火要自动接装填，
+## 调用方必须能区分「已装填」与「没弹药/已满/正忙」——后者要退回空弹音效。
+func _try_host_reload(peer_id: int) -> bool:
 	if not net.is_host or not _players.has(peer_id) or _is_host_combat_busy(peer_id):
-		return
+		return false
 	var entry: Dictionary = _players[peer_id]
 	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or _is_host_throwable_held(peer_id):
-		return
+		return false
 	var wd := state.get_active_weapon()
 	if not wd or not wd.is_ranged or wd.magazine_capacity <= 0:
-		return
+		return false
 	var current := state.get_magazine_ammo(wd.item_id)
 	var missing := maxi(0, wd.magazine_capacity - current)
 	if missing <= 0:
-		return
+		return false
 	## 无限备弹（WeaponData.ammo_is_infinite，如手枪）分支 —— 2026-09-26 用户实测
 	## 「手枪无限备弹不是无限的，还是会被打完」的根因：本函数是联机装填的**唯一**权威
 	## 路径，旧实现直接 `count_ammo_item` → 手枪根本不消耗 ammo_item，库存恒 0 →
@@ -1750,15 +1780,16 @@ func _try_host_reload(peer_id: int) -> void:
 		var available := state.count_ammo_item(wd.ammo_item_id)
 		load_count = mini(missing, available)
 		if load_count <= 0:
-			return
+			return false
 		if state.consume_ammo_item(wd.ammo_item_id, load_count) != load_count:
-			return
+			return false
 	state.set_magazine_ammo(wd.item_id, current + load_count)
 	var duration := _get_network_reload_duration(wd, load_count)
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
 	node.play_network_reload_presentation(wd, load_count)
 	reload_presentation.rpc(peer_id, wd.item_id, current + load_count, load_count)
 	print("[NetworkWorld] HOST_RELOAD peer=%d weapon=%s loaded=%d ammo=%d" % [peer_id, wd.item_id, load_count, current + load_count])
+	return true
 
 
 func _get_network_reload_duration(wd: WeaponData, load_count: int) -> float:
@@ -1880,7 +1911,14 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 			return
 		var current := state.get_magazine_ammo(wd.item_id)
 		if current <= 0:
-			# 空弹「咔嚓」（2026-09-24 音效审计）：单机在攻击状态 enter 时会播
+			# ★自动换弹（2026-09-30 用户需求）：弹夹空但**还有备弹**（无限备弹武器恒成立）
+			# → 不再空放一枪，直接接装填，省掉手动按装填键。与单机
+			# PlayerPistolAttackState._try_auto_reload 同一规则（两端手感必须一致）。
+			var has_reserve: bool = wd.has_infinite_ammo() or state.count_ammo_item(wd.ammo_item_id) > 0
+			if has_reserve and _try_host_reload(peer_id):
+				print("[NetworkWorld] HOST_AUTO_RELOAD peer=%d weapon=%s (mag empty, reserve available)" % [peer_id, wd.item_id])
+				return
+			# 真打光了：空弹「咔嚓」（2026-09-24 音效审计）：单机在攻击状态 enter 时会播
 			# empty_fire_sound，联机此前静默返回 —— 客户端按开火键毫无反馈。
 			# 与 attack_presentation 同款：Host 本地直接播，Client 走同一 RPC 广播。
 			if wd.empty_fire_sound:

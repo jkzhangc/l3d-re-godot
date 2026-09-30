@@ -187,6 +187,13 @@ var _frame_w_prev: int = 0
 var _frame_h_prev: int = 0
 ## 死亡表现是否已切到专用死亡表（death_texture）。防快照路径重复覆盖（见 apply_death_appearance）。
 var _death_appearance_applied: bool = false
+## ★Client 侧死亡音效是否已播（2026-09-30 修「敌人死亡有时没有死亡音效」）。
+## 见 _play_network_death_sfx_once()：
+##   `apply_network_presentation` 的 is_dead 分支**只切外观、不播音效**，而
+##   `apply_network_death` 开头又有 `if _is_dead: return` —— 只要死亡先被快照路径
+##   （可靠世界重同步 / 死亡 RPC 到达时实体尚未注册被静默丢弃）标记，
+##   `_is_dead` 就已被置位 → 后续可靠的死亡 RPC 被早退吞掉 → **这一条命永远没有死亡音效**。
+var _network_death_sfx_done: bool = false
 ## ── 每张贴图各自的帧尺寸缓存 ──
 ##
 ## 为什么需要它：自动推断（_guess_frame_dim）只在"整表恰好 4 个角色格宽"时可靠，
@@ -699,6 +706,7 @@ func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, hp: float, visual_char_index: int, is_dead: bool, is_headshot: bool, snap: bool = false, element_state: int = -1) -> void:
 	if not network_presentation_only:
 		return
+	var was_dead := _is_dead
 	var previous_hp := current_hp
 	current_hp = clampf(hp, 0.0, max_hp)
 	if not snap and not _is_dead and current_hp < previous_hp:
@@ -741,6 +749,13 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 			apply_death_appearance(is_headshot)
 			if death_texture == null:
 				_refresh_sprite_with_index(visual_char_index if visual_char_index >= 0 else (headshot_char_index_2 if is_headshot else death_char_index))
+		# ★补死亡音效（2026-09-30）：快照是**先于**可靠 death RPC 把 `_is_dead` 置位的
+		# 另一条路径，而它以前完全不播音（RPC 到达后又被 `_is_dead` 早退吞掉）→
+		# 「敌人死亡时有时候不会播放死亡音效」。
+		# ⚠ 只补「本端看着它从活到死」：`snap`（首次同步/重连）里的既有尸体不补，
+		#    否则中途加入时会一次性叠播一串死亡音。
+		if not was_dead and not snap:
+			_play_network_death_sfx_once(is_headshot)
 		return
 
 	_is_dead = false
@@ -804,7 +819,12 @@ func apply_network_element_tint(state: int) -> void:
 ## Client 要等 2 秒一次的可靠世界重同步才能看到尸体 —— 期间丧尸会保持
 ## 最后一次快照的移动状态原地踏步。爆头死亡按 Host 相同节奏播放两帧倒地。
 func apply_network_death(is_headshot: bool) -> void:
-	if not network_presentation_only or _is_dead:
+	if not network_presentation_only:
+		return
+	if _is_dead:
+		# 快照路径可能已先一步置位 `_is_dead`（且那条路径不播音）→ 这里**补一次**音效。
+		# 旧实现直接 return，等于把「已由快照标记死亡」的敌人永久静音（2026-09-30 修复）。
+		_play_network_death_sfx_once(is_headshot)
 		return
 	_is_dead = true
 	_network_headshot_death = is_headshot
@@ -819,8 +839,8 @@ func apply_network_death(is_headshot: bool) -> void:
 	# 尸体 3 秒渐隐同理：Client 也走 _register_corpse()，这里必须单独启动一次，
 	# 否则联机下只有 Host 侧的尸体会消失，Client 留下一具永久站立不动的"活尸"。
 	_start_corpse_lifecycle()
+	_play_network_death_sfx_once(is_headshot)
 	if is_headshot:
-		_play_sound(headshot_sound, headshot_sound_pitch)
 		if death_texture != null:
 			# 特感：headshot_char_index_1/2 是行走表索引，不适用 → 直接死亡表终帧。
 			apply_death_appearance(true)
@@ -828,8 +848,19 @@ func apply_network_death(is_headshot: bool) -> void:
 			_refresh_sprite_with_index(headshot_char_index_1)
 			_schedule_network_headshot_fall()
 	else:
-		_play_sound(death_sound, death_sound_pitch)
 		apply_death_appearance(false)
+
+
+## ★Client 死亡音效的**唯一出口**（2026-09-30）。幂等：同一条命只播一次，
+## 无论死亡先由哪条路径（可靠 death RPC / 可靠世界重同步快照）传递到本端。
+func _play_network_death_sfx_once(is_headshot: bool) -> void:
+	if _network_death_sfx_done:
+		return
+	_network_death_sfx_done = true
+	if is_headshot:
+		_play_sound(headshot_sound, headshot_sound_pitch)
+	else:
+		_play_sound(death_sound, death_sound_pitch)
 
 
 func _schedule_network_headshot_fall() -> void:

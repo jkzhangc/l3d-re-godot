@@ -208,9 +208,43 @@ func _maybe_show_update_log_on_first_launch() -> void:
 ## ── F1 更新日志（2026-09-17 用户需求）──
 ## 右上角「F1 更新日志」角标 + RM 窗口样式的更新日志面板（F1/Esc/确定键关闭）。
 
-const CHANGELOG_VERSION_TEXT := "v0.30（2026-09-18 ~ 09-28）"
+const CHANGELOG_VERSION_TEXT := "v0.31（2026-09-29 ~ 09-30）"
 
-const CHANGELOG_BODY := """【新内容】
+## ⚠ CHANGELOG_VERSION_TEXT 是「本版已看过」的判据（`Global.changelog_seen_version`）：
+## 改了它 → 玩家下次启动会**自动弹一次**更新日志。所以每次发版必须换新字符串。
+const CHANGELOG_BODY := """【手机版 · 本次重点】
+· 新增「按键布局」：设置里可自由拖动虚拟摇杆和所有按键的位置，
+  用不到的按键还能收起来（调整完点「保存」才生效）
+· 补齐三个缺失的触摸按键：「举枪」「慢走」「觉醒」—— 以前在手机上没法操作
+· 按键提示全部改成手机上的按钮名（以前写「按 D」「按 Shift」，手机玩家找不到）
+· 联机时举不起武器已修复：手机上按「主武器」按钮能正常举枪 / 收枪
+· 多个按键同时按不再失灵（以前按住摇杆时其它按键点不动）
+· 按键的触发位置与看到的按钮对齐了（以前要按在旁边空白处），画面上下拉伸也修好了
+· 720p 手机画面被裁掉一块的问题已修复，现在按屏幕自动适配
+· 手机上改的设置不再丢失（以前退出游戏就还原）
+· 关卡里打开暂停菜单 / 安全屋台词时，按键不再被窗口盖住
+· 结算界面的按钮不会再被挡住
+
+【新内容】
+· 尸潮开始前会有一次预警音效，听到就知道要来了
+
+【修复】
+· 敌人死亡音效有时不播放
+· 标题画面左下角的文字会压住选项窗口
+· 空手对着武器按功能键捡不起来（现在和替换武器的手感一致）
+· 满血时用急救喷雾会白消耗一瓶（现在满血不再消耗）
+· 防守战刚开始（预备阶段）附近的丧尸就被切成狂暴形态
+· 「返回标题画面」偶发的报错
+· HUD 弹药数字周围出现零散白点
+
+【调整】
+· 弹夹打空但还有备弹时**自动换弹**，不用再手动按装填键
+· 真的把子弹打光时，扣扳机有音效了
+· 「退出游戏」改为「返回标题画面」
+
+──────────────  v0.30（2026-09-18 ~ 09-28）  ──────────────
+
+【新内容】
 · 手机版支持：画面自动适配手机屏幕（像素画质不打折扣）
   左下虚拟摇杆 + 右下「动作 / 物品 / 系统」三组触摸按钮
 · 角色台词：进入安全屋时会说出当前角色的专属台词（带头像与名字）
@@ -265,8 +299,58 @@ var _scroll_log_y: float = 0.0
 
 
 ## 左下角版本/作者/官网/群信息块（2026-09-16 用户需求）。
-## 12px fusion-pixel 基底（字号铁律 12 整数倍），行距 16，沿 1280×960 设计分辨率贴左下。
+## 12px fusion-pixel 基底（字号铁律 12 整数倍），行距 28，沿 1280×960 设计分辨率贴左下。
+##
+## ★可用宽度限制（2026-09-30 用户实测「左下角文字盖住选项窗口」）：
+## 菜单窗口被 `window_y_offset`(300) 压到底部（y 630~930），与本信息块**纵向完全重叠**，
+## 只能靠**左边界**避让 → 超宽的行按「菜单窗口左边界 − 留白」自动折行。
+## 实测：`本游戏处于测试阶段，遇到 bug 欢迎在交流群反馈` 24px 下宽 540px（x 14→554），
+## 已越进窗口左边界 520 → 压住窗口左下角。折行后每行 ≤ 可用宽，任何窗口尺寸/偏移都不会再压住。
+## ⚠ 字体切换会改变字宽（zpix 13/7 > fusion 12/6）→ 由 _on_global_font_changed 重建本块。
+const FOOTER_X: float = 14.0
+const FOOTER_LINE_H: float = 28.0
+const FOOTER_BOTTOM_MARGIN: float = 10.0
+const FOOTER_DESIGN_H: float = 960.0
+const FOOTER_FONT_SIZE: int = 24
+## 折行时与菜单窗口左边界保留的最小留白（含阴影偏移余量）。
+const FOOTER_GAP: float = 12.0
+var _footer_labels: Array[GradientLabel] = []
+
+
+## 信息块可用宽度 = 菜单窗口左边界 − 留白 − 起始 x。
+## 取不到窗口时退回整幅设计宽度（不会折行，但也不会崩）。
+func _footer_max_width() -> float:
+	var limit: float = FOOTER_DESIGN_H * (1280.0 / 960.0)
+	var win: Control = get_node_or_null("MenuWindow")
+	if win != null:
+		limit = win.position.x - FOOTER_GAP
+	return maxf(160.0, limit - FOOTER_X)
+
+
+## 按可用宽度逐字符折行（保留原文，不丢字）。单字即超宽时也至少吐出一个字符，防死循环。
+func _wrap_footer_line(text: String, max_w: float) -> Array[String]:
+	var out: Array[String] = []
+	var current: String = ""
+	for i: int in text.length():
+		var candidate: String = current + text[i]
+		if current.is_empty() or _measure_text(candidate, FOOTER_FONT_SIZE).x <= max_w:
+			current = candidate
+		else:
+			out.append(current)
+			current = text[i]
+	if not current.is_empty():
+		out.append(current)
+	return out
+
+
 func _build_footer_info() -> void:
+	## 幂等：字体切换会重新调用本函数（见 _on_global_font_changed）。
+	for old: Node in _footer_labels:
+		if is_instance_valid(old):
+			remove_child(old)
+			old.queue_free()
+	_footer_labels.clear()
+
 	var version: String = str(ProjectSettings.get_setting("application/config/version", ""))
 	var vi: Dictionary = Engine.get_version_info()
 	var engine_text: String = "Godot Engine %d.%d" % [int(vi.get("major", 4)), int(vi.get("minor", 6))]
@@ -279,12 +363,24 @@ func _build_footer_info() -> void:
 	lines.append("官网：https://l3dre.xyz:8443")
 	lines.append("QQ交流群：1125775141")
 	lines.append("本游戏处于测试阶段，遇到 bug 欢迎在交流群反馈")
-	var line_h: float = 28.0
-	var bottom_margin: float = 10.0
-	var start_y: float = 960.0 - bottom_margin - lines.size() * line_h
-	for i: int in lines.size():
-		var gl := _make_menu_gradient_label(lines[i], Vector2(14, start_y + i * line_h), 24, text_color_index)
+
+	## 折行后按总行数**自下而上**排版（底边固定），行数变化不会把首行推出画布。
+	var max_w: float = _footer_max_width()
+	var wrapped: Array[String] = []
+	for line: String in lines:
+		wrapped.append_array(_wrap_footer_line(line, max_w))
+	var start_y: float = FOOTER_DESIGN_H - FOOTER_BOTTOM_MARGIN - wrapped.size() * FOOTER_LINE_H
+	var win: Control = get_node_or_null("MenuWindow")
+	for i: int in wrapped.size():
+		var gl := _make_menu_gradient_label(wrapped[i], Vector2(FOOTER_X, start_y + i * FOOTER_LINE_H), FOOTER_FONT_SIZE, text_color_index)
 		add_child(gl)
+		## ★绘制次序是本问题的**另一半根因**：信息块在 _ready 里晚于 MenuWindow 建，
+		## 直接 add_child = 画在窗口**之上**（用户看到的「文字盖住选项窗口」）。
+		## 只靠折行避让也挡不住设置窗（520 宽 → 左边界 380，比主菜单窗口更靠左），
+		## 所以必须把信息块钉到 MenuWindow **之前**：宁可被窗口压住，绝不压住窗口。
+		if win != null:
+			move_child(gl, mini(win.get_index(), get_child_count() - 1))
+		_footer_labels.append(gl)
 
 
 ## 右上角「F1 更新日志」角标（12px fusion 基底，贴 1280×960 设计分辨率右上）。
@@ -1065,6 +1161,9 @@ func _on_global_font_changed(_font_path: String) -> void:
 	else:
 		_rebuild_menu_items()
 		_refresh_all()
+	## ★左下角信息块的折行是按**当前字体**量的宽（zpix 比 fusion 宽 ~8%），
+	## 不重建就会在换字体后重新压住菜单窗口（2026-09-30）。
+	_build_footer_info()
 
 
 func _refresh_settings_cursor() -> void:

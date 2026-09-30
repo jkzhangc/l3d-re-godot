@@ -58,7 +58,9 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 
 @export_group("音效")
 @export var attack_sound: AudioStream = null    ## 攻击音效（远程/近战共用）
-@export var empty_fire_sound: AudioStream = null  ## 空弹音效（弹夹为空时播放）
+## 空弹音效：弹夹为空**且没有备弹可装**时扣扳机播放（2026-09-30 用户指定默认值；
+## 有备弹的情况现在会**自动换弹**，不再空放）。tres 可逐武器覆盖。
+@export var empty_fire_sound: AudioStream = preload("res://sound/リロード.ogg")
 @export var raise_sound: AudioStream = null      ## 举起武器音效
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
