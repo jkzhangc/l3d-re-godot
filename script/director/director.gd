@@ -417,6 +417,7 @@ func _on_phase_changed(phase: StringName) -> void:
 		_set_all_enemies_rage(true)   ## 尸潮触发 → 僵尸切换クリムゾンヘッド（狂暴）
 		_lock_all_enemies_for_horde() ## 尸潮触发 → 附近全部丧尸直接追击最近玩家（对齐防守战）
 		_play_horde_music()
+		_play_horde_alert()           ## 尸潮触发 → 一次性预警音效（2026-09-30 用户需求）
 		horde_started.emit()
 	elif phase == &"cooldown":
 		_horde_rage = false
@@ -452,6 +453,25 @@ func _stop_horde_music() -> void:
 		_horde_music_player.stop()
 		_announce_music("horde", false)
 		print("[Director] 尸潮 BGM 停止")
+
+
+## ── 尸潮预警音效（DirectorConfig「音效 — 尸潮预警」；2026-09-30 用户需求）──
+## 尸潮（Peak）**开始的那一刻**响一次，与 BGM 并行（预警音压不住 BGM 的起播）。
+## 与 BGM 的两点差异：
+## · **不看 Boss 优先级** —— Boss 在场时 BGM 不换，但「尸潮来了」这个提示仍要给玩家；
+## · **不是循环** —— 一次性播放，尸潮结束时无需停止。
+## 联机：本函数自身不判端，Host 与 Client 都走它；广播由 `_announce_music` 里
+## 的 Client 早退闸负责（Client 调用时不会再广播回去 → 不会回环）。
+func _play_horde_alert() -> void:
+	var stream: AudioStream = current_config.horde_alert_sound if current_config else null
+	if not stream:
+		return
+	var scene: Node = get_tree().current_scene if get_tree() != null else null
+	if scene == null:
+		return
+	Global.play_sfx_managed(stream, scene)
+	_announce_music("horde_alert", true)
+	print("[Director] 尸潮预警音效")
 
 
 ## ── Boss BGM（DirectorConfig「音乐 — Boss」组；2026-09-14 用户定稿）──
@@ -545,6 +565,11 @@ func apply_network_music(music_key: String, active: bool) -> void:
 				_play_horde_music()
 			else:
 				_stop_horde_music()
+		"horde_alert":
+			## 一次性音效（2026-09-30）：Host 在尸潮 peak 开始时广播，Client 本地响一次。
+			## `active` 恒为 true（没有"停止"语义），Client 侧不会再广播（_announce_music 早退）。
+			if active:
+				_play_horde_alert()
 		"boss":
 			if active:
 				play_boss_music(null)  # watch 监视是 Host 职责，Client 只管播放

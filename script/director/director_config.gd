@@ -190,6 +190,13 @@ class_name DirectorConfig extends Node
 @export var horde_music: AudioStream = preload("res://music/ラッシュ１.mp3")
 @export_range(-80.0, 12.0, 0.5) var horde_music_volume_db: float = 0.0
 
+@export_group("音效 — 尸潮预警（Peak 开始的一次性提示音）")
+## 尸潮（Peak）**开始的那一刻**播放一次的音效（2026-09-30 用户需求）。
+## 默认 = 原作「ラッシュ開始」，与最终章防守战机器 HoldoutMachine.alert_sound 是同一个文件
+## —— 让玩家在尸潮涌来前听到和防守战一致的预警。留空 = 不播。
+## 表现层：Host/单机本地播放并经 NetworkWorld 广播，Client 同步播放（各自本地响一次）。
+@export var horde_alert_sound: AudioStream = preload("res://sound/ラッシュ開始.ogg")
+
 @export_group("音乐 — Boss（Tank/T-002 登场 BGM，优先级高于尸潮）")
 ## Boss（tank_enemies 组成员 / BossEncounter 定点遭遇）存活期间播放的 BGM。
 ## 登场即停尸潮 BGM 改播本曲（L4D2 Tank 音乐式），Boss 全灭自动停止；
