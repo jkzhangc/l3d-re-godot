@@ -13,7 +13,10 @@ extends CanvasLayer
 ##   ④ 进设置子页窗口放大并居中、退出还原（同标题画面行为）；
 ##   ⑤ 接入全局 UI 窗口音效（光标/确定/取消，可被本界面导出覆盖）。
 
-const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "退出游戏"]
+## ★2026-09-29 用户需求：第三项原为「退出游戏」直接 `get_tree().quit()`，太粗暴 ——
+## 玩家往往只想回主界面。改成「返回标题画面」，统一走 `Global.go_to_title_screen()`
+##（该入口会顺带解除暂停 + 退出联机会话，见 global.gd 里的说明）。
+const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面"]
 const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "返回"]
 
 ## 设置子页窗口尺寸（进设置放大居中、退出还原；同标题画面 SETTINGS_WINDOW_SIZE 思路）
@@ -259,9 +262,9 @@ func _menu_confirm() -> void:
 			_close_menu()
 		"设置":
 			_enter_settings()
-		"退出游戏":
+		"返回标题画面":
 			_close_menu()
-			get_tree().quit()
+			Global.go_to_title_screen()
 
 
 # ═══════════════════════════════════════
@@ -272,7 +275,12 @@ func _menu_confirm() -> void:
 ## （同标题画面 _apply_window_size 行为，2026-09-15 用户要求设置页窗口也要有变化）
 func _apply_window_size(s: Vector2) -> void:
 	_menu_panel.size = s
-	_menu_panel.position = Vector2((1280.0 - s.x) * 0.5, (960.0 - s.y) * 0.5)
+	## ⚠ 按**当前**画布尺寸居中：逻辑画布会随屏幕比例横向加宽（手机 16:9 → 1706），
+	## 写死 1280 会让面板停在画布中间偏左。
+	## ⚠ 本脚本 extends CanvasLayer（不是 CanvasItem）→ 没有 `get_viewport_rect()`，
+	##   必须走 viewport 实例取。
+	var canvas: Vector2 = get_viewport().get_visible_rect().size
+	_menu_panel.position = Vector2((canvas.x - s.x) * 0.5, (canvas.y - s.y) * 0.5)
 	if _window_bg:
 		_window_bg.size = s
 	if _window_frame:

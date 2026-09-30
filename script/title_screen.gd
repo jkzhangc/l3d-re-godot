@@ -281,7 +281,9 @@ func _build_update_log_icon() -> void:
 	# GradientLabel 自算宽 → 延后一帧按实际宽右对齐
 	await get_tree().process_frame
 	if _update_log_icon != null and is_instance_valid(_update_log_icon):
-		_update_log_icon.position = Vector2(1280.0 - _update_log_icon.size.x - 14.0, 10.0)
+		## ⚠ 不能写死 1280：逻辑画布会按屏幕比例横向加宽（16:9 → 1706），
+	## 写死会让"更新日志"角标停在画布中间偏左。
+		_update_log_icon.position = Vector2(get_viewport_rect().size.x - _update_log_icon.size.x - 14.0, 10.0)
 
 
 func _open_update_log() -> void:
@@ -304,7 +306,8 @@ func _open_update_log() -> void:
 	var win := Control.new()
 	win.name = "LogWindow"
 	win.size = Vector2(960, 840)
-	win.position = ((Vector2(1280, 960) - win.size) * 0.5).floor()
+	## 同上：按**当前**画布尺寸居中，别写死 1280。
+	win.position = ((get_viewport_rect().size - win.size) * 0.5).floor()
 	panel.add_child(win)
 
 	var bg := TextureRect.new()
@@ -616,8 +619,9 @@ func _center_label(gl: GradientLabel) -> float:
 func _create_menu_window() -> void:
 	var win: Control = $MenuWindow
 
+	## ⚠ 按**当前**画布宽度居中，不能写死 1280（手机端画布会横向加宽到 1706）。
 	win.position = Vector2(
-		(1280.0 - window_size.x) / 2.0,
+		(get_viewport_rect().size.x - window_size.x) / 2.0,
 		(960.0 - window_size.y) / 2.0 + window_y_offset
 	)
 	win.size = window_size
@@ -800,7 +804,7 @@ func _apply_window_size(s: Vector2) -> void:
 	window_size = s
 	var win: Control = $MenuWindow
 	win.position = Vector2(
-		(1280.0 - s.x) / 2.0,
+		(get_viewport_rect().size.x - s.x) / 2.0,
 		(960.0 - s.y) / 2.0 + window_y_offset
 	)
 	win.size = s

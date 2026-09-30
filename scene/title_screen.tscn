@@ -23,17 +23,19 @@ font_path = "res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
 
 [node name="Background" type="TextureRect" parent="." unique_id=921359252]
 layout_mode = 0
-offset_right = 1280.0
-offset_bottom = 960.0
+anchor_right = 1.0
+anchor_bottom = 1.0
 mouse_filter = 2
 texture = ExtResource("1")
 expand_mode = 1
 
 [node name="MenuWindow" type="Control" parent="." unique_id=1800102687]
 anchors_preset = 0
-offset_left = 520.0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
 offset_top = 630.0
-offset_right = 760.0
+offset_right = 120.0
 offset_bottom = 930.0
 
 [node name="WindowBg" type="TextureRect" parent="MenuWindow" unique_id=1788669830]

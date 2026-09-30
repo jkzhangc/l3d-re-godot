@@ -552,6 +552,26 @@ func dispatch_virtual_action(act: StringName, pressed: bool) -> void:
 	Input.parse_input_event(ev)
 
 
+## ── 返回标题画面（唯一入口，2026-09-29）──
+## 暂停菜单里原来是「退出游戏」直接 `get_tree().quit()`，太粗暴（玩家往往只想回主界面）。
+## 改成回标题。这里统一做三件事 —— **少做任何一件都会留下"看起来正常、其实已经坏掉"的状态**：
+##   ① 解除暂停：标题画面是独立场景，留着 `paused = true` 会让它整场点不动、看起来像卡死；
+##   ② 退出联机会话：否则 `Net` 残留 host / handshake 状态，标题画面会以为还在局里；
+##   ③ 切场景。
+## ⚠ 走这个入口而不是散落的 `change_scene_to_file(标题)`，避免以后又漏掉 ①②。
+const TITLE_SCENE_PATH: String = "res://scene/title_screen.tscn"
+
+
+func go_to_title_screen() -> void:
+	get_tree().paused = false
+	var net: Node = get_node_or_null("/root/Net")
+	if net != null and net.has_method("leave"):
+		net.leave()
+	var err: Error = get_tree().change_scene_to_file(TITLE_SCENE_PATH)
+	if err != OK:
+		printerr("[Global] 返回标题画面失败: %d" % err)
+
+
 ## ── 画面适配（2026-09-28 移动端需求 / 2026-09-29 改为运行时自适应）──
 ## 基准画布 1280×960（4:3）。缩放口径由 `stretch/mode=viewport` ＋ `aspect=keep` 决定：
 ## 「按较紧的一边缩放，另一方向留黑边」（用户选定「4:3 + 黑边」策略）。
