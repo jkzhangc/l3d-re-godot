@@ -467,7 +467,14 @@ func _process_local_pickup(delta: float) -> bool:
 	if current == null:
 		if not require_function_key:
 			if not _can_auto_take():
-				return false
+				## ★2026-09-30 用户实测：把主武器丢掉后靠近地上的主武器，
+				## 地图上明明显示着「D」键帽，**按住功能键却毫无反应**。
+				## 根因：空槽走的是「自动拾取」分支，它**根本不读功能键**；而键帽的显示
+				## 条件只要求"在范围内 + 角色能用"，与这个分支无关 → 提示与实际行为不一致。
+				## 而 `_can_auto_take()` 的三道闸门（最近的一件 / 本次靠近没捡过 / 角色能用）
+				## 任一不过都会静默 return，表现就是"按了没反应"。
+				## 修法：自动拾取被挡下时，**也接受按住功能键** —— 与"有武器时替换"手感一致。
+				return _process_hold(delta)
 			mark_auto_picked(get_tree(), _player_ref)
 			_do_pickup()
 			return false
