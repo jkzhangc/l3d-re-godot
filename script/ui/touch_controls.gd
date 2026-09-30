@@ -33,6 +33,8 @@ extends CanvasLayer
 ## 当前是否菜单模式（调试与用例读取）。
 var _menu_mode: bool = false
 var _last_scene: Node = null
+## ★临时诊断用（2026-09-30），定位完删。
+var _diag_label: Label = null
 
 
 func _ready() -> void:
@@ -48,6 +50,7 @@ func _ready() -> void:
 	var debug_on: bool = g != null and bool(g.get("debug_enabled"))
 	visible = mobile or (force_show_on_desktop and debug_on)
 	_apply_mode()
+	_make_diag_label()
 	print("[TouchControls] 移动平台=%s 调试=%s → 触摸层 visible=%s（%d 个按钮节点，菜单模式=%s）" % [
 		mobile, debug_on, visible, _count_buttons(), _menu_mode])
 
@@ -58,6 +61,27 @@ func _process(_delta: float) -> void:
 	var cs: Node = get_tree().current_scene if get_tree() != null else null
 	if cs != _last_scene:
 		_apply_mode()
+	## ★临时诊断（2026-09-30）：把最近一次触摸的数值显示到屏幕上（手机没有控制台，靠截图取证）。
+	if _diag_label != null:
+		var g: Node = get_node_or_null("/root/Global")
+		var txt: String = String(g.get("touch_diag_text")) if g != null else ""
+		_diag_label.text = txt
+		_diag_label.visible = not txt.is_empty()
+
+
+## ★临时诊断用的屏幕标签（定位完连同 Global.touch_diag_text 一起删）。
+func _make_diag_label() -> void:
+	_diag_label = Label.new()
+	_diag_label.name = "TouchDiagLabel"
+	_diag_label.position = Vector2(8.0, 8.0)
+	_diag_label.add_theme_font_size_override("font_size", 12)
+	_diag_label.add_theme_color_override("font_color", Color(1, 1, 0))
+	_diag_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0))
+	_diag_label.add_theme_constant_override("shadow_offset_x", 1)
+	_diag_label.add_theme_constant_override("shadow_offset_y", 1)
+	_diag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_diag_label.z_index = 100
+	add_child(_diag_label)
 
 
 ## 是否菜单模式（菜单里只留摇杆 + 确定 + 取消）。

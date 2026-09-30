@@ -67,6 +67,10 @@ func _diag(msg: String) -> void:
 		return
 	_diag_count += 1
 	print("[触摸诊断 %d] %s" % [_diag_count, msg])
+	## 手机取不到 stdout → 同步一份到屏幕上，让用户截图取证。
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null:
+		g.set("touch_diag_text", "[按钮 %s] %s" % [action, msg])
 
 
 func _input(event: InputEvent) -> void:

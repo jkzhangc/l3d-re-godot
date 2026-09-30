@@ -577,6 +577,12 @@ func dispatch_virtual_action(act: StringName, pressed: bool) -> void:
 const TITLE_SCENE_PATH: String = "res://scene/title_screen.tscn"
 
 
+## ★临时诊断（2026-09-30）：手机上「触摸位置与按钮对不上」定位中。
+## 最近一次触摸的诊断文本，由触摸层显示到屏幕上 —— 手机没有控制台，只能靠截图取证。
+## 定位完连同 `touch_controls` 里的诊断 Label 一起删。
+var touch_diag_text: String = ""
+
+
 func go_to_title_screen() -> void:
 	get_tree().paused = false
 	var net: Node = get_node_or_null("/root/Net")
