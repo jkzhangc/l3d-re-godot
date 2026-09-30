@@ -89,24 +89,28 @@ func _input(event: InputEvent) -> void:
 			if not _is_player_in_weapon_state():
 				Global.play_ui_sfx("cursor", sfx_cursor_path)
 				_open_menu()
-			get_viewport().set_input_as_handled()
+			_mark_handled()
 		return
 
 	if _in_settings:
 		_handle_settings_input(event)
-		get_viewport().set_input_as_handled()
+		_mark_handled()
 		return
 
 	if event.is_action_pressed("菜单键") or event.is_action_pressed("取消键"):
 		Global.play_ui_sfx("cancel", sfx_cancel_path)
 		_close_menu()
-		get_viewport().set_input_as_handled()
+		_mark_handled()
 		return
 
 	if event.is_action_pressed("确定键"):
+		## ★必须先标记"已处理"，再执行菜单动作：
+		## 「返回标题画面」会 `change_scene_to_file`，**本节点当场被释放** ——
+		## 之后再去 `get_viewport()` 已经是 null，会报
+		## "Cannot call method 'set_input_as_handled' on a null value"（用户实测）。
+		_mark_handled()
 		Global.play_ui_sfx("confirm", sfx_confirm_path)
 		_menu_confirm()
-		get_viewport().set_input_as_handled()
 		return
 
 	var item_count: int = _get_menu_item_count()
@@ -114,12 +118,12 @@ func _input(event: InputEvent) -> void:
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_cursor()
-		get_viewport().set_input_as_handled()
+		_mark_handled()
 	elif event.is_action_pressed("下"):
 		_cursor_idx = (_cursor_idx + 1) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
 		_refresh_cursor()
-		get_viewport().set_input_as_handled()
+		_mark_handled()
 
 
 func _process(delta: float) -> void:
@@ -252,6 +256,15 @@ func _refresh_cursor() -> void:
 		12.0,
 		menu_item_start_y + _cursor_idx * menu_item_step + (menu_item_height - _cursor_frame.size.y) * 0.5
 	)
+
+
+## 标记输入已被本菜单消费。**所有 `set_input_as_handled()` 都走这里**：
+## `_input` 里触发动作可能把本节点释放掉（切场景），此时 `get_viewport()` 是 null。
+## 顺带保证顺序安全 —— 调用点也应在动作**之前**调它。
+func _mark_handled() -> void:
+	var vp: Viewport = get_viewport()
+	if vp != null:
+		vp.set_input_as_handled()
 
 
 func _menu_confirm() -> void:
