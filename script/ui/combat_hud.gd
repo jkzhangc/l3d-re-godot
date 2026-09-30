@@ -85,7 +85,15 @@ func _apply_ammo_font() -> void:
 		return
 	var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
 	if fallback:
+		## fallback（DotGothic16）同样要关抗锯齿 + 次像素定位：
+		## 否则 ∞ 这类走兜底的字形照样会在 36px 下渗出零散白点（2026-09-30 用户实测）。
+		fallback.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+		fallback.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 		out.fallbacks = [fallback]
+	## duplicate() 出来的副本也要显式关一遍（基字体已在 Global.load_ui_font 里关过，
+	## 但这里再做一次可保证「本标签的字体链」整体干净）。
+	out.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	out.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
 		if label:
 			## 标记为「自定义字体」：Global 的整树字体重套会跳过它们，

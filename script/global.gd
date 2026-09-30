@@ -242,6 +242,14 @@ func load_ui_font(path: String) -> FontFile:
 	var ff := load(path) as FontFile
 	if ff == null:
 		printerr("[Global] ★界面字体加载失败（将回退系统字体，字形与设计不一致）: %s" % path)
+	else:
+		## ★像素字体必须关「抗锯齿 + 次像素定位」（2026-09-30 用户实测）：
+		## TTF 导入默认是 **Grayscale 抗锯齿 + Auto 次像素定位** —— 12px 原尺寸下几乎看不出，
+		## 但字号放大（弹药数字是 36px = 3 倍）时，字形边缘会渗出**零散的灰白像素点**。
+		## 像素字体本来就该是硬边 1:1，关掉这两项才对。
+		## （只改内存实例，不会写回 .import / 磁盘资源。）
+		ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+		ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 	_ui_font_cache[path] = ff
 	return ff
 
