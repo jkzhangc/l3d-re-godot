@@ -79,9 +79,24 @@ func set_menu_mode(menu_mode: bool, _scene_key: String = "") -> void:
 		_release_all()
 
 
+## ★临时诊断（2026-09-30）：手机端触摸位置对不上，先打真实数值（含摇杆）。
+const DIAG_LIMIT: int = 40
+static var _diag_count: int = 0
+
+
+func _diag(msg: String) -> void:
+	if _diag_count >= DIAG_LIMIT:
+		return
+	_diag_count += 1
+	print("[触摸诊断-摇杆 %d] %s" % [_diag_count, msg])
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t: InputEventScreenTouch = event
+		if t.pressed:
+			_diag("收到触点 idx=%d pos(局部)=%s size=%s global=%s" % [
+				t.index, t.position, size, get_global_rect()])
 		if t.pressed and _active_index == -2:
 			_active_index = t.index
 			_origin = t.position

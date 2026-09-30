@@ -635,30 +635,36 @@ func _setup_adaptive_stretch() -> void:
 func _on_window_resized() -> void:
 	_refresh_logical_canvas()
 	_refresh_content_scale_stretch()
+	## ★临时诊断（2026-09-30）：手机端「画面上下没拉伸好 + 触摸位置对不上」还在定位，
+	## 先把窗口与画布的真实数值打出来。定位完删掉。
+	var w: Window = get_window()
+	if w != null:
+		print("[诊断-布局] win=%s logical=%s stretch=%d aspect=%d final=%s visible=%s" % [
+			w.size, w.content_scale_size, w.content_scale_stretch,
+			w.content_scale_aspect, w.get_final_transform(),
+			get_viewport().get_visible_rect() if get_viewport() != null else Rect2()])
 
 
 ## 移动端：把逻辑画布按屏幕比例横向加宽（上限 `MAX_LOGICAL_ASPECT`）。
 ## 桌面端不动（仍是 1280×960），保证桌面行为零变化。
 ## 注意：`content_scale_size` 同时也决定了 UI（含触摸层）的坐标空间 ——
 ## 所以触摸层里靠右的按钮必须用 **右锚点** 定位，否则会跟着画布加宽而偏左。
+## ⚠⚠ 2026-09-30 **暂时停用「横向加宽逻辑画布」** ⚠⚠
+## 现象：加宽之后手机端出现两件顽疾 —— ① 触摸位置与按钮视觉位置对不上（摇杆/按钮都要
+## 在旁边的空白处点）② 画面上下方向拉伸异常。两者都在加宽之前不存在。
+## 高度怀疑是**运行时改 `content_scale_size` 让 Godot 的输入坐标变换与画布尺寸脱节**
+##（画布尺寸变了但触摸变换矩阵没跟着更新），而 `_to_logical()` 那类"手动补变换"反而更糟
+##（实测：加宽前按钮判定是对的，说明 Godot 本来就转过了）。
+## → 先退回「固定 4:3 + 左右黑边」这个**已知可玩**的状态，把触摸确认干净，再谈两侧放按键。
+## 这里显式设回 base size，避免上一次运行残留的加宽值继续生效。
 func _refresh_logical_canvas() -> void:
-	if not is_mobile_platform():
-		return
 	var win: Window = get_window()
 	if win == null:
 		return
-	var ws: Vector2 = Vector2(win.size)
-	if ws.x < 256.0 or ws.y < 192.0:
-		return
-	var aspect: float = ws.x / ws.y
-	var size: Vector2i = Vector2i(BASE_VIEWPORT_SIZE)
-	if aspect > BASE_VIEWPORT_SIZE.x / BASE_VIEWPORT_SIZE.y:
-		var w: float = minf(BASE_VIEWPORT_SIZE.y * aspect, BASE_VIEWPORT_SIZE.y * MAX_LOGICAL_ASPECT)
-		size = Vector2i(roundi(w), int(BASE_VIEWPORT_SIZE.y))
-	if win.content_scale_size == size:
-		return
-	win.content_scale_size = size
-	print("[Global] 逻辑画布扩展：窗口 %s（比例 %.3f）→ %s" % [ws, aspect, size])
+	var base: Vector2i = Vector2i(BASE_VIEWPORT_SIZE)
+	if win.content_scale_size != base:
+		win.content_scale_size = base
+		print("[Global] 逻辑画布回到基准 %s" % base)
 
 
 ## 按当前窗口尺寸选「整数缩放 / 分数缩放」。这是**唯一的缩放口径入口**。

@@ -56,16 +56,17 @@ func _ready() -> void:
 	## ⚠ `_input` 在 GUI 之前收到事件，所以 Button 自己那套鼠标处理不会把它吃掉。
 
 
-## ★把触摸事件的坐标换成 **viewport 逻辑坐标**（2026-09-30 用户实测「按下的位置与按钮视觉位置对不上」）。
-## 根因：Godot 只对 `InputEventMouse` 系列做 content-scale 变换，**`InputEventScreenTouch` /
-## `ScreenDrag` 的 `position` 保持屏幕坐标** —— 而 `get_global_rect()` 是逻辑坐标。
-## 一旦画面有非 1:1 缩放（手机端分数缩放 0.75 / 1.125），两者就整体错位。
-## ⚠ 摇杆走 `_gui_input`，坐标由 GUI 系统自动转过，所以没这个问题 —— 只有本文件（`_input`）要自己转。
-func _to_logical(screen_pos: Vector2) -> Vector2:
-	var vp: Viewport = get_viewport()
-	if vp == null:
-		return screen_pos
-	return vp.get_final_transform().affine_inverse() * screen_pos
+## ★临时诊断（2026-09-30）：手机上「触摸位置与按钮对不上」还没定位，先打日志取真实数值。
+## 只打前 DIAG_LIMIT 次，避免刷屏；定位完就删。
+const DIAG_LIMIT: int = 40
+static var _diag_count: int = 0
+
+
+func _diag(msg: String) -> void:
+	if _diag_count >= DIAG_LIMIT:
+		return
+	_diag_count += 1
+	print("[触摸诊断 %d] %s" % [_diag_count, msg])
 
 
 func _input(event: InputEvent) -> void:
@@ -74,7 +75,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		var t: InputEventScreenTouch = event
 		if t.pressed:
-			if _touch_index == -2 and get_global_rect().has_point(_to_logical(t.position)):
+			var r: Rect2 = get_global_rect()
+			_diag("按下 act=%s idx=%d pos=%s | rect=%s hit=%s | vp_rect=%s final=%s" % [
+				action, t.index, t.position, r, r.has_point(t.position),
+				get_viewport().get_visible_rect(), get_viewport().get_final_transform()])
+			if _touch_index == -2 and r.has_point(t.position):
 				_touch_index = t.index
 				_on_down()
 		elif t.index == _touch_index:
@@ -83,7 +88,7 @@ func _input(event: InputEvent) -> void:
 		## 手指滑出按钮范围 → 松开。多点触控下 Button 的 `mouse_exited` 兜底不可靠，
 		## 少了这一步会出现"动作一直按着"（角色一直走 / 一直开枪）。
 		var d: InputEventScreenDrag = event
-		if d.index == _touch_index and not get_global_rect().has_point(_to_logical(d.position)):
+		if d.index == _touch_index and not get_global_rect().has_point(d.position):
 			_on_up()
 	elif event is InputEventMouseButton:
 		## 鼠标事件 Godot 已经变换过了 → 直接用 `mb.position`（不要重复变换）。
