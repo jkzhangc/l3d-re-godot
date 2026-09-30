@@ -209,6 +209,8 @@ func _maybe_show_update_log_on_first_launch() -> void:
 ## 右上角「F1 更新日志」角标 + RM 窗口样式的更新日志面板（F1/Esc/确定键关闭）。
 
 const CHANGELOG_VERSION_TEXT := "v0.31（2026-09-29 ~ 09-30）"
+## 更新日志正文字号（12 整数倍铁律）。★折行量宽与建行必须用同一个值（`_wrap_text_to_width`）。
+const CHANGELOG_FONT_SIZE: int = 24
 
 ## ⚠ CHANGELOG_VERSION_TEXT 是「本版已看过」的判据（`Global.changelog_seen_version`）：
 ## 改了它 → 玩家下次启动会**自动弹一次**更新日志。所以每次发版必须换新字符串。
@@ -328,19 +330,27 @@ func _footer_max_width() -> float:
 
 
 ## 按可用宽度逐字符折行（保留原文，不丢字）。单字即超宽时也至少吐出一个字符，防死循环。
-func _wrap_footer_line(text: String, max_w: float) -> Array[String]:
+## `continuation_indent`：第二行起的缩进（子项换行后仍能看出属于上一条），计入量宽。
+## ★**统一入口**：左下信息块与更新日志正文都走它 —— 两处都必须「不裁剪右侧」。
+func _wrap_text_to_width(text: String, max_w: float, font_size: int, continuation_indent: String = "") -> Array[String]:
 	var out: Array[String] = []
+	var prefix: String = ""
 	var current: String = ""
 	for i: int in text.length():
-		var candidate: String = current + text[i]
-		if current.is_empty() or _measure_text(candidate, FOOTER_FONT_SIZE).x <= max_w:
-			current = candidate
+		var ch: String = text[i]
+		if current.is_empty() or _measure_text(prefix + current + ch, font_size).x <= max_w:
+			current += ch
 		else:
-			out.append(current)
-			current = text[i]
+			out.append(prefix + current)
+			prefix = continuation_indent
+			current = ch
 	if not current.is_empty():
-		out.append(current)
+		out.append(prefix + current)
 	return out
+
+
+func _wrap_footer_line(text: String, max_w: float) -> Array[String]:
+	return _wrap_text_to_width(text, max_w, FOOTER_FONT_SIZE)
 
 
 func _build_footer_info() -> void:
@@ -477,24 +487,27 @@ func _open_update_log() -> void:
 	_scroll_log_y = 0.0
 
 	var g2: Node = get_node_or_null("/root/Global")
+	## ★正文按裁剪区宽度**预先折行**（2026-09-30 用户截图：右侧被裁，长句后半段看不见）。
+	## `clip_contents` 会直接切掉超宽部分，而 Label 默认不折行 → 必须自己在建行前折。
+	## ⚠ **不用 `Label.autowrap_mode`**：`flow` 的父节点是普通 Control（不是 Container），
+	## VBox 宽度不确定 → Label 的折行高度会算错，`get_combined_minimum_size().y`（滚动量程）
+	## 随之失真。预先折行则每行都是独立 Label，高度与量程都保持原有语义。
+	var body_w: float = clip.size.x - 24.0
 	for line: String in CHANGELOG_BODY.split("\n"):
 		if line.strip_edges().is_empty():
 			continue
-		var lbl := Label.new()
-		lbl.text = line
-		if g2 and g2.has_method("apply_hint_font"):
-			g2.apply_hint_font(lbl, 24)
-		if g2 and g2.has_method("apply_text_shadow"):
-			g2.apply_text_shadow(lbl)
-		if line.begins_with("【"):
-			lbl.add_theme_color_override("font_color", Color(1, 0.95, 0.55))
-		else:
-			lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		## 32px 行高下限（24px 字号的 12 整数倍）：12px 基底像素字实际渲染格比字体报告的
-		## 高度更高，按 min size 算会"恰好塞下"→ 滚动范围恒 0、末行被裁剪边切掉
-		## （2026-09-17 用户反馈：还是不能滚）。
-		lbl.custom_minimum_size = Vector2(0, 32)
-		flow.add_child(lbl)
+		for piece: String in _wrap_text_to_width(line, body_w, CHANGELOG_FONT_SIZE, "  "):
+			var lbl := Label.new()
+			lbl.text = piece
+			if g2 and g2.has_method("apply_hint_font"):
+				g2.apply_hint_font(lbl, CHANGELOG_FONT_SIZE)
+			if g2 and g2.has_method("apply_text_shadow"):
+				g2.apply_text_shadow(lbl)
+			if piece.begins_with("【"):
+				lbl.add_theme_color_override("font_color", Color(1, 0.95, 0.55))
+			else:
+				lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+			_add_changelog_row(flow, lbl)
 
 	# 底部提示（文案按平台取：手机用触摸层的摇杆 / 取消按钮名）
 	var hint_text: String = "↑↓ / 滚轮 滚动    F1 / Esc 返回" if not Global.is_mobile_platform() \
@@ -505,6 +518,15 @@ func _open_update_log() -> void:
 	add_child(panel)
 	_update_log_panel = panel
 	print("[标题画面] 打开更新日志（v%s）" % str(ProjectSettings.get_setting("application/config/version", "")))
+
+
+## 更新日志正文行挂进 VBox。
+## 32px 行高下限（24px 字号的 12 整数倍）：12px 基底像素字实际渲染格比字体报告的
+## 高度更高，按 min size 算会"恰好塞下"→ 滚动范围恒 0、末行被裁剪边切掉
+## （2026-09-17 用户反馈：还是不能滚）。
+func _add_changelog_row(flow: VBoxContainer, lbl: Label) -> void:
+	lbl.custom_minimum_size = Vector2(0, 32)
+	flow.add_child(lbl)
 
 
 ## 更新日志滚动（内容高于裁剪区时 ↑↓/滚轮 平移 VBox）。
