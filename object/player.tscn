@@ -102,14 +102,14 @@ script = ExtResource("8")
 [node name="Launcher" type="Node" parent="StateMachine" unique_id=2074634901]
 script = ExtResource("8")
 
-[node name="RLauncher" type="Node" parent="StateMachine"]
+[node name="RLauncher" type="Node" parent="StateMachine" unique_id=1921823592]
 script = ExtResource("8")
 
-[node name="Frypan" type="Node" parent="StateMachine"]
+[node name="Frypan" type="Node" parent="StateMachine" unique_id=1694041693]
 script = ExtResource("9")
 
-[node name="Bat" type="Node" parent="StateMachine"]
+[node name="Bat" type="Node" parent="StateMachine" unique_id=356418758]
 script = ExtResource("9")
 
-[node name="Bowgun" type="Node" parent="StateMachine"]
+[node name="Bowgun" type="Node" parent="StateMachine" unique_id=591665800]
 script = ExtResource("8")

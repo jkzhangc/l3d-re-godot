@@ -32,7 +32,7 @@ portrait_index = 14
 walk_texture = ExtResource("2")
 run_texture = ExtResource("3")
 death_texture = ExtResource("2")
-death_char_index = 6
+death_char_index = 5
 weapon_walk_textures = {
 "Bowgun": ExtResource("17_bg"),
 "Frypan": ExtResource("16_fp"),

@@ -34,7 +34,8 @@ portrait = ExtResource("4_0uj3i")
 portrait_index = 8
 walk_texture = ExtResource("7_yottv")
 run_texture = ExtResource("4_lxnma")
-death_char_index = 6
+death_texture = ExtResource("7_yottv")
+death_char_index = 5
 weapon_walk_textures = {
 "Bat": ExtResource("18_bat"),
 "Bowgun": ExtResource("17_bg"),
