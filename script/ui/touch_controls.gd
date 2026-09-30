@@ -47,6 +47,8 @@ var _drag_name: String = ""
 var _drag_touch: int = -2
 var _drag_start_offset: Vector2 = Vector2.ZERO
 var _drag_start_touch: Vector2 = Vector2.ZERO
+## 本次触摸是否已越过 `DRAG_THRESHOLD` —— 没越过就在松手时当成"点一下"（切换隐藏）。
+var _drag_moved: bool = false
 var _edit_bar: Control = null
 var _edit_buttons: Array[Dictionary] = []
 ## 上一次见到的画布尺寸（用于检测转屏 / 分辨率变化后重算自定义偏移）。
@@ -80,6 +82,10 @@ func _ready() -> void:
 const LAYER_CHECK_INTERVAL: float = 0.25
 var _layer_check_accum: float = 0.0
 
+## 「拖动」判定阈值（px）：手指位移超过它算**拖动**（改位置），没超过算**点一下**
+##（切换该元素的隐藏 / 显示）。两者共用一次按下，靠阈值区分，不用额外按钮。
+const DRAG_THRESHOLD: float = 12.0
+
 
 func _process(delta: float) -> void:
 	## 首帧采集布局基线（此时 tscn 的锚点布局已生效）。
@@ -87,6 +93,7 @@ func _process(delta: float) -> void:
 	if not _layout_ready:
 		_capture_layout_bases()
 		apply_saved_layout()
+		apply_saved_hidden()
 	## 画布尺寸变了（转屏 / 分辨率变化 / 窗口拉伸）→ 自定义偏移要按**新尺寸**重算。
 	## ⚠ 基线（offset）不用重采：offset 是相对锚点的，锚点会自己适配父尺寸。
 	var now_canvas: Vector2 = _canvas_size()
@@ -263,11 +270,26 @@ func is_layout_edit() -> bool:
 
 
 ## 编辑模式下把全部元素显示出来（忽略菜单/关卡过滤），并切回按钮原始文字。
+## ⚠ 被玩家隐藏的元素**也要显示**（否则隐藏过的按钮永远拖不回来）——
+##   它只是换成"红色描边 + 半透明"来提示"现在不显示"。
 func _show_all_for_edit() -> void:
+	var g: Node = get_node_or_null("/root/Global")
 	for e: Control in _layout_elements():
 		if e.has_method("set_menu_mode"):
 			e.call("set_menu_mode", false, "")
 		e.visible = true
+		if e.has_method("set_edit_hidden") and g != null and g.has_method("touch_hidden_is"):
+			e.call("set_edit_hidden", bool(g.call("touch_hidden_is", String(e.name))))
+
+
+## 把 Global 的隐藏列表应用到各元素（非编辑模式下才会真正隐藏）。
+func apply_saved_hidden() -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("touch_hidden_is"):
+		return
+	for e: Control in _layout_elements():
+		if e.has_method("set_custom_hidden"):
+			e.call("set_custom_hidden", bool(g.call("touch_hidden_is", String(e.name))))
 
 
 ## 进入布局编辑模式（设置页调用）。幂等。
@@ -276,6 +298,8 @@ func enter_layout_edit() -> bool:
 		return true
 	if not _layout_ready:
 		_capture_layout_bases()
+	## 先把玩家的隐藏设置同步到各元素（编辑态仍显示，只是换成红框 + 半透明）。
+	apply_saved_hidden()
 	_layout_edit = true
 	_show_all_for_edit()
 	_set_elements_layout_edit(true)
@@ -320,12 +344,13 @@ func _build_edit_bar() -> void:
 	add_child(bar)
 	_edit_bar = bar
 
-	## ★摆在**左上角**（2026-09-30）：底部中央会压住动作区（BtnSA / BtnPush 在右下，
-	## 工具条又会吃掉点击 → 那几个按钮就**拖不到**了）。左上角 x<600 / y<130 这条
-	## 带子在现有布局里是空的：摇杆在左下（y≥610）、物品区在右上（x≥720）、
-	## ActionPad 最靠上的 BtnStart 也在 y=390。仍留 40px 边距避开圆角/刘海。
+	## ★摆在**左侧中部**（2026-09-30）：
+	## 左上角 (40,40)-(450,170) 是 SystemPad（菜单 / 取消 / 丢弃）—— 放那儿会压住它们；
+	## 底部中央又会压住右下动作区（BtnSA / BtnPush）。而左侧中部这条带子
+	##（x 40~580, y 230~352）在现有布局里是空的：SystemPad 到 y=170、摇杆从 y=610、
+	## BtnWalk 从 y=470、物品区在 x≥720。仍留 40px 边距避开圆角 / 刘海。
 	var tip := Label.new()
-	tip.text = "拖动按键 / 摇杆调整位置"
+	tip.text = "拖动移动 · 点一下隐藏 / 显示"
 	tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tip.add_theme_font_size_override("font_size", 24)
 	tip.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -334,13 +359,13 @@ func _build_edit_bar() -> void:
 	tip.add_theme_constant_override("shadow_offset_y", 2)
 	tip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tip.size = Vector2(600.0, 32.0)
-	tip.position = Vector2(40.0, 10.0)
+	tip.position = Vector2(40.0, 230.0)
 	bar.add_child(tip)
 
 	_edit_buttons.clear()
 	var bw: float = 260.0
-	_make_edit_button("恢复默认", Vector2(40.0, 50.0), Vector2(bw, 72.0), "reset")
-	_make_edit_button("保存", Vector2(40.0 + bw + 20.0, 50.0), Vector2(bw, 72.0), "save")
+	_make_edit_button("恢复默认", Vector2(40.0, 280.0), Vector2(bw, 72.0), "reset")
+	_make_edit_button("保存", Vector2(320.0, 280.0), Vector2(bw, 72.0), "save")
 
 
 ## 工具条按钮用 `mouse_filter = IGNORE` + 自己在 `_input` 里判矩形 —— 
@@ -421,6 +446,7 @@ func _begin_drag(touch_index: int, pos: Vector2) -> void:
 	_drag_name = String(e.name)
 	_drag_start_offset = Vector2(e.offset_left, e.offset_top)
 	_drag_start_touch = pos
+	_drag_moved = false
 
 
 ## 命中可拖元素：**倒序**遍历（后加的节点画在上面，应当优先被拖到）。
@@ -437,24 +463,48 @@ func _update_drag(pos: Vector2) -> void:
 	var e: Control = _element_by_name(_drag_name)
 	if e == null:
 		return
-	_set_element_offset(e, _drag_start_offset + (pos - _drag_start_touch))
+	var d: Vector2 = pos - _drag_start_touch
+	## 越过阈值才真的开始移动 —— 否则"想点一下隐藏"会顺手把按钮挪偏几像素。
+	if not _drag_moved and d.length() >= DRAG_THRESHOLD:
+		_drag_moved = true
+	if _drag_moved:
+		_set_element_offset(e, _drag_start_offset + d)
 
 
-## 松手：把当前位置换算成**画布比例**存进 Global。
-## ⚠ `persist=false` —— 拖动过程只改内存，点「保存」才落盘（中途退出/崩溃不留半成品）。
+## 松手：位移没超过阈值 → 视为"点一下"，切换该元素的隐藏 / 显示；
+## 超过了 → 把当前位置换算成**画布比例**存进 Global。
+## ⚠ `persist=false` —— 编辑过程只改内存，点「保存」才落盘（中途退出 / 崩溃不留半成品）。
 func _end_drag() -> void:
 	if not _drag_name.is_empty():
-		var e: Control = _element_by_name(_drag_name)
-		var base: Vector2 = _layout_bases.get(_drag_name, _drag_start_offset)
-		var cs: Vector2 = _canvas_size()
-		if e != null and cs.x > 1.0 and cs.y > 1.0:
-			var off: Vector2 = Vector2(e.offset_left, e.offset_top)
-			var ratio := Vector2((off.x - base.x) / cs.x, (off.y - base.y) / cs.y)
-			var g: Node = get_node_or_null("/root/Global")
-			if g != null and g.has_method("set_touch_layout_offset"):
-				g.call("set_touch_layout_offset", _drag_name, ratio, false)
+		if not _drag_moved:
+			_toggle_element_hidden(_drag_name)
+		else:
+			var e: Control = _element_by_name(_drag_name)
+			var base: Vector2 = _layout_bases.get(_drag_name, _drag_start_offset)
+			var cs: Vector2 = _canvas_size()
+			if e != null and cs.x > 1.0 and cs.y > 1.0:
+				var off: Vector2 = Vector2(e.offset_left, e.offset_top)
+				var ratio := Vector2((off.x - base.x) / cs.x, (off.y - base.y) / cs.y)
+				var g: Node = get_node_or_null("/root/Global")
+				if g != null and g.has_method("set_touch_layout_offset"):
+					g.call("set_touch_layout_offset", _drag_name, ratio, false)
 	_drag_name = ""
 	_drag_touch = -2
+	_drag_moved = false
+
+
+## 点一下 = 隐藏 / 显示该元素（2026-09-30 用户需求）。
+## 编辑态里元素始终可见，只是换成"红色描边 + 半透明"表示它现在是隐藏的。
+func _toggle_element_hidden(elem_name: String) -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("set_touch_hidden"):
+		return
+	var now_hidden: bool = not bool(g.call("touch_hidden_is", elem_name))
+	g.call("set_touch_hidden", elem_name, now_hidden, false)
+	var e: Control = _element_by_name(elem_name)
+	if e != null and e.has_method("set_edit_hidden"):
+		e.call("set_edit_hidden", now_hidden)
+	print("[TouchControls] %s → %s" % [elem_name, "隐藏" if now_hidden else "显示"])
 
 
 func _on_edit_button(key: String) -> void:

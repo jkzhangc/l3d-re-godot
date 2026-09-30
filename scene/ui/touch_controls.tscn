@@ -212,6 +212,25 @@ text = "装填"
 script = ExtResource("3_btn")
 action = &"装填键"
 
+[node name="BtnHold" type="Button" parent="ActionPad"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -570.0
+offset_top = 380.0
+offset_right = -430.0
+offset_bottom = 520.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "举枪"
+script = ExtResource("3_btn")
+action = &"举起放下武器键"
+
 [node name="BtnSA" type="Button" parent="ActionPad"]
 layout_mode = 1
 anchor_left = 1.0
@@ -249,6 +268,25 @@ theme_override_styles/focus = SubResource("SB_pressed")
 text = "推击"
 script = ExtResource("3_btn")
 action = &"推击键"
+
+[node name="BtnAwaken" type="Button" parent="ActionPad"]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -175.0
+offset_top = 380.0
+offset_right = -35.0
+offset_bottom = 520.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "觉醒"
+script = ExtResource("3_btn")
+action = &"覚醒键"
 
 [node name="ItemPad" type="Control" parent="."]
 layout_mode = 1
@@ -427,3 +465,20 @@ theme_override_styles/focus = SubResource("SB_pressed")
 text = "切人"
 script = ExtResource("3_btn")
 action = &"切换角色键"
+
+[node name="BtnWalk" type="Button" parent="SystemPad"]
+layout_mode = 0
+offset_left = 180.0
+offset_top = 470.0
+offset_right = 310.0
+offset_bottom = 600.0
+focus_mode = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.92, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("SB_gray")
+theme_override_styles/hover = SubResource("SB_pressed")
+theme_override_styles/pressed = SubResource("SB_pressed")
+theme_override_styles/focus = SubResource("SB_pressed")
+text = "慢走"
+script = ExtResource("3_btn")
+action = &"行走键"

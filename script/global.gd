@@ -43,6 +43,37 @@ var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置�
 ## 空字典 = 从未自定义过（用 tscn 里的默认位置）。
 var touch_layout: Dictionary = {}
 
+## 被玩家**隐藏**的元素名（编辑模式里点一下即可隐藏 / 恢复），随 config.json 持久化。
+## ⚠ 隐藏只影响**显示**：动作映射还在，只是按钮不画出来、也不吃触摸。
+var touch_hidden: Array = []
+
+
+## 该元素是否被玩家隐藏。
+func touch_hidden_is(elem_name: String) -> bool:
+	return touch_hidden.has(elem_name)
+
+
+## 设置某元素的隐藏状态。`persist=false` 用于编辑过程中的临时切换（保存时才落盘）。
+func set_touch_hidden(elem_name: String, hidden: bool, persist: bool = true) -> void:
+	if hidden == touch_hidden.has(elem_name):
+		return
+	if hidden:
+		touch_hidden.append(elem_name)
+	else:
+		touch_hidden.erase(elem_name)
+	if persist:
+		save_config()
+
+
+## 从 config 读隐藏列表。⚠ 缺字段时**保留原值**（与其它设置字段一致）。
+func _apply_touch_hidden(raw: Variant) -> void:
+	if not (raw is Array):
+		return
+	var out: Array = []
+	for v: Variant in (raw as Array):
+		out.append(String(v))
+	touch_hidden = out
+
 
 ## 取某元素的布局偏移（比例）。未自定义过 → (0, 0)。
 func touch_layout_offset(elem_name: String) -> Vector2:
@@ -65,16 +96,17 @@ func set_touch_layout_offset(elem_name: String, ratio: Vector2, persist: bool = 
 		save_config()
 
 
-## 是否自定义过布局（设置页显示「默认 / 自定义」用）。
+## 是否自定义过布局（设置页显示「默认 / 自定义」用）。隐藏按钮也算自定义。
 func has_custom_touch_layout() -> bool:
-	return not touch_layout.is_empty()
+	return not touch_layout.is_empty() or not touch_hidden.is_empty()
 
 
-## 恢复默认布局（清空全部偏移 + 落盘）。返回是否真的有改动。
+## 恢复默认布局（清空全部偏移 + 隐藏列表 + 落盘）。返回是否真的有改动。
 func reset_touch_layout() -> bool:
-	if touch_layout.is_empty():
+	if touch_layout.is_empty() and touch_hidden.is_empty():
 		return false
 	touch_layout.clear()
+	touch_hidden.clear()
 	save_config()
 	return true
 
@@ -802,9 +834,9 @@ const KEY_HINT_TABLE: Dictionary = {
 	&"投掷物键": ["5", "投掷"],
 	&"丢弃武器键": ["E", "丢弃"],
 	&"切换角色键": ["Q", "切人"],
-	&"举起放下武器键": ["Shift", ""],
-	&"行走键": ["Ctrl", ""],
-	&"覚醒键": ["空格", ""],
+	&"举起放下武器键": ["Shift", "举枪"],
+	&"行走键": ["Ctrl", "慢走"],
+	&"覚醒键": ["空格", "觉醒"],
 }
 
 
@@ -1060,6 +1092,7 @@ func _apply_config_file(path: String) -> void:
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 	_apply_touch_layout(cfg.get("touch_layout", null))
+	_apply_touch_hidden(cfg.get("touch_hidden", null))
 
 
 ## 收敛 debug 的**有效值**（2026-09-28）：导出包（release）一律关闭；
@@ -1078,7 +1111,8 @@ func save_config() -> void:
 		"facing_lock_mode": facing_lock_mode,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
-		"touch_layout": _touch_layout_to_json()
+		"touch_layout": _touch_layout_to_json(),
+		"touch_hidden": touch_hidden.duplicate()
 	}
 	## ★移动端 res:// 只读 → 写 user://；桌面端仍写 res://config.json，
 	## 保持「开发时手改 config.json 切 debug」的既有工作流不变。

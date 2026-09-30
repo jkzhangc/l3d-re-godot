@@ -46,6 +46,13 @@ var _global: Node = null
 ## 布局编辑模式（2026-09-30）：为 true 时不响应输入，拖动交给 TouchControls 统一处理。
 var _layout_edit: bool = false
 var _edit_outline: Panel = null
+var _edit_outline_sb: StyleBoxFlat = null
+## 「模式显隐」：由 set_menu_mode 按菜单/关卡算出的**逻辑**可见性。
+var _mode_visible: bool = true
+## 「玩家隐藏」：在「按键布局」里点一下隐藏。最终 visible = 两者相与。
+var _custom_hidden: bool = false
+## 编辑模式下本摇杆当前是否处于"已隐藏"（红描边 + 半透明）。
+var _edit_hidden: bool = false
 
 
 func _ready() -> void:
@@ -76,10 +83,34 @@ func _forward(act: StringName, pressed: bool) -> void:
 ## 由 TouchControls 调用：菜单模式默认保留（摇杆正好用来走菜单光标）。
 ## `scene_key` 只有按钮用得上（菜单场景白名单），摇杆忽略。
 func set_menu_mode(menu_mode: bool, _scene_key: String = "") -> void:
-	visible = (not menu_mode) or show_in_menu
+	_mode_visible = (not menu_mode) or show_in_menu
+	_apply_visibility()
+
+
+## 最终显隐 = 「模式显隐」∧「未被玩家隐藏」。
+## ★不可见时必须先松开：否则角色会一直朝最后的方向走。
+func _apply_visibility() -> void:
+	visible = _mode_visible and not _custom_hidden
 	if not visible:
-		## ★隐藏时必须先松开：否则角色会一直朝最后的方向走。
 		_release_all()
+
+
+## 由 TouchControls 应用玩家的隐藏设置（隐藏 = 不显示、不吃触摸）。
+func set_custom_hidden(on: bool) -> void:
+	if _custom_hidden == on:
+		return
+	_custom_hidden = on
+	_apply_visibility()
+
+
+## 编辑模式下标记「本摇杆当前是隐藏的」：红描边 + 半透明。
+func set_edit_hidden(hidden: bool) -> void:
+	_edit_hidden = hidden
+	modulate = Color(1, 1, 1, 0.4) if hidden else Color.WHITE
+	if _edit_outline_sb != null:
+		var c: Color = Color(1.0, 0.35, 0.3, 0.95) if hidden else Color(1.0, 0.9, 0.3, 0.95)
+		_edit_outline_sb.border_color = c
+		_edit_outline_sb.bg_color = Color(c.r, c.g, c.b, 0.08)
 
 
 ## ★临时诊断（2026-09-30）：手机端触摸位置对不上，先打真实数值（含摇杆）。
@@ -103,6 +134,10 @@ func set_layout_edit(on: bool) -> void:
 	_layout_edit = on
 	if on:
 		_release_all()
+	else:
+		## 退出编辑：清掉「已隐藏」的半透明与红框，回到正常外观。
+		_edit_hidden = false
+		modulate = Color.WHITE
 	_apply_edit_outline(on)
 
 
@@ -122,6 +157,7 @@ func _apply_edit_outline(on: bool) -> void:
 			p.set_anchors_preset(Control.PRESET_FULL_RECT)
 			add_child(p)
 			_edit_outline = p
+			_edit_outline_sb = sb   ## 留着，供 set_edit_hidden() 改描边颜色（隐藏=红，可拖=黄）
 		_edit_outline.visible = true
 	elif _edit_outline != null and is_instance_valid(_edit_outline):
 		_edit_outline.visible = false
