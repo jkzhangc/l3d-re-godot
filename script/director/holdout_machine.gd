@@ -615,10 +615,9 @@ func trigger() -> void:
 	# 尸潮刷怪/狂暴干扰防守战；防守战自身刷怪走 EventManager 剧本事件管线不受影响。
 	if not _is_network_client() and director.has_method("set_director_suspended"):
 		director.set_director_suspended(true)
-	# 防守战期间丧尸与尸潮一样狂暴（存量切形态 + 新刷直接狂暴登场）。
-	# 注意顺序：先挂起（其中若正处尸潮会先收尾解狂暴）再开防守战狂暴。
-	if not _is_network_client() and director.has_method("set_holdout_rage"):
-		director.set_holdout_rage(true)
+	# ⚠ 2026-09-30 用户实测：狂暴**不能**在预备阶段就开 —— 预备倒计时里，附近由导演系统
+	# 刷出的**普通丧尸会被一起切成狂暴形态**，玩家还没开打就先看到一片红。
+	# 已移到 `_begin_active()`（防守战正式波次开始）才切。这里只负责"挂起常规编排"。
 	# 防守战 Tank 通道开启：重置首只延迟（防守战里 Tank 是核心压迫源，频率与常规不同）。
 	if not _is_network_client() and director.has_method("notify_holdout_started"):
 		director.notify_holdout_started()
@@ -766,6 +765,10 @@ func _begin_active() -> void:
 	var director: Node = get_node_or_null("/root/Director")
 	if director and director.has_method("start_scripted_event"):
 		director.start_scripted_event(_build_config())
+	## ★防守战狂暴**从这里才开始**（2026-09-30 用户需求）：
+	## 预备阶段由导演系统刷在附近的普通丧尸保持原形态，只有正式波次（ACTIVE）才统一切狂暴。
+	if not _is_network_client() and director and director.has_method("set_holdout_rage"):
+		director.set_holdout_rage(true)
 	# 杀怪式：挂击杀计数钩子（存量丧尸 + ACTIVE 期间新刷的都算，对齐原作组1计数语义）
 	if end_mode == EndMode.KILL_COUNT:
 		_connect_kill_hooks()

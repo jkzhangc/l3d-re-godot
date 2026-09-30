@@ -3826,6 +3826,10 @@ func _try_host_use_healing(peer_id: int) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state:
 		return
+	## ★满血拒绝（2026-09-30 用户实测：满血还能用且扣数量）：与 player.gd::use_healing_item
+	## 是同一道闸门 —— 那边拦本机操作，这里拦远程 Client 提交上来的请求。
+	if float(node.get("current_hp")) >= float(node.get("max_hp")):
+		return
 	var used: ItemData = Players.consume_spray_for(state)
 	if not used:
 		print("[NetworkWorld] HOST_HEALING_USE_REJECTED peer=%d（自己座位无喷雾）" % peer_id)

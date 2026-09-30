@@ -1340,6 +1340,11 @@ func heal(amount: float) -> void:
 ## 联机 Client **不本地预测**：只提交请求，真实扣减/加血由 Host 权威域结算后经快照回灌
 ## （2026-09-24 实测：「客户端用喷雾却扣了主机那边的账」根因就是两端各记一本账）。
 func use_healing_item() -> bool:
+	## ★满血时既不能用、也不扣数量（2026-09-30 用户实测：满血还能用，且数量会减少）。
+	## 放在最前面 = 单机 / 联机 Host / 联机 Client 提交前 都被拦下；
+	## Host 结算远程请求时在 network_world 里另有同样一道闸门。
+	if current_hp >= max_hp:
+		return false
 	if _submit_network_healing_use():
 		return true
 	var state: PlayerState = Players.get_state_for_entity(self)
