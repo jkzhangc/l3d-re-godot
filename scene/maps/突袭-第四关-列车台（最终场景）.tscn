@@ -13,7 +13,7 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="6_mkn31"]
 [ext_resource type="AudioStream" uid="uid://c66xlvtnt7cyc" path="res://sound/フィナーレ開幕.ogg" id="6_oj32u"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="6_rx6vf"]
-[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="6_tvnym"]
+[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="6_tvnym"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="7_mkn31"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="7_t3gkl"]
 [ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="8_uqcpj"]
@@ -27,6 +27,7 @@
 [ext_resource type="Resource" uid="uid://ycwi6hulksfl" path="res://tres/zombies/学生ゾンビ.tres" id="14_vpsco"]
 [ext_resource type="Resource" uid="uid://cf1ay21u0ekph" path="res://tres/zombies/女子学生ゾンビ.tres" id="15_8depf"]
 [ext_resource type="Resource" path="res://tres/zombies/職員ゾンビ.tres" id="16_723xh"]
+[ext_resource type="AudioStream" uid="uid://bi1yukjhwd0px" path="res://sound/ドア開け3.ogg" id="17_7cqef"]
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="17_flfka"]
 [ext_resource type="Resource" uid="uid://dfqkujph8xko0" path="res://tres/specials/ハンター.tres" id="18_t3ys5"]
 [ext_resource type="Resource" uid="uid://dtwr8d4xchwiw" path="res://tres/specials/ハンターβ.tres" id="19_4shf0"]
@@ -123,6 +124,7 @@ prepare_sound = ExtResource("6_oj32u")
 alert_sound = ExtResource("6_5fbns")
 ending_enabled = true
 finished_interact_label = "进入列车"
+ending_sound = ExtResource("17_7cqef")
 shutdown_director_on_finish = true
 
 [node name="GameInit" type="Node" parent="." unique_id=956443968]
