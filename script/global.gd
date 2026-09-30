@@ -708,6 +708,62 @@ func is_mobile_platform() -> bool:
 	return OS.has_feature("mobile") or OS.get_name() in ["Android", "iOS"]
 
 
+## ── 按键提示文案（PC 键名 ↔ 移动端虚拟按钮名）2026-09-30 用户需求 ──
+## 手机端**不应该出现键盘键名**（「按 D」「X / Esc」）—— 玩家手上根本没有键盘。
+## 所有**玩家可见**的按键提示统一走这里：PC 显示键盘键名，移动端显示虚拟按钮名。
+##
+## 表结构：动作名 → [PC 显示名, 移动端按钮名]。
+## 移动端列留空 = 该动作在触摸层没有对应按钮 → `has_key_hint()` 返回 false，
+## 调用方据此**整条不显示**（例：操作说明里 Ctrl / Shift / F1 那几行）。
+##
+## ⚠ 第二列必须与 `scene/ui/touch_controls.tscn` 各按钮的 `text` 一致
+##   （改按钮文字时同步这张表，否则提示与实际按钮名对不上）。
+const KEY_HINT_TABLE: Dictionary = {
+	&"确定键": ["Z", "攻击"],
+	&"开始游戏键": ["回车", "开始"],
+	&"取消键": ["X", "取消"],
+	&"菜单键": ["P", "菜单"],
+	&"功能键": ["D", "功能"],
+	&"装填键": ["A", "装填"],
+	&"SA键": ["C", "SA"],
+	&"推击键": ["S", "推击"],
+	&"主武器键": ["1", "武器"],
+	&"副武器键": ["2", "副武器"],
+	&"治疗品键": ["3", "治疗"],
+	&"辅助品键": ["4", "辅助"],
+	&"投掷物键": ["5", "投掷"],
+	&"丢弃武器键": ["E", "丢弃"],
+	&"切换角色键": ["Q", "切人"],
+	&"举起放下武器键": ["Shift", ""],
+	&"行走键": ["Ctrl", ""],
+	&"覚醒键": ["空格", ""],
+}
+
+
+## 取某动作的按键提示名（平台感知）。未登记的动作原样返回动作名（不炸）。
+func key_hint(action: StringName) -> String:
+	var row: Array = KEY_HINT_TABLE.get(action, [])
+	if row.is_empty():
+		return String(action)
+	if is_mobile_platform():
+		var mobile_name: String = str(row[1])
+		if not mobile_name.is_empty():
+			return mobile_name
+	return str(row[0])
+
+
+## 该动作在当前平台是否有可显示的按键提示。
+## 移动端要求表里登记了按钮名 —— 没有按钮的动作（Ctrl 慢走 / Shift 举枪 / F1 日志）
+## 在手机上无法操作，提示也不该出现（否则教玩家按一个不存在的键）。
+func has_key_hint(action: StringName) -> bool:
+	var row: Array = KEY_HINT_TABLE.get(action, [])
+	if row.is_empty():
+		return false
+	if not is_mobile_platform():
+		return true
+	return not str(row[1]).is_empty()
+
+
 ## 现场抓取器（F2 连拍+报告 / F4 只写报告）。挂在 Global 上，所有场景都能用，
 ## 不落进任何 .tscn，避免污染关卡场景。见 script/debug_capture.gd。
 func _setup_debug_capture() -> void:

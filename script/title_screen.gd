@@ -273,10 +273,12 @@ func _build_footer_info() -> void:
 
 
 ## 右上角「F1 更新日志」角标（12px fusion 基底，贴 1280×960 设计分辨率右上）。
+## ★文案按平台取（2026-09-30 用户需求）：手机没有 F1 → 只写「更新日志」。
 func _build_update_log_icon() -> void:
 	if _update_log_icon != null:
 		return
-	_update_log_icon = _make_menu_gradient_label("F1 更新日志", Vector2.ZERO, 24, text_color_index)
+	var log_text: String = "更新日志" if Global.is_mobile_platform() else "F1 更新日志"
+	_update_log_icon = _make_menu_gradient_label(log_text, Vector2.ZERO, 24, text_color_index)
 	add_child(_update_log_icon)
 	# GradientLabel 自算宽 → 延后一帧按实际宽右对齐
 	await get_tree().process_frame
@@ -383,8 +385,10 @@ func _open_update_log() -> void:
 		lbl.custom_minimum_size = Vector2(0, 32)
 		flow.add_child(lbl)
 
-	# 底部提示
-	var hint := _make_menu_gradient_label("↑↓ / 滚轮 滚动    F1 / Esc 返回", Vector2(24, win.size.y - 46.0), 24, text_color_index)
+	# 底部提示（文案按平台取：手机用触摸层的摇杆 / 取消按钮名）
+	var hint_text: String = "↑↓ / 滚轮 滚动    F1 / Esc 返回" if not Global.is_mobile_platform() \
+		else "摇杆上下 滚动    %s 返回" % Global.key_hint(&"取消键")
+	var hint := _make_menu_gradient_label(hint_text, Vector2(24, win.size.y - 46.0), 24, text_color_index)
 	win.add_child(hint)
 
 	add_child(panel)

@@ -31,10 +31,27 @@ var _text_color_index: int = 1
 var _text_color_row: int = 0
 var _accent_color_index: int = 5
 var _accent_color_row: int = 1
+## 是否移动端（_ready 时定一次；txt 里的键名据此本地化）。
+var _is_mobile: bool = false
+
+
+## ── 手机端键名映射（2026-09-30 用户需求）──
+## 手机玩家没有键盘 —— txt 里写的 `[D]` / `[Z]` / `[X 或 Esc]` 对他们毫无意义。
+## 这张表把 txt 里出现的**字面键名**翻成触摸层按钮名，让 `操作说明.txt` 保持单一来源
+## （不需要维护两份文件），只在解析阶段按平台替换。
+## ⚠ 与 `Global.KEY_HINT_TABLE` 的第二列保持同义（改触摸层按钮文字时两处都要改）。
+const MOBILE_KEY_ALIAS: Dictionary = {
+	"Z": "攻击", "X": "取消", "Esc": "取消", "P": "菜单", "D": "功能",
+	"A": "装填", "S": "推击", "C": "SA", "E": "丢弃", "Q": "切人",
+	"1": "武器", "2": "副武器", "3": "治疗", "4": "辅助", "5": "投掷",
+	## 方向键：手机上就是摇杆（菜单里也用摇杆上下选择）
+	"↑↓←→": "摇杆", "↑↓": "摇杆",
+}
 
 
 func _ready() -> void:
 	Global.play_lobby_music()   # 与战役/角色选择共用大厅 BGM（切界面不中断）
+	_is_mobile = Global.is_mobile_platform()
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
 		## 字体（2026-09-24）：统一走 Global —— 跟随「设置 → 界面字体」。
@@ -121,8 +138,10 @@ func _build_window() -> void:
 
 	_parse_and_build(GUIDE_TXT_PATH)
 
-	# 底部提示
-	var hint := _make_label("↑↓ 滚动    Z / Esc 返回", 16, _text_color_index, _text_color_row, true)
+	# 底部提示（文案按平台取：手机用摇杆 / 取消按钮的说法）
+	var hint_text: String = "摇杆 滚动    %s 返回" % Global.key_hint(&"取消键") if _is_mobile \
+		else "↑↓ 滚动    Z / Esc 返回"
+	var hint := _make_label(hint_text, 16, _text_color_index, _text_color_row, true)
 	hint.position = Vector2(24, window_size.y - 36)
 	win.add_child(hint)
 
@@ -130,6 +149,8 @@ func _build_window() -> void:
 ## 解析 txt 并构建行内容（VBox 自动排版）。行类型：
 ##   【xxx】 → 段落标题（强调色）；[KEY] desc → 键帽行；· xxx → 普通行；
 ##   ==== 装饰线与首行大标题 → 跳过；空行 → 小间隔。
+## 平台标记（2026-09-30）：`@pc ` 仅桌面显示，`@phone ` 仅手机显示 ——
+## 键盘专属条目（Ctrl 慢走 / Shift 举枪 / F1 日志）在手机上无法操作，提示也不该出现。
 func _parse_and_build(path: String) -> void:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
@@ -146,6 +167,13 @@ func _parse_and_build(path: String) -> void:
 			continue
 		if line.begins_with("="):
 			continue
+		if line.begins_with("@pc") or line.begins_with("@phone"):
+			var only_phone: bool = line.begins_with("@phone")
+			if _is_mobile != only_phone:
+				continue
+			line = line.substr(6 if only_phone else 3).strip_edges()
+			if line.is_empty():
+				continue
 		if not first_content_skipped:
 			first_content_skipped = true  # 首行大标题（窗口已有自己的标题）
 			continue
@@ -158,13 +186,25 @@ func _parse_and_build(path: String) -> void:
 			if close > 1:
 				_content.add_child(_build_keycap_row(
 					line.substr(1, close - 1).strip_edges(),
-					line.substr(close + 1).strip_edges()))
+					_localize_inline(line.substr(close + 1).strip_edges())))
 			else:
-				_content.add_child(_make_plain_label(line, _content_width()))
+				_content.add_child(_make_plain_label(_localize_inline(line), _content_width()))
 		elif line.begins_with("·"):
-			_content.add_child(_make_plain_label(line.substr(1).strip_edges(), _content_width()))
+			_content.add_child(_make_plain_label(
+				_localize_inline(line.substr(1).strip_edges()), _content_width()))
 		else:
-			_content.add_child(_make_plain_label(line, _content_width()))
+			_content.add_child(_make_plain_label(_localize_inline(line), _content_width()))
+
+
+## 把普通行里**内联**的键名替换成本平台的说法（例：`按 [Z] 看下一句` → `按 [攻击] 看下一句`）。
+## 只认 `[X]` 形式 —— txt 里的裸键名已统一写成方括号，避免误伤普通文字。
+func _localize_inline(text: String) -> String:
+	if not _is_mobile:
+		return text
+	var out: String = text
+	for key: String in MOBILE_KEY_ALIAS.keys():
+		out = out.replace("[%s]" % key, "[%s]" % str(MOBILE_KEY_ALIAS[key]))
+	return out
 
 
 func _content_width() -> float:
@@ -191,11 +231,41 @@ func _build_keycap_row(key_text: String, desc: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 
-	for token: String in key_text.split(" 或 "):
-		var t := token.strip_edges()
+	## 键名拆分：
+	## · `X 或 Esc` → 两个键帽（PC 一直如此）；
+	## · `A / S` → **只在手机端**拆成「装填」「推击」两个键帽；
+	##   ⚠ 只在 `/` 两侧**都是已知键名**时才拆 —— 否则 `Ctrl+1/2/3` 会被拆成
+	##   「Ctrl+1」「2」「3」三个键帽（用例 ⑪ 抓到过）。
+	##   PC 端一律不拆，保持原样的单个 `A / S` 键帽。
+	var groups: PackedStringArray = key_text.split(" 或 ")
+	if _is_mobile:
+		var expanded := PackedStringArray()
+		for g: String in groups:
+			var parts: PackedStringArray = g.split("/")
+			var all_known: bool = parts.size() > 1
+			for p: String in parts:
+				if not MOBILE_KEY_ALIAS.has(p.strip_edges()):
+					all_known = false
+					break
+			if all_known:
+				expanded.append_array(parts)
+			else:
+				expanded.append(g)
+		groups = expanded
+
+	var names := PackedStringArray()
+	for token: String in groups:
+		var t: String = token.strip_edges()
 		if t.is_empty():
 			continue
-		row.add_child(_make_keycap(t))
+		if _is_mobile:
+			t = str(MOBILE_KEY_ALIAS.get(t, t))
+		## 手机端两个键可能映射到同一个按钮（X 与 Esc 都是「取消」）→ 只画一个键帽
+		if names.has(t):
+			continue
+		names.append(t)
+	for n: String in names:
+		row.add_child(_make_keycap(n))
 
 	if not desc.is_empty():
 		var lbl := _make_label(desc, 16, _text_color_index, _text_color_row, false)

@@ -391,10 +391,15 @@ func _get_skills_text(cd: CharacterData) -> String:
 
 
 ## 觉醒行（角色专属；当前仅のび太=集中射撃）
+## ★键名按平台取（2026-09-30 用户需求）：手机触摸层没有觉醒按钮 →
+## 不写键名（写「空格」等于教玩家按一个不存在的键）。
 func _get_awaken_text(cd: CharacterData) -> String:
 	match String(cd.get("awaken_type")):
 		"concentrated_fire":
-			return "觉醒: 集中射撃——空格发动，威力×1.5、子弹即死（Boss 免疫）"
+			var cast: String = ""
+			if Global.has_key_hint(&"覚醒键"):
+				cast = "%s发动，" % Global.key_hint(&"覚醒键")
+			return "觉醒: 集中射撃——%s威力×1.5、子弹即死（Boss 免疫）" % cast
 		_:
 			return "觉醒: ——"
 

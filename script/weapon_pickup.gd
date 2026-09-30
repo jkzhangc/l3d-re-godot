@@ -400,20 +400,21 @@ func _process(delta: float) -> void:
 	_update_keycap_hint()
 
 
-## ── D 键帽图标（2026-09-17 用户需求）──
-## 玩家站在可使用（可拾取/可替换）的武器掉落物附近时，掉落物上方显示「D」键帽，
-## 提示按住 D 拾取/替换。角色不可用的武器（can_use false）不显示。
-const KEYCAP_KEY_TEXT := "D"
-
+## ── 功能键键帽图标（2026-09-17 用户需求；2026-09-30 平台化）──
+## 玩家站在可使用（可拾取/可替换）的武器掉落物附近时，掉落物上方显示键帽，
+## 提示按住功能键拾取/替换。角色不可用的武器（can_use false）不显示。
+## ★文字按平台取（用户 2026-09-30）：PC =「D」，手机 =「功能」——
+## 手机玩家没有键盘，看到「D」完全不知道按哪里。
 var _keycap_hint: Label = null
 
 
 func _ensure_keycap_hint() -> void:
 	if _keycap_hint != null and is_instance_valid(_keycap_hint):
 		return
+	var cap_text: String = Global.key_hint(&"功能键")
 	var lbl := Label.new()
 	lbl.name = "KeycapHint"
-	lbl.text = KEYCAP_KEY_TEXT
+	lbl.text = cap_text
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	## 键帽外观：深底 + 浅描边 + 圆角（fusion 12px 基底，键帽 16×14）
@@ -432,9 +433,13 @@ func _ensure_keycap_hint() -> void:
 	if g and g.has_method("apply_hint_font"):
 		g.apply_hint_font(lbl, 12)
 	add_child(lbl)
-	# 掉落物精灵约 48×64、原点在脚部 → 键帽悬在头顶上方
-	lbl.position = Vector2(-11, -78)
-	lbl.size = Vector2(22, 16)
+	# 掉落物精灵约 48×64、原点在脚部 → 键帽悬在头顶上方。
+	## ★宽度随文字自适应并保持水平居中（「功能」比「D」宽，写死 22px 会截字）。
+	var font: Font = g.get_ui_font() if g and g.has_method("get_ui_font") else null
+	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x if font else 10.0
+	var cap_w: float = maxf(22.0, text_w + 10.0)
+	lbl.size = Vector2(cap_w, 16)
+	lbl.position = Vector2(-cap_w * 0.5, -78)
 	## 抬 z：键帽在 DecorLayer（画序上被 UpperLayer 图块覆盖）→ 提到单位层之上、
 	## 黑幕(90)/ED(95)/章节总结(100) 之下（2026-09-17 用户反馈：被上层图块盖住）
 	lbl.z_index = 10

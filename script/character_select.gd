@@ -59,8 +59,11 @@ func _create_ui() -> void:
 	add_child(placeholder)
 
 	# ── 返回提示 ──
+	## 键名按平台取（2026-09-30 用户需求）：PC 显示键盘键名，
+	## 手机显示触摸层「取消」按钮名 —— 手机玩家没有键盘，写 X / Esc 毫无意义。
+	var back_key: String = Global.key_hint(&"取消键") if Global.is_mobile_platform() else "取消键 (X / Esc)"
 	var hint := _make_label(
-		"按 取消键 (X / Esc) 返回标题画面",
+		"按 %s 返回标题画面" % back_key,
 		Vector2(160, 420),
 		14,
 		Color(0.4, 0.4, 0.5, 1)

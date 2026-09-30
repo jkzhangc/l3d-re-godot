@@ -542,7 +542,7 @@ func _update_label() -> void:
 		if _is_network_client():
 			label.text = "%s（需主机操作）" % t
 		else:
-			label.text = "%s  [D]" % t
+			label.text = "%s  [%s]" % [t, Global.key_hint(&"功能键")]
 		label.visible = _can_interact and not t.is_empty()
 		return
 
@@ -556,7 +556,7 @@ func _update_label() -> void:
 	elif auto_start_on_approach:
 		label.text = interact_label
 	else:
-		label.text = "%s  [D]" % interact_label
+		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
 	label.visible = _can_interact
 
 

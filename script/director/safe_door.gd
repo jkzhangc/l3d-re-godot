@@ -169,9 +169,10 @@ func _update_label() -> void:
 	if not label:
 		return
 	if _is_online_session() and _network_total_count > 0:
-		label.text = "%s  [确定键]  (%d/%d 已到门)" % [interact_label, _network_ready_count, _network_total_count]
+		label.text = "%s  [%s]  (%d/%d 已到门)" % [
+			interact_label, Global.key_hint(&"确定键"), _network_ready_count, _network_total_count]
 	else:
-		label.text = "%s  [确定键]" % interact_label
+		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"确定键")]
 	label.visible = _can_interact and not _transitioning
 
 
