@@ -36,23 +36,16 @@ window/stretch/mode="viewport"
 window/stretch/scale_mode="integer"
 window/handheld/orientation=4
 
-[gui]
-
-; ── 项目级默认主题（2026-09-30）──
-; 【为什么必须写在这里】运行时的 `Global.apply_ui_font()` / `ensure_root_ui_theme()`
-; 只在游戏跑起来后生效，**编辑器预览不执行** → 编辑器里所有 UI 都显示成 Godot 默认字体。
-; 放到项目设置里，编辑器与运行时都用同一套像素字体。
-; ⚠ 这里只定「默认值」：运行时仍由 Global 按「设置 → 界面字体」覆盖（缝合像素 / zpix）。
-theme/custom_font="res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
-theme/default_font_size=12
-; ★像素字体必须关抗锯齿 + 次像素定位（0 = NONE / DISABLED）：
-;   否则字号放大时字形边缘会渗出零散灰白像素点（弹药数字 36px 实测）。
-theme/default_font_antialiasing=0
-theme/default_font_subpixel_positioning=0
-
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/godot_ai/plugin.cfg", "res://addons/phantom_camera/plugin.cfg", "res://addons/script-ide/plugin.cfg", "res://addons/vx_anim_editor/plugin.cfg", "res://addons/vx_tilemap/plugin.cfg")
+
+[gui]
+
+theme/default_font_antialiasing=0
+theme/default_font_subpixel_positioning=0
+theme/custom_font="res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf"
+theme/default_font_size=12
 
 [input]
 
