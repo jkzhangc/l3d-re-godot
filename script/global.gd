@@ -36,6 +36,69 @@ var sfx_volume: int = 80        ## 音效音量 0–100
 var facing_lock_mode: int = 0   ## 固定朝向模式: 0=切换式, 1=按住式
 var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置里可开关，2026-09-14 用户要求默认居中）
 
+## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
+## 存法：元素名 → Vector2(dx, dy)，单位是**相对逻辑画布的偏移比例**（不是像素）。
+## ★为什么用比例：换设备分辨率 / 逻辑画布尺寸变化时像素值会整体跑偏，比例不会。
+## 元素名 = 触摸层里的节点名（`Joystick` / `BtnAttack` / `BtnFunc` …）。
+## 空字典 = 从未自定义过（用 tscn 里的默认位置）。
+var touch_layout: Dictionary = {}
+
+
+## 取某元素的布局偏移（比例）。未自定义过 → (0, 0)。
+func touch_layout_offset(elem_name: String) -> Vector2:
+	var raw: Variant = touch_layout.get(elem_name, null)
+	if raw is Vector2:
+		return raw
+	if raw is Array and (raw as Array).size() == 2:
+		return Vector2(float((raw as Array)[0]), float((raw as Array)[1]))
+	return Vector2.ZERO
+
+
+## 写入某元素的布局偏移（比例）。传 (0,0) 等价于清除该项（回到 tscn 默认位置）。
+## `persist=false` 用于拖动过程中的高频写入（先攒着，松手/保存时再落盘）。
+func set_touch_layout_offset(elem_name: String, ratio: Vector2, persist: bool = true) -> void:
+	if ratio.length() < 0.0001:
+		touch_layout.erase(elem_name)
+	else:
+		touch_layout[elem_name] = ratio
+	if persist:
+		save_config()
+
+
+## 是否自定义过布局（设置页显示「默认 / 自定义」用）。
+func has_custom_touch_layout() -> bool:
+	return not touch_layout.is_empty()
+
+
+## 恢复默认布局（清空全部偏移 + 落盘）。返回是否真的有改动。
+func reset_touch_layout() -> bool:
+	if touch_layout.is_empty():
+		return false
+	touch_layout.clear()
+	save_config()
+	return true
+
+
+## 从 config 读布局。⚠ 缺字段 / 类型不对时**保留原值**（与其它设置字段一致的行为）。
+func _apply_touch_layout(raw: Variant) -> void:
+	if not (raw is Dictionary):
+		return
+	var out: Dictionary = {}
+	for k: Variant in (raw as Dictionary).keys():
+		var v: Variant = (raw as Dictionary)[k]
+		if v is Array and (v as Array).size() == 2:
+			out[String(k)] = Vector2(float((v as Array)[0]), float((v as Array)[1]))
+	touch_layout = out
+
+
+## 序列化成 JSON 友好形式（Vector2 不能直接进 JSON）。
+func _touch_layout_to_json() -> Dictionary:
+	var out: Dictionary = {}
+	for k: Variant in touch_layout.keys():
+		var v: Vector2 = touch_layout[k]
+		out[String(k)] = [v.x, v.y]
+	return out
+
 
 ## 武器/物品快捷键（1~5）统一轮询入口。
 ## Godot 动作默认子集匹配：Ctrl+1 会同时命中「主武器键」(裸1)——表现为
@@ -546,6 +609,11 @@ func _setup_touch_controls() -> void:
 	tc.name = "TouchControls"
 	add_child(tc)
 
+
+## 触摸层实例（未创建时返回 null）。设置页进入「按键布局」调整、调试与用例走这里。
+func touch_controls() -> Node:
+	return get_node_or_null("TouchControls")
+
 ## ── 虚拟按钮 / 摇杆的统一「动作派发」入口（2026-09-29 手机实测修复）──
 ## ★`Input.action_press()` **只改动作状态、不派发任何事件**（探针实测收到 0 个 InputEventAction）：
 ##   玩法侧 `Input.get_vector()` / `is_action_pressed()` 靠**轮询状态** → 生效；
@@ -991,6 +1059,7 @@ func _apply_config_file(path: String) -> void:
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
+	_apply_touch_layout(cfg.get("touch_layout", null))
 
 
 ## 收敛 debug 的**有效值**（2026-09-28）：导出包（release）一律关闭；
@@ -1008,7 +1077,8 @@ func save_config() -> void:
 		"sfx_volume": sfx_volume,
 		"facing_lock_mode": facing_lock_mode,
 		"font_option": font_option,
-		"changelog_seen_version": changelog_seen_version
+		"changelog_seen_version": changelog_seen_version,
+		"touch_layout": _touch_layout_to_json()
 	}
 	## ★移动端 res:// 只读 → 写 user://；桌面端仍写 res://config.json，
 	## 保持「开发时手改 config.json 切 debug」的既有工作流不变。

@@ -17,7 +17,15 @@ extends CanvasLayer
 ## 玩家往往只想回主界面。改成「返回标题画面」，统一走 `Global.go_to_title_screen()`
 ##（该入口会顺带解除暂停 + 退出联机会话，见 global.gd 里的说明）。
 const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面"]
-const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "返回"]
+## 设置项（2026-09-30：移动端多一项「按键布局」—— 手机端可自由拖动按键/摇杆位置）。
+## ⚠ 用函数而非 const（项数随平台变）；「按键布局」插在「返回」之前，
+##   所以 0~2（音量 / 固定朝向）的序号在任何平台上都不变。
+func _settings_items() -> Array[String]:
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向"]
+	if Global.is_mobile_platform():
+		out.append("按键布局")
+	out.append("返回")
+	return out
 
 ## 设置子页窗口尺寸（进设置放大居中、退出还原；同标题画面 SETTINGS_WINDOW_SIZE 思路）
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(480, 280)
@@ -332,9 +340,10 @@ func _exit_settings() -> void:
 
 
 func _build_settings_items() -> void:
-	for i: int in range(SETTINGS_ITEMS.size()):
+	var items: Array[String] = _settings_items()
+	for i: int in range(items.size()):
 		var pos_y: float = settings_item_start_y + i * menu_item_step
-		var text: String = SETTINGS_ITEMS[i]
+		var text: String = items[i]
 
 		var gl := _make_gl("  %s" % text, Vector2(12, pos_y), 24)
 		_menu_panel.add_child(gl)
@@ -371,6 +380,13 @@ func _build_settings_items() -> void:
 			var mode_label := _make_gl(mode_text, Vector2(BAR_X, pos_y), 24)
 			_menu_panel.add_child(mode_label)
 			_settings_value_labels.append(mode_label)
+		elif i == items.size() - 2 and Global.is_mobile_platform():
+			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
+			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
+			var lay_text: String = "自定义" if Global.has_custom_touch_layout() else "默认"
+			var lay_label := _make_gl(lay_text, Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(lay_label)
+			_settings_value_labels.append(lay_label)
 		else:
 			# "返回" — 无额外控件
 			_settings_value_labels.append(null)
@@ -403,7 +419,8 @@ func _handle_settings_input(event: InputEvent) -> void:
 		_exit_settings()
 		return
 
-	var item_count: int = SETTINGS_ITEMS.size()
+	var items: Array[String] = _settings_items()
+	var item_count: int = items.size()
 	if event.is_action_pressed("上"):
 		_settings_cursor_idx = (_settings_cursor_idx - 1 + item_count) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
@@ -415,15 +432,19 @@ func _handle_settings_input(event: InputEvent) -> void:
 		_refresh_settings_cursor()
 		return
 
+	## ★按**项名**分派，不硬编码序号（2026-09-30）：移动端多一项「按键布局」，序号会变。
+	var cur: String = items[_settings_cursor_idx] if _settings_cursor_idx < items.size() else ""
 	if event.is_action_pressed("确定键"):
 		Global.play_ui_sfx("confirm", sfx_confirm_path)
-		match _settings_cursor_idx:
-			2:  # 固定朝向
+		match cur:
+			"固定朝向":
 				var new_mode: int = 1 if Global.facing_lock_mode == 0 else 0
 				Global.set_facing_lock_mode(new_mode)
 				if _settings_value_labels[2]:
 					_settings_value_labels[2].text = "切换式" if new_mode == 0 else "按住式"
-			3:  # 返回
+			"按键布局":
+				_enter_touch_layout_edit()
+			"返回":
 				_exit_settings()
 		return
 
@@ -436,13 +457,35 @@ func _handle_settings_input(event: InputEvent) -> void:
 	else:
 		return
 
-	match _settings_cursor_idx:
-		0:
+	match cur:
+		"音乐音量":
 			Global.set_music_volume(clampi(Global.music_volume + delta_vol, 0, 100))
 			_update_volume_display(0)
-		1:
+		"音效音量":
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_volume_display(1)
+
+
+## ── 按键布局调整（2026-09-30，仅移动端）──
+## 交给触摸层自己的编辑模式；暂停菜单只负责进入 + 结束后刷新「默认 / 自定义」。
+## ⚠ 此时 `get_tree().paused == true` —— 触摸层是 `PROCESS_MODE_ALWAYS`，
+##   所以编辑模式照常可操作（这条链路靠用例 ⑩ 的冻结态断言兜着）。
+func _enter_touch_layout_edit() -> void:
+	var tc: Node = Global.touch_controls()
+	if tc == null or not tc.has_method("enter_layout_edit"):
+		push_warning("[暂停菜单] 触摸层不存在，无法进入按键布局调整（桌面端属正常）")
+		return
+	if not tc.is_connected("layout_edit_finished", _on_touch_layout_edit_finished):
+		tc.connect("layout_edit_finished", _on_touch_layout_edit_finished)
+	tc.call("enter_layout_edit")
+
+
+func _on_touch_layout_edit_finished(_saved: bool) -> void:
+	if not _in_settings:
+		return
+	_clear_settings_ui()
+	_build_settings_items()
+	_refresh_settings_cursor()
 
 
 func _refresh_settings_cursor() -> void:

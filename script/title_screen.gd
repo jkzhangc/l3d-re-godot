@@ -117,9 +117,24 @@ var _settings_labels: Array[GradientLabel] = []
 var _settings_value_labels: Array[GradientLabel] = []
 var _settings_bar_bg: Array[ColorRect] = []
 var _settings_bar_fill: Array[ColorRect] = []
-const SETTINGS_ITEMS: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "返回"]
+## 设置项（2026-09-30：移动端多一项「按键布局」—— 手机端可自由拖动按键/摇杆位置）。
+## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**，
+##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
+func _settings_items() -> Array[String]:
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体"]
+	if Global.is_mobile_platform():
+		out.append("按键布局")
+	out.append("返回")
+	return out
 ## 设置页窗口尺寸（2026-09-14）：音量条/数值标签比菜单项宽，进设置时窗口加宽、退出还原
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(520, 336)
+
+
+## 设置窗实际尺寸。移动端多一行「按键布局」→ 加高一点：
+## `_settings_row_step()` 会把行距压到 `avail / 行数`，7 行时压到 ~42px，
+## 和 32px 字号 + 光标框打架（2026-09-30）。
+func _settings_window_size() -> Vector2:
+	return Vector2(520.0, 392.0 if Global.is_mobile_platform() else 336.0)
 ## 音量条宽度——背景条与填充条必须同宽（旧版填充刷新写死 80、背景 160，
 ## 填充永远只有背景一半长，2026-09-15 用户截图复现）
 const SETTINGS_BAR_W: float = 160.0
@@ -822,17 +837,17 @@ func _apply_window_size(s: Vector2) -> void:
 ## 自动压缩 —— 2026-09-24 加了「界面字体」后共 6 行，56×6 会顶出 336 高的窗口。
 func _settings_row_step() -> float:
 	var step: float = item_height + item_spacing
-	var count: int = SETTINGS_ITEMS.size()
+	var count: int = _settings_items().size()
 	if count <= 0:
 		return step
-	var avail: float = SETTINGS_WINDOW_SIZE.y - item_start_y - 8.0
+	var avail: float = _settings_window_size().y - item_start_y - 8.0
 	return minf(step, avail / float(count))
 
 
 func _enter_settings() -> void:
 	_in_settings = true
 	_settings_cursor_idx = 0
-	_apply_window_size(SETTINGS_WINDOW_SIZE)
+	_apply_window_size(_settings_window_size())
 	_set_menu_items_visible(false)
 	_build_settings_items()
 	_refresh_settings_cursor()
@@ -855,9 +870,10 @@ func _build_settings_items() -> void:
 	var bar_w: float = SETTINGS_BAR_W
 	var bar_h: float = 24.0
 
-	for i: int in range(SETTINGS_ITEMS.size()):
+	var items: Array[String] = _settings_items()
+	for i: int in range(items.size()):
 		var pos_y: float = start_y + i * row_step
-		var text: String = SETTINGS_ITEMS[i]
+		var text: String = items[i]
 
 		var gl := _make_menu_gradient_label("  %s" % text, Vector2(label_x, pos_y), item_font_size, text_color_index)
 		win.add_child(gl)
@@ -905,6 +921,13 @@ func _build_settings_items() -> void:
 				Global.font_option_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(font_label)
 			_settings_value_labels.append(font_label)
+		elif i == items.size() - 2 and Global.is_mobile_platform():
+			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
+			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
+			var lay_text: String = "自定义" if Global.has_custom_touch_layout() else "默认"
+			var lay_label := _make_menu_gradient_label(lay_text, Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(lay_label)
+			_settings_value_labels.append(lay_label)
 		else:
 			# "返回" — 无额外控件
 			_settings_value_labels.append(null)
@@ -937,7 +960,8 @@ func _handle_settings_input(event: InputEvent) -> void:
 		_exit_settings()
 		return
 
-	var item_count: int = SETTINGS_ITEMS.size()
+	var items: Array[String] = _settings_items()
+	var item_count: int = items.size()
 	if event.is_action_pressed("上"):
 		_settings_cursor_idx = (_settings_cursor_idx - 1 + item_count) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
@@ -949,16 +973,19 @@ func _handle_settings_input(event: InputEvent) -> void:
 		_refresh_settings_cursor()
 		return
 
+	## ★按**项名**分派，不硬编码序号（2026-09-30）：移动端多一项「按键布局」，
+	## 序号会变；用名字判断后，以后再加项也不会串行。
+	var cur: String = items[_settings_cursor_idx] if _settings_cursor_idx < items.size() else ""
 	if event.is_action_pressed("确定键"):
 		Global.play_ui_sfx("confirm", sfx_confirm_path)
-		match _settings_cursor_idx:
-			2:  # 固定朝向
+		match cur:
+			"固定朝向":
 				var new_mode: int = 1 if Global.facing_lock_mode == 0 else 0
 				Global.set_facing_lock_mode(new_mode)
 				var mode_text: String = "切换式" if new_mode == 0 else "按住式"
 				if _settings_value_labels[2]:
 					_settings_value_labels[2].text = mode_text
-			3:  # 文字居中（2026-09-14 新增开关）
+			"文字居中":
 				Global.menu_item_centered = not Global.menu_item_centered
 				if _settings_value_labels[3]:
 					_settings_value_labels[3].text = "开" if Global.menu_item_centered else "关"
@@ -966,9 +993,11 @@ func _handle_settings_input(event: InputEvent) -> void:
 				_clear_settings_ui()
 				_build_settings_items()
 				_refresh_settings_cursor()
-			4:  # 界面字体（2026-09-24 新增）：循环切换 + 立即重套全 UI
+			"界面字体":
 				_cycle_ui_font(1)
-			5:  # 返回
+			"按键布局":
+				_enter_touch_layout_edit()
+			"返回":
 				_exit_settings()
 		return
 
@@ -981,15 +1010,38 @@ func _handle_settings_input(event: InputEvent) -> void:
 	else:
 		return
 
-	match _settings_cursor_idx:
-		0:  # 音乐音量
+	match cur:
+		"音乐音量":
 			Global.set_music_volume(clampi(Global.music_volume + delta_vol, 0, 100))
 			_update_settings_volume_display(0)
-		1:  # 音效音量
+		"音效音量":
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_settings_volume_display(1)
-		4:  # 界面字体：左右 = 上一个 / 下一个
+		"界面字体":  # 左右 = 上一个 / 下一个
 			_cycle_ui_font(-1 if delta_vol < 0 else 1)
+
+
+## ── 按键布局调整（2026-09-30，仅移动端）──
+## 交给触摸层自己的编辑模式（拖动 / 保存 / 恢复默认都在那边），设置页只负责
+## 「进入」+「结束后刷新这一行的『默认 / 自定义』显示」。
+func _enter_touch_layout_edit() -> void:
+	var tc: Node = Global.touch_controls()
+	if tc == null or not tc.has_method("enter_layout_edit"):
+		push_warning("[标题画面] 触摸层不存在，无法进入按键布局调整（桌面端属正常）")
+		return
+	if not tc.is_connected("layout_edit_finished", _on_touch_layout_edit_finished):
+		tc.connect("layout_edit_finished", _on_touch_layout_edit_finished)
+	tc.call("enter_layout_edit")
+
+
+func _on_touch_layout_edit_finished(_saved: bool) -> void:
+	if not _in_settings:
+		return
+	## 重建设置行：值标签要跟着「默认 / 自定义」变。
+	## ⚠ 不能调 `_rebuild_menu_items()` —— 它会把隐藏中的主菜单项 show() 回来。
+	_clear_settings_ui()
+	_build_settings_items()
+	_refresh_settings_cursor()
 
 
 ## 循环切换界面字体并刷新该行显示（Global 会广播 font_changed → 本窗口重排）。

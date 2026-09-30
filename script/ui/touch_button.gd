@@ -45,6 +45,9 @@ var _mouse_held: bool = false
 var _held: bool = false
 var _base_text: String = ""
 var _global: Node = null
+## 布局编辑模式（2026-09-30）：为 true 时不派发动作，拖动交给 TouchControls 统一处理。
+var _layout_edit: bool = false
+var _edit_outline: Panel = null
 
 
 func _ready() -> void:
@@ -70,7 +73,8 @@ func _diag(msg: String) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not visible or action == &"":
+	## ★布局编辑模式（2026-09-30）：不派发任何动作 —— 否则拖动按钮时会顺带开枪/扔雷。
+	if _layout_edit or not visible or action == &"":
 		return
 	if event is InputEventScreenTouch:
 		var t: InputEventScreenTouch = event
@@ -125,6 +129,40 @@ func set_menu_mode(menu_mode: bool, scene_key: String = "") -> void:
 		##（角色一直走 / 一直开枪）。切场景那一帧正好会走到这里。
 		_on_up()
 	text = menu_text if (menu_mode and not menu_text.is_empty()) else _base_text
+
+
+## ── 布局编辑模式（2026-09-30 用户需求：手机端可自由拖动按键位置）──
+## 进入后按钮**不再派发动作**（否则拖动按钮 = 顺带开枪/扔雷），只保留"能被拖"这一件事；
+## 加一圈黄描边给出「这个可以拖」的视觉暗示。
+## ⚠ 进入时先 `_on_up()`：手指可能正按着某个键，不松开会让动作卡住。
+func set_layout_edit(on: bool) -> void:
+	if _layout_edit == on:
+		return
+	_layout_edit = on
+	if on:
+		_on_up()
+	_apply_edit_outline(on)
+
+
+## 描边用**子节点**（Panel）：它是按钮的孩子 → 拖动时自动跟随，不必手动同步坐标。
+func _apply_edit_outline(on: bool) -> void:
+	if on:
+		if _edit_outline == null or not is_instance_valid(_edit_outline):
+			var p := Panel.new()
+			p.name = "LayoutEditOutline"
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(1.0, 0.9, 0.3, 0.10)
+			sb.border_color = Color(1.0, 0.9, 0.3, 0.95)
+			sb.set_border_width_all(2)
+			sb.set_corner_radius_all(6)
+			p.add_theme_stylebox_override("panel", sb)
+			p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			p.set_anchors_preset(Control.PRESET_FULL_RECT)
+			add_child(p)
+			_edit_outline = p
+		_edit_outline.visible = true
+	elif _edit_outline != null and is_instance_valid(_edit_outline):
+		_edit_outline.visible = false
 
 
 func _on_down() -> void:

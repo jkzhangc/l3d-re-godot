@@ -43,6 +43,9 @@ var _knob: Control = null
 var _base_home: Vector2 = Vector2.ZERO
 var _knob_home: Vector2 = Vector2.ZERO
 var _global: Node = null
+## 布局编辑模式（2026-09-30）：为 true 时不响应输入，拖动交给 TouchControls 统一处理。
+var _layout_edit: bool = false
+var _edit_outline: Panel = null
 
 
 func _ready() -> void:
@@ -91,7 +94,43 @@ func _diag(msg: String) -> void:
 	print("[触摸诊断-摇杆 %d] %s" % [_diag_count, msg])
 
 
+## ── 布局编辑模式（2026-09-30 用户需求：手机端可自由拖动摇杆位置）──
+## 进入后摇杆**不响应输入**（否则拖动摇杆 = 角色一直走），只保留"能被拖"这一件事。
+## ⚠ 进入时先 `_release_all()`：手指可能正推着摇杆，不松开会让角色一直朝那个方向走。
+func set_layout_edit(on: bool) -> void:
+	if _layout_edit == on:
+		return
+	_layout_edit = on
+	if on:
+		_release_all()
+	_apply_edit_outline(on)
+
+
+## 描边用**子节点**（Panel）：它是摇杆的孩子 → 拖动时自动跟随；铺满热区即为「可拖范围」。
+func _apply_edit_outline(on: bool) -> void:
+	if on:
+		if _edit_outline == null or not is_instance_valid(_edit_outline):
+			var p := Panel.new()
+			p.name = "LayoutEditOutline"
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(1.0, 0.9, 0.3, 0.08)
+			sb.border_color = Color(1.0, 0.9, 0.3, 0.95)
+			sb.set_border_width_all(2)
+			sb.set_corner_radius_all(12)
+			p.add_theme_stylebox_override("panel", sb)
+			p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			p.set_anchors_preset(Control.PRESET_FULL_RECT)
+			add_child(p)
+			_edit_outline = p
+		_edit_outline.visible = true
+	elif _edit_outline != null and is_instance_valid(_edit_outline):
+		_edit_outline.visible = false
+
+
 func _gui_input(event: InputEvent) -> void:
+	## ★布局编辑模式：不响应任何输入（拖动统一由 TouchControls 处理）。
+	if _layout_edit:
+		return
 	if event is InputEventScreenTouch:
 		var t: InputEventScreenTouch = event
 		if t.pressed:
