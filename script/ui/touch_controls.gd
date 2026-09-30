@@ -54,10 +54,25 @@ func _ready() -> void:
 
 ## 场景切换时重新判定模式。每帧只做一次引用比较，开销可忽略。
 ##（Global 是 autoload，创建本层时主场景可能还没挂上 → 必须靠这里补一次判定。）
-func _process(_delta: float) -> void:
+## 层级复查间隔（秒）。递归查找 CanvasLayer 不能每帧做，0.25s 对"菜单开关"这种
+## 人眼可感知的事件足够快。
+const LAYER_CHECK_INTERVAL: float = 0.25
+var _layer_check_accum: float = 0.0
+
+
+func _process(delta: float) -> void:
 	var cs: Node = get_tree().current_scene if get_tree() != null else null
 	if cs != _last_scene:
 		_apply_mode()
+	## ★关卡里暂停菜单 / 安全屋台词窗口的开关**不会**改变 `current_scene`，
+	## 所以层级不能只在 `_apply_mode` 里算 —— 这里定期对一次（见 `_effective_layer`）。
+	## ⚠ 该查找是**递归**的（菜单可能挂在地图场景内部），不能每帧做 → 降频到 0.25s。
+	_layer_check_accum += delta
+	if _layer_check_accum >= LAYER_CHECK_INTERVAL:
+		_layer_check_accum = 0.0
+		var want_layer: int = _effective_layer()
+		if layer != want_layer:
+			layer = want_layer
 	## ★屏幕诊断已撤（2026-09-30 定位完成）：
 	## 根因是「运行时改 `content_scale_size` 让输入坐标系与画布脱节」，已回退画布加宽解决。
 	## `touch_button` / `touch_joystick` 里的 `print` 诊断保留（各限 40 条）——
@@ -67,6 +82,28 @@ func _process(_delta: float) -> void:
 ## 是否菜单模式（菜单里只留摇杆 + 确定 + 取消）。
 func is_menu_mode() -> bool:
 	return _menu_mode
+
+
+## 当前该用的层级。★2026-09-30 用户实测：**关卡里打开暂停菜单 / 安全屋开头台词时，
+## 按键会被整个盖住** —— 因为那时 `current_scene` 仍是地图（有 GameInit），
+## 触摸层判定为「关卡模式」留在 80，而菜单窗口是 100。
+## 所以关卡模式也要动态看一眼：root 下有没有**可见且层级更高**的 CanvasLayer UI。
+## （只遍历 root 的直接子节点，数量很少，每帧开销可忽略。）
+func _effective_layer() -> int:
+	if _menu_mode:
+		return menu_layer
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.root == null:
+		return control_layer
+	## ⚠ 必须**递归**找：暂停菜单 `menu.tscn` 的根虽是 CanvasLayer，但它可能是被挂到
+	## 地图场景内部（不是 root 的直接子节点）—— 只扫一层会漏。所以调用方要降频。
+	for node: Node in tree.root.find_children("*", "CanvasLayer", true, false):
+		if node == self:
+			continue
+		var cl: CanvasLayer = node
+		if cl.visible and cl.layer > control_layer:
+			return menu_layer
+	return control_layer
 
 
 ## 用「当前场景里有没有 GameInit」区分关卡与菜单，再把模式下发到每个按钮。
@@ -79,8 +116,9 @@ func _apply_mode(scene_key_override: String = "") -> void:
 	## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
 	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
 	_menu_mode = not gameplay
-	## 菜单里要压在结算页(100)之上，关卡里要留在黑幕(90)/结算页之下。
-	layer = menu_layer if _menu_mode else control_layer
+	## 菜单里压在结算页(100)之上；关卡里平时留在黑幕(90)/结算页之下，
+	## 但**只要有更高层的可见 UI（暂停菜单 / 安全屋台词）冒出来就抬上去**（见 _effective_layer）。
+	layer = _effective_layer()
 	_propagate(self, _menu_mode, scene_key_override if not scene_key_override.is_empty() else _current_scene_key(cs))
 
 
