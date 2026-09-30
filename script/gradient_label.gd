@@ -252,6 +252,11 @@ func _load_resources() -> void:
 		if not _resolved_font_path.is_empty():
 			var ff := load(_resolved_font_path) as FontFile
 			if ff:
+				## ★这里直接 load 会绕过 Global.load_ui_font() 的像素字体后处理 →
+				## 字号放大时字形边缘渗出零散灰白点。统一过一遍（幂等）。
+				var g: Node = get_node_or_null("/root/Global")
+				if g != null and g.has_method("make_pixel_crisp"):
+					g.call("make_pixel_crisp", ff)
 				_font = ff
 			else:
 				printerr("[GradientLabel] 字体加载失败: %s" % _resolved_font_path)
