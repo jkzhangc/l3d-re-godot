@@ -96,6 +96,12 @@ extends Resource
 ## 受击碰撞体偏移。ZERO = 沿用（0, -8）。
 @export var hurtbox_offset: Vector2 = Vector2.ZERO
 
+@export_group("掉落（2026-10-01：敌人死亡掉落）")
+## 该变体的**专属**掉落池。留空 = 回落地图的 DirectorConfig.enemy_drop_pool。
+@export var drop_pool: DropPoolData = null
+## 该变体的掉落概率。< 0 = 沿用地图配置的默认值（普通感染者 12%）。
+@export_range(-1.0, 1.0, 0.01) var drop_chance: float = -1.0
+
 
 # ═══════════════════════════════════════
 # 注入（Host 生成 / Client 重建共用）

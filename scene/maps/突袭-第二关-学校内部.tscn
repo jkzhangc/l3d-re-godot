@@ -40,6 +40,13 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="38_1iro2"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="39_ue28p"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="40_qtngj"]
+[ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="po_enemy_drop"]
+[ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="po_bowgun"]
+[ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="po_frypan"]
+[ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="po_metalbat"]
+[ext_resource type="Resource" uid="uid://b7glacid5x2m" path="res://object/weapon_launcher_acid.tres" id="po_lacid"]
+[ext_resource type="Resource" uid="uid://b4glice3nx8q" path="res://object/weapon_launcher_ice.tres" id="po_lice"]
+[ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="po_lthunder"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="41_f2h8c"]
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
@@ -81,8 +88,8 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_21b8x"]
 script = ExtResource("40_qtngj")
-items = Array[Resource]([ExtResource("15_sdj3s"), ExtResource("34_3h1al"), ExtResource("35_f2h8c"), ExtResource("13_ear28"), ExtResource("14_g714n"), ExtResource("36_aogdg"), ExtResource("37_ednpm"), ExtResource("38_1iro2"), ExtResource("39_ue28p"), ExtResource("11_p7eod")])
-weights = Array[float]([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
+items = Array[Resource]([ExtResource("15_sdj3s"), ExtResource("34_3h1al"), ExtResource("35_f2h8c"), ExtResource("13_ear28"), ExtResource("14_g714n"), ExtResource("36_aogdg"), ExtResource("37_ednpm"), ExtResource("38_1iro2"), ExtResource("39_ue28p"), ExtResource("11_p7eod"), ExtResource("po_bowgun"), ExtResource("po_frypan"), ExtResource("po_metalbat"), ExtResource("po_lacid"), ExtResource("po_lice"), ExtResource("po_lthunder")])
+weights = Array[float]([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0142" type="Node2D" unique_id=1993185561]
@@ -310,6 +317,7 @@ tank_enabled = true
 tank_data = ExtResource("28_u4r11")
 holdout_tank_enabled = false
 drop_pool = SubResource("Resource_21b8x")
+enemy_drop_pool = ExtResource("po_enemy_drop")
 metadata/_custom_type_script = "uid://blx0cs5m3w80f"
 
 [node name="NoSpawnLayer" parent="." unique_id=431626105 instance=ExtResource("41_f2h8c")]

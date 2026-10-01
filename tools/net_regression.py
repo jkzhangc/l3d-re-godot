@@ -224,6 +224,30 @@ def _kill(proc) -> None:
             pass
 
 
+CONFIG_JSON = PROJECT_ROOT / "config.json"
+
+
+def _read_config() -> bytes | None:
+    """备份 config.json 的**原始字节**（读不到就返回 None，例如仓库布局变了）。"""
+    try:
+        return CONFIG_JSON.read_bytes()
+    except OSError:
+        return None
+
+
+def _restore_config(saved: bytes | None) -> bool:
+    """还原 config.json；真的被改脏了才返回 True（调用方据此打印一行提示）。"""
+    if saved is None:
+        return False
+    try:
+        if CONFIG_JSON.read_bytes() == saved:
+            return False
+        CONFIG_JSON.write_bytes(saved)
+        return True
+    except OSError:
+        return False
+
+
 def run_scenario(name: str, spec: dict, keep_logs: bool) -> tuple[bool, str]:
     stamp = time.strftime("%Y%m%d-%H%M%S")
     out_dir = LOG_ROOT / f"{stamp}-{name}"
@@ -367,6 +391,12 @@ def main() -> int:
     print(f"项目  : {PROJECT_ROOT}")
     print(f"场景  : {', '.join(names)}")
 
+    ## config.json 兜底快照（2026-10-01）：联机场景会实例化标题画面 → 触发「首启自动弹
+    ## 更新日志」链路，把 `changelog_seen_version` 写成当前版本号。那正是**打包红线**
+    ## （发版前进包的 config.json 该值必须 ≠ CHANGELOG_VERSION_TEXT，否则玩家收不到弹窗）。
+    ## 用例不负责还原全局状态，这里做单点兜底：跑完一律恢复成跑之前的样子。
+    saved_cfg = _read_config()
+
     results: list[tuple[str, bool, int, bool]] = []
     for n in names:
         spec = SCENARIOS[n]
@@ -400,6 +430,8 @@ def main() -> int:
             extra = f"（{used} 次尝试均失败）" if used > 1 else ""
             print(f"  FAIL       {n}{extra}")
     print(f"\n通过 {n_pass} / 已知bug {n_known} / 真回归失败 {n_fail}   （共 {len(results)}）")
+    if _restore_config(saved_cfg):
+        print("（config.json 被场景写脏，已还原为跑前内容）")
     # 已知 bug 不影响退出码；只有"真回归失败"才返回非零（CI 可据此拦截）
     return 1 if n_fail > 0 else 0
 

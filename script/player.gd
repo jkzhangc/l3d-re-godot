@@ -178,8 +178,15 @@ const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.g
 ## 武器拾取物脚本（静态工具：drop_weapon_for_player —— E 键全丢武器共用）
 const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 
-## 玩家位置快照以 60Hz+ 到达，50ms 延迟足以覆盖抖动且几乎无感。
-const NETWORK_RENDER_DELAY := 0.05
+## 远端玩家位置插值：快照样本按**自适应**固定延迟渲染，取代旧的指数平滑。
+## 2026-10-01（用户："尽量让玩家感觉不到延迟"）：本值是**延迟下限**，取 ≈ 2.2 个 60Hz 快照间隔
+## （16.7ms × 2.2 ≈ 37ms，原固定 50ms）；网络抖动时插值器自己临时加缓冲，
+## 平稳时不再白等那 13ms。见 `script/network_snapshot_interp.gd` 顶部说明。
+const NETWORK_RENDER_DELAY := 0.037
+## 生效延迟**硬上限**（用户 2026-10-01："网络有 100ms 也尽量保持 70ms 左右"）：
+## 抖动再持续，远端玩家也不会被渲染得比 70ms 更旧。
+const NETWORK_MAX_RENDER_DELAY := 0.070
+
 var _remote_interp: Variant = null
 var _network_attack_token: int = 0
 var _network_reload_was_facing_locked: bool = false
@@ -246,7 +253,7 @@ var facing: int:
 func _ready() -> void:
 ## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
 	add_to_group("player")
-	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY)
+	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY)
 	# NetworkWorld 会在实体加入场景前预先标记动态玩家；此处绝不能把它们
 	# 错绑到单人 active_seat。
 	if not network_controlled:

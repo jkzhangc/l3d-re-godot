@@ -36,6 +36,9 @@ const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
 const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源对当前敌人的重复命中冷却（毫秒）
+## ★敌人死亡掉落（2026-10-01 用户需求：原作里敌人死后会掉药品/武器）。
+## 只由单机 / Host 权威侧调用；掉落物落进 ground_pickup 组，由 NetworkWorld 收编后同步给 Client。
+const LOOT_DROPPER := preload("res://script/director/loot_dropper.gd")
 
 ## 帧尺寸覆盖（0 = 用默认 48×64）。
 ##
@@ -454,8 +457,12 @@ var _current_char_index: int = 0
 ## 远端敌人位置插值：快照样本按固定延迟渲染，取代旧的指数平滑
 ## （旧的每帧 lerp 会让远端实体起停带"摩擦力"观感）。
 const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.gd")
-## 敌人快照跟随 40Hz 的 player_snapshot 到达，延迟取约 2.5 个快照间隔。
-const NETWORK_RENDER_DELAY := 0.06
+## 敌人快照跟随 player_snapshot 到达（2026-10-01 起与玩家同为 **60Hz**），
+## 延迟下限取 ≈ 2.2 个快照间隔（16.7ms × 2.2 ≈ 37ms）；抖动时才由插值器自己抬高。
+const NETWORK_RENDER_DELAY := 0.037
+## 生效延迟**硬上限**（用户 2026-10-01："网络有 100ms 也尽量保持 70ms 左右"）。
+const NETWORK_MAX_RENDER_DELAY := 0.070
+
 var _remote_interp: Variant = null
 
 # ═══════════════════════════════════════
@@ -491,7 +498,7 @@ func _ready() -> void:
 		max_hp *= Global.difficulty_enemy_hp()
 	current_hp = max_hp
 	_facing = initial_facing
-	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY)
+	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY)
 	# 俯视角：浮动模式，所有碰撞都是墙壁
 	motion_mode = MOTION_MODE_FLOATING
 	# 敌人之间正常碰撞（move_and_collide 滑墙会自然推开）
@@ -763,7 +770,7 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 	# 联机（09-22 实测「客户端丧尸攻击动画反复抽搐」根因）：Client 敌人显示动作帧
 	# （攻击/突进/张嘴等非行走角色格）期间**必须停掉行走动画 timer** —— timer 回调
 	# _on_animation_timer_timeout → _refresh_sprite() 会按 _anim_step 把 walk_char 的
-	# 行走帧插进动作帧之间，与 40Hz 快照互相覆盖，表现为「第二帧瞬间跳第一帧、又跳回
+	# 行走帧插进动作帧之间，与快照下发的动作帧互相覆盖，表现为「第二帧瞬间跳第一帧、又跳回
 	# 第二帧」。与 Host 动作状态同规则（动作表激活期间禁 _refresh_sprite）。
 	# 快照 char 与 walk_char 一致时（正常行走/跑步）恢复 timer，行走动画仍本地推进。
 	if visual_char_index >= 0 and visual_char_index != walk_char_index:
@@ -1333,6 +1340,7 @@ func _die(is_headshot: bool) -> void:
 	_network_headshot_death = is_headshot
 	died.emit(self)  ## 击杀统计挂点（防重复：_is_dead 已挡住重复进入 _die）
 	BurnEffect.detach(self)  ## 烧死的尸体不留火焰（_update_element_status 死态早退不摘，在此统一摘）
+	_maybe_drop_loot()  ## ★掉落结算：所有死亡路径（含爆头）的唯一汇合点，_is_dead 已保证只算一次
 	print("[敵人] 死亡！类型=%s" % ("爆头" if is_headshot else "普通"))
 
 	if is_headshot:
@@ -1347,6 +1355,58 @@ func _die(is_headshot: bool) -> void:
 			sm._on_transition_requested(death_state_name)
 		else:
 			_become_corpse(is_headshot)
+
+
+## ★敌人死亡掉落结算（2026-10-01 用户需求："原作是敌人死亡后会掉一些物品，药品和武器都会掉"）。
+##
+## 池的优先级：敌人自身专属池（ZombieVariant.drop_pool / SpecialEnemyData.drop_pool）
+##   → 回落地图的 DirectorConfig.enemy_drop_pool。两者都空 = 这只不掉东西。
+## 概率同理：敌人自身 drop_chance（≥ 0 才生效）→ 地图按类别的默认值
+##   （普通 12% / 特感 50% / Boss 必掉，全部可在 DirectorConfig 里调）。
+##
+## ⚠ **权威唯一出口**：Client 是纯表现镜像（network_presentation_only）→ 一律不本地 roll，
+## 否则两端各抽一次会多出 Host 不认的物件（与 random_pickup 的 09-22 教训同源）。
+## 掉落物落进 `ground_pickup` 组 → NetworkWorld `_register_untracked_host_pickups` 自动收编下发。
+func _maybe_drop_loot() -> void:
+	if network_presentation_only:
+		return
+	var director: Node = get_node_or_null("/root/Director")
+	if director == null:
+		return
+	var cfg_raw: Variant = director.get("current_config")
+	if cfg_raw == null or not is_instance_valid(cfg_raw):
+		return
+	var cfg: Node = cfg_raw as Node
+	if cfg == null:
+		return
+
+	var pool: Resource = null
+	var chance: float = -1.0
+	if special_data != null:
+		pool = special_data.drop_pool
+		chance = special_data.drop_chance
+	elif variant_data != null:
+		pool = variant_data.drop_pool
+		chance = variant_data.drop_chance
+	if pool == null:
+		pool = cfg.get("enemy_drop_pool") as Resource
+	if pool == null:
+		return
+
+	if chance < 0.0:
+		if is_in_group("tank_enemies"):
+			chance = float(cfg.get("enemy_drop_chance_boss"))
+		elif special_data != null:
+			chance = float(cfg.get("enemy_drop_chance_special"))
+		else:
+			chance = float(cfg.get("enemy_drop_chance_common"))
+	if chance <= 0.0 or randf() > clampf(chance, 0.0, 1.0):
+		return
+
+	var dropped: Node2D = LOOT_DROPPER.spawn_from_pool(pool, global_position, self)
+	if dropped != null:
+		print("[敵人] 死亡掉落: %s @ (%d, %d)" % [
+			dropped.name, int(global_position.x), int(global_position.y)])
 
 
 func _become_corpse(is_headshot: bool) -> void:

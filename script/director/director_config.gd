@@ -185,6 +185,17 @@ class_name DirectorConfig extends Node
 ## 池子配置方法见 DropPoolData 的文件头说明。
 @export var drop_pool: DropPoolData = null
 
+@export_group("投放 — 敌人死亡掉落（2026-10-01：原作式「打完会掉东西」）")
+## 敌人掉落的**总池**：敌人自身（ZombieVariant / SpecialEnemyData）没配 drop_pool 时回落到这里。
+## 留空 = 该地图的敌人不掉落。池内可混放 WeaponData / ItemData。
+@export var enemy_drop_pool: DropPoolData = null
+## 普通感染者掉落概率（0~1）。用户 2026-10-01 拍板：普通 12%。
+@export_range(0.0, 1.0, 0.01) var enemy_drop_chance_common: float = 0.12
+## 特感（special_pool 刷出的 ハンター 等）掉落概率。用户拍板：50%。
+@export_range(0.0, 1.0, 0.01) var enemy_drop_chance_special: float = 0.5
+## Boss / Tank（group `tank_enemies`）掉落概率。用户拍板：必掉。
+@export_range(0.0, 1.0, 0.01) var enemy_drop_chance_boss: float = 1.0
+
 @export_group("音乐 — 尸潮（Peak 阶段 BGM）")
 ## 尸潮期间播放的 BGM，尸潮结束自动停止。默认 = 原作ラッシュ１（与防守战同曲）。
 @export var horde_music: AudioStream = preload("res://music/ラッシュ１.mp3")

@@ -135,7 +135,10 @@ const NETWORK_VARIANTS: Dictionary = {
 ## 快照节拍说明：
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
 ## - Client 只提交输入，并接收 Host 的表现数据。
-## - 玩家位置单独以 60Hz 发送；敌人位置与玩家表现合并为 40Hz 快照。
+## - 两条高频路径（2026-10-01 起**同为 60Hz**）：
+##   ① 玩家状态 `player_position_snapshot`（27 字段紧凑数组）；
+##   ② 敌人/世界表现 `player_snapshot`（敌人为主，**玩家状态不再重复发** —— 合并成一个大包
+##      会超过 ENet MTU，所以刻意分成两条 RPC）。
 ## - 高频快照使用 unreliable_ordered，因为旧位置没有保存价值；可靠快照只用于
 ##   首次进图、掉落物变化、实体列表收敛等结构性同步。
 ## 作者摆的「玩家出生槽位」脚本（2026-09-26 用户需求）。
@@ -153,7 +156,11 @@ var _arrival_applied: bool = false
 ## ⚠ 不能只依赖物理探测 —— 刚 `add_child` 的碰撞体在**当帧**可能还没进物理空间，
 ## 于是第二名玩家会和第一名落在同一格（引擎要过几帧才把两人推开）。
 var _spawn_assignments: Array[Vector2] = []
-const SNAPSHOT_INTERVAL := 1.0 / 40.0
+## 敌人快照频率（2026-10-01 用户拍板 40 → **60Hz**）：代价是敌人流量 +50%，
+## 换来的是远端敌人延迟从 ~55ms 降到 ~37ms 且更顺 —— 用户明确要求"最好让玩家感觉不到延迟"。
+## ⚠ 本常量现在是**敌人/世界快照**的频率；玩家状态走下面 60Hz 的专用路径（两者已同频，
+## 但仍是两条独立 RPC，玩家状态不在本路径里重复发，见 _physics_process 的说明）。
+const SNAPSHOT_INTERVAL := 1.0 / 60.0
 const PLAYER_SNAPSHOT_INTERVAL := 1.0 / 60.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
@@ -554,7 +561,7 @@ func _physics_process(delta: float) -> void:
 		## 写在 `for peer_id in _ready_client_peers` **里面** → N 个 Client 就把同一份
 		## 快照重建 N 次：玩家快照 27 个字段/人、敌人快照要遍历全部敌人（每只还先分配一个
 		## 13 键 Dictionary 再拆成 9 元素数组）并排序。4 人局（3 个 Client）时，
-		## 60Hz 与 40Hz 两条路径合计 ≈ 300 次构建/秒 —— 而结果**完全相同**。
+		## 两条高频路径合计 ≈ 300 次构建/秒 —— 而结果**完全相同**。
 		## 手机做 Host 时这是最重的一笔纯浪费（构建在 Host CPU 上，编码/带宽本来就省不掉）。
 		## 构建结果是只读的，同一份 Array 交给多次 `rpc_id` 是安全的。
 		if _player_snapshot_accumulator >= PLAYER_SNAPSHOT_INTERVAL:
@@ -569,10 +576,16 @@ func _physics_process(delta: float) -> void:
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			var snapshot_targets: Array = _active_client_peer_ids()
 			if not snapshot_targets.is_empty():
-				var player_states: Array = _build_compact_player_snapshot()
+				## ★玩家状态不再随本路径重复发送（2026-10-01）：上面 `player_position_snapshot`
+				## 发的就是**同一份** 27 字段紧凑数组，本路径再发一遍等于把玩家状态流量翻一倍
+				## （粗估每 Client 数十 KB/s），而两份内容完全相同 → 这里只发敌人。
+				## 丢包容忍度不受影响：客户端插值缓冲按固定延迟渲染（player 0.037s ≈ 2.2 个快照间隔），
+				## 且两条路径都是 unreliable_ordered（丢包由下一包覆盖）。
+				## ⚠ 客户端 `_apply_client_snapshot(states, false)` 对空数组是 no-op
+				## （「不在快照即回收」的收敛只走 snap=true 的可靠重同步），故传空数是安全的。
 				var enemy_states: Array = _build_enemy_snapshot(true)
 				for peer_id: int in snapshot_targets:
-					player_snapshot.rpc_id(peer_id, player_states, enemy_states)
+					player_snapshot.rpc_id(peer_id, [], enemy_states)
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)

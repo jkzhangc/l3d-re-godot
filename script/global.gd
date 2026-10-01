@@ -561,10 +561,10 @@ const ANIM_BASE_FRAME_DURATION: float = 0.18
 var selected_campaign: CampaignData = null
 var selected_difficulty: int = 0  ## 0=Easy, 1=Normal, 2=Hard, 3=Expert
 var difficulty_multipliers: Dictionary = {
-	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6},
-	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0},
-	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5},
-	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0},
+	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6, "spawn_scale": 0.5},
+	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0, "spawn_scale": 0.75},
+	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5, "spawn_scale": 1.0},
+	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0, "spawn_scale": 1.25},
 }
 
 
@@ -590,6 +590,14 @@ func difficulty_enemy_damage() -> float:
 
 func difficulty_director_intensity() -> float:
 	return difficulty_mult("director_intensity")
+
+
+## ── ★单人难度 → 刷怪数量倍率（2026-10-01 用户拍板）──
+## 简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25。
+## ⚠ **只在单人生效**：多人联机仍只按真人数（见 Players.spawn_scale），
+## 否则 4 人 + 最高难度会叠成 2.0×1.25 = 2.5×，多人平衡会跟着变。
+func difficulty_spawn_scale() -> float:
+	return difficulty_mult("spawn_scale")
 
 # ═══════════════════════════════════════
 # 尸体管理

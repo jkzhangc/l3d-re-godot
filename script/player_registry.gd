@@ -208,11 +208,25 @@ func spawn_player_count() -> int:
 	return maxi(owned, 1)
 
 
-## 当前刷怪倍率。
+## 当前刷怪倍率 = 「按真人数的倍率」×「单人难度倍率」。
+## ★单人难度（2026-10-01 用户拍板）：简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25，
+## **只在单人生效** —— 多人局照旧只按人数（4 人 + 最高难度不要叠成 2.5×）。
 func spawn_scale() -> float:
 	var n: int = spawn_player_count()
 	var idx: int = mini(n, SPAWN_SCALE_TABLE.size()) - 1
-	return SPAWN_SCALE_TABLE[maxi(idx, 0)]
+	var base: float = SPAWN_SCALE_TABLE[maxi(idx, 0)]
+	if n <= 1:
+		base *= _difficulty_spawn_scale()
+	return base
+
+
+## 单人难度倍率。取不到 Global（harness / 无 autoload 的裸实例）时按 1.0 处理 ——
+## 用例里的裸注册表不该因为"当前选的难度"而抖。
+func _difficulty_spawn_scale() -> float:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("difficulty_spawn_scale"):
+		return 1.0
+	return maxf(0.0, float(g.call("difficulty_spawn_scale")))
 
 
 ## 把基准刷怪数量按人数放大。
