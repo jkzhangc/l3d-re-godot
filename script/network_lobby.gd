@@ -111,28 +111,65 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- 两界面结构（2026-09-27）
 
+## 档位：正文 24、窗内标题 36（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
+## 提为类级常量（2026-10-01）：端口框宽度要按同一字号算，两处必须同源。
+const BODY_FONT_SIZE: int = 24
+const PANEL_TITLE_FONT_SIZE: int = 36
+
+
 ## 大厅 / 房间两界面的正文字号统一（2026-09-28 用户反馈「文字太小」）。
 ## 档位：正文 24、窗内标题 36（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
 ## 刻意用代码统一覆盖而不写进 .tscn：既避免「编辑器重存丢属性」，也让之后新增的控件自动跟随。
 func _apply_panel_font_sizes() -> void:
-	const BODY: int = 24
-	const PANEL_TITLE: int = 36
 	for panel: Control in [connect_panel, room_panel]:
 		if panel == null:
 			continue
 		for node: Node in panel.find_children("*", "Control", true, false):
 			if node is Label:
-				Global.apply_ui_font(node as Label, BODY)
+				Global.apply_ui_font(node as Label, BODY_FONT_SIZE)
 			elif node is BaseButton:
 				## Button / OptionButton / CheckBox 都走这里（OptionButton 继承 Button）。
-				(node as BaseButton).add_theme_font_size_override("font_size", BODY)
+				(node as BaseButton).add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 			elif node is LineEdit:
-				(node as LineEdit).add_theme_font_size_override("font_size", BODY)
+				(node as LineEdit).add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 	## 窗内标题比正文大一档，保住层级。
 	for title_path: String in ["ConnectPanel/VBox/Title", "RoomPanel/Margin/Column/Title"]:
 		var title: Label = get_node_or_null(title_path) as Label
 		if title != null:
-			Global.apply_ui_font(title, PANEL_TITLE)
+			Global.apply_ui_font(title, PANEL_TITLE_FONT_SIZE)
+	## 端口框宽度必须跟着字号走（放在字号设置之后）。
+	_widen_port_fields()
+
+
+## ── 端口输入框宽度（2026-10-01 用户反馈：手机端端口框只能显示四位数）──
+## 端口最大 65535 = **5 位**。SpinBox 没有自己的字体 —— 字体与字号都在**内部 LineEdit** 上：
+##   · `find_children("*", "Control")` **拿不到**它（实测：遍历走不到 → 字号覆盖落空 → 输入框仍按默认字号
+##     算最小宽，正文放大后 5 位数字被裁掉）；
+##   · 正确入口是官方 API `SpinBox.get_line_edit()`。
+## 这里显式把正文字号套到内部 LineEdit + 按**字体实测宽度**留位（不写死像素），字号再改也自动跟随。
+const PORT_DIGITS: int = 5
+## SpinBox 右侧上下箭头 + 内边距的宽裕量（正文 24px 下实测取值；字号更大时偏保守无害）。
+const PORT_SPIN_EXTRA: float = 56.0
+
+
+func _widen_port_fields() -> void:
+	for box: SpinBox in [port_edit, host_port_edit]:
+		if box == null:
+			continue
+		var inner: LineEdit = box.get_line_edit()
+		var font: Font = Global.get_ui_font()
+		if inner != null:
+			inner.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
+			var inner_font: Font = inner.get_theme_font("font")
+			if inner_font != null:
+				font = inner_font
+		var text_w: float = 0.0
+		if font != null:
+			text_w = font.get_string_size("0".repeat(PORT_DIGITS),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, BODY_FONT_SIZE).x
+		if text_w <= 0.0:
+			text_w = float(PORT_DIGITS) * float(BODY_FONT_SIZE) * 0.62   ## 兜底估算
+		box.custom_minimum_size = Vector2(text_w + PORT_SPIN_EXTRA, box.custom_minimum_size.y)
 
 
 ## 房间界面的一次性初始化：难度选项 + 只读信息栏。
@@ -604,14 +641,27 @@ func _on_leave_pressed() -> void:
 
 
 func _on_character_selected(index: int) -> void:
-	if _refreshing_character_select or not net or not net.handshake_ok:
+	if _refreshing_character_select:
+		return
+	if not net or not net.handshake_ok:
+		## ⚠ **不能静默返回**（2026-10-01 玩家反馈手机端「选完角色右边不变」）：
+		## 下拉框会照常显示玩家点的这一项，但请求根本没发出去 → UI 与权威状态不一致，
+		## 而且没有任何线索。这里既打印原因，也把下拉框**拉回权威值**（提示必须与真实可执行性同源）。
+		print("[大廳] 角色选择被忽略：连接/握手未就绪 → 下拉框已拉回权威值")
+		_refresh_ui()
 		return
 	var character_path := str(character_select.get_item_metadata(index))
 	if character_path.is_empty():
+		## 占位项（index 0，metadata 为空）或越界索引：同样不静默 —— 触摸点偏差在手机上是真实存在的，
+		## 表现为"点了一下没反应"，玩家无法区分是没点到还是被忽略。
+		print("[大廳] 角色选择无效：index=%d 没有角色路径（占位项/越界）→ 下拉框已拉回权威值" % index)
+		_refresh_ui()
 		return
 	if not net.request_local_character_selection(character_path):
 		_log("角色选择请求未发送，请先完成连接与握手")
 		_refresh_ui()
+	else:
+		print("[大廳] 已发送角色选择请求：%s" % character_path.get_file())
 
 
 # ---------------------------------------------------------------- 连接事件
