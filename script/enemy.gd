@@ -387,7 +387,14 @@ var witch_enraged: bool = false
 ## 丸呑み（零距离必杀）总开关。仅ハンターγ 开启：玩家贴脸时吞入 → 咀嚼 → 吐出即死。
 @export var swallow_enabled: bool = false
 ## 触发距离（px）：玩家在此距离内才可能被丸呑み（原作「零距離で」）。
+## ⚠ 必须**明显大于**本敌人攻击矩形的前伸距离（`attack_range_forward_offset + attack_range.y/2`）：
+## 否则敌人一进入攻击距离就停下开打，永远走不到丸吞判定区（2026-10-01 用户实测反馈）。
 @export var swallow_trigger_range: float = 52.0
+## 吞入判定帧（帧 1）的距离宽容（px）：**判定已开始后不再因为几像素漂移而作废**。
+## 原作把"丸吞判定区"放在张嘴那一帧，但精确复刻同一阈值会让"贴脸站定"也频繁取消
+## （玩家/敌人被推挤一点点 → 判定帧不通过 → 白张嘴 + 直接吃 6s 冷却）。
+## 实际判定距离 = `swallow_trigger_range + swallow_bite_tolerance`。
+@export var swallow_bite_tolerance: float = 8.0
 ## 触发概率（0~1）：满足距离时的单次判定成功率，避免贴脸必被吞。
 @export var swallow_chance: float = 0.45
 ## 咀嚼循环次数（2→3 循环次数）。原作「多次后回到 1」。
@@ -409,6 +416,8 @@ var witch_enraged: bool = false
 @export var swallow_cooldown_seconds: float = 6.0
 ## 丸呑み冷却剩余。由 EnemySwallowState 在收尾时置位。
 var _swallow_cooldown_left: float = 0.0
+## 丸呑み诊断日志节流（2026-10-01，仅 `Global.debug_enabled`）：回答"贴脸却不丸吞"卡在哪一道闸。
+var _swallow_diag_left: float = 0.0
 
 @export_group("动画特效")
 ## 攻击命中时的特效场景，拖入 anim/ 目录下的 .tscn 文件
@@ -684,6 +693,8 @@ func _process(delta: float) -> void:
 	# 丸呑み冷却（ハンターγ）：两次零距离必杀之间的最短间隔
 	if _swallow_cooldown_left > 0.0:
 		_swallow_cooldown_left = maxf(0.0, _swallow_cooldown_left - delta)
+	if _swallow_diag_left > 0.0:
+		_swallow_diag_left = maxf(0.0, _swallow_diag_left - delta)
 
 
 # ═══════════════════════════════════════

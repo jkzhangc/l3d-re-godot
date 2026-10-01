@@ -16,6 +16,9 @@
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_fjvgb"]
 [ext_resource type="Texture2D" uid="uid://d3krstbwy7w1a" path="res://art/Ui/装備アイコンアサルトライフル.png" id="icon"]
 
+[sub_resource type="Resource" id="Resource_fjvgb"]
+script = ExtResource("9wspawn")
+
 [sub_resource type="Resource" id="Resource_tdlcb"]
 script = ExtResource("2_lg75x")
 bullet_texture = ExtResource("3_lg75x")
@@ -31,8 +34,10 @@ right = Vector2(0, -16)
 
 [sub_resource type="Resource" id="WSO_rifle_01_nobita"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -5)
-right = Vector2(0, -5)
+down = Vector2(-6, 0)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
+up = Vector2(6, 0)
 
 [sub_resource type="Resource" id="WSO_rifle_01_shizuka"]
 script = ExtResource("9wspawn")
@@ -69,6 +74,9 @@ bullet_spawn_offsets = {
 "nobita": SubResource("WSO_rifle_01_nobita"),
 "shizuka": SubResource("WSO_rifle_01_shizuka"),
 "suneo": SubResource("WSO_rifle_01_suneo")
+}
+attack_effect_offsets = {
+"nobita": SubResource("Resource_fjvgb")
 }
 magazine_capacity = 30
 ammo_item_id = "ammo_rifle"

@@ -154,15 +154,21 @@ func _enter_bite(enemy: Node2D) -> void:
 
 
 ## 解析吞入结果：距离 + 概率双判定。
+## 距离用 `触发距离 + 宽容`：判定已开始（已经张嘴了）就不该因为几像素漂移作废 ——
+## 用与触发完全相同的阈值会让"贴脸站定"也经常白张嘴 + 白吃 6s 冷却（2026-10-01 用户实测）。
 func _resolve_bite(enemy: Node2D) -> void:
 	var ok: bool = false
 	if enemy.has_valid_player_target():
 		var p: Node2D = enemy._player_ref
 		var dist: float = p.global_position.distance_to(enemy.global_position)
-		if dist <= maxf(1.0, enemy.swallow_trigger_range):
+		var limit: float = maxf(1.0, enemy.swallow_trigger_range + enemy.swallow_bite_tolerance)
+		if dist <= limit:
 			ok = randf() < clampf(enemy.swallow_chance, 0.0, 1.0)
 			if ok:
 				_victim = p
+		elif Global.debug_enabled:
+			print("[敵人] 丸呑み判定帧未通过：距离 %.1f > %.1f（触发 %.0f + 宽容 %.0f）"
+				% [dist, limit, enemy.swallow_trigger_range, enemy.swallow_bite_tolerance])
 
 	if not ok:
 		# 扑空 → 直接进收尾（不惩罚性地连续尝试；冷却留给下一次贴近）

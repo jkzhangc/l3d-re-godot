@@ -278,14 +278,38 @@ func process_update(_delta: float) -> void:
 ## 表现与判定脱节（玩家看到张嘴却发现什么都没发生，或反之）。
 func _can_swallow(enemy: Node2D, player: Node2D) -> bool:
 	if not enemy.swallow_enabled:
+		## 特感但没开丸吞（ハンターα/β 等）→ 每秒提示一次，避免玩家"以为它该吞我"。
+		if enemy.special_data != null and Global.debug_enabled and enemy._swallow_diag_left <= 0.0:
+			enemy._swallow_diag_left = 1.0
+			print("[敵人] %s 未开启丸呑み（swallow_enabled=false）" % String(enemy.special_data.id))
 		return false
+	var d: float = player.global_position.distance_to(enemy.global_position)
+	## 诊断只在"已经很近却没吞成"时才说话（并 1s 节流）：
+	## 玩家站在敌人面前却看不到这一行 → 说明该敌人根本不是可丸吞的（非ハンターγ），
+	## 或它压根没进 Chase（那是另一个问题）。
+	var close: bool = d <= maxf(1.0, enemy.swallow_trigger_range) * 2.5
 	if enemy._swallow_cooldown_left > 0.0:
+		_diag_swallow_blocked(enemy, d, close, "冷却中（剩 %.1fs）" % enemy._swallow_cooldown_left)
 		return false
 	var sm: Node = enemy.get_node_or_null("StateMachine")
 	if sm == null or sm.get_node_or_null("Swallow") == null:
+		_diag_swallow_blocked(enemy, d, close, "状态机缺 Swallow 节点")
 		return false
-	var d: float = player.global_position.distance_to(enemy.global_position)
-	return d <= maxf(1.0, enemy.swallow_trigger_range)
+	var within: bool = d <= maxf(1.0, enemy.swallow_trigger_range)
+	if not within:
+		_diag_swallow_blocked(enemy, d, close, "超出触发距离")
+	return within
+
+
+## 「贴脸却不丸吞」诊断（仅 `Global.debug_enabled` + 1s 节流，避免刷屏）。
+func _diag_swallow_blocked(enemy: Node2D, d: float, close: bool, reason: String) -> void:
+	if not close or not Global.debug_enabled or enemy._swallow_diag_left > 0.0:
+		return
+	enemy._swallow_diag_left = 1.0
+	var sm: Node = enemy.get_node_or_null("StateMachine")
+	var state_name: String = (sm.get("current_state").name if sm and sm.get("current_state") else "?")
+	print("[敵人] 丸呑み未触发：距离 %.1f（触发 %.0f）│ %s（当前状态 %s）"
+		% [d, enemy.swallow_trigger_range, reason, state_name])
 
 
 func _can_pounce(enemy: Node2D, player: Node2D) -> bool:

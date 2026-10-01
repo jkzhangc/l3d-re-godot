@@ -20,6 +20,7 @@ death_texture = ExtResource("6_death")
 death_char_index = 4
 run_char_index = 1
 run_speed = 260.0
+attack_damage = 30.0
 attack_cooldown_frames = 90
 vision_range = 320.0
 discover_sound = ExtResource("2_om4wq")

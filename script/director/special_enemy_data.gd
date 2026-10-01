@@ -210,7 +210,11 @@ extends Resource
 ## 是否启用丸呑み（零距离必杀）：玩家贴脸时有概率触发「吞入 → 咀嚼 → 吐出即死」。
 @export var swallow_enabled: bool = false
 ## 触发距离（px）：玩家在此距离内才可能被丸呑み。原作「零距離で」。
+## ⚠ 必须**明显大于**该敌人攻击矩形的前伸距离（`attack_range_forward_offset + attack_range.y/2`），
+## 否则敌人一进入攻击距离就停下开打，永远走不到丸吞判定区（2026-10-01 用户实测反馈）。
 @export var swallow_trigger_range: float = 52.0
+## 吞入判定帧的距离宽容（px）：判定已开始后不再因几像素漂移而作废（见 enemy.gd 同名字段说明）。
+@export var swallow_bite_tolerance: float = 8.0
 ## 触发概率（0~1）：每次进入触发距离时的判定成功率（避免贴脸必被吞，太惩罚）。
 @export var swallow_chance: float = 0.45
 ## 咀嚼循环次数（2→3 循环次数）：原作「多次后回到 1」。
@@ -409,6 +413,7 @@ func apply_to_enemy(enemy: Node) -> void:
 	# 丸呑み（ハンターγ）
 	enemy.swallow_enabled = swallow_enabled
 	enemy.swallow_trigger_range = swallow_trigger_range
+	enemy.swallow_bite_tolerance = swallow_bite_tolerance
 	enemy.swallow_chance = swallow_chance
 	enemy.swallow_chew_cycles = swallow_chew_cycles
 	enemy.swallow_chew_interval = swallow_chew_interval
