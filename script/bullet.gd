@@ -422,12 +422,21 @@ func cancel_by_enemy_acid() -> void:
 	queue_free()
 
 
+## 调试用爆炸范围环（TAB 打开 `Global.debug_visuals` 后才真的生成节点）。
+## 静态入口内部自带开关判断 —— 关闭时零开销，调用点不需要再写一遍 if。
+const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+
+
 func _explode() -> void:
 	## 原地爆炸：半径内敌人统一结算（超プッシュ按子弹击退参数），
 	## 可波及玩家（自爆，explosion_hurts_players），并引爆 blast_wall。
 	## 仅单机/Host 的权威子弹会走到这里（Client 镜像子弹 monitoring 已关，不会命中）。
 	_exploded = true
 	var center: Vector2 = global_position
+	## ★调试可视化（2026-10-01 用户需求）：把这一炸的**实际范围**画出来并停留 2 秒。
+	## 对敌半径 = `_explosion_radius`；对玩家自爆半径只在「会波及玩家」且与主环不同时才画。
+	DEBUG_BLAST_RING.show_ring(center, _explosion_radius, get_tree().current_scene,
+		_explosion_player_radius if _explosion_hurts_players else 0.0)
 	if _explode_effect_anim:
 		VXAnimSprite.play_scene(_explode_effect_anim, center, get_tree().current_scene)
 	if _explode_sound:

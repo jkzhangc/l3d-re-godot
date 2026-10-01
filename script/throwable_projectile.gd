@@ -10,6 +10,10 @@ class_name ThrowableProjectile extends Node2D
 ## authoritative=true 才会执行落地爆炸/火海伤害；Client 镜像必须关闭权威逻辑，避免每台机器重复结算。
 const FLY_DURATION: float = 0.5
 const TILE_SIZE: int = 32
+## 调试用爆炸范围环（TAB 打开 `Global.debug_visuals` 后才真的生成）。
+## ⚠ 投掷物爆炸走**本文件**，枪械爆炸走 `bullet.gd` —— 两条独立路径，两边都要接，
+## 否则"调试环只对手雷不显示"或反之。
+const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
 
 var _td: ThrowableData = null
 var _start: Vector2 = Vector2.ZERO
@@ -85,6 +89,11 @@ func _land() -> void:
 		Global.play_sfx_managed(_td.explode_sound, get_tree().current_scene)
 	if _td.explode_effect_anim:
 		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, get_tree().current_scene)
+	## ★调试可视化（2026-10-01 用户需求）：把这一炸的实际范围画出来并停留 2 秒。
+	## 半径按 play 侧同一公式换算（`格 × 32 + 16`），两端都画（`_land` 在所有端都会跑）。
+	if _td.explosion_radius > 0:
+		DEBUG_BLAST_RING.show_ring(global_position,
+			float(_td.explosion_radius) * float(TILE_SIZE) + 16.0, get_tree().current_scene)
 	if _authoritative and _td.explosion_radius > 0:
 		_explode()
 	if _authoritative and _td.flash_radius > 0:

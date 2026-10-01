@@ -2107,6 +2107,10 @@ func _on_host_bullet_exploded(_network_entity_id: int, position: Vector2, weapon
 	bullet_explode_effect.rpc(position, weapon_id, bullet_index)
 
 
+## 调试用爆炸范围环（与 Host 侧 `bullet.gd::_explode()` 同一个入口 → 两端表现一致）。
+const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+
+
 @rpc("authority", "call_remote", "reliable")
 func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: int) -> void:
 	if net.is_host:
@@ -2118,6 +2122,9 @@ func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: i
 	var scene: Node = get_tree().current_scene
 	if not scene:
 		return
+	## ★调试可视化（2026-10-01）：Client 也从同一份 BulletData 取证半径 → 与 Host 画的一样大。
+	DEBUG_BLAST_RING.show_ring(position, float(bd.explosion_radius), scene,
+		float(bd.explosion_player_radius) if bd.explosion_hurts_players else 0.0)
 	if bd.explode_effect_anim:
 		VXAnimSprite.play_scene(bd.explode_effect_anim, position, scene)
 	if bd.explode_sound:
