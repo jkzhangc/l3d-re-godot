@@ -136,9 +136,7 @@ position = Vector2(465, 938)
 
 [node name="DevEnemySpawner" type="Node2D" parent="DecorLayer" unique_id=991501218]
 script = ExtResource("99_devspawn")
-zombie_enabled = false
 zombie_mode = 1
-special_enabled = true
 special_fixed = ExtResource("90_90_gm")
 special_interval = 1.0
 special_max_alive = 1
