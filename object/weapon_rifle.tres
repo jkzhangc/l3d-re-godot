@@ -19,6 +19,12 @@
 [sub_resource type="Resource" id="Resource_fjvgb"]
 script = ExtResource("9wspawn")
 
+[sub_resource type="Resource" id="AEO_rifle_01_shizuka"]
+script = ExtResource("9wspawn")
+
+[sub_resource type="Resource" id="AEO_rifle_01_suneo"]
+script = ExtResource("9wspawn")
+
 [sub_resource type="Resource" id="Resource_tdlcb"]
 script = ExtResource("2_lg75x")
 bullet_texture = ExtResource("3_lg75x")
@@ -41,23 +47,27 @@ up = Vector2(6, 0)
 
 [sub_resource type="Resource" id="WSO_rifle_01_shizuka"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -11)
-right = Vector2(0, -11)
+down = Vector2(-6, 0)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
+up = Vector2(6, 0)
 
 [sub_resource type="Resource" id="WSO_rifle_01_suneo"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -13)
-right = Vector2(0, -13)
+down = Vector2(-6, 0)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
+up = Vector2(6, 0)
 
 [resource]
 script = ExtResource("6_oiymr")
 attack_power = 35
-critical_rate = 20.0
-critical_damage = 1.8
 attack_range = 200.0
 weapon_state_name = "Rifle"
 weapon_walk_texture = ExtResource("7_2b1o8")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
+critical_rate = 20.0
+critical_damage = 1.8
 fire_mode = 1
 attack_sound = ExtResource("1_2b1o8")
 empty_fire_sound = ExtResource("4_tk8ak")
@@ -78,7 +88,9 @@ bullet_spawn_offsets = {
 "suneo": SubResource("WSO_rifle_01_suneo")
 }
 attack_effect_offsets = {
-"nobita": SubResource("Resource_fjvgb")
+"nobita": SubResource("Resource_fjvgb"),
+"shizuka": SubResource("AEO_rifle_01_shizuka"),
+"suneo": SubResource("AEO_rifle_01_suneo")
 }
 magazine_capacity = 30
 ammo_item_id = "ammo_rifle"

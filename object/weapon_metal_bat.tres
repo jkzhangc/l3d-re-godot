@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7"]
 [ext_resource type="Texture2D" uid="uid://dx7jfrrb2g6x8" path="res://art/Weapon/A武器セット６.png" id="7_e8ecx"]
 [ext_resource type="Texture2D" uid="uid://2di8l2lepdf2" path="res://art/Ui/装備アイコンバット.png" id="8"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_e8ecx"]
 
 [resource]
 script = ExtResource("1")

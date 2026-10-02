@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
 [ext_resource type="Texture2D" uid="uid://duumnrw1jm624" path="res://art/Barrages/grenade.png" id="3"]
 [ext_resource type="AudioStream" uid="uid://cwjuklape7gpf" path="res://sound/ロケットランチャー.ogg" id="4"]
-[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="5"]
+[ext_resource type="PackedScene" uid="uid://bmqw2hs5aqshd" path="res://anim/anim_effect_RPG爆炸动画.tscn" id="5"]
 [ext_resource type="AudioStream" uid="uid://c0m5bt0p2rpik" path="res://sound/ロケットランチャー爆発.ogg" id="6"]
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="7"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="8"]

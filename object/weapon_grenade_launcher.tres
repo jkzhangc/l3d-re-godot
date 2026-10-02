@@ -38,18 +38,18 @@ right = Vector2(0, -16)
 
 [sub_resource type="Resource" id="WSO_launcher_01_nobita"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -14)
-right = Vector2(0, -14)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [sub_resource type="Resource" id="WSO_launcher_01_shizuka"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -14)
-right = Vector2(0, -14)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [sub_resource type="Resource" id="WSO_launcher_01_suneo"]
 script = ExtResource("9wspawn")
-left = Vector2(0, -14)
-right = Vector2(0, -14)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [resource]
 script = ExtResource("1")

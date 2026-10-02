@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://bmqw2hs5aqshd"]
+
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1_qadtu"]
+[ext_resource type="Texture2D" uid="uid://dqpwb4if881tt" path="res://art/Animations/爆発.png" id="2_qadtu"]
+
+[node name="AnimEdit" type="Node2D" unique_id=319484060]
+z_index = 1
+script = ExtResource("1_qadtu")
+texture = ExtResource("2_qadtu")
+fps = 36.5
+frame_sequence = Array[int]([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])

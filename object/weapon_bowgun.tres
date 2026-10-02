@@ -36,18 +36,18 @@ right = Vector2(0, -4)
 
 [sub_resource type="Resource" id="WSO_bowgun_01_nobita"]
 script = ExtResource("11")
-left = Vector2(0, -4)
-right = Vector2(0, -4)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [sub_resource type="Resource" id="WSO_bowgun_01_shizuka"]
 script = ExtResource("11")
-left = Vector2(0, -4)
-right = Vector2(0, -4)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [sub_resource type="Resource" id="WSO_bowgun_01_suneo"]
 script = ExtResource("11")
-left = Vector2(0, -4)
-right = Vector2(0, -4)
+left = Vector2(0, -8)
+right = Vector2(0, -8)
 
 [resource]
 script = ExtResource("1")
