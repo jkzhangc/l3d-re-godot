@@ -380,7 +380,7 @@ func _hit(target: Node2D) -> void:
 		final_damage = float(damageable.call("apply_backstab", final_damage))
 		hitstun = maxf(hitstun, 0.1)
 		backstab_applied = true
-		## 成就「必殺仕事人」：计的是**发动**次数（不是击杀数），在这里记最准。
+		## 成就「必杀专家」：计的是**发动**次数（不是击杀数），在这里记最准。
 		var bs_state: PlayerState = Players.get_state_for_entity(_shooter)
 		ACHIEVEMENTS.on_backstab(bs_state.seat_index if bs_state else ACHIEVEMENTS.TEAM_SEAT)
 

@@ -11,11 +11,22 @@ extends Control
 
 signal closed
 
-const PANEL_W: float = 920.0
+## ★ 2026-10-02 加宽 920 → 1080：24px 字号下「名字 + 条件 + 进度」三列在 920 里挤不开，
+## 长名字会压到条件列上。现在三列各自独立占位，名字再长也只在**自己那一列**内截断。
+const PANEL_W: float = 1080.0
 const PANEL_H: float = 620.0
 const ROW_H: float = 46.0
 const FONT_TITLE: int = 24
 const FONT_BODY: int = 24
+
+## 三列几何（左内边距 / 名字列宽 / 条件列起点 / 进度列宽）。
+## 名字列 344px ≈ 12 个 24px 全角字，当前最长成就名（"不行。绝对不行。" 8 字 + "◆ " 前缀）只用掉约 240。
+const COL_PAD: float = 36.0
+const NAME_W: float = 344.0
+const DESC_X: float = 384.0
+const STATE_W: float = 188.0
+## 条件列宽 = 面板宽 - 条件列起点 - 进度列宽 - 右内边距
+const DESC_W: float = PANEL_W - DESC_X - STATE_W - 36.0
 
 
 func _ready() -> void:
@@ -56,8 +67,8 @@ func _build() -> void:
 
 	var count := _make_label("已达成 %d / %d" % [ACHIEVEMENTS.unlocked_count(), ACHIEVEMENTS.CATALOG.size()],
 		FONT_BODY)
-	count.position = Vector2(PANEL_W - 240, 20)
-	count.size = Vector2(220, 30)
+	count.position = Vector2(PANEL_W - STATE_W - COL_PAD, 20)
+	count.size = Vector2(STATE_W, 30)
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count.modulate = Color(0.80, 0.78, 0.72)
 	panel.add_child(count)
@@ -75,22 +86,25 @@ func _build() -> void:
 
 		## 达成标记（◆ 与成就弹窗同款符号）+ 名称
 		var name_label := _make_label("%s %s" % ["◆" if ok else "◇", ACHIEVEMENTS.name_of(id)], FONT_BODY)
-		name_label.position = Vector2(36, y)
-		name_label.size = Vector2(PANEL_W - 300, 30)
+		name_label.position = Vector2(COL_PAD, y)
+		name_label.size = Vector2(NAME_W, 30)
+		## 名字再长也只在自己列内截断，绝不会压到条件列上（加宽面板后的双保险）。
+		name_label.clip_text = true
 		if not ok:
 			name_label.modulate = Color(0.55, 0.53, 0.50)   ## 未达成：压暗
 		panel.add_child(name_label)
 
 		var desc_label := _make_label(ACHIEVEMENTS.desc_of(id), FONT_BODY)
-		desc_label.position = Vector2(300, y)
-		desc_label.size = Vector2(PANEL_W - 520, 30)
+		desc_label.position = Vector2(DESC_X, y)
+		desc_label.size = Vector2(DESC_W, 30)
+		desc_label.clip_text = true
 		desc_label.modulate = Color(0.72, 0.70, 0.64) if ok else Color(0.48, 0.46, 0.44)
 		panel.add_child(desc_label)
 
 		var state_label := _make_label("已达成" if ok else "%d / %d"
 			% [ACHIEVEMENTS.progress_of(ACHIEVEMENTS.TEAM_SEAT, id), ACHIEVEMENTS.target_of(id)], FONT_BODY)
-		state_label.position = Vector2(PANEL_W - 200, y)
-		state_label.size = Vector2(170, 30)
+		state_label.position = Vector2(PANEL_W - STATE_W - COL_PAD, y)
+		state_label.size = Vector2(STATE_W, 30)
 		state_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		state_label.modulate = Color(0.95, 0.80, 0.35) if ok else Color(0.50, 0.48, 0.46)
 		panel.add_child(state_label)

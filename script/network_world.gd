@@ -3926,7 +3926,7 @@ func _try_host_use_healing(peer_id: int) -> void:
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("record_healing_item"):
 		chapter_stats.record_healing_item(state.seat_index)
-		## 成就「ダメ。ゼッタイ。」（联机路径，与 player.gd 单机路径同规则）
+		## 成就「不行。绝对不行。」（联机路径，与 player.gd 单机路径同规则）
 		ACHIEVEMENTS.on_heal_item(state.seat_index)
 	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())

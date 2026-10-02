@@ -753,12 +753,17 @@ func _is_centered() -> bool:
 	return g != null and bool(g.get("menu_item_centered"))
 
 
-## 按 GradientLabel 自算的实际文本宽做真居中（旧逻辑用 DotGothic 量宽，
-## 与实际渲染字体不一致导致永远歪）。size 未就绪时回退整窗居中。
+## 按**实际渲染字体量出的文本宽**做真居中。
+##
+## ★ 2026-10-02 修：原来用 `gl.size.x` —— 但 GradientLabel 的 size 是**延迟一帧**才刷新的
+## （`text` 赋值当帧读到的还是上一个长度），于是「成就」「设置」这类同宽项会算出不同的 x
+## （实测 96 vs 72，左边缘错开 24px，看起来就是"某一项文字往左移了"）。
+## 量宽改用 `_measure_text`（同一份 fusion 像素字体、同一字号）→ 与最终渲染完全一致，且当帧可用。
 func _center_label(gl: GradientLabel) -> float:
-	var w: float = gl.size.x
+	var w: float = _measure_text(gl.text, item_font_size).x
 	if w <= 0.0:
-		w = _measure_text(gl.text, item_font_size).x
+		w = gl.size.x                      ## 极端兜底：字体取不到时退回节点自身宽度
+	gl.size.x = w                          ## 宽度也按实测值当帧写回（**不能用 maxf**：会锁死旧宽度）
 	gl.position.x = (window_size.x - w) / 2.0
 	return gl.position.x
 
@@ -844,9 +849,9 @@ func _rebuild_menu_items() -> void:
 		if i >= _menu_item_labels.size():
 			break
 		var gl: GradientLabel = _menu_item_labels[i]
-		if i < _scroll_offset or i >= end_idx:
-			gl.hide()
-			continue
+		## ★ 文本与位置**一律**设置（含被滚动隐藏的项）：隐藏项若保留上一次的 y，
+		## 滚动回来时就会与相邻可见项同 y 叠放（2026-10-02 布局用例抓到）。
+		## 显隐统一放在最后一行赋值。
 		var display_idx: int = i - _scroll_offset
 		# 居中模式去掉 "  " 前缀空格——否则量宽连空格一起居中，文字整体右偏
 		var item_text := MENU_ITEMS[i] if _is_centered() else "  %s" % MENU_ITEMS[i]
@@ -858,10 +863,10 @@ func _rebuild_menu_items() -> void:
 		gl.position = Vector2(_get_item_x(), text_y)
 		if item_width > 0.0:
 			gl.size.x = item_width
-		# 文字居中排列：按 GradientLabel 自算的实际文本宽二次定位
+		# 文字居中排列：按实际渲染字体量出的文本宽二次定位
 		if _is_centered():
 			_center_label(gl)
-		gl.show()
+		gl.visible = display_idx >= 0 and i < end_idx
 
 	_update_scroll_arrows()
 
