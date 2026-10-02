@@ -1297,6 +1297,9 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 		var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 		if chapter_stats and chapter_stats.has_method("record_damage_taken"):
 			chapter_stats.record_damage_taken(state.seat_index, actual_damage)
+		## 成就「アンタッチャブル」：本局受过伤即失去无伤资格
+		if actual_damage > 0.0:
+			ACHIEVEMENTS.on_player_damaged()
 
 	if current_hp <= 0.0:
 		_die()
@@ -1363,6 +1366,8 @@ func use_healing_item() -> bool:
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("record_healing_item") and state:
 		chapter_stats.record_healing_item(state.seat_index)
+		## 成就「ダメ。ゼッタイ。」：使用治疗品次数
+		ACHIEVEMENTS.on_heal_item(state.seat_index)
 	return true
 
 
@@ -1905,6 +1910,10 @@ func _try_counter() -> void:
 		e.take_damage(dmg, push_force, facing, false, push_stun, 0.0)
 		hit_count += 1
 	print("[反击] %s：命中 %d 个敌人（威力 x%.0f，推力 %.0f%s）" % [ctype, hit_count, dmg_mult, push_force, "，即死" if instant_kill else ""])
+	## 成就「カウンター免許皆伝」：计发动次数（命中至少一个敌人才算一次有效反击）
+	if hit_count > 0:
+		var cst: PlayerState = Players.get_state_for_entity(self)
+		ACHIEVEMENTS.on_counter(cst.seat_index if cst else ACHIEVEMENTS.TEAM_SEAT)
 
 
 # ═══════════════════════════════════════
@@ -2596,3 +2605,7 @@ func _refresh_sprite() -> void:
 	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
 
 	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")

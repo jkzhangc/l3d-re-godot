@@ -1371,6 +1371,8 @@ func _cleanup_corpses() -> void:
 # ═══════════════════════════════════════
 
 func init_new_game() -> void:
+	# 成就：新战役开始 → 载入进度、重置本局统计（无伤/不存档/用时都从这里算）
+	ACHIEVEMENTS.begin_campaign()
 	# 座位表为空时 Players.get_active_state() 会懒创建座位 0（のび太，单角色回退模式），
 	# 所以旧实现那条独立的「回退分支」不再需要 —— 两条初始化路径已统一。
 	Players.get_active_state()
@@ -1403,3 +1405,7 @@ func try_load_or_init() -> void:
 		print("[Global] try_load_or_init: 保留当前状态 | 座位=%d %s" % [
 			Players.seat_count(), Players.get_active_state().describe(),
 		])
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")

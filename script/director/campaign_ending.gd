@@ -16,6 +16,8 @@ class_name CampaignEnding extends CanvasLayer
 const SUMMARY_SCENE := "res://scene/ui/chapter_summary.tscn"
 const CREDITS_SCENE := "res://scene/ui/credits.tscn"
 const ED_MUSIC_PATH := "res://music/l3d_ed.mp3"
+## 成就弹窗脚本（**运行时 load，不用 class_name** —— 本项目 `class_name` 不跨文件的教训）
+const EARNED_SCRIPT := preload("res://script/ui/achievements_earned.gd")
 ## 2026-09-14 用户定稿：每条话语固定显示 5 秒
 const DIALOGUE_SECONDS_PER_LINE: float = 5.0
 
@@ -55,6 +57,7 @@ var _rect: ColorRect
 var _dialogue_label: Label
 var _ed_music: AudioStreamPlayer = null
 var _fuse_timer: Timer = null
+var _root: Control = null           ## EndingRoot（成就弹窗也挂这里 → 天然压在黑幕之上）
 
 
 func _ready() -> void:
@@ -68,6 +71,7 @@ func _ready() -> void:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
+	_root = root
 
 	_rect = ColorRect.new()
 	_rect.name = "Blackout"
@@ -95,6 +99,9 @@ func _ready() -> void:
 
 ## 由 HoldoutMachine 调用：开始终章流程。
 func start() -> void:
+	## 成就：战役通关结算（通关 / 单人 / 无伤 / 不存档 / 速通）——
+	## 必须在这里做，而不是弹窗那一步：弹窗之前玩家可能按跳过，结算不能丢。
+	ACHIEVEMENTS.finish_campaign(Players.all_entities(true).size())
 	# 黑幕淡出前先清场：触发 ED 前残留的伤害数字飘字（layer 100 > 黑幕 90）会
 	# 压在黑幕和总结页上直到切场景——直接全清。
 	DamageNumber.clear_all()
@@ -143,7 +150,15 @@ func _after_summary() -> void:
 	# 是黑屏 UI 演出，世界必须保持冻结——否则玩家会被活着的尸潮咬死（实测教训）。
 	get_tree().paused = true
 	_start_ed_music()
-	_show_dialogue()
+	## 成就弹窗（2026-10-02 用户需求）：**章节总结确定之后、ED 对话之前**展示本次解锁。
+	## 无解锁 → 直接进对话（不白等 3 秒）。弹窗自己 3 秒后发 finished 续上对话段，
+	## 多人两端走同一时间轴（不等按键），保证名单同步。
+	if EARNED_SCRIPT.has_content():
+		var earned: Control = EARNED_SCRIPT.new()
+		_root.add_child(earned)
+		earned.connect("finished", _show_dialogue)
+	else:
+		_show_dialogue()
 
 
 ## ED BGM：挂在本节点（root 子节点，场景切换不释放），从对话段一直压到名单结束。
@@ -297,3 +312,7 @@ func _cancel_fuse() -> void:
 		_fuse_timer.stop()
 		_fuse_timer.queue_free()
 	_fuse_timer = null
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")

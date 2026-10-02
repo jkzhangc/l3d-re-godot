@@ -18,6 +18,7 @@ var _seq_idx: int = 0
 var _timer: float = 0.0
 var _hit_done: bool = false
 var _hitbox: Area2D = null
+var _last_backstab: bool = false   ## 本次命中是否走了背刺（供击杀归属：即死击杀成就）
 var _is_headshot: bool = false   ## 本次攻击是否暴击（对所有命中目标生效）
 var _post_attack_active: bool = false  ## 是否正在播放攻击后动画
 var _wait_frames: int = 0              ## 攻击完成后等待帧计数器（fire rate 控制）
@@ -201,7 +202,7 @@ func _check_melee_hits() -> void:
 			var hp_before: float = float(body.get("current_hp")) if body.get("current_hp") != null else 0.0
 			body.take_damage(_backstab_damage(body, damage), 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.element)
 			var hp_after: float = float(body.get("current_hp")) if body.get("current_hp") != null else hp_before
-			_record_chapter_hit(hp_before, hp_after)
+			_record_chapter_hit(hp_before, hp_after, _last_backstab)
 			if _wd.hit_effect_anim:
 				var hf: Node2D = body if _wd.hit_effect_follow else null
 				## 偏移优先级：武器覆盖 > 目标自身 hurt_effect_offset（大体型敌人抬到躯干）
@@ -230,7 +231,7 @@ func _check_melee_hits() -> void:
 			var hp_before: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else 0.0
 			parent.take_damage(_backstab_damage(parent, damage), 0.0, character.get_facing_vector(), _is_headshot, 0.0, _wd.hitstun_duration, 0, _wd.element)
 			var hp_after: float = float(parent.get("current_hp")) if parent.get("current_hp") != null else hp_before
-			_record_chapter_hit(hp_before, hp_after)
+			_record_chapter_hit(hp_before, hp_after, _last_backstab)
 			if _wd.hit_effect_anim:
 				var hf2: Node2D = parent if _wd.hit_effect_follow else null
 				var fx_offset2: Vector2 = _wd.hit_effect_offset_override
@@ -250,14 +251,19 @@ func _check_melee_hits() -> void:
 ## 背刺（必杀）：玩家**从背后**（敌我朝向同向）或打**尚未察觉**的敌人 → 非 Boss 即死（原作 §4.3）。
 ## 近战没有子弹方向，判定向量就用角色朝向（与 take_damage 的 direction 语义一致）。
 func _backstab_damage(target: Node, base_damage: float) -> float:
+	_last_backstab = false
 	if target == null or not target.has_method("is_backstab_hit"):
 		return base_damage
 	if bool(target.call("is_backstab_hit", character.get_facing_vector())):
+		_last_backstab = true
+		## 成就「必殺仕事人」计的是发动次数 → 在这里记（每次背刺命中记一次）。
+		var st: PlayerState = Players.get_state_for_entity(character)
+		ACHIEVEMENTS.on_backstab(st.seat_index if st else ACHIEVEMENTS.TEAM_SEAT)
 		return float(target.call("apply_backstab", base_damage))
 	return base_damage
 
 
-func _record_chapter_hit(hp_before: float, hp_after: float) -> void:
+func _record_chapter_hit(hp_before: float, hp_after: float, backstab: bool = false) -> void:
 	var player: Node2D = character as Node2D
 	if not player:
 		return
@@ -272,6 +278,8 @@ func _record_chapter_hit(hp_before: float, hp_after: float) -> void:
 		chapter_stats.record_damage_dealt(player_state.seat_index, actual_damage)
 	if hp_before > 0.0 and hp_after <= 0.0 and chapter_stats.has_method("record_kill"):
 		chapter_stats.record_kill(player_state.seat_index, _is_headshot)
+	## 成就：击杀计数 + 即死击杀（背刺即死属于即死级手段）
+	ACHIEVEMENTS.on_kill(player_state.seat_index, backstab)
 
 
 func _is_target_dead(target: Node) -> bool:
@@ -321,3 +329,7 @@ func _play_attack_sound(stream: AudioStream) -> void:
 
 func _get_weapon() -> WeaponData:
 	return get_player_state().get_active_weapon()
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")

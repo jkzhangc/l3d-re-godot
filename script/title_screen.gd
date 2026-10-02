@@ -16,7 +16,7 @@ extends Control
 ##   确定键  → 确认
 
 
-const MENU_ITEMS: Array[String] = ["开始游戏", "联机游戏", "操作说明", "设置", "退出游戏"]
+const MENU_ITEMS: Array[String] = ["开始游戏", "联机游戏", "操作说明", "成就", "设置", "退出游戏"]
 const WINDOW_TITLE: String = "のび太的求生之路"
 
 # ═══════════════════════════════════════
@@ -156,6 +156,10 @@ var _base_window_size: Vector2 = Vector2.ZERO
 # ═══════════════════════════════════════
 
 func _ready() -> void:
+	## 成就入口（2026-10-02）：菜单项比场景里预置的 Item 节点多一个 →
+	## 在这里**复制**最后一个预置节点补足（不手写 tscn：GradientLabel 是 @tool，
+	## 节点化时字体/字号/位置都调好了，复制即可继承）。
+	_ensure_menu_item_nodes()
 	# 仅供双进程联机烟测使用：从默认标题场景直接进入联机大厅，
 	# 正常启动和玩家手动进入“联机游戏”菜单的流程不受影响。
 	var user_args := OS.get_cmdline_user_args()
@@ -599,6 +603,10 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# ── 成就页（2026-10-02）：打开时吞掉全部菜单输入（与下方 F1 更新日志同款做法）──
+	# 按键由叠加层自己处理并关闭它，这里只需不把同一按键再喂给菜单。
+	if _achievements_overlay != null:
+		return
 	# ── F1 更新日志（2026-09-17）：打开时吞掉全部菜单输入，F1/Esc/确定键关闭 ──
 	var f1_pressed: bool = event is InputEventKey and event.pressed and not event.echo \
 			and (event as InputEventKey).keycode == KEY_F1
@@ -920,6 +928,8 @@ func _confirm() -> void:
 			_go_to_network_lobby()
 		"操作说明":
 			_go_to_controls_guide()
+		"成就":
+			_open_achievements()
 		"设置":
 			_enter_settings()
 		"退出游戏":
@@ -935,6 +945,47 @@ func _go_to_controls_guide() -> void:
 			printerr("[标题画面] 操作说明场景切换失败: %d" % err)
 		return
 	print("[标题画面] 操作说明界面尚未实现（内容待用户确认）")
+
+
+# ═══════════════════════════════════════
+# 成就页（2026-10-02）
+# ═══════════════════════════════════════
+var _achievements_overlay: Control = null
+
+
+## 菜单项数多于场景里预置的 Item 节点时，复制最后一个补足。
+## 复制的依据：Item 节点是 @tool 的 GradientLabel，节点化时已调好字体/字号/行距/位置，
+## `duplicate()` 能一并继承；随后既有的布局代码（按 MENU_ITEMS.size() 迭代）自动生效。
+func _ensure_menu_item_nodes() -> void:
+	if _menu_item_labels.is_empty():
+		return
+	var parent: Node = _menu_item_labels[0].get_parent()
+	while _menu_item_labels.size() < MENU_ITEMS.size():
+		var proto: Node = _menu_item_labels[_menu_item_labels.size() - 1]
+		var clone: Node = proto.duplicate()
+		parent.add_child(clone)
+		_menu_item_labels.append(clone)
+
+
+## 打开成就一览（叠加在标题之上；关闭后销毁）。
+func _open_achievements() -> void:
+	if _achievements_overlay != null:
+		return
+	_achievements_overlay = ACHIEVEMENTS_MENU.new()
+	add_child(_achievements_overlay)
+	_achievements_overlay.connect("closed", _close_achievements)
+
+
+func _close_achievements() -> void:
+	if _achievements_overlay == null:
+		return
+	_achievements_overlay.queue_free()
+	_achievements_overlay = null
+
+
+## 成就页脚本（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error）。
+const ACHIEVEMENTS_MENU := preload("res://script/ui/achievements_menu.gd")
 
 
 # ═══════════════════════════════════════

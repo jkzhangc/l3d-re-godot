@@ -24,6 +24,8 @@ const SAVE_VERSION: int = 2
 
 ## 保存当前游戏状态
 static func save_game() -> void:
+	## 成就「人生プレイ」：本局只要存过一次档就失去资格（读档不算）
+	ACHIEVEMENTS.on_save_used()
 	DirAccess.make_dir_absolute(SAVE_DIR)
 
 	var scene_path: String = ""
@@ -245,3 +247,7 @@ static func auto_load_on_start() -> bool:
 ## 检查存档是否存在
 static func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_DIR + SAVE_FILE)
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")

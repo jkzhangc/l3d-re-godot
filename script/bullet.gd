@@ -370,11 +370,8 @@ func _hit(target: Node2D) -> void:
 			final_damage = maxf(final_damage, 99999.0)
 			hitstun = maxf(hitstun, 0.1)
 
-	# 背刺（必杀）：玩家从背后命中 → 非 Boss 即死 / Boss 1.5 倍（原作 system.html ◆必殺）。
-	# 只对「玩家开火 → 敌人」成立；爆炸路径不走这里（_explode 单独结算，背刺只认直击方向）。
-	# 免疫只认 Boss 组 —— 即死免疫（instant_kill_immune，如 ブレインディモス）**不免疫必杀**。
-	# ⚠ **不叠加**：觉醒「集中射撃」已是即死级手段（非 Boss 直接拉满、Boss ×1.5），
-	#   再乘一次背刺会给 Boss 叠成 2.25 倍 → 故 `_instant_kill` 分支内不再走背刺。
+	## 背刺是否在本击生效（供击杀归属：即死击杀成就 / 必杀次数成就）
+	var backstab_applied: bool = false
 	if not _instant_kill \
 			and _shooter != null and _shooter.is_in_group("player") \
 			and damageable.is_in_group("enemy") \
@@ -382,6 +379,10 @@ func _hit(target: Node2D) -> void:
 			and bool(damageable.call("is_backstab_hit", direction)):
 		final_damage = float(damageable.call("apply_backstab", final_damage))
 		hitstun = maxf(hitstun, 0.1)
+		backstab_applied = true
+		## 成就「必殺仕事人」：计的是**发动**次数（不是击杀数），在这里记最准。
+		var bs_state: PlayerState = Players.get_state_for_entity(_shooter)
+		ACHIEVEMENTS.on_backstab(bs_state.seat_index if bs_state else ACHIEVEMENTS.TEAM_SEAT)
 
 	# 尝试对目标造成伤害
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
@@ -389,7 +390,7 @@ func _hit(target: Node2D) -> void:
 	var hp_before: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else 0.0
 	damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0)
 	var hp_after: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else hp_before
-	_record_chapter_damage(hp_before, hp_after, is_headshot)
+	_record_chapter_damage(hp_before, hp_after, is_headshot, backstab_applied)
 
 	# 播放命中特效
 	if _hit_effect_anim:
@@ -509,7 +510,8 @@ func _explode() -> void:
 			(w as Node2D).call("apply_explosion", center, _explosion_radius, _breaks_blast_wall)
 
 
-func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool) -> void:
+func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool,
+		instant: bool = false) -> void:
 	if not _shooter:
 		return
 	var shooter_state: PlayerState = Players.get_state_for_entity(_shooter)
@@ -523,6 +525,8 @@ func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool
 		chapter_stats.record_damage_dealt(shooter_state.seat_index, actual_damage)
 	if hp_before > 0.0 and hp_after <= 0.0 and chapter_stats.has_method("record_kill"):
 		chapter_stats.record_kill(shooter_state.seat_index, is_headshot)
+	## 成就：击杀计数 + 即死击杀（觉醒集中射撃 or 背刺都算即死级手段）
+	ACHIEVEMENTS.on_kill(shooter_state.seat_index, _instant_kill or instant)
 
 
 func _refresh_sprite() -> void:
@@ -595,3 +599,7 @@ func _roll_critical() -> bool:
 	if critical_rate >= 100.0:
 		return true
 	return randf() * 100.0 < critical_rate
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
