@@ -85,6 +85,19 @@ static func find_around_anchor(world_node: Node2D, anchor: Vector2, min_sep: flo
 	return null
 
 
+## 该点是否被**图块碰撞**挡住（墙 / 桌椅等挂物理层的格子）。
+## 【公开入口的用途（2026-10-02）】玩家"卡墙自救"的判据 —— 只看地图，**不看敌人 body**，
+## 否则被敌人贴脸（body 重叠）会被误判成卡墙并瞬移出去。
+static func is_tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
+	return _tile_blocked(world_node, pos)
+
+
+## 该点是否落在**有效图块**上（地图外的虚空 / 未铺图块的区域 = false）。
+## 与 `is_free(..., require_tile=true)` 用的是同一判据；无图块层的场景恒为 true。
+static func has_tile(world_node: Node2D, pos: Vector2) -> bool:
+	return _has_any_tile(world_node, pos)
+
+
 ## 修正落点：原落点是空的就原样返回；否则由近及远环形找最近的可站点（确定性，无随机）。
 static func resolve(world_node: Node2D, base: Vector2, require_tile: bool = false) -> Vector2:
 	var found: Variant = find_near(world_node, base, PROBE_RADIUS, Callable(), require_tile)

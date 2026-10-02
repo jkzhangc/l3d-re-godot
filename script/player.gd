@@ -328,8 +328,68 @@ func _setup_hurt_area() -> Area2D:
 	return area
 
 
+# ═══════════════════════════════════════
+# 卡墙自救（2026-10-02 用户反馈）
+# ═══════════════════════════════════════
+## 用户实测复现：「很多敌人追逐玩家时，玩家后面有墙 → 敌人会一直挤玩家，会把玩家挤进墙，
+## 有几率玩家就会在屋顶或者墙里出不来了」。
+## 【为什么会卡死】Godot 的 CharacterBody2D 去重叠修正会把深重叠的玩家往外推，墙在身后时
+## 就被推进墙格；而图块碰撞是**整格**的 —— 一旦整格陷进墙里，普通移动再也出不来。
+## 【判据只认地图】图块挡住 / 不在任何图块上（被挤到地图外或"屋顶"）；**不看敌人 body** ——
+## 否则被敌人贴脸（body 重叠）就会被误判成卡墙、把人瞬移出去，观感很怪。
+## 【谁执行】只在本端对位置有权威时：单机全体 / 联机仅 Host。Client 不自救 ——
+## 它的位置由 Host 权威，Host 修好后经 `_network_target_position` 硬校准自动跟随。
+const STUCK_CHECK_INTERVAL := 0.5      ## 检查间隔（秒）
+const STUCK_CONFIRM_HITS := 2          ## 连续命中几次才判定（≈1 秒，滤掉瞬时假阳性）
+const STUCK_PROBE_RADIUS := 14.0       ## 与 SpawnSpotResolver.PROBE_RADIUS 同口径（玩家盒 24×27）
+const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
+const GAME_LOG := preload("res://script/game_log.gd")
+
+var _stuck_timer: float = 0.0
+var _stuck_hits: int = 0
+
+
+func _rescue_if_stuck(delta: float) -> void:
+	_stuck_timer += delta
+	if _stuck_timer < STUCK_CHECK_INTERVAL:
+		return
+	_stuck_timer = 0.0
+	if _is_dying or is_network_dead():
+		_stuck_hits = 0                ## 死亡/倒地不阻挡，位置无意义，别去动
+		return
+	var net: Node = get_node_or_null("/root/Net")
+	if net != null and bool(net.get("handshake_ok")) and not bool(net.get("is_host")):
+		_stuck_hits = 0                ## 联机 Client：等 Host 权威修正
+		return
+	if not is_inside_tree():
+		return
+	var here: Vector2 = global_position
+	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here)
+	var off_map: bool = not SPOT_RESOLVER.has_tile(self, here)
+	if not (in_wall or off_map):
+		_stuck_hits = 0
+		return
+	_stuck_hits += 1
+	if _stuck_hits < STUCK_CONFIRM_HITS:
+		return
+	## 找最近可站点：`require_tile` 保证既不落墙里、也不落地图外的虚空。
+	var fixed: Variant = SPOT_RESOLVER.find_near(self, here, STUCK_PROBE_RADIUS, Callable(), true)
+	if fixed is Vector2:
+		var target: Vector2 = fixed
+		GAME_LOG.log_event("卡墙自救", "%s 卡在 %s（%s）→ 纠正到 %s" % [
+			name, here.round(), "墙里" if in_wall else "地图外/虚空", target.round()])
+		global_position = target
+		velocity = Vector2.ZERO
+		_stuck_hits = 0
+	else:
+		GAME_LOG.log_error("卡墙自救", "%s 在 %s 四周找不到可站点（严重卡死，下次继续尝试）"
+			% [name, here.round()])
+
+
 func _process(delta: float) -> void:
 	_update_burn_status(delta)  # 灼烧 DoT（本机/远端实体均结算，死态内部早退）
+	## 卡墙自救：放在联机分支**之前** —— 联机实体在下面会提前 return，放后面就只管单机了。
+	_rescue_if_stuck(delta)
 	if network_controlled:
 		_update_shove_fatigue(delta)
 		_update_tp_regen(delta)

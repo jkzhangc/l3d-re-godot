@@ -636,6 +636,52 @@ func _ready() -> void:
 	# 界面字体：先建根主题（未显式指定字体的控件也拿到像素字体），再打自检日志
 	ensure_root_ui_theme()
 	_log_font_self_check()
+	## 报错捕获与报错界面（2026-10-02 用户需求）——放最后：字体/主题都已就绪，
+	## 之后引擎打出的任何错误都会进日志文件，并能弹报错界面。
+	_setup_error_capture()
+
+
+## ── 报错捕获（2026-10-02）──
+## 【为什么在 Global 里注册】GDScript 没有异常机制，脚本层的错（空引用/越界/类型错）只有
+## `OS.add_logger()` 能截到；而 Global 是第一个 autoload，注册得最早。
+## ⚠ 不新增 autoload：`project.godot` 不能随便动（编辑器会回写、且不能写注释）。
+const GAME_LOG := preload("res://script/game_log.gd")
+const GAME_ERROR_CAPTURE := preload("res://script/game_error_capture.gd")
+const ERROR_SCREEN := preload("res://script/ui/error_screen.gd")
+
+## 必须先持有引用再注册：`OS.add_logger` 不接管所有权，局部变量会被 GC 掉 → 捕获静默失效。
+var _error_capture: Logger = null
+
+
+func _setup_error_capture() -> void:
+	GAME_LOG.begin_session(str(ProjectSettings.get_setting("application/config/version", "?")))
+	_error_capture = GAME_ERROR_CAPTURE.new()
+	_error_capture.error_captured.connect(_on_game_error_captured)
+	OS.add_logger(_error_capture)
+
+
+func _on_game_error_captured(info: Dictionary) -> void:
+	## ★自动化环境下**只写日志、绝不弹窗**：报错界面会 `paused = true` 冻结整棵树 →
+	## 双端联机回归（`tools/net_regression.py`）与 batch 会直接卡死 / 大面积假回归。
+	## 判据取"无头环境"或"联机自动测试参数"——真实玩家两者都不满足，照常弹窗。
+	if not _error_popups_enabled():
+		return
+	## 节流：同一条错误 3 秒内只弹一次、一个会话最多弹 6 次（超出的仍然写进日志文件）——
+	## 否则一个"每帧都错"的 bug 会让玩家陷入弹窗地狱，反而看不到日志。
+	if not ERROR_SCREEN.should_show(info):
+		return
+	var screen: CanvasLayer = ERROR_SCREEN.new(info)
+	add_child(screen)
+
+
+## 是否允许弹报错界面（玩家手玩 = 允许；自动化 = 不允许，但日志照写）。
+func _error_popups_enabled() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--net-test"):
+			return false
+	return true
 
 
 ## ── 触摸操作层（2026-09-29 从「按地图挂」改为「全局挂」）──
