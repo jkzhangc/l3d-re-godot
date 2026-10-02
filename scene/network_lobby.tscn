@@ -39,7 +39,7 @@ text = "多人大厅"
 
 [node name="SubTitle" type="Label" parent="ConnectPanel/VBox" unique_id=2110000002]
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "创建房间 = 本机当主机（下面填监听端口）；加入房间 = 填上方 IP 与端口。"
 autowrap_mode = 2
 
@@ -114,7 +114,7 @@ value = 27015.0
 [node name="HostPortHint" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/HostRow" unique_id=2110000009]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "本机监听端口（可改）"
 autowrap_mode = 2
 
@@ -276,7 +276,7 @@ layout_mode = 2
 [node name="SlotName1" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot1" unique_id=2110000027]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
@@ -286,7 +286,7 @@ layout_mode = 2
 [node name="SlotName2" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot2" unique_id=2110000029]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
@@ -296,7 +296,7 @@ layout_mode = 2
 [node name="SlotName3" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot3" unique_id=2110000031]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
@@ -306,7 +306,7 @@ layout_mode = 2
 [node name="SlotName4" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot4" unique_id=2110000033]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
@@ -321,11 +321,11 @@ vertical_alignment = 1
 [node name="RoomLogLabel" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000034]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 autowrap_mode = 2
 
 [node name="RoomHint" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000035]
 layout_mode = 2
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 24
 text = "全部玩家选好角色后由主机确认开局；Esc / 离开该大厅 返回大厅界面。"
 autowrap_mode = 2

@@ -3840,7 +3840,8 @@ func _build_pickup_snapshot() -> Array:
 		if pickup_kind.is_empty():
 			continue
 		var scene := get_tree().current_scene
-		var reserve_ammo := int(pickup.get("pickup_reserve_ammo")) if weapon else 0
+		## -1 = 未携带（Client 侧同样按这个约定回退初始备弹）
+		var reserve_ammo := int(pickup.get("pickup_reserve_ammo")) if weapon else -1
 		var magazine_ammo := int(pickup.get("pickup_magazine_ammo")) if weapon else -1
 		var char_idx := int(pickup.get("pickup_char_idx")) if weapon else item.pickup_char_idx
 		var direction := int(pickup.get("pickup_direction")) if weapon else item.pickup_direction
@@ -4023,12 +4024,12 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	if weapon.is_ranged:
 		var mag: int = int(pickup.get("pickup_magazine_ammo"))
 		state.set_magazine_ammo(weapon.item_id, clampi(weapon.magazine_capacity if mag < 0 else mag, 0, weapon.magazine_capacity))
-		# 备弹（09-22 实测「备弹还是 0」根因）：掉落物携带的转移备弹优先，**没有时
-		# 必须回退武器数据的 initial_reserve_ammo** —— 单机 weapon_pickup._do_pickup
-		# 一直有这个回退，网络权威路径漏了：预摆/新生成的掉落物 pickup_reserve_ammo
-		# 恒为 0（只有「捡起再扔下」才带上转移值）→ 网络拾取的武器备弹永远是 0。
+		# 备弹：约定 **-1 = 未携带**（回退武器数据的 initial_reserve_ammo）、**0 = 确实没有备弹**。
+		# ⚠ 2026-10-02 起判据从 `> 0` 改为 `>= 0`：旧判据把"0 备弹"当成"未设置" →
+		# 把备弹打光的枪丢出去再捡回来，备弹会凭空回满（用户实测）。
+		# 预摆/新生成的掉落物不带该字段时拿到的是 -1 → 仍然正确回退初始备弹。
 		var pickup_reserve: int = int(pickup.get("pickup_reserve_ammo"))
-		var reserve_to_give: int = pickup_reserve if pickup_reserve > 0 else weapon.initial_reserve_ammo
+		var reserve_to_give: int = pickup_reserve if pickup_reserve >= 0 else weapon.initial_reserve_ammo
 		_add_host_reserve_ammo(state, weapon, reserve_to_give)
 	if state.active_weapon_slot == slot and player.is_weapon_mode_active():
 		player.enter_weapon_mode(weapon)
@@ -4052,6 +4053,8 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, player: Node2D, state: Playe
 	if weapon.is_ranged:
 		pickup.set("pickup_magazine_ammo", state.get_magazine_ammo(weapon.item_id))
 		state.weapon_magazines.erase(weapon.item_id)
+		## ★无条件写入（含 0）：`pickup_reserve_ammo` 约定 **-1 = 未携带**、0 = 确实没有备弹。
+		## 与单机 `weapon_pickup.drop_weapon_for_player` 同一规则（2026-10-02 用户实测"捡回回满"）。
 		var reserve: int = state.count_ammo_item(weapon.ammo_item_id)
 		pickup.set("pickup_reserve_ammo", reserve)
 		if reserve > 0:
@@ -4265,7 +4268,8 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			# 旧实现只设 texture/char_idx/direction，pickup_animated / step_frames /
 			# step_duration 留默认 → Client 踏步动画与武器数据配置不一致。
 			PICKUP_SCRIPT.apply_weapon_ground_display(pickup, weapon)
-			pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", 0)))
+			## 两个字段约定一致：**-1 = 未携带**（拣取时回退武器数据的初始值），0 = 确实是 0。
+			pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", -1)))
 			pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
 		pickup.global_position = _packet_position(packet)
 		pickup.call("_refresh_sprite")

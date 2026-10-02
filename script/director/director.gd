@@ -367,6 +367,14 @@ func _freeze_for_death() -> void:
 		pc.force_cooldown()
 	_reset_intensity()
 	_stop_horde_music()
+	## ★狂暴形态与目标锁定**在这里也显式清一遍**（2026-10-02）：它们平时由
+	## `_on_phase_changed(cooldown)` 清，但只要 phase 没有真的切换（例如 PacingController
+	## 已停在 cooldown、或 force_cooldown 发的信号被别处吞掉），死亡时就会残留 ——
+	## 复活后全场丧尸仍是クリムゾンヘッド、且继续无条件追着玩家，观感就是"尸潮没结束"。
+	## 两个函数都是幂等的，重复调用无副作用。
+	_horde_rage = false
+	_set_all_enemies_rage(false)
+	_release_horde_locks()
 	## Boss BGM 一并收（2026-09-16 用户反馈「死亡后尸潮/Boss 音乐还在响」）：
 	## 冻结后 _process 每帧早退，_update_boss_music 再也不会被调用 → 必须在这里显式停。
 	stop_boss_music(false)
@@ -449,10 +457,17 @@ func _play_horde_music() -> void:
 	print("[Director] 尸潮 BGM 开始")
 
 func _stop_horde_music() -> void:
-	if _horde_music_player and _horde_music_player.playing:
-		_horde_music_player.stop()
-		_announce_music("horde", false)
-		print("[Director] 尸潮 BGM 停止")
+	if _horde_music_player == null:
+		return
+	## ★判据必须带 `stream_paused`（项目铁律「`stream_paused` 时 `playing` 为 false」）：
+	## 尸潮 BGM 会被 Boss BGM 用 `stream_paused` 挂起，这时 `playing` 返回 **false** →
+	## 只判 `playing` 就会**漏停**，于是死亡收尾/尸潮结束时它一直在（或复活后被恢复播放），
+	## 表现为「死亡后尸潮音乐还在响」「尸潮好像永不停」（2026-10-02 用户实测）。
+	if not (_horde_music_player.playing or _horde_music_player.stream_paused):
+		return
+	_horde_music_player.stop()
+	_announce_music("horde", false)
+	print("[Director] 尸潮 BGM 停止")
 
 
 ## ── 尸潮预警音效（DirectorConfig「音效 — 尸潮预警」；2026-09-30 用户需求）──

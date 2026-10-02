@@ -200,7 +200,11 @@ func _finish_upnp_mapping(port: int, ok: bool, info: String) -> void:
 		print("[Net] UPnP 映射成功 UDP %d 外部地址=%s" % [port, info if not info.is_empty() else "未知"])
 		upnp_port_mapped.emit(port, info)
 	else:
-		printerr("[Net] UPnP 映射失败 UDP %d：%s" % [port, info])
+		## ⚠ 用 `print` 不用 `printerr`（2026-10-02）：UPnP 不可用是**很常见的正常情况**
+		## （路由器没开 UPnP / 用了内网穿透），`printerr` 会被报错捕获当 ERROR →
+		## 玩家一开房就弹「游戏报错了」界面（用户实测反馈）。失败信息走
+		## `upnp_mapping_failed` 信号由界面提示，不需要占用"错误"这一级。
+		print("[Net] UPnP 映射失败 UDP %d：%s" % [port, info])
 		upnp_mapping_failed.emit(info)
 
 ## 房间解散/离开时异步删除已建立的映射，避免路由器残留永久转发规则。

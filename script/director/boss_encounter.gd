@@ -317,13 +317,13 @@ func _ensure_hint_label() -> void:
 		_hint_label = Label.new()
 		_hint_label.name = "HintLabel"
 		_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_hint_label.position = Vector2(-80, -40)
-		_hint_label.size = Vector2(160, 20)
+		_hint_label.position = Vector2(-160, -50)
+		_hint_label.size = Vector2(320, 44)
 		_hint_label.modulate = Color(1, 1, 1, 0.85)
 		add_child(_hint_label)
 		var g: Node = get_node_or_null("/root/Global")
 		if g:
-			g.apply_hint_font(_hint_label, 12)  ## 字体统一（2026-09-17）：fusion-pixel + 12 整倍
+			g.apply_hint_font(_hint_label, 24)  ## 24 号（2026-10-02 用户要求放大）
 			if g.has_method("apply_text_shadow"):
 				g.apply_text_shadow(_hint_label)
 	_hint_label.text = hint_message if not hint_message.is_empty() else encounter_name

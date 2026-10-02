@@ -91,13 +91,13 @@ func _ensure_label() -> void:
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
-		label.position = Vector2(-90, -70)
-		label.size = Vector2(180, 28)
+		label.position = Vector2(-180, -74)
+		label.size = Vector2(360, 48)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
 		var g: Node = get_node_or_null("/root/Global")
 		if g:
-			g.apply_hint_font(label, 12)  ## 字体统一（2026-09-17）
+			g.apply_hint_font(label, 24)  ## 字体统一（2026-09-17）；24 号=2026-10-02 用户要求放大
 			g.apply_text_shadow(label)
 		label.hide()
 		add_child(label)

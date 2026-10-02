@@ -167,7 +167,7 @@ func _ensure_children() -> void:
 		## 字体统一（2026-09-17）：fusion-pixel + 12 整倍；编辑器进程无 autoload，判空再套。
 		var hg: Node = get_node_or_null("/root/Global")
 		if hg:
-			hg.apply_hint_font(label, 12)
+			hg.apply_hint_font(label, 24)
 		label.size = Vector2(100, 24)
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()

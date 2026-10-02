@@ -218,9 +218,12 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 	if state and wd.is_ranged and wd.magazine_capacity > 0:
 		pickup.pickup_magazine_ammo = state.get_magazine_ammo(wd.item_id)
 		state.weapon_magazines.erase(wd.item_id)
+		## ★备弹**无条件写上去**（含 0）：本字段用「**-1 = 未携带**」的约定，0 是"确实没有备弹"。
+		## 旧实现只在 `reserve > 0` 时才写，于是"把备弹打光 → 丢枪 → 捡回来"会回退到
+		## `initial_reserve_ammo`（例如步枪 270 发）→ 表现为**子弹回满**（2026-10-02 用户实测）。
 		var reserve: int = state.count_ammo_item(wd.ammo_item_id)
+		pickup.pickup_reserve_ammo = reserve
 		if reserve > 0:
-			pickup.pickup_reserve_ammo = reserve
 			state.consume_ammo_item(wd.ammo_item_id, reserve)
 	## 落点：沿玩家朝向推远 DROP_PUSH_DISTANCE（2026-09-23 用户：丢下的武器要离玩家
 	## 远一些，避免刚脱手就被自己的自动拾取捡回），再做与已有掉落物的间距避让。
@@ -282,7 +285,10 @@ static func apply_weapon_ground_display(pickup: Node2D, wd: WeaponData) -> void:
 @export_group("拾取弹药")
 ## 拾取时给予的备弹数量（对应 weapon_data.ammo_item_id 的弹药物品）。
 ## 0 = 沿用武器数据里的 initial_reserve_ammo（掉落转移的旧备弹仍优先）。
-@export var pickup_reserve_ammo: int = 0
+## 掉落物携带的备弹（弹药道具数量）。
+## ★**-1 = 未携带**（拾取时回退 `WeaponData.initial_reserve_ammo`）；**0 = 确实没有备弹**（不回退）。
+## 与 `pickup_magazine_ammo` 同一套约定 —— 0 必须能表达"打光了"，否则丢枪再捡会凭空回满。
+@export var pickup_reserve_ammo: int = -1
 ## 拾取时弹夹内的子弹数（-1=自动填满弹夹容量，0=空弹夹）
 @export var pickup_magazine_ammo: int = -1
 
@@ -431,15 +437,15 @@ func _ensure_keycap_hint() -> void:
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 	var g: Node = get_node_or_null("/root/Global")
 	if g and g.has_method("apply_hint_font"):
-		g.apply_hint_font(lbl, 12)
+		g.apply_hint_font(lbl, 24)
 	add_child(lbl)
 	# 掉落物精灵约 48×64、原点在脚部 → 键帽悬在头顶上方。
 	## ★宽度随文字自适应并保持水平居中（「功能」比「D」宽，写死 22px 会截字）。
 	var font: Font = g.get_ui_font() if g and g.has_method("get_ui_font") else null
-	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x if font else 10.0
-	var cap_w: float = maxf(22.0, text_w + 10.0)
-	lbl.size = Vector2(cap_w, 16)
-	lbl.position = Vector2(-cap_w * 0.5, -78)
+	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x if font else 20.0
+	var cap_w: float = maxf(34.0, text_w + 14.0)
+	lbl.size = Vector2(cap_w, 28)
+	lbl.position = Vector2(-cap_w * 0.5, -86)
 	## 抬 z：键帽在 DecorLayer（画序上被 UpperLayer 图块覆盖）→ 提到单位层之上、
 	## 黑幕(90)/ED(95)/章节总结(100) 之下（2026-09-17 用户反馈：被上层图块盖住）
 	lbl.z_index = 10
@@ -775,7 +781,9 @@ func _do_pickup() -> void:
 			state.set_magazine_ammo(weapon_data.item_id, weapon_data.magazine_capacity)
 
 	# 备弹（库存弹药物品）：掉落转移的旧备弹优先，否则用武器数据的初始备弹
-	var reserve: int = pickup_reserve_ammo if pickup_reserve_ammo > 0 else weapon_data.initial_reserve_ammo
+	## ★`>= 0` 而非 `> 0`：0 = 确实没有备弹（打光了），只有 -1（未携带）才回退初始备弹。
+	## 旧判据把"0 备弹"当成"未设置" → 打光备弹的枪丢出去再捡回来，备弹会回满。
+	var reserve: int = pickup_reserve_ammo if pickup_reserve_ammo >= 0 else weapon_data.initial_reserve_ammo
 	if reserve > 0 and not weapon_data.ammo_item_id.is_empty():
 		var ammo_res: ItemData = _find_ammo_resource(state, weapon_data.ammo_item_id)
 		if ammo_res:

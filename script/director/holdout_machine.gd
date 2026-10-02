@@ -321,22 +321,25 @@ func _process(delta: float) -> void:
 		_tick_countdown(delta)
 	elif _can_interact and auto_start_on_approach:
 		trigger()
+	elif _can_interact and Input.is_action_just_pressed("功能键"):
+		## ★2026-10-02 用户反馈「有玩家互动不了防守战机器」→ 改用**轮询**取键。
+		## 旧实现走 `_unhandled_input`：那条路依赖"没有任何节点先 consume 掉功能键"，
+		## 一旦别处 consume（或焦点被某个 Control 抢走）就静默失效，且**举枪 / 其它模式下
+		## 都可能是不同结果**。轮询不受事件派发影响，也与医疗箱 / 武器拾取的取键方式一致。
+		if _completed and _ending_pending():
+			_start_ending()
+		else:
+			trigger()
 
 	if Global.debug_visuals:
 		queue_redraw()
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if Engine.is_editor_hint():
-		return
-	if not _can_interact or _active or auto_start_on_approach:
-		return
-	if event.is_action_pressed("功能键"):
-		get_viewport().set_input_as_handled()
-		if _completed and _ending_pending():
-			_start_ending()
-		else:
-			trigger()
+## 【为什么没有 _unhandled_input】互动键已改为 `_process` 里的**轮询**（见上面那段）。
+## 事件路径依赖"功能键没有被任何节点先 consume"，任何一处 consume 都会让它静默失效
+## （2026-10-02 用户反馈「互动不了」）。这里保留函数名会与轮询**双触发**，故不再实现。
+## ⚠ 排查结论：**举枪不会消费功能键** —— 全项目只有 `player.gd` 的「丢弃武器键」
+## 会 `set_input_as_handled`；但轮询方案顺带把这类风险彻底清零。
 
 
 ## 终章 ED（用户 2026-09-13）：防守完成后再交互 →
@@ -436,8 +439,8 @@ func _ensure_children() -> void:
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
-		label.position = Vector2(-80, -66)
-		label.size = Vector2(160, 28)
+		label.position = Vector2(-160, -70)
+		label.size = Vector2(320, 48)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
 		label.hide()
@@ -450,7 +453,7 @@ func _ensure_children() -> void:
 	## 本脚本是 @tool、编辑器里也会执行此函数，autoload 必须判空。
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
-		g.apply_hint_font(label, 12)  ## 12px 基底（字号只取 12 的整倍）
+		g.apply_hint_font(label, 24)  ## 24px（2026-10-02 用户：手机上 12 太小，翻倍）
 		g.apply_text_shadow(label)
 
 	if label_created:
