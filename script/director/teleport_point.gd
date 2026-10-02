@@ -165,10 +165,11 @@ func _ensure_children() -> void:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.position = Vector2(-50, -56)
 		## 字体统一（2026-09-17）：fusion-pixel + 12 整倍；编辑器进程无 autoload，判空再套。
+		## 2026-10-02 用户实测「前进」提示用 24 偏大 → 调回 12（与传送点自身的图标尺度匹配）。
 		var hg: Node = get_node_or_null("/root/Global")
 		if hg:
-			hg.apply_hint_font(label, 24)
-		label.size = Vector2(100, 24)
+			hg.apply_hint_font(label, 12)
+		label.size = Vector2(100, 18)
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()
 		add_child(label)

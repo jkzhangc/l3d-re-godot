@@ -339,6 +339,11 @@ var _indicator_alpha: float = 0.0       ## 指示器当前透明度（用于淡�
 var _indicator_node: Node2D = null      ## 指示器绘制子节点
 
 const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
+## 头顶键帽提示的字号（fusion 12px 基底的**1 倍**）。
+## 2026-10-02 用户实测：拾取/替换的键帽（"功能"/"D"）用 24 时**字偏大、喧宾夺主**，
+## 且键帽跟着撑到 34×28 显得像按钮牌 → 调回 12。**它与其它"靠近提示"（拾取/机器/门/键帽）
+## 的 24 号口径不同，这是用户实机拍板的结果，别再批量放大这里。**
+const HINT_FONT_SIZE: int = 12
 @export_group("Hold Settings")
 ## 按住替换所需时长（秒）
 @export var hold_time: float = 1.2
@@ -437,15 +442,15 @@ func _ensure_keycap_hint() -> void:
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
 	var g: Node = get_node_or_null("/root/Global")
 	if g and g.has_method("apply_hint_font"):
-		g.apply_hint_font(lbl, 24)
+		g.apply_hint_font(lbl, HINT_FONT_SIZE)
 	add_child(lbl)
 	# 掉落物精灵约 48×64、原点在脚部 → 键帽悬在头顶上方。
 	## ★宽度随文字自适应并保持水平居中（「功能」比「D」宽，写死 22px 会截字）。
 	var font: Font = g.get_ui_font() if g and g.has_method("get_ui_font") else null
-	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x if font else 20.0
-	var cap_w: float = maxf(34.0, text_w + 14.0)
-	lbl.size = Vector2(cap_w, 28)
-	lbl.position = Vector2(-cap_w * 0.5, -86)
+	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, HINT_FONT_SIZE).x if font else 12.0
+	var cap_w: float = maxf(22.0, text_w + 10.0)
+	lbl.size = Vector2(cap_w, 18)
+	lbl.position = Vector2(-cap_w * 0.5, -74)
 	## 抬 z：键帽在 DecorLayer（画序上被 UpperLayer 图块覆盖）→ 提到单位层之上、
 	## 黑幕(90)/ED(95)/章节总结(100) 之下（2026-09-17 用户反馈：被上层图块盖住）
 	lbl.z_index = 10
