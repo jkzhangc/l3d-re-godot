@@ -776,6 +776,9 @@ func _create_menu_window() -> void:
 	var win: Control = $MenuWindow
 
 	## ⚠ 按**当前**画布宽度居中，不能写死 1280（手机端画布会横向加宽到 1706）。
+	## 纵向 = 画布居中 + `window_y_offset`。menu_y_offset(tscn 里 = 268) 是**配合 6 项菜单**
+	## 调出来的：窗口高 364 时顶部落在 566、**底边钉在 930**（与旧的 300 高 / offset 300 完全同一条底边），
+	## 于是"窗口变高但底边不动"= 整体向上长，不会顶出 960 的画布底部。
 	win.position = Vector2(
 		(get_viewport_rect().size.x - window_size.x) / 2.0,
 		(960.0 - window_size.y) / 2.0 + window_y_offset
