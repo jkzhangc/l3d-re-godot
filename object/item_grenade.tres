@@ -12,7 +12,7 @@
 script = ExtResource("1")
 projectile_texture = ExtResource("3_pamkk")
 arc_height = 64.0
-explosion_radius = 2
+explosion_radius = 1
 damage = 120.0
 explode_effect_anim = ExtResource("1_rtgqi")
 throw_sound = ExtResource("7_58x6b")
