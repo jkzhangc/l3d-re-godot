@@ -339,6 +339,4 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		# 回标题前停掉大厅 BGM，让位标题画面自己的音乐（与 campaign_select._go_back 同款）
 		Global.stop_lobby_music()
-		var err: Error = get_tree().change_scene_to_file(TITLE_SCENE)
-		if err != OK:
-			printerr("[操作说明] 返回标题失败: %d" % err)
+		Global.go_to_title_screen()   ## ★统一入口（含会话状态清理）

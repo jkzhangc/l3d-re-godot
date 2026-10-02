@@ -435,9 +435,9 @@ func _on_back_to_title_pressed() -> void:
 		net.leave()
 		_connected = false
 	Global.stop_lobby_music()
-	var err: Error = get_tree().change_scene_to_file("res://scene/title_screen.tscn")
-	if err != OK:
-		printerr("[NetworkLobby] 返回标题失败: %d" % err)
+	## ★走统一入口（2026-10-02）：它会清会话状态（座位表 / checkpoint / 任务旗标）——
+	## 直连 `change_scene_to_file(标题)` 会把上一局全留下 → 「重新开房后还是上一把的角色」。
+	Global.go_to_title_screen()
 
 
 ## 联机提示（2026-09-14 用户要求挂在标题下方，黄字醒目）。

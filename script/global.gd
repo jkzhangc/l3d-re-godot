@@ -747,9 +747,28 @@ func go_to_title_screen() -> void:
 	var net: Node = get_node_or_null("/root/Net")
 	if net != null and net.has_method("leave"):
 		net.leave()
+	## ④ **清空本局会话状态**（2026-10-02 用户实测补上）：
+	## 少了这一步，「打完一局 → 回标题 → 重新开房」会**继承上一局**的座位表与 checkpoint ——
+	## 表现为「选了新角色，进游戏还是上一把的角色/血量/武器」，以及「下次玩自动读取之前的存档」
+	## （根因：`try_load_or_init()` 见 `Players.seats_authored == true` 就保留当前状态，
+	##  不再走 `init_new_game()`）。checkpoint 残留还会让新局第一次死亡重载回上一局的安全屋。
+	_reset_session_state()
 	var err: Error = get_tree().change_scene_to_file(TITLE_SCENE_PATH)
 	if err != OK:
 		printerr("[Global] 返回标题画面失败: %d" % err)
+
+
+## 放弃本局时的会话清理（回标题 / 开新局共用）。
+## ⚠ 只清**内存态**，不动 `SaveManager` 的磁盘存档 —— 「返回标题」不该销毁玩家的存档文件。
+func _reset_session_state() -> void:
+	var players: Node = get_node_or_null("/root/Players")
+	if players != null and players.has_method("clear_seats"):
+		players.call("clear_seats")   ## 含 seats_authored = false，让下一局重新 init_new_game
+	checkpoint.clear()
+	quest_flags.clear()
+	corpse_list.clear()
+	gold = 0
+	print("[Global] 会话状态已清空（座位表 / checkpoint / 任务旗标 / 金币）")
 
 
 ## ── 画面适配（2026-09-28 移动端需求 / 2026-09-29 改为运行时自适应）──

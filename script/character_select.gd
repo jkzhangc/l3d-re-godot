@@ -32,9 +32,7 @@ func _input(event: InputEvent) -> void:
 func _go_back() -> void:
 	print("[角色选择] 返回标题画面")
 	Global.stop_lobby_music()   # 回标题，让位标题画面自己的 BGM
-	var err: Error = get_tree().change_scene_to_file(title_screen_scene)
-	if err != OK:
-		printerr("[角色选择] 场景切换失败: %s (err=%d)" % [title_screen_scene, err])
+	Global.go_to_title_screen() ## ★统一入口（含会话状态清理）
 
 
 func _create_ui() -> void:

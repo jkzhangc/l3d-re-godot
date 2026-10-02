@@ -273,4 +273,4 @@ func _confirm() -> void:
 
 func _go_back() -> void:
 	Global.stop_lobby_music()   # 回标题，让位标题画面自己的 BGM
-	get_tree().change_scene_to_file(title_screen_scene)
+	Global.go_to_title_screen() ## ★统一入口（含会话状态清理，见 Global._reset_session_state）

@@ -189,8 +189,11 @@ func _finish() -> void:
 		_external_ending = null
 	if _music:
 		_music.stop()
-	# 回标题
-	get_tree().change_scene_to_file.call_deferred(TITLE_SCENE)
+	# 回标题：★走统一入口（2026-10-02）——它会清会话状态（座位表 / checkpoint / 任务旗标）。
+	# 直连切场景会让「打完一局 → 重新开房」继承上一局的角色与血量（用户实测），
+	# 而这里正是"打完一局"的必经之路（ED → 名单 → 回标题）。
+	# 仍用 deferred：本函数可能从信号回调里跑，延后一帧再切场景更安全。
+	Global.go_to_title_screen.call_deferred()
 
 
 ## ★credits 只是这份 ED BGM 的**临时代管者**：只要本场景被拆掉（正常结束、跳过名单、
