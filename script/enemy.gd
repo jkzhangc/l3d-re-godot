@@ -646,6 +646,10 @@ func _process(delta: float) -> void:
 	# 覆盖步行/跑步/狂暴所有换速点；动作表激活期 timer 已停，此处只改数值无副作用。
 	if animation_timer:
 		animation_timer.wait_time = _current_anim_frame_duration()
+	## ★卡墙自救（2026-10-02 用户实测「敌人会把其他敌人挤进墙里/屋顶里」）：
+	## 与 `Player._rescue_if_stuck()` 同构。必须在 `network_presentation_only`
+	## 早退**之前**调用 —— 远端镜像实体由快照定位、不需要自救，权威侧才需要。
+	_rescue_if_stuck(delta)
 	if network_presentation_only:
 		if _network_has_target:
 			# 远端实体：按固定延迟在两个快照样本间插值，起停干脆、匀速贴合。
@@ -1111,6 +1115,16 @@ const BACKSTAB_BOSS_MULT: float = 1.5     ## Boss 免疫即死 → 改吃 1.5 �
 ## 背刺伤害数字的颜色（2026-10-02 用户要求）：**紫色** —— 与既有四种都不撞
 ## （白=普通 / 黄=爆头 / 红=玩家受伤 / 橙=燃烧），同屏一眼能认出「这是必杀」。
 const BACKSTAB_DMG_COLOR: Color = Color(0.78, 0.45, 1.0)
+
+## ── 卡墙自救（2026-10-02 用户实测「敌人会把其他敌人挤进墙里/屋顶里」）──
+## 与 `Player._rescue_if_stuck()` 完全同构（同间隔 / 同确认次数 / 同探测半径），
+## 判据**只看地图**（图块挡住 / 不在任何图块上）—— 故意不看同伴，
+## 否则被敌人挤一下就误判成卡墙、把整群敌人反复瞬移。
+const STUCK_CHECK_INTERVAL: float = 0.5   ## 检查间隔（秒）
+const STUCK_CONFIRM_HITS: int = 2         ## 连续命中几次才动手（≈1 秒，滤掉瞬时假阳性）
+const STUCK_PROBE_RADIUS: float = 16.0    ## 与 SpawnSpotResolver.PROBE_RADIUS 同口径
+var _stuck_timer: float = 0.0
+var _stuck_hits: int = 0
 ## 本击是否为背刺。**由 apply_backstab 置位，take_damage 开头消费并清零** ——
 ## 用一次性标志而不是加参数，是为了不动 take_damage 的既有签名（调用点很多）。
 var _backstab_this_hit: bool = false
@@ -2479,3 +2493,50 @@ func get_discover_pitch() -> float:
 	if _rage and variant_rage_discover_sound != null:
 		return variant_rage_discover_pitch if variant_rage_discover_pitch > 0.0 else 1.0
 	return discover_sound_pitch
+
+
+## 卡墙自救：同伴推挤 / 出生点重叠会把敌人挤进墙格或屋顶，进去就再也出不来。
+## 流程与玩家版一致：每 0.5s 查一次、连续 2 次才动手（滤掉推挤过程中的瞬时重叠），
+## 落点用 `find_near(require_tile=true)` —— 既不落墙里、也不落地图外的虚空。
+## ⚠ 只有单机与联机 **Host** 侧的权威实体执行；Client 镜像由快照定位，等 Host 修正。
+func _rescue_if_stuck(delta: float) -> void:
+	_stuck_timer += delta
+	if _stuck_timer < STUCK_CHECK_INTERVAL:
+		return
+	_stuck_timer = 0.0
+	if _is_dead:
+		_stuck_hits = 0                ## 尸体不阻挡，位置无意义
+		return
+	if network_presentation_only:
+		return
+	var net: Node = get_node_or_null("/root/Net")
+	if net != null and bool(net.get("handshake_ok")) and not bool(net.get("is_host")):
+		_stuck_hits = 0                ## 联机 Client：等 Host 权威修正
+		return
+	if not is_inside_tree():
+		return
+	var here: Vector2 = global_position
+	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here)
+	var off_map: bool = not SPOT_RESOLVER.has_tile(self, here)
+	if not (in_wall or off_map):
+		_stuck_hits = 0
+		return
+	_stuck_hits += 1
+	if _stuck_hits < STUCK_CONFIRM_HITS:
+		return
+	var fixed: Variant = SPOT_RESOLVER.find_near(self, here, STUCK_PROBE_RADIUS, Callable(), true, true)
+	if fixed is Vector2:
+		var target: Vector2 = fixed
+		## 敌人被纠正时要停掉速度，否则下一帧的残余速度又会把它推回墙里。
+		velocity = Vector2.ZERO
+		global_position = target
+		_stuck_hits = 0
+		if Global.debug_visuals:
+			print("[卡墙自救] 敌人 %s 卡在 %s（%s）→ 纠正到 %s" % [
+				name, here.round(), "墙里" if in_wall else "地图外/虚空", target.round()])
+	else:
+		if Global.debug_visuals:
+			print("[卡墙自救] 敌人 %s 在 %s 四周找不到可站点（下次继续尝试）" % [name, here.round()])
+
+## 卡墙自救用的可通行判定（与玩家同一入口；preload 常量而非 class_name，见 MEMORY）。
+const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")

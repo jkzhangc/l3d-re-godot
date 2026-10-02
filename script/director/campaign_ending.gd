@@ -156,6 +156,14 @@ func _after_summary() -> void:
 	if EARNED_SCRIPT.has_content():
 		var earned: Control = EARNED_SCRIPT.new()
 		_root.add_child(earned)
+		## ★2026-10-02 用户实测「成就 3 秒后不继续、按菜单键才行」的根因：
+		## 结算页关闭时 `_dialogue_label` 可能**残留 visible = true**（上一次 ED 段留下的），
+		## 于是成就弹窗（3 秒）与对话文字在屏幕上**同时显示**；3 秒后弹窗消失，
+		## 玩家看到的仍是那行对话 → 误以为"没继续"，其实对话段正在按
+		## `DIALOGUE_SECONDS_PER_LINE`(5s) 各自计时。修法：弹窗期间**强制隐藏对话文字**，
+		## 由弹窗的 `finished` 独占推进权。
+		if _dialogue_label != null:
+			_dialogue_label.visible = false
 		earned.connect("finished", _show_dialogue)
 	else:
 		_show_dialogue()

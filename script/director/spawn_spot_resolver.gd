@@ -34,24 +34,31 @@ const BLOCKING_MASK: int = 1 | 4 | 8
 ## 该点是否可以站人。`world_node` 必须已入树（取它的 World2D）。
 ## `probe_radius` 供不同体积的使用者覆盖（玩家盒 24×27 → 14；敌人盒 20×28 → 14 同样够用）。
 ## `require_tile` = 还必须**落在有效图块上**（见 `_has_any_tile` 的成因说明）。
+## `ignore_bodies` = 只看图块、忽略实体占用（卡墙自救用；见 find_near 的说明）。
 static func is_free(world_node: Node2D, pos: Vector2, probe_radius: float = PROBE_RADIUS,
-		require_tile: bool = false) -> bool:
-	return _acceptable(world_node, pos, probe_radius, Callable(), require_tile)
+		require_tile: bool = false, ignore_bodies: bool = false) -> bool:
+	return _acceptable(world_node, pos, probe_radius, Callable(), require_tile, ignore_bodies)
 
 
 ## 找 `base` 附近最近的可站位置；**一个都没有时返回 null** ——
 ## 调用方据此决定回退策略（玩家落点=保留原地，敌人刷怪=退回屏幕外刷法）。
 ## `extra_ok` 是附加判据（例如 `Director._is_walkable`：地图范围闸 + 作者禁刷层）。
+##
+## ★`ignore_bodies`（2026-10-02）：**只看图块、完全忽略实体占用**。
+## 用途 = 卡墙自救：被挤成一堆时恰恰是"周围全是敌人/玩家身体"，而
+## `_body_free` 只排除调用者自己的 rid → 同伴身体全被当成阻挡 → **无解、救不出来**。
+## 自救的语义是"把我从墙里挪到能站的地方"，实体挤占由推挤自己解决，不该在此判定。
 static func find_near(world_node: Node2D, base: Vector2, probe_radius: float = PROBE_RADIUS,
-		extra_ok: Callable = Callable(), require_tile: bool = false) -> Variant:
-	if _acceptable(world_node, base, probe_radius, extra_ok, require_tile):
+		extra_ok: Callable = Callable(), require_tile: bool = false,
+		ignore_bodies: bool = false) -> Variant:
+	if _acceptable(world_node, base, probe_radius, extra_ok, require_tile, ignore_bodies):
 		return base
 	for ring: int in range(1, RING_COUNT + 1):
 		var radius: float = RING_STEP * float(ring)
 		for i: int in range(ANGLE_STEPS):
-			var ang: float = TAU * float(i) / float(ANGLE_STEPS)
+			var ang: float = TAU * float(float(i)) / float(ANGLE_STEPS)
 			var cand: Vector2 = base + Vector2(cos(ang), sin(ang)) * radius
-			if _acceptable(world_node, cand, probe_radius, extra_ok, require_tile):
+			if _acceptable(world_node, cand, probe_radius, extra_ok, require_tile, ignore_bodies):
 				return cand
 	return null
 
@@ -119,14 +126,14 @@ static func resolve(world_node: Node2D, base: Vector2, require_tile: bool = fals
 ## 综合判据：无法判定时保守放行（与 `Director._is_walkable` 的无玩家兜底同口径）；
 ## 否则必须同时通过 ①图块碰撞 ②物理探测 ③调用方附加判据。
 static func _acceptable(world_node: Node2D, pos: Vector2, probe_radius: float,
-		extra_ok: Callable, require_tile: bool = false) -> bool:
+		extra_ok: Callable, require_tile: bool = false, ignore_bodies: bool = false) -> bool:
 	if world_node == null or not is_instance_valid(world_node) or not world_node.is_inside_tree():
 		return true
 	if _tile_blocked(world_node, pos):
 		return false
 	if require_tile and not _has_any_tile(world_node, pos):
 		return false
-	if not _body_free(world_node, pos, probe_radius):
+	if not ignore_bodies and not _body_free(world_node, pos, probe_radius):
 		return false
 	if extra_ok.is_valid() and not bool(extra_ok.call(pos)):
 		return false

@@ -43,6 +43,11 @@ var _prev_paused: bool = false
 
 ## 是否值得为这条错误弹窗。由 Global 在创建本层前调用。
 static func should_show(info: Dictionary) -> bool:
+	## ① 引擎噪音白名单：**已被兜底、不影响可玩性**的错误不弹窗（照写日志文件）。
+	## 判据是"报错内容"而非"是否报错"——玩家看到弹窗会以为游戏坏了，直接去群里问，
+	## 反而淹没真正的致命错误。逐条写明理由，新增前先确认真的不影响玩法。
+	if is_known_noise(info):
+		return false
 	if _popups_shown >= MAX_POPUPS_PER_SESSION:
 		return false
 	var key: String = "%s|%s" % [str(info.get("message", "")), str(info.get("where", ""))]
@@ -53,6 +58,28 @@ static func should_show(info: Dictionary) -> bool:
 	_last_msec = now
 	_popups_shown += 1
 	return true
+
+
+## 引擎噪音白名单（**只降级为"写日志、不弹窗"**，绝不吞掉日志）。
+## ★判断标准：这条错误是否会让玩家无法继续游戏？不会 → 不值得弹窗打断他。
+const NOISE_PATTERNS: Array[String] = [
+	## 2026-10-02 用户实机截图：旧导出包把 8 月已重命名的 .wav 资源打了进去，
+	## 加载失败 `No loader found for resource`。**只影响那一声音效不响**，
+	## 游戏完全可玩（音效字段是 null 兜底）→ 不该弹窗打断玩家。
+	"No loader found for resource",
+	## 资源缺失的其它表述（同一类问题）。
+	"Cannot open file",
+	"Failed loading resource",
+]
+
+
+## 这条错误是否属于「已兜底的引擎噪音」。命中任一白名单条目即返回 true。
+static func is_known_noise(info: Dictionary) -> bool:
+	var text: String = "%s %s" % [str(info.get("message", "")), str(info.get("code", ""))]
+	for pattern: String in NOISE_PATTERNS:
+		if text.find(pattern) >= 0:
+			return true
+	return false
 
 
 ## 用例 / 调试用：复位节流（同一进程里多次验证弹窗行为）。

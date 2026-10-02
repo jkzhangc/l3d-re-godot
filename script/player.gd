@@ -373,7 +373,7 @@ func _rescue_if_stuck(delta: float) -> void:
 	if _stuck_hits < STUCK_CONFIRM_HITS:
 		return
 	## 找最近可站点：`require_tile` 保证既不落墙里、也不落地图外的虚空。
-	var fixed: Variant = SPOT_RESOLVER.find_near(self, here, STUCK_PROBE_RADIUS, Callable(), true)
+	var fixed: Variant = SPOT_RESOLVER.find_near(self, here, STUCK_PROBE_RADIUS, Callable(), true, true)
 	if fixed is Vector2:
 		var target: Vector2 = fixed
 		GAME_LOG.log_event("卡墙自救", "%s 卡在 %s（%s）→ 纠正到 %s" % [
@@ -756,6 +756,15 @@ func exit_weapon_mode() -> void:
 	_current_weapon_char_idx = 0
 	# 放下武器 → 覚醒解除（原作觉醒是构势系状态，武器收起即失效）
 	_deactivate_awaken()
+	# 放下武器 → **强制解除固定朝向**（2026-10-02 用户实测）：
+	# 固定朝向是"举枪时用取消键锁定朝向"的姿势能力，武器收起后玩家没有任何
+	# 途径再按取消键（联机下 `_capture_facing_lock_input` 还有 `is_weapon_mode_active()`
+	# 闸门，压根不再采集）→ 锁残留会让 `update_facing()` 一直走锁定分支，
+	# 表现为**不举武器时角色仍被强制固定朝向、无法转向**。
+	# 解锁后 `_locked_facing` 同步为当前朝向，避免下次锁定时跳到陈旧方向。
+	if _facing_locked:
+		_facing_locked = false
+		_locked_facing = _facing
 	_refresh_sprite()
 
 

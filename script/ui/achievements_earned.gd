@@ -20,6 +20,8 @@ const FONT_BODY: int = 24
 
 var _timer: float = 0.0
 var _done: bool = false
+## 本层显示期间是否由**本弹窗**持有暂停（用于结束时还原）
+var _paused_by_us: bool = false
 
 
 func _ready() -> void:
@@ -27,7 +29,28 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	## 树此时是暂停的（ED 演出全程冻结世界）→ 本层必须 ALWAYS 才能走计时
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	## ★2026-10-02 用户实测「显示成就时敌人还在打玩家」的防御性修复：
+	## 结算页（`chapter_summary.pause_game`）关闭时会 `paused = false`，而 ED 的
+	## `start()` → `_show_summary()` → `_after_summary()` 之间存在窗口；
+	## 成就弹窗正好挂在这个窗口里 → 敌人恢复行动继续咬人。
+	## 做法：弹窗显示期间**自己持有暂停**，结束时精确还原（只还自己设的那一次，
+	## 不能无脑设 false —— 那会踩掉别人（如结算页）持有的暂停）。
+	var tree: SceneTree = get_tree()
+	if tree != null and not tree.paused:
+		tree.paused = true
+		_paused_by_us = true
 	_build()
+	## 兜底：节点被意外释放（场景切换）时也别把世界永久冻住
+	tree_exited.connect(_release_pause)
+
+
+func _release_pause() -> void:
+	if not _paused_by_us:
+		return
+	_paused_by_us = false
+	var tree: SceneTree = get_tree()
+	if tree != null:
+		tree.paused = false
 
 
 func _process(delta: float) -> void:
@@ -36,7 +59,9 @@ func _process(delta: float) -> void:
 	_timer += delta
 	if _timer >= HOLD_SECONDS:
 		_done = true
+		_release_pause()
 		finished.emit()
+		queue_free()
 
 
 ## 本次是否有成就需要展示（无解锁 → 调用方直接跳过本页，不白等 3 秒）。
