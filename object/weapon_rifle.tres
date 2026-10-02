@@ -52,6 +52,8 @@ right = Vector2(0, -13)
 [resource]
 script = ExtResource("6_oiymr")
 attack_power = 35
+critical_rate = 20.0
+critical_damage = 1.8
 attack_range = 200.0
 weapon_state_name = "Rifle"
 weapon_walk_texture = ExtResource("7_2b1o8")

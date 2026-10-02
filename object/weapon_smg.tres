@@ -47,6 +47,8 @@ right = Vector2(0, -12)
 [resource]
 script = ExtResource("7_nmfdk")
 attack_power = 30
+critical_rate = 15.0
+critical_damage = 1.6
 attack_range = 200.0
 weapon_state_name = "Smg"
 weapon_walk_texture = ExtResource("8_0clvs")

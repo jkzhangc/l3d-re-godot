@@ -1481,9 +1481,10 @@ func _on_host_enemy_block_applied(position: Vector2, entity_id: int) -> void:
 		enemy_block_presentation.rpc(entity_id, position)
 
 
-func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool, entity_id: int) -> void:
+func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool,
+		backstab: bool, entity_id: int) -> void:
 	if net.is_host and damage > 0.0:
-		enemy_hurt_presentation.rpc(entity_id, damage, position, is_headshot)
+		enemy_hurt_presentation.rpc(entity_id, damage, position, is_headshot, backstab)
 
 
 func _add_host_peer(peer_id: int) -> void:
@@ -2732,15 +2733,16 @@ func player_hurt_presentation(peer_id: int, damage: float, position: Vector2) ->
 
 
 @rpc("authority", "call_remote", "reliable")
-func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, is_headshot: bool) -> void:
+func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, is_headshot: bool,
+		backstab: bool = false) -> void:
 	if net.is_host or _scene_transitioning:
 		return
 	var node := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
 	if is_instance_valid(node) and node.has_method("play_network_hurt_presentation"):
-		node.play_network_hurt_presentation(damage, position, is_headshot)
+		node.play_network_hurt_presentation(damage, position, is_headshot, backstab)
 		if _is_auto_network_feature_test():
 			_auto_client_enemy_hurt_presentations += 1
-			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s" % [entity_id, damage, is_headshot])
+			print("[NetworkWorld] CLIENT_ENEMY_HURT_PRESENTATION entity=%d damage=%.1f headshot=%s backstab=%s" % [entity_id, damage, is_headshot, backstab])
 
 
 ## 正面抗性「無効」表现（Host → Client，2026-09-25）。

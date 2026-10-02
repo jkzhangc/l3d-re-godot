@@ -8,7 +8,7 @@ extends CharacterBody2D
 
 
 ## Host 伤害判定完成后由 NetworkWorld 转发给客户端的纯表现事件。
-signal network_damage_applied(damage: float, position: Vector2, is_headshot: bool)
+signal network_damage_applied(damage: float, position: Vector2, is_headshot: bool, backstab: bool)
 ## Host：正面抗性「無効」表现转发（2026-09-25）。0 伤害**走不了** network_damage_applied
 ## （那条通道在 NetworkWorld 侧有 `damage > 0.0` 闸），于是客户端永远看不到弹开/「無効」飘字
 ## —— 用户实测「红色猎杀者正面无敌提示文字客户端不显示」。
@@ -875,10 +875,22 @@ func _play_network_death_sfx_once(is_headshot: bool) -> void:
 	if _network_death_sfx_done:
 		return
 	_network_death_sfx_done = true
-	if is_headshot:
-		_play_sound(headshot_sound, headshot_sound_pitch)
-	else:
-		_play_sound(death_sound, death_sound_pitch)
+	_play_sound(_death_stream(is_headshot),
+		headshot_sound_pitch if is_headshot else death_sound_pitch)
+
+
+## ── 死亡音效取流（2026-10-02 修「有时候死亡没声音」）──
+## 根因：`headshot_sound` **全项目无人配置**（`enemy.tscn` 与所有 enemy/special 的 .tres 都没有
+## 这一行 → 恒为 null）→ `_play_sound(null)` 直接早退 → **每一次爆头死亡都是静音的**。
+## 用户报的"有时候"正是"爆头的那几次"。
+##
+## 处理：**取不到专属爆头音就回退到普通死亡音**，保证任何死亡路径都必有声。
+## （想要更狠的爆头反馈，在敌人 Inspector 里给 `headshot_sound` 指定专属音即可，
+## 例如 `sound/グシャア.ogg`，无需改代码。）
+func _death_stream(is_headshot: bool) -> AudioStream:
+	if is_headshot and headshot_sound != null:
+		return headshot_sound
+	return death_sound
 
 
 func _schedule_network_headshot_fall() -> void:
@@ -1096,6 +1108,12 @@ func get_facing_vector() -> Vector2:
 const BACKSTAB_FACING_DOT: float = 0.7    ## 敌我同向判据：cos45°≈0.707，留一点容差
 const BACKSTAB_BOSS_MULT: float = 1.5     ## Boss 免疫即死 → 改吃 1.5 倍
 @export var backstab_enabled: bool = true ## 总开关（留作按敌种关闭的口子）
+## 背刺伤害数字的颜色（2026-10-02 用户要求）：**紫色** —— 与既有四种都不撞
+## （白=普通 / 黄=爆头 / 红=玩家受伤 / 橙=燃烧），同屏一眼能认出「这是必杀」。
+const BACKSTAB_DMG_COLOR: Color = Color(0.78, 0.45, 1.0)
+## 本击是否为背刺。**由 apply_backstab 置位，take_damage 开头消费并清零** ——
+## 用一次性标志而不是加参数，是为了不动 take_damage 的既有签名（调用点很多）。
+var _backstab_this_hit: bool = false
 
 
 ## 是否"尚未察觉玩家"（Idle=还没进 Discover；女巫徘徊态同理）。
@@ -1122,6 +1140,7 @@ func is_backstab_hit(direction: Vector2) -> bool:
 ## 非 Boss → 拉满到「当前 HP + 1」（走正常死亡路径：尸体 / 死亡动画 / 掉落照常）；
 ## Boss → 免疫即死，只吃 BACKSTAB_BOSS_MULT 倍。
 func apply_backstab(final_damage: float) -> float:
+	_backstab_this_hit = true   ## 供 take_damage 把伤害数字染成紫色
 	if is_in_group("tank_enemies"):
 		print("[背刺] Boss 免疫必杀 → 改吃 %.1f 倍伤（%.0f → %.0f）"
 			% [BACKSTAB_BOSS_MULT, final_damage, final_damage * BACKSTAB_BOSS_MULT])
@@ -1198,6 +1217,11 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 		return
 
 	# ── 正面抗性（特感：Hunter β 回避 / Tyrant Normalize）──
+	# ★背刺一次性标志：**在这里（受击入口）消费并清零**，而不是在伤害数字那一行 ——
+	#   避免中途任何早退把标志泄漏给同一次敌人的下一次受击。
+	var backstab_hit: bool = _backstab_this_hit
+	_backstab_this_hit = false
+
 	# 必须在属性结算与 HP 扣减之前：完全回避时不应触发燃烧/冻结/掉血，
 	# 但仍要播放"被弹开"的反馈，让玩家知道"这个方向打不进去"。
 	if damage > 0.0:
@@ -1250,7 +1274,7 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	current_hp = maxf(0.0, current_hp - damage)
 	var actual_damage := maxf(0.0, hp_before - current_hp)
 	if actual_damage > 0.0:
-		network_damage_applied.emit(actual_damage, global_position + hurt_effect_offset, is_headshot)
+		network_damage_applied.emit(actual_damage, global_position + hurt_effect_offset, is_headshot, backstab_hit)
 	if damage > 0.0:
 		print("[敵人] 受到伤害: %d | HP: %.0f/%.0f | 爆头=%s | source=%d" % [int(damage), current_hp, max_hp, str(is_headshot), source_id])
 		_play_hit_feedback(Color.RED)
@@ -1264,7 +1288,9 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	if damage > 0.0:
 		var tree := get_tree()
 		if tree and tree.current_scene:
-			var dmg_color: Color = Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
+			## 颜色优先级：背刺（紫）> 爆头（黄）> 普通（白）
+			var dmg_color: Color = BACKSTAB_DMG_COLOR if backstab_hit \
+				else (Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE)
 			DamageNumber.spawn(global_position + hurt_effect_offset, damage, tree.current_scene, 0, dmg_color)
 
 	# 播放受伤音效（0 伤害不播放）
@@ -1334,13 +1360,16 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				print("[敵人] StateMachine 中未找到 Hitstun 状态节点")
 
 
-func play_network_hurt_presentation(damage: float, impact_position: Vector2 = global_position, is_headshot: bool = false) -> void:
+func play_network_hurt_presentation(damage: float, impact_position: Vector2 = global_position,
+		is_headshot: bool = false, backstab: bool = false) -> void:
 	if damage <= 0.0:
 		return
 	_play_hit_feedback(Color.RED)
 	var tree := get_tree()
 	if tree and tree.current_scene:
-		var dmg_color := Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE
+		## 颜色优先级同 take_damage：背刺（紫）> 爆头（黄）> 普通（白）
+		var dmg_color := BACKSTAB_DMG_COLOR if backstab \
+			else (Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE)
 		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, dmg_color)
 	_play_sound(hurt_sound, hurt_sound_pitch)
 
@@ -1404,10 +1433,8 @@ func _die(is_headshot: bool) -> void:
 	_maybe_drop_loot()  ## ★掉落结算：所有死亡路径（含爆头）的唯一汇合点，_is_dead 已保证只算一次
 	print("[敵人] 死亡！类型=%s" % ("爆头" if is_headshot else "普通"))
 
-	if is_headshot:
-		_play_sound(headshot_sound, headshot_sound_pitch)
-	else:
-		_play_sound(death_sound, death_sound_pitch)
+	_play_sound(_death_stream(is_headshot),
+		headshot_sound_pitch if is_headshot else death_sound_pitch)
 
 	var sm: Node = get_node_or_null("StateMachine")
 	if sm:
