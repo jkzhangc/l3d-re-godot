@@ -4,6 +4,20 @@
 > 说明：本仓库不含 `../L3D参考项目_官方说明书整理.md`（设计总纲引用的原版手册），以下"原版 L3D 战斗设计"均基于设计总纲 + 现有战斗子系统文档**实证重建**。
 > 与《全面重做规划清单》的关系：本文 §2 的重做项 → 模块映射见 §3 / 该文件 §7，二者必须保持一致。
 
+> ## ⚠️ 现状列已过时（2026-10-02 代码核实后更正）
+>
+> 本文 §1 的「当前实现状态」写于 **2026-09-02**，其后大量项已实装。**当前有效的缺口清单以
+> `原作L3D缺失功能清单.md` 为准**（以原版官方说明书为基准、逐项 grep 代码核实）；本文降级为
+> **设计依据**（§2 的重做方案仍有参考价值）。表中已就地更正为 ✅/⚠ 的即为已核实项。
+>
+> 已实装（旧文写的「缺失/空壳/未实现」全部作废）：**见切→反击→背刺之外的整条防御反击链**
+> （见切 0.3s 窗口 + 反击 punch/heavy/issen + Guts 保底）、**Heat / 削り**、**属性 炎雷氷酸 + 敌人抗性**、
+> **L3D 敌人阵容**（ハンター α/β/γ、ブレインディモス、ブレアウィッチ、タイラント、Crimson Head 力竭）、
+> **角色 SA**（感覚向上 / リサイタル / バックパック / しゃがみ回避）、**觉醒·集中射撃**、
+> **Rush 三型**、**被动**（看护 / コマンドー / デモリション / 怪力 / スプレー+1）、
+> **8 格地面放置上限**、**Boss 正面抗性 + Normalize**、HUD（HP/TP/喷雾/槽位/倒计时）。
+> **仍然缺的**：背刺（必杀）、成就、Realism、MOD 战役、6 名角色、双持、投掷大师、4 只 Boss、部分道具。
+
 ---
 
 ## 1. 原版 L3D 战斗系统设计拆解（五维度）
@@ -12,15 +26,15 @@
 
 | 要素 | 原版 L3D 设计 | 当前实现状态 | 落差 |
 |------|--------------|-------------|------|
-| **核心循环：见切→反击→背刺即死** | 敌人命中瞬间按见切（0.3s 窗口）→ 无伤+反击（必带超 Push 推开敌群）→ 绕背攻击触发**背刺即死**（无视 HP/威力；Boss 改 1.5× 伤）。三支柱之一 | **完全缺失**（`PlayerMikiriState` 不存在，全 `.gd` 零匹配） | 设计支柱未落地，属最高优先级 |
-| **Guts 保底不死** | HP≥2 时任何攻击最低保留 1 HP（与静香回复联动） | 未实现 | 伤害结算无 clamp |
+| **核心循环：见切→反击→背刺即死** | 敌人命中瞬间按见切（0.3s 窗口）→ 无伤+反击（必带超 Push 推开敌群）→ 绕背攻击触发**背刺即死**（无视 HP/威力；Boss 改 1.5× 伤）。三支柱之一 | ⚠ **见切 + 反击已实装**（`player.gd::_try_mikiri_input` / `_try_counter`，反击分 punch/heavy/issen）；**背刺**（敌我同向即死）**仍未实装** | 见切/反击已闭环；「背刺」为 2026-10-02 新增缺口，见 `原作L3D缺失功能清单.md` 缺口 A |
+| **Guts 保底不死** | HP≥2 时任何攻击最低保留 1 HP（与静香回复联动） | ✅ **已实装**（`player.gd:1262`，Heat 中停止） | 已闭环 |
 | **Rush 三型节奏** | 单发型（杀够数结束）/耐久型（倒计时防守）/永续型（完成事件才结束，必须边打边走） | 仅"耐久型"在防守战有雏形；单发/永续未实现 | 节奏多样性缺失 |
 | **角色=打法** | 共享框架（SA/反击/武器槽）+ 专属技能组合把角色推向不同玩法 | `CharacterData` 的 `base_speed`/`critical_rate` **零引用**，全角色同速同龄 | 差异化在代码层被架空 |
 | **武器系统** | 主/副槽；远程 TAP/HOLD 双模式；近战；推击（无伤击退+溅射+连锁推挤）；装填 NORMAL/SHOTGUN；消耗品（治疗/辅助） | ✅ 较完整（6 把武器、双装填、推击疲劳、暴击爆头） | 数据驱动良好，主要问题是 `player.gd` 承载过重 |
 | **投掷物** | 举起/瞄准（路径+终点，A/S 调格数）/投掷；抛物线；爆炸/火海 | ✅ 燃烧瓶/手雷可用，但持物外观 `held_walk_texture` 未配置 | 表现层缺口 |
 | **倒地/救援/团灭** | HP=0→倒地（爬行+流血 20s）→队友长按 3s 救起 30% HP→全员非站立黑屏重载本章 | ✅ 已落地（`倒地救援与团灭实施方案`） | 实现完整，是亮点 |
-| **属性系统（炎/雷/氷/酸）** | 第一章不做；第五章前引入，敌人预留 `element_resist` 字典 | 未做（按计划后置） | 属预期后置，但需**预留数据结构** |
-| **武器削损（Heat/酸）** | 第一章不做；Hunter 实装时再评估 | 未做（后置） | 预期后置 |
+| **属性系统（炎/雷/氷/酸）** | 第一章不做；第五章前引入，敌人预留 `element_resist` 字典 | ✅ **已实装**（`enemy.gd::take_damage` 按 element 结算：炎=燃烧 DoT、雷=感电硬直、氷=冻结+受击 ×1.5；抗性字段 `resist_fire/ice/lightning`） | 已闭环（氷的"一击粉碎即死"以 ×1.5 数值化实现） |
+| **武器削损（Heat/酸）** | 第一章不做；Hunter 实装时再评估 | ✅ **已实装**（`player.gd` `ATTRITION_AMMO/DURABILITY`；Hunter 首狩り → Heat + 削り，γ 丸呑み多段削り） | 已闭环 |
 
 ### 1.2 数值平衡（Numerical Balance）
 
@@ -32,7 +46,7 @@
 | 难度四档 | Easy/Normal/Hard/Expert，被伤 **10 倍差**（总纲 §8 默认） | `游戏设计方向-L3D混合.md` | 10 倍差过大，待调参阶段收敛 |
 | 推击疲劳 | `shove_fatigue_limit=3` / `cooldown=2.0s` / `reset=3.0s` | `CharacterData` | 合理，但写死在角色默认值 |
 | 倒地 | `BLEED_HP=100` / `BLEED_RATE=5/s`(20s) / 救援 3s / 复血 30% | `network_world.gd` 常量 | 常量散落联机文件，未入数据资源 |
-| **`CharacterData` 死字段** | `base_speed` / `critical_rate` 声明后**零引用**；暴击量纲冲突（CharacterData 用 0–1，WeaponData 用 0–100） | `character_data.gd` vs `weapon_data.gd` | 角色差异化与暴击系统同时失效 |
+| **`CharacterData` 死字段** | `base_speed` / `critical_rate` 声明后**零引用**；暴击量纲冲突（CharacterData 用 0–1，WeaponData 用 0–100） | ⚠ **2026-10-02 复核：`base_speed` 仍零引用**；`critical_rate` 只有 WeaponData 那套在用（角色层那份仍未接） | 仍是有效问题（角色差异化与暴击单一真相未落地） |
 | 武器数值 | 伤害/射速/击退/暴击/溅射全 `@export` 在 WeaponData | `weapon_data.gd` | 驱动良好，但缺乏"平衡基线表"（各武器 DPS/控场力未归一） |
 
 ### 1.3 技能体系（Skill System）
@@ -42,11 +56,11 @@
 | 资源模型 | `SkillData`（tp_cost / cooldown / command_trigger / command_motion / icon / effect_anim） | ✅ 结构存在，`skill_test`/`skill_form_switch` 占位 |
 | 搓招输入 | 技能键(5)+触发键(Z/X)+方向序列（"下右"）；4 方向简化 | ✅ 框架已通（`_match_motion` 缓冲匹配） |
 | TP 经济 | `max_tp`/`current_tp`/`tp_regen`；TP 恢复品 | ✅ 消耗/回复已通 |
-| **SA（特殊行动）** | のび太=感覚向上 / ジャイアン=リサイタル / スネ夫=バックパック / 静香=しゃがみ回避（一闪） | ❌ **空壳**：仅 `use_skill` 扣 TP，无实际效果 |
-| **反击类型** | 角色差异化反击（拳打/强打/一闪）作为 CharacterData 字段 | ❌ 未落地 |
-| 冷却 | `cooldown` 字段 | ❌ **未接入计时** |
-| 技能 UI | HUD 显示 TP 数值，无图标栏 | ❌ 仅 `TPLabel` |
-| 角色技能表 | `CharacterData.skills` 数组 | ❌ 各角色为空 |
+| **SA（特殊行动）** | のび太=感覚向上 / ジャイアン=リサイタル / スネ夫=バックパック / 静香=しゃがみ回避（一闪） | ✅ **已实装**：`object/skill_sa_{kankaku,recital,backpack,crouch}.tres` + `player.gd` 三个 SA 分支 | 已闭环 |
+| **反击类型** | 角色差异化反击（拳打/强打/一闪）作为 CharacterData 字段 | ✅ 已落地（`character_data.counter_type`，`player.gd::_try_counter` 按类型给不同威力/推力/即死） | 已闭环 |
+| 冷却 | `cooldown` 字段 | ✅ 已接入（反击有 `COUNTER_COOLDOWN_MS`；角色切换有 `switch_cooldown`） | 技能自身冷却见缺口清单 |
+| 技能 UI | HUD 显示 TP 数值，无图标栏 | ⚠ 仍只有 TP 数值（`combat_hud.gd::tp_label`），无技能图标栏 | 仍缺（见缺口清单） |
+| 角色技能表 | `CharacterData.skills` 数组 | ⚠ 4 名角色各有 SA 条目；其余 6 名角色未实装 | 仍缺 |
 
 ### 1.4 敌人 AI（Enemy AI）
 
@@ -54,20 +68,20 @@
 |------|----------|-------------|------|
 | 状态机 | Idle/Discover/Chase/Attack/Hitstun/Knockback/Death/HeadshotDeath | ✅ 8 态完整 | —— |
 | 寻路 | A* + 流场 + 狭窄通道排队 + 卡墙恢复 + 转向限速 | ✅ 较完整（`EnemyChaseState` 内实现） | 全部塞进单一状态（god-state） |
-| **敌种阵容（L3D）** | 丧尸 + Crimson Head（10s 力竭）+ Hunter 系 + 女巫 + Tyrant（Boss） | ❌ **仅 1 种**（`enemy.tscn`）；Hunter/女巫/Tyrant 全未实现 | 阵容 85% 空缺 |
-| **敌种抽象** | 应数据驱动（参数+可选状态覆盖） | ❌ 无 `EnemyArchetype`；差异仅靠 `@export` 数值，全部跑同一套 FSM | 新增敌种=改内核 |
-| 可行走性 | 两套 TileMap 判定（按图层名子串 `"wall"/"decor"/"ground"`） | `EnemyChaseState:843-864` vs `director.gd:630-646` | 不可移植、换图块集风险高 |
-| 特感编排 | Director Phase 4（生成预算/时机/事件） | ❌ 未开始（`spawn_point` 的 `SPECIAL` 枚举预留但无实体） | —— |
+| **敌种阵容（L3D）** | 丧尸 + Crimson Head（10s 力竭）+ Hunter 系 + 女巫 + Tyrant（Boss） | ✅ **已实装**：`tres/specials/` ハンター α/β/γ、ブレインディモス、ブレアウィッチ、タイラントT002；`enemys/` 疾走体(Crimson Head，10s 力竭 `EnemyExhaustedState`)、重装体 | 阵容已到位；缺 ネメシス/バイオゲラス/ブラックタイガー/ティンダロス（见缺口清单 H） |
+| **敌种抽象** | 应数据驱动（参数+可选状态覆盖） | ⚠ 已做到「配置驱动」（`SpecialEnemyData` + `ZombieVariant` .tres 描述敌种，行为靠共享 FSM + 状态复用），但**无 `EnemyArchetype` 子类** | 现状可接受；差异靠字段，新增攻防形态仍需改共享状态 |
+| 可行走性 | 两套 TileMap 判定（按图层名子串 `"wall"/"decor"/"ground"`） | ⚠ 仍为按图层名判定 | 见 `path_blocked` 铁律（MEMORY） |
+| 特感编排 | Director Phase 4（生成预算/时机/事件） | ✅ 已实装（`special_enemy_data` + Director 特感刷怪/冷却/阈值） | 已闭环 |
 
 ### 1.5 关卡战斗节奏（Level Combat Pacing）
 
 | 要素 | 原版/设计 | 当前实现状态 | 落差 |
 |------|----------|-------------|------|
 | Director 核心 | 紧张度→节奏(Build/Peak/Cooldown)→生成/物品/事件 | ✅ Phase 1–3（intensity/pacing/spawn/event/item） | —— |
-| **Rush 三型** | 单发/耐久/永续（设计总纲 §1.2） | ❌ 仅耐久型在防守战雏形；单发/永续无 | 节奏多样性缺失 |
+| **Rush 三型** | 单发/耐久/永续（设计总纲 §1.2） | ✅ **已实装**（`holdout_machine.gd` end_mode：`0=TIMER 耐久型 / 1=KILL_COUNT 单发型 / 2=EXTERNAL 永续型`） | 已闭环 |
 | 防守战（Holdout） | 耐久型 Finale 原型；强制追击最近玩家 + 开局附近一起追 | ✅ 09-03 已改（见记忆） | 实现完整 |
 | 剧本事件 | CRESCENDO/FINALE/ALARM/BOSS | ✅ `event_manager` + `ScriptedEventTrigger` | —— |
-| **动态音乐** | 按紧张度切换 BGM | ❌ 未做 | 氛围缺失 |
+| **动态音乐** | 按紧张度切换 BGM | ⚠ **部分**：BGM 优先级（Boss > 尸潮 > 防守战）+ 尸潮预警音效已实装；**无按紧张度连续 crossfade** | 仍缺 |
 | **章节内容** | 市街地+学校 5 图贯通 | ❌ 仅 1 关有内容；第二关 2 图空图、无生成区/安全门 | 最大短板 |
 | 地图碰撞/通行性 | 还原图需碰撞数据供寻路 | ❌ 所有还原图无碰撞/通行性 → 敌人寻路不可用 | 阻断内容生产 |
 | 难度/进度因子 | `progress_factor` 越接近终点越紧张 | ✅ 公式存在 | 合理 |

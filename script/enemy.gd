@@ -1080,6 +1080,56 @@ func get_facing_vector() -> Vector2:
 	return Vector2(0, 1)
 
 
+# ═══════════════════════════════════════
+# 背刺（必杀）—— 原作 system.html ◆必殺
+# ═══════════════════════════════════════
+## 原作规则：「**从背后攻击** → 非 Boss 属性敌人**即死**，无视武器威力」；
+## 实际判定 = **敌人与自己朝向相同**（玩家必须面朝敌人才能命中，所以"朝向相同"就是玩家站在敌人背后）。
+## Boss 免疫即死 → 改吃 **1.5 倍伤害**。
+##
+## 【2026-10-02 用户补充】原作只有几何判定、实战很难撞上 →
+## 再补一条：**尚未察觉玩家的敌人（Idle / 女巫徘徊 WitchIdle）从任意方向命中都算背刺**。
+## 这同时兑现原作对女巫的说明「趁其安静绕背击杀」。
+##
+## ⚠ 背刺免疫**只认 Boss**（`tank_enemies` 组）：原作抗性表里「即死」与「必杀」是两列 ——
+## ブレインディモス 即死 × 但**必杀 ○**，所以这里**不能**用 `instant_kill_immune` 当背刺免疫判据。
+const BACKSTAB_FACING_DOT: float = 0.7    ## 敌我同向判据：cos45°≈0.707，留一点容差
+const BACKSTAB_BOSS_MULT: float = 1.5     ## Boss 免疫即死 → 改吃 1.5 倍
+@export var backstab_enabled: bool = true ## 总开关（留作按敌种关闭的口子）
+
+
+## 是否"尚未察觉玩家"（Idle=还没进 Discover；女巫徘徊态同理）。
+func is_undiscovered() -> bool:
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm == null or sm.current_state == null:
+		return false
+	var n: String = sm.current_state.name
+	return n == "Idle" or n == "WitchIdle"
+
+
+## 这一击是否构成背刺。`direction` 语义与 take_damage 一致（伤害传播前向）。
+func is_backstab_hit(direction: Vector2) -> bool:
+	if not backstab_enabled or _is_dead:
+		return false
+	if is_undiscovered():
+		return true                       ## 未察觉 → 任意方向可背刺
+	if direction == Vector2.ZERO:
+		return false
+	return get_facing_vector().dot(direction.normalized()) >= BACKSTAB_FACING_DOT
+
+
+## 背刺结算：改写这一击的伤害。
+## 非 Boss → 拉满到「当前 HP + 1」（走正常死亡路径：尸体 / 死亡动画 / 掉落照常）；
+## Boss → 免疫即死，只吃 BACKSTAB_BOSS_MULT 倍。
+func apply_backstab(final_damage: float) -> float:
+	if is_in_group("tank_enemies"):
+		print("[背刺] Boss 免疫必杀 → 改吃 %.1f 倍伤（%.0f → %.0f）"
+			% [BACKSTAB_BOSS_MULT, final_damage, final_damage * BACKSTAB_BOSS_MULT])
+		return final_damage * BACKSTAB_BOSS_MULT
+	print("[背刺] ★必杀！%s（%s）" % [name, "未察觉" if is_undiscovered() else "绕背同向"])
+	return maxf(final_damage, current_hp + 1.0)
+
+
 ## ── 正面抗性结算 ──
 ## 判定"这一击是否落在敌人正面扇区内"，并按配置缩放伤害。
 ##

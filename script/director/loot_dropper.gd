@@ -69,6 +69,13 @@ static func spawn_resource(res: Resource, base: Vector2, anchor: Node2D,
 	## ⚠ `cap_exempt` 必须在 add_child **之前**置位（GroundItemCap 在 _ready 里读它）。
 	## 敌人掉落不豁免上限 —— 它属于"掉落杂物"，该被 GroundItemCap 淘汰。
 	spawned.set("cap_exempt", cap_exempt)
-	parent.add_child(spawned)
-	spawned.global_position = free_spot(anchor, base)
+	## 落点先算（要读 TileData + 物理探测），再入树 —— 顺序与 random_pickup 一致。
+	var spot: Vector2 = free_spot(anchor, base)
+	## ⚠⚠ **必须 deferred 入树**：本函数会被"物理回调链内"调用 ——
+	##   `bullet._on_area_entered → enemy.take_damage → _die → _maybe_drop_loot → 这里`，
+	##   此时物理服务器正在 flushing_queries；直接 add_child 会让拾取物的 Area2D/碰撞形状
+	##   立刻向物理服务器注册 → `area_set_shape_disabled` 报
+	##   "Can't change this state while flushing queries"。改用 call_deferred 排到本帧物理之后。
+	parent.add_child.call_deferred(spawned)
+	spawned.set_deferred("global_position", spot)
 	return spawned

@@ -370,6 +370,19 @@ func _hit(target: Node2D) -> void:
 			final_damage = maxf(final_damage, 99999.0)
 			hitstun = maxf(hitstun, 0.1)
 
+	# 背刺（必杀）：玩家从背后命中 → 非 Boss 即死 / Boss 1.5 倍（原作 system.html ◆必殺）。
+	# 只对「玩家开火 → 敌人」成立；爆炸路径不走这里（_explode 单独结算，背刺只认直击方向）。
+	# 免疫只认 Boss 组 —— 即死免疫（instant_kill_immune，如 ブレインディモス）**不免疫必杀**。
+	# ⚠ **不叠加**：觉醒「集中射撃」已是即死级手段（非 Boss 直接拉满、Boss ×1.5），
+	#   再乘一次背刺会给 Boss 叠成 2.25 倍 → 故 `_instant_kill` 分支内不再走背刺。
+	if not _instant_kill \
+			and _shooter != null and _shooter.is_in_group("player") \
+			and damageable.is_in_group("enemy") \
+			and damageable.has_method("is_backstab_hit") \
+			and bool(damageable.call("is_backstab_hit", direction)):
+		final_damage = float(damageable.call("apply_backstab", final_damage))
+		hitstun = maxf(hitstun, 0.1)
+
 	# 尝试对目标造成伤害
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(final_damage)])
