@@ -16,7 +16,12 @@ extends Control
 ##   确定键  → 确认
 
 
-const MENU_ITEMS: Array[String] = ["开始游戏", "联机游戏", "操作说明", "成就", "设置", "退出游戏"]
+## ★2026-10-03 新增「继续游戏」（置顶）：读取手动存档点的存档。
+## ⚠ 菜单项数从 6 → 7 → 窗口高度必须同步加高（否则最后一项会被挤进滚动区，
+##   标题菜单布局用例 title_menu_layout_check 的「全部一屏可见」断言会当场抓住）。
+const MENU_ITEMS: Array[String] = [
+	"继续游戏", "开始游戏", "联机游戏", "操作说明", "成就", "设置", "退出游戏",
+]
 const WINDOW_TITLE: String = "のび太的求生之路"
 
 # ═══════════════════════════════════════
@@ -212,13 +217,24 @@ func _maybe_show_update_log_on_first_launch() -> void:
 ## ── F1 更新日志（2026-09-17 用户需求）──
 ## 右上角「F1 更新日志」角标 + RM 窗口样式的更新日志面板（F1/Esc/确定键关闭）。
 
-const CHANGELOG_VERSION_TEXT := "v0.32（2026-10-01 ~ 10-03）"
+const CHANGELOG_VERSION_TEXT := "v0.33（2026-10-01 ~ 10-03）"
 ## 更新日志正文字号（12 整数倍铁律）。★折行量宽与建行必须用同一个值（`_wrap_text_to_width`）。
 const CHANGELOG_FONT_SIZE: int = 24
 
 ## ⚠ CHANGELOG_VERSION_TEXT 是「本版已看过」的判据（`Global.changelog_seen_version`）：
 ## 改了它 → 玩家下次启动会**自动弹一次**更新日志。所以每次发版必须换新字符串。
 const CHANGELOG_BODY := """【新内容】
+· 手动存档点：地图上出现「存档点」（绿色的行走图），走近按功能键打开菜单，
+  可以把当前进度存进 20 个存档槽中的任意一个
+  同一个菜单里也能调整难度，改了立刻生效
+· 标题画面新增「继续游戏」：选一个存档槽，直接回到存档时的地点继续冒险
+
+【调整】
+· 存档槽一览会显示该档的整支队伍（每名队员的名字 / 等级 / HP）
+
+──────────────  v0.32（2026-10-01 ~ 10-03）  ──────────────
+
+【新内容】
 · 必杀（背刺）：绕到敌人背后攻击，可以直接秒杀普通敌人
   Boss 免疫秒杀，但会吃到更高的伤害
   潜行接近「还没发现你」的敌人时，从哪个方向都能发动
@@ -676,6 +692,9 @@ func _input(event: InputEvent) -> void:
 	# 按键由叠加层自己处理并关闭它，这里只需不把同一按键再喂给菜单。
 	if _achievements_overlay != null:
 		return
+	# ── 存档槽位叠加层（2026-10-03）：打开时吞掉全部菜单输入（按键由叠加层自己处理）──
+	if _slot_overlay != null:
+		return
 	# ── F1 更新日志（2026-09-17）：打开时吞掉全部菜单输入，F1/Esc/确定键关闭 ──
 	var f1_pressed: bool = event is InputEventKey and event.pressed and not event.echo \
 			and (event as InputEventKey).keycode == KEY_F1
@@ -999,6 +1018,8 @@ func _refresh_cursor_frame() -> void:
 
 func _confirm() -> void:
 	match MENU_ITEMS[_cursor_idx]:
+		"继续游戏":
+			_go_to_load_game()
 		"开始游戏":
 			_go_to_campaign_select()
 		"联机游戏":
@@ -1058,6 +1079,62 @@ func _close_achievements() -> void:
 		return
 	_achievements_overlay.queue_free()
 	_achievements_overlay = null
+
+
+# ═══════════════════════════════════════
+# 继续游戏（读档，2026-10-03）
+# ═══════════════════════════════════════
+var _slot_overlay: Node = null
+var _no_save_label: GradientLabel = null
+
+## 「继续游戏」：有档 → 打开槽位选择（读取模式）；无档 → 原地提示一下。
+func _go_to_load_game() -> void:
+	if not SAVE_MANAGER.has_any_save():
+		_show_no_save_hint()
+		return
+	if _slot_overlay != null:
+		return
+	_slot_overlay = SAVE_SLOT_MENU.new()
+	_slot_overlay.setup(SAVE_SLOT_MENU.Mode.LOAD, false)
+	_slot_overlay.connect("chosen", _on_load_slot_chosen)
+	_slot_overlay.connect("closed", _on_slot_overlay_closed)
+	add_child(_slot_overlay)
+
+
+func _on_slot_overlay_closed() -> void:
+	_slot_overlay = null
+
+
+func _on_load_slot_chosen(idx: int) -> void:
+	_slot_overlay = null
+	## 载入 + 切图由 Global 统一负责（恢复队伍/场景/难度，并把玩家落回存档点）。
+	if not Global.load_from_slot(idx):
+		_show_no_save_hint("读取失败：存档已损坏或场景缺失")
+
+
+## 窗口内的一条临时提示（无档 / 读取失败），约 1.6s 后消失。
+func _show_no_save_hint(text: String = "还没有存档 —— 去游戏里的存档点存一个吧") -> void:
+	if _no_save_label != null and is_instance_valid(_no_save_label):
+		_no_save_label.queue_free()
+	_no_save_label = _make_menu_gradient_label(text, Vector2(0, window_size.y - 52.0), 24, text_color_index)
+	_no_save_label.size.x = window_size.x
+	$MenuWindow.add_child(_no_save_label)
+	_center_label(_no_save_label)
+
+	var timer := Timer.new()
+	timer.wait_time = 1.6
+	timer.one_shot = true
+	add_child(timer)
+	var cb: Callable = func():
+		if _no_save_label != null and is_instance_valid(_no_save_label):
+			_no_save_label.queue_free()
+		_no_save_label = null
+	timer.timeout.connect(cb)
+	timer.start()
+
+
+const SAVE_MANAGER := preload("res://script/save_manager.gd")
+const SAVE_SLOT_MENU := preload("res://script/ui/save_slot_menu.gd")
 
 
 ## 成就页脚本（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，

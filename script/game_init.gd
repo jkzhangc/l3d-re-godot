@@ -44,6 +44,10 @@ func _ready() -> void:
 
 	Global.try_load_or_init()
 	_apply_pending_arrival()
+	# ★读档进图：补一次死亡锚点（checkpoint 是内存态，读档时为空的，见 Global.load_from_slot）
+	if Global.consume_pending_checkpoint_capture():
+		Global.capture_checkpoint()
+		print("[GameInit] 读档进图：已建立死亡锚点")
 	# 安全屋场景加载时自动存档（确保死亡后回到这里时的状态一致）
 	if get_tree() and get_tree().current_scene:
 		var scene_path: String = get_tree().current_scene.scene_file_path

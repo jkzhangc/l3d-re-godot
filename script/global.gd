@@ -1157,6 +1157,57 @@ func restore_checkpoint() -> void:
 	])
 
 # ═══════════════════════════════════════
+# 手动存档（2026-10-03）：从槽位读档并进入
+# ═══════════════════════════════════════
+
+## 读档后是否要在新场景补一次 `capture_checkpoint()`（由 GameInit 消费）。
+## ★为什么需要：checkpoint 是**内存态**、读档时为空 → 若玩家读档后、抵达下一个安全屋前死亡，
+## `restore_checkpoint()` 只能走「无 checkpoint，保持当前状态」分支 → 队伍停在 HP=0 的死档。
+## 因此读档进图后立刻把当前状态记为死亡锚点。
+var _pending_checkpoint_capture: bool = false
+
+func consume_pending_checkpoint_capture() -> bool:
+	var v: bool = _pending_checkpoint_capture
+	_pending_checkpoint_capture = false
+	return v
+
+
+## 读取指定槽位并切入其记录的场景（玩家落回存档点坐标）。返回 false = 失败。
+## 供标题画面「继续游戏」调用。
+func load_from_slot(slot_index: int) -> bool:
+	var sm: GDScript = load("res://script/save_manager.gd")
+	var data: Dictionary = sm.load_slot(slot_index)
+	if data.is_empty():
+		printerr("[Global] 读取槽位 %d 失败：无数据" % slot_index)
+		return false
+
+	var scene_path: String = str(data.get("scene_path", ""))
+	if scene_path.is_empty() or not ResourceLoader.exists(scene_path):
+		printerr("[Global] 读取槽位 %d 失败：场景缺失 %s" % [slot_index, scene_path])
+		return false
+
+	## 读档等同开新一局：先清掉上一局残留（Director 子状态是 autoload、跨场景存活）。
+	var director: Node = get_node_or_null("/root/Director")
+	if director and director.has_method("reset_for_title_return"):
+		director.call("reset_for_title_return")
+	corpse_list.clear()
+	_pending_checkpoint_capture = true
+
+	var spawn: Variant = sm.spawn_position_of(data)
+	set_pending_arrival(scene_path, "", spawn)
+
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return false
+	print("[Global] 读档进入: %s (槽位 %d)" % [scene_path, slot_index])
+	var err: Error = tree.change_scene_to_file(scene_path)
+	if err != OK:
+		printerr("[Global] 读档切场景失败: %s (err=%d)" % [scene_path, err])
+		return false
+	return true
+
+
+# ═══════════════════════════════════════
 # 队伍管理 —— 已迁至 Players（script/player_registry.gd）
 # ═══════════════════════════════════════
 

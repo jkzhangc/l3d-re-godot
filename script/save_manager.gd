@@ -2,33 +2,80 @@ class_name SaveManager extends RefCounted
 
 ## ── 架构定位 ──
 ## 系统：存档系统 ｜ 层：数据（RefCounted）
-## 联机：当前为单机/Host 存档
-## 职责：JSON 存档读写，格式 v2（seats 数组承载 per-player 状态）并兼容读取 v1 旧格式。
-## 依赖：PlayerState、ItemCodec；被 Global/菜单调用
+## 联机：仅单机 / Host 侧使用（存档点节点在联机会话里被禁用，见 save_point.gd）
+## 职责：多槽位 JSON 存档读写（20 槽），格式 v2（seats 数组承载 per-player 状态）并兼容 v1 旧格式。
+## 依赖：PlayerState、ItemCodec；被 Global / 存档点菜单 / 标题画面调用
 
-## 存档管理器 — 保存/加载游戏数据到 JSON 文件
+## 存档管理器 — 保存 / 加载游戏数据到 JSON 文件
+##
+## ★2026-10-03 重写：从「单档」升级为「20 个槽位」。
+##   ① 落盘目录 `res://saves/` → **`user://saves/`** —— `res://` 在导出包（尤其安卓 APK）里
+##      是**只读**的，写 `res://saves/` 会静默失败（此前 save_game 是死代码才没暴露）。
+##   ② 每槽一个文件：`user://saves/slot_%02d.json`（slot_00 ~ slot_19）。
 ##
 ## 存档格式 v2：per-player 状态全部收在 seats 数组里（每项 = PlayerState.to_dict()），
 ## 顶层只放真正全局的东西（gold / 场景 / 战役 / 难度）。
 ##
 ## v1（无 save_version 字段）是旧格式：顶层单值 + 一个残缺的 team 数组。
 ## 旧格式仍可读入（见 _load_legacy），但只写 v2。
-## 注意 v1 的 team 数组漏存了 current_tp / healing_item / support_item / throwable /
-## inventory，旧 loader 还会用 team 里的空值覆盖顶层字段 —— 迁移时反过来把顶层的
-## inventory/治疗品/辅助品叠加回激活座位，尽量救回这些数据。
 
-const SAVE_DIR: String = "res://saves/"
-const SAVE_FILE: String = "save_data.json"
+const SAVE_DIR: String = "user://saves/"
 const SAVE_VERSION: int = 2
+## 存档槽位数量（用户 2026-10-03 定稿：16 → 能多就 20）。
+const SLOT_COUNT: int = 20
 
 
-## 保存当前游戏状态
-static func save_game() -> void:
-	## ⚠ 2026-10-03：此处原先调 `ACHIEVEMENTS.on_save_used()` 记录「用过存档」，
-	## 供成就「不存档通关」判定。该成就已删除（本项目**当前没有手动存档功能**——
-	## `save_game/load_game/has_save` 全库零调用，判定永远不成立、成就等于白送），
-	## 所以这一行连同成就侧的状态位一起移除。将来若接入手动存档，再按原作补回。
-	DirAccess.make_dir_absolute(SAVE_DIR)
+# ═══════════════════════════════════════
+# 路径 / 查询
+# ═══════════════════════════════════════
+
+static func slot_path(idx: int) -> String:
+	return SAVE_DIR + "slot_%02d.json" % clampi(idx, 0, SLOT_COUNT - 1)
+
+
+static func has_slot(idx: int) -> bool:
+	if idx < 0 or idx >= SLOT_COUNT:
+		return false
+	return FileAccess.file_exists(slot_path(idx))
+
+
+## 是否**至少有一个**存档槽有内容（标题画面「继续游戏」的可用性判据）。
+static func has_any_save() -> bool:
+	return latest_slot() >= 0
+
+
+## 最近一次保存的槽位号；无档返回 -1（按文件 mtime 取最新）。
+static func latest_slot() -> int:
+	var best_idx: int = -1
+	var best_time: int = -1
+	for i: int in range(SLOT_COUNT):
+		var p: String = slot_path(i)
+		if not FileAccess.file_exists(p):
+			continue
+		var t: int = FileAccess.get_modified_time(p)
+		if t >= best_time:
+			best_time = t
+			best_idx = i
+	return best_idx
+
+
+static func delete_slot(idx: int) -> bool:
+	if not has_slot(idx):
+		return false
+	var err: Error = DirAccess.remove_absolute(slot_path(idx))
+	return err == OK
+
+
+# ═══════════════════════════════════════
+# 保存
+# ═══════════════════════════════════════
+
+## 保存当前游戏状态到指定槽位。
+## spawn_position（可选）：存档点的全局坐标 —— 读档时玩家直接落在存档点，
+## 而不是回到地图默认出生点。
+static func save_to_slot(idx: int, spawn_position: Variant = null) -> bool:
+	idx = clampi(idx, 0, SLOT_COUNT - 1)
+	DirAccess.make_dir_recursive_absolute(SAVE_DIR)
 
 	var scene_path: String = ""
 	if Global.get_tree() and Global.get_tree().current_scene:
@@ -40,46 +87,102 @@ static func save_game() -> void:
 
 	var data: Dictionary = {
 		"save_version": SAVE_VERSION,
+		"slot_index": idx,
 		"gold": Global.gold,
 		"scene_path": scene_path,
 		"seats": seat_dicts,
 		"active_seat_index": Players.active_seat_index,
 		# 单机喷雾共用池（2026-09-13）；联机时恒 0（各座位自己存）
 		"team_spray_count": Players.team_spray_count if Players.using_shared_spray_pool() else 0,
+		# ★喷雾池 count 与 item 必须成对存取（同 checkpoint 的教训）：
+		#   只存 count → 读档后 count>0 但 item=null → 喷雾用不了且每按一次白扣一支。
+		"team_spray_item": _encode_item(Players.team_spray_item) if Players.using_shared_spray_pool() else {},
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
 		"quest_flags": Global.quest_flags.duplicate(),
+		# 槽位列表预览用的轻量数据（避免开菜单时逐槽加载 CharacterData 卡顿）
+		"preview": _build_preview(),
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
+	if spawn_position is Vector2:
+		data["spawn_position"] = {"x": spawn_position.x, "y": spawn_position.y}
 
-	var f: FileAccess = FileAccess.open(SAVE_DIR + SAVE_FILE, FileAccess.WRITE)
-	if f:
-		f.store_string(JSON.stringify(data, "\t"))
-		f.close()
-		print("[存档] 已保存: %s | 座位=%d" % [SAVE_DIR + SAVE_FILE, seat_dicts.size()])
-
-
-## 加载存档
-static func load_game() -> Dictionary:
-	var path: String = SAVE_DIR + SAVE_FILE
-	if not FileAccess.file_exists(path):
-		print("[存档] 未找到存档文件")
-		return {}
-
-	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if not f:
-		return {}
-
-	var text: String = f.get_as_text()
+	var f: FileAccess = FileAccess.open(slot_path(idx), FileAccess.WRITE)
+	if f == null:
+		push_error("[存档] 无法写入槽位 %d: %s (err=%d)"
+			% [idx, slot_path(idx), FileAccess.get_open_error()])
+		return false
+	f.store_string(JSON.stringify(data, "\t"))
 	f.close()
+	print("[存档] 已保存槽位 %d: %s | 座位=%d" % [idx, slot_path(idx), seat_dicts.size()])
+	return true
 
-	var data: Dictionary = JSON.parse_string(text) if text else {}
+
+## 从当前座位构建「槽位预览」轻量数据（标题/徽章/槽位列表用）。
+static func _build_preview() -> Dictionary:
+	var members: Array = []
+	for s: PlayerState in Players.seats:
+		if s == null:
+			continue
+		var cd: CharacterData = s.character
+		members.append({
+			"name": cd.character_name if cd else "?",
+			"level": cd.level if cd else 1,
+			"hp": int(round(s.current_hp)),
+			"max_hp": int(round(s.get_max_hp())),
+			"character_path": s.character_path,
+		})
+	var leader: String = ""
+	var leader_path: String = ""
+	if not members.is_empty():
+		leader = str(members[0].get("name", ""))
+		leader_path = str(members[0].get("character_path", ""))
+	return {
+		"leader": leader,
+		"leader_path": leader_path,
+		"party_size": members.size(),
+		"members": members,
+	}
+
+
+static func _encode_item(it: ItemData) -> Dictionary:
+	if it == null:
+		return {}
+	var codec: GDScript = load("res://script/item_codec.gd")
+	return codec.to_dict(it)
+
+
+# ═══════════════════════════════════════
+# 读取
+# ═══════════════════════════════════════
+
+## 只读槽位摘要（**不改动任何运行时状态**），供槽位列表显示。
+## 返回 {} 表示空槽；键：leader / party_size / members / scene_name / timestamp。
+static func slot_info(idx: int) -> Dictionary:
+	if not has_slot(idx):
+		return {}
+	var data: Dictionary = _read_raw(idx)
+	if data.is_empty():
+		return {}
+	var info: Dictionary = (data.get("preview", {}) as Dictionary).duplicate(true)
+	info["slot_index"] = idx
+	info["scene_name"] = str(data.get("scene_path", "")).get_file().get_basename()
+	info["timestamp"] = data.get("timestamp", "")
+	info["save_version"] = int(data.get("save_version", 1))
+	return info
+
+
+## 加载槽位并**应用**到运行时（Players / Global）。
+## 返回存档数据（含 scene_path / spawn_position）；无档返回 {}。
+static func load_slot(idx: int) -> Dictionary:
+	if not has_slot(idx):
+		print("[存档] 槽位 %d 为空" % idx)
+		return {}
+	var data: Dictionary = _read_raw(idx)
 	if data.is_empty():
 		return {}
 
 	var version: int = int(data.get("save_version", 1))
-	print("[存档] 已加载: %s (time=%s, v%d)" % [path, data.get("timestamp", "?"), version])
-
 	if version >= 2:
 		_load_v2(data)
 	else:
@@ -87,7 +190,6 @@ static func load_game() -> Dictionary:
 
 	# 全局字段（两个版本共用）
 	Global.gold = data.get("gold", 0)
-	# 剧情机关 flag：JSON 往返 value 可能变 float/其他，只收真值；存档没有该字段则清空
 	Global.quest_flags.clear()
 	var saved_flags: Dictionary = data.get("quest_flags", {})
 	if not saved_flags.is_empty():
@@ -98,10 +200,24 @@ static func load_game() -> Dictionary:
 		Global.selected_campaign = load(campaign_path) as CampaignData
 	Global.selected_difficulty = data.get("selected_difficulty", 0)
 
-	print("[存档] 恢复完成 | 座位=%d %s" % [
-		Players.seat_count(), Players.get_active_state().describe(),
-	])
+	print("[存档] 已加载槽位 %d: %s (time=%s, v%d)" % [idx, slot_path(idx), data.get("timestamp", "?"), version])
+	print("[存档] 恢复完成 | 座位=%d %s" % [Players.seat_count(), Players.get_active_state().describe()])
 	return data
+
+
+static func _read_raw(idx: int) -> Dictionary:
+	var path: String = slot_path(idx)
+	if not FileAccess.file_exists(path):
+		return {}
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return {}
+	var text: String = f.get_as_text()
+	f.close()
+	var data: Variant = JSON.parse_string(text) if text else null
+	if data is Dictionary:
+		return data as Dictionary
+	return {}
 
 
 static func _load_v2(data: Dictionary) -> void:
@@ -131,6 +247,17 @@ static func _load_v2(data: Dictionary) -> void:
 				s.healing_item = null
 				s.healing_item_count = 0
 		Players.team_spray_count = migrated
+	# ★count 与 item 成对恢复（旧档没有该键 → 回退到默认喷雾资源）
+	var spray: Variant = data.get("team_spray_item", {})
+	var codec: GDScript = load("res://script/item_codec.gd")
+	if spray is Dictionary and not (spray as Dictionary).is_empty():
+		var it: ItemData = codec.from_dict(spray)
+		if it:
+			Players.team_spray_item = it
+	elif Players.team_spray_count > 0 and Players.team_spray_item == null:
+		var g: Node = Global.get_node_or_null("/root/Global") if Global else null
+		if g and g.has_method("_default_spray_item"):
+			Players.team_spray_item = g.call("_default_spray_item")
 
 
 ## 读取 v1 旧存档并归一化为座位表
@@ -224,28 +351,15 @@ static func _apply_legacy_consumables(st: PlayerState, data: Dictionary) -> void
 			st.inventory.append(it)
 
 
-## 获取存档中的场景路径（用于死亡后重载）
-static func get_saved_scene_path() -> String:
-	var path: String = SAVE_DIR + SAVE_FILE
-	if not FileAccess.file_exists(path):
-		return ""
-	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if not f:
-		return ""
-	var text: String = f.get_as_text()
-	f.close()
-	var data: Dictionary = JSON.parse_string(text) if text else {}
-	return data.get("scene_path", "")
+## 读档后的落点（存档时记录的存档点坐标）；没有记录返回 null。
+static func spawn_position_of(data: Dictionary) -> Variant:
+	var sp: Variant = data.get("spawn_position", null)
+	if sp is Dictionary:
+		var d: Dictionary = sp
+		return Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
+	return null
 
 
-## 启动时自动加载
-static func auto_load_on_start() -> bool:
-	if not FileAccess.file_exists(SAVE_DIR + SAVE_FILE):
-		return false
-	var data: Dictionary = load_game()
-	return not data.is_empty()
-
-
-## 检查存档是否存在
-static func has_save() -> bool:
-	return FileAccess.file_exists(SAVE_DIR + SAVE_FILE)
+## 获取指定槽位记录的场景路径（用于读档后切图）。空槽返回 ""。
+static func get_slot_scene_path(idx: int) -> String:
+	return str(_read_raw(idx).get("scene_path", ""))
