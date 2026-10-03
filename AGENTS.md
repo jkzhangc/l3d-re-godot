@@ -206,6 +206,43 @@ godot --headless --quit
 godot --headless --export-release "Windows Desktop" build/game.exe
 ```
 
+### 发布打包与体积（2026-10-03 实测）
+
+```bash
+# 一步到位：导出 Windows 版 → 压成 zip（发布用）
+python tools/package_release.py
+#   release/l3dre_v0.32.exe       原始可执行（解压即玩）
+#   release/l3dre_v0.32_win.zip   ← 上传 itch.io / 网盘用这个
+```
+
+**为什么 PC 端也要打包压缩**：Godot 的 PCK 是**原样存储**的，不像 APK 本身就是 zip。
+同一份游戏 `exe 207.5 MB` vs `apk 91.7 MB`，差距几乎全来自 APK 的 deflate。
+实测把 exe 用 zip 压一遍 → **98.8 MB（48%）**，10 秒完成 ——
+**PC 端不需要任何引擎改动，只要分发时给压缩包**（Steam / itch.io 的标准做法）。
+
+**`export_presets.cfg` 的 include / exclude 语义（踩过坑）**
+
+| 字段 | 含义 |
+|---|---|
+| `exclude_filter` | **额外排除**（原本会导出的也别导） |
+| `include_filter` | **额外放行**（默认不导出的类型也带进来——**不是"排除"**） |
+
+⚠ 2026-10-03 之前 `include_filter` 被误填成 `*.txt,*.md,*.psd,*.json,*.chm,*.log,*.docs`
+（本意是排除），结果把约 **30 MB** 非资源打进了包：`art/Tilesets/rm2k3_auto/*.json` 21.6 MB
+（地图还原工具中间产物）、`rpg2003.chm` 6.0 MB、`*.psd`/`*.log`/`*.md`/`*.import` 各 0.5~0.9 MB。
+现已收窄为 `include_filter="操作说明.txt"`（**唯一被运行时读取的文本资源**，
+见 `controls_guide.gd::GUIDE_TXT_PATH`）→ exe 207.5 → **177.0 MB**。
+
+⭐ 改这两个过滤器前，**先 `grep` 确认代码到底读哪些 `res://` 文本文件**：
+```
+grep -rn "FileAccess.open\|load(\"res://.*\.\(json\|txt\)" script/
+```
+目前运行时要读的只有 `res://操作说明.txt`；`config.json` **故意**在 `export_files` 里排除
+（发版不带开发者本地设置，游戏走 `Global` 默认值）。
+
+⚠ **导出前必须关闭 Godot 编辑器** —— 编辑器会在退出/导出时把内存里的 `export_presets.cfg`
+写回磁盘，覆盖掉对导出配置的改动。
+
 ## 当前状态
 
 项目处于**核心战斗循环与局域网合作模式并行开发阶段**。已有功能：
