@@ -318,14 +318,19 @@ func _ensure_hint_label() -> void:
 		_hint_label.name = "HintLabel"
 		_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_hint_label.position = Vector2(-160, -50)
-		_hint_label.size = Vector2(320, 44)
+		_hint_label.size = Vector2(320, 24)
 		_hint_label.modulate = Color(1, 1, 1, 0.85)
 		add_child(_hint_label)
-		var g: Node = get_node_or_null("/root/Global")
-		if g:
-			g.apply_hint_font(_hint_label, 24)  ## 24 号（2026-10-02 用户要求放大）
-			if g.has_method("apply_text_shadow"):
-				g.apply_text_shadow(_hint_label)
+	## ★字体/阴影**无条件套**（不能留在上面那个 `if _hint_label == null` 里）：
+	## 一旦 `boss_encounter.tscn` 预置了 HintLabel，写在新建分支内的样式会静默失效
+	## （同 holdout_machine / safe_door / medical_box 踩过的坑）。本函数带 early-return，
+	## 所以这仍是"只套一次"的成本。
+	var g: Node = get_node_or_null("/root/Global")
+	if g:
+		## 12 号（2026-10-03 用户：与防守战机器一起把靠近提示统一调回 12）
+		g.apply_hint_font(_hint_label, 12)
+		if g.has_method("apply_text_shadow"):
+			g.apply_text_shadow(_hint_label)
 	_hint_label.text = hint_message if not hint_message.is_empty() else encounter_name
 	_hint_label.visible = trigger_mode != 2 and not hint_message.is_empty()
 

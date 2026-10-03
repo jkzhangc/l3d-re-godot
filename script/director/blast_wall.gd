@@ -396,12 +396,18 @@ func _update_hint() -> void:
 	if not _hint_label:
 		_hint_label = Label.new()
 		_hint_label.name = "HintLabel"
-		Global.apply_text_shadow(_hint_label)
-		Global.apply_hint_font(_hint_label, 24)  ## 字体统一（2026-09-17）：多行提示信息用 24 保读性
 		_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_hint_label.size = Vector2(320, 48)
+		_hint_label.size = Vector2(320, 24)
 		add_child(_hint_label)
+	## ★字体/阴影**必须无条件套**（不能留在上面那个 `if not _hint_label` 里）：
+	## 一旦将来在 `blast_wall.tscn` 里预置 HintLabel 节点，写在新建分支内的样式就会
+	## **静默失效**（阴影消失、字体不跟随「设置 → 界面字体」）—— holdout_machine
+	## （2026-09-25）、safe_door（2026-09-26）、medical_box（2026-10-03）都栽过这个坑。
+	## 每次调用重复套是幂等的（同 key 覆盖，不累积）。
+	Global.apply_text_shadow(_hint_label)
+	## 12 号（2026-10-03 用户：与防守战机器一起把靠近提示统一调回 12）
+	Global.apply_hint_font(_hint_label, 12)
 	if _hint_label.text != text:
 		_hint_label.text = text
 	_hint_label.position = Vector2(-160.0, -64.0)

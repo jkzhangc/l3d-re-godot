@@ -258,18 +258,19 @@ func _ensure_children() -> void:
 		label = Label.new()
 		label.name = "HintLabel"
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		## 字体统一（2026-09-17）：fusion-pixel + 12 整倍；编辑器进程无 autoload，判空再套。
-		var hg: Node = get_node_or_null("/root/Global")
-		if hg:
-			hg.apply_hint_font(label, 24)
 		label.position = Vector2(-80, -56)
 		label.size = Vector2(160, 24)
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()
 		add_child(label)
-	## 阴影统一走全局参数；编辑器分支不执行（编辑器进程没有 autoload）
+	## ★字体 / 阴影**无条件套**（不能写在上面的 `if not label` 里）：一旦
+	## `item_pickup_point.tscn` 预置了 HintLabel，写在新建分支内的样式会静默失效
+	## （阴影消失 + 字体不跟随「设置 → 界面字体」）。同 holdout_machine / safe_door /
+	## medical_box 踩过的坑。编辑器进程没有 autoload，必须判空。
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
+		## 12 号（2026-10-03 用户：与防守战机器一起把靠近提示统一调回 12）
+		g.apply_hint_font(label, 12)
 		g.apply_text_shadow(label)
 
 

@@ -91,16 +91,27 @@ func _ensure_label() -> void:
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
+		## ⚠ 宽度与 position.x **必须成对满足 `position.x == -size.x / 2`** 才会以箱子为中心
+		## （Label 的居中是相对自身尺寸而言）—— 改尺寸时务必成对改。
 		label.position = Vector2(-180, -74)
-		label.size = Vector2(360, 48)
+		label.size = Vector2(360, 24)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
-		var g: Node = get_node_or_null("/root/Global")
-		if g:
-			g.apply_hint_font(label, 24)  ## 字体统一（2026-09-17）；24 号=2026-10-02 用户要求放大
-			g.apply_text_shadow(label)
 		label.hide()
 		add_child(label)
+	## ★字体 / 颜色 / 阴影**每次调用都套**（2026-10-03 用户实测「医疗箱的文字没阴影了」）：
+	## `object/medical_box.tscn` **预置了 HintLabel 节点**，而旧实现把这三行写在
+	## `if not label` 分支内 → 预置节点永远拿不到样式：**没有阴影、字体也不跟随
+	## 「设置 → 界面字体」开关**。这是与 holdout_machine（2026-09-25）/ safe_door
+	## （2026-09-26）**同一个坑**，每次都靠"用户发现某个物件的提示样式不对"才被找到。
+	## 规则：**任何"给已有节点套样式"的代码都不能写在"新建节点"分支里。**
+	## ⚠ 本脚本是 @tool、编辑器里也会执行此函数，autoload 必须判空。
+	var g: Node = get_node_or_null("/root/Global")
+	if g:
+		## ★2026-10-03 用户要求：与防守战机器一起把靠近提示统一调回 **12 号**
+		##（10-02 曾整体放大到 24，实机觉得太占画面）。
+		g.apply_hint_font(label, 12)
+		label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+		g.apply_text_shadow(label)
 
 
 func _refresh_sprite() -> void:

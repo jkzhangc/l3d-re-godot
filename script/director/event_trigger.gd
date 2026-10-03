@@ -66,14 +66,18 @@ func _ready() -> void:
 		label.text = event_name
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		## 字体统一（2026-09-17）：fusion-pixel + 12 整倍；编辑器进程无 autoload，判空再套。
+		## 12 号（2026-10-03 用户：与防守战机器一起把靠近提示统一调回 12）。
 		var hg: Node = get_node_or_null("/root/Global")
 		if hg:
-			hg.apply_hint_font(label, 24)
+			hg.apply_hint_font(label, 12)
 		label.position = Vector2(-60, -28)
 		label.size = Vector2(120, 20)
 		label.modulate = Color(1, 1, 1, 0.6)
 		add_child(label)
 		## 全局阴影参数；编辑器进程里没有 autoload，判空再套。
+		## ⚠ 本块由 `if not has_node(...)` 把关、只在缺节点时跑一次 —— 若将来
+		## `event_trigger.tscn` 预置了 HintLabel，这里两段样式都会静默失效，
+		## 届时要像 medical_box 那样把样式移到 if 之外（无条件套）。
 		var g: Node = get_node_or_null("/root/Global")
 		if g:
 			g.apply_text_shadow(label)
