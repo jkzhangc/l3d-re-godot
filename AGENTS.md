@@ -229,16 +229,45 @@ python tools/package_release.py
 
 ⚠ 2026-10-03 之前 `include_filter` 被误填成 `*.txt,*.md,*.psd,*.json,*.chm,*.log,*.docs`
 （本意是排除），结果把约 **30 MB** 非资源打进了包：`art/Tilesets/rm2k3_auto/*.json` 21.6 MB
-（地图还原工具中间产物）、`rpg2003.chm` 6.0 MB、`*.psd`/`*.log`/`*.md`/`*.import` 各 0.5~0.9 MB。
+（地图还原工具中间产物）、`rpg2003.chm` 6.0 MB、`*.psd`/`*.log`/`*.md` 各 0.5~0.9 MB。
 现已收窄为 `include_filter="操作说明.txt"`（**唯一被运行时读取的文本资源**，
 见 `controls_guide.gd::GUIDE_TXT_PATH`）→ exe 207.5 → **177.0 MB**。
 
-⭐ 改这两个过滤器前，**先 `grep` 确认代码到底读哪些 `res://` 文本文件**：
+#### ❌ 千万不要把 `*.import` 加进 exclude（2026-10-03 实际踩坑）
+
+我第一版排除项里顺手加了 `*.import`（以为它是 Godot 的中间文件），导出后游戏**直接报错**：
+
 ```
-grep -rn "FileAccess.open\|load(\"res://.*\.\(json\|txt\)" script/
+'res://tres/zombies/職員ゾンビ.tres': In external resource #3, invalid UID: 'uid://b0o88...'
+  - using text path instead: 'res:/sound/クリムゾン.wav'
+[错误][引擎] No loader found for resource: res:/sound/クリムゾン.wav
+```
+
+**根因**：Godot 4.4+ 把每个导入资源的 **UID 就存在它自己的 `.import` 文件里**（`uid=` 字段）。
+排除 `.import` → 导出时 **UID → 路径 的映射表整体缺失** → 所有 `.tres`/`.tscn` 的 UID 引用
+**集体错位**，指向毫不相干的文件（敌人变体被错配成了音效）。
+⚠ 而且**源文件是好的、编辑器里跑也没事** —— 只有导出版本会炸，非常隐蔽。
+
+**可安全排除的**：纯数据/文档类（`*.md` `*.psd` `*.json` `*.chm` `*.log` `*.docs`）
+与工具产物目录。
+**必须保留的**：`*.import`、`*.remap`、`*.uid`、`.godot/imported/*`。
+
+#### ⭐ 改过滤器前先 grep 确认运行时读哪些 `res://` 文本文件
+
+```
+grep -rn "FileAccess.open\|res://.*\.\(json\|txt\)" script/
 ```
 目前运行时要读的只有 `res://操作说明.txt`；`config.json` **故意**在 `export_files` 里排除
 （发版不带开发者本地设置，游戏走 `Global` 默认值）。
+
+#### ✅ 导出后必须实测（别只看体积）
+
+```bash
+cd release
+./l3dre_v0.32.exe --headless --net-test=host --net-test-scene=enemies 2>&1 | grep -iE "uid|invalid|no loader"
+# 再核对 release/l3d_error_log.txt 里无 invalid UID / No loader found
+```
+⚠ 因为这个类别的错误**只在导出包里暴露**，项目内跑用例是查不出来的。
 
 ⚠ **导出前必须关闭 Godot 编辑器** —— 编辑器会在退出/导出时把内存里的 `export_presets.cfg`
 写回磁盘，覆盖掉对导出配置的改动。
