@@ -427,6 +427,35 @@ func _reset_intensity() -> void:
 ##      事件被中止时才复原）→ 新一局常规刷怪与节奏全废。
 ## ★幂等：全程走「先判再动」，重复调用无副作用（标题画面/菜单里可能被调多次）。
 func reset_for_title_return() -> void:
+	## ①~⑧ 收尾「本局正在进行中的战斗状态」（与「进入安全屋」共用同一份逻辑）
+	_reset_live_combat_state()
+	## ⑨ 死亡冻结标志复位（否则新一局第一帧会被 _resume_after_death 之外的路径误判）
+	_frozen_by_death = false
+	## ⑩ 场景缓存标记（下一帧 _check_scene_change 会重新收集 TileMap / NoSpawnLayer；
+	##   这里只把 _last_scene 清掉，强制它重新走一遍换图钩子）
+	_last_scene = null
+	# 敌人节点本身随场景释放，这里只清锁定引用，避免跨局指向已释放实例
+	_boss_music_watchlist.clear()
+	print("[Director] 回标题收尾：剧本事件/防守战已中止、节奏回 cooldown、狂暴与 BGM 已清")
+
+
+## ── 收尾「本局正在进行中的战斗状态」（2026-10-03 二次抽取）──
+## 两个调用者，收尾动作相同、语义略有差异：
+##   · `reset_for_title_return()` —— 回标题：跨局残留必须清干净；
+##   · `_check_scene_change()` 检测到**进入安全屋** —— 安全屋是本局的中场休息，
+##     必须把门外那一波尸潮彻底收掉。
+##
+## ★为什么「进安全屋」也必须走这里，而不是靠 `spawn_map=false` 冻结就够了：
+##   `spawn_map=false` 只让 `_process` **不再推进** Pacing/SpawnManager/FrontSpawner，
+##   **不会**把已经进入 peak 的状态收掉 —— `current_phase` 仍停在 peak、
+##   `_horde_rage` / 目标锁定 / 尸潮 BGM（`_horde_music_player` 挂在 autoload 下，
+##   不随场景释放）全部残留。玩家在安全屋里就听到尸潮 BGM 不停；
+##   出门后 `spawn_map` 恢复 true，Pacing 从 peak 接着走 → 刚出安全屋直接又是一波尸潮。
+##   （用户 2026-10-03 实测：「在安全屋里尸潮音乐还没结束」「出安全屋后直接尸潮」）
+## ★进安全屋时 Pacing 的 `phase_elapsed` 被归零，而安全屋里 `pc.update()` 因
+##   `spawn_map=false` 根本不跑 → 出门后从 0 起算，拥有一整段完整的喘息期。
+## ★幂等：全程「先判再动」，重复调用无副作用。
+func _reset_live_combat_state() -> void:
 	## ① 剧本事件与防守战先收：它们是 ④⑤ 的来源，且持有 BGM / 挂起计数。
 	abort_scripted_event()
 	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
@@ -457,20 +486,12 @@ func reset_for_title_return() -> void:
 	## ⑥ BGM：尸潮 + Boss 都收（判据见 _stop_horde_music 的 stream_paused 铁律）
 	_stop_horde_music()
 	stop_boss_music(false)
-	## ⑦ 紧张度归零（残留高紧张度会让新一局 cooldown 走「3 秒提前结束」捷径）
+	## ⑦ 紧张度归零（残留高紧张度会让 cooldown 走「3 秒提前结束」捷径）
 	_reset_intensity()
-	## ⑧ 死亡冻结标志复位（否则新一局第一帧会被 _resume_after_death 之外的路径误判）
-	_frozen_by_death = false
-	## ⑨ 前方补位记账（_batch_player_pos 里是旧图玩家的 instance_id）
+	## ⑧ 前方补位记账（_batch_player_pos 里是旧图玩家的 instance_id）
 	var fs: Node = get_node_or_null("FrontSpawner")
 	if fs and fs.has_method("reset_batch_tracking"):
 		fs.call("reset_batch_tracking")
-	## ⑩ 场景缓存标记（下一帧 _check_scene_change 会重新收集 TileMap / NoSpawnLayer；
-	##   这里只把 _last_scene 清掉，强制它重新走一遍换图钩子）
-	_last_scene = null
-	# 敌人节点本身随场景释放，这里只清锁定引用，避免跨局指向已释放实例
-	_boss_music_watchlist.clear()
-	print("[Director] 回标题收尾：剧本事件/防守战已中止、节奏回 cooldown、狂暴与 BGM 已清")
 
 
 func _on_phase_changed(phase: StringName) -> void:
@@ -1308,6 +1329,22 @@ func _evaluate_spawn_map() -> bool:
 	return true
 
 
+## 当前场景是否为「安全屋」（按 `safe_room_keywords` 匹配场景路径）。
+## 与 `_evaluate_spawn_map` 的差别：**不看** auto_spawn_enabled / spawn_map_keywords ——
+## 那两个是「要不要刷怪」的闸门，可能被本图的 DirectorConfig 覆盖；
+## 而「是不是安全屋」只取决于地图名，用于触发「中场休息收尾」（见 _reset_live_combat_state）。
+func _scene_is_safe_room(scene: Node) -> bool:
+	if scene == null or not is_instance_valid(scene):
+		return false
+	var scene_path: String = scene.scene_file_path.to_lower()
+	for kw: String in safe_room_keywords:
+		if kw.is_empty():
+			continue
+		if kw.to_lower() in scene_path:
+			return true
+	return false
+
+
 ## 场景配置刷新入口（由 GameInit 在联机会话下调用）。
 ## ⚠ 为什么需要：`_process` 在联机客户端**整体早退**，`_check_scene_change` 从来不跑
 ## → 客户端的 `current_config` 恒为 null → `play_boss_music` / `_play_horde_music`
@@ -1363,6 +1400,17 @@ func _check_scene_change() -> void:
 			_apply_immediate_spawn_start()
 	else:
 		print("[Director] no DirectorConfig in scene, using defaults")
+	## ★进入安全屋 = 本局的中场休息（2026-10-03 用户实测：「安全屋里尸潮音乐还没结束」
+	## 「出安全屋后直接尸潮」）：必须在这里把门外那一波尸潮彻底收掉 ——
+	## 停尸潮/Boss BGM、解除狂暴与目标锁定、Pacing 回 cooldown 并重掷时长、
+	## 复位剧本事件与防守战挂起。
+	## ⚠ 放在 `_apply_config` **之后**：重掷 cooldown 时长要用本图配的参数。
+	## ⚠ 这是 2026-09-23「换图不要重置 pacing」教训的**唯一例外** ——
+	##   那次事故的成因是"普通图开场被强制回 cooldown → 开场静默 20~35s"，
+	##   而安全屋本身就不刷怪（`spawn_map=false`），强制回 cooldown 零副作用。
+	if _scene_is_safe_room(scene):
+		_reset_live_combat_state()
+		print("[Director] 进入安全屋：本局战斗状态已收尾（尸潮/Boss BGM 停止、节奏回喘息、狂暴与目标锁定解除）")
 	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
 	## 开场强制回 cooldown 会把"地图开局立即 build（SpawnManager 立刻散兵刷怪）"变成
 	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。

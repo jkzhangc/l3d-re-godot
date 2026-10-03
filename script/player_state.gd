@@ -143,6 +143,22 @@ func get_max_tp() -> int:
 	return 0
 
 
+## ── TP 唯一写入口（2026-10-03 全面检查）──
+## ★为什么必须收敛到一个入口：TP 原本有 5 处写入（技能消耗 / 覚醒每秒消耗 /
+## しゃがみ按住消耗 / 物品回复 / 自动回复），其中 3 处直接 `state.current_tp = ...`
+## 且**没有任何统一钳制** —— 任何一处越界（旧存档、上限下调、联机快照往返）
+## 都会一路污染 HUD：用户实测的「人物默认 TP 显示 133」（上限只有 100）即属此类。
+## 自本函数起，不变量为 `0 <= current_tp <= get_max_tp()`。
+func set_tp(value: int) -> void:
+	var mx: int = get_max_tp()
+	current_tp = clampi(value, 0, mx) if mx > 0 else maxi(value, 0)
+
+
+## TP 增减（正 = 回复，负 = 消耗）。
+func change_tp(delta_tp: int) -> void:
+	set_tp(current_tp + delta_tp)
+
+
 func get_character_name() -> String:
 	if character:
 		return character.character_name
@@ -489,7 +505,8 @@ func from_dict(d: Dictionary) -> void:
 			character = (res as CharacterData).duplicate() as CharacterData
 
 	current_hp = d.get("current_hp", get_max_hp())
-	current_tp = int(d.get("current_tp", get_max_tp()))
+	## ★经唯一写入口 set_tp：钳到 [0, 上限]（旧存档 / 联机快照里的越界值不再污染 HUD）
+	set_tp(int(d.get("current_tp", get_max_tp())))
 
 	var eq: Dictionary = d.get("equipment", {})
 	equipment = {"primary": null, "secondary": null}

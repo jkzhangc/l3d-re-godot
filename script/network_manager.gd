@@ -96,6 +96,22 @@ func _ready() -> void:
 func has_network() -> bool:
 	return multiplayer.multiplayer_peer != null and not (multiplayer.multiplayer_peer is OfflineMultiplayerPeer)
 
+
+## ── 安全取「本机 peer id」（2026-10-03 用户实测报错）──
+## `multiplayer.get_unique_id()` 在**没有分配 peer** 时会抛引擎错误
+## 「No multiplayer peer is assigned. Unable to get unique ID.」（scene_multiplayer.cpp:529）。
+## 触发场景（本项目最可能的一条）：`hello_ack` 是 Client 收到 Host 的**可靠 RPC** ——
+## 若玩家在这条包投递**之前**已 `leave()`（断线 / 退回标题 / 取消连接），
+## `multiplayer.multiplayer_peer` 已被置 null，但队列里已入队的可靠包仍会执行一次
+## → 每执行一次就报一行错（用户截图里连续 6 条）。
+## 约定：凡取本机 id 一律走这里；无 peer / 离线时回退 1（Host 与离线的默认 id）。
+func get_my_peer_id() -> int:
+	if multiplayer == null or multiplayer.multiplayer_peer == null:
+		return 1
+	if multiplayer.multiplayer_peer is OfflineMultiplayerPeer:
+		return 1
+	return multiplayer.get_unique_id()
+
 func is_online_session() -> bool:
 	return has_network() and handshake_ok
 
@@ -109,7 +125,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	is_host = true
-	my_peer_id = multiplayer.get_unique_id()
+	my_peer_id = get_my_peer_id()
 	handshake_ok = true
 	active_port = port
 	_player_names = {my_peer_id: _sanitize_name(player_name)}
@@ -132,7 +148,7 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	is_host = false
-	my_peer_id = multiplayer.get_unique_id()
+	my_peer_id = get_my_peer_id()
 	handshake_ok = false
 	_session_player_states.clear()
 	_connect_multiplayer_signals()
@@ -338,7 +354,7 @@ func hello_ack(version: String, names: Dictionary, character_paths: Dictionary) 
 	handshake_ok = true
 	_player_names = names.duplicate()
 	_player_character_paths = character_paths.duplicate()
-	my_peer_id = multiplayer.get_unique_id()
+	my_peer_id = get_my_peer_id()
 	print("[Net] HANDSHAKE_OK client peer=%d players=%d" % [my_peer_id, _player_names.size()])
 	player_list_changed.emit()
 	player_character_list_changed.emit()

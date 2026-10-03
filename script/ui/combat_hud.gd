@@ -139,7 +139,11 @@ func _configure_tp_label() -> void:
 	# TP 数值标签（场景节点 $TPLabel）—— 与伤害数字同款像素字体
 	# 资源路径/位置在场景里设置；字号和效果属性在代码里设置（_ready 阶段覆盖 _enter_tree 的 Global 默认值）
 	# 字号铁律 12 的整数倍（2026-09-24 用户确认）：32 非整倍 → 像素字体非整数缩放会糊，改 36=12×3
-	tp_label.text_font_size = 36
+	# ★2026-10-03 用户实测「UI 字体多出几个像素点」：根因是节点曾用 `scale = 1.5`
+	#   （非整数缩放像素字体 → 笔画粗细不均、边缘出杂点）。现改为 **scale = 1 + 字号 48**（=12×4），
+	#   视觉尺寸与原 `36 × 1.5 = 54` 接近，且是 1:1 硬边栅格化，不再渗点。
+	#   ⚠ 今后任何 HUD 文字都**不要用非整数 scale 放大**，要放大就放大字号（取 12 的整倍）。
+	tp_label.text_font_size = 48
 	tp_label.color_index = 1
 	tp_label.color_row = 0
 	tp_label.bold = false
@@ -151,7 +155,12 @@ func _configure_tp_label() -> void:
 
 func _update_tp() -> void:
 	var state: PlayerState = Players.get_active_state()
+	## ★显示前再钳一次（数据层已有 set_tp 唯一入口，这里兜底）：
+	##   HUD 是最终门面，绝不允许出现超过上限的数字（用户实测「默认 TP 显示 133」）。
 	var tp: int = state.current_tp
+	var mx: int = state.get_max_tp()
+	if mx > 0:
+		tp = clampi(tp, 0, mx)
 	if tp != _last_tp:
 		_last_tp = tp
 		tp_label.text = "%d" % tp

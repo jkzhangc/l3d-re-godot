@@ -127,27 +127,25 @@ offset_left = 86.0
 offset_top = 164.0
 offset_right = 98.0
 offset_bottom = 188.0
-scale = Vector2(1.5, 1.5)
 script = ExtResource("6_aeqfj")
 text = "0"
-text_font_size = 24
+text_font_size = 48
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
 
 [node name="HoldoutCountdown" type="PanelContainer" parent="." unique_id=1952354651]
 offset_left = 49.0
 offset_top = 28.0
-offset_right = 169.0
-offset_bottom = 106.0
-scale = Vector2(1.5, 1.5)
+offset_right = 229.0
+offset_bottom = 145.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("HoldoutPanel")
 
 [node name="Margin" type="MarginContainer" parent="HoldoutCountdown" unique_id=1830518122]
 layout_mode = 2
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
 
 [node name="VBox" type="VBoxContainer" parent="HoldoutCountdown/Margin" unique_id=2032519222]
 layout_mode = 2
@@ -161,14 +159,14 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "准备防守"
 
 [node name="TimeLabel" type="Control" parent="HoldoutCountdown/Margin/VBox" unique_id=1118143495]
 layout_mode = 2
 script = ExtResource("6_aeqfj")
 text = "1:00"
-text_font_size = 36
+text_font_size = 48
 color_index = 1
 shadow = true
 color_sheet_path_override = "res://art/System/Text color, 20 types (each 16 x 16).png"
@@ -181,5 +179,5 @@ theme_override_colors/font_outline_color = Color(0, 0, 0, 0.95)
 theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "守住机器！"

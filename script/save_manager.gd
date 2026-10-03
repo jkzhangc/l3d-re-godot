@@ -301,7 +301,8 @@ static func _seat_from_legacy_member(md: Dictionary) -> PlayerState:
 			st.character = (res as CharacterData).duplicate() as CharacterData
 			st.character_path = resource_path
 	st.current_hp = md.get("current_hp", st.get_max_hp())
-	st.current_tp = md.get("current_tp", st.get_max_tp())
+	## ★经唯一写入口 set_tp（钳到 [0, 上限]）：旧存档里的越界 TP 不再污染 HUD。
+	st.set_tp(int(md.get("current_tp", st.get_max_tp())))
 	st.facing = md.get("facing", 0)
 	st.position = Vector2(md.get("position_x", 0.0), md.get("position_y", 0.0))
 	var eq: Dictionary = md.get("equipment", {})
@@ -322,7 +323,7 @@ static func _apply_legacy_top_level(st: PlayerState, data: Dictionary) -> void:
 			st.character = (res as CharacterData).duplicate() as CharacterData
 			st.character_path = cd_path
 	st.current_hp = data.get("player_hp", st.get_max_hp())
-	st.current_tp = st.get_max_tp()
+	st.set_tp(st.get_max_tp())
 	var eq: Dictionary = data.get("equipment", {})
 	for slot: String in ["primary", "secondary"]:
 		var sd: Dictionary = eq.get(slot, {})

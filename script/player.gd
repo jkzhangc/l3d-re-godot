@@ -1636,7 +1636,8 @@ func restore_tp(amount: int) -> void:
 		return
 	var max_tp: int = _get_max_tp()
 	var before: int = state.current_tp
-	state.current_tp = mini(max_tp, before + amount)
+	## ★唯一写入口（2026-10-03）：内部钳到 [0, 上限]，避免任何越界污染 HUD。
+	state.change_tp(amount)
 	if state.current_tp > before:
 		print("[玩家] 回复 TP: +%d | TP: %d/%d" % [state.current_tp - before, state.current_tp, max_tp])
 
@@ -1709,7 +1710,10 @@ func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
 	if skill.tp_cost > 0 and state.current_tp < skill.tp_cost:
 		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, state.current_tp])
 		return false
-	state.current_tp -= skill.tp_cost
+	## ★唯一写入口（2026-10-03）：钳到 [0, 上限]，不再裸减。
+	##   上限判据用 `get_max_tp()`（= CharacterData.max_tp，现四人皆 100）——
+	##   越界曾导致 HUD 显示出「133」这类超过上限的数字。
+	state.change_tp(-skill.tp_cost)
 	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, state.current_tp])
 	_execute_skill_effect(skill, trigger)
 	return true
@@ -1863,7 +1867,8 @@ func _update_awaken(delta: float) -> void:
 	var state: PlayerState = Players.get_state_for_entity(self)
 	var tp_left: int = state.current_tp if state else 0
 	if state:
-		state.current_tp = maxi(0, state.current_tp - int(round(AWAKEN_TP_DRAIN_PER_SEC * delta)))
+		## ★唯一写入口：钳到 [0, 上限]（旧实现裸减只有 0 下限、没有上限）
+		state.change_tp(-int(round(AWAKEN_TP_DRAIN_PER_SEC * delta)))
 		tp_left = state.current_tp
 	if tp_left <= 0 or _is_dying:
 		_deactivate_awaken()
@@ -1982,7 +1987,7 @@ func _update_sa_state(delta: float) -> void:
 			if state and state.current_tp > 0:
 				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
 				var drain: int = maxi(1, int(round(_sa_crouch_skill.crouch_tp_drain * delta)))
-				state.current_tp = maxi(0, state.current_tp - drain)
+				state.change_tp(-drain)
 
 
 ## 敌方攻击是否被无效化（しゃがみ无敌 / 感覚向上完全见切 / 见切输入窗口）。
@@ -2168,7 +2173,7 @@ func _update_network_sa_state(delta: float) -> void:
 			if state and state.current_tp > 0:
 				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
 				var drain: int = maxi(1, int(round(_sa_crouch_skill.crouch_tp_drain * delta)))
-				state.current_tp = maxi(0, state.current_tp - drain)
+				state.change_tp(-drain)
 
 
 ## 联机表现接口（C2，由 NetworkWorld 的 sa_presentation 调用）：

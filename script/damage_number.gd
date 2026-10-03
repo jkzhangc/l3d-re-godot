@@ -166,10 +166,19 @@ func _ensure_shared_canvas() -> void:
 	_shared_canvas.name = "DamageNumberLayer"
 	_shared_canvas.layer = 100
 	_shared_canvas.add_to_group("damage_number_layer")
-	if tree.current_scene:
-		tree.current_scene.add_child(_shared_canvas)
-	else:
-		tree.root.add_child(_shared_canvas)
+	## ★★★ 必须走 `call_deferred`（2026-10-03 用户实测报错，根因确定）：
+	## 本函数是在 `DamageNumber._ready()` 里被调用的，而 DamageNumber 自己正是
+	## `parent.add_child(dn)` 的**被添加节点**（调用方传的 parent 恒为
+	## `get_tree().current_scene`，见 enemy.gd / player.gd 的 `DamageNumber.spawn(...)`）。
+	## 也就是说：此刻 current_scene 正处于 `add_child()` 内部 `data.blocked > 0` 的
+	## 「正在建立子树」窗口 —— Godot 会**拒绝**任何对它的新 `add_child`，并打印
+	## 「Parent node is busy setting up children, `add_child()` failed.」
+	##（截图里的 node.cpp:1709 @ add_child 就是这一条）。
+	## 后果不止刷屏：`_shared_canvas` 会静默留在树外 → 该帧起的伤害数字全部不显示。
+	## deferred 会在当前 add_child 窗口结束后执行，既不再报错，也照常入树。
+	var target: Node = tree.current_scene if tree.current_scene != null else tree.root
+	if target != null:
+		target.call_deferred("add_child", _shared_canvas)
 
 
 # ═══════════════════════════════════════
@@ -208,6 +217,21 @@ func _create_label() -> void:
 	_shared_canvas.add_child(_label)
 
 	# —— 效果属性（必须在 add_child 后设，覆盖 _enter_tree() 的 Global 默认值）——
+	## ★时序（2026-10-03，配合 _ensure_shared_canvas 的 deferred 改法）：
+	## `_shared_canvas` 可能是本帧**刚创建并 deferred 入树**的（见该函数注释），此时 `_label`
+	## 还没 enter_tree —— 若现在就设属性，等它入树时 `GradientLabel._load_defaults_from_global()`
+	## 会把「仍等于类默认值」的那几项（color_index / outline / shadow…）**反过来覆盖成 Global 值**，
+	## 与同步路径的行为相反。因此：已入树 → 立即套；否则等 `ready` 后补套一次。
+	if _label.is_inside_tree():
+		_apply_label_effects()
+	else:
+		_label.ready.connect(_apply_label_effects, CONNECT_ONE_SHOT)
+
+
+## 把效果属性套到 label 上。必须在 `_label` enter_tree **之后**调用（见 _create_label 的时序说明）。
+func _apply_label_effects() -> void:
+	if not _label or not is_instance_valid(_label):
+		return
 	_label.text = text_override if not text_override.is_empty() else str(int(amount))
 	_label.text_font_size = font_size
 	_label.color_index = color_index
