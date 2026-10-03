@@ -1058,6 +1058,24 @@ func distribute_point_indices(count: int, point_count: int, wave_index: int = 0)
 	return out
 
 
+## 固定刷怪点条目 → 坐标。
+## 兼容两种格式：`{"pos": Vector2, "allow_in_view": bool}`（HoldoutMachine 2026-10-03 起）
+## 与裸 `Vector2`（老调用 / 直接手填坐标的场合）。
+static func _holdout_entry_pos(entry: Variant) -> Vector2:
+	if entry is Dictionary:
+		var v: Variant = (entry as Dictionary).get("pos", Vector2.ZERO)
+		return v if v is Vector2 else Vector2.ZERO
+	return entry if entry is Vector2 else Vector2.ZERO
+
+
+## 固定刷怪点条目 → 是否「玩家画面内也照常刷」。
+## 裸 `Vector2` 视为 false —— 保持 2026-09-26 起的旧行为（画面内点位本批屏蔽）。
+static func _holdout_entry_allow_in_view(entry: Variant) -> bool:
+	if entry is Dictionary:
+		return bool((entry as Dictionary).get("allow_in_view", false))
+	return false
+
+
 ## 防守战**固定刷怪点**批（2026-09-26 用户需求）：把 count 只敌人**轮转均分**到 positions 上。
 ##   例：5 只 / 3 点 → 2、2、1；`wave_index` 让每批的起点轮转（避免永远同一个点多一只）。
 ##
@@ -1081,11 +1099,15 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 	var fell_back: int = 0
 	var blocked_swapped: int = 0
 	for i: int in range(count):
-		var point: Vector2 = points[assignment[i]] as Vector2
+		var entry: Variant = points[assignment[i]]
+		var point: Vector2 = _holdout_entry_pos(entry)
 		## ★「玩家画面内 / 近旁的点位 → 本批暂时屏蔽」（2026-09-26 用户需求）：
 		## 该只改走屏幕外刷法 —— 供给不断，也绝不会出现在玩家眼前。
 		## 单机与联机同规则（判据本身按"全体玩家"取并集）。
-		if fs != null and fs.has_method("is_holdout_point_blocked") \
+		## ★2026-10-03 用户需求：点位自身可勾 `allow_in_view` **跳过这层屏蔽**
+		##（想做"眼睁睁看着丧尸从走廊尽头涌出来"的表演型点位）。
+		if not _holdout_entry_allow_in_view(entry) \
+				and fs != null and fs.has_method("is_holdout_point_blocked") \
 				and bool(fs.call("is_holdout_point_blocked", point)):
 			blocked_swapped += 1
 			var swapped: Array[Node2D] = spawn_horde_nodes(1, decor_layer)

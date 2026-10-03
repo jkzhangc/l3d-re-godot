@@ -1105,7 +1105,16 @@ func _capture_facing_lock_input() -> void:
 	var local_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(local_id, {})
 	var node := _player_node(entry)
-	if not is_instance_valid(node) or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or node.player_in_weapon_state:
+	if not is_instance_valid(node) or node.current_hp <= 0.0:
+		return
+	## ⚠ 这里**不做**任何"自动清锁"（2026-10-03 试过两种判据都不行）：
+	##   · "当前不在武器模式就清锁" —— features 用例是"空手状态下显式加锁"，会被当场解掉；
+	##   · "武器模式 true→false 的边沿清锁" —— 联机快照有延迟，**迟到的"放下"表现**
+	##     会落在"玩家已经加锁"之后 → 照样把锁解掉。
+	## 真正的清锁点放在 **Host 的放下武器动作**里（`_try_host_toggle_weapon`）：
+	## 那是玩家意图明确的一次操作，不受表现层延迟影响。
+	var weapon_mode: bool = node.is_weapon_mode_active()
+	if not weapon_mode or node.player_in_weapon_state:
 		return
 	if Global.facing_lock_mode == 0:
 		if Input.is_action_just_pressed("取消键"):
@@ -1760,6 +1769,13 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	if not is_instance_valid(node) or not wd or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
 	var raising: bool = not node.is_weapon_mode_active()
+	## ★2026-10-03：**放下武器**是"朝向锁"唯一该被解除的时机（它本是"举着武器时按取消键"
+	## 的姿势能力，武器收起后玩家没有途径再解锁；锁残留会让人物无法转身）。
+	## 判据挂在 Host 的这次**明确动作**上，而不是 `_capture_facing_lock_input` 的状态推断 ——
+	## 后者会被"空手显式加锁"和"迟到的放下快照"两种时序误伤（详见该函数的注释）。
+	if not raising and node.is_facing_locked():
+		node.apply_facing_lock_state(false, node.facing)
+		_send_host_facing_lock_state(peer_id)
 	_begin_host_weapon_transition(peer_id, node, wd, raising)
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 

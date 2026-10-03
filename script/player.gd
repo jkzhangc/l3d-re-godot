@@ -432,6 +432,7 @@ func _process(delta: float) -> void:
 	_update_tp_regen(delta)
 	_update_motion_input()
 	_update_sa_state(delta)
+	_sanitize_facing_lock()
 	_try_shove_interrupt()
 
 
@@ -445,8 +446,10 @@ func _process(delta: float) -> void:
 ##   必然漏加 → 又变成"有时候推不出来"。这里做**唯一入口**，覆盖举枪/攻击/装弹全部武器状态。
 ##
 ## 【拦截判据】
-##   · `_weapon_mode` = 举着武器（攻/换弹/推击期间都为 true）→ 天然排除投掷物模式
-##     （`enter_throwable_mode()` **不设** `_weapon_mode`，见该函数），投掷瞄准时不会误触发；
+##   · **不要求举着武器**（2026-10-03 用户需求：「玩家没举起武器的时候也能用推击」）——
+##     L4D2 里推击是任何时候都能做的保命动作，不必先举枪；武器数据取 `active_weapon_slot`
+##     的当前值（空手状态也拿得到），推击结束后按"进入前是否举武器"回到对应状态。
+##   · 排除**投掷物模式**（`_throwable_mode`）：正在瞄投掷物时不推，避免与投掷/取消键冲突；
 ##   · 当前状态已是 `Shove` → 不打断自己（否则会重入、动画被重置）；
 ##   · `can_shove()` → 尊重既有的推击疲劳冷却（冷却中静默忽略，不消耗次数）。
 ##
@@ -463,7 +466,8 @@ func _try_shove_interrupt() -> void:
 		return
 	if not Input.is_action_just_pressed("推击键"):
 		return
-	if not _weapon_mode:
+	## 投掷物瞄准中不推（要与投掷/取消键区分开）；空手状态**允许**推击。
+	if _throwable_mode:
 		return
 	var sm: Node = get_node_or_null("StateMachine")
 	if sm == null or not sm.has_method("request_state"):
@@ -472,6 +476,8 @@ func _try_shove_interrupt() -> void:
 		return
 	if not can_shove():
 		return
+	## 记下进入前的姿态（举枪 / 空手），推击结束时照此返回。
+	remember_return_pose_state()
 	sm.call("request_state", "Shove")
 
 
@@ -797,16 +803,61 @@ func exit_weapon_mode() -> void:
 	_current_weapon_char_idx = 0
 	# 放下武器 → 覚醒解除（原作觉醒是构势系状态，武器收起即失效）
 	_deactivate_awaken()
-	# 放下武器 → **强制解除固定朝向**（2026-10-02 用户实测）：
-	# 固定朝向是"举枪时用取消键锁定朝向"的姿势能力，武器收起后玩家没有任何
-	# 途径再按取消键（联机下 `_capture_facing_lock_input` 还有 `is_weapon_mode_active()`
-	# 闸门，压根不再采集）→ 锁残留会让 `update_facing()` 一直走锁定分支，
-	# 表现为**不举武器时角色仍被强制固定朝向、无法转向**。
-	# 解锁后 `_locked_facing` 同步为当前朝向，避免下次锁定时跳到陈旧方向。
-	if _facing_locked:
-		_facing_locked = false
-		_locked_facing = _facing
+	## ★★ 这里**不再**解除固定朝向（2026-10-03 用户实测「固定朝向的时候开枪会取消固定朝向」）。
+	## 【旧行为与它的两个副作用】
+	##   2026-10-02 为解决「放下武器后朝向锁残留 → 不举武器仍被强制固定朝向、无法转向」，
+	##   把解锁塞进了本函数。但 `exit_weapon_mode()` **不只是"放下武器"会调** ——
+	##   攻击 / 装弹 / 推击状态的 `exit()` 也都会调它（状态切换时会先退再进武器模式），
+	##   于是玩家**一开枪/一换弹，辛苦锁好的朝向就被静默解掉**（用户 2026-10-03 实测）。
+	##   顺带一提，那些状态切换同样会触发 `_deactivate_awaken()` —— 一并成为"开枪掉覚醒"的来源。
+	## 【现在的规则】朝向锁的解除只发生在**玩家真的放下武器**时：
+	##   · 单机：`_begin_lower()` 显式 `unlock_facing()`
+	##   · 兜底：`_sanitize_facing_lock()` —— 只要不在武器/投掷物模式就清锁（每帧幂等）
+	##   · 联机：`NetworkWorld._capture_facing_lock_input()` 的「没举武器」分支
 	_refresh_sprite()
+
+
+## ★推击 / 投掷物这类**临时姿态**结束后要回到的状态名（`""` = 空手 Idle）。
+##
+## 【为什么需要 Player 层记这个】状态切换必经 `前状态.exit()` → `exit_weapon_mode()`，
+## 它会把 `_weapon_mode` / `_weapon_data` 一并清空 —— 于是新状态的 `enter()` **根本读不到**
+## "玩家进来之前举没举枪"。若让临时状态自己判断，结论永远是"空手"，
+## 表现为「举着枪推一下就变成空手」/「掏完手雷枪没了」。
+## 所以由 Player 层在**发起切换之前**记下，临时状态结束时取用（取用即清空，避免陈旧值）。
+var _return_pose_state: String = ""
+
+
+## 当前姿态对应的状态名：举着武器 → 该武器的武器状态名（如 "Pistol"）；空手 → `""`。
+func _current_weapon_state_name() -> String:
+	if not _weapon_mode or _weapon_data == null:
+		return ""
+	return _weapon_data.weapon_state_name
+
+
+## 取出并清空"临时姿态结束后要回到的状态名"（供 PlayerShoveState / PlayerThrowableState 调用）。
+func take_return_pose_state() -> String:
+	var back: String = _return_pose_state
+	_return_pose_state = ""
+	return back
+
+
+## 由**发起方**在切到"临时姿态"（推击 / 投掷物）之前调用：记下当前姿态供其返回。
+## 统一入口，避免各处直接写私有字段。
+func remember_return_pose_state() -> void:
+	_return_pose_state = _current_weapon_state_name()
+
+
+## ★固定朝向只在「举着武器」时才有意义（玩家用取消键锁定的姿势能力）。
+## 一旦离开武器 / 投掷物模式，玩家再也没有途径去解锁 —— 锁残留会让
+## `update_facing()` 一直走锁定分支，表现为**不举武器却无法转身**。
+## 这里做**收敛兜底**：与"谁调用了 exit_weapon_mode"解耦，任何路径漏了解锁都能自愈。
+## （单机路径每帧调用；联机由 `NetworkWorld._capture_facing_lock_input` 走 RPC 处理。）
+func _sanitize_facing_lock() -> void:
+	if not _facing_locked:
+		return
+	if _weapon_mode or _throwable_mode:
+		return
+	unlock_facing()
 
 
 ## 设置举起/放下动画帧（使用 weapon_raise_char_sequence 中的索引）

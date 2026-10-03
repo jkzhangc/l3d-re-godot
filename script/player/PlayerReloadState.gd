@@ -22,7 +22,6 @@ var _phase: int = Phase.ANIM
 var _seq_idx: int = 0
 var _timer: float = 0.0
 var _reload_done: bool = false   ## 弹药是否已装入（NORMAL 模式下动画结束后设为 true）
-var _was_facing_locked: bool = false  ## 进入装填前朝向是否已锁定
 
 
 func enter() -> void:
@@ -57,9 +56,11 @@ func enter() -> void:
 	character.enter_weapon_mode(_wd)
 	character.player_in_weapon_state = true
 
-	# 保存并锁定朝向
-	_was_facing_locked = character.is_facing_locked()
-	character.lock_facing()
+	## ★装填**不再强制固定朝向**（2026-10-03 用户实测「没固定朝向的时候装弹会强制固定朝向」）。
+	## 旧实现无条件 `lock_facing()`，于是玩家只要按一下装填键，角色就被钉住朝向、行动别扭。
+	## 朝向锁现在是**纯玩家主动能力**（举枪时按取消键）——装弹既不该加锁，也不该解玩家的锁；
+	## 玩家自己的锁在装弹期间原样保留（装填不改变朝向，移动时仍按移动方向转向）。
+	## 相关兜底见 `Player._sanitize_facing_lock()`（离开武器模式才清锁）。
 
 	_phase = Phase.ANIM
 	_seq_idx = 0
@@ -73,9 +74,7 @@ func enter() -> void:
 
 func exit() -> void:
 	character.player_in_weapon_state = false
-	# 恢复装填前的朝向锁定状态
-	if not _was_facing_locked:
-		character.unlock_facing()
+	## 朝向锁不在这里动：装填既不加载也不解锁（见 `enter()` 的说明）。
 	if _wd:
 		character.set_weapon_ready_frame()
 	character.exit_weapon_mode()

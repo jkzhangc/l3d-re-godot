@@ -116,6 +116,19 @@ func process_update(delta: float) -> void:
 				character.use_support_item()
 				return
 
+			# ★投掷物键：**举着武器时也能举起投掷物**（2026-10-03 用户需求）。
+			# 旧实现只有空手三状态（Idle/Walk/Run）处理该键 → 举着枪/刀按 5 毫无反应，
+			# 玩家必须先收枪才能掏手榴弹（用户实测「只有在不举起武器的时候才能举起手榴弹」）。
+			# ⚠ 没带投掷物就不切：否则 `ThrowableState.enter()` 会立刻退回 Idle ——
+			#   连手里举着的武器也一并被放下，比"没反应"更糟。
+			if Global.item_key_just_pressed("投掷物键"):
+				if get_player_state().throwable:
+					## 记下"举着武器"这个姿态：放下手雷后回到举枪，而不是被丢回空手
+					##（状态切换会清空武器字段，投掷物状态自己读不到，见 Player._return_pose_state）。
+					character.remember_return_pose_state()
+					transition_requested.emit("Throwable")
+				return
+
 			if Input.is_action_just_pressed("举起放下武器键"):
 				_begin_lower()
 

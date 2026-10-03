@@ -28,6 +28,9 @@ var _phase: int = Phase.RAISE
 var _td: ThrowableData = null
 var _range: int = DEFAULT_RANGE
 var _aim_indicator: Node2D = null
+## ★放下 / 投掷后要回到的状态名（`""` → Idle）；由 Player 层在发起切换前交给本状态。
+## 举着枪按 5 掏手雷 → 结束时回到举枪，而不是被丢回空手（见 `Player._return_pose_state`）。
+var _return_state: String = ""
 
 
 func enter() -> void:
@@ -35,6 +38,8 @@ func enter() -> void:
 	if not _td:
 		transition_requested.emit("Idle")
 		return
+	## 取用即清空（避免陈旧值）。
+	_return_state = character.take_return_pose_state()
 	character.player_in_weapon_state = true
 	_phase = Phase.RAISE
 	_range = DEFAULT_RANGE
@@ -65,9 +70,9 @@ func process_update(_delta: float) -> void:
 
 
 func _process_ready() -> void:
-	# 再次按投掷物键 → 放下
+	# 再次按投掷物键 → 放下（回到进入前的姿态：举枪 / 空手）
 	if Global.item_key_just_pressed("投掷物键"):
-		transition_requested.emit("Idle")
+		_finish()
 		return
 	# 主/副武器键 → 切武器放下
 	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
@@ -130,6 +135,15 @@ func _throw() -> void:
 	# 叠数投掷物（炸药）：扔一次减一个，归零才清槽；普通投掷物直接清槽
 	get_player_state().consume_throwable()
 	_remove_aim_indicator()
+	## 投掷完成 → 回到进入前的姿态（举枪 / 空手）。
+	_finish()
+
+
+## 放下 / 投掷后的唯一出口：回到"进入前的姿态"。
+func _finish() -> void:
+	if not _return_state.is_empty():
+		transition_requested.emit(_return_state)
+		return
 	transition_requested.emit("Idle")
 
 

@@ -19,6 +19,10 @@ var _seq_idx: int = 0
 var _timer: float = 0.0
 var _hit_done: bool = false
 var _hitbox: Area2D = null
+## ★推击结束后要回到的状态名（`""` → Idle）；由 Player 层在发起切换前交给本状态。
+## 见 `Player._return_pose_state` 的说明：不能在这里读 `is_weapon_mode_active()` ——
+## 上一个状态的 `exit()` 已经调过 `exit_weapon_mode()`，那两个字段早被清空了。
+var _return_state: String = ""
 
 
 func enter() -> void:
@@ -27,13 +31,12 @@ func enter() -> void:
 		transition_requested.emit("Idle")
 		return
 
+	## 取用即清空（避免陈旧值）：举着枪推完回举枪就绪，空手推完回 Idle。
+	_return_state = character.take_return_pose_state()
+
 	# 推击疲劳检查：冷却中则拒绝推击
 	if not character.can_shove():
-		var state_name: String = _wd.weapon_state_name
-		if not state_name.is_empty():
-			transition_requested.emit(state_name)
-		else:
-			transition_requested.emit("Idle")
+		_finish()
 		return
 
 	_seq_idx = 0
@@ -51,6 +54,14 @@ func enter() -> void:
 	character.on_shove_performed()
 
 	_set_shove_frame(0)
+
+
+## 推击结束的唯一出口：回到"进入前的姿态"（举枪就绪 或 空手 Idle）。
+func _finish() -> void:
+	if not _return_state.is_empty():
+		transition_requested.emit(_return_state)
+		return
+	transition_requested.emit("Idle")
 
 
 func exit() -> void:
@@ -76,12 +87,8 @@ func process_update(delta: float) -> void:
 		_seq_idx += 1
 		var seq: Array[int] = _wd.get_shove_char_sequence()
 		if _seq_idx >= seq.size():
-			# 推击动画结束 → 直接切回武器举起状态（无攻击后动画）
-			var state_name: String = _wd.weapon_state_name
-			if not state_name.is_empty():
-				transition_requested.emit(state_name)
-			else:
-				transition_requested.emit("Idle")
+			# 推击动画结束 → 回到"进入前的姿态"（举枪就绪 或 空手 Idle，见 _finish）
+			_finish()
 			return
 
 		_timer = _wd.shove_frame_duration

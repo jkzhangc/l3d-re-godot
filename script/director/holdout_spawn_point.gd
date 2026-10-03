@@ -21,6 +21,15 @@ class_name HoldoutSpawnPoint extends Node2D
 ## 挪到最近的可站空位；实在找不到空位的才退回屏幕外刷法。
 
 @export var enabled: bool = true                  ## 关掉后该点不参与均分（便于临时对比）
+## ★「玩家画面内也照常刷怪」（2026-10-03 用户需求）。
+## 默认 false = 旧行为：该点若落在任一玩家的**画面内**、或离玩家不足
+## `FrontSpawner.holdout_spot_block_radius`（默认 240px），本批就绕开它改走屏幕外刷法
+## —— 供给不断，但敌人绝不会当着玩家的面凭空出现。
+## 勾选后**跳过这层屏蔽**：该点即使就在玩家眼前也照常出兵。
+## 适用场景：铁门后 / 拐角外 / 玩家视野边缘这类"看得见但够不着"的表演型点位
+## （想做出"眼睁睁看着丧尸从走廊尽头涌出来"的效果）。
+## ⚠ 勾之前先确认点位不在玩家**贴脸**位置，否则会出现"敌人凭空出现在眼前"。
+@export var allow_in_view: bool = false
 @export var marker_color: Color = Color(1.0, 0.35, 0.25, 1.0)  ## 编辑器标记色（仅编辑器可见）
 @export_range(4.0, 40.0, 2.0) var marker_radius: float = 10.0
 
@@ -59,3 +68,6 @@ func _draw() -> void:
 	draw_arc(Vector2.ZERO, marker_radius, 0.0, TAU, 24, col, 2.0)
 	draw_line(Vector2(-marker_radius, 0.0), Vector2(marker_radius, 0.0), col, 1.0)
 	draw_line(Vector2(0.0, -marker_radius), Vector2(0.0, marker_radius), col, 1.0)
+	## 「画面内也刷」的点位再套一圈外环 —— TAB 调试视图里一眼能和普通点区分开。
+	if allow_in_view and enabled:
+		draw_arc(Vector2.ZERO, marker_radius + 6.0, 0.0, TAU, 24, col, 1.0)

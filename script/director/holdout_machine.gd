@@ -898,7 +898,7 @@ func _build_config() -> Dictionary:
 	## 让"附近已刷出来的丧尸"在防守战一开始就扑向玩家。
 	## 固定刷怪点（2026-09-26 用户需求）：有就把坐标写进事件配置 → EventManager 按点均分；
 	## 一个都没有 → 配置里不带该字段 → 完全沿用原来的"屏幕外刷"。
-	var spawn_points: Array[Vector2] = _collect_spawn_points()
+	var spawn_points: Array = _collect_spawn_points()
 	var cfg: Dictionary = {
 		"event_name": event_name,
 		"event_type": ScriptedEventTrigger.EventType.CRESCENDO,
@@ -918,7 +918,13 @@ func _build_config() -> Dictionary:
 		cfg["max_active"] = max_active
 	if not spawn_points.is_empty():
 		cfg["spawn_positions"] = spawn_points
-		print("[HoldoutMachine] 固定刷怪点 %d 个：%s" % [spawn_points.size(), str(spawn_points)])
+		var preview: Array[String] = []
+		for entry: Variant in spawn_points:
+			var p: Vector2 = spawn_entry_pos(entry)
+			preview.append("%s%s" % [
+				str(p.round()),
+				"（画面内也刷）" if spawn_entry_allow_in_view(entry) else ""])
+		print("[HoldoutMachine] 固定刷怪点 %d 个：%s" % [spawn_points.size(), ", ".join(preview)])
 	return cfg
 
 
@@ -926,12 +932,18 @@ func _build_config() -> Dictionary:
 # 固定刷怪点收集（2026-09-26）
 # ═══════════════════════════════════════
 
-## 收集本次防守战可用的固定刷怪点坐标。
+## 收集本次防守战可用的固定刷怪点。
 ##   ① 优先：**本节点的子树**（含孙节点）—— 归属明确，一台机器一套点；
 ##   ② 兜底：**全场景扫描** —— 允许作者把点集中摆在一处。
 ## 未启用（enabled=false）的点不参与；返回值顺序 = 树序（保证每批轮转可预期）。
-func _collect_spawn_points() -> Array[Vector2]:
-	var out: Array[Vector2] = []
+##
+## ★2026-10-03：元素从裸 `Vector2` 升级为
+##   `{"pos": Vector2, "allow_in_view": bool}` —— 因为要支持「该点位在玩家画面内也照常刷怪」
+##   这个**逐点位**开关（见 `HoldoutSpawnPoint.allow_in_view`）。只带坐标就丢掉了节点属性。
+##   ⚠ 下游（EventManager → Director.spawn_horde_nodes_at_positions）**同时兼容裸 Vector2**，
+##     所以别处直接传坐标数组的老调用不受影响。
+func _collect_spawn_points() -> Array:
+	var out: Array = []
 	_collect_spawn_points_recursive(self, out)
 	if out.is_empty():
 		var tree: SceneTree = get_tree()
@@ -939,6 +951,21 @@ func _collect_spawn_points() -> Array[Vector2]:
 			_collect_spawn_points_recursive(tree.current_scene, out)
 	_warn_points_in_no_spawn(out)
 	return out
+
+
+## 点位条目 → 坐标（兼容 `{"pos":..., "allow_in_view":...}` 与裸 `Vector2`）。
+static func spawn_entry_pos(entry: Variant) -> Vector2:
+	if entry is Dictionary:
+		var v: Variant = (entry as Dictionary).get("pos", Vector2.ZERO)
+		return v if v is Vector2 else Vector2.ZERO
+	return entry if entry is Vector2 else Vector2.ZERO
+
+
+## 点位条目 → 是否"画面内也刷"（裸 `Vector2` 视为 false，即沿用原来的屏蔽行为）。
+static func spawn_entry_allow_in_view(entry: Variant) -> bool:
+	if entry is Dictionary:
+		return bool((entry as Dictionary).get("allow_in_view", false))
+	return false
 
 
 ## 点位落在作者禁刷层（NoSpawnLayer）里时提示一次。
@@ -952,25 +979,35 @@ func _collect_spawn_points() -> Array[Vector2]:
 ##   → 结果是一条"完全正常、游戏照常运行"的作者提示，被当成错误弹出报错界面并暂停游戏。
 ##   判据沿用 MEMORY 铁律：**「预期情况别 printerr」——同理，预期情况也别 push_warning。**
 ##   凡是"有兜底/属正常状态"的信息一律用 `print`（控制台可见、不触发报错捕获）。
-func _warn_points_in_no_spawn(points: Array[Vector2]) -> void:
+func _warn_points_in_no_spawn(points: Array) -> void:
 	if points.is_empty():
+		return
+	## ⚠ 必须先确认自己在场景树里：`get_node_or_null("/root/Director")` 用绝对路径，
+	## 而**未入树的节点**调它会直接抛 `Can't use get_node() with absolute paths from
+	## outside the active scene tree`（用例里"不入树实例化机器"的场景必踩，也会被
+	## 报错捕获记进日志）。这里只是作者提示，跳过即可。
+	if not is_inside_tree():
 		return
 	var director: Node = get_node_or_null("/root/Director")
 	if director == null or not director.has_method("_is_no_spawn"):
 		return
 	var overlapped: int = 0
-	for p: Vector2 in points:
-		if bool(director.call("_is_no_spawn", p)):
+	for entry: Variant in points:
+		if bool(director.call("_is_no_spawn", spawn_entry_pos(entry))):
 			overlapped += 1
 	if overlapped > 0:
 		print("[HoldoutMachine] 提示：固定刷怪点有 %d/%d 个落在作者禁刷层（NoSpawn）内 —— 按「显式点位优先」仍会照常使用；若本意是不要这个点，请把该节点 enabled 关掉"
 			% [overlapped, points.size()])
 
 
-func _collect_spawn_points_recursive(node: Node, out: Array[Vector2]) -> void:
+func _collect_spawn_points_recursive(node: Node, out: Array) -> void:
 	for child: Node in node.get_children():
 		if _is_spawn_point(child) and bool(child.get("enabled")):
-			out.append((child as Node2D).global_position)
+			out.append({
+				"pos": (child as Node2D).global_position,
+				## 该点位是否"画面内也照常刷"（2026-10-03 用户需求）。
+				"allow_in_view": bool(child.get("allow_in_view")),
+			})
 		_collect_spawn_points_recursive(child, out)
 
 

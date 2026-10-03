@@ -38,6 +38,9 @@ engine-reference/Godot-Demos/
 
 # 联机回归日志（tools/net_regression.py 产出）
 /tools/net_regression_logs/
+# 归档的旧回归日志（2026-10-03：沙箱按「本轮累计删除数」计，脚本收尾清理日志会撞阈值 →
+# 跑回归前把旧目录改名归档、并用 `--keep-logs` 跳过清理；这些归档同样不该进版本库）
+/tools/net_regression_logs_archive_*/
 
 # Python 工具链缓存
 __pycache__/

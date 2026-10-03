@@ -110,6 +110,15 @@ func process_update(delta: float) -> void:
 				character.use_support_item()
 				return
 
+			# ★投掷物键：举着武器时也能举起投掷物（2026-10-03 用户需求）。
+			# 详见 PlayerPistolState 同段的说明（没带投掷物就不切，避免连武器一起放下）。
+			if Global.item_key_just_pressed("投掷物键"):
+				if get_player_state().throwable:
+					## 记下"举着武器"姿态，放下手雷后回到举刀（见 Player._return_pose_state）。
+					character.remember_return_pose_state()
+					transition_requested.emit("Throwable")
+				return
+
 			if Input.is_action_just_pressed("举起放下武器键"):
 				_begin_lower()
 
