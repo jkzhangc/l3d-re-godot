@@ -774,6 +774,12 @@ func _do_pickup() -> void:
 		print("[拾取] 装备到 %s 槽: %s" % [slot, weapon_data.item_name])
 
 	state.equip_weapon_in_slot(weapon_data, slot)
+	## ★2026-10-03 用户实测「举着武器时换枪，枪换完了行走图对不上」：
+	## `equip_weapon_in_slot()` 只改数据，实体上的 `_weapon_data` /
+	## `_current_weapon_char_idx` 仍是**举起瞬间的旧武器快照**，而状态机下次攻击走
+	## `get_active_weapon()` 取到的是新武器 → 贴图与帧索引错位。
+	## 必须换装后立刻把表现重绑到新武器（联机 Host 侧同款修复见 network_world）。
+	_rebind_player_weapon_presentation(state, slot)
 
 	# —— 弹药处理 ——
 	# 弹夹子弹
@@ -808,6 +814,20 @@ func _drop_weapon(wd: WeaponData, _slot: String) -> void:
 	## 替换掉落：交给静态入口统一处理（含落点避让，2026-09-16 用户反馈②）。
 	## 远程武器的弹夹子弹和备弹一并转移到拾取物上（逻辑在 drop_weapon_for_player 里）。
 	drop_weapon_for_player(_player_ref, wd)
+
+
+## 换装后把玩家实体的武器表现重绑到新武器（2026-10-03）。
+## 判据与联机 Host 侧一致：**换掉的是当前举着的那个槽位且确实在举枪**才重绑，
+## 否则只需清掉旧快照（下次举起自然会读到新武器）。
+## ⚠ 用 `_player_ref` 而不是 `Players.get_local_entity()`：多角色时同一位只有一位操控者，
+##   但 `_player_ref` 才是这次事务真正的持有者（联机 Host 权威路径也走这里）。
+func _rebind_player_weapon_presentation(state: PlayerState, slot: String) -> void:
+	var node: Node2D = _player_ref
+	if not is_instance_valid(node) or not node.has_method("rebind_weapon_after_equip"):
+		return
+	if state.active_weapon_slot != slot or not bool(node.call("is_weapon_mode_active")):
+		return
+	node.call("rebind_weapon_after_equip", state.get_equipped_weapon(slot))
 
 
 func _find_ground_layer() -> Node:

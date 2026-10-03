@@ -90,6 +90,15 @@ func try_add_team_spray(item: ItemData) -> bool:
 func consume_team_spray() -> ItemData:
 	if is_online_session() or team_spray_count <= 0:
 		return null
+	## ★2026-10-03 防御：count>0 但 item 为 null 时**不能扣数量**。
+	## 旧实现先 `count -= 1` 再返回 item，于是「有数量但资源丢失」时
+	## 返回 null（调用方判定失败）+ 白扣一支 → 玩家看到「喷雾用不了且数字在掉」。
+	## 根因在 `Global.restore_checkpoint()`（clear_seats 清了 item 却只恢复 count），
+	## 已在 Global 侧修好；这里是幂等兜底，防止将来别的路径再造成同样症状。
+	if team_spray_item == null:
+		push_warning("[Players] 急救喷雾池 count=%d 但缺少 ItemData，本次不扣数量"
+			% team_spray_count)
+		return null
 	team_spray_count -= 1
 	return team_spray_item
 

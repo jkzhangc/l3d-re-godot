@@ -411,6 +411,68 @@ func _reset_intensity() -> void:
 	intensity_tracker.set("_raw_intensity", 0.0)
 
 
+## ── 回标题：导演系统彻底收尾（2026-10-03 用户实测「打完一局回标题，再开一局刚出安全屋就尸潮」）──
+## ★为什么必须单独有这个入口（不是 `_freeze_for_death` 就够了）：
+##   Director 是 **autoload**，它的子节点 PacingController / SpawnManager / EventManager /
+##   FrontSpawner / ItemManager 以及 `_horde_music_player` 全部跨场景存活 —— 换图/回标题
+##   都不会重建它们。而 `_freeze_for_death()` 只在「全员死亡」时跑；**主动回标题时玩家没死**，
+##   于是上一局的一切都原样带进下一局：
+##   ① `_horde_music_player` 挂在 autoload 下 → 回标题后尸潮 BGM 继续播（用户实测）；
+##   ② `PacingController.current_phase` 停在 peak、`phase_elapsed` 保留 → 新一局刚出安全屋
+##      几秒内就进 peak（用户实测「刚出安全屋就直接尸潮」）；
+##   ③ `_horde_rage` / 狂暴形态 / 目标锁定残留 → 复活后满场クリムゾンヘッド 且无条件追人；
+##   ④ `EventManager._scripted_event_active` 残留 → 新一局 `HoldoutMachine.trigger()` 被
+##      「已有剧本事件进行中」静默挡死（用户实测「防守战机器有时候开不了」）；
+##   ⑤ `SpawnManager.enabled=false` / `PacingController.paused=true` 残留（由剧本事件设置，
+##      事件被中止时才复原）→ 新一局常规刷怪与节奏全废。
+## ★幂等：全程走「先判再动」，重复调用无副作用（标题画面/菜单里可能被调多次）。
+func reset_for_title_return() -> void:
+	## ① 剧本事件与防守战先收：它们是 ④⑤ 的来源，且持有 BGM / 挂起计数。
+	abort_scripted_event()
+	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
+		if is_instance_valid(machine) and machine.has_method("abort"):
+			machine.call("abort")
+	## ② 防守战挂起计数归零（否则新一局节奏永久冻结，见 set_director_suspended 的计数语义）
+	director_suspended = false
+	_suspend_count = 0
+	## ③ 节奏：解除暂停 + 强制回 cooldown（清零 phase_elapsed 并重掷时长）
+	var pc: Node = get_node_or_null("PacingController")
+	if pc:
+		pc.set("paused", false)
+		if pc.has_method("force_cooldown"):
+			pc.force_cooldown()
+	## ④ SpawnManager：解除停用 + 复位尸潮窗口
+	##（`on_phase_changed(cooldown)` 会清 _horde_active；经 force_cooldown 的 phase_changed
+	##  信号本也会走到，但 _stop_horde_music 等分支不依赖信号，直接显式调更稳）
+	var sm: Node = get_node_or_null("SpawnManager")
+	if sm:
+		if "enabled" in sm:
+			sm.set("enabled", true)
+		if sm.has_method("on_phase_changed"):
+			sm.call("on_phase_changed", &"cooldown")
+	## ⑤ 狂暴形态 / 目标锁定（与 _freeze_for_death 同款，幂等）
+	_horde_rage = false
+	_set_all_enemies_rage(false)
+	_release_horde_locks()
+	## ⑥ BGM：尸潮 + Boss 都收（判据见 _stop_horde_music 的 stream_paused 铁律）
+	_stop_horde_music()
+	stop_boss_music(false)
+	## ⑦ 紧张度归零（残留高紧张度会让新一局 cooldown 走「3 秒提前结束」捷径）
+	_reset_intensity()
+	## ⑧ 死亡冻结标志复位（否则新一局第一帧会被 _resume_after_death 之外的路径误判）
+	_frozen_by_death = false
+	## ⑨ 前方补位记账（_batch_player_pos 里是旧图玩家的 instance_id）
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs and fs.has_method("reset_batch_tracking"):
+		fs.call("reset_batch_tracking")
+	## ⑩ 场景缓存标记（下一帧 _check_scene_change 会重新收集 TileMap / NoSpawnLayer；
+	##   这里只把 _last_scene 清掉，强制它重新走一遍换图钩子）
+	_last_scene = null
+	# 敌人节点本身随场景释放，这里只清锁定引用，避免跨局指向已释放实例
+	_boss_music_watchlist.clear()
+	print("[Director] 回标题收尾：剧本事件/防守战已中止、节奏回 cooldown、狂暴与 BGM 已清")
+
+
 func _on_phase_changed(phase: StringName) -> void:
 	## 节奏阶段切换 → 通知 SpawnManager + 发出信号
 	print("[Director] pacing phase → %s" % phase)

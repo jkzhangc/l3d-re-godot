@@ -713,9 +713,19 @@ func _on_enemy_died(_enemy: Node) -> void:
 
 ## 提前中止防守战（外部条件触发或机器被移除时）。隐藏 HUD、解除敌人锁定并复位状态。
 func abort() -> void:
+	## ★`_started` 必须一起复位（2026-10-03 用户实测「防守战机器有时候开不了」）：
+	## `trigger()` 开头有 `if _started and one_shot: return`，而 `one_shot` 默认 **true**。
+	## 旧实现只清 `_active` 不清 `_started` → 任何一次 abort（全灭冻结 / 换图 / 事件中止 /
+	## 玩家主动放弃）之后，这台机器在**同一场景内**就永久开不了第二次：按功能键毫无反应，
+	## 提示也不变（因为 `_can_interact` 仍为 true，走的是 trigger 的静默早退）。
+	## 语义上 abort = 「这场没打完」，理应允许重开 —— 与 one_shot「只完成一次」不冲突
+	## （完成态由 `_completed` + `_finish_holdout` 把关，机器完成后仍不给重开）。
 	if not _active:
+		## 即使当前不在进行中，也清掉可能残留的 `_started`（幂等兜底：跨场景/异常路径）。
+		_started = false
 		return
 	_active = false
+	_started = false
 	_phase = Phase.IDLE
 	_disconnect_kill_hooks()
 	var director: Node = get_node_or_null("/root/Director")

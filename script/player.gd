@@ -989,6 +989,35 @@ func get_weapon_data() -> WeaponData:
 	return _weapon_data
 
 
+## ★装备槽武器被外部替换后重绑表现（2026-10-03 用户实测「举着武器时换枪，行走图对不上」）。
+##
+## 【根因】`_weapon_data` / `_current_weapon_char_idx` 是**举起瞬间的快照**，而槽位里
+##   的武器可以被 `weapon_pickup._do_pickup()`（拾取替换）、`equip_weapon_in_slot()` 直接换掉，
+##   旧实现**不通知实体**。于是举着 A 枪时拾起 B 枪替换同一槽位：
+##   · 实体仍持 `_weapon_data = A` + A 的 `_current_weapon_char_idx`（贴图与帧索引都属 A）；
+##   · 状态机下次攻击走 `_get_weapon()` → `get_active_weapon()` 拿到 **B**。
+##   两者错位 → 行走图显示 A 的帧、攻击/枪口效果用 B 的数据，视觉上就是「枪换了但图没对上」。
+##
+## 【修法】换装完成后由调用方转到这里：仍在武器模式就**按新武器重举一次**（跳过举起动画），
+##   不在武器模式则只清快照，让下一次 `enter_weapon_mode()` 正常读新武器。
+## ⚠ 必须整体重置 `_current_weapon_char_idx`（不能只换 `_weapon_data`）：
+##   索引是按旧武器的 raise 序列取的，沿用会取到新贴图上的越界/错位帧。
+func rebind_weapon_after_equip(wd: WeaponData) -> void:
+	if _is_dying:
+		return
+	if _weapon_mode and wd and not wd.weapon_state_name.is_empty():
+		_weapon_data = wd
+		_current_weapon_char_idx = wd.get_raise_char_sequence()[0]
+		# 跳过举起动画直接落到就绪帧（等价联机侧的 weapon_skip_raise 语义）
+		set_weapon_ready_frame()
+		print("[玩家] 换装后重绑武器表现: %s" % wd.item_name)
+		return
+	## 不在武器模式：清掉旧快照即可（下次举起会从新武器读起）
+	_weapon_data = null
+	_current_weapon_char_idx = 0
+	_refresh_sprite()
+
+
 ## NetworkWorld 的只读接口：不要让联机层访问玩家私有武器状态。
 func is_weapon_mode_active() -> bool:
 	return _weapon_mode
@@ -1243,6 +1272,23 @@ func refresh_after_switch() -> void:
 	var wd: WeaponData = state.get_active_weapon() if state else null
 	_weapon_data = wd if wd and not wd.weapon_state_name.is_empty() else null
 	_weapon_mode = false
+	## ★2026-10-03 补齐复位（切人时角色的「举枪/投掷物/推击/固定朝向」必须全部清干净）。
+	## 旧实现只把 `_weapon_mode` 置 false 就收工，于是残留两类问题：
+	## ① `_current_weapon_char_idx` 仍是**旧角色/旧武器**举起序列的帧索引
+	##    → 新角色首次举枪时贴图与帧索引可能错位（用户报「行走图对不上」的同类现象）；
+	## ② 若切人前锁了固定朝向，`update_facing()` 的锁定分支继续生效
+	##    → 新角色无法转向（用户 10-03 实测「举着武器定向移动时切人就一直保持固定朝向」，
+	##      当次没复现但代码上确有窗口：`exit_weapon_mode()` 的解锁在
+	##      `CharacterSwitchManager._reset_player_state_machine()` 里才走到，
+	##      而投掷物/推击等状态的 exit 路径不覆盖全部组合）。
+	## 这里走与 `exit_weapon_mode()` 相同的收敛逻辑（幂等），不依赖状态机 exit 链。
+	_current_weapon_char_idx = 0
+	_shove_mode = false
+	_shove_texture = null
+	exit_throwable_mode()
+	if _facing_locked:
+		_facing_locked = false
+		_locked_facing = _facing
 	current_hp = state.current_hp if state else max_hp
 	_moving = false
 	_anim_step = 0

@@ -753,6 +753,16 @@ func go_to_title_screen() -> void:
 	## （根因：`try_load_or_init()` 见 `Players.seats_authored == true` 就保留当前状态，
 	##  不再走 `init_new_game()`）。checkpoint 残留还会让新局第一次死亡重载回上一局的安全屋。
 	_reset_session_state()
+	## ④ **导演系统收尾**（2026-10-03 用户实测「回标题后尸潮音乐还在播 / 再开一局刚出
+	## 安全屋就尸潮、丧尸还是狂暴形态」）：Director 是 autoload，其子节点（Pacing /
+	## SpawnManager / EventManager）与尸潮 BGM 播放器跨场景存活，而 `_freeze_for_death()`
+	## 只在**全员死亡**时跑 —— 主动回标题时玩家没死，上一局的 peak 阶段 / 狂暴形态 /
+	## 剧本事件 / BGM 全部原样带进下一局。详见 `Director.reset_for_title_return()`。
+	## ⚠ 必须在 change_scene_to_file **之前**调：换图后 _check_scene_change 会按新场景重灌
+	##   DirectorConfig，收尾必须先于它。
+	var director: Node = get_node_or_null("/root/Director")
+	if director != null and director.has_method("reset_for_title_return"):
+		director.call("reset_for_title_return")
 	var err: Error = get_tree().change_scene_to_file(TITLE_SCENE_PATH)
 	if err != OK:
 		printerr("[Global] 返回标题画面失败: %d" % err)
@@ -1079,6 +1089,12 @@ func capture_checkpoint() -> void:
 		"seats": seat_clones,
 		"active_seat_index": Players.active_seat_index,
 		"team_spray_count": Players.team_spray_count,
+		## ★2026-10-03：必须连 `team_spray_item` 一起存（此前只存了 count）。
+		## `restore_checkpoint()` 里的 `Players.clear_seats()` 会把 `team_spray_item` 置 null，
+		## 而 `consume_team_spray()` 判的是 `team_spray_count <= 0` → count 被恢复成 >0、
+		## item 却是 null → `use_healing_item()` 拿到 null 直接 return false，
+		## 表现为「死了一次后急救喷雾就失效了」，而且**每按一次白扣一支**。
+		"team_spray_item": Players.team_spray_item,
 		"gold": gold,
 		"selected_campaign": selected_campaign,
 		"selected_difficulty": selected_difficulty,
@@ -1090,6 +1106,20 @@ func capture_checkpoint() -> void:
 ## 返回 checkpoint 中的安全屋场景路径（用于死亡后切回安全屋）
 func get_checkpoint_scene() -> String:
 	return checkpoint.get("scene_path", "")
+
+## 急救喷雾的兜底资源（checkpoint 缺 `team_spray_item` 键时按 item_id 载入）。
+## ★`class_name` 不跨文件（headless/导出期 Parse Error），所以用运行时 `load()` 自校验。
+const DEFAULT_SPRAY_ITEM_ID := "first_aid_spray"
+const DEFAULT_SPRAY_ITEM_PATH := "res://object/item_first_aid_spray.tres"
+
+func _default_spray_item() -> ItemData:
+	if ResourceLoader.exists(DEFAULT_SPRAY_ITEM_PATH):
+		var res: Resource = load(DEFAULT_SPRAY_ITEM_PATH)
+		if res is ItemData:
+			return res as ItemData
+	push_warning("[Global] 找不到默认急救喷雾资源：%s" % DEFAULT_SPRAY_ITEM_PATH)
+	return null
+
 
 ## 从内存 checkpoint 恢复游戏状态（死亡时调用）
 func restore_checkpoint() -> void:
@@ -1107,6 +1137,19 @@ func restore_checkpoint() -> void:
 		)
 	gold = checkpoint.get("gold", 0)
 	Players.team_spray_count = int(checkpoint.get("team_spray_count", Players.team_spray_count))
+	## ★2026-10-03 补：上面那行 `clear_seats()` 已把 team_spray_item 清成 null，
+	## 这里必须把 ItemData 一起恢复，否则「count>0 但 item=null」→
+	## consume_team_spray() 返回 null → 急救喷雾彻底失效（死一次就再也用不了）。
+	## 兼容旧 checkpoint（没这个键）：count>0 时回落到当前已有的 item；
+	## 仍为空则按 item_id 载入一次资源（存档是内存态，ItemData 引用本身不会被序列化丢失，
+	## 但玩家中途换过拾取物资源时兜底重载更稳）。
+	var spray_item: Variant = checkpoint.get("team_spray_item", null)
+	if spray_item is ItemData:
+		Players.team_spray_item = spray_item as ItemData
+	elif Players.team_spray_item == null and Players.team_spray_count > 0:
+		Players.team_spray_item = _default_spray_item()
+		print("[Checkpoint] 急救喷雾数据缺失（count=%d），已按默认资源回填"
+			% Players.team_spray_count)
 	selected_campaign = checkpoint.get("selected_campaign")
 	selected_difficulty = checkpoint.get("selected_difficulty", 0)
 	print("[Checkpoint] 已恢复: 座位=%d %s" % [

@@ -4031,9 +4031,12 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		var pickup_reserve: int = int(pickup.get("pickup_reserve_ammo"))
 		var reserve_to_give: int = pickup_reserve if pickup_reserve >= 0 else weapon.initial_reserve_ammo
 		_add_host_reserve_ammo(state, weapon, reserve_to_give)
+	## ★2026-10-03：统一走 `rebind_weapon_after_equip()`，与单机 weapon_pickup 同一入口。
+	## 旧实现条件为 `active_weapon_slot == slot and is_weapon_mode_active()`，语义偏窄：
+	## 玩家举着**副武器**时拾起一把**主武器**替换，主槽换了但实体仍持副武器快照 ——
+	## 与单机同样会错位（用户实测「举着武器时换枪，行走图对不上」）。
 	if state.active_weapon_slot == slot and player.is_weapon_mode_active():
-		player.enter_weapon_mode(weapon)
-		player.set_weapon_ready_frame()
+		player.rebind_weapon_after_equip(weapon)
 	_pickups.erase(pickup_id)
 	pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 	pickup.queue_free()
