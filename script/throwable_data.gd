@@ -9,6 +9,10 @@ class_name ThrowableData extends ItemData
 ## 投掷物数据 — 继承 ItemData，增加投掷/爆炸/燃烧参数
 
 @export_group("投掷")
+## 投掷格数下限。2026-10-03 用户需求：**按住 Z 进入持续瞄准时，落点距离从这个值起算**
+## （再从最近处往外按方向键扫远），因此必须有一个"最低距离"概念。
+## 设为 0 表示允许扔在自己脚下。
+@export var throw_range_min: int = 1
 @export var throw_range_max: int = 8        ## 最大投掷格数（默认 3 格）
 @export var projectile_texture: Texture2D   ## 飞行中的投掷物精灵（可选，回退 pickup_texture/icon）
 

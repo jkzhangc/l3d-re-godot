@@ -801,19 +801,18 @@ func exit_weapon_mode() -> void:
 	_weapon_mode = false
 	_weapon_data = null
 	_current_weapon_char_idx = 0
-	# 放下武器 → 覚醒解除（原作觉醒是构势系状态，武器收起即失效）
-	_deactivate_awaken()
-	## ★★ 这里**不再**解除固定朝向（2026-10-03 用户实测「固定朝向的时候开枪会取消固定朝向」）。
-	## 【旧行为与它的两个副作用】
-	##   2026-10-02 为解决「放下武器后朝向锁残留 → 不举武器仍被强制固定朝向、无法转向」，
-	##   把解锁塞进了本函数。但 `exit_weapon_mode()` **不只是"放下武器"会调** ——
-	##   攻击 / 装弹 / 推击状态的 `exit()` 也都会调它（状态切换时会先退再进武器模式），
-	##   于是玩家**一开枪/一换弹，辛苦锁好的朝向就被静默解掉**（用户 2026-10-03 实测）。
-	##   顺带一提，那些状态切换同样会触发 `_deactivate_awaken()` —— 一并成为"开枪掉覚醒"的来源。
-	## 【现在的规则】朝向锁的解除只发生在**玩家真的放下武器**时：
-	##   · 单机：`_begin_lower()` 显式 `unlock_facing()`
-	##   · 兜底：`_sanitize_facing_lock()` —— 只要不在武器/投掷物模式就清锁（每帧幂等）
-	##   · 联机：`NetworkWorld._capture_facing_lock_input()` 的「没举武器」分支
+	## ★★ 这里**不再**解除覚醒、也**不再**解除固定朝向（2026-10-03 用户实测两条）。
+	## 【根因】本函数**职责过载**：它同时被「真的放下武器」（`_begin_lower()`）和
+	##   「状态切换」（攻击 / 装弹 / 推击的 `exit()` 都会先退再进武器模式）调用。
+	##   10-02 与更早为修「锁残留 / 覚醒残留」，把两个收敛动作塞了进来 ——
+	##   覆盖面够大，但**误伤了每一次状态切换**：玩家一开枪，辛苦锁好的朝向被解掉、
+	##   刚开的覚醒也掉了。
+	## 【现在的规则】本函数只负责"武器模式开关"本身。两个收敛动作各有明确归属：
+	##   · 固定朝向 → `_sanitize_facing_lock()`（单机每帧幂等）；
+	##                联机由 `NetworkWorld._try_host_toggle_weapon` 的**放下武器**动作触发。
+	##   · 覚醒     → `deactivate_awaken()`：单机由 `_begin_lower()` 触发，
+	##                联机同上（放下武器动作）。★都是**动作驱动**，不是每帧推断 ——
+	##                每帧推断会误伤"没举武器也能测覚醒"的既有语义。
 	_refresh_sprite()
 
 
@@ -1870,6 +1869,14 @@ func _update_awaken(delta: float) -> void:
 		_deactivate_awaken()
 		if tp_left <= 0:
 			print("[覚醒] TP 耗尽，集中射撃解除")
+
+
+## 公开包装：供**武器状态**在"玩家主动放下武器"时调用（见 `PlayerPistolState._begin_lower`）。
+## 内部 `_deactivate_awaken()` 仍供 TP 耗尽 / 死亡等内部路径使用。
+## ★为什么要一个公开入口：放下武器解除覚醒是"动作驱动"的（玩家按了放下键），
+##   不能挂在 `exit_weapon_mode()` 上（那个函数被状态切换复用 → 开枪也会解）。
+func deactivate_awaken() -> void:
+	_deactivate_awaken()
 
 
 func _deactivate_awaken() -> void:

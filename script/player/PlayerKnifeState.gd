@@ -152,8 +152,10 @@ func physics_update(delta: float) -> void:
 
 func _begin_lower() -> void:
 	## 开始放下动画：从序列倒数第二帧开始（最后一帧 = 就绪帧已在显示）
-	# 放下武器时取消固定朝向
+	## ★放下武器是玩家意图明确的动作 → 朝向锁与覚醒都在这里收尾（详见 PlayerPistolState 同段注释：
+	## 不能挂到 `exit_weapon_mode()`，那会被攻击/装弹的状态切换误伤）。
 	character.unlock_facing()
+	character.deactivate_awaken()
 	var seq: Array[int] = _wd.get_raise_char_sequence()
 	_seq_idx = seq.size() - 2
 	_phase = Phase.LOWER

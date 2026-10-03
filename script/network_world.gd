@@ -1776,6 +1776,9 @@ func _try_host_toggle_weapon(peer_id: int) -> void:
 	if not raising and node.is_facing_locked():
 		node.apply_facing_lock_state(false, node.facing)
 		_send_host_facing_lock_state(peer_id)
+	## 同上：放下的瞬间也解除覚醒（构势系状态，武器收起即失效）。
+	if not raising and node.has_method("deactivate_awaken"):
+		node.call("deactivate_awaken")
 	_begin_host_weapon_transition(peer_id, node, wd, raising)
 	print("[NetworkWorld] HOST_WEAPON_TOGGLE peer=%d transition=%s" % [peer_id, _weapon_transition_state[peer_id]])
 
