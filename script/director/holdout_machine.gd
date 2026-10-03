@@ -439,8 +439,10 @@ func _ensure_children() -> void:
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
+		## ⚠ 宽度与 position.x **必须满足 `position.x == -size.x / 2`** 才会以机器为中心
+		## （Label 的居中是相对自身尺寸而言，不是相对世界坐标）—— 改尺寸时务必成对改。
 		label.position = Vector2(-160, -70)
-		label.size = Vector2(320, 48)
+		label.size = Vector2(320, 24)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
 		label.hide()
@@ -453,7 +455,11 @@ func _ensure_children() -> void:
 	## 本脚本是 @tool、编辑器里也会执行此函数，autoload 必须判空。
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
-		g.apply_hint_font(label, 24)  ## 24px（2026-10-02 用户：手机上 12 太小，翻倍）
+		## ★2026-10-03 用户实机反馈「防守战机器的提示文字太大了」→ 24 调回 **12**。
+		##   高度已同步从 48 收到 24（铁律：改字号必须连带改 Label 尺寸，
+		##   否则会残留一块「按 24 号设计的框」—— 与 10-02 放大时是同一个坑的镜像）。
+		##   ⚠ 宽度 320 / position.x -160 保持不变：二者成对满足居中关系，动一个就会偏。
+		g.apply_hint_font(label, 12)
 		g.apply_text_shadow(label)
 
 	if label_created:
@@ -935,9 +941,17 @@ func _collect_spawn_points() -> Array[Vector2]:
 	return out
 
 
-## 点位落在作者禁刷层（NoSpawnLayer）里时告警一次。
+## 点位落在作者禁刷层（NoSpawnLayer）里时提示一次。
 ## 这不影响行为（显式点位优先于禁刷层，见 `Director.is_holdout_spot_ok`），
 ## 只是提示作者"你的点位和禁刷区重叠了"，便于判断是不是摆错位置。
+##
+## ★★ 2026-10-03 用户实机报错修复：**这里绝不能用 `push_warning`**。
+##   本项目注册了 `Logger` 子类（`game_error_capture.gd`）拦截引擎输出，
+##   而 Godot 的 `push_warning` 与 `push_error` **走同一条 `_log_error` 通道**
+##   （引擎不区分二者，`_log_message` 那个 error 布尔只覆盖 print/printerr）
+##   → 结果是一条"完全正常、游戏照常运行"的作者提示，被当成错误弹出报错界面并暂停游戏。
+##   判据沿用 MEMORY 铁律：**「预期情况别 printerr」——同理，预期情况也别 push_warning。**
+##   凡是"有兜底/属正常状态"的信息一律用 `print`（控制台可见、不触发报错捕获）。
 func _warn_points_in_no_spawn(points: Array[Vector2]) -> void:
 	if points.is_empty():
 		return
@@ -949,7 +963,7 @@ func _warn_points_in_no_spawn(points: Array[Vector2]) -> void:
 		if bool(director.call("_is_no_spawn", p)):
 			overlapped += 1
 	if overlapped > 0:
-		push_warning("[HoldoutMachine] 固定刷怪点有 %d/%d 个落在作者禁刷层（NoSpawn）内 —— 按「显式点位优先」仍会照常使用；若本意是不要这个点，请把该节点 enabled 关掉"
+		print("[HoldoutMachine] 提示：固定刷怪点有 %d/%d 个落在作者禁刷层（NoSpawn）内 —— 按「显式点位优先」仍会照常使用；若本意是不要这个点，请把该节点 enabled 关掉"
 			% [overlapped, points.size()])
 
 

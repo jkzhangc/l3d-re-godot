@@ -432,6 +432,47 @@ func _process(delta: float) -> void:
 	_update_tp_regen(delta)
 	_update_motion_input()
 	_update_sa_state(delta)
+	_try_shove_interrupt()
+
+
+## ── 推击中断（2026-10-03 用户需求：对齐 L4D2 手感）──
+## 「推击」在 L4D2 里是**万能打断动作** —— 攻击中、换弹中都能推出去把贴脸丧尸顶开。
+## 旧实现只在 `PlayerPistolState` / `PlayerKnifeState` 的 **READY 阶段**读推击键，
+## 于是「正在开枪 / 正在换弹」时按推击键毫无反应，玩家必须先停手再推（用户反馈手感不好）。
+##
+## 【为什么收敛到 Player 层而不是各状态各加一处】
+##   用户要的是「能中断**任何**状态」。若逐状态加，将来新增状态（霰弹枪专用、双持…）
+##   必然漏加 → 又变成"有时候推不出来"。这里做**唯一入口**，覆盖举枪/攻击/装弹全部武器状态。
+##
+## 【拦截判据】
+##   · `_weapon_mode` = 举着武器（攻/换弹/推击期间都为 true）→ 天然排除投掷物模式
+##     （`enter_throwable_mode()` **不设** `_weapon_mode`，见该函数），投掷瞄准时不会误触发；
+##   · 当前状态已是 `Shove` → 不打断自己（否则会重入、动画被重置）；
+##   · `can_shove()` → 尊重既有的推击疲劳冷却（冷却中静默忽略，不消耗次数）。
+##
+## 【为什么用 `_process` 轮询而不是 `_unhandled_input`】
+##   与 `HoldoutMachine` 的互动键同款理由（见该处注释）：事件派发路径会被别的节点
+##   consume / 抢焦点而静默失效。轮询只依赖输入状态。且游戏暂停时 `_process` 不跑，
+##   「菜单里按推击键」不会误触发，安全性由引擎保证。
+##
+## 【联机】本函数**只管单机**：联机实体的状态机已被 `_disable_network_state_machine()`
+##   关掉，推击由 `NetworkWorld._capture_shove_input()` 独立处理（Host 权威结算），
+##   两条路径互斥，不会双触发。
+func _try_shove_interrupt() -> void:
+	if network_controlled or _is_dying:
+		return
+	if not Input.is_action_just_pressed("推击键"):
+		return
+	if not _weapon_mode:
+		return
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm == null or not sm.has_method("request_state"):
+		return
+	if String(sm.call("current_state_name")) == "Shove":
+		return
+	if not can_shove():
+		return
+	sm.call("request_state", "Shove")
 
 
 func _on_animation_timer_timeout() -> void:

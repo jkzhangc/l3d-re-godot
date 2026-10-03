@@ -17,7 +17,10 @@ static var save_path: String = SAVE_PATH
 ## ── 首批成就目录（2026-10-02 与用户确认：只做第一章可判定的子集）──
 ## 原作 26 个里有 12 个依赖第二/三战役与 Realism 模式，等那些内容做出来再补。
 ## kind 说明：clear_campaign=通关战役 / solo_clear=单人通关 / no_damage_clear=无伤通关 /
-##   no_save_clear=不存档通关 / speed_clear=限时通关 / 其余为计数型（target = 目标次数）。
+##   speed_clear=限时通关 / 其余为计数型（target = 目标次数）。
+## ★2026-10-03 用户要求删除「不存档通关」（id=no_save）——本项目**目前没有手动存档功能**，
+##   判定依据（`SaveManager.save_game()` 的调用）在实际游玩中根本不会触发，成就等于白送。
+##   连同 `_session_saved` / `on_save_used()` 一并移除；将来若做了手动存档再按原作补回。
 const CATALOG: Array[Dictionary] = [
 	{"id": "clear_attack", "name": "明天仍在等着我们", "desc": "通关第一战役（突袭）",
 		"kind": "clear_campaign", "target": 1},
@@ -35,8 +38,6 @@ const CATALOG: Array[Dictionary] = [
 		"kind": "solo_clear", "target": 1},
 	{"id": "untouchable", "name": "不可触碰", "desc": "全程无伤通关一次战役",
 		"kind": "no_damage_clear", "target": 1},
-	{"id": "no_save", "name": "人生只有一次", "desc": "战役中一次都没存档并通关",
-		"kind": "no_save_clear", "target": 1},
 	{"id": "speedrun", "name": "西伯利亚超特急", "desc": "10 分钟内通关一次战役",
 		"kind": "speed_clear", "target": 1, "limit_seconds": 600},
 ]
@@ -53,7 +54,6 @@ static var _loaded: bool = false
 ## 单次游玩统计（begin_campaign 时重置）
 static var _session_kills: Dictionary = {}      ## 座位 → 本局击杀
 static var _session_damaged: bool = false       ## 本局是否受过伤（无伤成就）
-static var _session_saved: bool = false         ## 本局是否存过档
 static var _session_start_msec: int = 0
 
 
@@ -116,7 +116,6 @@ static func begin_campaign() -> void:
 	load_progress()
 	_session_kills.clear()
 	_session_damaged = false
-	_session_saved = false
 	_session_start_msec = Time.get_ticks_msec()
 	_pending.clear()
 	print("[成就] 本局开始（已解锁 %d/%d）" % [unlocked_count(), CATALOG.size()])
@@ -150,11 +149,6 @@ static func on_player_damaged() -> void:
 	_session_damaged = true
 
 
-## 用了一次存档（不存档成就的判定依据）。
-static func on_save_used() -> void:
-	_session_saved = true
-
-
 ## 战役通关结算（CampaignEnding.start 调用）。
 ## `seat_count` = 本局实际参战人数（1 = 单人）。
 static func finish_campaign(seat_count: int) -> void:
@@ -164,16 +158,14 @@ static func finish_campaign(seat_count: int) -> void:
 		_add(TEAM_SEAT, "solo_clear", 1)
 	if not _session_damaged:
 		_add(TEAM_SEAT, "no_damage_clear", 1)
-	if not _session_saved:
-		_add(TEAM_SEAT, "no_save_clear", 1)
 	## 速通：目标值是「限时秒数」而不是解锁阈值 → 达标时直接把进度写成 1（=达成）。
 	## 早期写成 `_add(..., 0)` 是错的：amount=0 不涨进度、永远够不到 target。
 	var limit: float = float(catalog_entry("speedrun").get("limit_seconds", 600.0))
 	if elapsed <= limit:
 		_progress[_key(TEAM_SEAT, "speedrun")] = 1
 		_check_unlock(TEAM_SEAT, "speedrun")
-	print("[成就] 通关结算：用时 %.0fs  受伤=%s  存过档=%s  人数=%d"
-		% [elapsed, str(_session_damaged), str(_session_saved), seat_count])
+	print("[成就] 通关结算：用时 %.0fs  受伤=%s  人数=%d"
+		% [elapsed, str(_session_damaged), seat_count])
 	save_progress()
 
 
@@ -235,7 +227,6 @@ static func reset_all_progress() -> void:
 	_pending = []
 	_session_kills.clear()
 	_session_damaged = false
-	_session_saved = false
 
 
 ## 强制重新从磁盘读取（正常启动只读一次，这是给测试/切换存档位用的显式入口）。

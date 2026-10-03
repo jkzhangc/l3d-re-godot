@@ -113,8 +113,9 @@ func process_update(delta: float) -> void:
 			if Input.is_action_just_pressed("举起放下武器键"):
 				_begin_lower()
 
-			if Input.is_action_just_pressed("推击键"):
-				transition_requested.emit("Shove")
+			## 推击键的读取已上移到 `Player._try_shove_interrupt()`（2026-10-03）：
+			## 推击要能打断**任何**武器状态（攻击中/换弹中…），收敛为 Player 层唯一入口。
+			## 详见 player.gd 的 `_try_shove_interrupt` 注释。
 
 			if Input.is_action_just_pressed("确定键"):
 				# 同 Pistol：武器替换已改「按住功能键(D)」，拾取物旁点按 Z 照常攻击

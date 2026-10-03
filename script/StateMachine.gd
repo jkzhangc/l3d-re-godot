@@ -60,3 +60,17 @@ func _on_transition_requested(nxt_state: String) -> void:
 	if current_state:
 		current_state.last_state = last_state
 		current_state.enter()
+
+
+## 由**外部**（非 State 子节点）请求切换状态，与 State 内部 `transition_requested` 走同一条路径。
+## 【为什么需要它】2026-10-03 推击改为「可打断任何武器状态」后，输入拦截收敛到 Player 层统一处理
+## （它不属于任何一个 State，不能 emit State 的信号）—— 没有这个入口就只能去 call 私有方法
+## `_on_transition_requested`，语义不清且容易被后续重构破坏。
+## ⚠ 未知状态名会被忽略（与内部路径一致），调用方无需自行判断。
+func request_state(state_name: String) -> void:
+	_on_transition_requested(state_name)
+
+
+## 当前状态名（供外部做「已在某状态就不重复请求」这类幂等判断）。
+func current_state_name() -> String:
+	return current_state.name if current_state != null else ""
