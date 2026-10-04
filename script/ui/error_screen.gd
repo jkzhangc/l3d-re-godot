@@ -110,6 +110,16 @@ const NOISE_PATTERNS: Array[String] = [
 	"背景素材加载失败",          # 退回纯色底，可玩性不受影响
 	"excluded_nodes",            # 该排除项被忽略，色调效果照常生效
 	"VXAnimSprite:",             # 动画素材缺失 → 跳过初始化（表现为该动画不播）
+
+	## ── 2026-10-04：逐条核对全库 `push_warning` 后补的白名单 ──
+	## 【起因】用户报「读档后弹报错」，核查控制台时顺带把其余「同样有兜底、
+	##   却因为写成 push_warning 而会弹窗」的条目一并收敛（判据同上：能否继续玩）。
+	"UI 音效加载失败",           # 少一个 UI 音效文件（Global.play_ui_sfx 已判空跳过）
+	"找不到弹药资源",            # 拾取武器时对应的弹药 .tres 缺失 → 只是不补弹，拾取照常
+	"target_scene 未设置",       # ⚠ 语序陷阱：既有白名单写的是「未设置 target_scene」，
+	                             #   而 SafeDoor 的文案是「target_scene 未设置」→ 会漏匹配。
+	                             #   （2026-10-03 已踩过同类语序坑，这里按 SafeDoor 的语序再补一条。）
+	"无法枚举 res://object",     # 导出包里 DirAccess 枚举 res:// 会失败 → 回退预置角色清单（正常路径）
 ]
 
 

@@ -31,6 +31,8 @@
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="21_278n4"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="22_8d8vq"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="23_8d8vq"]
+[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="27_1g0bs"]
+[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="28_028cn"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="32_13v0d"]
 
 [sub_resource type="Resource" id="Resource_id55e"]
@@ -202,6 +204,13 @@ pool = SubResource("Resource_5x104")
 [node name="火箭炮类" parent="UpperLayer" unique_id=495434962 instance=ExtResource("10_4tjii")]
 position = Vector2(-184, 128)
 pool = SubResource("Resource_u66fg")
+
+[node name="SavePoint" type="Node2D" parent="UpperLayer" unique_id=1045820249]
+position = Vector2(16, -128)
+script = ExtResource("27_1g0bs")
+walk_texture = ExtResource("28_028cn")
+walk_char_index = 6
+metadata/_custom_type_script = "uid://bn4bhfat04f5j"
 
 [node name="Menu" parent="." unique_id=610287889 instance=ExtResource("5_sjj6e")]
 

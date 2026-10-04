@@ -22,6 +22,9 @@ const IGNORE_PATTERNS: Array[String] = [
 	"ObjectDB instances leaked",
 	"Leaked instance",
 	"Object was freed",
+	## 退出时的资源统计报告（与 ObjectDB 泄漏同属引擎收尾噪音；此时游戏已经在退出，
+	## 弹窗没有任何意义，只会污染报错文件）。2026-10-04 跑回归用例时稳定复现。
+	"resources still in use at exit",
 ]
 
 ## 日志落盘入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，

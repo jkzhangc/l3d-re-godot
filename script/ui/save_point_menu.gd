@@ -8,11 +8,19 @@ extends CanvasLayer
 ## 依赖：SaveManager、save_slot_menu、Global（字体/音效/selected_difficulty）
 ##
 ## 暂停策略：打开时暂停游戏（存档点交互期间不该被丧尸打断），关闭时恢复。
+##
+## ★2026-10-04 版式重做（用户实机反馈 + 原作视频参考）：窗口改用 `art/System/Window *`
+##   （与角色选择 / 安全屋台词同一套皮肤），字号 24 → 36，窗口置于左上角（原作同款），
+##   光标套白框。旧版是纯色块 + 24 号字，用户报「界面有点小」。
 
 signal closed
 
 const SAVE_MANAGER := preload("res://script/save_manager.gd")
 const SLOT_MENU := preload("res://script/ui/save_slot_menu.gd")
+
+# ── 窗口皮肤（与角色选择 / 台词窗口同款）──
+const WINDOW_BG_PATH := "res://art/System/Window background color.png"
+const WINDOW_FRAME_PATH := "res://art/System/Window frame.png"
 
 enum State { MAIN, DIFFICULTY }
 
@@ -23,22 +31,27 @@ const DIFFICULTY_NAMES: Array[String] = ["简单难度", "普通难度", "困难
 var save_position: Variant = null
 var pause_game: bool = true
 
+# ── 版式（像素字体铁律：字号只能是 12 的整倍）──
+const FONT_ITEM: int = 36
+const FONT_HINT: int = 24
+const MARGIN: float = 32.0     ## 窗口距屏幕左上角
+const WIN_W: float = 560.0
+const LIST_TOP: float = 28.0
+const ITEM_LEFT: float = 56.0
+const ITEM_H: float = 64.0
+const ITEM_GAP: float = 8.0
+const FOOT_H: float = 56.0
+
 var _state: int = State.MAIN
 var _cursor: int = 0
 var _items: Array = []
 var _labels: Array[Label] = []
-var _win: Control = null
+var _bg: TextureRect = null
+var _frame: NinePatchRect = null
 var _cursor_box: Panel = null
-var _title: Label = null
 var _hint: Label = null
 var _slot_menu: Node = null
 var _busy: bool = false
-
-const WIN_W: float = 420.0
-const ITEM_H: float = 46.0
-const ITEM_GAP: float = 8.0
-const LIST_TOP: float = 66.0
-const FOOT_H: float = 40.0
 
 
 func _ready() -> void:
@@ -66,26 +79,37 @@ func _build_frame() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
-	_win = ColorRect.new()
-	_win.color = Color(0.09, 0.28, 0.17, 0.98)   ## RM 风格深绿窗口
-	_win.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_win)
+	## 窗口底色 + 九宫边框（尺寸在 _layout 里按条目数决定）。
+	## ★「加底色 / 套边框」与「新建节点」分离（项目铁律：样式不能写在新建分支里）。
+	_bg = TextureRect.new()
+	_bg.texture = load(WINDOW_BG_PATH) as Texture2D
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_bg)
+
+	_frame = NinePatchRect.new()
+	_frame.texture = load(WINDOW_FRAME_PATH) as Texture2D
+	_frame.patch_margin_left = 20
+	_frame.patch_margin_top = 20
+	_frame.patch_margin_right = 20
+	_frame.patch_margin_bottom = 20
+	_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_frame)
 
 	_cursor_box = Panel.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(1, 1, 1, 0.08)
 	sb.border_color = Color(1, 1, 1, 0.95)
 	sb.set_border_width_all(2)
+	sb.corner_radius_top_left = 3
+	sb.corner_radius_top_right = 3
+	sb.corner_radius_bottom_left = 3
+	sb.corner_radius_bottom_right = 3
 	_cursor_box.add_theme_stylebox_override("panel", sb)
 	_cursor_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_cursor_box)
 
-	_title = _make_label("", 24)
-	_title.modulate = Color(0.98, 0.97, 0.92)
-	add_child(_title)
-
-	_hint = _make_label("", 12)
-	_hint.modulate = Color(0.82, 0.90, 0.82)
+	_hint = _make_label("", FONT_HINT)
+	_hint.modulate = Color(0.88, 0.90, 0.84)
 	add_child(_hint)
 
 
@@ -95,11 +119,9 @@ func _show_state(s: int) -> void:
 	match s:
 		State.MAIN:
 			_items = MAIN_ITEMS.duplicate()
-			_title.text = "存档点"
 			_hint.text = "方向键选择 · 确定 · 取消=离开"
 		State.DIFFICULTY:
 			_items = DIFFICULTY_NAMES.duplicate()
-			_title.text = "选择难度"
 			_hint.text = "改动立即生效（影响后续刷怪与敌人强度）"
 	_layout()
 
@@ -107,13 +129,14 @@ func _show_state(s: int) -> void:
 func _layout() -> void:
 	var n: int = _items.size()
 	var win_h: float = LIST_TOP + n * (ITEM_H + ITEM_GAP) + FOOT_H
-	var vp: Vector2 = get_viewport().get_visible_rect().size
-	var pos: Vector2 = ((vp - Vector2(WIN_W, win_h)) * 0.5).floor()
-	_win.size = Vector2(WIN_W, win_h)
-	_win.position = pos
+	var pos := Vector2(MARGIN, MARGIN)
 
-	_title.position = pos + Vector2(20, 16)
-	_title.size = Vector2(WIN_W - 40, 28)
+	if _bg != null:
+		_bg.position = pos
+		_bg.size = Vector2(WIN_W, win_h)
+	if _frame != null:
+		_frame.position = pos
+		_frame.size = Vector2(WIN_W, win_h)
 
 	for l: Label in _labels:
 		if is_instance_valid(l):
@@ -121,25 +144,25 @@ func _layout() -> void:
 	_labels.clear()
 
 	for i: int in range(n):
-		var l := _make_label(_items[i], 24)
-		l.modulate = Color(0.97, 0.96, 0.90)
-		l.position = pos + Vector2(34, LIST_TOP + i * (ITEM_H + ITEM_GAP))
-		l.size = Vector2(WIN_W - 60, ITEM_H)
+		var l := _make_label(_items[i], FONT_ITEM)
+		l.modulate = Color(0.97, 0.97, 0.92)
+		l.position = pos + Vector2(ITEM_LEFT, LIST_TOP + i * (ITEM_H + ITEM_GAP))
+		l.size = Vector2(WIN_W - ITEM_LEFT - 32.0, ITEM_H)
 		add_child(l)
 		_labels.append(l)
 
-	_hint.position = pos + Vector2(20, win_h - FOOT_H + 8)
-	_hint.size = Vector2(WIN_W - 40, 22)
+	_hint.position = pos + Vector2(ITEM_LEFT, win_h - FOOT_H + 12.0)
+	_hint.size = Vector2(WIN_W - ITEM_LEFT - 32.0, 32)
 
 	_refresh_cursor()
 
 
 func _refresh_cursor() -> void:
-	if _cursor >= _labels.size():
+	if _cursor >= _labels.size() or _cursor_box == null:
 		return
 	var l: Label = _labels[_cursor]
-	_cursor_box.position = l.position + Vector2(-10, 0)
-	_cursor_box.size = Vector2(WIN_W - 40, ITEM_H)
+	_cursor_box.position = l.position + Vector2(-16.0, -6.0)
+	_cursor_box.size = Vector2(WIN_W - ITEM_LEFT - 32.0 + 32.0, ITEM_H + 12.0)
 
 
 # ═══════════════════════════════════════
@@ -221,21 +244,22 @@ func _on_slot_chosen(idx: int) -> void:
 
 func _toast_and_close(text: String) -> void:
 	_busy = true
-	if _win != null:
-		_win.visible = false
+	if _bg != null:
+		_bg.visible = false
+	if _frame != null:
+		_frame.visible = false
 	for l: Label in _labels:
 		if is_instance_valid(l):
 			l.visible = false
-	_title.visible = false
 	_hint.visible = false
 	_cursor_box.visible = false
 
-	var toast := _make_label(text, 24)
+	var toast := _make_label(text, FONT_ITEM)
 	toast.modulate = Color(1, 1, 1)
 	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	toast.position = Vector2(0, vp.y * 0.5 - 40.0)
-	toast.size = Vector2(vp.x, 40)
+	toast.size = Vector2(vp.x, 48)
 	add_child(toast)
 
 	var timer := Timer.new()
@@ -261,6 +285,8 @@ func _make_label(text: String, size: int) -> Label:
 	var g: Node = get_node_or_null("/root/Global")
 	if g != null and g.has_method("apply_ui_font"):
 		g.call("apply_ui_font", l, size)
+		if g.has_method("apply_text_shadow"):
+			g.call("apply_text_shadow", l)
 	else:
 		l.add_theme_font_size_override("font_size", size)
 	return l

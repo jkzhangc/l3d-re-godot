@@ -7,7 +7,7 @@
 [ext_resource type="TileSet" uid="uid://b4cei0e6of7ya" path="res://tres/街道B.tres" id="4_5gk8a"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="5_5gk8a"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="5_vqqwu"]
-[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="6_57ke7"]
+[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="6_57ke7"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="6_caxuo"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="6_oc1v5"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_caxuo"]
@@ -28,6 +28,8 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="16_42lar"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="17_df6p2"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="17_g836h"]
+[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="25_525qf"]
+[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="26_83dy4"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="29_od0b1"]
 
 [sub_resource type="Resource" id="Resource_wqyqx"]
@@ -185,6 +187,13 @@ position = Vector2(-208, 56)
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAD4//7/AAAJAAgAAAD5//7/AAAJAAgAAAD6//7/AAAJAAgAAAD7//7/AAAJAAgAAAD///7/AAAJAAgAAAAAAP7/AAAJAAgAAAABAP7/AAAHAAQAAAABAP3/AAAOAAgAAAABAPz/AAAOAAgAAAABAPv/AAAOAAgAAAABAPr/AAAOAAgAAAABAPn/AAAOAAgAAAABAPj/AAAOAAgAAAACAPj/AAAGAAIAAAACAPn/AAAGAAIAAAACAPr/AAAGAAIAAAACAPv/AAAGAAIAAAACAPz/AAAGAAIAAAACAP3/AAAGAAIAAAACAP7/AAAHAAIAAAACAP//AAAHAAMAAAACAAAAAAAHAAMAAAABAP//AAAGAAMAAAABAAAAAAAGAAMAAAADAP7/AAAJAAgAAAAEAP7/AAAJAAgAAAAFAP7/AAAJAAgAAAAGAP7/AAAJAAgAAAAIAP7/AAAJAAgAAAAJAP7/AAAHAAQAAAAJAP3/AAAOAAgAAAAJAPz/AAAOAAgAAAAJAPv/AAAOAAgAAAAJAPr/AAAOAAgAAAAJAPn/AAAOAAgAAAAJAPj/AAAOAAgAAAAGAP//AAAOAAUAAAAGAAAAAAAOAAYAAAD4//z/AAAKAAUAAAD6//z/AAAKAAUAAAD7////AAAFAAIAAAAGAPz/AAAHAA4AAAAGAP3/AAAHAA8AAAD9//z/AAAHAA4AAAD9//3/AAAHAA8AAAA=")
 tile_set = ExtResource("4_5gk8a")
+
+[node name="SavePoint" type="Node2D" parent="UpperLayer" unique_id=973819113]
+position = Vector2(-112, 32)
+script = ExtResource("25_525qf")
+walk_texture = ExtResource("26_83dy4")
+walk_char_index = 6
+metadata/_custom_type_script = "uid://bn4bhfat04f5j"
 
 [node name="Menu" parent="." unique_id=1067404182 instance=ExtResource("6_57ke7")]
 

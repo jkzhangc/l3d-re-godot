@@ -92,10 +92,26 @@ func _apply_pending_arrival() -> void:
 	print("[GameInit] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
 
 
+## 取本场景**预置**的玩家实体（到达/读档落点要写它的 global_position）。
+##
+## ★2026-10-04 实测修复：**不能只靠 "player" 分组**。
+## GameInit 是场景根（Test2）的**第一个子节点**；Godot 的 `_ready()` 按子节点顺序
+## 深度优先传播 → 本节点的 `_ready()` **早于** `DecorLayer/PlayerSpawn/Player` 的
+## `_ready()`。而玩家是在**自己的** `_ready()` 里 `add_to_group("player")` 的 →
+## 此刻分组恒为空 → 落点应用失败，并误报「找不到预置 Player」把玩家打断。
+## （同一根因也影响单机地图传送：teleport_point 走的也是 `set_pending_arrival`。）
+##
+## 因此：先按分组找（运行时/联机的正常路径），找不到再退回**地图约定路径**
+## 「PlayerSpawn 下的 Player 节点」——所有地图的预置玩家都是这个名字。
 func _find_preplaced_player(scene: Node) -> CharacterBody2D:
 	for node: Node in scene.get_tree().get_nodes_in_group("player"):
 		if node is CharacterBody2D:
 			return node as CharacterBody2D
+	## 兜底：场景内名为 "Player" 的 CharacterBody2D（不含 PlayerSpawn —— find_child 是精确匹配）。
+	if scene != null:
+		var preplaced: Node = scene.find_child("Player", true, false)
+		if preplaced is CharacterBody2D:
+			return preplaced as CharacterBody2D
 	return null
 
 

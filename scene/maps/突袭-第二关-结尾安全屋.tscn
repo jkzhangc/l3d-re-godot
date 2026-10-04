@@ -10,7 +10,7 @@
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="5_e868y"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="6_62c55"]
 [ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="6_260tg"]
-[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="7_s1uoq"]
+[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="7_s1uoq"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="7_vaahr"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="8_6lern"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="8_vv0vf"]
@@ -31,6 +31,8 @@
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="18_qkes6"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="19_84vq2"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="20_edq43"]
+[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="25_86tq3"]
+[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="26_neel0"]
 
 [sub_resource type="Resource" id="Resource_82whr"]
 script = ExtResource("9_0yv3w")
@@ -193,6 +195,13 @@ pool = SubResource("Resource_86tq3")
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAFAAIAAAAAAAAAAAAFAAMAAAAAAAAAAAAJAAMAAAAAAAAAAAAMAAMAAAABAAAAAAAFAAQAAAAAAAAAAAAJAAQAAAAAAAAAAAAMAAQAAAACAAAAAAAFAAUAAAAAAAAAAAAJAAUAAAAAAAAAAAAFAAYAAAAAAAAAAAAJAAYAAAAAAAAAAAAFAAcAAAAAAAAAAAAJAAcAAAAAAAAAAAAMAAcAAAADAAAAAAAFAAgAAAAAAAAAAAAJAAgAAAAAAAAAAAAMAAgAAAAEAAAAAAAFAAkAAAAAAAAAAAAJAAkAAAAAAAAAAAAMAAkAAAADAAAAAAAFAAoAAAAAAAAAAAAJAAoAAAAAAAAAAAAMAAoAAAAEAAAAAAAFAAsAAAAAAAAAAAAJAAsAAAAAAAAAAAAFAAwAAAAAAAAAAAAJAAwAAAAAAAAAAAA=")
 tile_set = ExtResource("3_f2bpg")
+
+[node name="SavePoint" type="Node2D" parent="UpperLayer" unique_id=873120788]
+position = Vector2(432, 160)
+script = ExtResource("25_86tq3")
+walk_texture = ExtResource("26_neel0")
+walk_char_index = 6
+metadata/_custom_type_script = "uid://bn4bhfat04f5j"
 
 [node name="Camera2D2" type="Camera2D" parent="." unique_id=437178264]
 zoom = Vector2(2, 2)

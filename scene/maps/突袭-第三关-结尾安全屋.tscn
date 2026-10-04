@@ -14,7 +14,7 @@
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_n6iv6"]
 [ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="8_585ik"]
 [ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="8_l8yke"]
-[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="9_8to2r"]
+[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="9_8to2r"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="9_lc7ol"]
 [ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="10_847u6"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="10_lc7ol"]
@@ -30,6 +30,8 @@
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="16_mfjch"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="17_s2v06"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="18_xcdn1"]
+[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="23_548yc"]
+[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="24_d45xp"]
 
 [sub_resource type="Resource" id="Resource_tgboo"]
 script = ExtResource("7_n6iv6")
@@ -184,6 +186,13 @@ pool = SubResource("Resource_h8n3k")
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAHAAMAAAAAAAAAAAAHAAQAAAABAAAAAAA=")
 tile_set = ExtResource("3_0j83v")
+
+[node name="SavePoint" type="Node2D" parent="UpperLayer" unique_id=753137823]
+position = Vector2(368, 128)
+script = ExtResource("23_548yc")
+walk_texture = ExtResource("24_d45xp")
+walk_char_index = 6
+metadata/_custom_type_script = "uid://bn4bhfat04f5j"
 
 [node name="GameInit" type="Node" parent="." unique_id=2012107607]
 script = ExtResource("5_6gpxu")

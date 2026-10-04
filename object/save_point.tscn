@@ -1,6 +1,16 @@
-[gd_scene load_steps=2 format=3 uid="uid://csavpnt0l3d1"]
+[gd_scene load_steps=3 format=3 uid="uid://csavpnt0l3d1"]
 
 [ext_resource type="Script" path="res://script/save_point.gd" id="1_savepoint"]
 
+[sub_resource type="RectangleShape2D" id="SavePointRect"]
+size = Vector2(32, 32)
+
 [node name="SavePoint" type="Node2D"]
 script = ExtResource("1_savepoint")
+
+[node name="Collision" type="StaticBody2D" parent="."]
+collision_layer = 33
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Collision"]
+shape = SubResource("SavePointRect")

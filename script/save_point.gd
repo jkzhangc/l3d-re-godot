@@ -25,6 +25,15 @@ const SAVE_POINT_MENU := preload("res://script/ui/save_point_menu.gd")
 
 const PLAYER_RESCAN_INTERVAL: float = 0.5  ## 玩家缺席时的降频重扫间隔（秒）
 
+## ── 实体碰撞（2026-10-04 用户需求：跟医疗箱那样）──
+## 存档点是"一台机器"，玩家不该能从它身上穿过去。与 `medical_box` / `holdout_machine`
+## 完全同款：StaticBody2D + 32×32 方形，`collision_layer=33`（图块层 + 第 6 层）、`mask=0`
+## —— 玩家 collision_mask=15 含图块层，因此会被挡下。
+const COLLISION_NODE: String = "Collision"
+const COLLISION_SHAPE_NODE: String = "Shape"
+const COLLISION_LAYER: int = 33
+const COLLISION_SIZE: Vector2 = Vector2(32, 32)
+
 # ═══════════════════════════════════════
 # 配置
 # ═══════════════════════════════════════
@@ -82,6 +91,7 @@ func _ready() -> void:
 		return
 
 	_ensure_children()
+	_ensure_collision()
 	_refresh_sprite()
 	if animated:
 		_step_timer = step_duration
@@ -92,6 +102,7 @@ func _editor_preview() -> void:
 		step_frames = [1]
 	_step_index = 0
 	_ensure_children()
+	_ensure_collision()
 	_refresh_sprite()
 
 
@@ -156,6 +167,30 @@ func _ensure_children() -> void:
 			g.apply_hint_font(label, 12)
 		if g.has_method("apply_text_shadow"):
 			g.apply_text_shadow(label)
+
+
+## 实体碰撞（与 medical_box / holdout_machine 同款）。幂等：`save_point.tscn` 已预置
+## 同名节点时只是补全缺失的形状，不会重建（预置节点优先，改不动导出参数）。
+func _ensure_collision() -> void:
+	var body: StaticBody2D = get_node_or_null(COLLISION_NODE) as StaticBody2D
+	if not body:
+		body = StaticBody2D.new()
+		body.name = COLLISION_NODE
+		add_child(body)
+	## ★层/掩码对「预置或新建」都要（幂等地）写死：预置节点若在 Inspector 里被改过，
+	## 也必须回到与医疗箱一致的口径，否则会出现"这个存档点能穿、那个不能穿"。
+	body.collision_layer = COLLISION_LAYER
+	body.collision_mask = 0
+
+	var shape_node: CollisionShape2D = body.get_node_or_null(COLLISION_SHAPE_NODE) as CollisionShape2D
+	if not shape_node:
+		shape_node = CollisionShape2D.new()
+		shape_node.name = COLLISION_SHAPE_NODE
+		body.add_child(shape_node)
+	if not shape_node.shape:
+		var rect := RectangleShape2D.new()
+		rect.size = COLLISION_SIZE
+		shape_node.shape = rect
 
 
 # ═══════════════════════════════════════
