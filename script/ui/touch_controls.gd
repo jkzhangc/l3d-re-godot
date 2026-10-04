@@ -114,6 +114,11 @@ func _process(delta: float) -> void:
 	_layer_check_accum += delta
 	if _layer_check_accum >= LAYER_CHECK_INTERVAL:
 		_layer_check_accum = 0.0
+		## ★自愈：叠加层可能走非正常途径消失（直接 free / 换场景强杀）而来不及 pop ——
+		## 这里复查一次"模式是否仍然成立"，不指望调用方一定记得成对调用。
+		if _compute_menu_mode() != _menu_mode:
+			_apply_mode()
+			return
 		var want_layer: int = _effective_layer()
 		if layer != want_layer:
 			layer = want_layer
@@ -126,6 +131,45 @@ func _process(delta: float) -> void:
 ## 是否菜单模式（菜单里只留摇杆 + 确定 + 取消）。
 func is_menu_mode() -> bool:
 	return _menu_mode
+
+
+# ── 菜单式叠加层登记（2026-10-04）──────────────────────────────
+## 地图里打开的「菜单式叠加层」（存档点菜单 / 存档槽位菜单）需要的是**整套菜单按钮**
+## （摇杆 + 确定 + 取消），而不是战斗按钮；触摸层还要**压在它们之上**。
+##
+## 【为什么不能靠现有判定】`_menu_mode` 是按「当前场景里有没有 `GameInit`」判定的 ——
+## 地图场景里恒为 false。于是叠加层打开时：战斗按钮照旧铺满把菜单盖住，叠加层的遮罩
+## （`MOUSE_FILTER_STOP`）又反向把摇杆的 `_gui_input` 吃掉 → 用户 2026-10-04 手机实测
+## 「存档 / 选择难度 / 存档·读档界面盖住虚拟按键，摇杆也失效」。
+##
+## 【修法】由叠加层**自己登记**：打开时 `Global.touch_controls().push_menu_overlay(self)`，
+## 关闭时 pop（`_exit_tree` 兜底）。登记期间触摸层按菜单模式走。
+## ⚠ 配套约定：这类叠加层的 `layer` **必须低于 `menu_layer`(110)**，否则仍会被触摸层压在下面。
+var _menu_overlays: Array[Node] = []
+
+
+## 登记一个「菜单式叠加层」（打开时调）。幂等：同一个 owner 重复 push 不叠加。
+func push_menu_overlay(owner: Node) -> void:
+	if owner == null or _menu_overlays.has(owner):
+		return
+	_menu_overlays.append(owner)
+	_apply_mode()
+
+
+## 注销「菜单式叠加层」（关闭时调）。幂等。
+func pop_menu_overlay(owner: Node) -> void:
+	if not _menu_overlays.has(owner):
+		return
+	_menu_overlays.erase(owner)
+	_apply_mode()
+
+
+## 当前是否有存活的叠加层（顺带清掉已被释放的 —— 换场景强杀时可能来不及 pop）。
+func has_menu_overlay() -> bool:
+	for i: int in range(_menu_overlays.size() - 1, -1, -1):
+		if not is_instance_valid(_menu_overlays[i]):
+			_menu_overlays.remove_at(i)
+	return not _menu_overlays.is_empty()
 
 
 ## 当前该用的层级。★2026-09-30 用户实测：**关卡里打开暂停菜单 / 安全屋开头台词时，
@@ -157,9 +201,7 @@ func _apply_mode(scene_key_override: String = "") -> void:
 	var tree: SceneTree = get_tree()
 	var cs: Node = tree.current_scene if tree != null else null
 	_last_scene = cs
-	## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
-	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
-	_menu_mode = not gameplay
+	_menu_mode = _compute_menu_mode()
 	if _layout_edit:
 		## 编辑模式忽略菜单/关卡过滤：所有元素都要显示出来才拖得到。
 		_show_all_for_edit()
@@ -169,6 +211,16 @@ func _apply_mode(scene_key_override: String = "") -> void:
 	## 但**只要有更高层的可见 UI（暂停菜单 / 安全屋台词）冒出来就抬上去**（见 _effective_layer）。
 	layer = _effective_layer()
 	_propagate(self, _menu_mode, scene_key_override if not scene_key_override.is_empty() else _current_scene_key(cs))
+
+
+## 当前该不该按「菜单模式」走 = 「当前场景不是关卡」**或**「有存活的菜单式叠加层」。
+## 后者是关键：地图里打开的存档点菜单 / 存档槽位菜单本身就在关卡场景中，靠它才切得过去。
+## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
+func _compute_menu_mode() -> bool:
+	var tree: SceneTree = get_tree()
+	var cs: Node = tree.current_scene if tree != null else null
+	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
+	return (not gameplay) or has_menu_overlay()
 
 
 ## 当前菜单场景的脚本文件名（不含扩展名），如 `character_select_menu`。

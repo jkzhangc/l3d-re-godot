@@ -75,12 +75,19 @@ func setup(m: int, pause: bool = false) -> void:
 	pause_game = pause
 
 
+## 层级：**必须低于触摸层的 `menu_layer`(110)**（同 save_point_menu 的理由：
+## 手机端触摸层要压在存档界面之上，玩家才有「摇杆 + 确定 + 取消」可按）。
+## 同时要高于存档点菜单(105) —— 槽位菜单是从它里面打开的，得盖住它。
+const LAYER: int = 108
+
+
 func _ready() -> void:
-	layer = 150
+	layer = LAYER
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_slot_count = SAVE_MANAGER.SLOT_COUNT
 	if pause_game and get_tree() != null:
 		get_tree().paused = true
+	_push_touch_menu_mode()
 	_build()
 	_refresh_cursor()
 
@@ -89,6 +96,28 @@ func _exit_tree() -> void:
 	## 保险：被直接释放（换场景）时也要解除暂停，否则整棵树永久冻结。
 	if pause_game and get_tree() != null:
 		get_tree().paused = false
+	_pop_touch_menu_mode()
+
+
+## ★手机端：登记「菜单式叠加层」→ 触摸层切菜单按钮模式并抬到本层之上。
+## 从标题画面打开时本就是菜单模式，登记是幂等的（无害）。
+func _push_touch_menu_mode() -> void:
+	var tc: Node = _touch_layer()
+	if tc != null and tc.has_method("push_menu_overlay"):
+		tc.call("push_menu_overlay", self)
+
+
+func _pop_touch_menu_mode() -> void:
+	var tc: Node = _touch_layer()
+	if tc != null and tc.has_method("pop_menu_overlay"):
+		tc.call("pop_menu_overlay", self)
+
+
+func _touch_layer() -> Node:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("touch_controls"):
+		return g.call("touch_controls")
+	return null
 
 
 # ═══════════════════════════════════════

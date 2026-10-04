@@ -54,11 +54,18 @@ var _slot_menu: Node = null
 var _busy: bool = false
 
 
+## 层级：**必须低于触摸层的 `menu_layer`(110)** —— 手机端触摸层要压在菜单之上，
+## 玩家才有「摇杆 + 确定 + 取消」可按（2026-10-04 用户手机实测：原来取 149，
+## 把整套虚拟按键盖住、摇杆也点不动）。高于结算页(100)/暂停菜单(100) 即可。
+const LAYER: int = 105
+
+
 func _ready() -> void:
-	layer = 149
+	layer = LAYER
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if pause_game and get_tree() != null:
 		get_tree().paused = true
+	_push_touch_menu_mode()
 	_build_frame()
 	_show_state(State.MAIN)
 
@@ -66,6 +73,28 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if pause_game and get_tree() != null:
 		get_tree().paused = false
+	_pop_touch_menu_mode()
+
+
+## ★手机端：让触摸层切到「菜单按钮模式」（只留摇杆 + 确定 + 取消）并抬到本层之上。
+## 地图场景里 `_menu_mode` 恒为 false（判定靠 `GameInit`），所以必须由叠加层自己登记。
+func _push_touch_menu_mode() -> void:
+	var tc: Node = _touch_layer()
+	if tc != null and tc.has_method("push_menu_overlay"):
+		tc.call("push_menu_overlay", self)
+
+
+func _pop_touch_menu_mode() -> void:
+	var tc: Node = _touch_layer()
+	if tc != null and tc.has_method("pop_menu_overlay"):
+		tc.call("pop_menu_overlay", self)
+
+
+func _touch_layer() -> Node:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("touch_controls"):
+		return g.call("touch_controls")
+	return null
 
 
 # ═══════════════════════════════════════
