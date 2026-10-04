@@ -1184,6 +1184,18 @@ func _capture_awaken_input() -> void:
 			awaken_request.rpc_id(1)
 
 
+## Client 侧"本地显示域 TP 够不够放这个技能"预校验（只减少无效请求，
+## **最终判定仍以 Host 权威域为准**）。技能无耗蓝 / 找不到技能时返回 true。
+func _client_has_tp_for(node: Node2D, trigger: String) -> bool:
+	if not is_instance_valid(node) or not node.has_method("local_skill_tp_cost"):
+		return true
+	var cost: int = int(node.call("local_skill_tp_cost", trigger))
+	if cost <= 0:
+		return true
+	var state: PlayerState = Players.get_state_for_entity(node)
+	return state != null and state.current_tp >= cost
+
+
 ## SA / 见切 输入收集（C2）：SA 键=技能释放请求；确定键=攻击兼见切（同原作）
 ## 的窗口登记请求。Host 不进入本函数——Host 本机玩家由 player._update_sa_state
 ## 直读输入并经 _use_skill_core 扣 TP，这里再发请求会双扣；投掷瞄准（占用
@@ -1198,9 +1210,12 @@ func _capture_sa_input() -> void:
 	if not is_instance_valid(node):
 		return
 	node.poll_network_motion_input()
-	# SA 键：技能释放请求（TP/存活由 Host 权威校验）。
+	# SA 键：技能释放请求（**存活与最终 TP 判定仍由 Host 权威校验**）。
+	# ★2026-10-04 补本地 TP 预校验：本地显示域积分不够就别发请求 —— 一来减少无效请求，
+	# 二来让"TP 见底"在本机**立刻**有感（否则要等 Host 拒绝，而 Host 拒绝是静默的，
+	# 玩家只会看到"按了没反应"却不知道是没蓝）。
 	if Input.is_action_just_pressed("SA键"):
-		if node.validate_skill_motion("SA键"):
+		if node.validate_skill_motion("SA键") and _client_has_tp_for(node, "SA键"):
 			sa_skill_request.rpc_id(1, "SA键")
 	# 确定键：见切窗口登记请求（窗口/间隔状态登记在 Host 权威实体上；
 	# _try_mukiri_input 只读 Time/Heat，零拆分直调）。
@@ -2556,6 +2571,13 @@ func sa_presentation(peer_id: int, trigger: String) -> void:
 	var node := _player_node(_players.get(peer_id, {}))
 	if is_instance_valid(node) and node.has_method("apply_network_sa_skill"):
 		node.call("apply_network_sa_skill", trigger)
+	## ★2026-10-04：**本机**玩家的本地显示域 TP 也要扣（Host 扣的是权威域）。
+	## 否则 Client 点按技能时本地 TP 永不下降 → HUD 一直满格、看着"技能一直能用"
+	## （只有按住不放才会被 `_update_network_sa_state` 扣）。仅对本人生效：
+	## 远端玩家的镜像座位不是本机显示域，扣了没有意义。
+	if peer_id == int(net.my_peer_id) and is_instance_valid(node) \
+			and node.has_method("pay_local_sa_tp"):
+		node.call("pay_local_sa_tp", trigger)
 	if _is_auto_network_feature_test():
 		_auto_client_sa_presentations += 1
 	print("[NetworkWorld] CLIENT_SA peer=%d trigger=%s" % [peer_id, trigger])

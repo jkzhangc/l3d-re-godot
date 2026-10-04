@@ -197,6 +197,9 @@ var _tp_regen_timer: float = 0.0
 var _sa_crouch_active: bool = false      ## しゃがみ回避进行中（无敌）
 var _sa_crouch_until_msec: int = 0       ## 无敌截止时间
 var _sa_crouch_skill: SkillData = null   ## 当前しゃがみ技能（取持续消耗参数）
+## しゃがみ按住消耗的**小数累加器**（见 `_drain_crouch_tp`）：不足 1 点的部分留到下一帧，
+## 保证消耗速率与帧率无关（旧实现每帧至少扣 1 → 实际速率 = 帧率，60fps 时是设计值的 4 倍）。
+var _sa_crouch_drain_accum: float = 0.0
 var _network_sa_crouch_hold: bool = false ## C2：Host 权威实体的しゃがみ按住登记（sa_crouch_hold RPC 写入）
 var _sa_auto_mukiri_until_msec: int = 0  ## 感覚向上：完全见切截止时间
 
@@ -1770,6 +1773,7 @@ func _start_crouch_dodge(skill: SkillData) -> void:
 	_sa_crouch_skill = skill
 	_sa_crouch_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
 	_sa_crouch_active = true
+	_sa_crouch_drain_accum = 0.0  # 每次进入蹲下都从 0 起算（不留上次的余量）
 	if sprite:
 		sprite.modulate = Color(0.75, 0.85, 1.0)  # 蹲下（无敌）的视觉提示
 	print("[SA] しゃがみ回避：无敌 %.1f 秒（按住 SA 键持续蹲，每秒耗 %.0f TP）" % [skill.duration, skill.crouch_tp_drain])
@@ -1778,6 +1782,7 @@ func _start_crouch_dodge(skill: SkillData) -> void:
 func _end_crouch_dodge() -> void:
 	_sa_crouch_active = false
 	_sa_crouch_skill = null
+	_sa_crouch_drain_accum = 0.0
 	_network_sa_crouch_hold = false  # Host 权威实体的按住登记随蹲下结束一并清除
 	if sprite:
 		sprite.modulate = Color.WHITE
@@ -1785,6 +1790,62 @@ func _end_crouch_dodge() -> void:
 	# 联机（C2）：Host 侧结束（超时/TP 尽/死亡）广播对齐表现；Client 本地结束
 	# 与 crouch_end_presentation 幂等（LAN 漂移 <1s）；单机 no-op。
 	_announce_network_sa_event("crouch_end")
+
+
+## しゃがみ按住每帧扣 TP —— **按秒计价、与帧率无关**。
+##
+## ★2026-10-04 修复（用户报「TP 到不了 0 / 静香技能一直能用」时一并查出的真实缺陷）：
+## 旧实现是
+##     `var drain := maxi(1, int(round(crouch_tp_drain * delta)))` → `change_tp(-drain)`
+## 两个毛病：
+##   ① `maxi(1, …)` 让**每帧至少扣 1 点** → 实际速率 = **帧率**（60fps 时 60 TP/s，
+##      是 `crouch_tp_drain = 15` 设计值的 4 倍；144fps 更离谱，且低帧率时反而变慢 ——
+##      「耗蓝速度取决于电脑性能」本身就是 bug）；
+##   ② `round()` 把不足 1 点的零头直接抹掉，无法表达"每秒 15"这种非整数/帧的量。
+## 现在改用**小数累加器**：不足 1 点的部分留到下一帧，长期平均速率恒等于
+## `crouch_tp_drain` 点/秒（15 TP/s → 满蓝 100 可按住约 6.6 秒）。
+func _drain_crouch_tp(delta: float) -> void:
+	if _sa_crouch_skill == null:
+		return
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state == null or state.current_tp <= 0:
+		return
+	_sa_crouch_drain_accum += _sa_crouch_skill.crouch_tp_drain * delta
+	var whole: int = int(_sa_crouch_drain_accum)
+	if whole <= 0:
+		return  ## 攒着，下一帧一起扣（避免"每帧至少 1"的帧率依赖）
+	_sa_crouch_drain_accum -= float(whole)
+	state.change_tp(-whole)
+
+
+## 本机（**本地显示域**）释放该技能要花的 TP；没有该技能 / 不耗 TP 时返回 0。
+## 联机 Client 的"能不能放"预校验用（与 Host 权威校验同一份 SkillData，两端同值）。
+func local_skill_tp_cost(trigger: String) -> int:
+	if not current_character:
+		return 0
+	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
+	return skill.tp_cost if skill else 0
+
+
+## 联机 Client：把本次**已确认生效**的技能 TP 从本地显示域扣掉。
+##
+## ★为什么需要（2026-10-04 用户报「点按静香技能会一直能用 / TP 到不了 0」的联机根因）：
+## 联机下技能由 Host 结算，TP 也从 **Host 权威域**扣；而 Client 的 HUD 读的是
+## **本地显示域**（双域设计，见 `_update_network_sa_state` 注释）。旧实现里 Client 侧
+## **没有任何一处**为"释放技能"扣本地 TP（表现接口只播音效/染色，按住消耗又要求
+## 一直按住键）→ 点按（tap）时本地 TP 一点不掉 → 玩家看到「TP 一直满、技能一直能用」。
+## 现在：Host 确认后广播 `sa_presentation`，Client 在**同一次事件**上镜像扣一次
+## （各域各扣一次，与覚醒 TP 的"双域独立推进"口径一致），并由 `local_skill_tp_cost`
+## 在本机做发送前预校验，避免 TP 空转刷请求。
+func pay_local_sa_tp(trigger: String) -> void:
+	var cost: int = local_skill_tp_cost(trigger)
+	if cost <= 0:
+		return
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state == null:
+		return
+	state.change_tp(-cost)
+	print("[SA] 本地 TP 同步扣除: -%d | 剩余 %d" % [cost, state.current_tp])
 
 
 ## SA 状态每帧维护：发动输入、しゃがみ持续（按住延长 + TP 消耗）、超时结束。
@@ -1986,8 +2047,7 @@ func _update_sa_state(delta: float) -> void:
 			var state: PlayerState = Players.get_state_for_entity(self)
 			if state and state.current_tp > 0:
 				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
-				var drain: int = maxi(1, int(round(_sa_crouch_skill.crouch_tp_drain * delta)))
-				state.change_tp(-drain)
+				_drain_crouch_tp(delta)
 
 
 ## 敌方攻击是否被无效化（しゃがみ无敌 / 感覚向上完全见切 / 见切输入窗口）。
@@ -2172,8 +2232,7 @@ func _update_network_sa_state(delta: float) -> void:
 			var state: PlayerState = Players.get_state_for_entity(self)
 			if state and state.current_tp > 0:
 				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
-				var drain: int = maxi(1, int(round(_sa_crouch_skill.crouch_tp_drain * delta)))
-				state.change_tp(-drain)
+				_drain_crouch_tp(delta)
 
 
 ## 联机表现接口（C2，由 NetworkWorld 的 sa_presentation 调用）：
