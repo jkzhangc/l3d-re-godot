@@ -61,6 +61,14 @@ const COLLISION_SIZE: Vector2 = Vector2(32, 32)
 @export var interact_range: float = 48.0           ## 交互触发距离（像素）
 @export var pause_on_open: bool = true             ## 打开菜单时暂停游戏（回归用例设 false）
 
+@export_group("碰撞")
+## 碰撞盒相对节点原点的偏移（作用在 Shape 上）。
+## ★为什么需要它：地图里摆的存档点是**普通 Node2D + 挂本脚本**（不是 `save_point.tscn` 实例），
+##   所以**在 `object/save_point.tscn` 里调 `Collision.position` 对它们没有任何效果** ——
+##   那处改动只会影响将来直接拖 tscn 的实例。想让地图里的存档点碰撞盒下移/偏移，
+##   请在**该节点自己的 Inspector** 里设这个字段（两条路径互不干扰：Body.position + 本偏移）。
+@export var collision_offset: Vector2 = Vector2.ZERO
+
 # ═══════════════════════════════════════
 # 运行时
 # ═══════════════════════════════════════
@@ -191,6 +199,10 @@ func _ensure_collision() -> void:
 		var rect := RectangleShape2D.new()
 		rect.size = COLLISION_SIZE
 		shape_node.shape = rect
+	## ★偏移**无条件**套一遍（不写在"新建形状"分支里）：预置 Shape 的 tscn 实例同样要跟随
+	##   这个导出字段，否则「改了 Inspector 却没反应」—— 与「给已有节点套样式必须写在分支外」
+	##   是同一条铁律。默认 ZERO 时对预置节点是 no-op（`save_point.tscn` 的 Shape 就在 (0,0)）。
+	shape_node.position = collision_offset
 
 
 # ═══════════════════════════════════════
