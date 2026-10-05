@@ -114,7 +114,7 @@
 ### 场景入口与关卡
 
 - **场景入口**：`scene/main.tscn`
-- **关卡标准**：参考 `scene/maps/突袭-第一关-开头安全屋-户外.tscn`。GroundLayer→DecorLayer(y_sort)→UpperLayer(y_sort)。玩家/敌人必须是 **DecorLayer 子节点**。UpperLayer 不参与 A* 寻路。详见 `memory/scene-conventions.md`
+- **关卡标准**：参考 `scene/maps/突袭-第一关-开头安全屋-户外.tscn`。GroundLayer→DecorLayer(y_sort)→UpperLayer(y_sort)。玩家/敌人必须是 **DecorLayer 子节点**。寻路图层角色：`wall`=整格墙 / `ground|floor`=可行走 / **其余(upper/decor/未知名)=参与碰撞、不提供地面**（并非跳过）。详见 `.workbuddy/memory/REFERENCE.md`
 - **旧测试地图**：`scene/maps/test.tscn`
 
 ### 输入
