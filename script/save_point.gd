@@ -3,7 +3,7 @@ class_name SavePoint extends Node2D
 
 ## ── 架构定位 ──
 ## 系统：关卡流程 ｜ 层：玩法（Node2D, @tool）
-## 联机：★禁用 —— 联机会话里完全隐藏且不响应（存档是本机单人进度）
+## 联机：★自移除 —— 联机会话里节点直接 queue_free（存档是本机单人进度）
 ## 职责：手动存档点：用 VX Ace 行走图渲染（支持踏步动画），玩家靠近按**功能键**
 ##       打开存档点菜单（存档 / 选择难度）。
 ## 依赖：Global.key_hint、ui/save_point_menu（均运行时）
@@ -91,11 +91,10 @@ func _ready() -> void:
 	if step_frames.is_empty():
 		step_frames = [1]
 
-	## ★联机禁用：会话里直接隐藏 + 关掉处理，不干扰多人玩法。
+	## ★联机自移除（2026-10-05 用户需求）：多人模式下存档点节点直接清除，
+	## 不再只是隐藏 —— 存档是本机单人进度，多人局里不需要它。
 	if _online():
-		visible = false
-		set_process(false)
-		set_process_input(false)
+		queue_free()
 		return
 
 	_ensure_children()
@@ -278,7 +277,12 @@ func _find_player() -> CharacterBody2D:
 
 func _open_menu() -> void:
 	_menu = SAVE_POINT_MENU.new()
+	## 存档点自身坐标（写入 `spawn_position`，作旧档 / 兜底落点）。
 	_menu.save_position = global_position
+	## ★玩家真实站位（2026-10-05）：读档落回这里，而不是存档点中心 ——
+	## 否则会生成在 32×32 实体碰撞内部被卡住。取不到玩家时退回存档点坐标。
+	var player: CharacterBody2D = _find_player()
+	_menu.player_position = player.global_position if (player != null and is_instance_valid(player)) else global_position
 	_menu.pause_game = pause_on_open
 	_menu.connect("closed", _on_menu_closed)
 	add_child(_menu)

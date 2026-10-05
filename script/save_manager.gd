@@ -2,7 +2,7 @@ class_name SaveManager extends RefCounted
 
 ## ── 架构定位 ──
 ## 系统：存档系统 ｜ 层：数据（RefCounted）
-## 联机：仅单机 / Host 侧使用（存档点节点在联机会话里被禁用，见 save_point.gd）
+## 联机：仅单机 / Host 侧使用（存档点节点在联机会话里自移除，见 save_point.gd）
 ## 职责：多槽位 JSON 存档读写（20 槽），格式 v2（seats 数组承载 per-player 状态）并兼容 v1 旧格式。
 ## 依赖：PlayerState、ItemCodec；被 Global / 存档点菜单 / 标题画面调用
 
@@ -71,9 +71,10 @@ static func delete_slot(idx: int) -> bool:
 # ═══════════════════════════════════════
 
 ## 保存当前游戏状态到指定槽位。
-## spawn_position（可选）：存档点的全局坐标 —— 读档时玩家直接落在存档点，
-## 而不是回到地图默认出生点。
-static func save_to_slot(idx: int, spawn_position: Variant = null) -> bool:
+## spawn_position（可选）：存档点的全局坐标 —— 旧档 / 兜底落点。
+## player_position（可选）：**玩家当时的真实站位**（2026-10-05）—— 读档优先落回这里，
+##   避免落回存档点中心被 32×32 实体碰撞卡住。
+static func save_to_slot(idx: int, spawn_position: Variant = null, player_position: Variant = null) -> bool:
 	idx = clampi(idx, 0, SLOT_COUNT - 1)
 	DirAccess.make_dir_recursive_absolute(SAVE_DIR)
 
@@ -100,12 +101,17 @@ static func save_to_slot(idx: int, spawn_position: Variant = null) -> bool:
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
 		"quest_flags": Global.quest_flags.duplicate(),
+		# ★已看过的安全屋台词 key（2026-10-05）：读档后已看过的不再重放。
+		"seen_safehouse_dialogues": Global.seen_safehouse_dialogues.duplicate(),
 		# 槽位列表预览用的轻量数据（避免开菜单时逐槽加载 CharacterData 卡顿）
 		"preview": _build_preview(),
 		"timestamp": Time.get_datetime_string_from_system(),
 	}
 	if spawn_position is Vector2:
 		data["spawn_position"] = {"x": spawn_position.x, "y": spawn_position.y}
+	## ★玩家真实站位（2026-10-05）：读档优先用它，避免落回存档点中心被卡住。
+	if player_position is Vector2:
+		data["player_position"] = {"x": player_position.x, "y": player_position.y}
 
 	var f: FileAccess = FileAccess.open(slot_path(idx), FileAccess.WRITE)
 	if f == null:
@@ -195,6 +201,12 @@ static func load_slot(idx: int) -> Dictionary:
 	if not saved_flags.is_empty():
 		for k: Variant in saved_flags:
 			Global.quest_flags[str(k)] = bool(saved_flags[k])
+	# ★已看过的安全屋台词 key（2026-10-05）：旧档无该键 → 空集 → 台词正常重播一次。
+	Global.seen_safehouse_dialogues.clear()
+	var saved_seen: Dictionary = data.get("seen_safehouse_dialogues", {})
+	if not saved_seen.is_empty():
+		for k: Variant in saved_seen:
+			Global.seen_safehouse_dialogues[str(k)] = bool(saved_seen[k])
 	var campaign_path: String = data.get("selected_campaign", "")
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData
@@ -352,12 +364,13 @@ static func _apply_legacy_consumables(st: PlayerState, data: Dictionary) -> void
 			st.inventory.append(it)
 
 
-## 读档后的落点（存档时记录的存档点坐标）；没有记录返回 null。
+## 读档后的落点：优先「玩家真实站位」（2026-10-05），旧档回退「存档点坐标」；都没有返回 null。
 static func spawn_position_of(data: Dictionary) -> Variant:
-	var sp: Variant = data.get("spawn_position", null)
-	if sp is Dictionary:
-		var d: Dictionary = sp
-		return Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
+	for key: String in ["player_position", "spawn_position"]:
+		var sp: Variant = data.get(key, null)
+		if sp is Dictionary:
+			var d: Dictionary = sp
+			return Vector2(float(d.get("x", 0.0)), float(d.get("y", 0.0)))
 	return null
 
 

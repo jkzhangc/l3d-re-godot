@@ -84,11 +84,15 @@ func _apply_pending_arrival() -> void:
 	)
 	if not arrival_position is Vector2:
 		return
+	## ★防卡死兜底（2026-10-05）：落点若压在存档点的 32×32 实体碰撞里（旧档存的正是
+	## 存档点中心），先移出存档点矩形；再走 SpawnSpotResolver 避墙。新档存的是玩家站位，
+	## 通常直接返回原坐标。详见 _resolve_safe_arrival。
+	var safe_position: Vector2 = _resolve_safe_arrival(tree.current_scene as Node2D, arrival_position as Vector2)
 	var player := _find_preplaced_player(tree.current_scene)
 	if not player:
 		push_warning("[GameInit] 找不到预置 Player，无法应用入口 ID: %s" % arrival_id)
 		return
-	player.global_position = arrival_position as Vector2
+	player.global_position = safe_position
 	print("[GameInit] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
 
 
@@ -113,6 +117,38 @@ func _find_preplaced_player(scene: Node) -> CharacterBody2D:
 		if preplaced is CharacterBody2D:
 			return preplaced as CharacterBody2D
 	return null
+
+
+## ── 读档 / 传送落点防卡死（2026-10-05 用户反馈）──
+## 存档点实体碰撞 32×32 → 半宽 16；玩家碰撞盒 24×27 → 半宽 12 / 半高 14（与 player.tscn 同口径）。
+const SAVE_POINT_HALF: float = 16.0
+const ARRIVAL_PLAYER_HALF: Vector2 = Vector2(12.0, 14.0)
+const ARRIVAL_PUSH_MARGIN: float = 4.0
+
+
+## 把落点从「存档点碰撞矩形」内移出去（旧档恰存存档点中心、无方向 → 固定下移到下沿外侧），
+## 再交给 SpawnSpotResolver 做泛化避墙（图块碰撞 + 物理体）。
+##
+## ★为什么用**节点几何**而不是物理探测：GameInit 是场景根的第一个子节点，此刻存档点的
+## `_ready()/_ensure_collision()` 可能尚未跑、碰撞体也可能还没进物理空间 → 物理探测会
+## 静默漏判。直接用存档点的导出字段（`global_position + collision_offset`）算矩形最稳。
+func _resolve_safe_arrival(scene: Node2D, pos: Vector2) -> Vector2:
+	var out: Vector2 = pos
+	if scene != null and is_instance_valid(scene):
+		var half: Vector2 = Vector2(SAVE_POINT_HALF, SAVE_POINT_HALF) + ARRIVAL_PLAYER_HALF
+		for node: Node in scene.find_children("*", "Node2D", true, false):
+			if not node is SavePoint:
+				continue
+			var sp := node as SavePoint
+			var center: Vector2 = sp.global_position + sp.collision_offset
+			if absf(out.x - center.x) <= half.x and absf(out.y - center.y) <= half.y:
+				out = Vector2(center.x, center.y + half.y + ARRIVAL_PUSH_MARGIN)
+	## 只在**确实触发了存档点兜底**时才走避墙（宁可不动正常落点）：
+	## 新档存的是玩家站位、传送点落点是作者摆的可站点 —— 都没触发时原样返回，
+	## 避免「泛化避墙」把既有传送落点悄悄挪位。
+	if out.is_equal_approx(pos):
+		return pos
+	return SpawnSpotResolver.resolve(scene, out, true)
 
 
 func _start_network_world() -> void:
@@ -164,6 +200,9 @@ func _spawn_safehouse_dialogue() -> void:
 	var key: String = SAFEHOUSE_DIALOGUE_DATA.key_for_scene(tree.current_scene.scene_file_path)
 	if key.is_empty():
 		return
+	## ★已看过就不再重放（2026-10-05）：读档进安全屋时，若存档前已看过本图台词则跳过。
+	if Global.has_seen_safehouse_dialogue(key):
+		return
 	## 总结页还开着就先等它关闭再说话（否则台词会被总结页盖住）。
 	## ★时机只有一个：原作里 A 批（刚进安全屋）与 B 批（接着说）是**同一段对话的连续两页**，
 	##   由窗口内部按确定键翻页完成，不再是两个独立的触发时机。
@@ -197,6 +236,8 @@ func _open_safehouse_dialogue(key: String) -> void:
 	var pages: Array = SAFEHOUSE_DIALOGUE_DATA.pages_for(key, char_id)
 	if pages.is_empty():
 		return
+	## ★只在「确实要显示」时标记已看过（角色无台词不记，避免误抑制后续正常台词）。
+	Global.mark_safehouse_dialogue_seen(key)
 	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
 	tree.current_scene.add_child(dlg)
 	dlg.call("open_character", pages, speaker, portrait)

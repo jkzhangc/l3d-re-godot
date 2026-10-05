@@ -27,8 +27,10 @@ enum State { MAIN, DIFFICULTY }
 const MAIN_ITEMS: Array[String] = ["存档", "选择难度"]
 const DIFFICULTY_NAMES: Array[String] = ["简单难度", "普通难度", "困难难度", "专家难度"]
 
-## 存档点全局坐标 —— 随存档写入，读档时玩家落回存档点。
+## 存档点全局坐标 —— 随存档写入 `spawn_position`（旧档 / 兜底落点）。
 var save_position: Variant = null
+## ★玩家真实站位（2026-10-05）—— 随存档写入 `player_position`，读档优先落回这里。
+var player_position: Variant = null
 var pause_game: bool = true
 
 # ── 版式（像素字体铁律：字号只能是 12 的整倍）──
@@ -260,7 +262,7 @@ func _on_slot_closed() -> void:
 
 func _on_slot_chosen(idx: int) -> void:
 	_slot_menu = null
-	var ok: bool = SAVE_MANAGER.save_to_slot(idx, save_position)
+	var ok: bool = SAVE_MANAGER.save_to_slot(idx, save_position, player_position)
 	if not ok:
 		_toast_and_close("保存失败（无法写入文件）")
 		return

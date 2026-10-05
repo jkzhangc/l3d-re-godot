@@ -776,6 +776,7 @@ func _reset_session_state() -> void:
 		players.call("clear_seats")   ## 含 seats_authored = false，让下一局重新 init_new_game
 	checkpoint.clear()
 	quest_flags.clear()
+	seen_safehouse_dialogues.clear()
 	corpse_list.clear()
 	gold = 0
 	print("[Global] 会话状态已清空（座位表 / checkpoint / 任务旗标 / 金币）")
@@ -991,6 +992,9 @@ var checkpoint: Dictionary = {}  ## 安全屋捕获的快照（仅在内存中�
 ## request_quest_flag 提交意图。命名约定：加章节前缀（ch3_），换章不自动清。
 signal quest_flag_changed(flag_name: String, value: bool)
 var quest_flags: Dictionary = {}
+## 已看过的安全屋台词 key（ch1_start / ch1_end / ch2_end / ch3_end）。
+## 随槽位持久化（同 quest_flags）：读档后已看过的不再重放（2026-10-05 用户需求）。
+var seen_safehouse_dialogues: Dictionary = {}
 
 ## 本机直接写入并广播信号。**只有** NetworkWorld 的同步回包与离线路径应调用；
 ## 玩法节点请走 request_quest_flag()。
@@ -1025,6 +1029,18 @@ func request_quest_flag(flag_name: String, value: bool = true) -> bool:
 		return false
 	apply_quest_flag(flag_name, value)
 	return true
+
+
+## 是否已看过该安全屋的台词（key 见 SafehouseDialogueData.key_for_scene）。
+func has_seen_safehouse_dialogue(key: String) -> bool:
+	return key != "" and bool(seen_safehouse_dialogues.get(key, false))
+
+
+## 标记该安全屋台词已看过（只有真正会显示时才调）。
+func mark_safehouse_dialogue_seen(key: String) -> void:
+	if key != "":
+		seen_safehouse_dialogues[key] = true
+
 
 ## 全队投掷物槽里是否还有「能炸墙的爆炸物」（explosion_radius>0 且叠数>0）。
 ## 供保底补给点的激活条件使用。
@@ -1541,6 +1557,7 @@ func init_new_game() -> void:
 	gold = 0
 	corpse_list.clear()
 	quest_flags.clear()
+	seen_safehouse_dialogues.clear()
 	# 战役累计统计（终章 ED 排名用）同步清零
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("reset_campaign"):
