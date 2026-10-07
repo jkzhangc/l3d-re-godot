@@ -121,7 +121,7 @@ b.follow_enabled = true
 
 ## A4 图块转换器（A4変換器.rb）
 
-**`A4转换器.rb`** 是运行在 RPG Maker VX Ace 内部的 RGSS3 脚本，将标准 A4 图块组（2列×5行）重新展开为自用图集（含合成过渡 tile 与完整形状行），输出 `A4-new_g00.png` ～ `A4-new_g23.png`（组 NN → `_gNN.png`）。**不写 `A4-new.png`**，旧产物保持原样。原始版本备份在 `A4转换器_原始备份.txt`（2026-08-30 改进前版本在 git 历史 d5b1149e）。
+**`A4转换器.rb`** 是运行在 RPG Maker VX Ace 内部的 RGSS3 脚本，将标准 A4 图块组（2列×5行）重新展开为自用图集（含合成过渡 tile 与完整形状行），输出 `A4-new_g00.png` ～ `A4-new_g23.png`（组 NN → `_gNN.png`）。**不写 `A4-new.png`**，旧产物保持原样。改进前版本在 git 历史 `d5b1149e` 可回溯。
 
 **运行方式**：在 VX Ace 脚本编辑器中粘贴全部代码 → 运行游戏 → 按 C 键退出。输出文件生成在游戏目录下。
 

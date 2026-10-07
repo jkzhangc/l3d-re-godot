@@ -1,8 +1,10 @@
 # CLAUDE.md
 
-本文件为 Claude Code (claude.ai/code) 在此仓库中工作时提供指导。
+本文件为本项目（`l3d-re-godot`）的 AI 编程助手指导。
 
-> **注意**：仓库中同时存在 `AGENTS.md`，该文件是旧版 CLAUDE.md 的衍生副本，内容已过时。**请忽略 `AGENTS.md`**，所有项目指导以本文件（`CLAUDE.md`）为准。
+> **注意**：仓库原有一份 `AGENTS.md`，内容与本文高度重叠且已过时，已于 2026-10-07 整理时**并入本文件后删除**。
+> 其独有内容（发布打包/导出过滤陷阱、RPG Maker VX Ace 素材格式、引擎参考文档结构）已合并到下文对应章节。
+> 所有项目指导以本文件为准。
 
 ## 项目概述
 
@@ -16,22 +18,30 @@
 
 | 文档 | 内容 |
 |------|------|
-| **`游戏设计方向-L3D混合.md`** | **设计总纲（2026-09 定稿）**：战斗核心、敌人阵容、角色差异化、第一章范围与里程碑 M0~M6；与其他文档冲突时以此为准 |
-| **`游戏系统架构文档.md`** | 完整系统架构（状态机、武器、菜单、存档） |
-| **`Global重构-PlayerState方案.md`** | 🔧 **进行中**：Global 单例 → PlayerState + 玩家注册表（S1–S6 已完成） |
+| **`游戏设计方向-L3D混合.md`** | **设计总纲（2026-09 定稿，需求源）**：战斗核心、敌人阵容、角色差异化、第一章范围与里程碑；与其他文档冲突时以此为准 |
+| **`原作L3D缺失功能清单.md`** | ✅ **当前唯一有效的缺口清单**（2026-10-02 以原版说明书为基准逐项 grep 核实） |
+| **`游戏系统架构文档.md`** | 系统细节参考（状态机/武器/菜单/存档等；正文多为 2026-07 快照，以代码为准） |
+| **`系统架构注释总览.md`** | 全脚本「架构定位」注释的汇总视图与分层地图 |
 | **`联机系统架构设计.md`** | 联机 v2 设计（Host 全量模拟）。仍是依据，仅 §8 原型章节作废 |
 | **`攻击系统参考.md`** | 攻击动画、子弹、弹夹/弹药、近战判定、武器槽位 |
 | **`L4D2特色机制参考.md`** | L4D2 原版机制详解（框架层参考：战役/Rush/导演/关卡） |
 | **`L4D2缺失功能清单.md`** | 相对 L4D2 的缺失功能（⚠️ 敌人章节已被 L3D 阵容方案替代，见设计总纲 §3） |
-| **`导演系统设计方案.md`** | Director AI 完整设计 + 5 阶段实施计划 |
-| **`导演系统参数参考.md`** | 全部参数速查 + 当前地图参数 |
-| **`导演系统使用指南.md`** | Director 节点放置与参数手册 |
+| **`导演系统设计方案.md`** / `导演系统参数参考.md` / `导演系统使用指南.md` | Director AI 设计 + 参数速查 + 节点放置手册 |
+| **`互动机关使用指南.md`** | 炸药/爆破墙/钥匙/锁门/同图传送类流程节点 |
+| **`技能与搓招系统.md`** / `投掷物系统.md` / `倒地救援与团灭实施方案.md` | 子系统实现说明 |
 | **`角色切换系统设计.md`** | 队伍切换/武器行走图/武器限制/菜单流程（✅ 已实现） |
+| **`防守战功能说明.md`** | 防守战（Holdout）机器交互 + 阶段机 + 联机同步 |
 | **`VX动画特效与图块系统.md`** | VXAnimSprite 参数表、VXTileMap、A4 转换器、bitmask 速查 |
 | **`A1动画图块实现方案.md`** | VX Ace A1 水流动画 → Godot TileSet 内置动画 |
 | **`TileSet工作流完整指南.txt`** | 图块素材 → TileSet → TileMapLayer 工作流 |
 | **`art/Tilesets/TileA4-Tw_bitmask速查表.txt`** | A4 墙壁自动图块 → Godot Terrain Bitmask 映射表 |
+| **`问题追踪.md`** | 历史联机问题单的闭环状态（含 8/21、8/22 原始清单） |
 | **`开发日志.md`** | 错误修复记录 + 架构变更日志 |
+| `原作安全屋台词数据.md` / `原作突袭战役*.md` / `原作147图*.md` | 原作逆向数据（台词/掉落/时间/刷怪逻辑） |
+| `标题画面布局公式.md` / `文字渐变实现方案.md` / `寻路方案对比.md` | 专项设计笔记 |
+| `Global重构-PlayerState方案.md` | ✅ 已完成（S1–S6）：Global 单例 → PlayerState + 玩家注册表，是现行 `Players`/`PlayerState` 架构的背景说明 |
+
+> 已归档：`archive/`（2026-09 的进度评估、现状风险、技术债务三份快照报告，仅作历史沿革）。
 
 ## 引擎配置
 
@@ -90,11 +100,19 @@
 | `art/misc/`、`art/Weapon/` | 杂项与武器图标 |
 | `anim/` | 动画特效场景（`.tscn`） |
 | `script/` | GDScript 脚本（`.gd`） |
-| `scene/`  | Godot 场景文件（`.tscn`） |
+| `scene/`  | Godot 场景文件（`.tscn`，`maps/` 战役地图、`ui/` HUD 等） |
 | `object/` | 可复用游戏对象、武器/角色/物品 `.tres` 数据资源 |
+| `enemys/` | 敌人数据资源（`.tres`） |
 | `tres/` | TileSet 资源文件（`.tres`） |
 | `shader/` | 自定义着色器（`.gdshader`） |
 | `music/` / `sound/` | 背景音乐 / 音效 |
+| `addons/` | Godot 插件（vx_anim_editor、vx_tilemap、phantom_camera、godot_ai） |
+| `tools/` | 构建/还原/回归脚本（RM2K3 地图还原、`net_regression.py`、`package_release.py`） |
+| `engine-reference/` | 引擎 API 参考文档（不入包） |
+
+> 美术资源使用日文描述性名称（基于内容：角色名、动画组）。存档落 `user://saves/`（导出后 `res://` 只读）。
+
+**美术资源补充**：所有纹理以 `CompressedTexture2D` 导入（默认设置，无 mipmap、无 HDR）。`art/Characters/` 角色精灵表（如 `のび太歩行セット.png`、`のび太セットナイフ.png`、`男性ゾンビ1.png` 等）。
 
 ## GDScript 风格
 
@@ -371,7 +389,30 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 约 200+ 张 RPG Maker VX Ace 格式图块（**32×32 像素**）。A1=动画自动图块、A2=地面、A3=建筑外观、A4=墙壁、A5=普通下层、B~E=上层装饰。详细格式规范见 `engine-reference/rpgvxace-docs/rpgvxace/6100_resource.html`。
 
-A4 墙壁自动图块 → Godot Terrain Bitmask 映射详见 **`VX动画特效与图块系统.md`** 和 `art/Tilesets/TileA4-Tw_bitmask速查表.txt`。
+**VX Ace 图块格式规范**（来源同上）：
+
+| 组 | 文件尺寸 | 用途 | 说明 |
+|----|---------|------|------|
+| **A1** | 512×384 | 动画自动图块（海洋、深水、瀑布） | 5 个 block，block A~D 可动画 |
+| **A2** | 512×384 | 地面自动图块 | 4 组×4 行，分 Field Type / Area Type |
+| **A3** | 512×256 | 建筑外观自动图块 | 8×4 排列，自动生成阴影 |
+| **A4** | 512×480 | 墙壁自动图块 | 8×3 排列，用于地牢生成 |
+| **A5** | 256×512 | 普通下层图块 | 8×16 排列，非自动图块 |
+| **B~E** | 512×512 | 上层装饰图块 | 16×16 排列，B 组左上角必须留空 |
+
+**角色精灵格式**：标准角色 = 4 方向（下左右上）× 3 帧，文件内 4 列×2 行（共 8 角色）；文件名加 `!` 前缀 = 取消 4 像素偏移 + 草丛半透明（门/宝箱等物件）；加 `$` 前缀 = 单角色文件（宽 1/3、高 1/4）。
+
+**A4 墙壁自动图块 → Godot Bitmask**：A4 每组 autotile 不是固定 8×3，**实际分组取决于素材排列**（如 `TileA4-Tw.png` 实测 8×5=40 tile/组，共 6 组）。Godot 中用 **TileSet Terrain + 3×3 Bitmask** 实现等价效果。参考文件（`art/Tilesets/`）：`TileA4-Tw_bitmask速查表.txt` + 3 张标注图。bitmask 速查（每组行 0~2）：
+
+```
+行0(外角/外边): TL外38  T边110  TR外76  L边55  中央255  R边205  BL外19  B边155
+行1(内角/内边): BR外137 TL内118 T内110  TR内236 L内55  中央B255 R内205  BL内179
+行2(底边/孤立): B内155  BR内137 TL孤0  T孤0   TR孤0   L孤0    C孤0    R孤0
+```
+
+A4 转换详情见 **`VX动画特效与图块系统.md`**。
+
+**RPG Maker VX Ace 帮助文档**：完整引擎文档已解压至 `engine-reference/rpgvxace-docs/`（来源 `RPGVXAce.chm`）——`rpgvxace/`=编辑器操作手册、`rgss/`=RGSS3 API 参考、`rpgvxace/6100_resource.html`=素材格式规范、`rpgvxace/3310_db_tileset.html`=图块数据库设置。
 
 ---
 
@@ -382,6 +423,56 @@ HUD/血条素材，10 张 CompressedTexture2D（无 mipmap）。命名规律：`
 
 ---
 
+## 导出与发布（2026-10-03 实测）
+
+```bash
+# 一步到位：导出 Windows 版 → 压成 zip（发布用）
+python tools/package_release.py
+#   release/l3dre_v0.32.exe       原始可执行（解压即玩）
+#   release/l3dre_v0.32_win.zip   ← 上传 itch.io / 网盘用这个
+
+# 无头检查（CI）/ 导出
+godot --headless --quit
+godot --headless --export-release "Windows Desktop" build/game.exe
+```
+
+**为什么 PC 端也要打包压缩**：Godot 的 PCK 是**原样存储**的（不像 APK 本身就是 zip）。同一份游戏 `exe 207.5 MB` vs `apk 91.7 MB`，差距几乎全来自 APK 的 deflate。exe 用 zip 压一遍 → **98.8 MB（48%）**，10 秒完成。**PC 端不需要引擎改动，分发时给压缩包即可**。
+
+**`export_presets.cfg` 的 include / exclude 语义（踩过坑）**：`exclude_filter`=**额外排除**；`include_filter`=**额外放行**（默认不导出的类型也带进来，**不是"排除"**）。曾误把 `include_filter` 填成 `*.txt,*.md,...`（本意排除），结果多打 30 MB 非资源进包 —— 现收窄为 `include_filter="操作说明.txt"`（**唯一被运行时读取的文本资源**，见 `controls_guide.gd::GUIDE_TXT_PATH`）→ exe 207.5 → 177.0 MB。
+
+⚠⚠ **绝不能把 `*.import` 加进 exclude**：Godot 4.4+ 把每个导入资源的 UID 存在其 `.import` 文件中；排除 `.import` 会导致 **UID→路径映射整体缺失**，所有 `.tres`/`.tscn` 的 UID 引用集体错位（**源文件正常、编辑器正常，只有导出包会炸**）。
+- **可安全排除**：纯数据/文档类（`*.md` `*.psd` `*.json` `*.chm` `*.log` `*.docs`）与工具产物目录。
+- **必须保留**：`*.import`、`*.remap`、`*.uid`、`.godot/imported/*`。
+- 改过滤器前先 `grep -rn "FileAccess.open\|res://.*\.\(json\|txt\)" script/` 确认运行时读哪些 `res://` 文本文件；`config.json` **故意**在导出中排除（发版不带开发者本地设置）。
+
+✅ **导出后必须实测**（该项目类别错误只在导出包暴露，项目内跑用例查不出）：
+
+```bash
+cd release
+./l3dre_v0.32.exe --headless --net-test=host --net-test-scene=enemies 2>&1 | grep -iE "uid|invalid|no loader"
+# 再核对 release/l3d_error_log.txt 里无 invalid UID / No loader found
+```
+
+⚠ **导出前必须关闭 Godot 编辑器** —— 编辑器会在退出/导出时把内存里的 `export_presets.cfg` 写回磁盘，覆盖掉对导出配置的改动。
+
+---
+
 ## 引擎参考文档（engine-reference/）
 
-`engine-reference/` 包含 Godot/Unity/Unreal 的版本锁定 API 参考。**本项目使用 Godot 4.6**，编写代码时优先参考 `engine-reference/godot/`：`VERSION.md` → `deprecated-apis.md` → `breaking-changes.md` → `modules/*.md`。Godot 4.6 发布于 2026 年 1 月，LLM 知识截止 ~4.3，API 偏差风险高。
+`engine-reference/` 包含三大引擎的版本锁定 API 参考（因 LLM 知识截止早于各引擎最新版本）。**本项目使用 Godot 4.6**，编写代码时优先参考 `engine-reference/godot/`：`VERSION.md` → `deprecated-apis.md` → `breaking-changes.md` → `modules/*.md`。
+
+```
+engine-reference/
+├── README.md
+├── godot/     VERSION.md · breaking-changes.md · deprecated-apis.md · current-best-practices.md · modules/{animation,audio,input,navigation,networking,physics,rendering,ui}.md
+├── unity/     同上 + PLUGINS.md + plugins/{addressables,cinemachine,dots-entities}.md
+└── unreal/    同上 + PLUGINS.md + plugins/{common-ui,gameplay-ability-system,gameplay-camera-system,pcg}.md
+```
+
+| 引擎 | 版本 | 发布日期 | LLM 知识截止 | 风险 |
+|------|------|----------|-------------|------|
+| **Godot** | 4.6 | 2026 年 1 月 | ~4.3 | 高 — 4.4/4.5/4.6 有重大变更 |
+| **Unity** | 6.3 LTS | 2025 年 12 月 | ~2022 LTS | 高 — Unity 6 系列全面重构 |
+| **Unreal** | 5.7 | 2025 年 11 月 | ~5.3 | 高 — 5.4~5.7 有重大变更 |
+
+**使用顺序**：①读对应引擎 `VERSION.md` 确认版本 → ②查 `deprecated-apis.md` 避免废弃 API → ③查 `breaking-changes.md` 了解破坏性变更 → ④按任务读 `modules/*.md`。
