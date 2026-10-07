@@ -1,16 +1,20 @@
-[gd_scene load_steps=3 format=3 uid="uid://csavpnt0l3d1"]
+[gd_scene format=3 uid="uid://csavpnt0l3d1"]
 
-[ext_resource type="Script" path="res://script/save_point.gd" id="1_savepoint"]
+[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="1_savepoint"]
+[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="2_in5up"]
 
 [sub_resource type="RectangleShape2D" id="SavePointRect"]
 size = Vector2(32, 32)
 
-[node name="SavePoint" type="Node2D"]
+[node name="SavePoint" type="Node2D" unique_id=1088350981]
 script = ExtResource("1_savepoint")
+walk_texture = ExtResource("2_in5up")
+walk_char_index = 6
 
-[node name="Collision" type="StaticBody2D" parent="."]
+[node name="Collision" type="StaticBody2D" parent="." unique_id=634132932]
+position = Vector2(0, 16)
 collision_layer = 33
 collision_mask = 0
 
-[node name="Shape" type="CollisionShape2D" parent="Collision"]
+[node name="Shape" type="CollisionShape2D" parent="Collision" unique_id=565350428]
 shape = SubResource("SavePointRect")

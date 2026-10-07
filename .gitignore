@@ -60,9 +60,17 @@ tools/**/*.exe
 # CHM 帮助文档源（6MB，chm_extract/ 已由其派生）
 /rpg2003.chm
 .workbuddy/
+# ── 发布产物目录：整目录排除（.gdignore 已被跟踪，保留）──
+# 2026-10-07：补 *.zip（约 96MB 分发包）与运行期杂项；exe/apk/pck 此前已排除
 release/*.exe
 release/*.apk
 release/*.pck
+release/*.zip
+release/config.json
+release/l3d_error_log.txt
+
+# 外部工具目录（Trae 等第三方 AI 工具的工作文件，非项目源）
+/.trae/
 
 # 安卓签名密钥库 —— 切勿入库（泄露 = 别人能冒名签发你的应用）
 *.keystore

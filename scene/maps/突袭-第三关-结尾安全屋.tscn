@@ -30,8 +30,7 @@
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="16_mfjch"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="17_s2v06"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="18_xcdn1"]
-[ext_resource type="Script" uid="uid://bn4bhfat04f5j" path="res://script/save_point.gd" id="23_548yc"]
-[ext_resource type="Texture2D" uid="uid://dn2ll5l72epf7" path="res://art/Characters/[2K-VX]-カラス.png" id="24_d45xp"]
+[ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="23_847u6"]
 
 [sub_resource type="Resource" id="Resource_tgboo"]
 script = ExtResource("7_n6iv6")
@@ -187,12 +186,8 @@ y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAHAAMAAAAAAAAAAAAHAAQAAAABAAAAAAA=")
 tile_set = ExtResource("3_0j83v")
 
-[node name="SavePoint" type="Node2D" parent="UpperLayer" unique_id=753137823]
+[node name="SavePoint" parent="UpperLayer" unique_id=1088350981 instance=ExtResource("23_847u6")]
 position = Vector2(368, 128)
-script = ExtResource("23_548yc")
-walk_texture = ExtResource("24_d45xp")
-walk_char_index = 6
-metadata/_custom_type_script = "uid://bn4bhfat04f5j"
 
 [node name="GameInit" type="Node" parent="." unique_id=2012107607]
 script = ExtResource("5_6gpxu")

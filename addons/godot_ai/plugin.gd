@@ -83,10 +83,25 @@ const HANDLERS_DIR := "res://addons/godot_ai/handlers/"
 ## resolver, and characterization tests share one source of truth.
 const SERVER_PID_FILE := PortResolver.SERVER_PID_FILE
 
-## How long we watch the spawned server for early exit. If the process is
-## still alive when this expires, we stop watching. Mid-session crashes
-## after this point get caught by the WebSocket disconnect flow.
+## How long we watch the spawned server for early exit once it has PROVEN it
+## started — i.e. published its pid-file. If the process is still alive when
+## this expires, we stop watching. Mid-session crashes after this point get
+## caught by the WebSocket disconnect flow.
 const SERVER_WATCH_MS := 30 * 1000
+## Watch ceiling for a spawn that has NOT yet published its pid-file (#896).
+##
+## The short window above justifies itself with "mid-session crashes surface
+## via WebSocket disconnect" — which is only true for a server that got far
+## enough to be connected to. A cold `uvx` spawn on a slow link can still be
+## resolving and downloading its ~67-package environment at 30s, having proven
+## nothing; stopping the watch there means a launcher that dies at 45s is never
+## observed, `_diagnose_spawn_fast_exit` never runs (it is only reachable from
+## inside the watch), and the plugin redials forever while the dock shows a
+## bare "Disconnected".
+##
+## Sized to cover that download. Independent of any pre-warm: this window has
+## to hold even when nothing warmed the cache first.
+const SERVER_COLD_START_WATCH_MS := 180 * 1000
 ## Python's import graph (FastMCP + Rich + uvicorn) plus the pid-file write
 ## take a beat on cold starts, especially on Windows. Hold off on declaring
 ## a spawn a crash until this window elapses so the watch loop has time to
@@ -391,6 +406,7 @@ func _enter_tree() -> void:
 	_dispatcher.register_lazy("game_command", "editor", &"game_command")
 	_dispatcher.register_lazy("get_project_setting", "project", &"get_project_setting")
 	_dispatcher.register_lazy("set_project_setting", "project", &"set_project_setting")
+	_dispatcher.register_lazy("set_main_scene", "project", &"set_main_scene")
 	_dispatcher.register_lazy("run_project", "project", &"run_project")
 	_dispatcher.register_lazy("stop_project", "project", &"stop_project")
 	_dispatcher.register_lazy("search_filesystem", "project", &"search_filesystem")
@@ -607,6 +623,10 @@ func _exit_tree() -> void:
 	if _headless_disabled:
 		_server_started_this_session = false
 		_headless_disabled = false
+		## `_lifecycle` is built in _init(), before the headless guard in
+		## _enter_tree() runs, so it exists even on this path — null it here
+		## too (the full teardown below is skipped).
+		_lifecycle = null
 		return
 
 	if _custom_tool_registry != null:
@@ -664,6 +684,12 @@ func _exit_tree() -> void:
 	## same-session disable/enable cycle) to adopt. Explicit stops (dock
 	## Restart, update reload) still kill via _stop_server.
 	_lifecycle.teardown_for_editor_exit()
+	## Match the nulling every sibling field gets above. `_lifecycle` was built
+	## as ServerLifecycleManager.new(self), so it holds the plugin back —
+	## leaving the field set keeps the manager and its scripts alive past
+	## plugin teardown (surfaces as leaked ObjectDB instances / "resource still
+	## in use" for server_lifecycle.gd + server_version_check.gd at editor exit).
+	_lifecycle = null
 	## Symmetric with prepare_for_update_reload: the static guard persists
 	## across disable/enable within a single editor session, so the re-enabled
 	## plugin instance's _start_server would short-circuit and never respawn.
@@ -1004,6 +1030,11 @@ static func _project_status_payload(parsed: Dictionary) -> Dictionary:
 		## skew. Older servers omit it; treat the missing field as "".
 		"package_path": str(parsed.get("package_path", "")),
 	}
+	## #913: live server telemetry state. Absent on older backends so the
+	## dock can tell "too old to publish" from an explicit false.
+	var telemetry_enabled: Variant = parsed.get("telemetry_enabled")
+	if telemetry_enabled is bool:
+		projected["telemetry_enabled"] = telemetry_enabled
 	## #824: advisory attach-lease count, consumed by teardown to decide
 	## detach-vs-kill. Absent stays absent rather than defaulting to 0, so
 	## `ServerLifecycleManager.active_lease_count` keeps distinguishing "backend
@@ -1146,11 +1177,12 @@ func _on_server_version_unverified() -> void:
 	_update_process_enabled()
 
 
-## Start a 1s-tick timer that watches the spawned server for up to
-## SERVER_WATCH_MS. If the process dies inside the window we drain the
-## captured pipes and mark the server as crashed so the dock can surface
-## what went wrong. After the window expires we close the pipes so they
-## don't pin file descriptors or fill their kernel buffers. See #146.
+## Start a 1s-tick timer that watches the spawned server through its cold-start
+## window, then for SERVER_WATCH_MS after pid-file publication. If the process
+## dies inside the active window we drain the captured pipes and mark the server
+## as crashed so the dock can surface what went wrong. After the window expires
+## we close the pipes so they don't pin file descriptors or fill their kernel
+## buffers. See #146 and #896.
 func _start_server_watch() -> void:
 	_stop_server_watch()
 	_server_watch_timer = Timer.new()
@@ -1873,7 +1905,7 @@ func _resume_connection_after_recovery() -> void:
 	_arm_server_version_check()
 
 
-func recover_incompatible_server(user_initiated: bool = true) -> bool:
+func recover_incompatible_server(user_initiated: bool = true, stale_version: String = "") -> bool:
 	## A user's click (the dock's Restart) authorizes the bounded
 	## stale-occupant retry for this episode, so a bridge respawning the old
 	## version and winning the post-kill bind race gets re-killed
@@ -1888,7 +1920,7 @@ func recover_incompatible_server(user_initiated: bool = true) -> bool:
 	## (#678): `_resume_connection_after_recovery` gates on the post-walk
 	## state, so it must not run until the respawn walk has completed. With
 	## `defer_blocking_work` off this completes synchronously.
-	if not await _lifecycle.recover_incompatible_server():
+	if not await _lifecycle.recover_incompatible_server(stale_version):
 		return false
 	_resume_connection_after_recovery()
 	return true
