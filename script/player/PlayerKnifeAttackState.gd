@@ -13,6 +13,9 @@ extends State
 ## 在 melee_hit_at_sequence_idx 处创建判定区域
 ## 动画结束后切回 Knife（READY 阶段，跳过举起动画）
 
+## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
+const HitResolver := preload("res://script/hit_resolver.gd")
+
 var _wd: WeaponData = null
 var _seq_idx: int = 0
 var _timer: float = 0.0
@@ -155,7 +158,7 @@ func _create_melee_hitbox() -> void:
 	_hitbox = Area2D.new()
 	_hitbox.name = "MeleeHitbox"
 	_hitbox.collision_layer = 0   ## 不需要属于任何层
-	_hitbox.collision_mask = 24   ## 检测层 4（敌人物理体）+ 层 5（受击碰撞体）
+	_hitbox.collision_mask = HitResolver.ENEMY_HIT_MASK   ## 层 4（敌人物理体）+ 层 5（受击碰撞体）
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var rect: RectangleShape2D = RectangleShape2D.new()
@@ -283,10 +286,8 @@ func _record_chapter_hit(hp_before: float, hp_after: float, backstab: bool = fal
 
 
 func _is_target_dead(target: Node) -> bool:
-	## 检查目标是否已死亡（敌人 _is_dead 或 玩家 _is_dying）
-	if target == null:
-		return true
-	return target.get("_is_dead") == true or target.get("_is_dying") == true
+	## 检查目标是否已死亡（敌人 _is_dead 或 玩家 _is_dying）—— 判据收敛到 HitResolver。
+	return HitResolver.is_removed(target)
 
 
 func _cleanup_hitbox() -> void:

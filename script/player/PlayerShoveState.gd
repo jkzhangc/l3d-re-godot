@@ -14,6 +14,9 @@ extends State
 ## 动画结束后直接切回武器举起状态（无攻击后动画）
 ## 敌人被推中：闪白 2 帧（由 enemy._play_hit_feedback 处理）
 
+## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
+const HitResolver := preload("res://script/hit_resolver.gd")
+
 var _wd: WeaponData = null
 var _seq_idx: int = 0
 var _timer: float = 0.0
@@ -124,7 +127,7 @@ func _create_shove_hitbox() -> void:
 	_hitbox = Area2D.new()
 	_hitbox.name = "ShoveHitbox"
 	_hitbox.collision_layer = 0
-	_hitbox.collision_mask = 24  ## 检测层 4（敌人物理体）+ 层 5（受击碰撞体）
+	_hitbox.collision_mask = HitResolver.ENEMY_HIT_MASK  ## 层 4（敌人物理体）+ 层 5（受击碰撞体）
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var rect: RectangleShape2D = RectangleShape2D.new()
@@ -188,9 +191,8 @@ func _check_shove_hits() -> void:
 
 
 func _is_target_dead(target: Node) -> bool:
-	if target == null:
-		return true
-	return target.get("_is_dead") == true or target.get("_is_dying") == true
+	## 判据收敛到 HitResolver（与近战/联机侧同一份定义）。
+	return HitResolver.is_removed(target)
 
 
 ## 溅射击退：对被推中目标周围的敌人施加击退效果（仅一级，不连锁）
@@ -236,8 +238,8 @@ func _apply_splash_knockback(hit_ids: Array[int]) -> void:
 		if splash_dir == Vector2.ZERO:
 			splash_dir = character.get_facing_vector()
 
-		# 溅射击退力度衰减：边缘=50%，中心=100%
-		var falloff: float = 1.0 - (dist / splash_radius) * 0.5
+		# 溅射击退力度衰减：边缘=50%，中心=100%（曲线与 Host 共用 HitResolver.splash_falloff）
+		var falloff: float = HitResolver.splash_falloff(dist, splash_radius)
 		var splash_force: float = _wd.shove_knockback_force * falloff
 
 		enemy.take_damage(0.0, splash_force, splash_dir, false, _wd.shove_knockback_duration * falloff, 0.0)

@@ -150,9 +150,8 @@ static func _tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
 	## 扫描根取「本节点所在的顶层场景节点」，而不是 SceneTree.current_scene ——
 	## 传送可能发生在 current_scene 还没指向新场景的那一帧（换图刚完成时），
 	## 那时按 current_scene 扫会扫到旧图上，图块检查静默失效。
-	var scan_root: Node = _topmost_scene_node(world_node, tree)
-	var layers: Array[TileMapLayer] = []
-	_collect_tilemaps(scan_root, layers)
+	## 图层列表按顶层场景节点缓存，避免每次调用都递归整树（见 _cached_layers）。
+	var layers: Array[TileMapLayer] = _cached_layers(world_node, tree)
 	for tm: TileMapLayer in layers:
 		if not is_instance_valid(tm) or tm.tile_set == null:
 			continue
@@ -184,8 +183,7 @@ static func _has_any_tile(world_node: Node2D, pos: Vector2) -> bool:
 	var tree: SceneTree = world_node.get_tree()
 	if tree == null:
 		return true
-	var layers: Array[TileMapLayer] = []
-	_collect_tilemaps(_topmost_scene_node(world_node, tree), layers)
+	var layers: Array[TileMapLayer] = _cached_layers(world_node, tree)
 	if layers.is_empty():
 		return true
 	for tm: TileMapLayer in layers:
@@ -201,6 +199,50 @@ static func _collect_tilemaps(node: Node, out: Array[TileMapLayer]) -> void:
 		out.append(node as TileMapLayer)
 	for child: Node in node.get_children():
 		_collect_tilemaps(child, out)
+
+
+## ── 图层列表缓存（2026-10-08 性能修复）──
+## 【为什么需要它】`_tile_blocked` / `_has_any_tile` 是**每只敌人每帧、每个探测点**都要调用的
+## 判据：卡墙自救（`enemy.gd::_rescue_if_stuck`）在找不到可站点时会做 6 环 × 12 角度 = 72 次
+## 候选探测，每次探测都走一遍 `_tile_blocked` + `_has_any_tile`；而每个都递归整棵场景树重新
+## 收集 TileMapLayer。实测（无头、锁 60fps）：20 只敌人被挤入墙时帧率掉到 41fps，禁用该自救
+## 即恢复满帧 —— 递归整树是纯冗余开销。
+##
+## 【为什么只缓存"图层节点列表"而不缓存判定结果】
+## 判定结果依赖 pos（每帧每点都不同），缓存无意义；图层**节点列表**则在同一张图内恒定
+## （`blast_wall` 只 erase_cell 改格子内容，不增删 TileMapLayer 节点）。
+##
+## 【失效策略】缓存「顶层场景节点的 instance_id + 图层数组」，命中时再校验图层仍有效。
+## 换图时 scan_root 变成新节点 → instance_id 不同 → 自动重扫；同一张图内直接命中缓存。
+## ⚠ 不直接持有 Node 引用（避免"退出时 ObjectDB 泄漏"告警）；改用 instance_id 比对后
+## 再逐个 `is_instance_valid` 校验缓存图层 —— 即便 instance_id 被复用（旧树已释放、新树
+## 恰好同 id），旧图层也已失效 → 校验不过 → 安全重扫，不会命中陈旧图层。
+const _NO_ROOT_ID: int = 0
+static var _layer_cache_root_id: int = _NO_ROOT_ID
+static var _layer_cache_layers: Array[TileMapLayer] = []
+
+static func _cached_layers(world_node: Node2D, tree: SceneTree) -> Array[TileMapLayer]:
+	var scan_root: Node = _topmost_scene_node(world_node, tree)
+	if scan_root != null:
+		var root_id: int = scan_root.get_instance_id()
+		if root_id == _layer_cache_root_id and _cache_layers_still_valid():
+			return _layer_cache_layers
+		var layers: Array[TileMapLayer] = []
+		_collect_tilemaps(scan_root, layers)
+		_layer_cache_root_id = root_id
+		_layer_cache_layers = layers
+		return layers
+	## scan_root 为 null（极端时序）：不缓存，直接现算。
+	var fallback: Array[TileMapLayer] = []
+	_collect_tilemaps(world_node, fallback)
+	return fallback
+
+
+static func _cache_layers_still_valid() -> bool:
+	for tm: TileMapLayer in _layer_cache_layers:
+		if not is_instance_valid(tm):
+			return false
+	return true
 
 
 ## 本节点所在的顶层场景节点（SceneTree.root 的下一层）。

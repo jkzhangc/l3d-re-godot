@@ -57,6 +57,24 @@ const SPRAY_TEXTS: Array[Texture2D] = [
 @onready var support_icon: TextureRect = $SupportIcon
 
 var _last_tp: int = -1
+## ── 每帧刷新脏检查缓存（2026-10-08 性能）──
+## refresh() 每帧都跑，但绝大多数帧只是打开菜单/移动、数值根本没变。旧实现每帧无条件：
+## 重建弹药字符串（`"%d/%d" % [...]`）、给 TextureRect 重赋 texture+size、线性扫 inventory
+## 数备弹。改为「值未变则跳过」，与 _last_tp 同款范式。显示结果完全一致。
+var _last_hp_ratio: float = -1.0
+var _last_spray_total: int = -1
+var _last_primary_weapon: WeaponData = null
+var _last_secondary_weapon: WeaponData = null
+## 哨兵：真实弹药文本形如 "12/30" / "5/∞"，绝不可能等于该值。
+const AMMO_TEXT_UNSET: String = "<unset>"
+var _last_primary_ammo_text: String = AMMO_TEXT_UNSET
+var _last_secondary_ammo_text: String = AMMO_TEXT_UNSET
+var _last_throwable_item: ItemData = null
+var _last_throwable_count: int = -1
+var _last_support_item: ItemData = null
+## 首次刷新强制应用：场景里的图标节点预置了占位纹理（非空），若首帧缓存恰为 null 且当前值
+## 也是 null，脏检查会判定"未变"而跳过 → 占位图残留（显示 bug）。首刷绕过所有脏检查。
+var _force_refresh: bool = true
 
 
 func _ready() -> void:
@@ -124,14 +142,18 @@ func refresh() -> void:
 	_update_spray()
 	_update_weapons()
 	_update_consumables()
+	_force_refresh = false
 
 
 func _update_hp() -> void:
+	if hp_fill == null:
+		return
 	var state: PlayerState = Players.get_active_state()
 	var hp: float = state.current_hp
 	var max_hp: float = state.get_max_hp()
 	var ratio: float = clampf(hp / max_hp, 0.0, 1.0)
-	if hp_fill:
+	if _force_refresh or ratio != _last_hp_ratio:
+		_last_hp_ratio = ratio
 		hp_fill.scale = Vector2(ratio, 1.0)
 
 
@@ -171,7 +193,8 @@ func _update_spray() -> void:
 	# 不要改回 spray_total()：联机那是各座位求和，客户端会显示主机的数量而自己恒 0。
 	var total: int = Players.spray_display_count()
 	var n: int = clampi(total, 0, SPRAY_TEXTS.size() - 1)
-	if spray_count:
+	if spray_count and (_force_refresh or n != _last_spray_total):
+		_last_spray_total = n
 		spray_count.texture = SPRAY_TEXTS[n]
 		spray_count.size = SPRAY_TEXTS[n].get_size()
 
@@ -180,45 +203,67 @@ func _update_weapons() -> void:
 	var state: PlayerState = Players.get_active_state()
 	var primary: WeaponData = state.get_equipped_weapon("primary")
 	var secondary: WeaponData = state.get_equipped_weapon("secondary")
-	if primary_icon:
+	## 图标脏检查：只有"当前武器对象变化"才重赋 texture/size（武器引用不变 → 图标必不变）。
+	if primary_icon and (_force_refresh or primary != _last_primary_weapon):
+		_last_primary_weapon = primary
 		if primary and primary.icon:
 			primary_icon.texture = primary.icon
 			primary_icon.size = primary.icon.get_size()
 			primary_icon.visible = true
 		else:
 			primary_icon.visible = false
-	if secondary_icon:
+	if secondary_icon and (_force_refresh or secondary != _last_secondary_weapon):
+		_last_secondary_weapon = secondary
 		if secondary and secondary.icon:
 			secondary_icon.texture = secondary.icon
 			secondary_icon.size = secondary.icon.get_size()
 			secondary_icon.visible = true
 		else:
 			secondary_icon.visible = false
-	_update_ammo_label(primary_ammo_label, primary, state)
-	_update_ammo_label(secondary_ammo_label, secondary, state)
+	_update_ammo_label(primary_ammo_label, primary, state, true)
+	_update_ammo_label(secondary_ammo_label, secondary, state, false)
 
 
 ## 武器图标上的「弹夹/备弹」显示；近战等无弹夹武器（magazine_capacity=0）隐藏。
 ## 备弹无限（WeaponData.ammo_is_infinite，如手枪）显示「弹夹/∞」。
-func _update_ammo_label(label: Label, weapon: WeaponData, state: PlayerState) -> void:
+## `is_primary` 决定脏检查用哪一份缓存（两把武器各自独立）。
+func _update_ammo_label(label: Label, weapon: WeaponData, state: PlayerState, is_primary: bool) -> void:
 	if not label:
 		return
+	var last_text: String = _last_primary_ammo_text if is_primary else _last_secondary_ammo_text
 	if weapon == null or weapon.magazine_capacity <= 0:
-		label.visible = false
+		if last_text != "":
+			if is_primary:
+				_last_primary_ammo_text = ""
+			else:
+				_last_secondary_ammo_text = ""
+			label.visible = false
 		return
+	## last_text 为 AMMO_TEXT_UNSET（哨兵）时必然 != text → 首次必刷，无需特殊分支。
 	var mag: int = state.get_magazine_ammo(weapon.item_id)
+	var text: String
 	if weapon.ammo_is_infinite:
-		label.text = "%d/∞" % mag
+		text = "%d/∞" % mag
 	else:
-		label.text = "%d/%d" % [mag, state.count_ammo_item(weapon.ammo_item_id)]
+		text = "%d/%d" % [mag, state.count_ammo_item(weapon.ammo_item_id)]
+	if text != last_text:
+		if is_primary:
+			_last_primary_ammo_text = text
+		else:
+			_last_secondary_ammo_text = text
+		label.text = text
 	label.visible = true
 
 
 ## 投掷物 / 辅助品图标：持有对应物品时显示其 icon，位于副武器图标列下方。
 func _update_consumables() -> void:
 	var state: PlayerState = Players.get_active_state()
-	_set_item_icon(throwable_icon, state.throwable)
-	_set_item_icon(support_icon, state.support_item)
+	if _force_refresh or state.throwable != _last_throwable_item:
+		_last_throwable_item = state.throwable
+		_set_item_icon(throwable_icon, state.throwable)
+	if _force_refresh or state.support_item != _last_support_item:
+		_last_support_item = state.support_item
+		_set_item_icon(support_icon, state.support_item)
 	_update_throwable_count(state)
 
 
@@ -227,11 +272,14 @@ func _update_consumables() -> void:
 func _update_throwable_count(state: PlayerState) -> void:
 	if not throwable_count_label:
 		return
-	if state.throwable and state.throwable_count > 0:
-		throwable_count_label.text = "×%d" % state.throwable_count
-		throwable_count_label.visible = true
-	else:
-		throwable_count_label.visible = false
+	var shown: int = state.throwable_count if (state.throwable and state.throwable_count > 0) else -1
+	if _force_refresh or shown != _last_throwable_count:
+		_last_throwable_count = shown
+		if shown > 0:
+			throwable_count_label.text = "×%d" % shown
+			throwable_count_label.visible = true
+		else:
+			throwable_count_label.visible = false
 
 
 func _set_item_icon(rect: TextureRect, item: ItemData) -> void:

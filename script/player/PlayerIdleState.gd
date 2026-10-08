@@ -1,10 +1,10 @@
-extends State
+extends "res://script/player/PlayerGroundState.gd"
 
 ## ── 架构定位 ──
-## 系统：玩家状态机 ｜ 层：玩法（State）
+## 系统：玩家状态机 ｜ 层：玩法（State，继承 PlayerGroundState）
 ## 联机：Host 注入已验证输入
 ## 职责：站立状态：速度归零，消费武器/消耗品/投掷/举枪等边沿输入，按移动输入切 Walk/Run。
-## 依赖：State、Player 实体、PlayerState
+## 依赖：PlayerGroundState、Player 实体、PlayerState
 
 ## 单机由本状态读取本地输入；联机 Host 不走这里读取键盘，而由 NetworkWorld 注入已验证输入。
 ## 站立状态 — 玩家不移动时
@@ -16,58 +16,18 @@ func enter() -> void:
 
 
 func process_update(_delta: float) -> void:
-	# 直接举起武器
-	if Global.item_key_just_pressed("主武器键"):
-		_try_raise_weapon("primary")
-		return
-	if Global.item_key_just_pressed("副武器键"):
-		_try_raise_weapon("secondary")
+	## 武器/消耗品/投掷输入由基类统一消费（逻辑与优先级同旧实现）。
+	if _consume_common_inputs():
 		return
 
-	# 使用消耗品
-	if Global.item_key_just_pressed("治疗品键"):
-		character.use_healing_item()
-		return
-	if Global.item_key_just_pressed("辅助品键"):
-		character.use_support_item()
-		return
-
-	# 投掷物
-	if Global.item_key_just_pressed("投掷物键"):
-		_try_throwable()
-		return
-
-	if Input.is_action_just_pressed("举起放下武器键"):
-		_try_weapon_state()
-		return
-
-	var move_dir: Vector2 = Global.move_input()
+	var move_dir: Vector2 = PlayerInput.move_vector()
 	if move_dir == Vector2.ZERO:
 		return
 
-	if Input.is_action_pressed("行走键"):
+	if PlayerInput.is_walk_held():
 		transition_requested.emit("Walk")
 	else:
 		transition_requested.emit("Run")
-
-
-func _try_weapon_state() -> void:
-	var wd: WeaponData = get_player_state().get_active_weapon()
-	if wd and not wd.weapon_state_name.is_empty():
-		transition_requested.emit(wd.weapon_state_name)
-
-
-func _try_raise_weapon(slot: String) -> void:
-	var wd: WeaponData = get_player_state().get_equipped_weapon(slot)
-	if not wd or wd.weapon_state_name.is_empty():
-		return
-	get_player_state().active_weapon_slot = slot
-	transition_requested.emit(wd.weapon_state_name)
-
-
-func _try_throwable() -> void:
-	if get_player_state().throwable:
-		transition_requested.emit("Throwable")
 
 
 func physics_update(delta: float) -> void:

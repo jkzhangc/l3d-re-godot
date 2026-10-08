@@ -175,7 +175,14 @@ func _create_network_world() -> void:
 			break
 	if not is_inside_tree() or not tree.current_scene:
 		return
-	var world := preload("res://script/network_world.gd").new()
+	## 仅当命令行含 `--net-test` 前缀参数（无头回归）时才加载 harness 子类；
+	## 正式游戏路径始终使用生产脚本，绝不触碰回归脚手架。
+	var world_script_path := "res://script/network_world.gd"
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test"):
+			world_script_path = "res://script/net_regression_harness.gd"
+			break
+	var world: Node = (load(world_script_path) as GDScript).new()
 	world.name = "NetworkWorld"
 	tree.current_scene.add_child(world)
 	print("[GameInit] 已进入 Phase 1 Host 权威联机世界")

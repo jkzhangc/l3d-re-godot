@@ -233,7 +233,10 @@ func _process(delta: float) -> void:
 	## 一帧只算一次后传给各消费者，避免在 60Hz 热路径上重复遍历玩家表。
 	var teammates: Array[Node2D] = spawn_reference_players()
 	if teammates.is_empty():
-		teammates.append(player)  ## 兜底：极端时序下至少保留主参考
+		## 兜底：极端时序下至少保留主参考。
+		## ⚠ 必须另建局部数组 —— spawn_reference_players() 现在返回**共享的每帧缓存**，
+		## 就地 append 会污染同一帧其它调用者拿到的同一份数组。
+		teammates = [player]
 	## ★玩家运动实测（2026-09-26）：必须在 pick_spawn_anchor / fs.update **之前**采样，
 	## 否则本帧的锚点权重与前方方向用的还是上一帧的数据（首帧更是全 0）。
 	sample_player_motion(teammates, delta)
@@ -340,6 +343,45 @@ func _process(delta: float) -> void:
 # ═══════════════════════════════════════
 
 var _frozen_by_death: bool = false  ## 全员死亡触发的冻结标志（场景重载、玩家复活后自动解除）
+
+## ── 每帧玩家集合缓存（2026-10-08 性能）──
+## `_find_player()` / `spawn_reference_players()` 在一帧内被多处高频调用：
+##   _process 顶部、`_is_walkable` 的**每次取点**（ring×angle 采样 + 36 次近点尝试）、
+##   players_moving、nearest_player_distance、_count_alive_tanks、_nearby_spawn_blocked…
+## 而旧实现每次调用都走 `Players.all_entities()` → **新分配 Array + `_prune_invalid()`**。
+## 同一帧内玩家集合（哪些节点）不变，缓存一次即可。按 idle 帧号失效。
+## ⚠ 返回的是**共享数组**，调用方**不得 append/erase**（只读遍历）。唯一会改写的
+##   `_process` 兜底分支已改为另建局部数组（见该处注释）。
+var _frame_players_frame: int = -1
+var _frame_ref_players: Array[Node2D] = []
+var _frame_all_entities: Array[Node2D] = []
+
+
+## 本帧「可作刷怪/回收基准的存活玩家」（排除 _is_dying / _is_dead）。同一帧内共享。
+func _cached_reference_players() -> Array[Node2D]:
+	var fno: int = Engine.get_process_frames()
+	if fno != _frame_players_frame:
+		_frame_players_frame = fno
+		_frame_ref_players = _build_reference_players()
+		_frame_all_entities = Players.all_entities()
+	return _frame_ref_players
+
+
+## 本帧 `Players.all_entities()` 视图（仅排除 _is_dying，与旧 `_find_player()` 同口径）。
+func _cached_all_entities() -> Array[Node2D]:
+	_cached_reference_players()  ## 确保两个缓存同帧一起刷新
+	return _frame_all_entities
+
+
+func _build_reference_players() -> Array[Node2D]:
+	var out: Array[Node2D] = []
+	for e: Node2D in Players.all_entities():
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		out.append(e)
+	return out
 
 func _are_all_players_dead() -> bool:
 	## 全部玩家实体都处于死亡/濒死状态（单机=唯一玩家死亡；联机=Host 上全灭）。
@@ -1289,6 +1331,18 @@ func set_combat(active: bool) -> void:
 ## 上一次"生成图判定"的结果（-1 = 未初始化）。用于只在该判定翻转时打一条日志 ——
 ## 安全屋/静默图不刷怪这件事没有别的可观测点，出问题时只能靠这行确认判成了什么。
 var _last_spawn_verdict: int = -1
+## ── 生成图判定缓存（2026-10-08 性能）──
+## `_is_spawn_map()` 每帧在 _process 顶部调用；旧实现每次都对场景路径 `to_lower()` 并
+## 对每个关键字再 `to_lower()` 一次做子串搜索 —— 全是每帧重复的字符串运算。
+## 判定只取决于「场景路径 + 关键字表 + auto_spawn_enabled」，这些在一张图内不变；
+## 按「场景路径」缓存结果，换图（路径变化）自动重算。
+## 哨兵：绝不可能等于任何真实 `scene_file_path`（后者恒以 "res://" 开头）。
+const _SCENE_PATH_SENTINEL: String = "<unset>"
+var _spawn_map_cache_path: String = _SCENE_PATH_SENTINEL
+var _spawn_map_cache_verdict: bool = false
+## 关键字小写化缓存（首用时构造一次）
+var _spawn_kw_lower: PackedStringArray = PackedStringArray()
+var _safe_kw_lower: PackedStringArray = PackedStringArray()
 
 
 func _is_spawn_map() -> bool:
@@ -1307,24 +1361,40 @@ func _is_spawn_map() -> bool:
 
 
 func _evaluate_spawn_map() -> bool:
-	if not auto_spawn_enabled:
-		return false
 	var tree: SceneTree = get_tree()
 	if not tree or not tree.current_scene:
 		return false
-	var scene_path: String = tree.current_scene.scene_file_path.to_lower()
+	var scene_path_raw: String = tree.current_scene.scene_file_path
+	if scene_path_raw == _spawn_map_cache_path:
+		return _spawn_map_cache_verdict
+	var verdict: bool = _evaluate_spawn_map_uncached(scene_path_raw)
+	_spawn_map_cache_path = scene_path_raw
+	_spawn_map_cache_verdict = verdict
+	return verdict
+
+
+func _evaluate_spawn_map_uncached(scene_path_raw: String) -> bool:
+	if not auto_spawn_enabled:
+		return false
+	var scene_path: String = scene_path_raw.to_lower()
+	if _spawn_kw_lower.is_empty() and not spawn_map_keywords.is_empty():
+		for kw: String in spawn_map_keywords:
+			_spawn_kw_lower.append(kw.to_lower())
+	if _safe_kw_lower.is_empty() and not safe_room_keywords.is_empty():
+		for kw: String in safe_room_keywords:
+			_safe_kw_lower.append(kw.to_lower())
 	# 白名单：指定了关键字则必须匹配
 	if spawn_map_keywords.size() > 0:
 		var matched: bool = false
-		for kw: String in spawn_map_keywords:
-			if kw.to_lower() in scene_path:
+		for kw: String in _spawn_kw_lower:
+			if kw in scene_path:
 				matched = true
 				break
 		if not matched:
 			return false
 	# 黑名单：安全屋不生成
-	for kw: String in safe_room_keywords:
-		if kw.to_lower() in scene_path:
+	for kw: String in _safe_kw_lower:
+		if kw in scene_path:
 			return false
 	return true
 
@@ -1363,6 +1433,10 @@ func _check_scene_change() -> void:
 	if scene == _last_scene:
 		return
 	_last_scene = scene
+	# 场景切换 → 失效生成图判定缓存 + 关键字小写缓存（新图配置可能不同）
+	_spawn_map_cache_path = _SCENE_PATH_SENTINEL
+	_spawn_kw_lower.clear()
+	_safe_kw_lower.clear()
 	# 场景切换 → 清空 TileMapLayer 缓存（旧引用已释放）
 	_tilemap_cache.clear()
 	_tilemap_cache_ready = false
@@ -1518,7 +1592,8 @@ func _copy_props(src: Object, dst: Object, props: Array[String]) -> void:
 
 
 func _find_player() -> Node2D:
-	var players: Array[Node2D] = Players.all_entities()
+	## 走每帧缓存（见 _cached_all_entities）：一帧内多处调用不再各自 all_entities() 新分配。
+	var players: Array[Node2D] = _cached_all_entities()
 	return players[0] if not players.is_empty() else null
 
 
@@ -1636,14 +1711,9 @@ func team_forward_dir(players: Array[Node2D]) -> Vector2:
 
 func spawn_reference_players() -> Array[Node2D]:
 	## 可作为刷怪/回收基准的玩家：存活且非濒死。联机 Host = 全体座位，单机 = 唯一玩家。
-	var out: Array[Node2D] = []
-	for e: Node2D in Players.all_entities():
-		if not is_instance_valid(e):
-			continue
-		if e.get("_is_dying") == true or e.get("_is_dead") == true:
-			continue
-		out.append(e)
-	return out
+	## ⚠ 返回**共享的每帧缓存数组**（见 _cached_reference_players）——调用方只读遍历，
+	##   不得 append/erase（会污染同一帧其它调用者拿到的同一份数组）。
+	return _cached_reference_players()
 
 
 func pick_spawn_anchor(teammates: Array[Node2D] = []) -> Node2D:

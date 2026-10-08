@@ -33,10 +33,16 @@ static func slot_path(idx: int) -> String:
 	return SAVE_DIR + "slot_%02d.json" % clampi(idx, 0, SLOT_COUNT - 1)
 
 
+## 备份路径：每次覆盖写主档前，把**上一份可解析的良好存档**留在这里。
+## 主档损坏/截断时 `_read_raw` 回退到它，避免"JSON 一坏 = 进度永久清零"（旧实现静默返回 {}）。
+static func bak_path(idx: int) -> String:
+	return slot_path(idx) + ".bak"
+
+
 static func has_slot(idx: int) -> bool:
 	if idx < 0 or idx >= SLOT_COUNT:
 		return false
-	return FileAccess.file_exists(slot_path(idx))
+	return FileAccess.file_exists(slot_path(idx)) or FileAccess.file_exists(bak_path(idx))
 
 
 ## 是否**至少有一个**存档槽有内容（标题画面「继续游戏」的可用性判据）。
@@ -49,10 +55,14 @@ static func latest_slot() -> int:
 	var best_idx: int = -1
 	var best_time: int = -1
 	for i: int in range(SLOT_COUNT):
-		var p: String = slot_path(i)
-		if not FileAccess.file_exists(p):
+		## 取「主档 / 备份」里较新的 mtime —— 主档损坏只剩备份时也要能被「继续游戏」找到。
+		var t: int = -1
+		if FileAccess.file_exists(slot_path(i)):
+			t = FileAccess.get_modified_time(slot_path(i))
+		if FileAccess.file_exists(bak_path(i)):
+			t = maxi(t, FileAccess.get_modified_time(bak_path(i)))
+		if t < 0:
 			continue
-		var t: int = FileAccess.get_modified_time(p)
 		if t >= best_time:
 			best_time = t
 			best_idx = i
@@ -62,8 +72,12 @@ static func latest_slot() -> int:
 static func delete_slot(idx: int) -> bool:
 	if not has_slot(idx):
 		return false
-	var err: Error = DirAccess.remove_absolute(slot_path(idx))
-	return err == OK
+	var ok: bool = true
+	if FileAccess.file_exists(slot_path(idx)):
+		ok = DirAccess.remove_absolute(slot_path(idx)) == OK and ok
+	if FileAccess.file_exists(bak_path(idx)):
+		ok = DirAccess.remove_absolute(bak_path(idx)) == OK and ok
+	return ok
 
 
 # ═══════════════════════════════════════
@@ -113,15 +127,56 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 	if player_position is Vector2:
 		data["player_position"] = {"x": player_position.x, "y": player_position.y}
 
+	## ── 先备份上一份良好存档（2026-10-08 健壮性）──
+	## 仅当现有主档能被解析为 Dictionary 时才转为 .bak —— 避免把一份已损坏的主档
+	## 覆盖掉本可用的旧备份。备份失败不阻断保存（尽力而为）。
+	_backup_existing_slot(idx)
+
+	var text: String = JSON.stringify(data, "\t")
 	var f: FileAccess = FileAccess.open(slot_path(idx), FileAccess.WRITE)
 	if f == null:
 		push_error("[存档] 无法写入槽位 %d: %s (err=%d)"
 			% [idx, slot_path(idx), FileAccess.get_open_error()])
 		return false
-	f.store_string(JSON.stringify(data, "\t"))
+	f.store_string(text)
 	f.close()
+	## ── 写入后读回校验（2026-10-08 健壮性）──
+	## 磁盘满 / 写入中途异常可能产生截断文件；当场发现即可提示，而不是等玩家下次读档才发现。
+	## 校验失败时立即用内存里的 data 重建一次（并保留 .bak 作为最终兜底）。
+	var verify: Variant = JSON.parse_string(_read_file_text(slot_path(idx)))
+	if not (verify is Dictionary):
+		push_error("[存档] 槽位 %d 写入后校验失败（文件可能截断），已保留备份：%s"
+			% [idx, bak_path(idx)])
+		return false
 	print("[存档] 已保存槽位 %d: %s | 座位=%d" % [idx, slot_path(idx), seat_dicts.size()])
 	return true
+
+
+## 把现有主档转存为 .bak（仅在它可解析为 Dictionary 时）。
+static func _backup_existing_slot(idx: int) -> void:
+	var main_path: String = slot_path(idx)
+	if not FileAccess.file_exists(main_path):
+		return
+	var text: String = _read_file_text(main_path)
+	if not (JSON.parse_string(text) is Dictionary):
+		return  ## 主档已损坏：不覆盖现有备份（旧备份大概率仍可用）
+	var bf: FileAccess = FileAccess.open(bak_path(idx), FileAccess.WRITE)
+	if bf == null:
+		push_warning("[存档] 槽位 %d 备份写入失败（继续保存主档）: %s" % [idx, FileAccess.get_open_error()])
+		return
+	bf.store_string(text)
+	bf.close()
+
+
+static func _read_file_text(path: String) -> String:
+	if not FileAccess.file_exists(path):
+		return ""
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var text: String = f.get_as_text()
+	f.close()
+	return text
 
 
 ## 从当前座位构建「槽位预览」轻量数据（标题/徽章/槽位列表用）。
@@ -217,19 +272,53 @@ static func load_slot(idx: int) -> Dictionary:
 	return data
 
 
+## 读取并解析槽位存档。主档损坏/截断时自动回退到 `.bak`（2026-10-08 健壮性）。
+## 返回 {} 仅当「主档与备份都不可用」。列表对话框里的"空槽"与"损坏"由此区分：
+## slot_info/load_slot 拿到 {} 时会报"为空"；若曾写入过备份，这里就一定拿得到内容。
 static func _read_raw(idx: int) -> Dictionary:
-	var path: String = slot_path(idx)
-	if not FileAccess.file_exists(path):
-		return {}
-	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if f == null:
-		return {}
-	var text: String = f.get_as_text()
-	f.close()
-	var data: Variant = JSON.parse_string(text) if text else null
-	if data is Dictionary:
-		return data as Dictionary
+	## ① 主档
+	var main_data: Variant = _try_parse_dict(slot_path(idx))
+	if main_data is Dictionary:
+		return main_data as Dictionary
+	## ② 主档缺失或损坏 → 回退备份
+	if FileAccess.file_exists(slot_path(idx)):
+		push_warning("[存档] 槽位 %d 主档无法解析，尝试回退备份" % idx)
+	var bak_data: Variant = _try_parse_dict(bak_path(idx))
+	if bak_data is Dictionary:
+		push_warning("[存档] 槽位 %d 已从备份恢复（.bak）" % idx)
+		return bak_data as Dictionary
+	if FileAccess.file_exists(slot_path(idx)) or FileAccess.file_exists(bak_path(idx)):
+		push_error("[存档] 槽位 %d 主档与备份均无法解析，视为空档" % idx)
 	return {}
+
+
+## 解析文件为 Dictionary；不存在 / 打不开 / 非 JSON 对象 / schema 不合法 → null。
+static func _try_parse_dict(path: String) -> Variant:
+	if not FileAccess.file_exists(path):
+		return null
+	var text: String = _read_file_text(path)
+	if text.is_empty():
+		return null
+	var data: Variant = JSON.parse_string(text)
+	if not (data is Dictionary):
+		return null
+	if not _is_plausible_save(data as Dictionary):
+		return null
+	return data
+
+
+## 轻量 schema 校验（2026-10-08）：拒绝"能解析成 JSON 对象但不含任何存档特征的垃圾"，
+## 例如被外部工具写坏的 `{}`、`{"foo":1}` —— 否则会被当作有效存档 apply 到运行时，
+## 把座位表清空（比读不到更糟）。判据：至少要有 seats（v2）或 team/player_hp（v1）之一。
+static func _is_plausible_save(data: Dictionary) -> bool:
+	if data.has("seats") and data["seats"] is Array:
+		return true
+	if data.has("team") and data["team"] is Array:
+		return true
+	## v1 单角色存档：顶层直接放 player_hp / equipment
+	if data.has("player_hp") or data.has("equipment"):
+		return true
+	return false
 
 
 static func _load_v2(data: Dictionary) -> void:

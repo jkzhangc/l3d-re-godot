@@ -292,6 +292,11 @@ def run_scenario(name: str, spec: dict, keep_logs: bool) -> tuple[bool, str]:
             timed_out = True
             break
         time.sleep(poll_interval)
+    # 判定已出（或超时）后，终止仍在运行的进程。
+    # ⚠ 必须**无论是否超时**都收尾：上面一旦读到期望标记就会 break，此时子进程往往还在跑，
+    #   仍持有日志文件的 stdout 句柄；不终止它，下面的 unlink 清理在 Windows 上必然撞
+    #   "PermissionError: [WinError 32] 另一个程序正在使用此文件" 并让整个 runner 崩溃
+    #   （这是 2026-10-08 实测到的 bug）——也正与本函数开头"立刻终止剩余进程"的注释相符。
     for role, p, _h in procs:
         if p.poll() is None:
             if timed_out:
@@ -341,13 +346,23 @@ def run_scenario(name: str, spec: dict, keep_logs: bool) -> tuple[bool, str]:
         print(d)
 
     if ok and not keep_logs:
+        # 尽力清理：单个文件仍被占用（Windows 句柄释放滞后于进程退出）不应让 runner 崩溃 ——
+        # 上面虽已 _kill 并 wait，但杀进程与句柄真正释放之间仍可能有一瞬竞态。
+        # 清理失败就留目录（无害、便于事后排查），绝不抛异常中断整轮回归。
+        cleanup_ok = True
         for f in out_dir.iterdir():
-            f.unlink()
+            try:
+                f.unlink()
+            except OSError:
+                cleanup_ok = False
         try:
             out_dir.rmdir()
         except OSError:
-            pass
-        print(f"    日志已清理（通过场景）")
+            cleanup_ok = False
+        if cleanup_ok:
+            print(f"    日志已清理（通过场景）")
+        else:
+            print(f"    日志目录（清理时被占用，已保留）: {out_dir}")
     else:
         print(f"    日志目录: {out_dir}")
 
