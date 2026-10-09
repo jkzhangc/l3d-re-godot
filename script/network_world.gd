@@ -35,105 +35,59 @@ const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
-const NETWORK_PISTOL: WeaponData = preload("res://object/weapon_pistol.tres")
-const NETWORK_KNIFE: WeaponData = preload("res://object/weapon_knife.tres")
-const NETWORK_RIFLE: WeaponData = preload("res://object/weapon_rifle.tres")
-const NETWORK_SMG: WeaponData = preload("res://object/weapon_smg.tres")
-const NETWORK_SHOTGUN: WeaponData = preload("res://object/weapon_shotgun.tres")
-const NETWORK_SNIPER: WeaponData = preload("res://object/weapon_sniper.tres")
-const NETWORK_MAGNUM: WeaponData = preload("res://object/weapon_magnum.tres")
-const NETWORK_LAUNCHER: WeaponData = preload("res://object/weapon_grenade_launcher.tres")
-const NETWORK_ROCKET: WeaponData = preload("res://object/weapon_rocket_launcher.tres")
-const NETWORK_BOWGUN: WeaponData = preload("res://object/weapon_bowgun.tres")
-const NETWORK_LAUNCHER_ACID: WeaponData = preload("res://object/weapon_launcher_acid.tres")
-const NETWORK_LAUNCHER_ICE: WeaponData = preload("res://object/weapon_launcher_ice.tres")
-const NETWORK_LAUNCHER_THUNDER: WeaponData = preload("res://object/weapon_launcher_thunder.tres")
-const NETWORK_FRYSPAN: WeaponData = preload("res://object/weapon_frypan.tres")
-const NETWORK_BAT: WeaponData = preload("res://object/weapon_metal_bat.tres")
-const NETWORK_GRENADE: ThrowableData = preload("res://object/item_grenade.tres")
-const NETWORK_MOLOTOV: ThrowableData = preload("res://object/item_molotov.tres")
-const NETWORK_FLASH: ThrowableData = preload("res://object/throwable_flash.tres")
-## 治疗品白名单（D2 实测修复）：喷雾/药品此前不在联机同步范围——动态刷出的治疗品
-## Client 看不见、预摆的 Client 本地私拿（Host 权威域无感知）→ 倒地时无喷雾可用。
-const NETWORK_SPRAY: ItemData = preload("res://object/item_first_aid_spray.tres")
-const NETWORK_PILLS: ItemData = preload("res://object/item_pills.tres")
-const NETWORK_HEALINGS: Dictionary = {
-	"first_aid_spray": NETWORK_SPRAY,
-	"pills_01": NETWORK_PILLS,
-}
-## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
-const NETWORK_WEAPONS: Dictionary = {
-	"pistol_01": NETWORK_PISTOL,
-	"knife_01": NETWORK_KNIFE,
-	"rifle_01": NETWORK_RIFLE,
-	"smg_01": NETWORK_SMG,
-	"shotgun_01": NETWORK_SHOTGUN,
-	"sniper_01": NETWORK_SNIPER,
-	"magnum_01": NETWORK_MAGNUM,
-	"launcher_01": NETWORK_LAUNCHER,
-	"rocket_01": NETWORK_ROCKET,
-	"bowgun_01": NETWORK_BOWGUN,
-	"launcher_acid_01": NETWORK_LAUNCHER_ACID,
-	"launcher_ice_01": NETWORK_LAUNCHER_ICE,
-	"launcher_thunder_01": NETWORK_LAUNCHER_THUNDER,
-	"frypan_01": NETWORK_FRYSPAN,
-	"bat_01": NETWORK_BAT,
-}
-## 投掷物同样必须由 Host 的固定白名单解析；客户端 RPC 绝不能指定资源或伤害。
-const NETWORK_THROWABLES: Dictionary = {
-	"grenade_01": NETWORK_GRENADE,
-	"molotov_01": NETWORK_MOLOTOV,
-	"flash_01": NETWORK_FLASH,
-}
-## 特感（SpecialEnemyData）白名单：键 = tres 的 id 字段（StringName 转字符串）。
-## Host 在 spawn_special_enemy 注入 enemy.special_data 后，spawn 快照携带
-## special_id 下发；Client 命中白名单才在本地重建表现节点（外观/帧表/受击盒）。
-## 与武器/投掷物同铁律：Client RPC 永远只传 id，资源只从本表解析。
-const NETWORK_SPECIAL_GREEN: SpecialEnemyData = preload("res://tres/specials/グリーンソルジャー.tres")
-const NETWORK_SPECIAL_TYRANT: SpecialEnemyData = preload("res://tres/specials/タイラントT002.tres")
-const NETWORK_SPECIAL_HUNTER: SpecialEnemyData = preload("res://tres/specials/ハンター.tres")
-const NETWORK_SPECIAL_HUNTER_BETA: SpecialEnemyData = preload("res://tres/specials/ハンターβ.tres")
-const NETWORK_SPECIAL_HUNTER_GAMMA: SpecialEnemyData = preload("res://tres/specials/ハンターγ.tres")
-const NETWORK_SPECIAL_WITCH: SpecialEnemyData = preload("res://tres/specials/ブレアウィッチ.tres")
-const NETWORK_SPECIALDEMOS: SpecialEnemyData = preload("res://tres/specials/ブレインディモス.tres")
-const NETWORK_SPECIALS: Dictionary = {
-	"green_soldier": NETWORK_SPECIAL_GREEN,
-	"tyrant_t002": NETWORK_SPECIAL_TYRANT,
-	"hunter": NETWORK_SPECIAL_HUNTER,
-	"hunter_beta": NETWORK_SPECIAL_HUNTER_BETA,
-	"hunter_gamma": NETWORK_SPECIAL_HUNTER_GAMMA,
-	"blare_witch": NETWORK_SPECIAL_WITCH,
-	"brain_demos": NETWORK_SPECIALDEMOS,
-}
-## 僵尸变体白名单（A5）：键 = tres 的 id 字段。Host 在 spawn_enemy 按 zombie_pool
-## 选种后登记 enemy.variant_data，spawn 快照携带 variant_id；Client 命中白名单
-## 才在本地重建差异化行走图。狂暴换皮不走本表 —— 随快照 element_state bit3 实时同步。
-const NETWORK_VARIANT_MALE: ZombieVariant = preload("res://tres/zombies/男性ゾンビ.tres")
-const NETWORK_VARIANT_FEMALE: ZombieVariant = preload("res://tres/zombies/女性ゾンビ.tres")
-const NETWORK_VARIANT_STUDENT: ZombieVariant = preload("res://tres/zombies/学生ゾンビ.tres")
-const NETWORK_VARIANT_CHUNEN: ZombieVariant = preload("res://tres/zombies/中年ゾンビ.tres")
-const NETWORK_VARIANT_SHIKAN: ZombieVariant = preload("res://tres/zombies/士官ゾンビ.tres")
-const NETWORK_VARIANT_JOSHI: ZombieVariant = preload("res://tres/zombies/女子学生ゾンビ.tres")
-const NETWORK_VARIANT_JIKKENTAI: ZombieVariant = preload("res://tres/zombies/実験体ゾンビ.tres")
-const NETWORK_VARIANT_KENKYUIN: ZombieVariant = preload("res://tres/zombies/研究員ゾンビ.tres")
-const NETWORK_VARIANT_SHOKUIN: ZombieVariant = preload("res://tres/zombies/職員ゾンビ.tres")
-const NETWORK_VARIANT_KUNRENSEI: ZombieVariant = preload("res://tres/zombies/訓練生ゾンビ.tres")
-const NETWORK_VARIANT_RUNNER: ZombieVariant = preload("res://enemys/疾走体.tres")
-const NETWORK_VARIANT_TANK: ZombieVariant = preload("res://enemys/重装体.tres")
-const NETWORK_VARIANTS: Dictionary = {
-	"male": NETWORK_VARIANT_MALE,
-	"female": NETWORK_VARIANT_FEMALE,
-	"student": NETWORK_VARIANT_STUDENT,
-	"chunen": NETWORK_VARIANT_CHUNEN,
-	"shikan": NETWORK_VARIANT_SHIKAN,
-	"joshi_gakusei": NETWORK_VARIANT_JOSHI,
-	"jikkentai": NETWORK_VARIANT_JIKKENTAI,
-	"kenkyuin": NETWORK_VARIANT_KENKYUIN,
-	"shokuin": NETWORK_VARIANT_SHOKUIN,
-	"kunrensei": NETWORK_VARIANT_KUNRENSEI,
-	"runner": NETWORK_VARIANT_RUNNER,
-	"tank": NETWORK_VARIANT_TANK,
-}
+## 联机资源白名单（2026-10-08 拆分）：真源已移到 script/network_whitelist.gd。
+## 这里保留**同名 const 转发别名** —— net_regression_harness.gd 子类直接引用
+## NETWORK_KNIFE / NETWORK_WEAPONS 等常量，别名保证其零改动。
+const Whitelist := preload("res://script/network_whitelist.gd")
+
+const NETWORK_SPRAY: ItemData = Whitelist.NETWORK_SPRAY
+const NETWORK_PILLS: ItemData = Whitelist.NETWORK_PILLS
+const NETWORK_HEALINGS: Dictionary = Whitelist.NETWORK_HEALINGS
+
+const NETWORK_PISTOL: WeaponData = Whitelist.NETWORK_PISTOL
+const NETWORK_KNIFE: WeaponData = Whitelist.NETWORK_KNIFE
+const NETWORK_RIFLE: WeaponData = Whitelist.NETWORK_RIFLE
+const NETWORK_SMG: WeaponData = Whitelist.NETWORK_SMG
+const NETWORK_SHOTGUN: WeaponData = Whitelist.NETWORK_SHOTGUN
+const NETWORK_SNIPER: WeaponData = Whitelist.NETWORK_SNIPER
+const NETWORK_MAGNUM: WeaponData = Whitelist.NETWORK_MAGNUM
+const NETWORK_LAUNCHER: WeaponData = Whitelist.NETWORK_LAUNCHER
+const NETWORK_ROCKET: WeaponData = Whitelist.NETWORK_ROCKET
+const NETWORK_BOWGUN: WeaponData = Whitelist.NETWORK_BOWGUN
+const NETWORK_LAUNCHER_ACID: WeaponData = Whitelist.NETWORK_LAUNCHER_ACID
+const NETWORK_LAUNCHER_ICE: WeaponData = Whitelist.NETWORK_LAUNCHER_ICE
+const NETWORK_LAUNCHER_THUNDER: WeaponData = Whitelist.NETWORK_LAUNCHER_THUNDER
+const NETWORK_FRYSPAN: WeaponData = Whitelist.NETWORK_FRYSPAN
+const NETWORK_BAT: WeaponData = Whitelist.NETWORK_BAT
+const NETWORK_WEAPONS: Dictionary = Whitelist.NETWORK_WEAPONS
+
+const NETWORK_GRENADE: ThrowableData = Whitelist.NETWORK_GRENADE
+const NETWORK_MOLOTOV: ThrowableData = Whitelist.NETWORK_MOLOTOV
+const NETWORK_FLASH: ThrowableData = Whitelist.NETWORK_FLASH
+const NETWORK_THROWABLES: Dictionary = Whitelist.NETWORK_THROWABLES
+
+const NETWORK_SPECIAL_GREEN: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_GREEN
+const NETWORK_SPECIAL_TYRANT: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_TYRANT
+const NETWORK_SPECIAL_HUNTER: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_HUNTER
+const NETWORK_SPECIAL_HUNTER_BETA: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_HUNTER_BETA
+const NETWORK_SPECIAL_HUNTER_GAMMA: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_HUNTER_GAMMA
+const NETWORK_SPECIAL_WITCH: SpecialEnemyData = Whitelist.NETWORK_SPECIAL_WITCH
+const NETWORK_SPECIALDEMOS: SpecialEnemyData = Whitelist.NETWORK_SPECIALDEMOS
+const NETWORK_SPECIALS: Dictionary = Whitelist.NETWORK_SPECIALS
+
+const NETWORK_VARIANT_MALE: ZombieVariant = Whitelist.NETWORK_VARIANT_MALE
+const NETWORK_VARIANT_FEMALE: ZombieVariant = Whitelist.NETWORK_VARIANT_FEMALE
+const NETWORK_VARIANT_STUDENT: ZombieVariant = Whitelist.NETWORK_VARIANT_STUDENT
+const NETWORK_VARIANT_CHUNEN: ZombieVariant = Whitelist.NETWORK_VARIANT_CHUNEN
+const NETWORK_VARIANT_SHIKAN: ZombieVariant = Whitelist.NETWORK_VARIANT_SHIKAN
+const NETWORK_VARIANT_JOSHI: ZombieVariant = Whitelist.NETWORK_VARIANT_JOSHI
+const NETWORK_VARIANT_JIKKENTAI: ZombieVariant = Whitelist.NETWORK_VARIANT_JIKKENTAI
+const NETWORK_VARIANT_KENKYUIN: ZombieVariant = Whitelist.NETWORK_VARIANT_KENKYUIN
+const NETWORK_VARIANT_SHOKUIN: ZombieVariant = Whitelist.NETWORK_VARIANT_SHOKUIN
+const NETWORK_VARIANT_KUNRENSEI: ZombieVariant = Whitelist.NETWORK_VARIANT_KUNRENSEI
+const NETWORK_VARIANT_RUNNER: ZombieVariant = Whitelist.NETWORK_VARIANT_RUNNER
+const NETWORK_VARIANT_TANK: ZombieVariant = Whitelist.NETWORK_VARIANT_TANK
+const NETWORK_VARIANTS: Dictionary = Whitelist.NETWORK_VARIANTS
 ## 快照节拍说明：
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
 ## - Client 只提交输入，并接收 Host 的表现数据。
@@ -1559,23 +1513,19 @@ func _get_network_primary_loadout_weapon() -> WeaponData:
 	return NETWORK_SMG if has_pickup_test else null
 
 func _get_network_weapon_data_by_id(weapon_id: String) -> WeaponData:
-	return NETWORK_WEAPONS.get(weapon_id) as WeaponData
+	return Whitelist.weapon_by_id(weapon_id)
 
 
 func _get_network_throwable_data_by_id(item_id: String) -> ThrowableData:
-	return NETWORK_THROWABLES.get(item_id) as ThrowableData
+	return Whitelist.throwable_by_id(item_id)
 
 
 func _get_network_special_data(special_id: String) -> SpecialEnemyData:
-	if special_id.is_empty():
-		return null
-	return NETWORK_SPECIALS.get(special_id) as SpecialEnemyData
+	return Whitelist.special_by_id(special_id)
 
 
 func _get_network_variant_data(variant_id: String) -> ZombieVariant:
-	if variant_id.is_empty():
-		return null
-	return NETWORK_VARIANTS.get(variant_id) as ZombieVariant
+	return Whitelist.variant_by_id(variant_id)
 
 
 func _get_host_throwable_state(peer_id: int) -> Dictionary:
