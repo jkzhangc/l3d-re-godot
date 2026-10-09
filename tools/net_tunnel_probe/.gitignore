@@ -1,0 +1,4 @@
+__pycache__/
+
+# 每次运行的 Godot stdout（可随时重新生成，不入库）
+logs/
