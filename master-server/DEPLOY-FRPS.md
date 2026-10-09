@@ -53,17 +53,41 @@ cd frp
 
 ## 2. 【服务器】写配置
 
-把仓库里 `master-server/deploy/frps.toml.example` 的内容拷成 `/opt/l3d/frp/frps.toml`，
-**必改两处**：
-
-- `auth.token` → 换成一串长随机字符串（这是唯一的准入凭证）
-- `webServer.password` → 换个强密码（或干脆把 webServer 段删掉）
-
-生成随机 token：
+**最快的方式**：直接从仓库取现成模板（纯 ASCII，已校验可解析），只改 token：
 
 ```bash
+# 在服务器上生成一个强 token（复制它，下面两处要用同一个）
 openssl rand -hex 32
 ```
+
+```bash
+cat > /opt/l3d/frp/frps.toml <<'EOF'
+bindAddr = "0.0.0.0"
+bindPort = 7000
+udpPacketSize = 1500
+auth.method = "token"
+auth.token = "把上面生成的随机串粘到这里"
+allowPorts = [
+  { start = 27015, end = 27030 },
+]
+webServer.addr = "127.0.0.1"
+webServer.port = 7500
+webServer.user = "admin"
+webServer.password = "换个强密码"
+log.to = "console"
+log.level = "info"
+log.maxDays = 3
+EOF
+```
+
+> ⚠⚠ **配置文件必须只有 ASCII 字符**（含注释）。
+> frp 的 TOML 解析器**不接受注释里的中文/框线字符**，会直接报：
+> ```
+> toml: line 1, column 3: toml: invalid character in comment
+> ```
+> 因为它不看内容、只看字节：一个 `─`（U+2500）就能让 frps 起不来。
+> 上面的 heredoc 直接写入，不含任何非 ASCII，可放心用。
+> 想验证自己的文件：在项目里跑 `python master-server/deploy/check_configs.py`。
 
 `allowPorts` 默认给了 `27015–27030`（16 个端口）。M1 阶段够用；房主多了再放大范围。
 
@@ -113,9 +137,17 @@ sudo systemctl status l3d-frps --no-pager
 看日志：
 
 ```bash
+# 看最近 50 行（一次性，立即返回）—— 排错先用这个
+sudo journalctl -u l3d-frps -n 50 --no-pager
+
+# 实时跟随（会一直挂着重放新日志，这是正常的；按 Ctrl+C 退出）
 sudo journalctl -u l3d-frps -f
-# 期望看到：frps started successfully / 监听 7000
 ```
+
+> ⚠ `-f` 是 "follow"，会**永远等在那里**、不会自己结束 —— 看着像"卡住了"，
+> 其实正常。想看一眼就退出，用上面那条 `-n 50 --no-pager`，或按 `Ctrl+C`。
+>
+> 期望看到：`frps started successfully` / 监听 7000。
 
 ---
 
@@ -156,6 +188,7 @@ Windows 上下载对应 release，然后：
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
+| **`toml: invalid character in comment`** | 配置里有非 ASCII 字符（中文注释、`─` 框线等） | 用第 2 节的 heredoc 重写；或跑 `check_configs.py` 定位 |
 | frpc 连不上 7000 | 防火墙没放 TCP 7000 | 回第 3 步 |
 | frpc 报 `authorization failed` | token 不一致 | 两边逐字符核对 |
 | frpc 报 `port already used` | remotePort 被别人占了 | 换 allowPorts 范围内另一个 |

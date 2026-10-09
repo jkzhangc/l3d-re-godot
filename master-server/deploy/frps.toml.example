@@ -1,36 +1,38 @@
-# ── L3D 互联网联机的 frps 服务端配置 ──
-# 放在**有公网 IP 的服务器**上（本项目：8.138.99.96）。
-# 部署步骤见同目录 `DEPLOY-FRPS.md`。
+# L3D frps server config (Internet play: host reachability via UDP relay).
+# Deploy steps: see DEPLOY-FRPS.md in the same directory.
+# NOTE: keep this file ASCII-only. frp's TOML parser rejects non-ASCII
+#       characters inside comments (error: "invalid character in comment").
 #
-# ⚠ 这是模板：复制成 `frps.toml` 后，**务必**改掉 `auth.token`。
+# WARNING: this is a template. After copying to frps.toml, CHANGE auth.token.
 
 bindAddr = "0.0.0.0"
 bindPort = 7000
 
-# ★★ 最关键的一项：UDP 单包上限（默认即 1500）。
+# MOST IMPORTANT: UDP packet size limit (default 1500, do NOT lower it).
 #
-# 为什么必须在意它：ENet 的 MTU 是 **1392**，所有 RPC 都被自动分片到 ≤1392。
-# 本机实测（互联网联机模式策划方案.md §12.2）：
-#   · 上限 1500 / 1400 → 可靠 RPC 正常（观测到最大单包 1392）
-#   · 上限 1300        → **可靠 RPC 永远不到**，表现为"握手能过、之后整个可靠通道
-#                        静默停摆"，客户端只显示"连不上"，极难排查
-# 即：**服务端与客户端必须一致，且不得低于 1400**。
+# Why it matters: ENet's MTU is 1392, so every RPC is fragmented to <= 1392 bytes.
+# Measured locally (plan doc section 12.2):
+#   - limit 1500 / 1400 -> reliable RPC works (max packet observed: 1392)
+#   - limit 1300        -> reliable RPC NEVER arrives. Symptom: handshake succeeds,
+#                          then the whole reliable channel goes silent, and the
+#                          client only reports "cannot connect" - very hard to debug.
+# Server and client values MUST match and MUST be >= 1400.
 udpPacketSize = 1500
 
-# 鉴权：房主侧的 frpc 必须填**完全相同**的 token 才能接入。
+# Auth: the host-side frpc must use the EXACT same token.
 auth.method = "token"
 auth.token = "CHANGE_ME_TO_A_LONG_RANDOM_STRING"
 
-# 只允许代理绑定这些远程端口 —— 防止有人拿你的服务器转发任意端口。
-# M1 做法：给房主一段 UDP 端口范围，房主自己挑一个空闲的，填进游戏大厅。
-# 16 个端口足够 M1 的开发者自建局；并发房主更多时把范围放大即可。
+# Only allow proxies to bind these remote ports, so nobody can relay arbitrary
+# ports through your server. M1: hand hosts a UDP port range; each host picks
+# one free port and types it into the in-game lobby form.
 allowPorts = [
   { start = 27015, end = 27030 },
 ]
 
-# 面板（可选）。
-# 默认绑 127.0.0.1：只有 SSH 进服务器才能访问，最安全。
-# 想从公网看就改成 "0.0.0.0" 并在控制台防火墙放行 7500，**同时务必设强密码**。
+# Dashboard (optional). Bound to 127.0.0.1 = reachable only via SSH (safest).
+# To expose it, set "0.0.0.0" and open TCP 7500 in the firewall,
+# but then you MUST set a strong password.
 webServer.addr = "127.0.0.1"
 webServer.port = 7500
 webServer.user = "admin"

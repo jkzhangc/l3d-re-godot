@@ -1,27 +1,31 @@
-# ── L3D 房主侧的 frpc 配置（跑在**房主自己的电脑**上）──
+# L3D host-side frpc config (runs on the HOST's own PC).
+# Deploy steps: see DEPLOY-FRPS.md in the same directory.
+# NOTE: keep this file ASCII-only. frp's TOML parser rejects non-ASCII
+#       characters inside comments (error: "invalid character in comment").
 #
-# 作用：把房主本机的游戏 UDP 端口，映射到公网服务器（frps）的一个远程端口，
-# 让外网玩家能连进来 —— 这就是"房主可达性"（互联网联机模式策划方案.md §2）。
+# What it does: maps the host's local game UDP port to a public port on the
+# frps server, so players on the Internet can reach the host. This is the
+# "host reachability" half of Internet play (plan doc section 2).
 #
-# ⚠ 复制成 `frpc.toml` 后，改这三处：
-#     ① serverAddr  —— 你的服务器公网 IP
-#     ② auth.token  —— 必须与服务器 frps.toml 里的 auth.token **完全一致**
-#     ③ remotePort  —— 在服务器 allowPorts 范围内挑一个**没被占用**的
+# After copying to frpc.toml, change these three:
+#   1) serverAddr  -> your server's public IP
+#   2) auth.token  -> MUST match auth.token in the server's frps.toml
+#   3) remotePort  -> pick one inside the server's allowPorts that is free
 
 serverAddr = "8.138.99.96"
 serverPort = 7000
 
 auth.method = "token"
-auth.token = "与服务器 frps.toml 里的 auth.token 完全一致"
+auth.token = "MUST_MATCH_THE_SERVER_FRPS_TOKEN"
 
-# 必须与服务端一致（见 frps.toml.example 里的详细说明：ENet MTU=1392）
+# Must match the server value (see frps.toml.example: ENet MTU = 1392).
 udpPacketSize = 1500
 
 [[proxies]]
 name = "l3d-game-udp"
 type = "udp"
 localIP = "127.0.0.1"
-# 你在游戏大厅「创建房间端口」里填的那个端口（本机 UDP 监听端口）
+# The port you typed as "create room port" in the in-game lobby (local UDP listen port).
 localPort = 27015
-# frps 上对外暴露的端口：在服务器 allowPorts 范围内、且当前没别人用
+# The port exposed on the frps server: inside allowPorts and currently unused.
 remotePort = 27015
