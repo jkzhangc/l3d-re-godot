@@ -63,6 +63,10 @@ __pycache__/
 # 第三方工具二进制（本地自备，不入库）
 tools/**/*.exe
 
+# Master Server 部署打包产物（由 tar 现场生成，不入库）
+/master-server.tar.gz
+/master-server.zip
+
 # CHM 帮助文档源（6MB，chm_extract/ 已由其派生）
 /rpg2003.chm
 .workbuddy/
