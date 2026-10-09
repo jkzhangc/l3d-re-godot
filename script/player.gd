@@ -98,17 +98,20 @@ var death_sound: AudioStream = null
 # ═══════════════════════════════════════
 # 精灵帧常量
 # ═══════════════════════════════════════
-const FRAME_W: int = 48   ## 576 / 12
-const FRAME_H: int = 64   ## 512 / 8
-const CHARS_PER_ROW: int = 4
-const DIRECTIONS: int = 4
+## 【2026-10-08】帧常量的**唯一真源**已随渲染逻辑移到 player_sprite_renderer.gd；
+## 这里保留同名转发别名，本文件其余引用（_play_mukiri_anim / _die / 联机死亡）与
+## 任何外部引用零改动。
+const FRAME_W: int = SpriteRenderer.FRAME_W   ## 576 / 12
+const FRAME_H: int = SpriteRenderer.FRAME_H   ## 512 / 8
+const CHARS_PER_ROW: int = SpriteRenderer.CHARS_PER_ROW
+const DIRECTIONS: int = SpriteRenderer.DIRECTIONS
 
 ## VX Ace 帧序列: frame1 → frame0 → frame1 → frame2 → frame1（循环）
-const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
-const STAND_FRAME: int = 1
+const WALK_SEQUENCE: Array[int] = SpriteRenderer.WALK_SEQUENCE
+const STAND_FRAME: int = SpriteRenderer.STAND_FRAME
 
 ## 方向 → 行偏移（VX Ace: 下/左/右/上）
-const DIR_ROWS: Array[int] = [0, 1, 2, 3]
+const DIR_ROWS: Array[int] = SpriteRenderer.DIR_ROWS
 const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源重复命中冷却（毫秒）
 
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
@@ -119,6 +122,17 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 @onready var sprite: Sprite2D = $Sprite2D
 @onready var animation_timer: Timer = $AnimationTimer
 @onready var hurt_area: Area2D = _setup_hurt_area()
+
+## 精灵渲染服务（_ready 创建；持有本实体引用，见 script/player_sprite_renderer.gd）。
+var _sprite_renderer: SpriteRenderer = null
+## 音效服务（_ready 创建；见 script/player_sfx.gd）。
+var _sfx: SfxService = null
+## 调试可视化服务（_ready 创建；见 script/player_debug_drawer.gd）。
+var _debug_drawer: DebugDrawer = null
+## 特殊行动服务（_ready 创建；见 script/player_special_action_service.gd）。
+var _special_action: SpecialAction = null
+## 死亡系统服务（_ready 创建；见 script/player_death_service.gd）。
+var _death_service: DeathService = null
 
 # ═══════════════════════════════════════
 # 内部状态
@@ -178,6 +192,18 @@ const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.g
 ## 武器拾取物脚本（静态工具：drop_weapon_for_player —— E 键全丢武器共用）
 const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 
+## 精灵渲染服务（2026-10-08 拆分：渲染逻辑抽到 player_sprite_renderer.gd，本文件保留转发门面）。
+const SpriteRenderer := preload("res://script/player_sprite_renderer.gd")
+## 音效服务（2026-10-08 拆分：SFX/音乐抽到 player_sfx.gd）。
+const SfxService := preload("res://script/player_sfx.gd")
+## 调试可视化服务（2026-10-08 拆分：调试绘制抽到 player_debug_drawer.gd）。
+const DebugDrawer := preload("res://script/player_debug_drawer.gd")
+## 特殊行动服务（2026-10-08 拆分：SA/见切/反击/Heat/削り/覚醒/搓招抽到
+## player_special_action_service.gd，本文件保留同名转发门面）。
+const SpecialAction := preload("res://script/player_special_action_service.gd")
+## 死亡系统服务（2026-10-08 拆分：死亡流程/丢弃武器抽到 player_death_service.gd）。
+const DeathService := preload("res://script/player_death_service.gd")
+
 ## 远端玩家位置插值：快照样本按**自适应**固定延迟渲染，取代旧的指数平滑。
 ## 2026-10-01（用户："尽量让玩家感觉不到延迟"）：本值是**延迟下限**，取 ≈ 2.2 个 60Hz 快照间隔
 ## （16.7ms × 2.2 ≈ 37ms，原固定 50ms）；网络抖动时插值器自己临时加缓冲，
@@ -204,31 +230,33 @@ var _network_sa_crouch_hold: bool = false ## C2：Host 权威实体的しゃが�
 var _sa_auto_mukiri_until_msec: int = 0  ## 感覚向上：完全见切截止时间
 
 # ── 见切/反击（说明书 §4.3）运行时 ──
-const MUKIRI_WINDOW_MS: int = 300        ## 见切判定窗口（原作 0.3 秒，"大甘"）
-const MUKIRI_INTERVAL_MS: int = 700      ## 两次见切输入的最小间隔（原作 0.7 秒）
-const COUNTER_COOLDOWN_MS: int = 1000    ## 反击触发冷却，防一次窗口内重复触发
+## 【2026-10-08】下列常量的**唯一真源**已随逻辑移到 player_special_action_service.gd；
+## 这里保留同名转发别名，本文件内引用与外部（如 tools 测试）零改动。
+const MUKIRI_WINDOW_MS: int = SpecialAction.MUKIRI_WINDOW_MS        ## 见切判定窗口（原作 0.3 秒，"大甘"）
+const MUKIRI_INTERVAL_MS: int = SpecialAction.MUKIRI_INTERVAL_MS    ## 两次见切输入的最小间隔（原作 0.7 秒）
+const COUNTER_COOLDOWN_MS: int = SpecialAction.COUNTER_COOLDOWN_MS  ## 反击触发冷却，防一次窗口内重复触发
 var _mukiri_window_until_msec: int = 0      ## 见切窗口截止时间
 var _mukiri_last_attempt_msec: int = -10000 ## 上次见切输入时间
 var _counter_cooldown_until_msec: int = 0   ## 反击冷却截止时间
 var _mukiri_anim_busy: bool = false         ## 见切动画播放中（防重入）
 
 # ── Heat / 削り（原作说明书 §4.6）──
-const HEAT_DURATION: float = 6.0            ## Heat 持续秒数（原作未公开精确值，按体感）
-const ATTRITION_AMMO: int = 2               ## 削り：弹夹每次 -2
-const ATTRITION_DURABILITY: float = 8.0     ## 削り：耐久每次 -8
+const HEAT_DURATION: float = SpecialAction.HEAT_DURATION            ## Heat 持续秒数（原作未公开精确值，按体感）
+const ATTRITION_AMMO: int = SpecialAction.ATTRITION_AMMO            ## 削り：弹夹每次 -2
+const ATTRITION_DURABILITY: float = SpecialAction.ATTRITION_DURABILITY  ## 削り：耐久每次 -8
 var _heat_time: float = 0.0                 ## Heat 剩余时间（>0=禁止见切/TP停/Guts停）
 
 # ── 覚醒コマンド（原作：構え中 Z+X；のび太=集中射撃）──
-const AWAKEN_TP_DRAIN_PER_SEC: float = 5.0  ## 发动中 TP 缓慢消耗（原作「徐々にTPを消費」）
-const AWAKEN_DAMAGE_MULT: float = 1.5       ## 射撃威力上升倍率
-const AWAKEN_BOSS_DAMAGE_MULT: float = 1.5  ## 即死对 Boss 无效 → 改为伤害 ×1.5（原作必殺对 Boss 同规则）
-const AWAKEN_HITSTUN_SEC: float = 0.8       ## 怯み时长（Boss 吃怯み不吃即死）
+const AWAKEN_TP_DRAIN_PER_SEC: float = SpecialAction.AWAKEN_TP_DRAIN_PER_SEC  ## 发动中 TP 缓慢消耗
+const AWAKEN_DAMAGE_MULT: float = SpecialAction.AWAKEN_DAMAGE_MULT            ## 射撃威力上升倍率
+const AWAKEN_BOSS_DAMAGE_MULT: float = SpecialAction.AWAKEN_BOSS_DAMAGE_MULT  ## 即死对 Boss 无效 → ×1.5
+const AWAKEN_HITSTUN_SEC: float = SpecialAction.AWAKEN_HITSTUN_SEC            ## 怯み时长
 var _awaken_active: bool = false            ## 覚醒发动中（集中射撃）
 var _awaken_tint_applied: bool = false      ## 觉醒金色染色是否已上（还原时区分 Heat 染色）
 
 ## 搓招方向输入缓冲
-const MOTION_DIRS: Array[String] = ["上", "下", "左", "右"]
-const MOTION_BUFFER_MAX: int = 8
+const MOTION_DIRS: Array[String] = SpecialAction.MOTION_DIRS
+const MOTION_BUFFER_MAX: int = SpecialAction.MOTION_BUFFER_MAX
 var _motion_buffer: Array[String] = []
 
 ## 推击相关
@@ -256,6 +284,12 @@ var facing: int:
 func _ready() -> void:
 ## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
 	add_to_group("player")
+	# 表现层服务（最先创建：后续 _refresh_sprite / 音效调用都要用到）
+	_sprite_renderer = SpriteRenderer.new(self)
+	_sfx = SfxService.new(self)
+	_debug_drawer = DebugDrawer.new(self)
+	_special_action = SpecialAction.new(self)
+	_death_service = DeathService.new(self)
 	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY)
 	# NetworkWorld 会在实体加入场景前预先标记动态玩家；此处绝不能把它们
 	# 错绑到单人 active_seat。
@@ -747,11 +781,7 @@ func _disable_network_state_machine() -> void:
 ## 当前移动档的动画帧时长（秒）：CharacterData 值 >0 = 手动固定；0 = 按全局基准
 ## （150px/s↔0.18s）与当前档速度自动换算——速度越快帧间隔越短（2026-09-15 统一公式）。
 func _mode_anim_duration(is_walking: bool) -> float:
-	var manual: float = walk_frame_duration if is_walking else run_frame_duration
-	if manual > 0.0:
-		return manual
-	var speed: float = walk_speed if is_walking else run_speed
-	return clampf(Global.ANIM_BASE_FRAME_DURATION * Global.ANIM_BASE_SPEED / maxf(speed, 1.0), 0.05, 0.5)
+	return _sprite_renderer.mode_anim_duration(is_walking)
 
 
 ## 更新外观：移动状态 + 行走/跑步模式
@@ -1677,1074 +1707,207 @@ func _update_tp_regen(delta: float) -> void:
 		restore_tp(current_character.tp_regen_amount)
 
 
-## 按搓招触发键释放技能（单机 / Host 本机玩家的输入入口）。
-## trigger: 触发键的输入动作名（如 "确定键"/"取消键"），匹配 SkillData.command_trigger
-func use_skill(trigger: String = "") -> void:
-	if not current_character:
-		return
-	var skills: Array[SkillData] = current_character.skills
-	if skills.is_empty():
-		print("[技能] 当前角色没有技能")
-		return
-	var skill: SkillData = _find_skill_by_trigger(skills, trigger)
-	if not skill:
-		print("[技能] 没有绑定触发键 %s 的技能" % trigger)
-		return
-	_use_skill_core(trigger, _match_motion(skill.command_motion))
-
-
-## 释放技能核心（C2 拆分：无 Input / 搓招缓冲读取，联机下 Host 替 Client 玩家
-## 结算经此入口）。motion_ok 由调用方预校验——搓招缓冲只存在于输入方本机，
-## Host 无法重放输入序列，请求协议信任 Client 的本地预校验（与射击瞄准同类
-## 的意图信任）；单机入口传 _match_motion 实测结果，行为不变。
-## TP 走 PlayerState 权威值（Host 上 get_state_for_entity 对权威实体返回权威域）。
-## 返回是否成功释放（校验失败逐项早退）。
-func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
-	if not current_character:
-		return false
-	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
-	if not skill:
-		print("[技能] 没有绑定触发键 %s 的技能" % trigger)
-		return false
-	if not motion_ok:
-		print("[技能] 搓招失败：%s 需要方向指令 [%s]" % [skill.skill_name, skill.command_motion])
-		return false
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if not state:
-		return false
-	if skill.tp_cost > 0 and state.current_tp < skill.tp_cost:
-		print("[技能] TP 不足: 需要 %d, 当前 %d" % [skill.tp_cost, state.current_tp])
-		return false
-	## ★唯一写入口（2026-10-03）：钳到 [0, 上限]，不再裸减。
-	##   上限判据用 `get_max_tp()`（= CharacterData.max_tp，现四人皆 100）——
-	##   越界曾导致 HUD 显示出「133」这类超过上限的数字。
-	state.change_tp(-skill.tp_cost)
-	print("[技能] 释放 %s | 消耗 TP %d | 剩余 %d" % [skill.skill_name, skill.tp_cost, state.current_tp])
-	_execute_skill_effect(skill, trigger)
-	return true
-
-
 # ═══════════════════════════════════════
-# SA 技能效果（说明书 §6.2：SA = 每角色一个专属主动技）
+# SA / 见切 / 反击 / Heat / 削り / 覚醒 / 搓招
+# （2026-10-08 拆分：实现已抽到 script/player_special_action_service.gd；
+#  本节只保留同名转发门面，外部调用点零改动）
 # ═══════════════════════════════════════
-
-## 按 skill_type 分派实际效果。
-func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
-	if skill.sa_sound:
-		var scene: Node = get_tree().current_scene if get_tree() else null
-		Global.play_sfx_managed(skill.sa_sound, scene)
-	match skill.skill_type:
-		SkillData.SkillType.SA_SEEKER:
-			# のび太「感覚向上」：持续时间内敌方攻击完全见切（无伤）
-			_sa_auto_mukiri_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
-			print("[SA] 感覚向上：%.0f 秒内完全见切（敌方攻击无效化）" % skill.duration)
-		SkillData.SkillType.SA_RECITAL:
-			# ジャイアン「ジャイアンリサイタル」：半径内全体敌人踉跄（0 伤害 + 硬直）
-			var staggered: int = _sa_recital_stagger(skill.radius, skill.stagger_duration)
-			print("[SA] ジャイアンリサイタル：%.0fpx 内 %d 个敌人踉跄 %.1fs" % [skill.radius, staggered, skill.stagger_duration])
-		SkillData.SkillType.SA_CROUCH:
-			# 静香「しゃがみ回避」：基础无敌 duration 秒；按住 SA 键持续蹲（急速耗 TP）
-			_start_crouch_dodge(skill)
-		SkillData.SkillType.SA_BACKPACK:
-			# スネ夫「バックパック」：背包系统未实装，占位
-			print("[SA] バックパック：背包系统未实装（占位）")
-		_:
-			print("[技能] %s：无绑定效果（GENERIC 占位）" % skill.skill_name)
-	# 联机（C2）：Host 侧结算完成后广播表现（Client 解析本地同名技能：
-	# 播 sa_sound / 蹲下染色与计时 / 感覚向上计时；RECITAL 的敌人踉跄由 Host
-	# 结算经快照体现，不在此复现）。单机 / Client 端为 no-op。
-	_announce_network_sa_event("sa:" + (trigger if not trigger.is_empty() else skill.command_trigger))
-
-
-## リサイタル：半径内所有存活敌人进入踉跄（0 伤害 → 不弹数字；hitstun → 原地冻结）
-func _sa_recital_stagger(radius: float, stagger: float) -> int:
-	var count: int = 0
-	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(e) or e.get("_is_dead") == true or e.get("_is_dying") == true:
-			continue
-		if e.global_position.distance_to(global_position) > radius:
-			continue
-		if e.has_method("take_damage"):
-			e.take_damage(0.0, 0.0, (e.global_position - global_position).normalized(), false, 0.0, stagger)
-			count += 1
-	return count
-
-
-## しゃがみ回避：进入蹲下无敌；每帧由 _update_sa_state 维持/结束。
-func _start_crouch_dodge(skill: SkillData) -> void:
-	_sa_crouch_skill = skill
-	_sa_crouch_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
-	_sa_crouch_active = true
-	_sa_crouch_drain_accum = 0.0  # 每次进入蹲下都从 0 起算（不留上次的余量）
-	if sprite:
-		sprite.modulate = Color(0.75, 0.85, 1.0)  # 蹲下（无敌）的视觉提示
-	print("[SA] しゃがみ回避：无敌 %.1f 秒（按住 SA 键持续蹲，每秒耗 %.0f TP）" % [skill.duration, skill.crouch_tp_drain])
-
-
-func _end_crouch_dodge() -> void:
-	_sa_crouch_active = false
-	_sa_crouch_skill = null
-	_sa_crouch_drain_accum = 0.0
-	_network_sa_crouch_hold = false  # Host 权威实体的按住登记随蹲下结束一并清除
-	if sprite:
-		sprite.modulate = Color.WHITE
-	print("[SA] しゃがみ回避结束")
-	# 联机（C2）：Host 侧结束（超时/TP 尽/死亡）广播对齐表现；Client 本地结束
-	# 与 crouch_end_presentation 幂等（LAN 漂移 <1s）；单机 no-op。
-	_announce_network_sa_event("crouch_end")
-
-
-## しゃがみ按住每帧扣 TP —— **按秒计价、与帧率无关**。
-##
-## ★2026-10-04 修复（用户报「TP 到不了 0 / 静香技能一直能用」时一并查出的真实缺陷）：
-## 旧实现是
-##     `var drain := maxi(1, int(round(crouch_tp_drain * delta)))` → `change_tp(-drain)`
-## 两个毛病：
-##   ① `maxi(1, …)` 让**每帧至少扣 1 点** → 实际速率 = **帧率**（60fps 时 60 TP/s，
-##      是 `crouch_tp_drain = 15` 设计值的 4 倍；144fps 更离谱，且低帧率时反而变慢 ——
-##      「耗蓝速度取决于电脑性能」本身就是 bug）；
-##   ② `round()` 把不足 1 点的零头直接抹掉，无法表达"每秒 15"这种非整数/帧的量。
-## 现在改用**小数累加器**：不足 1 点的部分留到下一帧，长期平均速率恒等于
-## `crouch_tp_drain` 点/秒（15 TP/s → 满蓝 100 可按住约 6.6 秒）。
-func _drain_crouch_tp(delta: float) -> void:
-	if _sa_crouch_skill == null:
-		return
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state == null or state.current_tp <= 0:
-		return
-	_sa_crouch_drain_accum += _sa_crouch_skill.crouch_tp_drain * delta
-	var whole: int = int(_sa_crouch_drain_accum)
-	if whole <= 0:
-		return  ## 攒着，下一帧一起扣（避免"每帧至少 1"的帧率依赖）
-	_sa_crouch_drain_accum -= float(whole)
-	state.change_tp(-whole)
-
-
-## 本机（**本地显示域**）释放该技能要花的 TP；没有该技能 / 不耗 TP 时返回 0。
-## 联机 Client 的"能不能放"预校验用（与 Host 权威校验同一份 SkillData，两端同值）。
-func local_skill_tp_cost(trigger: String) -> int:
-	if not current_character:
-		return 0
-	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
-	return skill.tp_cost if skill else 0
-
-
-## 联机 Client：把本次**已确认生效**的技能 TP 从本地显示域扣掉。
-##
-## ★为什么需要（2026-10-04 用户报「点按静香技能会一直能用 / TP 到不了 0」的联机根因）：
-## 联机下技能由 Host 结算，TP 也从 **Host 权威域**扣；而 Client 的 HUD 读的是
-## **本地显示域**（双域设计，见 `_update_network_sa_state` 注释）。旧实现里 Client 侧
-## **没有任何一处**为"释放技能"扣本地 TP（表现接口只播音效/染色，按住消耗又要求
-## 一直按住键）→ 点按（tap）时本地 TP 一点不掉 → 玩家看到「TP 一直满、技能一直能用」。
-## 现在：Host 确认后广播 `sa_presentation`，Client 在**同一次事件**上镜像扣一次
-## （各域各扣一次，与覚醒 TP 的"双域独立推进"口径一致），并由 `local_skill_tp_cost`
-## 在本机做发送前预校验，避免 TP 空转刷请求。
-func pay_local_sa_tp(trigger: String) -> void:
-	var cost: int = local_skill_tp_cost(trigger)
-	if cost <= 0:
-		return
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state == null:
-		return
-	state.change_tp(-cost)
-	print("[SA] 本地 TP 同步扣除: -%d | 剩余 %d" % [cost, state.current_tp])
-
-
-## SA 状态每帧维护：发动输入、しゃがみ持续（按住延长 + TP 消耗）、超时结束。
-## 仅本地权威实体调用（network_controlled 分支在 _process 里提前 return）。
-# ═══════════════════════════════════════
-# Heat / 削り（原作说明书 §4.6）
-# ═══════════════════════════════════════
-
-## Heat 状态：禁止切人、禁止见切（反击无效）、TP 停止回复、Guts 停止。
-func _apply_heat() -> void:
-	var was_active: bool = _heat_time > 0.0
-	_heat_time = HEAT_DURATION  # 刷新与首次置位统一（联机表现同语义）
-	if not was_active and sprite:
-		sprite.modulate = Color(1.8, 0.6, 0.6)
-	# 联机（C2）：Heat 染色 + 本地计时广播（否则 Client 不知道自己处于 Heat，
-	# 会误解见切失效的反馈）；单机 / Client 端 no-op。
-	_announce_network_sa_event("heat")
-	if not was_active:
-		print("[状态] Heat！%.0f 秒内禁止见切/反击、TP 停止回复、Guts 停止" % HEAT_DURATION)
-
-
-func is_heat_active() -> bool:
-	return _heat_time > 0.0
-
-
-# ═══════════════════════════════════════
-# 覚醒コマンド（原作：構え中 Z+X；のび太=「集中射撃」）
-# ═══════════════════════════════════════
-
-## 尝试发动觉醒。成功返回 true。
-## 原作（player.html のび太）：「構え中Z+Xで発動。発動中は徐々にTPを消費するが、
-## 射撃攻撃の威力が上昇し、ハンドガン・マグナムの攻撃に即死・怯み効果が付与される。」
-## 本工程触发 = 构势（举枪 READY）中按**空格（覚醒键）**（2026-09-13 用户改版：
-## 组合键按住Z+按X 容易被攻击状态转移吞输入 → 改专用键，空格已从确定键摘除）。
-## 覚醒键按下是本函数内的硬条件（单一判据，调用点不用各自判输入）。
-func try_activate_awaken() -> bool:
-	if _awaken_active or _is_dying:
-		return false
-	if not Input.is_action_pressed("覚醒键"):
-		return false
-	return _activate_awaken_core()
-
-
-## 覚醒发动核心（无 Input 读取）：联机下 Host 替 Client 玩家结算时经此入口
-## （Host 上读不到 Client 键盘，输入判定由 Client 的 awaken_request 上报替代）。
-## 校验 awaken_type + TP（PlayerState 权威值），成功后置 _awaken_active + 金色染色。
-func _activate_awaken_core() -> bool:
-	if _awaken_active or _is_dying:
-		return false
-	if current_character == null or current_character.awaken_type == "none":
-		return false
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state == null or state.current_tp <= 0:
-		print("[覚醒] TP 不足，无法发动")
-		return false
-	_awaken_active = true
-	if sprite:
-		sprite.modulate = Color(1.9, 1.7, 0.9)
-		_awaken_tint_applied = true
-	print("[覚醒] 集中射撃発動！TP 每秒 -%d、射撃威力 ×%.1f、即死・怯み（Boss 免疫即死）" % [
-		int(AWAKEN_TP_DRAIN_PER_SEC), AWAKEN_DAMAGE_MULT])
-	return true
-
-
-func is_awaken_active() -> bool:
-	return _awaken_active
-
-
-## 覚醒（集中射撃）射撃威力倍率。暴露成方法是因为联机 Host 侧持有的 shooter 变量
-## 静态类型为 CharacterBody2D，读不到本脚本的 const（2026-09-24：Host 权威弹补上
-## 覚醒伤害倍率时使用，避免在 network_world 里再写一份硬编码常量）。
-func get_awaken_damage_mult() -> float:
-	return AWAKEN_DAMAGE_MULT
-
-
-## 每帧：发动中 TP 缓慢消耗；TP 耗尽 / 死亡 / 切人 → 解除。
-func _update_awaken(delta: float) -> void:
-	if not _awaken_active:
-		return
-	var state: PlayerState = Players.get_state_for_entity(self)
-	var tp_left: int = state.current_tp if state else 0
-	if state:
-		## ★唯一写入口：钳到 [0, 上限]（旧实现裸减只有 0 下限、没有上限）
-		state.change_tp(-int(round(AWAKEN_TP_DRAIN_PER_SEC * delta)))
-		tp_left = state.current_tp
-	if tp_left <= 0 or _is_dying:
-		_deactivate_awaken()
-		if tp_left <= 0:
-			print("[覚醒] TP 耗尽，集中射撃解除")
-
-
-## 公开包装：供**武器状态**在"玩家主动放下武器"时调用（见 `PlayerPistolState._begin_lower`）。
-## 内部 `_deactivate_awaken()` 仍供 TP 耗尽 / 死亡等内部路径使用。
-## ★为什么要一个公开入口：放下武器解除覚醒是"动作驱动"的（玩家按了放下键），
-##   不能挂在 `exit_weapon_mode()` 上（那个函数被状态切换复用 → 开枪也会解）。
-func deactivate_awaken() -> void:
-	_deactivate_awaken()
-
-
-func _deactivate_awaken() -> void:
-	if not _awaken_active:
-		return
-	_awaken_active = false
-	# 还原染色：Heat 的红色染色优先（两者可能并存）
-	if sprite and _awaken_tint_applied:
-		sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
-		_awaken_tint_applied = false
-	# 联机（C1）：Host 权威实体上任何解除路径（TP 耗尽/死亡/放下武器）统一出口广播；
-	# 单机/Client 端 find_child 找不到 NetworkWorld → no-op。
-	var tree := get_tree()
-	if tree:
-		var scene := tree.current_scene
-		if scene:
-			var world: Node = scene.find_child("NetworkWorld", true, false)
-			if world and world.has_method("announce_player_awaken"):
-				world.call("announce_player_awaken", self, false)
-
-
-## 联机表现接口（C1，由 NetworkWorld 的 awaken_presentation 调用）：
-## 置 _awaken_active + 染色还原——发起者本人的 Client 也经此获得即时染色，
-## 其余 Client 的远端玩家同款；后续 TP 扣费由本实体 _process 的
-## network_controlled 分支内 _update_awaken 各自域独立推进（同速同规则）。
-func apply_network_awaken_state(active: bool) -> void:
-	if active:
-		if _awaken_active:
-			return
-		if current_character == null or current_character.awaken_type == "none":
-			return
-		_awaken_active = true
-		if sprite:
-			sprite.modulate = Color(1.9, 1.7, 0.9)
-			_awaken_tint_applied = true
-		print("[覚醒] 联机染色 ON（peer 表现）")
-	else:
-		if not _awaken_active:
-			return
-		_awaken_active = false
-		if sprite and _awaken_tint_applied:
-			sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
-			_awaken_tint_applied = false
-		print("[覚醒] 联机染色 OFF（peer 表现）")
-
-
-## 削り：削减装备中武器的弹药/耐久。
-## 远程=弹夹 -ATTRITION_AMMO；近战=耐久 -ATTRITION_DURABILITY（max_durability>0 才有耐久，
-## 原作"无限耐久武器免疫削り"）。耐久归零 → 武器损坏（卸下）。
-func _apply_attrition() -> void:
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if not state:
-		return
-	var wd: WeaponData = state.get_active_weapon()
-	if not wd:
-		return
-	if wd.is_ranged and wd.magazine_capacity > 0:
-		var before: int = state.get_magazine_ammo(wd.item_id)
-		if before <= 0:
-			return
-		var after: int = maxi(0, before - ATTRITION_AMMO)
-		state.set_magazine_ammo(wd.item_id, after)
-		print("[削り] %s 弹夹 %d → %d" % [wd.item_name, before, after])
-	elif wd.max_durability > 0.0:
-		var before_d: float = state.get_weapon_durability(wd.item_id, wd.max_durability)
-		var after_d: float = maxf(0.0, before_d - ATTRITION_DURABILITY)
-		state.set_weapon_durability(wd.item_id, after_d)
-		print("[削り] %s 耐久 %.0f → %.0f" % [wd.item_name, before_d, after_d])
-		if after_d <= 0.0:
-			state.unequip_slot(state.active_weapon_slot)
-			_weapon_mode = false
-			player_in_weapon_state = false
-			_refresh_sprite()
-			print("[削り] %s 耐久耗尽，武器损坏！" % wd.item_name)
-
-
-func _update_sa_state(delta: float) -> void:
-	if _is_dying:
-		if _sa_crouch_active:
-			_end_crouch_dodge()
-		return
-	# 覚醒（集中射撃）：发动中 TP 缓慢消耗，耗尽/死亡自动解除
-	_update_awaken(delta)
-	# Heat 状态计时与褪色（Heat 中禁止见切/反击、TP 停、Guts 停）
-	if _heat_time > 0.0:
-		_heat_time -= delta
-		if _heat_time <= 0.0 and sprite and not _sa_crouch_active:
-			sprite.modulate = Color.WHITE
-			print("[状态] Heat 解除")
-	# SA 发动键（原作 X 键；本工程菜单在 P/Esc，X 无冲突，绑在 project.godot 的「SA键」）
-	if Input.is_action_just_pressed("SA键"):
-		use_skill("SA键")
-	# 见切输入（原作 Z=攻击兼见切；「确定键」按下即登记 0.3s 判定窗口）
-	if Input.is_action_just_pressed("确定键"):
-		_try_mukiri_input()
-	# しゃがみ持续：超时结束；按住 SA 键且 TP 未耗尽 → 延长并扣 TP
-	var now: int = Time.get_ticks_msec()
-	if _sa_crouch_active:
-		if now >= _sa_crouch_until_msec:
-			_end_crouch_dodge()
-		elif Input.is_action_pressed("SA键") and _sa_crouch_skill:
-			var state: PlayerState = Players.get_state_for_entity(self)
-			if state and state.current_tp > 0:
-				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
-				_drain_crouch_tp(delta)
-
-
-## 敌方攻击是否被无效化（しゃがみ无敌 / 感覚向上完全见切 / 见切输入窗口）。
-## 见切成功时对实际伤害（>0）触发反击。
-func _should_negate_hit(damage: float) -> bool:
-	var now: int = Time.get_ticks_msec()
-	# しゃがみ回避（无敌）
-	if _sa_crouch_active or now < _sa_crouch_until_msec:
-		_play_hit_feedback(Color(2.0, 2.0, 2.0, 1.0), 0.08)
-		print("[SA] しゃがみ回避：攻击无效化")
-		return true
-	# 感覚向上（完全见切 → 自动反击，即原作"见切是反击的触发器"）；Heat 中禁止见切
-	if now < _sa_auto_mukiri_until_msec and not is_heat_active():
-		_play_hit_feedback(Color(2.0, 2.0, 2.0, 1.0), 0.08)
-		print("[SA] 感覚向上：见切成功（无伤）")
-		if damage > 0.0:
-			_try_counter()
-		return true
-	# 见切输入窗口（0.3s；原作 Z 键攻击兼见切）；Heat 中禁止见切
-	if now < _mukiri_window_until_msec and not is_heat_active():
-		_mukiri_window_until_msec = 0
-		_play_hit_feedback(Color(2.0, 2.0, 2.0, 1.0), 0.08)
-		print("[见切] 成功（无伤）")
-		_play_mukiri_anim()
-		# 联机（C2）：见切成功动画广播（Client 远端玩家播同款见切行走图序列）。
-		_announce_network_sa_event("mukiri")
-		if damage > 0.0:
-			_try_counter()
-		return true
-	return false
-
-
-## 见切成功动画：切换到见切行走图并按角色索引序列播放（配置方式同举枪动画）。
-## 素材 = CharacterData.mukiri_walk_texture（空则回退推击图/反撃套）。
-func _play_mukiri_anim() -> void:
-	if _mukiri_anim_busy or _is_dying or sprite == null:
-		return
-	var tex: Texture2D = null
-	var seq: Array[int] = []
-	var durations: Array[float] = []
-	if current_character:
-		tex = current_character.mukiri_walk_texture
-		if not tex:
-			tex = current_character.shove_walk_texture
-		seq = current_character.mukiri_char_sequence
-		durations = current_character.mukiri_frame_durations
-	if not tex or seq.is_empty():
-		return
-	_mukiri_anim_busy = true
-	for i: int in seq.size():
-		var char_idx: int = seq[i]
-		var char_col: int = char_idx % CHARS_PER_ROW
-		var char_row: int = char_idx / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_facing]
-		sprite.texture = tex
-		sprite.region_enabled = true
-		sprite.region_rect = Rect2(
-			char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W,
-			char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H,
-			FRAME_W, FRAME_H)
-		var fd: float = durations[i] if i < durations.size() else 0.08
-		var tree := get_tree()
-		if not tree:
-			return
-		await tree.create_timer(fd).timeout
-		if not is_inside_tree():
-			return
-	_mukiri_anim_busy = false
-	_refresh_sprite()
-
-
-## 见切输入：按「确定键」即登记 0.3s 判定窗口（与攻击共用一键，同原作）。
-## Heat 中见切使用不可（原作 system.html ◆ヒート：「見切り使用不可(カウンター不可)」）——
-## 输入直接吞掉并给反馈，不再登记无效窗口（无效化判定侧本就有 is_heat_active 门）。
-func _try_mukiri_input() -> void:
-	var now: int = Time.get_ticks_msec()
-	if is_heat_active():
-		if now - _mukiri_last_attempt_msec >= MUKIRI_INTERVAL_MS:
-			_mukiri_last_attempt_msec = now
-			print("[状态] Heat 中见切使用不可！")
-		return
-	if now - _mukiri_last_attempt_msec < MUKIRI_INTERVAL_MS:
-		return
-	_mukiri_last_attempt_msec = now
-	_mukiri_window_until_msec = now + MUKIRI_WINDOW_MS
-
-
-# ═══════════════════════════════════════
-# 反击（说明书 §4.3/§6.2：见切成功后触发，类型=角色专属）
-# ═══════════════════════════════════════
-
-## 见切成功 → 前方 ±60°、88px 扇形内敌人吃反击：
-##   punch（拳打）= 2×攻击 + 推开；heavy（强打）= 3×攻击 + 大推；
-##   issen（一闪）= 4×攻击 + 超Push + 即死（Boss 抗性系统未实装，当前对全部敌人生效）。
-func _try_counter() -> void:
-	var now: int = Time.get_ticks_msec()
-	if now < _counter_cooldown_until_msec:
-		return
-	var ctype: String = current_character.counter_type if current_character else "none"
-	if ctype == "none":
-		return
-	# 原作（system.html ◆カウンター）：反击只在**非架势**（未举枪）时触发；构势中见切只免伤
-	if player_in_weapon_state:
-		print("[反击] 构势中不触发反击（原作：カウンター=構えていない時のみ）")
-		return
-	_counter_cooldown_until_msec = now + COUNTER_COOLDOWN_MS
-	if current_character.counter_sound:
-		var scene: Node = get_tree().current_scene if get_tree() else null
-		Global.play_sfx_managed(current_character.counter_sound, scene)
-	# 联机（C2）：反击音效广播（反击伤害/击退结算本就在 Host，Client 只需听声）。
-	_announce_network_sa_event("counter")
-	var facing: Vector2 = get_facing_vector()
-	var dmg_mult: float = 2.0
-	var push_force: float = 320.0
-	var push_stun: float = 0.4
-	var instant_kill: bool = false
-	match ctype:
-		"punch":
-			dmg_mult = 2.0; push_force = 320.0; push_stun = 0.4
-		"heavy":
-			dmg_mult = 3.0; push_force = 520.0; push_stun = 0.8
-		"issen":
-			dmg_mult = 4.0; push_force = 640.0; push_stun = 1.0; instant_kill = true
-	var base: float = float(current_character.get_effective_attack()) if current_character else 10.0
-	var hit_count: int = 0
-	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(e) or e.get("_is_dead") == true or e.get("_is_dying") == true:
-			continue
-		var to_e: Vector2 = e.global_position - global_position
-		if to_e.length() > 88.0 or to_e.length() < 1.0:
-			continue
-		if to_e.normalized().dot(facing) < 0.5:
-			continue
-		if not e.has_method("take_damage"):
-			continue
-		var dmg: float = base * dmg_mult
-		if instant_kill and e.get("current_hp") != null:
-			dmg = maxf(dmg, float(e.get("current_hp")) + 1.0)
-		e.take_damage(dmg, push_force, facing, false, push_stun, 0.0)
-		hit_count += 1
-	print("[反击] %s：命中 %d 个敌人（威力 x%.0f，推力 %.0f%s）" % [ctype, hit_count, dmg_mult, push_force, "，即死" if instant_kill else ""])
-	## 成就「カウンター免許皆伝」：计发动次数（命中至少一个敌人才算一次有效反击）
-	if hit_count > 0:
-		var cst: PlayerState = Players.get_state_for_entity(self)
-		ACHIEVEMENTS.on_counter(cst.seat_index if cst else ACHIEVEMENTS.TEAM_SEAT)
-
-
-# ═══════════════════════════════════════
-# 联机 SA / 见切 / 反击接线（C2，由 NetworkWorld 调用 / network_controlled 分支驱动）
-# ═══════════════════════════════════════
-
-## network_controlled 实体的 SA 状态每帧维护（与单机 _update_sa_state 同规则同速度）：
-##   - Host 权威实体：Heat 计时（take_damage→_apply_heat 真实置位，原实现无人推进
-##     会让联机玩家 Heat 永不褪色）；しゃがみ按住延长读 sa_crouch_hold RPC 登记的
-##     _network_sa_crouch_hold，扣权威 TP；
-##   - Client 本地预测实体：Heat 计时（heat_presentation 本地置位）；しゃがみ按住
-##     直读本机键盘，扣显示 TP（双域独立推进，同 C1 覚醒 TP 精度）；
-##   - Client 远端玩家：仅 Heat 计时与蹲下超时（按住延长由 Host 权威侧结算，
-##     结束经 crouch_end_presentation 对齐）。
-## 超时/TP 尽各自结束：Host 侧结束经 _end_crouch_dodge 广播表现；Client 本地结束
-## 与表现幂等；感覚向上/见切窗口是 msec 时间戳比较，无需每帧推进。
-func _update_network_sa_state(delta: float) -> void:
-	if _is_dying:
-		if _sa_crouch_active:
-			_end_crouch_dodge()
-		return
-	# Heat 状态计时与褪色（与单机 _update_sa_state 同条件：蹲下中不覆盖染色）
-	if _heat_time > 0.0:
-		_heat_time -= delta
-		if _heat_time <= 0.0 and sprite and not _sa_crouch_active:
-			sprite.modulate = Color.WHITE
-			print("[状态] Heat 解除")
-	var now: int = Time.get_ticks_msec()
-	if _sa_crouch_active:
-		if now >= _sa_crouch_until_msec:
-			_end_crouch_dodge()
-			return
-		var hold: bool = _network_sa_crouch_hold
-		if network_local_prediction:
-			hold = Input.is_action_pressed("SA键")  # Client 本地实体直读本机键盘
-		if hold and _sa_crouch_skill:
-			var state: PlayerState = Players.get_state_for_entity(self)
-			if state and state.current_tp > 0:
-				_sa_crouch_until_msec = now + int(_sa_crouch_skill.duration * 1000.0)
-				_drain_crouch_tp(delta)
-
-
-## 联机表现接口（C2，由 NetworkWorld 的 sa_presentation 调用）：
-## Client 按本地同名技能解析表现——sa_sound、しゃがみ染色/计时、感覚向上计时。
-## RECITAL 的敌人踉跄 / BACKPACK 占位不在此复现（前者由 Host 结算经快照体现）。
-## 技能解析走 _find_skill_by_trigger 同款回退（两端同一 CharacterData 资源，
-## 结果一致），零资源传输。
-func apply_network_sa_skill(trigger: String) -> void:
-	if not current_character:
-		return
-	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
-	if not skill:
-		return
-	if skill.sa_sound:
-		var scene: Node = get_tree().current_scene if get_tree() else null
-		Global.play_sfx_managed(skill.sa_sound, scene)
-	match skill.skill_type:
-		SkillData.SkillType.SA_SEEKER:
-			_sa_auto_mukiri_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
-		SkillData.SkillType.SA_CROUCH:
-			_start_crouch_dodge(skill)
-	print("[SA] 联机表现：%s（peer 表现）" % skill.skill_name)
-
-
-## 联机表现接口（C2，crouch_end_presentation）：Host 权威侧蹲下结束的对齐信号，幂等
-## （Client 本地同规则超时大概率已自行结束）。
-func apply_network_crouch_end() -> void:
-	if _sa_crouch_active:
-		_end_crouch_dodge()
-
-
-## 联机表现接口（C2，counter_presentation）：反击音效（伤害/击退结算在 Host，快照体现）。
-func play_network_counter_presentation() -> void:
-	if current_character and current_character.counter_sound:
-		var scene: Node = get_tree().current_scene if get_tree() else null
-		Global.play_sfx_managed(current_character.counter_sound, scene)
-
-
-## 联机表现接口（C2，heat_presentation）：Heat 染色 + 本地计时置位——
-## _update_network_sa_state 推进计时并在到期褪色，与单机同规则。
-func apply_network_heat_state() -> void:
-	_heat_time = HEAT_DURATION
-	if sprite:
-		sprite.modulate = Color(1.8, 0.6, 0.6)
-
-
-## 联机（C2）：Host 权威实体的しゃがみ按住登记（sa_crouch_hold RPC 写入）。
-func set_network_crouch_hold(active: bool) -> void:
-	_network_sa_crouch_hold = active
-
-
-# ── 联机丸呑み表现（C3，由 NetworkWorld 的 swallow_presentation / Host 侧
-#    EnemySwallowState._hide_victim/_restore_victim 调用）──
 
 ## 被吞锁定标志：true 期间 NetworkWorld 冻结本实体的移动（Host 模拟与 Client
 ## 本地预测两处闸门都读它），Host 侧由 EnemySwallowState 置位，Client 侧由表现置位。
+## 【留在 player】该字段被 NetworkWorld / EnemySwallowState 直接读，不能迁入服务。
 var network_swallow_locked: bool = false
 
 
-## 吞入/吐出表现：隐藏/恢复 + 碰撞闸（与 EnemySwallowState._hide_victim 同款）
-## 并置 network_swallow_locked 锁。Host 权威实体被 _hide_victim 调用时同样生效
-## （重复隐藏无害），关键是为 _simulate_host_players 提供冻结判据。
+## 按搓招触发键释放技能（单机 / Host 本机玩家的输入入口）。
+## trigger: 触发键的输入动作名（如 "确定键"/"取消键"），匹配 SkillData.command_trigger
+func use_skill(trigger: String = "") -> void:
+	_special_action.use_skill(trigger)
+
+
+## 释放技能核心（联机下 Host 替 Client 玩家结算经此入口）。
+func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
+	return _special_action._use_skill_core(trigger, motion_ok)
+
+
+func is_heat_active() -> bool:
+	return _special_action.is_heat_active()
+
+
+func _apply_heat() -> void:
+	_special_action._apply_heat()
+
+
+func try_activate_awaken() -> bool:
+	return _special_action.try_activate_awaken()
+
+
+func is_awaken_active() -> bool:
+	return _special_action.is_awaken_active()
+
+
+func get_awaken_damage_mult() -> float:
+	return _special_action.get_awaken_damage_mult()
+
+
+func deactivate_awaken() -> void:
+	_special_action.deactivate_awaken()
+
+
+func _deactivate_awaken() -> void:
+	_special_action.deactivate_awaken()
+
+
+func _update_awaken(delta: float) -> void:
+	_special_action._update_awaken(delta)
+
+
+func apply_network_awaken_state(active: bool) -> void:
+	_special_action.apply_network_awaken_state(active)
+
+
+func _apply_attrition() -> void:
+	_special_action._apply_attrition()
+
+
+func _update_sa_state(delta: float) -> void:
+	_special_action._update_sa_state(delta)
+
+
+func _should_negate_hit(damage: float) -> bool:
+	return _special_action._should_negate_hit(damage)
+
+
+func _try_mukiri_input() -> void:
+	_special_action._try_mukiri_input()
+
+
+func _try_counter() -> void:
+	_special_action._try_counter()
+
+
+func _update_network_sa_state(delta: float) -> void:
+	_special_action._update_network_sa_state(delta)
+
+
+func apply_network_sa_skill(trigger: String) -> void:
+	_special_action.apply_network_sa_skill(trigger)
+
+
+func apply_network_crouch_end() -> void:
+	_special_action.apply_network_crouch_end()
+
+
+func play_network_counter_presentation() -> void:
+	_special_action.play_network_counter_presentation()
+
+
+func apply_network_heat_state() -> void:
+	_special_action.apply_network_heat_state()
+
+
+func set_network_crouch_hold(active: bool) -> void:
+	_special_action.set_network_crouch_hold(active)
+
+
 func apply_network_swallow_state(active: bool) -> void:
-	if network_swallow_locked == active:
-		return
-	network_swallow_locked = active
-	visible = not active
-	if active:
-		velocity = Vector2.ZERO
-	for c: Node in get_children():
-		if c is CollisionShape2D or c is CollisionPolygon2D:
-			(c as Node2D).set_deferred("disabled", active)
-	print("[敵人] 联机丸呑み表现：%s（peer 表现）" % ("吞入隐藏" if active else "吐出恢复"))
+	_special_action.apply_network_swallow_state(active)
 
 
-## 联机（C2）：Client 本地实体按帧记录搓招缓冲——_update_motion_input 挂在
-## _process 非联机分支，network_controlled 实体不会自行记录，由 NetworkWorld
-## 的 _capture_sa_input 每帧代为驱动。
 func poll_network_motion_input() -> void:
-	_update_motion_input()
+	_special_action.poll_network_motion_input()
 
 
-## 联机（C2）：SA 请求的搓招预校验（缓冲在本机，Host 无法重放输入序列——
-## 请求协议信任 Client 预校验，Host 侧 motion_ok 恒 true）。
 func validate_skill_motion(trigger: String) -> bool:
-	if not current_character:
-		return false
-	var skill: SkillData = _find_skill_by_trigger(current_character.skills, trigger)
-	if not skill:
-		return false
-	return _match_motion(skill.command_motion)
+	return _special_action.validate_skill_motion(trigger)
 
 
-## 联机事件统一出口（C2）：Host 结算侧（技能释放/蹲下结束/见切成功/反击/Heat）
-## 挂 call；单机（无 NetworkWorld 节点）与 Client 端（world 内 host 闸）均 no-op。
-func _announce_network_sa_event(event: String) -> void:
-	var tree := get_tree()
-	if not tree:
-		return
-	var scene := tree.current_scene
-	if not scene:
-		return
-	var world: Node = scene.find_child("NetworkWorld", true, false)
-	if world and world.has_method("announce_player_sa_event"):
-		world.call("announce_player_sa_event", self, event)
-
-
-## 攻击后硬直是否跳过（说明书被动：コマンドー=机枪/散弹/马格南；かいりき=近战）。
 func skip_post_attack(weapon_state_name: String) -> bool:
-	if not current_character:
-		return false
-	if current_character.kairiki and weapon_state_name == "Knife":
-		return true
-	if current_character.commando and weapon_state_name in ["Smg", "Shotgun", "Magnum"]:
-		return true
-	return false
+	return _special_action.skip_post_attack(weapon_state_name)
 
 
-## 按触发键查找技能（command_trigger 匹配；无匹配时回退到第一个未绑定触发键的技能）
-func _find_skill_by_trigger(skills: Array[SkillData], trigger: String) -> SkillData:
-	for s: SkillData in skills:
-		if s.command_trigger == trigger:
-			return s
-	for s: SkillData in skills:
-		if s.command_trigger.is_empty():
-			return s
-	return null
-
-
-## 每帧记录方向键输入到搓招缓冲
 func _update_motion_input() -> void:
-	for d: String in MOTION_DIRS:
-		if Input.is_action_just_pressed(d):
-			_record_motion(d)
+	_special_action._update_motion_input()
 
 
-func _record_motion(direction: String) -> void:
-	_motion_buffer.append(direction)
-	if _motion_buffer.size() > MOTION_BUFFER_MAX:
-		_motion_buffer.pop_front()
+func local_skill_tp_cost(trigger: String) -> int:
+	return _special_action.local_skill_tp_cost(trigger)
 
 
-## 检查最近方向输入是否以指定指令序列结尾（如 "下右"）
-func _match_motion(motion: String) -> bool:
-	if motion.is_empty():
-		return true
-	var n: int = motion.length()
-	if n > _motion_buffer.size():
-		return false
-	var start: int = _motion_buffer.size() - n
-	for i: int in range(n):
-		if _motion_buffer[start + i] != motion[i]:
-			return false
-	return true
+func pay_local_sa_tp(trigger: String) -> void:
+	_special_action.pay_local_sa_tp(trigger)
 
 
 # ═══════════════════════════════════════
-# 死亡系统
+# 死亡系统 + 丢弃全部武器
+# （2026-10-08 拆分：实现已抽到 script/player_death_service.gd；本节只保留同名转发门面）
 # ═══════════════════════════════════════
 
-
-## 尝试在死亡时切换到其他存活队员
 func _try_switch_on_death() -> bool:
-	if _switch_on_death_attempted:
-		return false
-	_switch_on_death_attempted = true
-	var mgr: Node = null
-	var tree := get_tree()
-	if tree:
-		var nodes: Array[Node] = tree.get_nodes_in_group("character_switch_manager")
-		if nodes.size() > 0:
-			mgr = nodes[0]
-	if not mgr:
-		return false
-	# 把本实体对应座位标记为死亡（否则 next_living_seat 还会把它算作存活）
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state:
-		state.current_hp = 0.0
-	# 尝试切换
-	var switched: bool = mgr.switch_after_death()
-	if switched:
-		print("[玩家] 死亡→切换到下一队员")
-	return switched
+	return _death_service._try_switch_on_death()
 
 
 func _clean_expired_damage_sources(now: int) -> void:
-	## 清理超过冷却时间的伤害源记录，防止字典无限增长
-	var to_erase: Array[int] = []
-	for sid: int in _recent_damage_sources:
-		if now - _recent_damage_sources[sid] >= DAMAGE_SOURCE_COOLDOWN_MSEC:
-			to_erase.append(sid)
-	for sid: int in to_erase:
-		_recent_damage_sources.erase(sid)
+	_death_service._clean_expired_damage_sources(now)
 
 
 func _apply_network_death_state() -> void:
-	print("[玩家] 联机死亡表现")
-	# 【倒地与死亡共用同一套躺地表现】
-	# HP=0 后本节点一律先进入这个状态：停动画、切躺地精灵、关碰撞与受击区。
-	# 之后它究竟是"倒地（可救援、可爬行）"还是"真死亡"，由 NetworkWorld 的
-	# Host 权威状态决定 —— 倒地时 NetworkWorld 会在下一帧通过
-	# set_network_downed(true) 重新打开移动碰撞并染红；真死亡则维持本状态。
-	# 本函数自己不做任何生死裁决，也不能在 deferred 关闭之外再碰碰撞体。
-	_is_dying = true
-	_death_phase = 3
-	_moving = false
-	# 冻结远端实体，避免延迟快照把死亡表现继续向旧目标位置拖动。
-	_network_target_position = global_position
-	_network_has_target = false
-	player_in_weapon_state = false
-	velocity = Vector2.ZERO
-	_weapon_mode = false
-	_weapon_data = null
-	apply_network_throwable_presentation(null, false, false, 0)
-	_shove_mode = false
-	_shove_texture = null
-	if animation_timer:
-		animation_timer.stop()
-	var tex: Texture2D = death_texture if death_texture else walk_texture
-	if tex:
-		sprite.texture = tex
-		var char_col: int = death_char_index % CHARS_PER_ROW
-		var char_row: int = death_char_index / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_facing]
-		sprite.region_rect = Rect2(char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W, char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H, FRAME_W, FRAME_H)
-	if $CollisionShape2D:
-		$CollisionShape2D.set_deferred("disabled", true)
-	## 真死亡的尸体同样不该阻挡别人：上面虽已整体禁用碰撞体，这里再加一道保险 ——
-	## 即使某条路径把 shape 又打开，敌人/队友也检测不到尸体（layer 归零）。
-	_set_body_collision_layer(0)
-	if hurt_area:
-		hurt_area.set_deferred("monitoring", false)
-		hurt_area.set_deferred("monitorable", false)
+	_death_service._apply_network_death_state()
 
 
-## 强制致死（无视 ガッツ / 见切 / 无敌帧）。
-##
-## 用途：丸呑み（ハンターγ）这类原作明确定为「伤害是致死」的必杀技。
-## 常规 take_damage 路径会被 ガッツ（HP≥2 保底 1 HP）拦下，无法表达"必死"语义，
-## 因此单独开一个入口，直接归零 HP 并走 _die()（保留切人 / オートスプレー 的判定链）。
-##
-## source_id 仅用于日志与去重记录，不参与判定。
 func force_lethal_death(source_id: int = 0) -> void:
-	if _is_dying:
-		return
-	print("[玩家] 强制致死（source_id=%d）" % source_id)
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state:
-		state.current_hp = 0.0
-	current_hp = 0.0
-	_die()
+	_death_service.force_lethal_death(source_id)
 
 
-## 施加额外的武器削り（弹药/耐久）。供外部必杀技（丸呑み「多段削りで武器も駄目に」）调用。
-## extra 为额外削减量：远程扣弹夹，近战扣耐久（0 或负值 = 无动作）。
 func apply_weapon_attrition(extra: float = 0.0) -> void:
-	if extra <= 0.0:
-		return
-	# 复用内置削り（每次固定量），再按 extra 追加一轮
-	var rounds: int = maxi(1, int(ceilf(extra / maxf(1.0, ATTRITION_DURABILITY))))
-	for i: int in rounds:
-		_apply_attrition()
-	print("[玩家] 丸呑み多段削り：武器削减 %d 轮" % rounds)
+	_death_service.apply_weapon_attrition(extra)
 
 
 func _die() -> void:
-	BurnEffect.detach(self)  ## 死亡不留火焰（_update_burn_status 死态早退不摘，在此统一摘）
-	if network_controlled:
-		# D2 实测修复：联机此前直接进躺地/死亡流程，オートスプレー（HP=0 自动喷雾
-		# 满血复活）永远不会触发——表现为「空血条后急救喷雾没起作用」。原作语义
-		# 喷雾在 HP=0 拦截，成功则满血继续（HP 经快照 40Hz 同步到 Client 表现）；
-		# 无喷雾才落进倒地/真死亡裁决。
-		if _try_auto_spray_revive():
-			# 伤害信号已在本帧把 entry["downed"] 置 true（先于 _die），必须清除。
-			var world: Node = get_tree().current_scene.find_child("NetworkWorld", true, false) \
-					if get_tree() and get_tree().current_scene else null
-			if world and world.has_method("notify_player_revived"):
-				world.call("notify_player_revived", self)
-			return
-		_apply_network_death_state()
-		return
-	# ── オートスプレー（原作 system.html）：HP=0 时自动使用急救喷雾 → 满血复活 ──
-	# （2026-09-13 用户定稿：**当前角色**直接用喷雾复活，不再"有队友先切人"——
-	#   旧顺序先切人，导致只有最后一个角色才轮得到喷雾）
-	if _try_auto_spray_revive():
-		return
-	# 没有喷雾 → 有其他存活队员才切换，否则真死
-	if _try_switch_on_death():
-		return
-	print("[玩家] 死亡！")
-	_is_dying = true
-	_death_phase = 0
-
-	# 播放死亡音效
-	_play_sound(death_sound)
-
-	# 更新本实体对应座位的 HP。
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if state:
-		state.current_hp = 0.0
-		# 真死亡计入战役累计（终章 ED「谁死了最多」排名用）
-		var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
-		if chapter_stats and chapter_stats.has_method("record_death"):
-			chapter_stats.record_death(state.seat_index)
-
-	# 停止状态机
-	var sm: Node = get_node_or_null("StateMachine")
-	if sm:
-		sm.set_process(false)
-		sm.set_physics_process(false)
-
-	# 停止移动 & 动画（防止 timer 回调 _refresh_sprite 覆盖死亡帧）
-	_moving = false
-	player_in_weapon_state = false
-	velocity = Vector2.ZERO
-	_weapon_mode = false
-	_shove_mode = false
-	_shove_texture = null
-	if animation_timer:
-		animation_timer.stop()
-
-	# 显示死亡精灵
-	var tex: Texture2D = death_texture if death_texture else walk_texture
-	if tex:
-		sprite.texture = tex
-		var char_col: int = death_char_index % CHARS_PER_ROW
-		var char_row: int = death_char_index / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_facing]
-		var x: int = char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
-
-	# 禁用碰撞
-	if $CollisionShape2D:
-		$CollisionShape2D.set_deferred("disabled", true)
-	# 禁用受击碰撞体
-	if hurt_area:
-		hurt_area.set_deferred("monitoring", false)
-		hurt_area.set_deferred("monitorable", false)
-
-	# 播放死亡音乐
-	if not Global.death_music_path.is_empty():
-		var music: AudioStream = load(Global.death_music_path) as AudioStream
-		if music:
-			_play_music(music)
-
-	# 创建黑屏遮罩
-	_create_fade_overlay()
+	_death_service._die()
 
 
 func _create_fade_overlay() -> void:
-	# CanvasLayer 确保 Control 节点能在 2D 场景之上渲染
-	var cl := CanvasLayer.new()
-	cl.name = "DeathFadeCanvas"
-	cl.layer = 128  # 最顶层
-
-	_death_fade_overlay = ColorRect.new()
-	_death_fade_overlay.name = "DeathFadeOverlay"
-	_death_fade_overlay.color = Color(0, 0, 0, 0)  # 初始透明
-	_death_fade_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_death_fade_overlay.size = get_viewport().get_visible_rect().size
-
-	cl.add_child(_death_fade_overlay)
-
-	var tree: SceneTree = get_tree()
-	if tree and tree.current_scene:
-		tree.current_scene.add_child(cl)
-		_death_fade_timer = 0.0
-		_death_phase = 1
+	_death_service._create_fade_overlay()
 
 
-## オートスプレー（原作 §4）：HP=0 时自动消耗急救喷雾（单机=共用池；联机=**自己那一格**），
-## 满血复活。返回 true = 已复活，跳过死亡流程。
-## ⚠ 联机「只用自己那一格」（2026-09-24 用户定稿）：自己没有喷雾就不再自动复活，
-##   直接进入倒地/死亡裁决（等队友救援）—— 不再借队友的喷雾。
 func _try_auto_spray_revive() -> bool:
-	var own: PlayerState = Players.get_state_for_entity(self)
-	# 消耗规则统一走 Players.consume_spray_for（单机共用池 / 联机只用自己那一格），
-	# 与联机 Host 权威侧（network_world._try_host_use_healing）共用同一条规则。
-	var used: ItemData = Players.consume_spray_for(own)
-	if not used:
-		return false
-	current_hp = max_hp
-	if own:
-		own.current_hp = current_hp
-	_play_hit_feedback(Color(1.6, 2.0, 1.6, 1.0), 0.4)
-	print("[自动喷雾] HP=0 → 自动使用急救喷雾（%s），满血复活（队伍剩余 %d）" % [
-		used.item_id, Players.spray_total()])
-	return true
+	return _death_service._try_auto_spray_revive()
 
 
-## 全队共用喷雾总数（HUD 显示与日志用）。
 func _team_spray_total() -> int:
-	return Players.spray_total()
+	return _death_service._team_spray_total()
 
 
 func _process_death(delta: float) -> void:
-	match _death_phase:
-		1:  # 渐黑
-			_death_fade_timer += delta
-			var progress: float = clampf(_death_fade_timer / Global.death_fade_duration, 0.0, 1.0)
-			if _death_fade_overlay:
-				_death_fade_overlay.color = Color(0, 0, 0, progress)
-			if progress >= 1.0:
-				_death_fade_timer = 0.0
-				_death_phase = 2
-				print("[玩家] 黑屏完成，等待重载...")
-
-		2:  # 全黑等待
-			_death_fade_timer += delta
-			if _death_fade_timer >= Global.death_black_hold:
-				_death_phase = 3
-				_reload_from_save()
-
-		3:  # 已触发重载，等待
-			pass
+	_death_service._process_death(delta)
 
 
 func _reload_from_save() -> void:
-	# 死亡后从 checkpoint 恢复所有状态（HP/装备/弹药/队伍），再回到安全屋。
-	## ⚠ 2026-09-16 修复「复活多次后队伍从 3 人缩到 1 人」：
-	## 旧实现在恢复后立刻 Global.checkpoint.clear()。若玩家在「再次抵达安全屋捕获新快照」之前
-	## 又死一次，restore_checkpoint() 就只剩「无 checkpoint，保持当前状态」分支 —— 把上次死亡
-	## 留下的「某角色 HP=0」原样保留，于是每死一次就永久少一个可操控角色（测试者实测）。
-	## checkpoint 只在「新游戏 / 选角确认」时清除（init_new_game / _confirm_team），
-	## 安全屋每次到位都会重新 capture 覆盖 —— 因此这里必须保留它作为复活锚点。
-	print("[玩家] 死亡，从 checkpoint 恢复...")
-	var safehouse: String = Global.get_checkpoint_scene()
-	Global.restore_checkpoint()
-	_log_team_state("死亡复活后")
-	var tree: SceneTree = get_tree()
-	if not tree:
-		return
-	if not safehouse.is_empty() and safehouse != tree.current_scene.scene_file_path:
-		# 不在安全屋 → 切回安全屋场景
-		var err := tree.change_scene_to_file(safehouse)
-		if err != OK:
-			printerr("[玩家] 无法切回安全屋: %s (err=%d)" % [safehouse, err])
-			tree.reload_current_scene()
-	else:
-		# 已在安全屋死亡 → 直接重载
-		tree.reload_current_scene()
+	_death_service._reload_from_save()
 
 
-## 复活/队伍诊断（2026-09-16）：逐席位打印「角色 + HP」，
-## 用于定位「选了 N 人却只剩 1 人可操控」这类队伍缩水问题（配合 [Checkpoint] 日志一起看）。
 func _log_team_state(tag: String) -> void:
-	var parts: Array[String] = []
-	for i: int in range(Players.seat_count()):
-		var st: PlayerState = Players.get_seat(i)
-		if st and st.character:
-			parts.append("席位%d=%s HP=%.0f" % [i, st.character.resource_path.get_file(), st.current_hp])
-		elif st:
-			parts.append("席位%d=<无角色> HP=%.0f" % [i, st.current_hp])
-		else:
-			parts.append("席位%d=<空>" % i)
-	print("[玩家] %s 队伍=%d 人 | %s" % [tag, Players.seat_count(), " ".join(parts)])
-
-
-# ═══════════════════════════════════════
-# 丢弃全部武器（E 键，2026-09-16 用户需求）
-# ═══════════════════════════════════════
-
-func _unhandled_input(event: InputEvent) -> void:
-	## 用 _unhandled_input 而不是 _process 轮询：UI（菜单/安全门/拾取提示）会先消费按键，
-	## 否则开着菜单按 E 也会把武器丢一地。
-	if event.is_action_pressed("丢弃武器键"):
-		get_viewport().set_input_as_handled()
-		request_drop_all_weapons()
+	_death_service._log_team_state(tag)
 
 
 ## E 键入口：单机本地丢弃；联机交给 Host 权威事务（Client 只提交意图，等快照回包）。
 func request_drop_all_weapons() -> void:
-	if _is_dying or network_downed:
-		return
-	var scene: Node = get_tree().current_scene
-	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
-	var net: Node = get_node_or_null("/root/Net")
-	var online: bool = net != null and net.has_method("is_online_session") and bool(net.is_online_session())
-	if online and world and world.has_method("request_drop_all"):
-		## 丢弃即视为一次拾取：置位闩锁，避免 Client 端本地判定把刚脱手的武器又请求回来
-		## （2026-09-23 用户反馈：丢下的武器被自己立刻捡回）。
-		WEAPON_PICKUP_SCRIPT.mark_auto_picked(get_tree(), self)
-		world.call("request_drop_all")
-		return
-	_drop_all_weapons_locally()
+	_death_service.request_drop_all_weapons()
 
 
 ## 单机：两个武器槽全部丢到地上（落点自动避让 24px，见 weapon_pickup.find_free_drop_position）。
 func _drop_all_weapons_locally() -> void:
-	var state: PlayerState = Players.get_state_for_entity(self)
-	if not state:
-		return
-	var dropped: int = 0
-	for slot: String in ["primary", "secondary"]:
-		var wd: WeaponData = state.get_equipped_weapon(slot)
-		if wd == null:
-			continue
-		WEAPON_PICKUP_SCRIPT.drop_weapon_for_player(self, wd)
-		state.unequip_slot(slot)
-		dropped += 1
-	if dropped == 0:
-		return
-	## 丢弃即视为一次拾取：置位自动拾取闩锁 —— 否则刚脱手的武器（落点在脚下附近）
-	## 会被自己的自动拾取立刻捡回一件（2026-09-23 用户反馈）。走开即重新武装。
-	WEAPON_PICKUP_SCRIPT.mark_auto_picked(get_tree(), self)
-	## 手里空了 → 收起武器模式（状态机在 _wd == null 时会自愈回 Idle）
-	if is_weapon_mode_active():
-		exit_weapon_mode()
-	print("[玩家] 丢弃全部武器：%d 件" % dropped)
+	_death_service._drop_all_weapons_locally()
+
+
+## E 键丢弃武器（保留在节点：_unhandled_input 是引擎回调）。
+## 用 _unhandled_input 而不是 _process 轮询：UI（菜单/安全门/拾取提示）会先消费按键，
+## 否则开着菜单按 E 也会把武器丢一地。
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("丢弃武器键"):
+		get_viewport().set_input_as_handled()
+		request_drop_all_weapons()
 
 
 # ═══════════════════════════════════════
@@ -2752,37 +1915,18 @@ func _drop_all_weapons_locally() -> void:
 # ═══════════════════════════════════════
 
 func _play_sound(stream: AudioStream) -> void:
-	if not stream:
-		return
-	Global.play_sfx_managed(stream, self)
+	_sfx.play_sound(stream)
 
 
 ## 联机表现专用音效入口（装填/攻击后/推击等）。与单机同一套 SFX 管理器与并发上限，
 ## 用**调用当刻**的节点自身作宿主：协程里 await 之后缓存的 SceneTree 可能已失效，
 ## 而本节点只要仍在树内就是合法宿主（2026-09-24 联机装填静音修复一并收口）。
 func _play_network_sfx(stream: AudioStream) -> void:
-	if not stream or not is_inside_tree():
-		return
-	Global.play_sfx_managed(stream, self)
+	_sfx.play_network_sfx(stream)
 
 
 func _play_music(stream: AudioStream) -> void:
-	## 播放全局音乐（替换当前音乐）
-	if not stream:
-		return
-	# 停止已有的音乐
-	for child: Node in get_children():
-		if child is AudioStreamPlayer and child.name == "DeathMusicPlayer":
-			child.stop()
-			child.queue_free()
-
-	var player: AudioStreamPlayer = AudioStreamPlayer.new()
-	player.name = "DeathMusicPlayer"
-	player.stream = stream
-	player.bus = "Music"
-	player.volume_db = Global.death_music_volume_db
-	player.autoplay = true
-	add_child(player)
+	_sfx.play_music(stream)
 
 
 # ═══════════════════════════════════════
@@ -2790,31 +1934,7 @@ func _play_music(stream: AudioStream) -> void:
 # ═══════════════════════════════════════
 
 func _draw() -> void:
-	if not Global.debug_visuals:
-		return
-	# 绘制玩家碰撞体
-	var cs: CollisionShape2D = $CollisionShape2D
-	var shape: Shape2D = cs.shape
-	if shape is RectangleShape2D:
-		var rect: RectangleShape2D = shape as RectangleShape2D
-		var color: Color = Color.GRAY if _is_dying else Color.GREEN
-		var pos: Vector2 = cs.position
-		draw_rect(Rect2(pos - rect.size / 2, rect.size), color, false, 1.0)
-	# 绘制 HP 条
-	var bar_w: float = 48.0
-	var bar_h: float = 4.0
-	var bar_y: float = -40.0
-	var ratio: float = current_hp / max_hp
-	draw_rect(Rect2(-bar_w/2, bar_y, bar_w, bar_h), Color.RED, false, 1.0)
-	draw_rect(Rect2(-bar_w/2, bar_y, bar_w * ratio, bar_h), Color.GREEN if not _is_dying else Color.GRAY, true)
-
-	# 绘制受击碰撞体（黄色虚线）
-	if hurt_area:
-		var hshape_node: CollisionShape2D = hurt_area.get_node_or_null("HurtShape")
-		if hshape_node and hshape_node.shape is RectangleShape2D:
-			var hs: Vector2 = (hshape_node.shape as RectangleShape2D).size
-			var ho: Vector2 = hshape_node.position
-			draw_rect(Rect2(ho - hs / 2, hs), Color.YELLOW, false, 1.0)
+	_debug_drawer.draw()
 
 
 # ═══════════════════════════════════════
@@ -2822,69 +1942,7 @@ func _draw() -> void:
 # ═══════════════════════════════════════
 
 func _refresh_sprite() -> void:
-	if not sprite:
-		return
-	if _is_dying:   ## 死亡后拒绝一切刷新，防止覆盖 _die() 设置的死亡帧
-		return
-
-	# 投掷物举起模式：使用投掷物行走图（跟随朝向+踏步）
-	if _throwable_mode and _throwable_texture:
-		sprite.texture = _throwable_texture
-		var char_idx: int = _throwable_char_idx
-		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
-		var char_col: int = char_idx % CHARS_PER_ROW
-		var char_row: int = char_idx / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_facing]
-		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
-		return
-
-	# 武器模式下使用武器纹理和角色索引
-	if _weapon_mode and _weapon_data:
-		# 推击模式：优先推击行走图（运行时设置 > 武器字段 > 角色字段 > 回退普通武器纹理）
-		if _shove_mode and _shove_texture:
-			sprite.texture = _shove_texture
-		else:
-			var tex: Texture2D = null
-			# 角色专属武器行走图
-			if current_character:
-				tex = current_character.get_weapon_walk_texture(_weapon_data.weapon_state_name)
-			# 回退到武器默认行走图
-			if not tex:
-				tex = _weapon_data.weapon_walk_texture
-			if not tex:
-				return
-			sprite.texture = tex
-		var char_idx: int = _current_weapon_char_idx
-		var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
-
-		var char_col: int = char_idx % CHARS_PER_ROW
-		var char_row: int = char_idx / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_facing]
-
-		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
-		return
-
-	# 普通模式
-	if not walk_texture or not run_texture:
-		return
-	var use_run_tex: bool = _moving and not _is_walking
-	sprite.texture = run_texture if use_run_tex else walk_texture
-
-	var char_idx: int = run_char_index if use_run_tex else walk_char_index
-	var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
-
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[_facing]
-
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-
-	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	_sprite_renderer.refresh_sprite()
 
 ## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
 ## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
