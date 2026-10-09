@@ -1,0 +1,19 @@
+{
+  "name": "l3d-master-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "L3D 互联网联机的房间目录（Master Server）：只负责找房间，不参与游戏数据转发",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  }
+}
