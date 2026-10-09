@@ -281,15 +281,23 @@ var facing: int:
 		return _facing
 
 
-func _ready() -> void:
-## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
-	add_to_group("player")
-	# 表现层服务（最先创建：后续 _refresh_sprite / 音效调用都要用到）
+func _init() -> void:
+	## ⚠ 表现层服务必须在 `_init` 创建，**不能放 `_ready`**：
+	## Godot 的 `_ready` 顺序是**子节点先于父节点**，而 StateMachine（player 的子节点）
+	## 在自己的 `_ready` 里就会 `PlayerIdleState.enter()` → `update_appearance()`
+	## → `_refresh_sprite()`。若服务在 player._ready 才建，这条早期链路会命中 null 服务
+	## （实测：`Nonexistent function 'refresh_sprite' in base 'Nil'`）。
+	## 服务构造只保存宿主引用、不读任何字段，故此时创建安全。
 	_sprite_renderer = SpriteRenderer.new(self)
 	_sfx = SfxService.new(self)
 	_debug_drawer = DebugDrawer.new(self)
 	_special_action = SpecialAction.new(self)
 	_death_service = DeathService.new(self)
+
+
+func _ready() -> void:
+## 初始化实体表现并绑定单机座位。network_controlled 实体由 NetworkWorld 接管，不能注册到单机 active_seat。
+	add_to_group("player")
 	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY)
 	# NetworkWorld 会在实体加入场景前预先标记动态玩家；此处绝不能把它们
 	# 错绑到单人 active_seat。

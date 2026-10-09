@@ -510,11 +510,18 @@ var _debug_cell_size: float = 32.0  ## 由 EnemyChaseState 在 enter() 中设置
 @onready var hurt_area: Area2D = _setup_hurt_area()
 
 
-func _ready() -> void:
-	## ★必须最先创建精灵渲染服务：下面 _update_facing_sprite / _sync_frame_size_to_texture /
-	## _refresh_sprite 都要经它转发。
+func _init() -> void:
+	## ⚠ 精灵渲染/调试服务必须在 `_init` 创建，**不能放 `_ready`**：
+	## Godot 的 `_ready` 顺序是**子节点先于父节点**，而 StateMachine（enemy 的子节点）
+	## 在自己的 `_ready` 里就会进 `EnemyIdleState.enter()` → `update_moving()`
+	## → `_refresh_sprite()`。若服务在 enemy._ready 才建，这条早期链路会命中 null 服务
+	## （player.gd 上实测过：`Nonexistent function 'refresh_sprite' in base 'Nil'`）。
+	## 服务构造只保存宿主引用、不读任何字段，故此时创建安全。
 	_sprite_renderer = SpriteRenderer.new(self)
 	_debug_drawer = DebugDrawer.new(self)
+
+
+func _ready() -> void:
 	## 难度缩放（2026-09-16 用户反馈「不管哪个难度丧尸血量都一样」）：
 	## 此前 Global.difficulty_multipliers 的 enemy_hp 全仓零消费 → 敌人血量与难度完全无关。
 	## 只在 Host / 单机应用 —— Client 的 HP 由 Host 快照驱动，两端各乘会算出不同血量。
