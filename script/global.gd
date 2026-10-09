@@ -10,6 +10,15 @@ extends Node
 ##
 ## 这里适合放本机设置、UI 缓存、战役选择和跨场景配置；不要把联机 HP、背包、伤害、敌人等
 ## 权威事实写在 Global。联机状态由 PlayerState + Players 保存，并由 Host 的 NetworkWorld/Net 写入。
+##
+## 【2026-10-08 拆分进展】字体职责已抽到 `script/font_service.gd`（本节保留转发门面）。
+## 后续可按同样「服务类 + 转发门面」模式继续抽出音频 / 触摸布局 / checkpoint。
+##
+## ⚠ 服务类用 **preload 常量**引用，不用 class_name（本项目 class_name 不进全局类缓存，
+##   跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const FontService := preload("res://script/font_service.gd")
+const AudioService := preload("res://script/audio_service.gd")
+const TouchLayoutService := preload("res://script/touch_layout_service.gd")
 # ═══════════════════════════════════════
 # Debug 开关
 # ═══════════════════════════════════════
@@ -31,105 +40,87 @@ var debug_visuals: bool = false
 # ═══════════════════════════════════════
 # 设置（音量 / 固定朝向）
 # ═══════════════════════════════════════
-var music_volume: int = 80      ## 音乐音量 0–100
-var sfx_volume: int = 80        ## 音效音量 0–100
+## ⚠ `music_volume` / `sfx_volume` 的定义已移到「音频总管理」节的**属性代理**处
+## （真实值在 AudioService）—— 此处不可重复声明。
 var facing_lock_mode: int = 0   ## 固定朝向模式: 0=切换式, 1=按住式
 var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置里可开关，2026-09-14 用户要求默认居中）
 
 ## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
+## 【2026-10-08 拆分】逻辑已抽到 `script/touch_layout_service.gd`（TouchLayoutService），
+## 这里只保留**同名转发门面 + 属性代理** → 外部（menu_controller / title_screen /
+## touch_controls）的 `Global.touch_layout` / `Global.touch_hidden` / `Global.xxx()` 零改动。
+##
 ## 存法：元素名 → Vector2(dx, dy)，单位是**相对逻辑画布的偏移比例**（不是像素）。
 ## ★为什么用比例：换设备分辨率 / 逻辑画布尺寸变化时像素值会整体跑偏，比例不会。
-## 元素名 = 触摸层里的节点名（`Joystick` / `BtnAttack` / `BtnFunc` …）。
-## 空字典 = 从未自定义过（用 tscn 里的默认位置）。
-var touch_layout: Dictionary = {}
+var _touch_service: TouchLayoutService = null
 
-## 被玩家**隐藏**的元素名（编辑模式里点一下即可隐藏 / 恢复），随 config.json 持久化。
-## ⚠ 隐藏只影响**显示**：动作映射还在，只是按钮不画出来、也不吃触摸。
-var touch_hidden: Array = []
+
+## 元素名 → 相对偏移比例（代理到 TouchLayoutService；touch_controls.gd 会直接 get 本属性）。
+var touch_layout: Dictionary:
+	get:
+		return _touch_service.layout if _touch_service != null else {}
+	set(v):
+		if _touch_service != null:
+			_touch_service.layout = v
+
+
+## 被玩家隐藏的元素名（代理到 TouchLayoutService）。
+var touch_hidden: Array:
+	get:
+		return _touch_service.hidden if _touch_service != null else []
+	set(v):
+		if _touch_service != null:
+			_touch_service.hidden = v
 
 
 ## 该元素是否被玩家隐藏。
 func touch_hidden_is(elem_name: String) -> bool:
-	return touch_hidden.has(elem_name)
+	return _touch_service.hidden_is(elem_name) if _touch_service != null else false
 
 
 ## 设置某元素的隐藏状态。`persist=false` 用于编辑过程中的临时切换（保存时才落盘）。
-func set_touch_hidden(elem_name: String, hidden: bool, persist: bool = true) -> void:
-	if hidden == touch_hidden.has(elem_name):
-		return
-	if hidden:
-		touch_hidden.append(elem_name)
-	else:
-		touch_hidden.erase(elem_name)
-	if persist:
-		save_config()
+func set_touch_hidden(elem_name: String, is_hidden: bool, persist: bool = true) -> void:
+	if _touch_service != null:
+		_touch_service.set_hidden(elem_name, is_hidden, persist)
 
 
 ## 从 config 读隐藏列表。⚠ 缺字段时**保留原值**（与其它设置字段一致）。
 func _apply_touch_hidden(raw: Variant) -> void:
-	if not (raw is Array):
-		return
-	var out: Array = []
-	for v: Variant in (raw as Array):
-		out.append(String(v))
-	touch_hidden = out
+	if _touch_service != null:
+		_touch_service.apply_hidden(raw)
 
 
 ## 取某元素的布局偏移（比例）。未自定义过 → (0, 0)。
 func touch_layout_offset(elem_name: String) -> Vector2:
-	var raw: Variant = touch_layout.get(elem_name, null)
-	if raw is Vector2:
-		return raw
-	if raw is Array and (raw as Array).size() == 2:
-		return Vector2(float((raw as Array)[0]), float((raw as Array)[1]))
-	return Vector2.ZERO
+	return _touch_service.layout_offset(elem_name) if _touch_service != null else Vector2.ZERO
 
 
 ## 写入某元素的布局偏移（比例）。传 (0,0) 等价于清除该项（回到 tscn 默认位置）。
 ## `persist=false` 用于拖动过程中的高频写入（先攒着，松手/保存时再落盘）。
 func set_touch_layout_offset(elem_name: String, ratio: Vector2, persist: bool = true) -> void:
-	if ratio.length() < 0.0001:
-		touch_layout.erase(elem_name)
-	else:
-		touch_layout[elem_name] = ratio
-	if persist:
-		save_config()
+	if _touch_service != null:
+		_touch_service.set_layout_offset(elem_name, ratio, persist)
 
 
 ## 是否自定义过布局（设置页显示「默认 / 自定义」用）。隐藏按钮也算自定义。
 func has_custom_touch_layout() -> bool:
-	return not touch_layout.is_empty() or not touch_hidden.is_empty()
+	return _touch_service.has_custom() if _touch_service != null else false
 
 
 ## 恢复默认布局（清空全部偏移 + 隐藏列表 + 落盘）。返回是否真的有改动。
 func reset_touch_layout() -> bool:
-	if touch_layout.is_empty() and touch_hidden.is_empty():
-		return false
-	touch_layout.clear()
-	touch_hidden.clear()
-	save_config()
-	return true
+	return _touch_service.reset() if _touch_service != null else false
 
 
 ## 从 config 读布局。⚠ 缺字段 / 类型不对时**保留原值**（与其它设置字段一致的行为）。
 func _apply_touch_layout(raw: Variant) -> void:
-	if not (raw is Dictionary):
-		return
-	var out: Dictionary = {}
-	for k: Variant in (raw as Dictionary).keys():
-		var v: Variant = (raw as Dictionary)[k]
-		if v is Array and (v as Array).size() == 2:
-			out[String(k)] = Vector2(float((v as Array)[0]), float((v as Array)[1]))
-	touch_layout = out
+	if _touch_service != null:
+		_touch_service.apply_layout(raw)
 
 
 ## 序列化成 JSON 友好形式（Vector2 不能直接进 JSON）。
 func _touch_layout_to_json() -> Dictionary:
-	var out: Dictionary = {}
-	for k: Variant in touch_layout.keys():
-		var v: Vector2 = touch_layout[k]
-		out[String(k)] = [v.x, v.y]
-	return out
+	return _touch_service.layout_to_json() if _touch_service != null else {}
 
 
 ## 武器/物品快捷键（1~5）统一轮询入口。
@@ -274,145 +265,30 @@ func apply_text_shadow(lbl: Label) -> void:
 # ═══════════════════════════════════════
 # 界面字体（可切换）—— 全 UI 取字体的唯一入口
 # ═══════════════════════════════════════
-## 玩家可在「标题画面 → 设置 → 界面字体」切换的两套像素字体。两套都是 **12px 基底**，
-## 所以字号铁律（12 的整数倍：12/24/36）对两者通用，切换只换字体资源、不动任何字号。
-##
-## 【为什么需要这个开关】2026-09 用户反馈「玩家下载的版本没问题，但电脑上字体缺字」。
-## 像素字体的字形覆盖差异极大，缺字时 Godot 会走 FontFile.allow_system_fallback →
-## 拿**玩家机器上的系统字体**顶上：同一份游戏在不同电脑上字形不同，系统里没有合适
-## CJK 字体时直接显示豆腐块。实测覆盖（对全项目文本取样 1769 个中日文字符，
-## 探针 `.workbuddy/tmp/probe_font_zpix.gd`）：
-##   fusion-pixel-12px-monospaced-zh_hans   缺 0      ← 界面定稿（默认）
-##   zpix_12px                              缺 0      ← 2026-09-28 起替代方舟（用户自备）
-##   ark-pixel-12px-monospaced-zh_cn        缺 56     ⚠ 2026-09-28 已移出选项（缺"旋/窗/然/热/警/避/酸/雾/骤"等常用字）
-##   ark-pixel-16px-monospaced-zh_cn        缺 1513   ⚠ 纯日文覆盖，不可作界面字体
-##   DotGothic16-Regular（日文字体）         缺 506    ⚠ 不可作界面字体
+## 【2026-10-08 拆分】字体逻辑已抽到 `script/font_service.gd`（FontService），
+## 本节只保留**同名转发门面**：外部一切 `Global.xxx` 调用点无需改动。
+## 为什么拆：字体约 270 行、与 Global 其它职责无关，且外部一律经 `Global.` 访问。
 ##
 ## 【铁律】任何 UI 都不许再硬编码 .ttf 路径 —— 一律经 resolve_ui_font_path() /
 ## get_ui_font() / apply_ui_font() 取值。否则「切换字体」覆盖不到那个窗口。
-const FONT_OPTION_PATHS: Array[String] = [
-	"res://art/System/fusion-pixel-12px-monospaced-zh_hans.ttf",
-	"res://art/System/zpix_12px.ttf",
-]
-const FONT_OPTION_LABELS: Array[String] = ["缝合像素 12px", "zpix 像素 12px"]
-## 各选项对上述 1769 字样本的实测缺字数（仅用于日志提示，不参与取字体逻辑）。
-const FONT_OPTION_MISSING_HINT: Array[int] = [0, 0]
-## 界面字号基底（铁律：界面字号必须是它的整数倍，否则像素字体缩放会糊）
-const UI_FONT_BASE_SIZE: int = 12
-## 自检样本（缺任何一个都会在启动日志里点名，用来直接回答「为什么缺字」）
-const FONT_SELF_CHECK_TEXT: String = "开始游戏联机设置退出操作说明装备物品难度简单普通困难专家急救喷雾武器弹药章节安全屋のび太ゾンビ"
+##
+## 字体族常量与缺字提示的**唯一真源**在 FontService；这里做转发别名，保持旧引用可用。
+const FONT_OPTION_PATHS: Array[String] = FontService.FONT_OPTION_PATHS
+const FONT_OPTION_LABELS: Array[String] = FontService.FONT_OPTION_LABELS
+const FONT_OPTION_MISSING_HINT: Array[int] = FontService.FONT_OPTION_MISSING_HINT
+## 界面字号基底（铁律：界面字号必须是它的整数倍，否则像素字体缩放会糊）。
+const UI_FONT_BASE_SIZE: int = FontService.UI_FONT_BASE_SIZE
+## 自检样本（缺任何一个都会在启动日志里点名，用来直接回答「为什么缺字」）。
+const FONT_SELF_CHECK_TEXT: String = FontService.FONT_SELF_CHECK_TEXT
 
 ## 字体切换广播（运行中需要立刻换字的 UI 可连它重新套字体；常规路径由
 ## set_font_option → reapply_ui_font_recursive 统一处理，一般不必自己连）。
 signal font_changed(font_path: String)
 
-var font_option: int = 0
+## 字体服务实例（`_ready` 创建；持有字体状态与根 Theme）。
+var _font_service: FontService = null
 ## 已看过的更新日志版本（首次启动 / 换版本时自动弹一次；见 title_screen._maybe_show_update_log）。
 var changelog_seen_version: String = ""
-var _ui_font_cache: Dictionary = {}      ## path → FontFile（null 表示加载失败，避免重复报错）
-var _ui_root_theme: Theme = null         ## 挂在场景树根上的默认主题（提供默认字体）
-
-
-func ui_font_option_count() -> int:
-	return FONT_OPTION_PATHS.size()
-
-
-## 当前选项的显示名（设置面板用）。
-func font_option_label() -> String:
-	return FONT_OPTION_LABELS[clampi(font_option, 0, FONT_OPTION_LABELS.size() - 1)]
-
-
-## 当前界面字体路径（**唯一真源**）。
-func get_ui_font_path() -> String:
-	return FONT_OPTION_PATHS[clampi(font_option, 0, FONT_OPTION_PATHS.size() - 1)]
-
-
-## 按路径取字体（带缓存）。加载失败时**醒目报错**：静默回退会让「字体没打进包」
-## 表现为「字形变了 / 缺字」，极难排查（2026-09-24 用户反馈的那类现象）。
-func load_ui_font(path: String) -> FontFile:
-	if path.is_empty():
-		return null
-	if _ui_font_cache.has(path):
-		return _ui_font_cache[path]
-	var ff := load(path) as FontFile
-	if ff == null:
-		printerr("[Global] ★界面字体加载失败（将回退系统字体，字形与设计不一致）: %s" % path)
-	else:
-		make_pixel_crisp(ff)
-	_ui_font_cache[path] = ff
-	return ff
-
-
-## ★把字体设成「像素字体」应有的样子：**关抗锯齿 + 关次像素定位 + 固定 1:1 栅格化**。
-## TTF 导入默认是 Grayscale 抗锯齿 + Auto 次像素定位 —— 12px 原尺寸下几乎看不出，
-## 但**字号一放大**（弹药数字是 36px = 3 倍）字形边缘就渗出**零散的灰白像素点**；
-## 两个像素字体（缝合像素 / zpix）都有这个问题（2026-09-30 用户实测）。
-## **凡是从磁盘新 load 一份字体的地方，都必须过这里** ——
-## 只改内存实例，不会写回 .import / 磁盘资源，所以对同一个字体反复调用是幂等的。
-##
-## ★`oversampling` 也必须钉成 1.0（2026-09-30 用户实测「手机端弹药数字仍有白点」）：
-## `oversampling = 0` 的语义是「跟随视口自动超采样」。手机端走的是**分数缩放**
-##（`pick_content_scale_stretch()` 对移动端一律返回 FRACTIONAL，本例 1.125 倍），
-## 字形被按 1.125 倍栅格化、再缩回 36px 画进 1280×960 的固定画布 →
-## 边缘丢像素/多像素，正是那些"零散白点"。像素字体要的是 **1:1 硬边栅格化**，
-## 所以这里与两份 `.import`（也写死 1.0）双保险：资源层管"任何加载路径"，
-## 这里管"运行时新 load 的实例"。
-func make_pixel_crisp(ff: FontFile) -> void:
-	if ff == null:
-		return
-	ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-	ff.oversampling = 1.0
-
-
-## 当前界面字体资源。加载失败返回 null（调用方自行回退 ThemeDB.fallback_font）。
-func get_ui_font() -> FontFile:
-	return load_ui_font(get_ui_font_path())
-
-
-## 解析一个「可能被场景或脚本烘死的字体路径」：
-##   空 → 当前选择（跟随开关）；
-##   属于可切换字体族（== FONT_OPTION_PATHS 之一）→ 当前选择
-##     （**旧场景里烘的界面字体路径自动跟随开关**，不必逐个改 .tscn/.tres）；
-##   其它 → 原样返回（真正自定义的字体，例如只为某个特殊字形准备的兜底字体）。
-func resolve_ui_font_path(path: String) -> String:
-	if path.is_empty():
-		return get_ui_font_path()
-	if path in FONT_OPTION_PATHS:
-		return get_ui_font_path()
-	return path
-
-
-## 解析路径并加载（给「自己持有字体路径」的窗口用）。
-## 解析规则见 resolve_ui_font_path；加载失败回退系统字体并醒目报错。
-func resolve_and_load_font(path: String) -> Font:
-	var resolved := resolve_ui_font_path(path)
-	var ff := load_ui_font(resolved)
-	return ff if ff else ThemeDB.fallback_font
-
-
-## 把界面字体套到 Label 上。字号被夹到 UI_FONT_BASE_SIZE 的整数倍（像素字体铁律）。
-## 代码创建的提示字（传送点/安全门/拾取点/医疗箱/防守战/事件/Boss/爆破墙）一律走这里。
-func apply_ui_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
-	if lbl == null:
-		return
-	var font := get_ui_font()
-	if font:
-		lbl.add_theme_font_override("font", font)
-	var s: int = maxi(UI_FONT_BASE_SIZE, int(round(float(size) / float(UI_FONT_BASE_SIZE))) * UI_FONT_BASE_SIZE)
-	lbl.add_theme_font_size_override("font_size", s)
-
-
-## 兼容旧名（2026-09-17 起各玩法节点调用）：等价 apply_ui_font。
-func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
-	apply_ui_font(lbl, size)
-
-
-## 根 Theme：让**未显式指定字体**的控件（Label/Button/RichTextLabel…）也拿到界面字体。
-## 没有它时这些控件走 ThemeDB.fallback_font + 系统字体回退 —— 同一份游戏在不同机器上
-## 字形不同，系统缺 CJK 字体时直接豆腐块（scene/network_lobby.tscn 的 13 个 Label、
-## map_output.tscn 的 Button 此前都属于这一类）。
-## 只设 default_font/default_font_size，其余样式照旧落到 Godot 内置主题。
 ## 自动化用例专用：抑制受击表现（闪红 Tween + 伤害数字）。
 ## 【为什么需要它】2026-09-25：给灼烧 DoT 补上权威侧表现后，headless harness 里反复 tick
 ## 会累积活 Tween，退出时必踩引擎
@@ -421,124 +297,100 @@ func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 var suppress_hit_presentation: bool = false
 
 
+## 当前字体选项索引（代理到 FontService，保持 `Global.font_option` 读写语义）。
+var font_option: int:
+	get:
+		return _font_service.font_option if _font_service != null else 0
+	set(v):
+		if _font_service != null:
+			_font_service.font_option = v
+
+
+func ui_font_option_count() -> int:
+	return _font_service.ui_font_option_count() if _font_service != null else FONT_OPTION_PATHS.size()
+
+
+## 当前选项的显示名（设置面板用）。
+func font_option_label() -> String:
+	return _font_service.font_option_label() if _font_service != null else ""
+
+
+## 当前界面字体路径（**唯一真源**）。
+func get_ui_font_path() -> String:
+	return _font_service.get_ui_font_path() if _font_service != null else FONT_OPTION_PATHS[0]
+
+
+## 按路径取字体（带缓存）。加载失败时醒目报错（见 FontService 同函数注释）。
+func load_ui_font(path: String) -> FontFile:
+	return _font_service.load_ui_font(path) if _font_service != null else null
+
+
+## 把字体设成「像素字体」应有的样子（关抗锯齿/次像素定位，钉 1:1 栅格化）。
+## ⚠ 外部存在鸭子类型调用（gradient_label.gd: `g.has_method("make_pixel_crisp")`）→ 必须保留。
+func make_pixel_crisp(ff: FontFile) -> void:
+	if _font_service != null:
+		_font_service.make_pixel_crisp(ff)
+
+
+## 当前界面字体资源。加载失败返回 null（调用方自行回退 ThemeDB.fallback_font）。
+func get_ui_font() -> FontFile:
+	return _font_service.get_ui_font() if _font_service != null else null
+
+
+## 解析一个「可能被场景或脚本烘死的字体路径」（规则见 FontService）。
+func resolve_ui_font_path(path: String) -> String:
+	return _font_service.resolve_ui_font_path(path) if _font_service != null else path
+
+
+## 解析路径并加载（给「自己持有字体路径」的窗口用）。
+func resolve_and_load_font(path: String) -> Font:
+	if _font_service != null:
+		return _font_service.resolve_and_load_font(path)
+	return ThemeDB.fallback_font
+
+
+## 把界面字体套到 Label 上。字号被夹到 UI_FONT_BASE_SIZE 的整数倍（像素字体铁律）。
+func apply_ui_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
+	if _font_service != null:
+		_font_service.apply_ui_font(lbl, size)
+
+
+## 兼容旧名（2026-09-17 起各玩法节点调用）：等价 apply_ui_font。
+func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
+	apply_ui_font(lbl, size)
+
+
+## 根 Theme：让**未显式指定字体**的控件（Label/Button/RichTextLabel…）也拿到界面字体。
 func ensure_root_ui_theme() -> Theme:
-	var tree := get_tree()
-	if tree == null or tree.root == null:
-		return _ui_root_theme
-	if _ui_root_theme == null:
-		_ui_root_theme = Theme.new()
-	_ui_root_theme.default_font = get_ui_font()
-	_ui_root_theme.default_font_size = UI_FONT_BASE_SIZE
-	if tree.root.theme != _ui_root_theme:
-		tree.root.theme = _ui_root_theme
-	return _ui_root_theme
-
-
-## 该 Label 是否「跟随界面字体」（无字体覆盖，或覆盖的就是可切换字体族之一）。
-## 带 fallbacks 的运行时字体副本（如战斗 HUD 弹药标签为 ∞ 字形补 DotGothic16）
-## 与真正自定义的字体一律返回 false —— 切换字体时不动它们。
-## ⚠ Godot 4 没有 get_theme_font_override（只有 get_theme_font，会沿主题链解析），
-##    所以这里用「解析后的字体的 resource_path 是否属于字体族」来判定；
-##    运行时构造的字体副本用 ui_font_custom 元数据显式排除。
-func _label_follows_ui_font(lbl: Label) -> bool:
-	if lbl.has_meta(&"ui_font_custom"):
-		return false
-	var cur: Font = lbl.get_theme_font("font")
-	if cur == null:
-		return true
-	var p: String = cur.resource_path
-	if p.is_empty():
-		# 主题默认 / ThemeDB 兜底（含未入树的 Label）→ 视为跟随
-		return true
-	return p in FONT_OPTION_PATHS
+	return _font_service.ensure_root_ui_theme() if _font_service != null else null
 
 
 ## 递归给一棵 UI 树换字体（运行中切换字体用）。返回改动过的 Label 数。
-## Label 是 GradientLabel 的内部节点，会被自然遍历到（套同一份字体无副作用）。
 func reapply_ui_font_recursive(root: Node) -> int:
-	if root == null or not is_instance_valid(root):
-		return 0
-	var font := get_ui_font()
-	if font == null:
-		return 0
-	var touched: int = 0
-	if root is Label:
-		var lbl := root as Label
-		if _label_follows_ui_font(lbl):
-			lbl.add_theme_font_override("font", font)
-			touched += 1
-	elif root is RichTextLabel:
-		var rtl := root as RichTextLabel
-		rtl.add_theme_font_override("normal_font", font)
-		rtl.add_theme_font_override("bold_font", font)
-		touched += 1
-	for child: Node in root.get_children():
-		touched += reapply_ui_font_recursive(child)
-	return touched
+	return _font_service.reapply_ui_font_recursive(root) if _font_service != null else 0
 
 
 ## 切换界面字体：写盘 + 立刻重套当前场景可见 UI + 广播。
 func set_font_option(index: int) -> void:
-	var i: int = clampi(index, 0, FONT_OPTION_PATHS.size() - 1)
-	if i == font_option:
+	if _font_service == null:
 		return
-	font_option = i
-	ensure_root_ui_theme()
-	var tree := get_tree()
-	if tree != null and tree.current_scene != null:
-		var touched: int = reapply_ui_font_recursive(tree.current_scene)
-		print("[Global] 界面字体已重套到当前场景 %d 个 Label" % touched)
+	_font_service.apply_font_option(index)
 	save_config()
 	font_changed.emit(get_ui_font_path())
-	print("[Global] 界面字体 → %s（%s｜实测缺字 %d/1733，缺处由系统字体顶替）" % [
-		font_option_label(), get_ui_font_path().get_file(),
-		FONT_OPTION_MISSING_HINT[clampi(font_option, 0, FONT_OPTION_MISSING_HINT.size() - 1)]])
 
 
 ## 启动自检：把「字体能不能用、缺哪些字」直接写进日志。
-## 用户反馈的「玩家电脑上缺字」需要一条能对证的线索，而不是让它表现为字形突变。
 func _log_font_self_check() -> void:
-	var path := get_ui_font_path()
-	var font := get_ui_font()
-	if font == null:
-		printerr("[Global] ★界面字体不可用：%s —— 已回退系统字体，字形将与其他机器不同。" % path)
-		return
-	var missing: String = ""
-	for i: int in range(FONT_SELF_CHECK_TEXT.length()):
-		var ch: String = FONT_SELF_CHECK_TEXT[i]
-		if not font.has_char(ch.unicode_at(0)):
-			missing += ch
-	if missing.is_empty():
-		print("[Global] 界面字体自检 OK: %s（%d 个可选字体，自检样本字形全覆盖）" % [
-			path.get_file(), FONT_OPTION_PATHS.size()])
-	else:
-		printerr("[Global] ★界面字体缺字形：%s 缺少「%s」—— 这些字会由系统字体顶替（各机器表现不同）。" % [
-			path.get_file(), missing])
+	if _font_service != null:
+		_font_service.log_font_self_check()
 
 
 ## UI 字体审计：找出**没有跟随界面字体**的可见 Label（漏接全局链接的窗口）。
 ## 返回 {"total": int, "foreign": Array[String]}。供 harness / 手动排查使用。
 func audit_ui_fonts(root: Node) -> Dictionary:
-	var foreign: Array[String] = []
-	var total: int = _audit_ui_fonts_recursive(root, foreign)
-	return {"total": total, "foreign": foreign}
-
-
-func _audit_ui_fonts_recursive(node: Node, foreign: Array[String]) -> int:
-	if node == null or not is_instance_valid(node):
-		return 0
-	var total: int = 0
-	if node is Label:
-		total += 1
-		if not _label_follows_ui_font(node as Label):
-			var cur: Font = (node as Label).get_theme_font("font")
-			var p: String = cur.resource_path if cur else "<null>"
-			if p.is_empty():
-				p = "<无资源的运行时字体>"
-			foreign.append("%s → %s" % [String(node.get_path()), p])
-	for child: Node in node.get_children():
-		total += _audit_ui_fonts_recursive(child, foreign)
-	return total
+	if _font_service != null:
+		return _font_service.audit_ui_fonts(root)
+	return {"total": 0, "foreign": []}
 
 
 # ═══════════════════════════════════════
@@ -620,6 +472,11 @@ const CONFIG_FILE_USER: String = "user://config.json"
 
 
 func _ready() -> void:
+	## ★必须最先创建字体/音频服务：`_load_config()` 会写 `font_option` / `music_volume` /
+	## `sfx_volume`，它们的 setter 都依赖对应实例已存在。
+	_font_service = FontService.new(self)
+	_audio_service = AudioService.new(self)
+	_touch_service = TouchLayoutService.new(self)
 	_load_config()
 	_ensure_audio_buses()
 	## 移动平台：横屏 + 全屏（4:3 画布居中留黑边）；桌面端直接早退，行为不变。
@@ -1320,6 +1177,11 @@ func save_config() -> void:
 # ═══════════════════════════════════════
 # 音频总管理
 # ═══════════════════════════════════════
+## 【2026-10-08 拆分】音频运行时逻辑已抽到 `script/audio_service.gd`（AudioService），
+## 本节只保留 **@export 配置项**（Inspector 语义不变）+ **同名转发门面**（外部调用点零改动）。
+##
+## ⚠ `music_volume` / `sfx_volume` 是**属性代理**（真实值在 AudioService）：
+##   这样 `_apply_config_file` / `save_config` 里的 `music_volume` 读写零改动。
 
 @export var max_sfx_concurrency: int = 2  ## 同一音效最大同时播放数（防止音量叠加；2026-09-13 用户要求 4→2）
 
@@ -1335,132 +1197,64 @@ func save_config() -> void:
 ## 数据资源（ItemData.pickup_sound）与拾取点（ItemPickupPoint.pickup_sound）留空时回退到这里。
 @export_file("*.wav", "*.ogg", "*.mp3") var default_pickup_sfx_path: String = "res://sound/bio1_アイテム入手２.ogg"
 
-## 播放拾取音效：override 非空用之，否则用全局默认；pitch <=0 视为原调。
-## 播放器挂当前场景（非定位）——拾取物节点随即释放，不能挂；拾取都发生在玩家身边，
-## 与 UI 音同等的非定位处理（沿用 ItemPickupPoint 既有行为）。
+## 音频服务实例（`_ready` 创建）。
+var _audio_service: AudioService = null
+
+
+## 音乐音量 0–100（代理到 AudioService，保持 `Global.music_volume` 读写语义）。
+var music_volume: int:
+	get:
+		return _audio_service.music_volume if _audio_service != null else 80
+	set(v):
+		if _audio_service != null:
+			_audio_service.music_volume = v
+
+
+## 音效音量 0–100（代理到 AudioService）。
+var sfx_volume: int:
+	get:
+		return _audio_service.sfx_volume if _audio_service != null else 80
+	set(v):
+		if _audio_service != null:
+			_audio_service.sfx_volume = v
+
+
+## 播放拾取音效（override 优先，否则全局默认）。
 func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
-	var stream := override
-	if stream == null:
-		if default_pickup_sfx_path.is_empty():
-			return
-		stream = load(default_pickup_sfx_path) as AudioStream
-	if stream == null:
-		return
-	var scene: Node = get_tree().current_scene if get_tree() else null
-	if scene == null:
-		scene = self
-	play_sfx_managed(stream, scene, false, maxf(pitch, 0.01))
+	if _audio_service != null:
+		_audio_service.play_pickup_sfx(override, pitch)
 
-## 同一音效资源的活跃播放器计数（resource_path → Array[AudioStreamPlayer]）
-var _active_sfx: Dictionary = {}
 
-## 播放音效（带并发限制，防止同音效多实例叠加导致音量过大）。
-## 超过 max_sfx_concurrency 的新请求会被丢弃。
-## positional=true 且 parent 是 Node2D 时用 AudioStreamPlayer2D —— 音量随距离衰减、
-## 带声像（丧尸叫等世界内音效必须走这个，否则屏外的僵尸和贴脸的一样响）。
+## 播放音效（带并发限制 + voice stealing）。pos/positional 语义见 AudioService。
 func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0) -> void:
-	if not stream:
-		return
-
-	var key := stream.resource_path
-	if key.is_empty():
-		key = "inline_%d" % stream.get_instance_id()
-
-	# 清理已完成/已释放的播放器
-	var arr: Array = _active_sfx.get(key, [])
-	var i: int = arr.size() - 1
-	while i >= 0:
-		# AudioStreamPlayer 与 AudioStreamPlayer2D 不是同一继承链，用鸭子读取 playing
-		if not is_instance_valid(arr[i]) or not arr[i].playing:
-			arr.remove_at(i)
-		i -= 1
-
-	if arr.size() >= max_sfx_concurrency:
-		# 声音窃取（voice stealing）：停掉最旧的，让新触发的音效必有声。
-		# 旧实现「丢弃新的」会让连发武器的枪声每隔几发漏一声（枪口火光有、声音没有，
-		# 用户 2026-09-13 回归：发射音效跟全局不同步）。总并发仍被上限封顶。
-		var oldest: Node = arr[0]
-		if is_instance_valid(oldest):
-			oldest.stop()
-			oldest.queue_free()
-		arr.remove_at(0)
-
-	var player: Node = null
-	if positional and parent is Node2D:
-		var p2d := AudioStreamPlayer2D.new()
-		# 可视世界半径 ≈ 分辨率/2（zoom=2x）≈ 640×480；衰减到屏外一圈即无声
-		p2d.max_distance = 1100.0
-		player = p2d
-	else:
-		player = AudioStreamPlayer.new()
-	player.stream = stream
-	player.bus = "SFX"
-	player.autoplay = true
-	player.pitch_scale = pitch  ## 每音效音调（2026-09-15：敌人各音效可独立设调）
-	var cb: Callable = func():
-		arr.erase(player)
-		player.queue_free()
-	player.finished.connect(cb)
-	parent.add_child(player)
-	arr.append(player)
-	_active_sfx[key] = arr
+	if _audio_service != null:
+		_audio_service.play_sfx_managed(stream, parent, positional, pitch)
 
 
-## 播放界面窗口音效（2026-09-15）。kind = "cursor" | "confirm" | "cancel"；
-## override_path 非空时优先（各界面自己的 sfx_*_path 导出），否则用全局 ui_*_sfx_path。
-## 播放器挂在 Global 下——确认音后立刻切场景也不会被掐断。
+## 播放界面窗口音效。kind = "cursor" | "confirm" | "cancel"。
 func play_ui_sfx(kind: String, override_path: String = "") -> void:
-	var path := override_path
-	if path.is_empty():
-		match kind:
-			"cursor":
-				path = ui_cursor_sfx_path
-			"confirm":
-				path = ui_confirm_sfx_path
-			"cancel":
-				path = ui_cancel_sfx_path
-			_:
-				return
-	if path.is_empty():
-		return
-	var stream: AudioStream = load(path) as AudioStream
-	if stream == null:
-		push_warning("[Global] UI 音效加载失败: %s" % path)
-		return
-	play_sfx_managed(stream, self)
+	if _audio_service != null:
+		_audio_service.play_ui_sfx(kind, override_path)
 
 
 func _ensure_audio_buses() -> void:
-	var bc: int = AudioServer.bus_count
-	if bc < 2:
-		AudioServer.add_bus(1)
-	if bc < 3:
-		AudioServer.add_bus(2)
-	AudioServer.set_bus_name(1, "SFX")
-	AudioServer.set_bus_name(2, "Music")
-	_apply_volume()
-	print("[Global] 音频总线已创建: Master, SFX, Music")
+	if _audio_service != null:
+		_audio_service.ensure_audio_buses()
 
 
 func _apply_volume() -> void:
-	var sfx_idx: int = AudioServer.get_bus_index("SFX")
-	var music_idx: int = AudioServer.get_bus_index("Music")
-	if sfx_idx >= 0:
-		AudioServer.set_bus_volume_db(sfx_idx, linear_to_db(sfx_volume / 100.0))
-	if music_idx >= 0:
-		AudioServer.set_bus_volume_db(music_idx, linear_to_db(music_volume / 100.0))
+	if _audio_service != null:
+		_audio_service.apply_volume()
 
 
 func set_music_volume(pct: int) -> void:
-	music_volume = clampi(pct, 0, 100)
-	_apply_volume()
-	save_config()
+	if _audio_service != null:
+		_audio_service.set_music_volume(pct)
 
 
 func set_sfx_volume(pct: int) -> void:
-	sfx_volume = clampi(pct, 0, 100)
-	_apply_volume()
-	save_config()
+	if _audio_service != null:
+		_audio_service.set_sfx_volume(pct)
 
 
 func set_facing_lock_mode(mode: int) -> void:
@@ -1471,30 +1265,21 @@ func set_facing_lock_mode(mode: int) -> void:
 # ═══════════════════════════════════════
 # 大厅音乐（2026-09-13 用户需求）
 # ═══════════════════════════════════════
+## 【2026-10-08 拆分】实现已并入 AudioService；这里保留同名转发门面。
 ## 选角色 / 选战役 / 选难度三个界面共用一首 BGM：播放器挂在 autoload 上，
 ## 切界面不释放 → 音乐连续不断；难度确认（正式开局）时 stop。
-const LOBBY_MUSIC_PATH: String = "res://music/l3d_lobby.mp3"
-var _lobby_music_player: AudioStreamPlayer = null
+const LOBBY_MUSIC_PATH: String = AudioService.LOBBY_MUSIC_PATH
 
 ## 播放大厅音乐。幂等：已在播同曲时直接返回（切界面不会重头播）。
 func play_lobby_music() -> void:
-	if _lobby_music_player and is_instance_valid(_lobby_music_player) and _lobby_music_player.playing:
-		return
-	if _lobby_music_player == null or not is_instance_valid(_lobby_music_player):
-		_lobby_music_player = AudioStreamPlayer.new()
-		_lobby_music_player.name = "LobbyMusicPlayer"
-		_lobby_music_player.bus = "Music"
-		add_child(_lobby_music_player)
-	if not ResourceLoader.exists(LOBBY_MUSIC_PATH):
-		return
-	_lobby_music_player.stream = load(LOBBY_MUSIC_PATH)
-	_lobby_music_player.play()
+	if _audio_service != null:
+		_audio_service.play_lobby_music()
 
 
 ## 停止大厅音乐（难度确认 / 回标题等正式离开大厅时调用）。
 func stop_lobby_music() -> void:
-	if _lobby_music_player and is_instance_valid(_lobby_music_player):
-		_lobby_music_player.stop()
+	if _audio_service != null:
+		_audio_service.stop_lobby_music()
 
 
 # ═══════════════════════════════════════
