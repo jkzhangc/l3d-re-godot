@@ -337,7 +337,10 @@ func _on_internet_join_requested(address: String, port: int, room_name: String) 
 
 ## 创建互联网房间：① 本机 host_game（拿到真实端口）→ ② 向大厅注册。
 ## 顺序不能反：注册对象里必须带**真实**端口，否则列表里的地址连不上（方案 §4.5）。
-func _on_internet_create_requested(room_name: String) -> void:
+##
+## `tunnel_address` / `tunnel_port` 是**外网能连到房主的地址**（方案 §2.3 A1）：
+## 房主跑完穿透客户端后填进创建表单，或由 UPnP 自动预填。大厅靠它找到房间。
+func _on_internet_create_requested(room_name: String, tunnel_address: String, tunnel_port: int) -> void:
 	net.player_name = name_edit.text
 	net.upnp_enabled = upnp_check.button_pressed
 	var port := int(host_port_edit.value)
@@ -350,14 +353,11 @@ func _on_internet_create_requested(room_name: String) -> void:
 	_connected = true
 	_log("本机已监听 UDP %d，正在向大厅注册房间「%s」…" % [port, room_name])
 
-	## 注册携带的 address：M1 走玩家自备穿透（A1），此处先填本机占位，
-	## 由外层在拿到 UPnP 外部地址后更新；无 UPnP 时玩家需在穿透工具里把地址填进大厅。
-	var address := _internet_register_address()
 	var payload := {
 		"name": room_name,
 		"hostName": str(net.player_name),
-		"address": address,
-		"port": port,
+		"address": tunnel_address,
+		"port": tunnel_port,
 		"transport": "udp",
 		"currentPlayers": 1,
 		"maxPlayers": Net.MAX_CLIENTS,
@@ -366,27 +366,9 @@ func _on_internet_create_requested(room_name: String) -> void:
 		"gameVersion": _changelog_version(),
 		"protocol": Net.PROTOCOL_VERSION,
 	}
-	_registered_payload_address = address
-	_registered_payload_port = port
 	if _internet_panel != null and _internet_panel.has_method("register_room"):
 		_internet_panel.register_room(payload)
 	_refresh_ui()
-
-
-## 注册用的 address（M1：UPnP 外部地址；查询不到时留待玩家用穿透工具提供）。
-var _registered_payload_address := ""
-var _registered_payload_port := 0
-
-
-func _internet_register_address() -> String:
-	## UPnP 是异步的，创建时可能还没结果 → 用最近一次 `upnp_port_mapped` 记下的外部地址。
-	## 仍拿不到就留空串：服务端会**拒绝**空地址，界面因此明确报错，
-	## 而不是悄悄注册一个连不上的死房（方案 §4.5）。
-	return _last_upnp_external_ip
-
-
-## 最近一次 UPnP 成功映射得到的外部地址（`_on_upnp_port_mapped` 记下，供注册时用）。
-var _last_upnp_external_ip := ""
 
 
 func _current_chapter_label() -> String:
@@ -941,8 +923,10 @@ func _on_upnp_port_mapped(port: int, external_ip: String) -> void:
 	if external_ip.is_empty():
 		_log("UPnP 已映射 UDP %d（未能查询外部 IP），好友可用路由器 WAN IP:%d 直连" % [port, port])
 	else:
-		_last_upnp_external_ip = external_ip
 		_log("UPnP 已映射，公网直连地址：%s:%d（把该地址告诉好友）" % [external_ip, port])
+		## 顺带预填互联网创建表单，省去房主手填穿透地址（方案 §2.3 A1 的自动化）。
+		if _internet_panel != null and _internet_panel.has_method("prefill_tunnel_address"):
+			_internet_panel.prefill_tunnel_address(external_ip, port)
 
 
 func _on_upnp_mapping_failed(reason: String) -> void:

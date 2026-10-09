@@ -19,7 +19,8 @@ extends Control
 ## 请求加入某房间（由大厅脚本接走，调用 Net.join_game）。
 signal join_requested(address: String, port: int, room_name: String)
 ## 请求创建并注册一个互联网房间。
-signal create_requested(room_name: String)
+## `tunnel_address` / `tunnel_port`：外网能连到的穿透地址与端口（方案 §2.3 A1）。
+signal create_requested(room_name: String, tunnel_address: String, tunnel_port: int)
 ## 注册成功：把房间投影与 hostToken 交给大厅脚本（它负责与 Net 会话绑定 + 心跳）。
 signal room_registered_external(room: Dictionary, host_token: String)
 ## 请求关闭（返回直连页签）。
@@ -51,6 +52,10 @@ var _last_update_label: Label
 
 # ── create 视图控件 ──
 var _room_name_edit: LineEdit
+## 穿透地址 / 穿透端口（方案 §2.3 A1）：
+## 房主跑起穿透客户端后，把"外网能连到的那个地址与端口"填进来 —— 大厅靠它找到房间。
+var _tunnel_addr_edit: LineEdit
+var _tunnel_port_edit: SpinBox
 var _self_check_labels: Array[Label] = []
 var _create_status: Label
 var _confirm_create_btn: Button
@@ -319,9 +324,31 @@ func _on_confirm_create() -> void:
 	if room_name.is_empty():
 		_set_status(_create_status, "请先填写房间名称", COLOR_ERROR)
 		return
+	## 穿透地址是**必填**：大厅必须知道外网往哪连，否则房主在列表里是个连不上的死房
+	## （方案 §4.5 的意图）。UPnP 成功时这里会被自动预填。
+	var tunnel_addr := ""
+	if _tunnel_addr_edit != null:
+		tunnel_addr = _tunnel_addr_edit.text.strip_edges()
+	if tunnel_addr.is_empty():
+		_set_status(_create_status,
+			"请填写「穿透地址」—— 外网能连到你这台机器的地址（跑完穿透客户端后它会给出）",
+			COLOR_ERROR)
+		return
+	var tunnel_port := 27015
+	if _tunnel_port_edit != null:
+		tunnel_port = int(_tunnel_port_edit.value)
+
 	Global.last_room_name = room_name
 	_create_status.text = ""
-	create_requested.emit(room_name)
+	create_requested.emit(room_name, tunnel_addr, tunnel_port)
+
+
+## UPnP 成功拿到外部地址时，由大厅脚本调它预填（省去房主手填）。
+func prefill_tunnel_address(address: String, port: int) -> void:
+	if _tunnel_addr_edit != null and _tunnel_addr_edit.text.strip_edges().is_empty():
+		_tunnel_addr_edit.text = address
+	if _tunnel_port_edit != null and port > 0:
+		_tunnel_port_edit.value = float(port)
 
 
 # ─────────────────────────── 加载 / 冷启动阶梯 ───────────────────────────
@@ -461,6 +488,38 @@ func _build_create_view() -> Control:
 	var limit_tag := Label.new()
 	limit_tag.text = "人数上限    4（固定）"
 	limit_row.add_child(limit_tag)
+
+	## 穿透地址 / 端口（方案 §2.3 A1）：外网能连到的地址。
+	## 跑完穿透客户端后（playit.gg / 自建 frps），它会给出这样一对值。
+	var tunnel_row := HBoxContainer.new()
+	tunnel_row.add_theme_constant_override("separation", 8)
+	root.add_child(tunnel_row)
+	var tunnel_tag := Label.new()
+	tunnel_tag.text = "穿透地址"
+	tunnel_row.add_child(tunnel_tag)
+	_tunnel_addr_edit = LineEdit.new()
+	_tunnel_addr_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tunnel_addr_edit.max_length = 253
+	_tunnel_addr_edit.placeholder_text = "如 8.138.99.96 或 xxx.playit.gg"
+	tunnel_row.add_child(_tunnel_addr_edit)
+
+	var tunnel_port_row := HBoxContainer.new()
+	tunnel_port_row.add_theme_constant_override("separation", 8)
+	root.add_child(tunnel_port_row)
+	var tunnel_port_tag := Label.new()
+	tunnel_port_tag.text = "穿透端口"
+	tunnel_port_row.add_child(tunnel_port_tag)
+	_tunnel_port_edit = SpinBox.new()
+	_tunnel_port_edit.min_value = 1.0
+	_tunnel_port_edit.max_value = 65535.0
+	_tunnel_port_edit.value = 27015.0
+	tunnel_port_row.add_child(_tunnel_port_edit)
+	var tunnel_port_hint := Label.new()
+	tunnel_port_hint.text = "穿透客户端分配的公网端口（可能与本机端口不同）"
+	tunnel_port_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	tunnel_port_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tunnel_port_hint.add_theme_color_override("font_color", COLOR_HINT)
+	tunnel_port_row.add_child(tunnel_port_hint)
 
 	var conn_title := Label.new()
 	conn_title.text = "── 连通性 ──"
