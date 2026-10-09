@@ -2,6 +2,12 @@
 .godot/
 /android/
 
+# 本地用户配置（2026-10-08）：每次运行游戏都会自动改写 changelog_seen_version 等字段，
+# 属运行副产物、不是源文件；且各人音量/字体/朝向设置本就该各自独立。
+# 缺失时 Global._apply_config_file 会静默跳过（用类内默认值），程序首跑 save_config 会自建。
+# ⚠ 已跟踪过该文件，需 `git rm --cached config.json` 才真正移出版本库。
+/config.json
+
 # 第三方参考 demo 仓库（独立 git 仓库，不纳入主仓库）
 engine-reference/Godot-Demos/
 
