@@ -64,6 +64,27 @@ var _refreshing_character_select := false
 ## 通过节点路径读取 Autoload，避免 Godot 编辑器热重载期间短暂丢失 `Net` 全局标识符。
 var net: Variant = null
 
+## ── 互联网页签（2026-10-09）──
+## 大厅分「互联网 / 直连」两种连接方式。互联网 = 走 Master Server 房间目录；
+## 直连 = 现有表单（降级路径，**不得移除**，方案 §6）。
+## 页签与 InternetPanel 全部代码构建，避免改 .tscn 丢属性。
+const INTERNET_PANEL_SCRIPT := "res://script/internet_lobby_panel.gd"
+var _tab_bar: HBoxContainer = null
+var _internet_tab_btn: Button = null
+var _direct_tab_btn: Button = null
+var _direct_container: Control = null
+var _internet_panel: Control = null
+
+const TAB_INTERNET := "internet"
+const TAB_DIRECT := "direct"
+
+## 本机作为互联网房主时的房间凭据（**不落盘**，方案 §3.4）。空 = 当前不是互联网房主。
+var _internet_room_id := ""
+var _internet_host_token := ""
+## 心跳定时器（房主侧保活）。10s 一次，与服务端 60s 超时配套（方案 §3.5）。
+var _heartbeat_accum := 0.0
+const HEARTBEAT_INTERVAL := 10.0
+
 
 func _ready() -> void:
 	## 场景内全部 Label 套全局阴影（原 .tscn 里的 Label 都没带阴影，与全游戏风格不一致）
@@ -97,6 +118,7 @@ func _ready() -> void:
 	_add_back_button()
 
 	_setup_room_panel()
+	_setup_connection_tabs()
 	_sync_panels()
 	## 两界面正文字号统一放大（2026-09-28 用户反馈"文字太小"）：正文 24 / 窗内标题 36。
 	## 放在最后调用，连 `_add_wip_notice()` / `_add_back_button()` 新建的控件一起覆盖。
@@ -212,6 +234,198 @@ func _sync_panels() -> void:
 		connect_panel.visible = not _connected
 	if room_panel:
 		room_panel.visible = _connected
+
+
+# ---------------------------------------------------------------- 互联网 / 直连 页签（2026-10-09）
+
+## 在 ConnectPanel 内加一条页签栏，并把现有表单收进「直连」子容器。
+##
+## 【为什么这样改而不是重做大堂】现有 ConnectPanel 的表单是降级路径（方案 §6 要求
+## **不得移除**），整块保留最安全；「互联网」只是与它并列的另一种方式。页签栏与互联网
+## 面板都在代码里搭，避免编辑器重存 .tscn 丢属性（与 _setup_room_panel 同风格）。
+func _setup_connection_tabs() -> void:
+	var vbox: Control = _connect_vbox()
+	if vbox == null:
+		return
+
+	## 1) 把现有表单控件收进一个「直连」容器：除标题与返回按钮外全部搬进去。
+	_direct_container = VBoxContainer.new()
+	_direct_container.name = "DirectView"
+	_direct_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_direct_container.add_theme_constant_override("separation", 10)
+	vbox.add_child(_direct_container)
+	for child: Node in vbox.get_children():
+		if child == _direct_container or child == _tab_bar:
+			continue
+		if child is Label and (child as Label).name == "Title":
+			continue      ## 窗内标题留在外面（它是面板级标题）
+		if (child as Node).name == "BackToTitleBtn" or (child as Node).name == "WipNotice":
+			continue      ## 属于大厅界面而非表单
+		if child is Control:
+			vbox.remove_child(child)
+			_direct_container.add_child(child)
+
+	## 2) 页签栏插到标题正下方。
+	_tab_bar = HBoxContainer.new()
+	_tab_bar.name = "ConnectionTabs"
+	_tab_bar.add_theme_constant_override("separation", 8)
+	vbox.add_child(_tab_bar)
+	vbox.move_child(_tab_bar, 1)   ## 0 是标题
+
+	_internet_tab_btn = Button.new()
+	_internet_tab_btn.name = "InternetTabBtn"
+	_internet_tab_btn.text = "互联网"
+	_internet_tab_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_internet_tab_btn.toggle_mode = true
+	_internet_tab_btn.pressed.connect(func() -> void: _select_tab(TAB_INTERNET))
+	_tab_bar.add_child(_internet_tab_btn)
+
+	_direct_tab_btn = Button.new()
+	_direct_tab_btn.name = "DirectTabBtn"
+	_direct_tab_btn.text = "直连"
+	_direct_tab_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_direct_tab_btn.toggle_mode = true
+	_direct_tab_btn.pressed.connect(func() -> void: _select_tab(TAB_DIRECT))
+	_tab_bar.add_child(_direct_tab_btn)
+
+	## 3) 互联网面板（独立脚本，代码构建）。
+	var script: GDScript = load(INTERNET_PANEL_SCRIPT) as GDScript
+	if script == null:
+		push_error("[NetworkLobby] 找不到 internet_lobby_panel.gd")
+		_select_tab(TAB_DIRECT)
+		return
+	_internet_panel = script.new() as Control
+	_internet_panel.name = "InternetView"
+	_internet_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(_internet_panel)
+	_internet_panel.join_requested.connect(_on_internet_join_requested)
+	_internet_panel.create_requested.connect(_on_internet_create_requested)
+	_internet_panel.room_registered_external.connect(_on_internet_room_registered)
+	_internet_panel.closed.connect(func() -> void: _select_tab(TAB_DIRECT))
+
+	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
+	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
+	## 需要再套一次缩进，否则页签会压在页标题上。
+	_push_down_content(connect_panel)
+
+
+func _select_tab(which: String) -> void:
+	if _direct_container == null or _internet_panel == null:
+		return
+	var internet: bool = which == TAB_INTERNET
+	_direct_container.visible = not internet
+	_internet_panel.visible = internet
+	if _internet_tab_btn != null:
+		_internet_tab_btn.button_pressed = internet
+	if _direct_tab_btn != null:
+		_direct_tab_btn.button_pressed = not internet
+	if internet:
+		_internet_panel.show_list()
+		_log("已切到互联网模式：从大厅房间列表加入，或创建互联网房间。")
+
+
+## 互联网列表里点「加入」→ 复用现有 Net.join_game 入口（零改动，方案 §5.4）。
+func _on_internet_join_requested(address: String, port: int, room_name: String) -> void:
+	net.player_name = name_edit.text
+	_log("正在加入互联网房间「%s」：%s:%d …" % [room_name, address, port])
+	var err: Error = net.join_game(address, port)
+	if err != OK:
+		_log("加入失败：%s" % error_string(err))
+		return
+	_set_connect_buttons_disabled(true)
+
+
+## 创建互联网房间：① 本机 host_game（拿到真实端口）→ ② 向大厅注册。
+## 顺序不能反：注册对象里必须带**真实**端口，否则列表里的地址连不上（方案 §4.5）。
+func _on_internet_create_requested(room_name: String) -> void:
+	net.player_name = name_edit.text
+	net.upnp_enabled = upnp_check.button_pressed
+	var port := int(host_port_edit.value)
+	var err: Error = net.host_game(port)
+	if err != OK:
+		_log("创建房间失败：%s" % error_string(err))
+		if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
+			_internet_panel.on_create_failed(error_string(err))
+		return
+	_connected = true
+	_log("本机已监听 UDP %d，正在向大厅注册房间「%s」…" % [port, room_name])
+
+	## 注册携带的 address：M1 走玩家自备穿透（A1），此处先填本机占位，
+	## 由外层在拿到 UPnP 外部地址后更新；无 UPnP 时玩家需在穿透工具里把地址填进大厅。
+	var address := _internet_register_address()
+	var payload := {
+		"name": room_name,
+		"hostName": str(net.player_name),
+		"address": address,
+		"port": port,
+		"transport": "udp",
+		"currentPlayers": 1,
+		"maxPlayers": Net.MAX_CLIENTS,
+		"difficulty": Global.selected_difficulty,
+		"chapterLabel": _current_chapter_label(),
+		"gameVersion": _changelog_version(),
+		"protocol": Net.PROTOCOL_VERSION,
+	}
+	_registered_payload_address = address
+	_registered_payload_port = port
+	if _internet_panel != null and _internet_panel.has_method("register_room"):
+		_internet_panel.register_room(payload)
+	_refresh_ui()
+
+
+## 注册用的 address（M1：UPnP 外部地址；查询不到时留待玩家用穿透工具提供）。
+var _registered_payload_address := ""
+var _registered_payload_port := 0
+
+
+func _internet_register_address() -> String:
+	## UPnP 是异步的，创建时可能还没结果 → 用最近一次 `upnp_port_mapped` 记下的外部地址。
+	## 仍拿不到就留空串：服务端会**拒绝**空地址，界面因此明确报错，
+	## 而不是悄悄注册一个连不上的死房（方案 §4.5）。
+	return _last_upnp_external_ip
+
+
+## 最近一次 UPnP 成功映射得到的外部地址（`_on_upnp_port_mapped` 记下，供注册时用）。
+var _last_upnp_external_ip := ""
+
+
+func _current_chapter_label() -> String:
+	if _chapter_entries.size() == 0:
+		return ""
+	return str(_chapter_entries[clampi(_selected_chapter, 0, _chapter_entries.size() - 1)].get("label", ""))
+
+
+func _changelog_version() -> String:
+	## 与 title_screen 的 CHANGELOG_VERSION_TEXT 同源（方案 §3.3：列表按版本分桶）。
+	return str(ProjectSettings.get_setting("application/config/version", ""))
+
+
+## 注册成功 → 记下凭据 + 启动心跳（房主侧保活）。
+func _on_internet_room_registered(room: Dictionary, host_token: String) -> void:
+	_internet_room_id = str(room.get("id", ""))
+	_internet_host_token = host_token
+	_heartbeat_accum = 0.0
+	_log("房间已注册（ID %s），好友可在互联网列表看到。" % _internet_room_id)
+	if _internet_panel != null and _internet_panel.has_method("on_room_registered"):
+		_internet_panel.on_room_registered()
+
+
+func _process(delta: float) -> void:
+	_update_internet_heartbeat(delta)
+
+
+## 房主侧心跳：每 10s 一次。服务端 60s 无心跳即清房（方案 §3.5）。
+func _update_internet_heartbeat(delta: float) -> void:
+	if _internet_room_id.is_empty() or _internet_panel == null:
+		return
+	if not _connected or not bool(net.get("is_host")):
+		return
+	_heartbeat_accum += delta
+	if _heartbeat_accum < HEARTBEAT_INTERVAL:
+		return
+	_heartbeat_accum = 0.0
+	var players: int = net.get_player_names().size()
+	_internet_panel.heartbeat(_internet_room_id, _internet_host_token, players)
 
 
 ## 右侧四个玩家槽位（L4D2 版式）：按 peer 顺序填，空位显示「有空位」。
@@ -432,6 +646,8 @@ func _connect_vbox() -> Control:
 
 func _on_back_to_title_pressed() -> void:
 	if net and _connected:
+		## 与「离开该大厅」同一套退出顺序：先销房，再断连接（方案 §4.6）。
+		_delete_internet_room_if_host()
 		net.leave()
 		_connected = false
 	Global.stop_lobby_music()
@@ -634,10 +850,28 @@ func _on_start_pressed() -> void:
 
 
 func _on_leave_pressed() -> void:
+	## ── 退出顺序（方案 §4.6，不得颠倒）──
+	## ① DELETE /api/rooms/:id（带 hostToken）—— 让房间**立即**从列表消失
+	## ② Net.leave()（清 ENet、UPnP 反向删映射）
+	## ③ 清本地 roomId / hostToken
+	## ⚠ 顺序不能反：先 leave() 会让心跳停止但仍留一个 60s 才清的死房。
+	## ⚠ ① 允许失败（网络断了就靠超时清理），**不得阻断** ②。
+	_delete_internet_room_if_host()
 	net.leave()
 	_connected = false
 	_log("已离开房间")
 	_refresh_ui()
+
+
+## 若本机是互联网房主，向大厅销掉房间并清本地凭据（方案 §4.6）。
+func _delete_internet_room_if_host() -> void:
+	if _internet_room_id.is_empty():
+		return
+	if _internet_panel != null and _internet_panel.has_method("delete_room"):
+		_internet_panel.delete_room(_internet_room_id, _internet_host_token)
+		_log("已通知大厅关闭房间 %s" % _internet_room_id)
+	_internet_room_id = ""
+	_internet_host_token = ""
 
 
 func _on_character_selected(index: int) -> void:
@@ -707,6 +941,7 @@ func _on_upnp_port_mapped(port: int, external_ip: String) -> void:
 	if external_ip.is_empty():
 		_log("UPnP 已映射 UDP %d（未能查询外部 IP），好友可用路由器 WAN IP:%d 直连" % [port, port])
 	else:
+		_last_upnp_external_ip = external_ip
 		_log("UPnP 已映射，公网直连地址：%s:%d（把该地址告诉好友）" % [external_ip, port])
 
 

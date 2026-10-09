@@ -296,6 +296,15 @@ var changelog_seen_version: String = ""
 ## 只影响测试进程（游戏内正常运行无此问题）；**默认 false**，任何游戏逻辑都不得依赖它。
 var suppress_hit_presentation: bool = false
 
+## 互联网大厅（Master Server）基址。空 = 用 lobby_client 的本地开发默认值。
+## ⚠ 只接受 https://，或本地开发用的 http://127.0.0.1 / http://localhost ——
+## Android 9+ 默认禁止明文 HTTP，配了公网 http 会让移动端大厅整体不可用。
+## 详见 `互联网联机模式策划方案.md` §5.1（C13）与 script/lobby_client.gd 的 setup()。
+var master_server_url: String = ""
+
+## 上次使用的房间名（大厅「创建互联网房间」表单回填用）。
+var last_room_name: String = ""
+
 
 ## 当前字体选项索引（代理到 FontService，保持 `Global.font_option` 读写语义）。
 var font_option: int:
@@ -1140,6 +1149,8 @@ func _apply_config_file(path: String) -> void:
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
+	master_server_url = str(cfg.get("master_server_url", master_server_url))
+	last_room_name = str(cfg.get("last_room_name", last_room_name))
 	_apply_touch_layout(cfg.get("touch_layout", null))
 	_apply_touch_hidden(cfg.get("touch_hidden", null))
 
@@ -1160,6 +1171,8 @@ func save_config() -> void:
 		"facing_lock_mode": facing_lock_mode,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
+		"master_server_url": master_server_url,
+		"last_room_name": last_room_name,
 		"touch_layout": _touch_layout_to_json(),
 		"touch_hidden": touch_hidden.duplicate()
 	}

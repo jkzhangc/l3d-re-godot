@@ -84,10 +84,13 @@ func _test_url_allowlist() -> void:
 		"https://a.b.c:8443/x",
 		"http://127.0.0.1:10000",
 		"http://localhost:10000",
+		"http://8.138.99.96:10000",       # M1 过渡期服务器公网 IP（明文白名单）
+		"http://8.138.99.96:10000/api/x", # 带路径也要能识别主机
 	]
 	var denied: Array[String] = [
-		"http://lobby.example.com",       # 明文 HTTP 到公网 —— Android 9+ 会直接失败
+		"http://lobby.example.com",       # 明文 HTTP 到未列入白名单的公网域名
 		"http://192.168.1.10:10000",      # 私网 http
+		"http://8.138.99.97:10000",       # 白名单之外的公网 IP
 		"ftp://lobby.example.com",
 		"lobby.example.com",              # 无协议
 		"",
@@ -98,7 +101,7 @@ func _test_url_allowlist() -> void:
 		_expect(not c._is_url_allowed(url), "应拒绝 %s" % url)
 
 	# setup() 要能因不安全基址而失败，以便调用方降级到直连页签。
-	_expect(not c.setup("http://lobby.example.com"), "setup 应拒绝明文公网基址")
+	_expect(not c.setup("http://lobby.example.com"), "setup 应拒绝非白名单明文公网基址")
 	_expect(c.setup("http://127.0.0.1:10000"), "setup 应接受本地开发基址")
 	_expect(c.base_url == "http://127.0.0.1:10000", "base_url 应记录规范化结果，实得 %s" % c.base_url)
 	# 尾斜杠必须被剥掉，否则会拼出 '//api/rooms'。

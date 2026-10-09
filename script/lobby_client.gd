@@ -253,15 +253,42 @@ func _stage_for(seconds: float) -> int:
 
 # ─────────────────────────── 工具 ───────────────────────────
 
-## 只放行 https，以及本地开发用的 127.0.0.1 / localhost（方案 §5.1 的 C13）。
+## 只放行 https，以及开发/过渡期的明文白名单（方案 §5.1 的 C13）。
+##
+## 【为什么允许特定的公网 http】M1 阶段服务器是**公网 IP、无证书**（如 8.138.99.96），
+## 而域名备案需要时间。此期间 PC 端用 http 联调是必要的。
+## 【代价】Android 9+ 默认禁止明文 HTTP，**手机端连 http 基址会直接失败**。
+## 因此手机端使用 http 时会在 `is_mobile_safe()` 里被明确拦下并提示，而不是静默连不上。
+## 备案完成、切到 https 域名后，应把 `http://` 从公网白名单里删掉。
+const INSECURE_HOSTS_ALLOWED: Array[String] = [
+	"127.0.0.1",
+	"localhost",
+	"8.138.99.96",   ## ★ M1 过渡：阿里云轻量服务器公网 IP，备案完成后改为域名+https
+]
+
+func is_mobile_safe() -> bool:
+	## 移动端（Android 9+）禁止明文 HTTP；用于在 UI 上提前给出明确提示。
+	if not Global.is_mobile_platform():
+		return true
+	return base_url.begins_with("https://")
+
+
+## URL 是否放行：https 一律可以；http 仅限白名单主机（本地开发 + M1 过渡期服务器 IP）。
 func _is_url_allowed(url: String) -> bool:
 	if url.begins_with("https://"):
 		return true
-	if url.begins_with("http://127.0.0.1"):
-		return true
-	if url.begins_with("http://localhost"):
-		return true
-	return false
+	if not url.begins_with("http://"):
+		return false
+	var rest := url.substr("http://".length())
+	## 取主机部分（去掉 :端口 与 /路径）。
+	var host := rest
+	var slash := host.find("/")
+	if slash >= 0:
+		host = host.substr(0, slash)
+	var colon := host.find(":")
+	if colon >= 0:
+		host = host.substr(0, colon)
+	return INSECURE_HOSTS_ALLOWED.has(host)
 
 func _error_of(dict: Dictionary, response_code: int) -> String:
 	var err := str(dict.get("error", ""))
