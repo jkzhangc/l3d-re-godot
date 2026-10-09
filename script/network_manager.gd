@@ -115,11 +115,24 @@ func get_my_peer_id() -> int:
 func is_online_session() -> bool:
 	return has_network() and handshake_ok
 
+## ── peer 工厂（2026-10-09 用户需求：为将来切换传输层预留）──
+## 【为什么收敛到一处】ENet 的创建目前散在 host_game / join_game 两处。将来若要换
+## `WebRTCMultiplayerPeer`（零配置穿透）或 `WebSocketMultiplayerPeer`（只走 TCP，穿透免费档
+## 全支持），改动若仍散落两处 + 所有调用方，成本会翻倍。收敛到这里后**只改这一个函数**。
+## 详细背景与选型对比见 `互联网联机模式策划方案.md` §2.1（A3/A4）与 §7.1。
+##
+## ⚠ 传输无关的约束（将来换 peer 时必须一并复核）：
+##   · 本函数只负责"造出一个未连接的 peer 实例"，**不做 create_server/create_client**；
+##     具体连接语义由调用方按各自角色发起（两种 peer 的建连 API 并不相同）。
+##   · `MAX_CLIENTS`（人数上限）是 host_game 侧参数，不在此处固化。
+func _create_peer() -> MultiplayerPeer:
+	return ENetMultiplayerPeer.new()
+
 ## 创建 Host（服务器也是本地玩家）。成功后立即建立本机玩家名单和默认角色记录；
 ## 远端玩家仍须通过 hello 握手才会出现在会话表中。
 func host_game(port: int = DEFAULT_PORT) -> Error:
 	leave()
-	var peer := ENetMultiplayerPeer.new()
+	var peer := _create_peer() as ENetMultiplayerPeer
 	var err := peer.create_server(port, MAX_CLIENTS)
 	if err != OK:
 		return err
@@ -142,7 +155,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 ## _on_connected_to_server() 发送 hello，待 hello_ack 后 handshake_ok 才会变为 true。
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	leave()
-	var peer := ENetMultiplayerPeer.new()
+	var peer := _create_peer() as ENetMultiplayerPeer
 	var err := peer.create_client(address.strip_edges(), port)
 	if err != OK:
 		return err
