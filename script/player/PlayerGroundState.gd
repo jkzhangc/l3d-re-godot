@@ -54,10 +54,12 @@ func _consume_common_inputs() -> bool:
 
 
 ## 举起当前激活武器对应的状态（空手/无武器状态名则忽略）。
+## 路由走 `get_state_node_name()`（远程 "Ranged" / 近战 "Melee"），不再是 weapon_state_name
+## （后者保留给外观/被动查询，见 WeaponData.get_state_node_name 的说明）。
 func _try_weapon_state() -> void:
 	var wd: WeaponData = get_player_state().get_active_weapon()
 	if wd and not wd.weapon_state_name.is_empty():
-		transition_requested.emit(wd.weapon_state_name)
+		transition_requested.emit(wd.get_state_node_name())
 
 
 ## 直接举起指定槽位的武器（槽位无武器/无状态名则忽略）。
@@ -66,7 +68,7 @@ func _try_raise_weapon(slot: String) -> void:
 	if not wd or wd.weapon_state_name.is_empty():
 		return
 	get_player_state().active_weapon_slot = slot
-	transition_requested.emit(wd.weapon_state_name)
+	transition_requested.emit(wd.get_state_node_name())
 
 
 ## 进入投掷物状态（未持有投掷物则忽略）。

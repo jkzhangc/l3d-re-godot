@@ -301,7 +301,8 @@ func _set_reload_frame(seq_idx: int) -> void:
 
 func _return_to_weapon() -> void:
 	if _wd and not _wd.weapon_state_name.is_empty():
-		transition_requested.emit(_wd.weapon_state_name)
+		# 路由按武器类型（远程 → Ranged / 近战 → Melee）。
+		transition_requested.emit(_wd.get_state_node_name())
 	else:
 		transition_requested.emit("Idle")
 

@@ -254,6 +254,30 @@ func get_slot_key() -> String:
 	return "primary" if weapon_slot == WeaponSlot.PRIMARY else "secondary"
 
 
+## ── 状态机路由名（2026-10-08 武器状态统一）──
+## 返回该武器应进入的**举起/就绪状态节点名**。远程统一走 "Ranged"，近战统一走 "Melee"。
+##
+## 【为什么与 weapon_state_name 分开】`weapon_state_name` 是**双重身份**：
+##   ① 状态机路由（旧用途，本次改由本函数接管）；
+##   ② 外观/被动查询键 —— `CharacterData.weapon_walk_textures` / `shove_walk_textures` 的字典键
+##      （键就是 "Pistol"/"Knife"/"Sniper"…），以及 `Player.skip_post_attack()` 的特技判据
+##      （"Knife" / "Smg"/"Shotgun"/"Magnum"）。
+##   若把 weapon_state_name 本身改成 "Ranged"，②会全部失配（行走图查不到、かいりき/コマンドー 被动失效）。
+##   因此**保留 weapon_state_name 原值不动**，路由改用本函数 —— 二者职责正交。
+##
+## 【收益】player.tscn 里每类武器从"一武器一节点"收敛为"远程一节点 + 近战一节点"；
+##   新增武器只需配好 is_ranged，**不必再手建同名状态节点**（旧架构的扩展成本来源）。
+func get_state_node_name() -> String:
+	return "Ranged" if is_ranged else "Melee"
+
+
+## 返回该武器应进入的**攻击状态节点名**（远程 "RangedAttack" / 近战 "MeleeAttack"）。
+## 与 get_state_node_name 同源派生；旧架构里 ShotgunAttack/RifleAttack/SmgAttack/SniperAttack
+## 是**不可达死节点**（发射方硬编码 "PistolAttack"），本次一并收敛。
+func get_attack_state_node_name() -> String:
+	return "RangedAttack" if is_ranged else "MeleeAttack"
+
+
 ## 获取武器基础伤害
 func get_effective_damage() -> float:
 	return float(attack_power)

@@ -829,11 +829,13 @@ func exit_weapon_mode() -> void:
 var _return_pose_state: String = ""
 
 
-## 当前姿态对应的状态名：举着武器 → 该武器的武器状态名（如 "Pistol"）；空手 → `""`。
+## 当前姿态对应的**状态节点名**：举着武器 → 该武器的路由状态名（"Ranged"/"Melee"）；空手 → `""`。
+## ⚠ 用 `get_state_node_name()` 而非 `weapon_state_name`（"Pistol"/"Knife"…）——后者只是外观/被动
+##   查询键，不是节点名；本返回值最终会被 `request_state()` 当节点名用（推击/投掷物结束后回归）。
 func _current_weapon_state_name() -> String:
 	if not _weapon_mode or _weapon_data == null:
 		return ""
-	return _weapon_data.weapon_state_name
+	return _weapon_data.get_state_node_name()
 
 
 ## 取出并清空"临时姿态结束后要回到的状态名"（供 PlayerShoveState / PlayerThrowableState 调用）。

@@ -7,11 +7,13 @@ extends State
 ## 依赖：WeaponData、BulletData、PlayerState、子弹场景
 
 ## 攻击帧只触发一次发射；单机本地或 Host 才能生成权威子弹，Client 仅播放攻击表现。
-## 手枪攻击状态 — 播放攻击动画并发射子弹
 ##
+## 【2026-10-08 武器状态统一】原 `PlayerPistolAttackState`，现为**所有远程武器共用**的攻击状态
+## （旧版 ShotgunAttack/RifleAttack/SmgAttack/SniperAttack 是无人发射的**死节点**，
+## 因举起状态硬编码 emit "PistolAttack" —— 本次一并删除）。
 ## 攻击动画: attack_char_sequence（默认 [3,4,3,2]）
 ## 在 fire_at_sequence_idx 处发射子弹
-## 动画结束后切回 Pistol（READY 阶段，跳过举起动画）
+## 动画结束后切回**远程举起状态**（READY 阶段，跳过举起动画），由 WeaponData.get_state_node_name() 路由
 
 var _wd: WeaponData = null
 var _seq_idx: int = 0
@@ -36,7 +38,7 @@ func enter() -> void:
 			print("[手枪] 弹夹为空！咔嚓——")
 			if _wd.empty_fire_sound:
 				_play_attack_sound(_wd.empty_fire_sound)
-			transition_requested.emit("Pistol")
+			transition_requested.emit(_wd.get_state_node_name())
 			return
 
 	_seq_idx = 0
@@ -74,7 +76,7 @@ func process_update(delta: float) -> void:
 		if _wait_frames <= 0:
 			if _try_continue_attack():
 				return
-			transition_requested.emit("Pistol")
+			transition_requested.emit(_wd.get_state_node_name())
 		return
 
 	_timer -= delta
@@ -210,7 +212,7 @@ func _on_attack_complete() -> void:
 	elif _try_continue_attack():
 		return
 	else:
-		transition_requested.emit("Pistol")
+		transition_requested.emit(_wd.get_state_node_name())
 
 
 func _try_continue_attack() -> bool:

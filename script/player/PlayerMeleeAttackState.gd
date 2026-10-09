@@ -7,11 +7,12 @@ extends State
 ## 依赖：WeaponData、PlayerState、敌人伤害接口
 
 ## 近战判定在配置的命中帧创建/执行一次，随后由状态机清理 hitbox 并回到 READY。
-## 小刀攻击状态 — 播放攻击动画并执行近战判定
 ##
+## 【2026-10-08 武器状态统一】原 `PlayerKnifeAttackState`，现为**所有近战武器共用**的攻击状态
+## （小刀/平底锅/金属球棒）。武器差异一律从 `WeaponData`（`_wd`）读取。
 ## 攻击动画: melee_attack_char_sequence（或回退 attack_char_sequence）
 ## 在 melee_hit_at_sequence_idx 处创建判定区域
-## 动画结束后切回 Knife（READY 阶段，跳过举起动画）
+## 动画结束后切回**近战举起状态**（READY 阶段，跳过举起动画），由 WeaponData.get_state_node_name() 路由
 
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
@@ -73,7 +74,7 @@ func process_update(delta: float) -> void:
 		if _wait_frames <= 0:
 			if _try_continue_attack():
 				return
-			transition_requested.emit("Knife")
+			transition_requested.emit(_wd.get_state_node_name())
 		return
 
 	_timer -= delta
@@ -304,7 +305,7 @@ func _on_attack_complete() -> void:
 	elif _try_continue_attack():
 		return
 	else:
-		transition_requested.emit("Knife")
+		transition_requested.emit(_wd.get_state_node_name())
 
 
 func _try_continue_attack() -> bool:

@@ -6,10 +6,10 @@
 [ext_resource type="Script" uid="uid://deidq5yq4hbp2" path="res://script/player/PlayerIdleState.gd" id="5"]
 [ext_resource type="Script" uid="uid://db1b8gm8jtwdh" path="res://script/player/PlayerWalkState.gd" id="6"]
 [ext_resource type="Script" uid="uid://x3hkp234qym1" path="res://script/player/PlayerRunState.gd" id="7"]
-[ext_resource type="Script" uid="uid://nenbthelxrl" path="res://script/player/PlayerPistolState.gd" id="8"]
-[ext_resource type="Script" uid="uid://dk5j2vcjx6cjl" path="res://script/player/PlayerKnifeState.gd" id="9"]
-[ext_resource type="Script" uid="uid://ct7tl0wa4nfnh" path="res://script/player/PlayerPistolAttackState.gd" id="10"]
-[ext_resource type="Script" uid="uid://byyfyvj4w6c1e" path="res://script/player/PlayerKnifeAttackState.gd" id="11"]
+[ext_resource type="Script" uid="uid://nenbthelxrl" path="res://script/player/PlayerRangedState.gd" id="8"]
+[ext_resource type="Script" uid="uid://dk5j2vcjx6cjl" path="res://script/player/PlayerMeleeState.gd" id="9"]
+[ext_resource type="Script" uid="uid://ct7tl0wa4nfnh" path="res://script/player/PlayerRangedAttackState.gd" id="10"]
+[ext_resource type="Script" uid="uid://byyfyvj4w6c1e" path="res://script/player/PlayerMeleeAttackState.gd" id="11"]
 [ext_resource type="Script" uid="uid://dsglyhws4ejp8" path="res://script/player/PlayerReloadState.gd" id="12"]
 [ext_resource type="Script" uid="uid://cctexj4rv8a0c" path="res://script/player/PlayerShoveState.gd" id="13"]
 [ext_resource type="Script" uid="uid://d30tupysobn75" path="res://script/player/PlayerThrowableState.gd" id="15"]
@@ -51,65 +51,23 @@ script = ExtResource("6")
 [node name="Run" type="Node" parent="StateMachine" unique_id=1647617733]
 script = ExtResource("7")
 
-[node name="Pistol" type="Node" parent="StateMachine" unique_id=505023350]
+[node name="Ranged" type="Node" parent="StateMachine" unique_id=505023350]
 script = ExtResource("8")
 
-[node name="Knife" type="Node" parent="StateMachine" unique_id=470291729]
+[node name="Melee" type="Node" parent="StateMachine" unique_id=470291729]
 script = ExtResource("9")
 
-[node name="PistolAttack" type="Node" parent="StateMachine" unique_id=836048565]
+[node name="RangedAttack" type="Node" parent="StateMachine" unique_id=836048565]
 script = ExtResource("10")
 
-[node name="KnifeAttack" type="Node" parent="StateMachine" unique_id=1959724089]
+[node name="MeleeAttack" type="Node" parent="StateMachine" unique_id=1959724089]
 script = ExtResource("11")
-
-[node name="Shotgun" type="Node" parent="StateMachine" unique_id=1980915167]
-script = ExtResource("8")
-
-[node name="ShotgunAttack" type="Node" parent="StateMachine" unique_id=1952468799]
-script = ExtResource("10")
 
 [node name="Reload" type="Node" parent="StateMachine" unique_id=1928475631]
 script = ExtResource("12")
 
-[node name="Rifle" type="Node" parent="StateMachine" unique_id=297656085]
-script = ExtResource("8")
-
-[node name="RifleAttack" type="Node" parent="StateMachine" unique_id=577506374]
-script = ExtResource("10")
-
 [node name="Shove" type="Node" parent="StateMachine" unique_id=228493632]
 script = ExtResource("13")
 
-[node name="Smg" type="Node" parent="StateMachine" unique_id=1531217225]
-script = ExtResource("8")
-
-[node name="SmgAttack" type="Node" parent="StateMachine" unique_id=846857311]
-script = ExtResource("10")
-
 [node name="Throwable" type="Node" parent="StateMachine" unique_id=-1279212740]
 script = ExtResource("15")
-
-[node name="Sniper" type="Node" parent="StateMachine" unique_id=1180501427]
-script = ExtResource("8")
-
-[node name="SniperAttack" type="Node" parent="StateMachine" unique_id=2074634755]
-script = ExtResource("10")
-
-[node name="Magnum" type="Node" parent="StateMachine" unique_id=2074634900]
-script = ExtResource("8")
-
-[node name="Launcher" type="Node" parent="StateMachine" unique_id=2074634901]
-script = ExtResource("8")
-
-[node name="RLauncher" type="Node" parent="StateMachine" unique_id=1921823592]
-script = ExtResource("8")
-
-[node name="Frypan" type="Node" parent="StateMachine" unique_id=1694041693]
-script = ExtResource("9")
-
-[node name="Bat" type="Node" parent="StateMachine" unique_id=356418758]
-script = ExtResource("9")
-
-[node name="Bowgun" type="Node" parent="StateMachine" unique_id=591665800]
-script = ExtResource("8")

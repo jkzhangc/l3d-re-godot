@@ -3,15 +3,19 @@ extends State
 ## ── 架构定位 ──
 ## 系统：玩家状态机 ｜ 层：玩法（State）
 ## 联机：Host 权威；Client 表现
-## 职责：副武器（近战）举起状态：举/放动画正反向播放，READY 期允许移动与近战。
+## 职责：**远程武器**举起状态（所有 is_ranged 武器共用）：READY 允许移动与开火，
+##       RAISE/LOWER 锁定过渡动画避免被快照打断。
 ## 依赖：WeaponData、Player 实体、PlayerState
-
-## 小刀 READY 阶段允许移动和近战；伤害只在 KnifeAttackState 的命中帧结算。
-## 小刀举起状态 — 副武器举起
+##
+## 【2026-10-08 武器状态统一】原 `PlayerPistolState`，现为**远程武器共用**举起状态。
+## 全部远程武器（手枪/霰弹/步枪/冲锋枪/狙击/马格南/榴弹/火箭筒/十字弩）都由本状态承载，
+## 具体武器差异一律从 `WeaponData`（`_wd`）读取，与旧版"每武器一个同构节点"行为等价 ——
+## 旧版那些节点本就指向同一个脚本，只是节点名不同（详见 weapon_data.get_state_node_name）。
+## 路由节点名由 `WeaponData.get_state_node_name()` 给出（远程恒 "Ranged"）。
 ##
 ## 举起动画：正向播放 weapon_raise_char_sequence
 ## 放下动画：反向播放 weapon_raise_char_sequence
-## 举起后可移动，按「确定键」→ 攻击
+## 举起后可移动，按「确定键」→ 攻击，按「装填键」→ 装弹
 
 enum Phase { RAISE, READY, LOWER }
 
@@ -68,6 +72,12 @@ func process_update(delta: float) -> void:
 		Phase.READY:
 			# （旧「按住技能键搓招」已移除：技能键动作删除，主动技 = SA 键 C，见 player._update_sa_state）
 
+			# --- 覚醒键（空格，2026-09-13 用户改版）：構え中按空格 = 发动集中射撃 ---
+			# （按住Z+按X 的组合键在攻击后摇/时序上容易吞输入，用户拍板改专用键。
+			#   空格已从「确定键」摘除 → 不会同时开枪。）
+			if Input.is_action_just_pressed("覚醒键"):
+				character.try_activate_awaken()
+
 			# --- 固定朝向输入处理 ---
 			if Global.facing_lock_mode == 0:
 				# 切换式：按取消键切换朝向锁定
@@ -110,11 +120,15 @@ func process_update(delta: float) -> void:
 				character.use_support_item()
 				return
 
-			# ★投掷物键：举着武器时也能举起投掷物（2026-10-03 用户需求）。
-			# 详见 PlayerPistolState 同段的说明（没带投掷物就不切，避免连武器一起放下）。
+			# ★投掷物键：**举着武器时也能举起投掷物**（2026-10-03 用户需求）。
+			# 旧实现只有空手三状态（Idle/Walk/Run）处理该键 → 举着枪/刀按 5 毫无反应，
+			# 玩家必须先收枪才能掏手榴弹（用户实测「只有在不举起武器的时候才能举起手榴弹」）。
+			# ⚠ 没带投掷物就不切：否则 `ThrowableState.enter()` 会立刻退回 Idle ——
+			#   连手里举着的武器也一并被放下，比"没反应"更糟。
 			if Global.item_key_just_pressed("投掷物键"):
 				if get_player_state().throwable:
-					## 记下"举着武器"姿态，放下手雷后回到举刀（见 Player._return_pose_state）。
+					## 记下"举着武器"这个姿态：放下手雷后回到举枪，而不是被丢回空手
+					##（状态切换会清空武器字段，投掷物状态自己读不到，见 Player._return_pose_state）。
 					character.remember_return_pose_state()
 					transition_requested.emit("Throwable")
 				return
@@ -123,12 +137,18 @@ func process_update(delta: float) -> void:
 				_begin_lower()
 
 			## 推击键的读取已上移到 `Player._try_shove_interrupt()`（2026-10-03）：
-			## 推击要能打断**任何**武器状态（攻击中/换弹中…），收敛为 Player 层唯一入口。
+			## 推击要能打断**任何**武器状态（攻击中/换弹中…），逐个状态各写一份必然漏，
+			## 收敛为 Player 层唯一入口。这里不再重复读键（否则同帧双触发）。
 			## 详见 player.gd 的 `_try_shove_interrupt` 注释。
 
 			if Input.is_action_just_pressed("确定键"):
-				# 同 Pistol：武器替换已改「按住功能键(D)」，拾取物旁点按 Z 照常攻击
-				transition_requested.emit("KnifeAttack")
+				# 2026-09-13 用户定稿：武器替换已改「按住功能键(D)」，点按 Z 在拾取物旁
+				# 也照常攻击 —— 旧「拾取物旁禁攻击」限制（_near_pickup 门）废除。
+				# 路由按武器类型（远程 → RangedAttack）。
+				transition_requested.emit(_wd.get_attack_state_node_name())
+
+			if Input.is_action_just_pressed("装填键"):
+				transition_requested.emit("Reload")
 
 		Phase.LOWER:
 			_timer -= delta
@@ -152,8 +172,12 @@ func physics_update(delta: float) -> void:
 
 func _begin_lower() -> void:
 	## 开始放下动画：从序列倒数第二帧开始（最后一帧 = 就绪帧已在显示）
-	## ★放下武器是玩家意图明确的动作 → 朝向锁与覚醒都在这里收尾（详见 PlayerPistolState 同段注释：
-	## 不能挂到 `exit_weapon_mode()`，那会被攻击/装弹的状态切换误伤）。
+	## ★放下武器是**玩家意图明确的一次动作**（按了举起放下键 / 同槽位武器键），
+	## 两个"离开武器模式才该发生"的收敛都挂在这里：
+	##   · 取消固定朝向（锁是"举着武器时按取消键"的姿势能力，武器收起后没有途径解锁）
+	##   · 解除覚醒（原作觉醒是构势系状态，武器收起即失效）
+	## ⚠ 绝不能改挂到 `exit_weapon_mode()` —— 那个函数被攻击/装弹的状态切换复用，
+	##   会让"开一枪"就把朝向锁和覚醒一起解掉（2026-10-03 用户实测）。
 	character.unlock_facing()
 	character.deactivate_awaken()
 	var seq: Array[int] = _wd.get_raise_char_sequence()
@@ -183,4 +207,5 @@ func _try_raise_weapon(slot: String) -> void:
 	if not wd or wd.weapon_state_name.is_empty():
 		return
 	get_player_state().active_weapon_slot = slot
-	transition_requested.emit(wd.weapon_state_name)
+	# 目标槽位可能是近战武器 → 路由按该武器类型决定，而非本地硬编码。
+	transition_requested.emit(wd.get_state_node_name())
