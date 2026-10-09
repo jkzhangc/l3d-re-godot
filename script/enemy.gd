@@ -28,17 +28,25 @@ signal died(enemy: Node)
 # ═══════════════════════════════════════
 # 精灵帧常量
 # ═══════════════════════════════════════
-const FRAME_W: int = 48
-const FRAME_H: int = 64
-const CHARS_PER_ROW: int = 4
-const DIRECTIONS: int = 4
-const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
-const STAND_FRAME: int = 1
-const DIR_ROWS: Array[int] = [0, 1, 2, 3]
+## 【2026-10-08】帧常量的**唯一真源**已随渲染逻辑移到 enemy_sprite_renderer.gd；
+## 这里做转发别名，避免两处各写一份导致漂移（enemy 侧仍有 _on_animation_timer_timeout
+## 用到 WALK_SEQUENCE.size()）。
+const FRAME_W: int = SpriteRenderer.FRAME_W
+const FRAME_H: int = SpriteRenderer.FRAME_H
+const CHARS_PER_ROW: int = SpriteRenderer.CHARS_PER_ROW
+const DIRECTIONS: int = SpriteRenderer.DIRECTIONS
+const WALK_SEQUENCE: Array[int] = SpriteRenderer.WALK_SEQUENCE
+const STAND_FRAME: int = SpriteRenderer.STAND_FRAME
+const DIR_ROWS: Array[int] = SpriteRenderer.DIR_ROWS
 const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源对当前敌人的重复命中冷却（毫秒）
 ## ★敌人死亡掉落（2026-10-01 用户需求：原作里敌人死后会掉药品/武器）。
 ## 只由单机 / Host 权威侧调用；掉落物落进 ground_pickup 组，由 NetworkWorld 收编后同步给 Client。
 const LOOT_DROPPER := preload("res://script/director/loot_dropper.gd")
+## 精灵渲染服务（2026-10-08 拆分：渲染逻辑抽到 enemy_sprite_renderer.gd，本文件保留转发门面）。
+## ⚠ 用 preload 常量而非 class_name（见 MEMORY「class_name 不跨文件」）。
+const SpriteRenderer := preload("res://script/enemy_sprite_renderer.gd")
+## 调试可视化服务（2026-10-08 拆分：调试绘制抽到 enemy_debug_drawer.gd）。
+const DebugDrawer := preload("res://script/enemy_debug_drawer.gd")
 
 ## 帧尺寸覆盖（0 = 用默认 48×64）。
 ##
@@ -190,6 +198,10 @@ var _frame_w_prev: int = 0
 var _frame_h_prev: int = 0
 ## 死亡表现是否已切到专用死亡表（death_texture）。防快照路径重复覆盖（见 apply_death_appearance）。
 var _death_appearance_applied: bool = false
+## 精灵渲染服务（_ready 创建；持有本实体引用，见 script/enemy_sprite_renderer.gd）。
+var _sprite_renderer: SpriteRenderer = null
+## 调试可视化服务（_ready 创建；见 script/enemy_debug_drawer.gd）。
+var _debug_drawer: DebugDrawer = null
 ## ★Client 侧死亡音效是否已播（2026-09-30 修「敌人死亡有时没有死亡音效」）。
 ## 见 _play_network_death_sfx_once()：
 ##   `apply_network_presentation` 的 is_dead 分支**只切外观、不播音效**，而
@@ -499,6 +511,10 @@ var _debug_cell_size: float = 32.0  ## 由 EnemyChaseState 在 enter() 中设置
 
 
 func _ready() -> void:
+	## ★必须最先创建精灵渲染服务：下面 _update_facing_sprite / _sync_frame_size_to_texture /
+	## _refresh_sprite 都要经它转发。
+	_sprite_renderer = SpriteRenderer.new(self)
+	_debug_drawer = DebugDrawer.new(self)
 	## 难度缩放（2026-09-16 用户反馈「不管哪个难度丧尸血量都一样」）：
 	## 此前 Global.difficulty_multipliers 的 enemy_hp 全仓零消费 → 敌人血量与难度完全无关。
 	## 只在 Host / 单机应用 —— Client 的 HP 由 Host 快照驱动，两端各乘会算出不同血量。
@@ -1868,139 +1884,44 @@ func _is_in_vision_cone(target: Node2D) -> bool:
 # 精灵渲染
 # ═══════════════════════════════════════
 
+## ── 精灵渲染（2026-10-08 拆分）──
+## 实现已抽到 `script/enemy_sprite_renderer.gd`（SpriteRenderer 服务）；本节只保留
+## **同名转发门面** → 外部（状态机 / NetworkWorld / debug_capture）调用点零改动。
+## 状态变量（_action_texture_stack / _frame_size_by_texture / _frame_*_prev / _current_char_index
+## / _death_appearance_applied）**仍留在本文件**，服务经 `_e.<字段>` 读写。
+
 func set_attack_char_index(char_idx: int) -> void:
-	_anim_step = 0
-	_refresh_sprite_with_index(char_idx)
+	_sprite_renderer.set_attack_char_index(char_idx)
 
 
 ## ── 附加动作表切换（特感：攻击/死亡使用独立贴图）──
-##
-## 普通僵尸的攻击/死亡帧都在同一张行走图表内（不同角色格索引），因此只需切 char_index。
-## 特感（如 T-002）的动作分属不同贴图文件，需要连贴图一起换。
-## 用法：状态 enter() 调 push_action_texture(tex)，exit() 调 restore_walk_texture()。
-## 切换后帧尺寸会被重新推断（不同动作表的帧宽高可能不同）。
-
-## 切到附加动作表。tex 为空则不动作（保持当前贴图）。
-##
-## 帧尺寸 determination 顺序（用户 2026-09-12 定稿）：
-##   1. 该表自己的缓存（此前推过且确认过）；
-##   2. **继承当前（行走）表的帧尺寸** —— 特感的攻击/死亡表画的是同一角色同一比例，
-##      只要当前尺寸能整除新表尺寸就直接沿用（"像行走那样的尺寸就没问题"）。
-##      T-002 攻击表 1536×576 是"1 角色列"布局（高只有标准的一半角色数，画布高度不变），
-##      盲目重推会得出 128×72 把角色水平腰斩；继承行走表的 128×144 则完全正确。
-##   3. 兜底：按贴图自动推断（_guess_frame_dim，对标准 4 列×2 角色布局可靠）。
+## 详见 enemy_sprite_renderer.gd 的 push_action_texture 注释。
 func push_action_texture(tex: Texture2D, char_idx: int = 0) -> void:
-	if tex == null:
-		return
-	if _action_texture_stack.is_empty():
-		_action_texture_prev = walk_texture
-		# 记住行走表的帧尺寸，restore 时精确还原（不靠重新推断）
-		_frame_w_prev = sprite_frame_w
-		_frame_h_prev = sprite_frame_h
-	_action_texture_stack.append(tex)
-	walk_texture = tex
-	var cached: Variant = _frame_size_by_texture.get(tex)
-	var tex_w: int = tex.get_width()
-	var tex_h: int = tex.get_height()
-	if cached is Vector2i and cached.x > 0 and cached.y > 0 \
-			and tex_w % cached.x == 0 and tex_h % cached.y == 0:
-		sprite_frame_w = cached.x
-		sprite_frame_h = cached.y
-	elif sprite_frame_w > 0 and sprite_frame_h > 0 \
-			and tex_w % sprite_frame_w == 0 and tex_h % sprite_frame_h == 0:
-		# 同角色动作表：沿用行走表帧尺寸（见函数头注释）
-		pass
-	else:
-		sprite_frame_w = 0
-		sprite_frame_h = 0
-		_sync_frame_size_to_texture()
-	_frame_size_by_texture[tex] = Vector2i(sprite_frame_w, sprite_frame_h)
-	_refresh_sprite_with_index(char_idx)
-	# 联机（A4）：表内动作表切换转发 Client（death_texture 等表外贴图不转发）。
-	# Client 侧经 apply_network_action_texture 再次进入本函数，Net.is_host 闸防回环。
-	var action_key := _texture_key_for(tex)
-	if action_key != "":
-		_announce_network_action(action_key, char_idx, true)
+	_sprite_renderer.push_action_texture(tex, char_idx)
 
 
 ## 恢复到行走图（并恢复切换前的角色索引与帧尺寸）。
 func restore_walk_texture() -> void:
-	if _action_texture_stack.is_empty():
-		return
-	# 联机（A4）：弹出前记下栈顶动作表的 key 并转发恢复（表外贴图 key="" 不转发）。
-	var popped_key := _texture_key_for(_action_texture_stack.back())
-	_action_texture_stack.pop_back()
-	if popped_key != "":
-		_announce_network_action(popped_key, 0, false)
-	walk_texture = _action_texture_prev if _action_texture_stack.is_empty() else _action_texture_stack.back()
-	if _action_texture_stack.is_empty():
-		# 精确还原行走表帧尺寸（推断不可靠：多动作表宽度整除方式有歧义）
-		sprite_frame_w = _frame_w_prev
-		sprite_frame_h = _frame_h_prev
-		## 回到站立帧（中帧）：攻击/突进期间 _anim_step 停在 0（左踏步），
-		## 直接恢复会以「迈步」姿势站着，下一拍行走动画才归位（2026-09-15 用户反馈）
-		_anim_step = 1
-		_apply_sprite_anchor()
-	else:
-		# 回到栈顶那张动作表的帧尺寸（用缓存，避免重复推断出错）
-		var top: Texture2D = _action_texture_stack.back()
-		var cached: Variant = _frame_size_by_texture.get(top)
-		if cached is Vector2i and cached.x > 0 and cached.y > 0:
-			sprite_frame_w = cached.x
-			sprite_frame_h = cached.y
-			_apply_sprite_anchor()
-		else:
-			sprite_frame_w = 0
-			sprite_frame_h = 0
-			_sync_frame_size_to_texture()
-	_refresh_sprite()
+	_sprite_renderer.restore_walk_texture()
 
 
 ## 当前是否处于附加动作表（供状态机判断是否需要恢复）。
 func has_action_texture() -> bool:
-	return not _action_texture_stack.is_empty()
+	return _sprite_renderer.has_action_texture()
 
 
 ## ── 死亡表现统一入口（death_texture 接入，2026-09-13）──
-##
-## 普通僵尸的死亡帧在行走表内（death_char_index 索引），历史路径直接
-## _refresh_sprite_with_index(death_char_index)。特感（T-002 等）的死亡帧在
-## **专用死亡表**（death_texture）里，行走表没有那个角色格 —— 直接索引会越界
-## （T-002 death_char_index=3 在行走表只显示错误格子）。
-## 统一规则：
-##   - death_texture 非空 → push 到死亡表（死亡是终态，不存在 restore 回走表）；
-##     帧索引用 death_texture_char_index（-1 回退 death_char_index）。
-##   - 爆头死亡对特感同理：headshot_char_index_1/2 是行走表索引，对特感无意义，
-##     直接显示死亡表最终帧（放弃两段倒地动画）。
-##   - death_texture 为空 → 完全维持旧行为，普通僵尸零影响。
+## 详见 enemy_sprite_renderer.gd 的 apply_death_appearance 注释。
 func apply_death_appearance(is_headshot: bool) -> void:
-	if death_texture != null:
-		push_action_texture(death_texture,
-				death_texture_char_index if death_texture_char_index >= 0 else death_char_index)
-		_death_appearance_applied = true
-	elif is_headshot:
-		_refresh_sprite_with_index(headshot_char_index_1)
-	else:
-		_refresh_sprite_with_index(death_char_index)
+	_sprite_renderer.apply_death_appearance(is_headshot)
 
 
 func _refresh_sprite() -> void:
-	if not sprite or not walk_texture:
-		return
-	if _is_dead:
-		return
-	sprite.texture = walk_texture
-	var frame: int = STAND_FRAME if not _moving else WALK_SEQUENCE[_anim_step]
-	_current_char_index = walk_char_index
-	_draw_sprite_rect(walk_char_index, frame)
+	_sprite_renderer.refresh_sprite()
 
 
 func _refresh_sprite_with_index(char_idx: int) -> void:
-	if not sprite or not walk_texture:
-		return
-	sprite.texture = walk_texture
-	_current_char_index = char_idx
-	_draw_sprite_rect(char_idx, STAND_FRAME)
+	_sprite_renderer.refresh_sprite_with_index(char_idx)
 
 
 # ── 步行/跑步双移动模式（暴君・猎杀者）──
@@ -2068,73 +1989,22 @@ func notify_run_mode_hit() -> void:
 
 
 func _draw_sprite_rect(char_idx: int, frame: int) -> void:
-	var fw: int = sprite_frame_w if sprite_frame_w > 0 else FRAME_W
-	var fh: int = sprite_frame_h if sprite_frame_h > 0 else FRAME_H
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[_facing]
-	var x: int = char_col * (fw * 3) + frame * fw
-	var y: int = char_row * (fh * DIRECTIONS) + dir_row * fh
-	sprite.region_rect = Rect2(x, y, fw, fh)
+	_sprite_renderer.draw_sprite_rect(char_idx, frame)
 
 
-## 按贴图实际尺寸自动推断帧宽高（仅当 sprite_frame_w/h 未显式指定时）。
-##
-## 推断依据 VX 规格：每角色格 = 3 帧 × 4 方向。整表宽度 = 角色格列数 × 3 × 帧宽。
-## 表不一定是标准 4 列（T-002 的三张表是 6 列 × 4 行），因此不能直接除以 12/8。
-## 做法：在候选帧宽里找"能整除且格子数合理"的最大值 —— 优先按 CHARS_PER_ROW
-## 列推断，失败再逐档回退。
-##
-## ⚠ 对表列数 ≠ CHARS_PER_ROW 的素材（如 T-002 的 6 列）本函数会算错，
-## 必须靠 .tres 的 sprite_frame_w/h 或 _frame_size_by_texture 缓存兜底 ——
-## 见 push_action_texture()。
+## 按贴图实际尺寸自动推断帧宽高（详见 enemy_sprite_renderer.gd）。
 func _sync_frame_size_to_texture() -> void:
-	if not walk_texture:
-		return
-	var tex_w: int = int(walk_texture.get_width())
-	var tex_h: int = int(walk_texture.get_height())
-	if tex_w <= 0 or tex_h <= 0:
-		return
-	if sprite_frame_w <= 0:
-		sprite_frame_w = _guess_frame_dim(tex_w, true)
-	if sprite_frame_h <= 0:
-		sprite_frame_h = _guess_frame_dim(tex_h, false)
-	if sprite_frame_w <= 0:
-		sprite_frame_w = FRAME_W
-	if sprite_frame_h <= 0:
-		sprite_frame_h = FRAME_H
-	_apply_sprite_anchor()
+	_sprite_renderer.sync_frame_size_to_texture()
 
 
-## 推断一维帧尺寸。`horizontal` = 是否宽度方向（宽度按 3 帧/格，高度按 4 方向/格）。
-## 优先取"整表恰好 CHARS_PER_ROW 个角色格"的解；其次取最大的合法整除数。
+## 推断一维帧尺寸（详见 enemy_sprite_renderer.gd）。
 func _guess_frame_dim(total: int, horizontal: bool) -> int:
-	var per_block: int = 3 if horizontal else DIRECTIONS
-	var prefer_cols: int = CHARS_PER_ROW if horizontal else 2
-	# 首选：整表 = prefer_cols 个角色格（标准布局）
-	if total % (per_block * prefer_cols) == 0:
-		var v: int = total / (per_block * prefer_cols)
-		if v > 0:
-			return v
-	# 回退：找最大整除数（格数从多到少试），保证格宽 ≥ 8px 避免噪声解
-	var best: int = 0
-	for blocks in range(prefer_cols, 0, -1):
-		if total % (per_block * blocks) == 0:
-			var cand: int = total / (per_block * blocks)
-			if cand >= 8:
-				best = cand
-				break
-	return best
+	return _sprite_renderer.guess_frame_dim(total, horizontal)
 
 
-## 按当前帧高把精灵"脚底"对齐到节点原点上方 16px（与原有 48×64 素材的观感一致）。
-## Sprite2D 默认居中绘制，故 position.y = -(half_h - 16)：
-##   帧高 64 → -16（原值，保持既有敌人不变）；帧高 144 → -56。
+## 按当前帧高把精灵"脚底"对齐到节点原点上方 16px（详见 enemy_sprite_renderer.gd）。
 func _apply_sprite_anchor() -> void:
-	if not sprite:
-		return
-	var fh: int = sprite_frame_h if sprite_frame_h > 0 else FRAME_H
-	sprite.position = Vector2(0, -(fh * 0.5 - 16.0))
+	_sprite_renderer.apply_sprite_anchor()
 
 
 # ═══════════════════════════════════════
@@ -2265,161 +2135,11 @@ func play_network_sfx(sfx_key: String, pitch: float) -> void:
 # Debug 可视化
 # ═══════════════════════════════════════
 
+## 调试可视化（2026-10-08 拆分）：实现已抽到 script/enemy_debug_drawer.gd。
+## ⚠ `_draw()` 是 CanvasItem 回调、必须留在节点上；它同步调用服务的 draw()，
+##   服务内 `_e.draw_*` 因此落在同一次绘制通道内（行为等价）。
 func _draw() -> void:
-	if not Global.debug_visuals:
-		return
-
-	var cs: CollisionShape2D = $CollisionShape2D
-	var color: Color = Color.GRAY if _is_dead else Color.RED
-	var shape: Shape2D = cs.shape
-	if shape is RectangleShape2D:
-		var rect: RectangleShape2D = shape as RectangleShape2D
-		var pos: Vector2 = cs.position
-		draw_rect(Rect2(pos - rect.size / 2, rect.size), color, false, 1.0)
-
-	if _is_dead:
-		var bar_w: float = 48.0
-		var bar_h: float = 4.0
-		var bar_y: float = -40.0
-		draw_rect(Rect2(-bar_w / 2, bar_y, bar_w, bar_h), Color.GRAY, true)
-		return
-
-	var forward: Vector2 = get_facing_vector()
-	var half_angle: float = deg_to_rad(vision_angle / 2.0)
-	var segments: int = 16
-	var points: PackedVector2Array = PackedVector2Array()
-	points.append(Vector2.ZERO)
-	for i: int in range(segments + 1):
-		var a: float = -half_angle + (2.0 * half_angle) * float(i) / float(segments)
-		points.append(forward.rotated(a) * vision_range)
-	draw_polygon(points, PackedColorArray([Color(1, 1, 0, 0.1)]))
-
-	var left_edge: Vector2 = forward.rotated(-half_angle) * vision_range
-	var right_edge: Vector2 = forward.rotated(half_angle) * vision_range
-	draw_line(Vector2.ZERO, left_edge, Color(1, 1, 0, 0.3))
-	draw_line(Vector2.ZERO, right_edge, Color(1, 1, 0, 0.3))
-	draw_arc(Vector2.ZERO, vision_range, -half_angle, half_angle, 16, Color(1, 1, 0, 0.3))
-
-	# 攻击命中矩形（attack_hit_range）—— 橙紅，跟随朝向旋转
-	var hit_offset: Vector2 = forward * attack_hit_forward_offset
-	var hw: float = attack_hit_range.x / 2.0
-	var hh: float = attack_hit_range.y / 2.0
-	var hit_side: Vector2 = Vector2(-forward.y, forward.x)
-	var hit_corners: PackedVector2Array = PackedVector2Array([
-			hit_offset + forward * hh + hit_side * hw,
-			hit_offset + forward * hh - hit_side * hw,
-			hit_offset - forward * hh - hit_side * hw,
-			hit_offset - forward * hh + hit_side * hw,
-	])
-	hit_corners.append(hit_corners[0])
-	draw_polyline(hit_corners, Color.ORANGE_RED, 1.0)
-
-	# 攻击触发矩形（attack_range）—— 青色，与判定矩形相同旋转逻辑
-	var tr_offset: Vector2 = forward * attack_range_forward_offset
-	var tr_hw: float = attack_range.x / 2.0
-	var tr_hh: float = attack_range.y / 2.0
-	var tr_corners: PackedVector2Array
-	if abs(forward.x) > abs(forward.y):
-		var side: Vector2 = Vector2(-forward.y, forward.x)
-		tr_corners = PackedVector2Array([
-			tr_offset + forward * tr_hh + side * tr_hw,
-			tr_offset + forward * tr_hh - side * tr_hw,
-			tr_offset - forward * tr_hh - side * tr_hw,
-			tr_offset - forward * tr_hh + side * tr_hw,
-		])
-	else:
-		tr_corners = PackedVector2Array([
-			tr_offset + Vector2(-tr_hw, -tr_hh),
-			tr_offset + Vector2( tr_hw, -tr_hh),
-			tr_offset + Vector2( tr_hw,  tr_hh),
-			tr_offset + Vector2(-tr_hw,  tr_hh),
-		])
-	tr_corners.append(tr_corners[0])
-	draw_polyline(tr_corners, Color.CYAN, 1.0)
-
-	var bar_w: float = 48.0
-	var bar_h: float = 4.0
-	var bar_y: float = -40.0
-	var ratio: float = current_hp / max_hp
-	draw_rect(Rect2(-bar_w / 2, bar_y, bar_w, bar_h), Color.RED, false, 1.0)
-	draw_rect(Rect2(-bar_w / 2, bar_y, bar_w * ratio, bar_h), Color.RED, true)
-
-	# 绘制受击碰撞体（黄色）
-	if hurt_area:
-		var hshape_node: CollisionShape2D = hurt_area.get_node_or_null("HurtShape")
-		if hshape_node and hshape_node.shape is RectangleShape2D:
-			var hs: Vector2 = (hshape_node.shape as RectangleShape2D).size
-			var ho: Vector2 = hshape_node.position
-			draw_rect(Rect2(ho - hs / 2, hs), Color.YELLOW, false, 1.0)
-
-	# ── A* 调试：绘制路径 ──
-	_draw_debug_path()
-
-	# ── A* 调试：绘制可行走网格 ──
-	_draw_debug_walk_grid()
-
-
-func _draw_debug_path() -> void:
-	if _debug_path.is_empty():
-		return
-
-	# 路径线 — 绿色
-	if _debug_path.size() >= 2:
-		for i in range(_debug_path.size() - 1):
-			var a: Vector2 = _debug_path[i] - global_position
-			var b: Vector2 = _debug_path[i + 1] - global_position
-			draw_line(a, b, Color.GREEN, 2.0)
-
-	# 路径点 — 绿色小圈
-	for wp: Vector2 in _debug_path:
-		var lp: Vector2 = wp - global_position
-		draw_circle(lp, 3.0, Color.GREEN)
-		draw_circle(lp, 4.0, Color.DARK_GREEN, false, 1.0)
-
-	# 下一个目标路径点 — 亮黄色
-	if _debug_path_idx < _debug_path.size():
-		var target: Vector2 = _debug_path[_debug_path_idx] - global_position
-		draw_circle(target, 6.0, Color.YELLOW, false, 2.0)
-
-	# 起点/终点标记（格子坐标 → 世界坐标）
-	var cell_half: float = _debug_cell_size / 2.0
-	var start_wp: Vector2 = Vector2(_debug_start_grid.x * _debug_cell_size + cell_half, _debug_start_grid.y * _debug_cell_size + cell_half) - global_position
-	var end_wp: Vector2 = Vector2(_debug_end_grid.x * _debug_cell_size + cell_half, _debug_end_grid.y * _debug_cell_size + cell_half) - global_position
-	draw_rect(Rect2(start_wp - Vector2(6, 6), Vector2(12, 12)), Color.BLUE, false, 2.0)
-	draw_rect(Rect2(end_wp - Vector2(6, 6), Vector2(12, 12)), Color.RED, false, 2.0)
-
-	# 路径状态文字
-	var status: String = "OK:%d" % _debug_path.size() if _debug_path_found else "FAIL(iters:%d)" % _debug_astar_iters
-	draw_string(ThemeDB.fallback_font, Vector2(20, -50), status, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.GREEN if _debug_path_found else Color.RED)
-
-
-func _draw_debug_walk_grid() -> void:
-	if _debug_walk_cache.is_empty():
-		return
-
-	var cell_half: float = _debug_cell_size / 2.0
-	var cs: float = _debug_cell_size
-
-	# 性能优化：按可见范围计算网格坐标遍历，而非遍历整个缓存字典
-	# 预构建后缓存可能包含全图数万格子，遍历字典每帧极卡
-	var view_range: int = 6  ## 格子数（约 192px @ 32px/cell）
-	var center_gp: Vector2i = Vector2i(floori(global_position.x / cs), floori(global_position.y / cs))
-
-	for dx in range(-view_range, view_range + 1):
-		for dy in range(-view_range, view_range + 1):
-			var gp: Vector2i = Vector2i(center_gp.x + dx, center_gp.y + dy)
-			if not _debug_walk_cache.has(gp):
-				continue
-			var world: Vector2 = Vector2(gp.x * cs + cell_half, gp.y * cs + cell_half)
-			var local: Vector2 = world - global_position
-
-			var walkable: bool = _debug_walk_cache[gp]
-			if walkable:
-				draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(0, 1, 0, 0.08), true)
-			else:
-				draw_rect(Rect2(local - Vector2(cell_half, cell_half), Vector2(cs, cs)), Color(1, 0, 0, 0.15), true)
-				draw_line(local + Vector2(-4, -4), local + Vector2(4, 4), Color.RED, 1.0)
-				draw_line(local + Vector2(-4, 4), local + Vector2(4, -4), Color.RED, 1.0)
+	_debug_drawer.draw()
 
 
 # ═══════════════════════════════════════
