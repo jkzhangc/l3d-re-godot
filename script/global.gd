@@ -614,6 +614,12 @@ func go_to_title_screen() -> void:
 	var net: Node = get_node_or_null("/root/Net")
 	if net != null and net.has_method("leave"):
 		net.leave()
+	## ⑤ **释放隧道**（2026-10-10）：隧道客户端已升级为 autoload，跨场景常驻 ——
+	## 它不再随大厅场景释放，所以从局内（暂停菜单）回标题时必须显式停掉，
+	## 否则中继上的公网端口会一直被占着（房主已走，端口泄漏）。幂等：未注册时停也无害。
+	var tunnel: Node = get_node_or_null("/root/Tunnel")
+	if tunnel != null and tunnel.has_method("stop") and bool(tunnel.call("is_active")):
+		tunnel.call("stop")
 	## ④ **清空本局会话状态**（2026-10-02 用户实测补上）：
 	## 少了这一步，「打完一局 → 回标题 → 重新开房」会**继承上一局**的座位表与 checkpoint ——
 	## 表现为「选了新角色，进游戏还是上一把的角色/血量/武器」，以及「下次玩自动读取之前的存档」

@@ -145,6 +145,12 @@ func _process(delta: float) -> void:
 
 	if _state == "connecting":
 		if status == StreamPeerTCP.STATUS_CONNECTED:
+			## ★ 关闭 Nagle（2026-10-10 实测「延迟不稳 + 果冻感/回弹」的根因）：
+			## 隧道把 60Hz 的小包（ENet 输入/快照）走 TCP。Nagle 默认开启 → 小包被攒着
+			## 等 ACK（≈1 个 RTT）再成批发 → **交付时刻抖动且成串**。客户端输入的到达时刻
+			## 因此忽早忽晚，主机就用「过时输入」推进权威位置，回头再把本地预测玩家拽回去
+			## —— 观感正是"移动有果冻质感、偶尔回弹"。关掉后每个包立即发出，抖动显著收敛。
+			_tcp.set_no_delay(true)
 			_send_register()
 			_state = "awaiting_registered"
 		return
@@ -194,21 +200,21 @@ func _send_register() -> void:
 
 
 ## 发送一条消息：[4字节大端长度][1字节类型][载荷]
+## ⚠ 一次 `put_data` 发整帧，不拆成「先头后体」两次：两次写会变成两个 TCP 段
+## （关闭 Nagle 后各自立即发出），每包多一个段的协议开销，也让接收端多一次组帧。
 func _send_message(type: int, payload: PackedByteArray) -> void:
 	if _tcp == null:
 		return
-	var msg := PackedByteArray()
-	msg.append(type)
-	msg.append_array(payload)
-	var length := msg.size()
-	var header := PackedByteArray([
+	var length := payload.size() + 1
+	var frame := PackedByteArray([
 		(length >> 24) & 0xFF,
 		(length >> 16) & 0xFF,
 		(length >> 8) & 0xFF,
 		length & 0xFF,
+		type,
 	])
-	_tcp.put_data(header)
-	_tcp.put_data(msg)
+	frame.append_array(payload)
+	_tcp.put_data(frame)
 
 
 ## 从 _recv_buffer 解析完整消息。

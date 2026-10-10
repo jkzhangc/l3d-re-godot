@@ -69,7 +69,8 @@ var net: Variant = null
 ## 直连 = 现有表单（降级路径，**不得移除**，方案 §6）。
 ## 页签与 InternetPanel 全部代码构建，避免改 .tscn 丢属性。
 const INTERNET_PANEL_SCRIPT := "res://script/internet_lobby_panel.gd"
-const TUNNEL_CLIENT_SCRIPT := "res://script/tunnel_client.gd"
+## 隧道客户端已升级为 autoload（project.godot 的 `Tunnel="*res://script/tunnel_client.gd"`），
+## 不再用脚本常量 new 出来挂到本场景（原因见下方 `_setup_connection_tabs` 第 4 步）。
 var _tab_bar: HBoxContainer = null
 var _internet_tab_btn: Button = null
 var _direct_tab_btn: Button = null
@@ -79,6 +80,8 @@ var _internet_panel: Control = null
 var _tunnel_client: Node = null
 ## 自动穿透模式下，等隧道就绪后需要用到的房间名（异步流程中转存）。
 var _pending_internet_room_name := ""
+## 开局流程进行中（`_on_start_pressed` 内含 `await`，用它防连点重复广播 start_game）。
+var _starting := false
 
 const TAB_INTERNET := "internet"
 const TAB_DIRECT := "direct"
@@ -308,16 +311,25 @@ func _setup_connection_tabs() -> void:
 	_internet_panel.room_registered_external.connect(_on_internet_room_registered)
 	_internet_panel.closed.connect(func() -> void: _select_tab(TAB_DIRECT))
 
-	## 4) 隧道客户端（路线二）：房主开互联网房时自动拉起。
-	##    不在此处连接中继，等用户点「创建房间」时才 start()。
-	var tunnel_script: GDScript = load(TUNNEL_CLIENT_SCRIPT) as GDScript
-	if tunnel_script != null:
-		_tunnel_client = tunnel_script.new() as Node
-		_tunnel_client.name = "TunnelClient"
-		add_child(_tunnel_client)
-		_tunnel_client.tunnel_ready.connect(_on_tunnel_ready)
-		_tunnel_client.tunnel_failed.connect(_on_tunnel_failed)
-		_tunnel_client.tunnel_closed.connect(_on_tunnel_closed)
+	## 4) 隧道客户端（路线二）：**autoload 常驻**（project.godot 的 `Tunnel=...`），
+	##    这里只取引用 + 接信号，绝不再挂到本场景。
+	## 【为什么】房主「开始游戏」会 change_scene_to_file 释放大厅场景；此前把隧道挂在
+	##    大厅下 → 开局瞬间隧道被销毁 → 外网客户端收不到回包 → ENet 超时
+	##    SERVER_DISCONNECTED，且客户端表现为「只看得见自己、仍是 P1」（实测 bug）。
+	## 【为何判 is_connected】Tunnel 是**跨场景常驻**的 autoload，而本大厅会随进出房间
+	##    反复实例化；不判重就连多次 → 一个信号触发多个回调（重复注册房间等）。
+	_tunnel_client = get_node_or_null("/root/Tunnel")
+	if _tunnel_client == null:
+		push_error("[NetworkLobby] 未找到 Tunnel autoload（检查 project.godot 的 [autoload]）")
+	else:
+		for pair: Array in [
+				["tunnel_ready", _on_tunnel_ready],
+				["tunnel_failed", _on_tunnel_failed],
+				["tunnel_closed", _on_tunnel_closed]]:
+			var sig: String = str(pair[0])
+			var handler: Callable = pair[1]
+			if not _tunnel_client.is_connected(sig, handler):
+				_tunnel_client.connect(sig, handler)
 
 	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
 	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
@@ -381,7 +393,9 @@ func _on_internet_create_requested(room_name: String, tunnel_address: String, tu
 			if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
 				_internet_panel.on_create_failed("隧道客户端未初始化")
 			return
-		var server_host := _tunnel_client.extract_host_from_url(Global.master_server_url)
+		## ⚠ 必须显式标注类型：`_tunnel_client` 静态类型是 Node，对它调用自定义方法
+		## 会被视为动态调用返回 Variant，用 `:=` 会报「Cannot infer the type」并导致整脚本加载失败。
+		var server_host: String = _tunnel_client.extract_host_from_url(Global.master_server_url)
 		if server_host.is_empty():
 			_log("无法从大厅地址提取服务器主机名")
 			if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
@@ -922,16 +936,44 @@ func _on_join_pressed() -> void:
 func _on_start_pressed() -> void:
 	if not net.is_host or not net.handshake_ok:
 		return
+	## 重入保护：本函数开头有 `await`（等 DELETE 收尾），期间按钮仍可点 → 连点会
+	## 广播两次 start_game。用一个标志把第二次点击挡在门外。
+	if _starting:
+		return
 	if not net.are_all_players_character_selected():
 		_log("不能开始：请等待所有玩家完成角色选择")
 		_refresh_ui()
 		return
+	_starting = true
+	## 开局前把互联网房从大厅**下架**（玩家已连上，发现层不再需要）。
+	## ⚠ 必须等 DELETE 收尾再切图：切图会释放大厅场景 → LobbyClient 被销毁 →
+	##   DELETE 发不出去 → 房间残留到服务端 60s 超时（2026-10-10 用户实测：
+	##   「游戏都开始了，房间列表里还有之前的房间」）。
+	## ⚠ 但下架**绝不停隧道** —— 隧道正承载着已连入的玩家，停掉等于当场断线。
+	await _retire_internet_room_before_game()
 	_log("全部角色已确认，广播开始游戏 ...")
 	# B1 难度同步（D2 用例暴露）：开局广播必须携带难度 —— 原调用漏参（默认 -1 不覆盖），
 	# 联机开局的 Client 难度从未被同步，只有中途切图（request_scene_change）才带上。
 	## 起始关卡 = 房间里选的章节（2026-09-27 用户需求：主机可选战役/章节）；
 	## 没选就回退到默认第一关。这样"不想从头测"可以直接从房间跳到目标关。
 	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty)
+
+
+## 开局前向大厅下架房间（**保留隧道**），并等 DELETE 送达或超时。
+## 与 `_delete_internet_room_if_host()` 的区别：这里不触碰隧道 —— 隧道要陪玩家进局。
+func _retire_internet_room_before_game() -> void:
+	if _internet_room_id.is_empty():
+		return
+	if _internet_panel != null and _internet_panel.has_method("delete_room"):
+		_internet_panel.delete_room(_internet_room_id, _internet_host_token)
+		_log("已在开局前下架房间 %s" % _internet_room_id)
+	_internet_room_id = ""
+	_internet_host_token = ""
+	## 等 DELETE 收尾（最多 2s）。HTTP 通常几十~几百 ms；超时也放行，**绝不阻断开局**。
+	if _internet_panel != null and _internet_panel.has_method("is_delete_pending"):
+		var deadline := Time.get_ticks_msec() + 2000
+		while Time.get_ticks_msec() < deadline and bool(_internet_panel.is_delete_pending()):
+			await get_tree().create_timer(0.05).timeout
 
 
 func _on_leave_pressed() -> void:

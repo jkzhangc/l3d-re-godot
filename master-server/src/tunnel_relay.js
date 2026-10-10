@@ -118,6 +118,10 @@ export class TunnelRelay {
   // ───────────────────────── TCP 连接处理 ─────────────────────────
 
   _handleConnection(socket) {
+    // ★ 关闭 Nagle（2026-10-10）：隧道把游戏 60Hz 的小包走 TCP 转发，Nagle 会把小包
+    // 攒着等 ACK（≈1 RTT）再成批发 → 交付时刻抖动、成串到达，客户端表现为"延迟忽高忽低
+    // + 移动果冻感/回弹"。每包立即发出后抖动显著收敛。UDP 侧本就无此问题。
+    socket.setNoDelay(true);
     socket._recvBuf = Buffer.alloc(0);
     socket._tunnel = null;
 

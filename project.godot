@@ -24,6 +24,7 @@ PhantomCameraManager="*res://addons/phantom_camera/scripts/managers/phantom_came
 Players="*res://script/player_registry.gd"
 Net="*res://script/network_manager.gd"
 ChapterStats="*res://script/chapter_stats.gd"
+Tunnel="*res://script/tunnel_client.gd"
 _mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [display]

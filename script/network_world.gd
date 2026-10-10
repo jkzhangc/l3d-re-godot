@@ -3774,13 +3774,23 @@ func _register_untracked_host_pickups(delta: float) -> void:
 		return
 	_untracked_pickup_scan_accumulator = fmod(_untracked_pickup_scan_accumulator, UNTRACKED_PICKUP_SCAN_INTERVAL)
 	var tracked_nodes: Dictionary = {}
-	for value: Variant in _pickups.values():
-		var tracked := value as Node
-		if is_instance_valid(tracked):
-			tracked_nodes[tracked.get_instance_id()] = true
+	## ⚠ **必须先判有效性，再 `as Node`**（2026-10-10 主机端实测报错根因）：
+	## `_pickups` 里可能残留已被 `queue_free` 的节点，对**已释放对象**做 `as Node`
+	## 会抛 "Trying to cast a freed object" 并**中止整个物理帧**，堆栈落在本函数。
+	## 顺手把悬垂条目就地清除，避免每帧反复踩同一个雷。
+	for key: Variant in _pickups.keys():
+		var value: Variant = _pickups[key]
+		if not is_instance_valid(value):
+			_pickups.erase(key)
+			continue
+		tracked_nodes[(value as Node).get_instance_id()] = true
 	var registered_any := false
-	for node: Node in get_tree().get_nodes_in_group("ground_pickup"):
-		var pickup := node as Node2D
+	## 同款防护：组遍历返回的数组可能含本帧待释放节点，**先用 Variant 接**再判有效性，
+	## 否则类型化循环变量（`for node: Node in ...`）自己就会在赋值时抛同样的 cast 错误。
+	for node_value: Variant in get_tree().get_nodes_in_group("ground_pickup"):
+		if not is_instance_valid(node_value):
+			continue
+		var pickup := node_value as Node2D
 		if not is_instance_valid(pickup) or tracked_nodes.has(pickup.get_instance_id()):
 			continue
 		if not pickup.has_method("configure_network_pickup"):

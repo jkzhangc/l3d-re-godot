@@ -70,6 +70,13 @@ const NOISE_PATTERNS: Array[String] = [
 	## 资源缺失的其它表述（同一类问题）。
 	"Cannot open file",
 	"Failed loading resource",
+	## 2026-10-10 用户实机截图（同一根因的另一半）：二进制资源里的 UID 已失效
+	## （`In external resource #N, invalid UID: 'uid://…'`），引擎**自动回退用文本路径**，
+	## 随后那条 .wav 文本路径又加载失败（见上一条）。二者是同一次"旧缓存残留"的连锁，
+	## 最终只是该音效不响。上面若只白名单了 "No loader found"，这条 UID 提示仍会弹窗 →
+	## 故一并白名单。⚠ 只精确匹配 `invalid UID`：它是引擎专属文案，且**只有在回退的
+	## 文本路径也失败时**才伴随真问题（那已由上面 "No loader found" 覆盖）—— 不吞真错误。
+	"invalid UID",
 
 	## ── 2026-10-03：一批「有兜底 / 属正常状态」的运行期提示 ──
 	## 【起因】用户实机报「一开防守战机器就弹报错」，截图里那条是

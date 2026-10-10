@@ -79,6 +79,10 @@ var _client: Node = null
 var _refresh_accum := 0.0
 var _game_version := ""
 var _last_rooms: Array = []
+## 是否有未收尾的「下架房间」请求。供大厅在开局前等待 DELETE 送达 ——
+## 不等待就切图，承载 HTTP 的 LobbyClient 会随大厅场景被释放，DELETE 可能发不出去，
+## 房间残留到服务端 60s 超时才消失（用户实测：开局后列表里还看得到房间）。
+var _delete_pending := false
 
 
 func _ready() -> void:
@@ -129,7 +133,13 @@ func heartbeat(room_id: String, host_token: String, current_players: int = -1) -
 func delete_room(room_id: String, host_token: String) -> void:
 	if _client == null:
 		return
+	_delete_pending = true
 	_client.delete_room(room_id, host_token)
+
+## 「下架房间」请求是否仍在飞行中。大厅在开局切图前应轮询它，确保 DELETE 送达，
+## 否则 LobbyClient 会随大厅场景被释放，房间残留到服务端超时（用户实测 bug）。
+func is_delete_pending() -> bool:
+	return _delete_pending
 
 ## 当前是否配置好了大厅地址（未配置时创建/列表都应提示）。
 func is_ready() -> bool:
@@ -161,6 +171,7 @@ func _setup_client() -> void:
 	_client.rooms_received.connect(_on_rooms_received)
 	_client.room_registered.connect(_on_room_registered)
 	_client.request_failed.connect(_on_request_failed)
+	_client.room_deleted.connect(_on_room_deleted)
 	_client.lobby_unreachable.connect(_on_lobby_unreachable)
 	_client.waking_up.connect(_on_waking_up)
 	_client.rate_limited.connect(_on_rate_limited)
@@ -211,6 +222,12 @@ func _on_request_failed(operation: String, reason: String) -> void:
 	elif operation == "delete_room":
 		## 删除失败只记日志，不打断退出（方案 §4.6：允许失败）。
 		print("[InternetPanel] 房间删除失败：%s" % reason)
+		_delete_pending = false
+
+
+## 房间删除成功（由 lobby_client 的 room_deleted 信号驱动）。
+func _on_room_deleted() -> void:
+	_delete_pending = false
 
 
 func _on_lobby_unreachable(reason: String) -> void:
@@ -698,11 +715,12 @@ func _on_apply_url_pressed() -> void:
 func _rebuild_client() -> void:
 	if _client != null:
 		for sig: String in ["rooms_received", "room_registered", "request_failed",
-				"lobby_unreachable", "waking_up", "rate_limited"]:
+				"room_deleted", "lobby_unreachable", "waking_up", "rate_limited"]:
 			if _client.is_connected(sig, Callable(self, "_on_" + sig)):
 				_client.disconnect(sig, Callable(self, "_on_" + sig))
 		_client.queue_free()
 		_client = null
+	_delete_pending = false
 	_setup_client()
 	if is_ready():
 		show_list()
