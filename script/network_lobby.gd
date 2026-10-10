@@ -69,11 +69,16 @@ var net: Variant = null
 ## 直连 = 现有表单（降级路径，**不得移除**，方案 §6）。
 ## 页签与 InternetPanel 全部代码构建，避免改 .tscn 丢属性。
 const INTERNET_PANEL_SCRIPT := "res://script/internet_lobby_panel.gd"
+const TUNNEL_CLIENT_SCRIPT := "res://script/tunnel_client.gd"
 var _tab_bar: HBoxContainer = null
 var _internet_tab_btn: Button = null
 var _direct_tab_btn: Button = null
 var _direct_container: Control = null
 var _internet_panel: Control = null
+## 隧道客户端（路线二）：房主开互联网房时自动拉起，替代 frpc。
+var _tunnel_client: Node = null
+## 自动穿透模式下，等隧道就绪后需要用到的房间名（异步流程中转存）。
+var _pending_internet_room_name := ""
 
 const TAB_INTERNET := "internet"
 const TAB_DIRECT := "direct"
@@ -303,6 +308,17 @@ func _setup_connection_tabs() -> void:
 	_internet_panel.room_registered_external.connect(_on_internet_room_registered)
 	_internet_panel.closed.connect(func() -> void: _select_tab(TAB_DIRECT))
 
+	## 4) 隧道客户端（路线二）：房主开互联网房时自动拉起。
+	##    不在此处连接中继，等用户点「创建房间」时才 start()。
+	var tunnel_script: GDScript = load(TUNNEL_CLIENT_SCRIPT) as GDScript
+	if tunnel_script != null:
+		_tunnel_client = tunnel_script.new() as Node
+		_tunnel_client.name = "TunnelClient"
+		add_child(_tunnel_client)
+		_tunnel_client.tunnel_ready.connect(_on_tunnel_ready)
+		_tunnel_client.tunnel_failed.connect(_on_tunnel_failed)
+		_tunnel_client.tunnel_closed.connect(_on_tunnel_closed)
+
 	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
 	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
 	## 需要再套一次缩进，否则页签会压在页标题上。
@@ -335,15 +351,21 @@ func _on_internet_join_requested(address: String, port: int, room_name: String) 
 	_set_connect_buttons_disabled(true)
 
 
-## 创建互联网房间：① 本机 host_game（拿到真实端口）→ ② 向大厅注册。
-## 顺序不能反：注册对象里必须带**真实**端口，否则列表里的地址连不上（方案 §4.5）。
+## 创建互联网房间：① 本机 host_game（拿到真实端口）→ ② 连接隧道（自动模式）或直接用
+## 玩家手填的穿透地址（手动模式）→ ③ 向大厅注册。
 ##
-## `tunnel_address` / `tunnel_port` 是**外网能连到房主的地址**（方案 §2.3 A1）：
-## 房主跑完穿透客户端后填进创建表单，或由 UPnP 自动预填。大厅靠它找到房间。
+## 自动模式（路线二）：tunnel_address 为空 → 启动内置隧道客户端 → 等隧道就绪 → 注册。
+## 手动模式：tunnel_address 非空 → 直接用玩家填的穿透地址注册（现有逻辑）。
 func _on_internet_create_requested(room_name: String, tunnel_address: String, tunnel_port: int) -> void:
 	net.player_name = name_edit.text
-	net.upnp_enabled = upnp_check.button_pressed
 	var port := int(host_port_edit.value)
+
+	## 自动模式不需要 UPnP（隧道处理 NAT 穿透）；手动模式保留 UPnP 预填逻辑。
+	if tunnel_address.is_empty():
+		net.upnp_enabled = false
+	else:
+		net.upnp_enabled = upnp_check.button_pressed
+
 	var err: Error = net.host_game(port)
 	if err != OK:
 		_log("创建房间失败：%s" % error_string(err))
@@ -351,8 +373,33 @@ func _on_internet_create_requested(room_name: String, tunnel_address: String, tu
 			_internet_panel.on_create_failed(error_string(err))
 		return
 	_connected = true
-	_log("本机已监听 UDP %d，正在向大厅注册房间「%s」…" % [port, room_name])
 
+	## ── 自动穿透模式：启动隧道客户端，等就绪后注册 ──
+	if tunnel_address.is_empty():
+		if _tunnel_client == null:
+			_log("隧道客户端未初始化，回退到手动模式")
+			if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
+				_internet_panel.on_create_failed("隧道客户端未初始化")
+			return
+		var server_host := _tunnel_client.extract_host_from_url(Global.master_server_url)
+		if server_host.is_empty():
+			_log("无法从大厅地址提取服务器主机名")
+			if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
+				_internet_panel.on_create_failed("无法解析服务器地址")
+			return
+		_pending_internet_room_name = room_name
+		_tunnel_client.setup(server_host)
+		_tunnel_client.start(port)
+		if _internet_panel != null and _internet_panel.has_method("set_tunnel_status"):
+			_internet_panel.set_tunnel_status(
+				"正在连接隧道服务 %s:%d …" % [server_host, _tunnel_client.TUNNEL_TCP_PORT],
+				Color(0.78, 0.84, 0.9))
+		_log("本机已监听 UDP %d，正在连接隧道服务…" % port)
+		_refresh_ui()
+		return
+
+	## ── 手动模式：直接用玩家填的穿透地址注册 ──
+	_log("本机已监听 UDP %d，正在向大厅注册房间「%s」…" % [port, room_name])
 	var payload := {
 		"name": room_name,
 		"hostName": str(net.player_name),
@@ -390,6 +437,62 @@ func _on_internet_room_registered(room: Dictionary, host_token: String) -> void:
 	_log("房间已注册（ID %s），好友可在互联网列表看到。" % _internet_room_id)
 	if _internet_panel != null and _internet_panel.has_method("on_room_registered"):
 		_internet_panel.on_room_registered()
+
+
+# ── 隧道信号处理（路线二：自动穿透）──
+
+## 隧道就绪：用隧道公网地址向大厅注册房间。
+func _on_tunnel_ready(public_address: String, public_port: int) -> void:
+	_log("隧道就绪：公网地址 %s:%d" % [public_address, public_port])
+	if _internet_panel != null and _internet_panel.has_method("set_tunnel_status"):
+		_internet_panel.set_tunnel_status(
+			"✔ 隧道已连接，公网端口 %d" % public_port, Color(0.55, 0.92, 0.6))
+	if _pending_internet_room_name.is_empty():
+		return
+	var room_name := _pending_internet_room_name
+	_pending_internet_room_name = ""
+	var payload := {
+		"name": room_name,
+		"hostName": str(net.player_name),
+		"address": public_address,
+		"port": public_port,
+		"transport": "udp",
+		"currentPlayers": 1,
+		"maxPlayers": Net.MAX_CLIENTS,
+		"difficulty": Global.selected_difficulty,
+		"chapterLabel": _current_chapter_label(),
+		"gameVersion": _changelog_version(),
+		"protocol": Net.PROTOCOL_VERSION,
+	}
+	if _internet_panel != null and _internet_panel.has_method("register_room"):
+		_internet_panel.register_room(payload)
+
+
+## 隧道连接失败：通知面板 + 清理本机 host。
+func _on_tunnel_failed(reason: String) -> void:
+	_log("隧道连接失败：%s" % reason)
+	_pending_internet_room_name = ""
+	if _internet_panel != null and _internet_panel.has_method("set_tunnel_status"):
+		_internet_panel.set_tunnel_status("✖ 隧道连接失败：%s" % reason, Color(1.0, 0.45, 0.4))
+	if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
+		_internet_panel.on_create_failed("隧道连接失败")
+	## host_game 已启动但隧道没通 → 回退到离线
+	if _connected and bool(net.get("is_host")):
+		net.leave()
+		_connected = false
+	_refresh_ui()
+
+
+## 隧道意外断开（非主动 stop）。
+func _on_tunnel_closed() -> void:
+	_log("隧道已断开")
+	if not _internet_room_id.is_empty():
+		## 房间还在大厅但隧道已断 → 清除凭据，房间会自然超时
+		_internet_room_id = ""
+		_internet_host_token = ""
+	if _internet_panel != null and _internet_panel.has_method("set_tunnel_status"):
+		_internet_panel.set_tunnel_status("隧道已断开", Color(1.0, 0.85, 0.3))
+	_refresh_ui()
 
 
 func _process(delta: float) -> void:
@@ -848,12 +951,19 @@ func _on_leave_pressed() -> void:
 ## 若本机是互联网房主，向大厅销掉房间并清本地凭据（方案 §4.6）。
 func _delete_internet_room_if_host() -> void:
 	if _internet_room_id.is_empty():
+		## 即使没注册成功（如隧道还在连接中），也要停隧道
+		if _tunnel_client != null and _tunnel_client.is_active():
+			_tunnel_client.stop()
 		return
 	if _internet_panel != null and _internet_panel.has_method("delete_room"):
 		_internet_panel.delete_room(_internet_room_id, _internet_host_token)
 		_log("已通知大厅关闭房间 %s" % _internet_room_id)
 	_internet_room_id = ""
 	_internet_host_token = ""
+	## 停止隧道（路线二：房主退出时自动释放）
+	if _tunnel_client != null and _tunnel_client.is_active():
+		_tunnel_client.stop()
+		_log("隧道已释放")
 
 
 func _on_character_selected(index: int) -> void:

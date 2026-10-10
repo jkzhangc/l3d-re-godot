@@ -55,7 +55,13 @@ var _apply_url_btn: Button
 
 # ── create 视图控件 ──
 var _room_name_edit: LineEdit
-## 穿透地址 / 穿透端口（方案 §2.3 A1）：
+## 自动穿透（路线二）：勾选后房主无需手填穿透地址，游戏自动连中继拿公网端口。
+var _auto_tunnel_check: CheckBox
+var _tunnel_status_label: Label
+## 手动穿透的地址 / 端口行容器（自动模式时隐藏）。
+var _tunnel_addr_row: HBoxContainer
+var _tunnel_port_row: HBoxContainer
+## 穿透地址 / 穿透端口（方案 §2.3 A1，手动模式）：
 ## 房主跑起穿透客户端后，把"外网能连到的那个地址与端口"填进来 —— 大厅靠它找到房间。
 var _tunnel_addr_edit: LineEdit
 var _tunnel_port_edit: SpinBox
@@ -315,13 +321,16 @@ func _update_self_check() -> void:
 	## 三步自检（方案 §4.5）：这里只做**展示**，真实门槛由 lobby 侧在创建前填。
 	##   ① 本机端口监听 —— 由 Net.host_game() 结果决定，此处先给中性文案
 	##   ② 路由器端口映射 / UPnP —— 由 Net.upnp_port_mapped / upnp_mapping_failed 决定
-	##   ③ 穿透隧道连通 —— M1 靠玩家自行确认（方案 §4.5 步骤 3 列 M2 才自动化）
+	##   ③ 穿透隧道连通 —— 自动模式由隧道客户端状态决定；手动模式靠玩家自行确认
 	if _self_check_labels.size() < 3:
 		return
 	var upnp_ok: bool = int(Net.get("_upnp_mapped_port")) > 0
 	_self_check_labels[0].text = "① 本机端口监听      ⏳ 创建时检测"
 	_self_check_labels[1].text = "② 路由器端口映射    %s" % ("✔ UPnP 已映射" if upnp_ok else "⏳ 创建时尝试")
-	_self_check_labels[2].text = "③ 穿透隧道连通      ⏳ 请确认穿透客户端日志显示 connected"
+	if is_auto_tunnel():
+		_self_check_labels[2].text = "③ 隧道自动连接      ⏳ 点击创建后自动连接"
+	else:
+		_self_check_labels[2].text = "③ 穿透隧道连通      ⏳ 请确认穿透客户端日志显示 connected"
 
 
 func _on_confirm_create() -> void:
@@ -331,22 +340,27 @@ func _on_confirm_create() -> void:
 	if room_name.is_empty():
 		_set_status(_create_status, "请先填写房间名称", COLOR_ERROR)
 		return
-	## 穿透地址是**必填**：大厅必须知道外网往哪连，否则房主在列表里是个连不上的死房
-	## （方案 §4.5 的意图）。UPnP 成功时这里会被自动预填。
+	Global.last_room_name = room_name
+	_create_status.text = ""
+
+	## 自动穿透（路线二）：地址留空，大厅脚本启动隧道客户端获取公网地址。
+	if is_auto_tunnel():
+		_set_status(_create_status, "正在连接隧道服务…", COLOR_HINT)
+		create_requested.emit(room_name, "", 0)
+		return
+
+	## 手动模式：穿透地址必填 —— 大厅必须知道外网往哪连，否则死房（方案 §4.5）。
 	var tunnel_addr := ""
 	if _tunnel_addr_edit != null:
 		tunnel_addr = _tunnel_addr_edit.text.strip_edges()
 	if tunnel_addr.is_empty():
 		_set_status(_create_status,
-			"请填写「穿透地址」—— 外网能连到你这台机器的地址（跑完穿透客户端后它会给出）",
+			"请填写「穿透地址」，或勾选上方「自动穿透」让游戏自动配置",
 			COLOR_ERROR)
 		return
 	var tunnel_port := 27015
 	if _tunnel_port_edit != null:
 		tunnel_port = int(_tunnel_port_edit.value)
-
-	Global.last_room_name = room_name
-	_create_status.text = ""
 	create_requested.emit(room_name, tunnel_addr, tunnel_port)
 
 
@@ -356,6 +370,33 @@ func prefill_tunnel_address(address: String, port: int) -> void:
 		_tunnel_addr_edit.text = address
 	if _tunnel_port_edit != null and port > 0:
 		_tunnel_port_edit.value = float(port)
+
+
+## 自动穿透模式是否开启（由大厅脚本在创建房间时查询）。
+func is_auto_tunnel() -> bool:
+	return _auto_tunnel_check != null and _auto_tunnel_check.button_pressed
+
+
+## 由大厅脚本更新隧道连接状态（自动模式下展示给房主看）。
+func set_tunnel_status(text: String, color: Color) -> void:
+	if _tunnel_status_label != null:
+		_tunnel_status_label.text = text
+		_tunnel_status_label.add_theme_color_override("font_color", color)
+
+
+## 自动 / 手动穿透切换：显示或隐藏手动地址行。
+func _on_auto_tunnel_toggled() -> void:
+	var auto := is_auto_tunnel()
+	if _tunnel_addr_row != null:
+		_tunnel_addr_row.visible = not auto
+	if _tunnel_port_row != null:
+		_tunnel_port_row.visible = not auto
+	if _tunnel_status_label != null:
+		_tunnel_status_label.visible = auto
+		if auto:
+			_tunnel_status_label.text = "点击创建后将自动连接隧道服务…"
+	## 更新自检文案
+	_update_self_check()
 
 
 # ─────────────────────────── 加载 / 冷启动阶梯 ───────────────────────────
@@ -515,37 +556,52 @@ func _build_create_view() -> Control:
 	limit_tag.text = "人数上限    4（固定）"
 	limit_row.add_child(limit_tag)
 
-	## 穿透地址 / 端口（方案 §2.3 A1）：外网能连到的地址。
-	## 跑完穿透客户端后（playit.gg / 自建 frps），它会给出这样一对值。
-	var tunnel_row := HBoxContainer.new()
-	tunnel_row.add_theme_constant_override("separation", 8)
-	root.add_child(tunnel_row)
+	## 自动穿透（路线二）：勾选后游戏内置隧道客户端自动连中继，房主无需手动配置穿透。
+	_auto_tunnel_check = CheckBox.new()
+	_auto_tunnel_check.text = "自动穿透（推荐）"
+	_auto_tunnel_check.button_pressed = true
+	_auto_tunnel_check.pressed.connect(_on_auto_tunnel_toggled)
+	root.add_child(_auto_tunnel_check)
+
+	## 隧道状态：自动模式下展示连接进度（由大厅脚本调 set_tunnel_status 更新）。
+	_tunnel_status_label = Label.new()
+	_tunnel_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tunnel_status_label.add_theme_color_override("font_color", COLOR_HINT)
+	root.add_child(_tunnel_status_label)
+
+	## 手动穿透地址 / 端口（方案 §2.3 A1，自动模式时隐藏）。
+	_tunnel_addr_row = HBoxContainer.new()
+	_tunnel_addr_row.add_theme_constant_override("separation", 8)
+	root.add_child(_tunnel_addr_row)
 	var tunnel_tag := Label.new()
 	tunnel_tag.text = "穿透地址"
-	tunnel_row.add_child(tunnel_tag)
+	_tunnel_addr_row.add_child(tunnel_tag)
 	_tunnel_addr_edit = LineEdit.new()
 	_tunnel_addr_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_tunnel_addr_edit.max_length = 253
 	_tunnel_addr_edit.placeholder_text = "如 8.138.99.96 或 xxx.playit.gg"
-	tunnel_row.add_child(_tunnel_addr_edit)
+	_tunnel_addr_row.add_child(_tunnel_addr_edit)
 
-	var tunnel_port_row := HBoxContainer.new()
-	tunnel_port_row.add_theme_constant_override("separation", 8)
-	root.add_child(tunnel_port_row)
+	_tunnel_port_row = HBoxContainer.new()
+	_tunnel_port_row.add_theme_constant_override("separation", 8)
+	root.add_child(_tunnel_port_row)
 	var tunnel_port_tag := Label.new()
 	tunnel_port_tag.text = "穿透端口"
-	tunnel_port_row.add_child(tunnel_port_tag)
+	_tunnel_port_row.add_child(tunnel_port_tag)
 	_tunnel_port_edit = SpinBox.new()
 	_tunnel_port_edit.min_value = 1.0
 	_tunnel_port_edit.max_value = 65535.0
 	_tunnel_port_edit.value = 27015.0
-	tunnel_port_row.add_child(_tunnel_port_edit)
+	_tunnel_port_row.add_child(_tunnel_port_edit)
 	var tunnel_port_hint := Label.new()
 	tunnel_port_hint.text = "穿透客户端分配的公网端口（可能与本机端口不同）"
 	tunnel_port_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tunnel_port_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tunnel_port_hint.add_theme_color_override("font_color", COLOR_HINT)
-	tunnel_port_row.add_child(tunnel_port_hint)
+	_tunnel_port_row.add_child(tunnel_port_hint)
+
+	## 初始状态：自动模式 → 隐藏手动行。
+	_on_auto_tunnel_toggled()
 
 	var conn_title := Label.new()
 	conn_title.text = "── 连通性 ──"
