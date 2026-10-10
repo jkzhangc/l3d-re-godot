@@ -15,7 +15,15 @@ func _ready() -> void:
 	## 纯本地表现（各端显示自己角色的台词），不暂停游戏；延后一帧等场景节点就绪。
 	call_deferred("_spawn_safehouse_dialogue")
 	var net: Node = get_node_or_null("/root/Net")
-	if net and net.has_method("is_online_session") and net.is_online_session():
+	## ★A* 网格预构建**必须在联机早退之前、且排除联机客户端**（2026-10-10 修「主机端加载慢」）：
+	## 此前它在 `is_online_session()` 的 `return` 之后 → 联机**从不预构建**，
+	## 主机上第一只敌人进入追击时才同步建 AStarGrid2D（大图要卡一帧甚至更久）。
+	## 仅 Host / 单机需要（客户端敌人是纯表现镜像、不寻路），故排除联机客户端不浪费其开销。
+	## `tick_build` 在 _physics_process 里已全局驱动（客户端跑到也是空转，成本可忽略）。
+	var is_online := net != null and net.has_method("is_online_session") and bool(net.is_online_session())
+	if not (is_online and not bool(net.get("is_host"))):
+		call_deferred("_prebuild_astar")
+	if is_online:
 		# D2 实测修复：联机此前直接 return，跳过 _align_actor_layers —— 预置玩家留在
 		# DecorLayer/PlayerSpawn 中间层，NetworkWorld 的动态玩家也跟着挂进去；
 		# y_sort 只能按 PlayerSpawn 的固定 y 排序整队 → 丧尸层级永远盖过联机玩家。
@@ -64,9 +72,6 @@ func _ready() -> void:
 		"有" if not Global.checkpoint.is_empty() else "无"
 	])
 	_spawn_switch_manager()
-	# 预构建 A* 寻路网格（延迟到本帧节点就绪后），
-	# 避免首个敌人追击时才同步创建 AStarGrid2D 造成卡顿
-	call_deferred("_prebuild_astar")
 	# 玩家与敌人必须在同一个 y 排序容器里，两者之间的遮挡才正确（见 _align_actor_layers）
 	call_deferred("_align_actor_layers")
 

@@ -48,10 +48,18 @@ var _extra_delay: float = 0.0
 var _interval_ema: float = 0.0
 var _last_decay_time: float = 0.0
 
+## ── 有限外推（2026-10-10，仅远端敌人启用）──
+## 当渲染延迟**小于**快照间隔时（用户要求敌人 15ms < 16.7ms），缓冲每个周期会干涸一小段，
+## 纯插值只能"停在最新样本"→ 表现为**一卡一卡**。允许在样本耗尽后按最近速度**短暂外推**，
+## 把这一小段补平。外推上限取 1 个快照间隔的时长，且限制位移 —— 外推过远会在敌人急停/
+## 转向时"冲出去再弹回"，比轻微卡顿更糟。
+var _extrapolate: bool = false
+## 外推的最大时长（秒）。≈ 1 个 60Hz 快照间隔，刚好覆盖缓冲干涸 + 轻微抖动。
+const MAX_EXTRAPOLATE_SECONDS := 0.017
 
-## `render_delay` = 延迟**下限**（≈ 2.2 个快照间隔）；
-## `max_delay` = 生效延迟**硬上限**，≤ 0 时退化为 `下限 × MAX_DELAY_MULT`。
-func _init(render_delay: float, max_delay: float = -1.0) -> void:
+## `extrapolate` = 是否启用有限外推（默认关闭：远端玩家已调好，不引入外推副作用）。
+func _init(render_delay: float, max_delay: float = -1.0, extrapolate: bool = false) -> void:
+	_extrapolate = extrapolate
 	_base_delay = maxf(render_delay, 0.0)
 	_max_delay = max_delay if max_delay > 0.0 else _base_delay * MAX_DELAY_MULT
 	if _max_delay < _base_delay:
@@ -124,7 +132,17 @@ func sample_render_position() -> Variant:
 	var render_time := now - render_delay()
 	var newest: Dictionary = _samples[_samples.size() - 1]
 	if render_time >= float(newest["t"]):
-		# 新样本之后没有更多数据：停在最新位置等待下一包（不外推）。
+		# 新样本之后没有更多数据。
+		if _extrapolate:
+			## 有限外推：按最近两个样本的速度往未来推，但**最多推 MAX_EXTRAPOLATE_SECONDS**，
+			## 且样本不足 2 个时不推。补平"延迟 < 快照间隔"造成的缓冲干涸（一卡一卡）。
+			var lead := minf(render_time - float(newest["t"]), MAX_EXTRAPOLATE_SECONDS)
+			if lead > 0.0 and _samples.size() >= 2:
+				var prev: Dictionary = _samples[_samples.size() - 2]
+				var span := maxf(float(newest["t"]) - float(prev["t"]), 0.0001)
+				var velocity := (newest["pos"] as Vector2 - prev["pos"] as Vector2) / span
+				return (newest["pos"] as Vector2) + velocity * lead
+		# 不外推（或外推不可用）：停在最新位置等待下一包。
 		return newest["pos"]
 	var oldest: Dictionary = _samples[0]
 	if render_time <= float(oldest["t"]):

@@ -4643,9 +4643,15 @@ func _register_untracked_host_enemies(delta: float = -1.0) -> void:
 		var public_state := _public_enemy_state(entity_id)
 		var ready_client_count := 0
 		for peer_id: int in net.get_peer_ids():
-			# 只向已完成本场景 world_snapshot 的 Client 发场景节点 RPC，
-			# 避免 Client 尚在切图时出现 "NetworkWorld not found" 在途包错误。
-			if peer_id > 1 and _players.has(peer_id):
+			# 只向「已完成本场景 scene-ready」的 Client 发场景节点 RPC，避免对方尚在切图时
+			# 收到指向不存在节点的包（客户端报 "Node not found: Map0136/NetworkWorld" +
+			# "Requested node was not found"）。
+			## ⚠ 判据必须是 `_ready_client_peers` 而**不是** `_players`（2026-10-10 修）：
+			## 注释本意一直是"已就绪"，但旧实现查的是 `_players` —— 它在 `_host_initialize_world`
+			## 里对**所有** peer 都填入（含尚未上报 ready 的客户端）→ 主机切图后立刻把
+			## spawn_network_enemy 发给还在旧场景的客户端 → 对方按新路径找不到节点而报错刷屏。
+			## 快照路径（_active_client_peer_ids）一直用的是 _ready_client_peers，唯有此处漏了。
+			if peer_id > 1 and _ready_client_peers.has(peer_id):
 				spawn_network_enemy.rpc_id(peer_id, public_state)
 				ready_client_count += 1
 		print("[NetworkWorld] HOST_ENEMY_REGISTERED id=%d path=%s clients=%d" % [entity_id, scene_path, ready_client_count])

@@ -478,11 +478,14 @@ var _current_char_index: int = 0
 ## 远端敌人位置插值：快照样本按固定延迟渲染，取代旧的指数平滑
 ## （旧的每帧 lerp 会让远端实体起停带"摩擦力"观感）。
 const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.gd")
-## 敌人快照跟随 player_snapshot 到达（60Hz），延迟下限与玩家同源下调到 22ms
-## （2026-10-10 用户："最小延迟控制在 20ms"）；抖动时才由插值器自己抬高。
-const NETWORK_RENDER_DELAY := 0.022
+## 敌人快照跟随 player_snapshot 到达（60Hz）。
+## 2026-10-10（用户：敌人移动"一卡一卡"，要求延迟降到 ~15ms）：
+##   · 下限降到 0.015（15ms）—— 已**低于** 60Hz 快照间隔 16.7ms，纯插值会因缓冲干涸而卡；
+##   · 因此敌人插值器**开启有限外推**（第 3 个参数 true），在样本耗尽时按速度补一小段，
+##     把"一卡一卡"抹平。远端玩家仍用纯插值（已确认流畅，不引入外推副作用）。
+const NETWORK_RENDER_DELAY := 0.015
 ## 生效延迟**硬上限**（抖动时不无限膨胀，延迟可预期）。
-const NETWORK_MAX_RENDER_DELAY := 0.055
+const NETWORK_MAX_RENDER_DELAY := 0.045
 
 var _remote_interp: Variant = null
 
@@ -530,7 +533,7 @@ func _ready() -> void:
 		max_hp *= Global.difficulty_enemy_hp()
 	current_hp = max_hp
 	_facing = initial_facing
-	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY)
+	_remote_interp = NETWORK_SNAPSHOT_INTERP.new(NETWORK_RENDER_DELAY, NETWORK_MAX_RENDER_DELAY, true)
 	# 俯视角：浮动模式，所有碰撞都是墙壁
 	motion_mode = MOTION_MODE_FLOATING
 	# 敌人之间正常碰撞（move_and_collide 滑墙会自然推开）
