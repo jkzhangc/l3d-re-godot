@@ -80,7 +80,10 @@ release/config.json
 release/l3d_error_log.txt
 
 # 外部工具目录（Trae 等第三方 AI 工具的工作文件，非项目源）
-/.trae/
+# ⚠ 但 `.trae/skills/` 是本项目**主动维护**的复用流程（部署/验收等），需要入库共享；
+# 故逐目录忽略，而不是整目录忽略。
+/.trae/documents/
+/.trae/*.md
 
 # 安卓签名密钥库 —— 切勿入库（泄露 = 别人能冒名签发你的应用）
 *.keystore
