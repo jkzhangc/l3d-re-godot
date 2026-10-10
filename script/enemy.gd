@@ -478,11 +478,11 @@ var _current_char_index: int = 0
 ## 远端敌人位置插值：快照样本按固定延迟渲染，取代旧的指数平滑
 ## （旧的每帧 lerp 会让远端实体起停带"摩擦力"观感）。
 const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.gd")
-## 敌人快照跟随 player_snapshot 到达（2026-10-01 起与玩家同为 **60Hz**），
-## 延迟下限取 ≈ 2.2 个快照间隔（16.7ms × 2.2 ≈ 37ms）；抖动时才由插值器自己抬高。
-const NETWORK_RENDER_DELAY := 0.037
-## 生效延迟**硬上限**（用户 2026-10-01："网络有 100ms 也尽量保持 70ms 左右"）。
-const NETWORK_MAX_RENDER_DELAY := 0.070
+## 敌人快照跟随 player_snapshot 到达（60Hz），延迟下限与玩家同源下调到 22ms
+## （2026-10-10 用户："最小延迟控制在 20ms"）；抖动时才由插值器自己抬高。
+const NETWORK_RENDER_DELAY := 0.022
+## 生效延迟**硬上限**（抖动时不无限膨胀，延迟可预期）。
+const NETWORK_MAX_RENDER_DELAY := 0.055
 
 var _remote_interp: Variant = null
 

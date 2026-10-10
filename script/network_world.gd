@@ -540,8 +540,13 @@ func _physics_process(delta: float) -> void:
 				## ⚠ 客户端 `_apply_client_snapshot(states, false)` 对空数组是 no-op
 				## （「不在快照即回收」的收敛只走 snap=true 的可靠重同步），故传空数是安全的。
 				var enemy_states: Array = _build_enemy_snapshot(true)
-				for peer_id: int in snapshot_targets:
-					player_snapshot.rpc_id(peer_id, [], enemy_states)
+				## ★按条数切包（2026-10-10 修 MTU 报错）：敌人一多，整包序列化会超过
+				## ENet MTU(1392)（实测 1448B），引擎报 "Sending ... above the MTU" 并丢包。
+				## 切成多个不可靠小包：单包丢失只影响该包内的敌人，下一帧重发；客户端
+				## `_apply_client_enemy_snapshot(states, false)` 对每包独立 ensure/更新，可安全分片。
+				for chunk: Array in _chunk_enemy_snapshot(enemy_states):
+					for peer_id: int in snapshot_targets:
+						player_snapshot.rpc_id(peer_id, [], chunk)
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
@@ -4682,6 +4687,31 @@ func _build_enemy_snapshot(compact: bool = false) -> Array:
 	else:
 		states.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["entity_id"]) < int(b["entity_id"]))
 	return states
+
+
+## 每包最多携带的敌人条数（2026-10-10 实测标定，**非估算**）：
+## 紧凑条目（9 元素）单条序列化恒为 **84 B**；整包 var_to_bytes 实测：
+##   15 条 = 1284 B（安全）、18 条 = 1536 B（**超过 ENet MTU 1392**，正是用户实测报错）。
+## 取 12 条 = 1008 B，为浮点编码波动与 RPC 头留足余量。
+## ⚠ 调大前必须重测 —— 跨过 MTU 会让 ENet 静默丢整包（客户端一批敌人集体卡住）。
+const ENEMY_SNAPSHOT_CHUNK_SIZE := 12
+
+
+## 把敌人紧凑快照切成可安全塞进单个 ENet 包的多个小包。
+## 为什么要切：ENet MTU=1392，敌人一多整包就超限，引擎直接报错 + 丢包
+## （用户 2026-10-10 实测 "Sending 1448 bytes ... above the MTU"）。
+## 客户端 `_apply_client_enemy_snapshot(states, false)` 对每个小包独立 ensure/更新，
+## 不依赖「一次收全」，因此分片是安全的；某片丢失只影响该片内的敌人（下一帧重发）。
+func _chunk_enemy_snapshot(states: Array) -> Array:
+	var chunks: Array = []
+	if states.is_empty():
+		return chunks
+	var index := 0
+	while index < states.size():
+		var end: int = mini(index + ENEMY_SNAPSHOT_CHUNK_SIZE, states.size())
+		chunks.append(states.slice(index, end))
+		index = end
+	return chunks
 
 
 func _public_enemy_state(entity_id: int) -> Dictionary:

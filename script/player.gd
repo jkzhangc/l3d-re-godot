@@ -179,6 +179,17 @@ var _network_prediction_initialized: bool = false
 ## 视为已对齐并清除目标。
 const NETWORK_CORRECTION_SNAP_DISTANCE := 96.0
 const NETWORK_CORRECTION_DEAD_ZONE := 0.5
+## ── 期望网络滞后带宽（2026-10-10 修「果冻感/回弹」根因）──
+## 客户端收到的 Host 权威坐标**天生落后** `速度 × RTT`（输入上去 RTT/2 + 快照回来 RTT/2）。
+## 旧死区只有 0.5px → 每帧都把这十几像素往回拽：有效移速被吃掉、拉扯成「果冻」，
+## 停下瞬间残留滞后又被快速纠回 = 「回弹」。现在把这个**可预期的滞后**计入死区：
+## 稳态滞后落在带宽内 → 不纠偏（预测领先就是对的）；只有**超出**滞后带宽（真不同步/
+## 丢包/切图）才纠。Host 的命中校验用它自己模拟的权威坐标，客户端显示领先十几像素无害。
+const NETWORK_CORRECTION_RTT_FALLBACK := 0.05
+## 停止移动后滞后预算的衰减速率（px/s²）：平滑回落，避免「一停就弹回」。
+const NETWORK_CORRECTION_SPEED_DECAY := 300.0
+## 近期速度峰值（平滑衰减）：用于估算期望滞后。停止后逐步归零。
+var _network_recent_speed: float = 0.0
 const NETWORK_CORRECTION_MOVE_RATE := 10.0
 ## 静止时的收敛速率（09-22 实测定案）：动作（挥刀/推击/拾取）都发生在静止瞬间，
 ## 而 Host 的命中查询/距离校验按权威坐标做 —— 移动中保持平滑预测（消除瞬移感），
@@ -205,13 +216,13 @@ const SpecialAction := preload("res://script/player_special_action_service.gd")
 const DeathService := preload("res://script/player_death_service.gd")
 
 ## 远端玩家位置插值：快照样本按**自适应**固定延迟渲染，取代旧的指数平滑。
-## 2026-10-01（用户："尽量让玩家感觉不到延迟"）：本值是**延迟下限**，取 ≈ 2.2 个 60Hz 快照间隔
-## （16.7ms × 2.2 ≈ 37ms，原固定 50ms）；网络抖动时插值器自己临时加缓冲，
-## 平稳时不再白等那 13ms。见 `script/network_snapshot_interp.gd` 顶部说明。
-const NETWORK_RENDER_DELAY := 0.037
-## 生效延迟**硬上限**（用户 2026-10-01："网络有 100ms 也尽量保持 70ms 左右"）：
-## 抖动再持续，远端玩家也不会被渲染得比 70ms 更旧。
-const NETWORK_MAX_RENDER_DELAY := 0.070
+## 2026-10-10（用户："客户端要体感上没延迟，最小延迟控制在 20ms"）：下限从 37ms 降到 22ms
+## （≈1.3 个 60Hz 快照间隔）；抖动时插值器自己临时加缓冲，平稳时不再白等那 15ms。
+## ⚠ 再往下压就低于 1 个快照间隔 → 会出现"样本用尽→停在最新位置"的顿感；
+## 由插值器的自适应层兜底（`network_snapshot_interp.gd`）。
+const NETWORK_RENDER_DELAY := 0.022
+## 生效延迟**硬上限**：抖动再持续，远端玩家也不会被渲染得比 55ms 更旧（延迟可预期）。
+const NETWORK_MAX_RENDER_DELAY := 0.055
 
 var _remote_interp: Variant = null
 var _network_attack_token: int = 0
@@ -451,20 +462,25 @@ func _process(delta: float) -> void:
 		if network_local_prediction and not _is_dying and _network_has_target:
 			var error := _network_target_position - global_position
 			var error_length := error.length()
+			## 期望滞后带宽 = 近期速度 × RTT（即"本预测领先权威多少属正常"）。
+			## 稳态移动时误差恰好落在此带宽内 → 不纠偏，预测领先就让它领先；
+			## 只有超出（真不同步/丢包/切图残留）才纠。这消除了逐帧回拽的果冻感。
+			var recent_speed := _update_network_recent_speed(delta)
+			var expected_lag := recent_speed * _network_rtt_seconds()
+			var dead_band: float = maxf(NETWORK_CORRECTION_DEAD_ZONE, expected_lag)
 			if error_length > NETWORK_CORRECTION_SNAP_DISTANCE:
 				# 大偏差（丢包/传送/切图残留）才硬校准
 				global_position = _network_target_position
 				_network_has_target = false
-			elif error_length <= NETWORK_CORRECTION_DEAD_ZONE:
+			elif error_length <= dead_band:
+				# 落在期望滞后带宽内：这是网络延迟的正常表现，不动它。
 				_network_has_target = false
 			else:
-				# 小偏差（LAN 稳态 ≈ 速度×RTT，通常 < 5px）：帧率无关的指数收敛。
-				# 旧实现用恒定速度拖拽（移动中 480 / 停止后 720 px/s），误差稍大时
-				# 玩家位置会被"拽"过去 → 观感为「莫名短距离瞬移」（09-22 实测）。
-				# 指数收敛起步快、尾段柔和，且与帧率解耦。
+				# 超出带宽的**真实**偏差：帧率无关的指数收敛（只收超出部分）。
 				var moving_now := not velocity.is_zero_approx()
 				var rate := NETWORK_CORRECTION_MOVE_RATE if moving_now else NETWORK_CORRECTION_IDLE_RATE
-				global_position += error * (1.0 - exp(-rate * delta))
+				var excess := error_length - dead_band
+				global_position += error.normalized() * excess * (1.0 - exp(-rate * delta))
 		elif not network_local_prediction and not _is_dying and _network_has_target:
 			# 远端玩家：按固定延迟在两个快照样本间插值，起停干脆、匀速贴合。
 			var render_position: Variant = _remote_interp.sample_render_position()
@@ -633,6 +649,29 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 ## NetworkWorld 用它区分"首次校准"（硬定位）与"定期可靠重同步"（软并流）。
 func has_network_position_tracking() -> bool:
 	return _network_has_target
+
+
+## 近期速度峰值（平滑衰减）。用于估算"本预测应领先权威多少像素"。
+## 只取峰值、只向上刷新：速度突变时立刻抬高期望滞后（避免起步瞬间被当偏差纠回），
+## 停下后按 SPEED_DECAY 平滑回落（避免停的一刹那就把残留滞后纠回去 = 回弹）。
+func _update_network_recent_speed(delta: float) -> float:
+	var speed := velocity.length()
+	if speed > _network_recent_speed:
+		_network_recent_speed = speed
+	else:
+		_network_recent_speed = maxf(0.0, _network_recent_speed - NETWORK_CORRECTION_SPEED_DECAY * delta)
+	return _network_recent_speed
+
+
+## 本机 ↔ 主机的单程估计（秒）。用 Net.rtt_ms（往返），没有则用保守回退值 ——
+## 宁可高估滞后带宽（少纠一点、更顺滑），也不要低估（多纠一点、发果冻）。
+func _network_rtt_seconds() -> float:
+	var net: Node = get_node_or_null("/root/Net")
+	if net != null:
+		var rtt: int = int(net.get("rtt_ms"))
+		if rtt > 0:
+			return float(rtt) / 1000.0
+	return NETWORK_CORRECTION_RTT_FALLBACK
 
 
 ## 本地预测玩家专用：把 Host 权威坐标登记为纠偏目标，绝不直接写位置。
