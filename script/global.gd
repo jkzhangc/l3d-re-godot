@@ -296,11 +296,12 @@ var changelog_seen_version: String = ""
 ## 只影响测试进程（游戏内正常运行无此问题）；**默认 false**，任何游戏逻辑都不得依赖它。
 var suppress_hit_presentation: bool = false
 
-## 互联网大厅（Master Server）基址。空 = 用 lobby_client 的本地开发默认值。
-## ⚠ 只接受 https://，或本地开发用的 http://127.0.0.1 / http://localhost ——
-## Android 9+ 默认禁止明文 HTTP，配了公网 http 会让移动端大厅整体不可用。
-## 详见 `互联网联机模式策划方案.md` §5.1（C13）与 script/lobby_client.gd 的 setup()。
-var master_server_url: String = ""
+## 互联网大厅（Master Server）基址。**默认指向已部署的公网服务器**，玩家可在
+## 互联网面板里改（改后写入 user://config.json，手机端也可持久化）。
+## ⚠ 明文 http：Android 的 cleartext 限制主要作用于 Java 网络栈，而 Godot 的
+## `HTTPRequest` 走引擎自带的原生 socket，**是否被拦尚需真机实测**（2026-10-10 结论放宽）。
+## 若手机端确实失败，改填 `https://` 域名即可。详见 lobby_client.gd 的 setup()。
+var master_server_url: String = "http://8.138.99.96:10000"
 
 ## 上次使用的房间名（大厅「创建互联网房间」表单回填用）。
 var last_room_name: String = ""
@@ -1149,7 +1150,11 @@ func _apply_config_file(path: String) -> void:
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
-	master_server_url = str(cfg.get("master_server_url", master_server_url))
+	## ★空串视为"未设置"，不覆盖 —— 否则随包的旧 config.json（或手机上的空值）会把
+	## 代码里的默认大厅地址顶掉，玩家会看到"连不上 127.0.0.1"这种莫名其妙的现象。
+	var cfg_url := str(cfg.get("master_server_url", "")).strip_edges()
+	if not cfg_url.is_empty():
+		master_server_url = cfg_url
 	last_room_name = str(cfg.get("last_room_name", last_room_name))
 	_apply_touch_layout(cfg.get("touch_layout", null))
 	_apply_touch_hidden(cfg.get("touch_hidden", null))

@@ -49,6 +49,9 @@ var _list_status: Label
 var _refresh_btn: Button
 var _create_btn: Button
 var _last_update_label: Label
+## 大厅地址输入（手机端唯一可改地址的入口，见 _build_list_view 注释）。
+var _server_url_edit: LineEdit
+var _apply_url_btn: Button
 
 # ── create 视图控件 ──
 var _room_name_edit: LineEdit
@@ -124,7 +127,7 @@ func delete_room(room_id: String, host_token: String) -> void:
 
 ## 当前是否配置好了大厅地址（未配置时创建/列表都应提示）。
 func is_ready() -> bool:
-	return _client != null
+	return _client != null and not _client.base_url.is_empty()
 
 # ─────────────────────────── 客户端接线 ───────────────────────────
 
@@ -140,10 +143,14 @@ func _setup_client() -> void:
 	if not _client.setup(url):
 		_set_status(_list_status, "大厅地址不安全或无效：%s" % url, COLOR_ERROR)
 		return
-	## 移动端 + 明文 http：Android 9+ 会直接拒绝，提前说清楚而不是让玩家看到"连不上"。
+	## 同步输入框（地址可能来自默认值 / 上次保存 / 外部改动）。
+	if _server_url_edit != null:
+		_server_url_edit.text = url
+	## 明文 http 在移动端**是否被拦尚未实测确认**（Godot 走原生 socket，未必受
+	## Java 层 cleartext 策略影响，见 lobby_client.gd 注释）——这里只提示、不阻断。
 	if not _client.is_mobile_safe():
 		_set_status(_list_status,
-			"当前大厅地址是明文 HTTP，安卓端无法连接；请等大厅启用 HTTPS 域名后再用手机联机。",
+			"提示：当前是明文 HTTP，若手机端连不上，请把地址改成 https:// 域名。",
 			COLOR_WARN)
 	_client.rooms_received.connect(_on_rooms_received)
 	_client.room_registered.connect(_on_room_registered)
@@ -418,6 +425,25 @@ func _build_list_view() -> Control:
 	title.add_theme_color_override("font_color", COLOR_TITLE)
 	root.add_child(title)
 
+	## 大厅地址：可编辑 + 应用。手机端 config.json 是只读的，这里是**唯一**能改地址的入口；
+	## 备案切 HTTPS 域名时玩家/开发者都不用重新打包。
+	var url_row := HBoxContainer.new()
+	url_row.add_theme_constant_override("separation", 8)
+	root.add_child(url_row)
+	var url_tag := Label.new()
+	url_tag.text = "大厅地址"
+	url_row.add_child(url_tag)
+	_server_url_edit = LineEdit.new()
+	_server_url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_server_url_edit.text = Global.master_server_url
+	_server_url_edit.placeholder_text = "https://你的域名 或 http://IP:端口"
+	_server_url_edit.tooltip_text = "Master Server 地址。改完点右侧「应用」保存。"
+	url_row.add_child(_server_url_edit)
+	_apply_url_btn = Button.new()
+	_apply_url_btn.text = "应用"
+	_apply_url_btn.pressed.connect(_on_apply_url_pressed)
+	url_row.add_child(_apply_url_btn)
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -594,6 +620,36 @@ func _build_load_view() -> Control:
 func _on_refresh_pressed() -> void:
 	_switch_view("list")
 	_refresh_now()
+
+
+## 应用新的 hall 地址：校验 → 持久化 → 重建客户端 → 立即刷新。
+func _on_apply_url_pressed() -> void:
+	var url := _server_url_edit.text.strip_edges()
+	if url == Global.master_server_url:
+		_set_status(_list_status, "大厅地址未变化", COLOR_HINT)
+		return
+	## 先落配置：即便校验失败也不至于把界面改成半截状态。
+	Global.master_server_url = url
+	Global.save_config()
+	_set_status(_list_status, "正在切换到 %s …" % url, COLOR_HINT)
+	_rebuild_client()
+
+
+## 用当前的 `Global.master_server_url` 重建客户端（切换地址 / 重试时复用）。
+##
+## ⚠ `queue_free()` 是**延迟**释放：旧节点要到帧末才真正销毁，其间它仍可能发出信号
+## 干扰新客户端的状态。所以先显式断连、再释放。
+func _rebuild_client() -> void:
+	if _client != null:
+		for sig: String in ["rooms_received", "room_registered", "request_failed",
+				"lobby_unreachable", "waking_up", "rate_limited"]:
+			if _client.is_connected(sig, Callable(self, "_on_" + sig)):
+				_client.disconnect(sig, Callable(self, "_on_" + sig))
+		_client.queue_free()
+		_client = null
+	_setup_client()
+	if is_ready():
+		show_list()
 
 
 func _switch_view(name: String) -> void:
