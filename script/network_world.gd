@@ -276,6 +276,9 @@ const REVIVE_RANGE := 52.0
 const REVIVE_HOLD_RANGE := 88.0
 const REVIVE_DURATION_MSEC := 3000
 const REVIVE_HP_RATIO := 0.30
+## Client 长按救援期间的请求重发间隔：Host 受理是"静默拒绝"（不给回执），若只在目标
+## 变化时发一次，首次被拒后整段长按再无重试机会（用户实测「按了没反应」）→ 周期重发兜底。
+const REVIVE_REQUEST_RETRY_MSEC := 200
 ## 倒地（L4D2 式 incapacitated）：HP=0 不再直接死亡，而是先倒地 —— 躺地表现、
 ## 仍可按 DOWNED_CRAWL_SPEED 爬行，流血池按 DOWNED_BLEED_RATE 每秒递减，
 ## 耗尽后才转为真死亡（不可再救）。数值推进只发生在 Host；Client 通过快照观察。
@@ -568,6 +571,29 @@ func _active_client_peer_ids() -> Array:
 	return out
 
 
+## Host → **已就绪** Client 的表现/状态 RPC 分发入口。
+##
+## 【为什么必须收敛到这一处】`<节点>.rpc(...)` 是**广播给所有已连接 peer**，其中包含
+## "本场景尚未加载完成、还没上报 scene-ready"的 Client。Godot 的 RPC 包按**节点路径**
+## 寻址（本 NetworkWorld 的路径形如 `<场景根>/NetworkWorld`），而对端此刻树里根本没有
+## 这个节点 → 引擎直接打印 `get_node: Node not found: "Map0136/NetworkWorld"` 并弹报错界面
+## （用户实机反复命中；2026-10-10 只修了 `spawn_network_enemy` 一条，其余广播仍漏）。
+## 快照路径（`_physics_process`）一直只发给 `_active_client_peer_ids()`；这里把其余表现
+## 广播也收敛到同一口径。
+## 未就绪 Client 不会因此漏状态：它 ready 后会在 `_accept_ready_peer` 收到**完整可靠世界快照**，
+## 敌人/玩家/掉落物/防守战倒计时都会在那时一次性重建。
+##
+## ⚠ 只用于 `call_remote` 的 Host→Client 广播；`call_local` 语义的 RPC（如
+## `team_wipe_presentation` / `apply_quest_flag_rpc`）仍走 `.rpc()`，否则 Host 自身收不到。
+## ⚠ `_scene_transitioning` 时一律不发：旧场景的 NetworkWorld 已静默，但客户端可能已
+## 先一步切到新场景（其 `NetworkWorld` 尚未 deferred 建好）→ 同样会撞路径找不到。
+func _send_to_ready_clients(method: StringName, args: Array = []) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	for peer_id: int in _active_client_peer_ids():
+		callv("rpc_id", [peer_id, method] + args)
+
+
 func _is_local_menu_open() -> bool:
 	for menu: Node in get_tree().get_nodes_in_group("local_pause_menu"):
 		if menu.has_method("is_menu_open") and menu.is_menu_open():
@@ -753,16 +779,34 @@ func _find_revive_target_for(peer_id: int, max_range: float = REVIVE_RANGE) -> i
 
 func _capture_revive_input() -> bool:
 	var peer_id := int(net.my_peer_id)
-	if Input.is_action_just_pressed("功能键"):
+	if Input.is_action_pressed("功能键"):
+		# ★按住期间**逐帧重算目标**（2026-10-11 用户实测「多人救不了玩家」）。
+		# 旧实现只在 just_pressed 那一帧找目标：只要该帧快照的 downed 字段尚未同步
+		# （target_id=0）或本地预测位置与目标距离瞬时超出范围，整段长按就作废，
+		# 玩家必须松开重按 —— 表现为"按了没反应 / 救不了人"。
+		# 改为按住期间持续重试：目标一旦进入可救状态/范围即补发请求，Host 仍做权威
+		# 复核（`_try_host_start_revive` 幂等：已有进行中的救援不会被重复受理）。
 		var target_id := _find_revive_target_for(peer_id)
 		if target_id > 0:
 			if net.is_host:
-				_try_host_start_revive(peer_id, target_id)
+				if not _revive_attempts.has(peer_id):
+					_try_host_start_revive(peer_id, target_id)
 			elif _client_local_ready:
-				# 本地仅记录按键占用，Host 仍会重新验证目标和距离。
-				_revive_attempts[peer_id] = {"target": target_id, "started_msec": 0}
-				revive_start_request.rpc_id(1, target_id)
+				# 跟随宿主上报本机预测坐标（滞后补偿）：Host 的起救距离校验在权威坐标上做，
+				# 不补偿会把"看着贴在队友身上"判成超出 52px 而静默拒绝。
+				var attempt: Dictionary = _revive_attempts.get(peer_id, {})
+				var now_msec := Time.get_ticks_msec()
+				# 目标变了 → 立即补发；目标没变但已隔 REVIVE_REQUEST_RETRY_MSEC → 也重发一次。
+				# 【为什么要周期重发】Host 的受理是"静默拒绝"（距离/战斗锁定等不满足就 return，
+				# 不给回执）；若只在目标变化时发一次，首次被拒后整段长按就再无重试机会 ——
+				# 仍是"按了没反应"。周期重发让玩家在按住期间持续争取受理（Host 幂等，重复无害）。
+				if int(attempt.get("target", 0)) != target_id \
+						or now_msec - int(attempt.get("sent_msec", 0)) >= REVIVE_REQUEST_RETRY_MSEC:
+					_revive_attempts[peer_id] = {"target": target_id, "started_msec": 0, "sent_msec": now_msec}
+					revive_start_request.rpc_id(1, target_id, _local_claim_position())
 			return true
+		# 按住但暂无目标：维持输入占用（避免同帧抢去触发投掷等），不误吞其它战斗输入。
+		return _revive_attempts.has(peer_id)
 	if Input.is_action_just_released("功能键") and _revive_attempts.has(peer_id):
 		if net.is_host:
 			_cancel_host_revive(peer_id)
@@ -773,17 +817,42 @@ func _capture_revive_input() -> bool:
 	return _revive_attempts.has(peer_id)
 
 
-## Host 权威受理救援开始。目标合法性完全由 _find_revive_target_for 复核：
+## Host 权威受理救援开始。目标合法性在这里复核：
 ## 必须是距离内的"倒地"玩家（站立/真死亡都不行），reviver 自身必须站立且不在
 ## 战斗锁定（装填等）中。Client 的本地记录只是按键占位，这里才是唯一权威起点。
-func _try_host_start_revive(reviver_id: int, target_id: int) -> void:
+## `claimed_position`（可选）为 Client 自报的本机预测坐标（滞后补偿，同拾取/开火）：
+## 真实外网 RTT 下客户端预测位置领先权威坐标 ≈ 速度×RTT，不补偿会把"看着贴着队友"
+## 判成超出 REVIVE_RANGE(52px) 而静默拒绝 —— 这正是用户实测「多人救不了玩家」的成因之一。
+func _try_host_start_revive(reviver_id: int, target_id: int, claimed_position: Variant = null) -> void:
 	if not net.is_host or reviver_id == target_id or not _players.has(reviver_id) or not _players.has(target_id):
 		return
+	if claimed_position is Vector2:
+		_apply_lag_compensated_position(reviver_id, _player_node(_players.get(reviver_id, {})), claimed_position)
 	## 起救仍用 REVIVE_RANGE（严格）；一旦受理，后续按 REVIVE_HOLD_RANGE 滞回。
-	if _is_host_combat_busy(reviver_id) or _find_revive_target_for(reviver_id, REVIVE_RANGE) != target_id:
+	## ⚠ 校验的是**客户端请求的那个目标**（而非 Host 侧重新算出的"最近者"）：
+	## 两端对"最近倒地者"的选择可能因延迟/快照时序不同而发散，旧实现直接判 `!=` 拒绝，
+	## 表现为"明明站在倒地队友身边却救不了"。现在只要求该目标本身合法且在范围内。
+	if _is_host_combat_busy(reviver_id) or not _is_host_revive_target_in_range(reviver_id, target_id, REVIVE_RANGE):
 		return
 	_revive_attempts[reviver_id] = {"target": target_id, "started_msec": Time.get_ticks_msec()}
 	print("[NetworkWorld] HOST_REVIVE_START reviver=%d target=%d" % [reviver_id, target_id])
+
+
+## 指定的 (reviver, target) 组合是否构成一次合法救援起手：reviver 站立、target 倒地、
+## 二者距离 ≤ max_range。与 `_find_revive_target_for` 的区别是**不做最近者筛选** ——
+## Host 受理时只关心"客户端点名的那个目标是否合法"，避免两端最近者判定发散导致误拒。
+func _is_host_revive_target_in_range(reviver_id: int, target_id: int, max_range: float) -> bool:
+	var reviver_entry: Dictionary = _players.get(reviver_id, {})
+	var reviver := _player_node(reviver_entry)
+	if not is_instance_valid(reviver) or reviver.is_network_dead():
+		return false
+	var target_entry: Dictionary = _players.get(target_id, {})
+	if not bool(target_entry.get("downed", false)):
+		return false
+	var target := _player_node(target_entry)
+	if not is_instance_valid(target):
+		return false
+	return reviver.global_position.distance_to(target.global_position) <= max_range
 
 
 ## 诊断用：施救者与目标当前距离（目标无效时返回 -1）。配合上面的取消日志定位"为什么中断"。
@@ -810,7 +879,9 @@ func _update_host_revives() -> void:
 		var target_id := int(attempt.get("target", 0))
 		## 施救中放宽到 REVIVE_HOLD_RANGE（滞回）：见该常量注释 —— 碰撞推挤/倒地爬行
 		## 导致的"中途静默取消"是用户实测「有时救不了」的直接成因。
-		if _find_revive_target_for(reviver_id, REVIVE_HOLD_RANGE) != target_id:
+		## ⚠ 校验的是**正在进行的这个目标**，而非"当前最近倒地者"：多人局里队友移动会
+		## 让"最近者"在施救中途切换，旧实现据此误判 `!=` 并取消正在进行中的救援。
+		if not _is_host_revive_target_in_range(reviver_id, target_id, REVIVE_HOLD_RANGE):
 			var lost_range: float = _revive_distance_to(reviver_id, target_id)
 			print("[NetworkWorld] HOST_REVIVE_CANCEL reviver=%d target=%d reason=超出滞回距离(%.0f) 或目标已非倒地"
 				% [reviver_id, target_id, lost_range])
@@ -836,7 +907,7 @@ func _update_host_revives() -> void:
 		_players[target_id] = target_entry
 		target_node.apply_network_revive_state(hp)
 		_revive_attempts.erase(reviver_id)
-		revive_presentation.rpc(target_id, hp)
+		_send_to_ready_clients(&"revive_presentation", [target_id, hp])
 		print("[NetworkWorld] HOST_REVIVE_COMPLETE reviver=%d target=%d hp=%.1f" % [reviver_id, target_id, hp])
 
 
@@ -1419,7 +1490,7 @@ func _connect_host_enemy_damage_signal(entity_id: int, node: CharacterBody2D) ->
 func _on_host_player_damage_applied(damage: float, position: Vector2, _is_headshot: bool, peer_id: int) -> void:
 	if not net.is_host or damage <= 0.0:
 		return
-	player_hurt_presentation.rpc(peer_id, damage, position)
+	_send_to_ready_clients(&"player_hurt_presentation", [peer_id, damage, position])
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := _player_node(entry)
 	if is_instance_valid(node) and node.current_hp <= 0.0:
@@ -1463,13 +1534,13 @@ func _handle_host_player_downed(peer_id: int) -> void:
 
 func _on_host_enemy_block_applied(position: Vector2, entity_id: int) -> void:
 	if net.is_host:
-		enemy_block_presentation.rpc(entity_id, position)
+		_send_to_ready_clients(&"enemy_block_presentation", [entity_id, position])
 
 
 func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot: bool,
 		backstab: bool, entity_id: int) -> void:
 	if net.is_host and damage > 0.0:
-		enemy_hurt_presentation.rpc(entity_id, damage, position, is_headshot, backstab)
+		_send_to_ready_clients(&"enemy_hurt_presentation", [entity_id, damage, position, is_headshot, backstab])
 
 
 func _add_host_peer(peer_id: int) -> void:
@@ -1583,7 +1654,7 @@ func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
 		node.exit_weapon_mode()
 		node.unlock_facing()
 	_apply_host_throwable_presentation(peer_id)
-	throwable_state_presentation.rpc(peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", 3)))
+	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", 3))])
 	_send_host_facing_lock_state(peer_id)
 
 
@@ -1600,7 +1671,7 @@ func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
 	throw_state["aiming"] = aiming
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
-	throwable_state_presentation.rpc(peer_id, td.item_id, true, aiming, int(throw_state.get("range", 3)))
+	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, aiming, int(throw_state.get("range", 3))])
 	_send_host_facing_lock_state(peer_id)
 
 
@@ -1616,7 +1687,7 @@ func _try_host_adjust_throwable_range(peer_id: int, delta: int) -> void:
 	throw_state["range"] = clampi(int(throw_state.get("range", 3)) + delta, 0, td.throw_range_max)
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
-	throwable_state_presentation.rpc(peer_id, td.item_id, true, true, int(throw_state["range"]))
+	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, true, int(throw_state["range"])])
 
 
 func _try_host_throw_throwable(peer_id: int) -> void:
@@ -1636,12 +1707,12 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 	if state.throwable and state.throwable_count > 0:
 		# 炸药类叠数投掷物：槽没空 → 保留举起外观，只清瞄准状态
 		node.apply_network_throwable_presentation(td, false, false, 3)
-		throwable_state_presentation.rpc(peer_id, td.item_id, false, false, 3)
+		_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, false, false, 3])
 	else:
 		node.apply_network_throwable_presentation(null, false, false, 3)
-		throwable_state_presentation.rpc(peer_id, "", false, false, 3)
+		_send_to_ready_clients(&"throwable_state_presentation", [peer_id, "", false, false, 3])
 	ThrowableProjectile.spawn(td, start, landing_position, node, true, false)
-	throwable_presentation.rpc(peer_id, td.item_id, start, landing_position)
+	_send_to_ready_clients(&"throwable_presentation", [peer_id, td.item_id, start, landing_position])
 	print("[NetworkWorld] HOST_THROWABLE peer=%d item=%s" % [peer_id, td.item_id])
 
 
@@ -1685,7 +1756,7 @@ func _begin_host_weapon_transition(peer_id: int, node: Node2D, wd: WeaponData, r
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
 	_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
 	node.play_network_weapon_transition(wd, raising)
-	weapon_transition_presentation.rpc(peer_id, wd.item_id, raising)
+	_send_to_ready_clients(&"weapon_transition_presentation", [peer_id, wd.item_id, raising])
 	_clear_host_weapon_transition_after(peer_id, duration)
 
 
@@ -1776,7 +1847,7 @@ func _send_host_facing_lock_state(peer_id: int) -> void:
 	var node := _player_node(_players.get(peer_id, {}))
 	if not is_instance_valid(node):
 		return
-	facing_lock_presentation.rpc(peer_id, node.is_facing_locked(), node.get_locked_facing())
+	_send_to_ready_clients(&"facing_lock_presentation", [peer_id, node.is_facing_locked(), node.get_locked_facing()])
 
 
 ## Host 权威换弹：立即提交库存/弹夹结果，并在动画持续时间内锁住射击、切枪和举放。
@@ -1816,7 +1887,7 @@ func _try_host_reload(peer_id: int) -> bool:
 	var duration := _get_network_reload_duration(wd, load_count)
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
 	node.play_network_reload_presentation(wd, load_count)
-	reload_presentation.rpc(peer_id, wd.item_id, current + load_count, load_count)
+	_send_to_ready_clients(&"reload_presentation", [peer_id, wd.item_id, current + load_count, load_count])
 	print("[NetworkWorld] HOST_RELOAD peer=%d weapon=%s loaded=%d ammo=%d" % [peer_id, wd.item_id, load_count, current + load_count])
 	return true
 
@@ -1855,7 +1926,7 @@ func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 	var facing: Vector2 = node.get_facing_vector()
 	node.on_shove_performed()
 	node.play_network_shove_presentation(wd)
-	shove_presentation.rpc(peer_id, wd.item_id)
+	_send_to_ready_clients(&"shove_presentation", [peer_id, wd.item_id])
 	_schedule_host_shove_hit(node, wd, facing)
 	print("[NetworkWorld] HOST_SHOVE peer=%d weapon=%s" % [peer_id, wd.item_id])
 
@@ -1953,12 +2024,12 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 			# 与 attack_presentation 同款：Host 本地直接播，Client 走同一 RPC 广播。
 			if wd.empty_fire_sound:
 				Global.play_sfx_managed(wd.empty_fire_sound, node)
-				empty_fire_presentation.rpc(peer_id, wd.item_id)
+				_send_to_ready_clients(&"empty_fire_presentation", [peer_id, wd.item_id])
 			return
 		state.set_magazine_ammo(wd.item_id, current - 1)
 		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 		node.play_network_attack_presentation(wd)
-		attack_presentation.rpc(peer_id, wd.item_id, current - 1)
+		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, current - 1])
 		var bullet_index := 0
 		for bd: BulletData in wd.bullet_list:
 			_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
@@ -1971,7 +2042,7 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	var is_headshot := wd.critical_rate > 0.0 and randf() * 100.0 < wd.critical_rate
 	node.play_network_attack_presentation(wd)
 	# -1 表示近战无弹夹变化；客户端只播放 Host 确认的表现。
-	attack_presentation.rpc(peer_id, wd.item_id, -1)
+	_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, -1])
 	_schedule_host_melee_hit(node, wd, is_headshot)
 	print("[NetworkWorld] HOST_MELEE peer=%d weapon=%s" % [peer_id, wd.item_id])
 
@@ -2088,14 +2159,14 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	if bullet.has_signal("hit_effect_applied"):
 		bullet.connect("hit_effect_applied", _on_host_bullet_hit_effect.bind(wd.item_id, bullet_index))
 	# Client 只从 Host 确认的白名单 weapon_id + 弹丸索引还原视觉弹道，绝不接收伤害或子弹数据对象。
-	spawn_bullet.rpc(bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index)
+	_send_to_ready_clients(&"spawn_bullet", [bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index])
 
 
 ## Host 权威弹爆炸 → 广播爆心（Client 播同一套爆炸特效/音效）。
 func _on_host_bullet_exploded(_network_entity_id: int, position: Vector2, weapon_id: String, bullet_index: int) -> void:
 	if not net.is_host:
 		return
-	bullet_explode_effect.rpc(position, weapon_id, bullet_index)
+	_send_to_ready_clients(&"bullet_explode_effect", [position, weapon_id, bullet_index])
 
 
 ## 调试用爆炸范围环（与 Host 侧 `bullet.gd::_explode()` 同一个入口 → 两端表现一致）。
@@ -2128,7 +2199,7 @@ func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: i
 func _on_host_bullet_hit_effect(position: Vector2, follow_entity_id: int, weapon_id: String, bullet_index: int) -> void:
 	if not net.is_host:
 		return
-	bullet_hit_effect.rpc(position, weapon_id, bullet_index, follow_entity_id)
+	_send_to_ready_clients(&"bullet_hit_effect", [position, weapon_id, bullet_index, follow_entity_id])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2162,7 +2233,7 @@ func _on_host_bullet_finished(bullet_id: int) -> void:
 	if not _bullets.has(bullet_id):
 		return
 	_bullets.erase(bullet_id)
-	despawn_bullet.rpc(bullet_id)
+	_send_to_ready_clients(&"despawn_bullet", [bullet_id])
 
 
 func _alert_host_enemies(shooter: CharacterBody2D, range: float) -> void:
@@ -2222,7 +2293,7 @@ func holdout_ending_confirm_request() -> void:
 		return
 	print("[NetworkWorld] ED_CONFIRM_RX peer=%d" % sender)
 	ending_summary_peer_confirmed.emit(sender)
-	_ending_confirm_echo.rpc(sender)
+	_send_to_ready_clients(&"_ending_confirm_echo", [sender])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2236,7 +2307,7 @@ func _ending_confirm_echo(peer_id: int) -> void:
 func announce_ending_summary_peer_confirmed(peer_id: int) -> void:
 	if net.is_host:
 		print("[NetworkWorld] ED_CONFIRM_ANNOUNCE peer=%d" % peer_id)
-		_ending_confirm_echo.rpc(peer_id)
+		_send_to_ready_clients(&"_ending_confirm_echo", [peer_id])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2255,7 +2326,7 @@ func request_ending_summary_confirm() -> void:
 ## Host：全员确认 → 广播（各端据此关闭结算页）。
 func announce_ending_summary_all_confirmed() -> void:
 	if net.is_host:
-		_ending_all_confirmed_notice.rpc()
+		_send_to_ready_clients(&"_ending_all_confirmed_notice")
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2389,7 +2460,7 @@ func _try_host_awaken(peer_id: int) -> void:
 	if not node._activate_awaken_core():
 		return
 	_awaken_active_peers[peer_id] = true
-	awaken_presentation.rpc(peer_id, true)
+	_send_to_ready_clients(&"awaken_presentation", [peer_id, true])
 	print("[NetworkWorld] HOST_AWAKEN peer=%d tp=%d" % [peer_id, state.current_tp])
 
 
@@ -2404,7 +2475,7 @@ func announce_player_awaken(node: Node2D, active: bool) -> void:
 	if peer_id <= 0 or not _awaken_active_peers.has(peer_id):
 		return
 	_awaken_active_peers.erase(peer_id)
-	awaken_presentation.rpc(peer_id, false)
+	_send_to_ready_clients(&"awaken_presentation", [peer_id, false])
 	print("[NetworkWorld] HOST_AWAKEN_OFF peer=%d" % peer_id)
 
 
@@ -2500,21 +2571,21 @@ func announce_player_sa_event(node: Node2D, event: String) -> void:
 		return
 	if event.begins_with("sa:"):
 		var trigger := event.substr(3)
-		sa_presentation.rpc(peer_id, trigger)
+		_send_to_ready_clients(&"sa_presentation", [peer_id, trigger])
 		print("[NetworkWorld] HOST_SA peer=%d trigger=%s" % [peer_id, trigger])
 		return
 	match event:
 		"crouch_end":
-			crouch_end_presentation.rpc(peer_id)
+			_send_to_ready_clients(&"crouch_end_presentation", [peer_id])
 			print("[NetworkWorld] HOST_CROUCH_END peer=%d" % peer_id)
 		"mukiri":
-			mukiri_presentation.rpc(peer_id)
+			_send_to_ready_clients(&"mukiri_presentation", [peer_id])
 			print("[NetworkWorld] HOST_MUKIRI peer=%d" % peer_id)
 		"counter":
-			counter_presentation.rpc(peer_id)
+			_send_to_ready_clients(&"counter_presentation", [peer_id])
 			print("[NetworkWorld] HOST_COUNTER peer=%d" % peer_id)
 		"heat":
-			heat_presentation.rpc(peer_id)
+			_send_to_ready_clients(&"heat_presentation", [peer_id])
 			print("[NetworkWorld] HOST_HEAT peer=%d" % peer_id)
 
 
@@ -2597,7 +2668,7 @@ func announce_enemy_swallow(enemy: Node2D, victim: Node2D, active: bool) -> void
 	var peer_id := _peer_id_for_node(victim)
 	if entity_id <= 0 or peer_id <= 0:
 		return
-	swallow_presentation.rpc(entity_id, peer_id, active)
+	_send_to_ready_clients(&"swallow_presentation", [entity_id, peer_id, active])
 	print("[NetworkWorld] HOST_SWALLOW entity=%d peer=%d active=%s" % [entity_id, peer_id, active])
 
 
@@ -2616,12 +2687,14 @@ func swallow_presentation(entity_id: int, peer_id: int, active: bool) -> void:
 	print("[NetworkWorld] CLIENT_SWALLOW entity=%d peer=%d active=%s" % [entity_id, peer_id, active])
 
 
+## claimed_position：Client 自报的本机预测坐标（滞后补偿用，可为 null）。
+## 默认值保证旧调用点（回归用例 / 旧包）仍兼容。
 @rpc("any_peer", "call_remote", "reliable")
-func revive_start_request(target_peer_id: int) -> void:
+func revive_start_request(target_peer_id: int, claimed_position: Variant = null) -> void:
 	if net.is_host:
 		var sender := multiplayer.get_remote_sender_id()
 		if sender > 1:
-			_try_host_start_revive(sender, target_peer_id)
+			_try_host_start_revive(sender, target_peer_id, claimed_position)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -2765,7 +2838,7 @@ func announce_enemy_acid_spit(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -
 	if entity_id <= 0:
 		# 尚未被收编（吐酸早于 register 周期的极端时序）→ 丢弃本次表现，下次吐酸照常广播。
 		return
-	enemy_acid_spit_presentation.rpc(entity_id, spawn_pos, dir)
+	_send_to_ready_clients(&"enemy_acid_spit_presentation", [entity_id, spawn_pos, dir])
 
 
 ## Client：生成非权威镜像酸弹并播放吐酸音（与 Host 出酸瞬间同帧语义）。
@@ -2799,7 +2872,7 @@ func announce_enemy_sfx(enemy: Node2D, sfx_key: String, pitch: float) -> void:
 	var entity_id: int = enemy.network_entity_id
 	if entity_id <= 0:
 		return
-	enemy_sfx_presentation.rpc(entity_id, sfx_key, pitch)
+	_send_to_ready_clients(&"enemy_sfx_presentation", [entity_id, sfx_key, pitch])
 
 
 ## Client：按音效 key 走 enemy.play_network_sfx 本地播放（key→字段映射在 enemy 侧）。
@@ -2825,7 +2898,7 @@ func announce_enemy_action(enemy: Node2D, tex_key: String, char_idx: int, active
 	var entity_id: int = enemy.network_entity_id
 	if entity_id <= 0:
 		return
-	enemy_action_presentation.rpc(entity_id, tex_key, char_idx, active)
+	_send_to_ready_clients(&"enemy_action_presentation", [entity_id, tex_key, char_idx, active])
 
 
 ## Client：动作表切到/恢复（攻击/突进/丸呑み张嘴等独立动作表的视觉预警）。
@@ -2848,7 +2921,7 @@ func enemy_action_presentation(entity_id: int, tex_key: String, char_idx: int, a
 func announce_director_music(music_key: String, active: bool) -> void:
 	if not net.is_host:
 		return
-	director_music_presentation.rpc(music_key, active)
+	_send_to_ready_clients(&"director_music_presentation", [music_key, active])
 
 
 ## Client：驱动本机 Director 起停对应 BGM（音源/音量本地解析，boss_music_changed
@@ -2895,7 +2968,7 @@ func _announce_host_enemy_deaths(delta: float = -1.0) -> void:
 		if not is_instance_valid(enemy) or not enemy.is_network_dead():
 			continue
 		_announced_dead_enemy_ids[entity_id] = true
-		enemy_death_presentation.rpc(entity_id, enemy.is_network_headshot_dead())
+		_send_to_ready_clients(&"enemy_death_presentation", [entity_id, enemy.is_network_headshot_dead()])
 		print("[NetworkWorld] HOST_ENEMY_DEATH entity=%d headshot=%s" % [entity_id, enemy.is_network_headshot_dead()])
 
 
@@ -3067,7 +3140,7 @@ func despawn_enemy_networkwide(enemy: Node2D) -> void:
 				break
 	_despawn_enemy_local(entity_id)
 	if entity_id > 0:
-		despawn_network_enemy.rpc(entity_id)
+		_send_to_ready_clients(&"despawn_network_enemy", [entity_id])
 	if is_instance_valid(enemy):
 		enemy.queue_free()
 
@@ -3234,7 +3307,7 @@ func _broadcast_peer_left_state(peer_id: int, had_player: bool) -> void:
 	if not net.is_host or not net.has_network() or multiplayer.get_peers().is_empty():
 		return
 	if had_player:
-		despawn_player.rpc(peer_id)
+		_send_to_ready_clients(&"despawn_player", [peer_id])
 	# 断线是结构性状态变更，不能只依赖不可靠移动快照：
 	# 向每一名仍在线的 Client 可靠下发完整世界快照，让实体列表、座位和安全门人数立即收敛。
 	_broadcast_reliable_world_snapshot()
@@ -3803,7 +3876,7 @@ func _register_untracked_host_pickups(delta: float) -> void:
 		_register_host_pickup(pickup)
 		registered_any = true
 	if registered_any:
-		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 
 
 func _register_host_pickup(pickup: Node2D) -> int:
@@ -3951,7 +4024,7 @@ func _try_host_use_healing(peer_id: int) -> void:
 		## 成就「不行。绝对不行。」（联机路径，与 player.gd 单机路径同规则）
 		ACHIEVEMENTS.on_heal_item(state.seat_index)
 	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
-	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 	print("[NetworkWorld] HOST_HEALING_USE peer=%d item=%s left=%d hp=%.0f" % [
 		peer_id, used.item_id, state.healing_item_count, node.current_hp])
 
@@ -4013,7 +4086,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		if not pickup.call("_do_pickup"):
 			return
 		_pickups.erase(pickup_id)
-		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d healing=%s" % [peer_id, pickup_id, healing.item_id])
 		return
 	if throwable:
@@ -4032,7 +4105,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		_pickups.erase(pickup_id)
 		pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 		pickup.queue_free()
-		pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
 	if state.character and not state.character.can_use_weapon(weapon):
@@ -4062,7 +4135,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 	pickup.queue_free()
 	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
-	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
 
 
@@ -4156,7 +4229,7 @@ func _try_host_drop_all(peer_id: int) -> void:
 	## 手里空了 → 收起武器模式（表现层交给客户端 PlayerPistolState 的 _wd==null → Idle 自愈）
 	if player.is_weapon_mode_active() and player.has_method("exit_weapon_mode"):
 		player.exit_weapon_mode()
-	pickup_snapshot.rpc(_build_snapshot(), _build_pickup_snapshot())
+	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 	print("[NetworkWorld] HOST_DROP_ALL peer=%d dropped=%d" % [peer_id, dropped])
 
 
@@ -4382,29 +4455,42 @@ func _is_host_player_at_safe_door(peer_id: int, door: Node2D) -> bool:
 	return player.global_position.distance_to(door.global_position) <= float(door.get("interact_range"))
 
 
-## 全员到门检查（Host 权威转场条件）。
-## 【死亡豁免】真死亡（流血耗尽）的玩家不再计入 —— 否则一人死亡全队就永远
-## 无法过门（软锁）。他们将在下一章开头由 spawn 满血复活兜底归队。
-## 倒地玩家仍计入：他们可以爬行到门边等待，但确认门本身必须由站立玩家执行。
+## 到门检查（Host 权威转场条件）。
+## 【口径（2026-10-11 用户定稿）】只要求**未倒地的玩家**都到门即可转场 ——
+## 倒地玩家不再计入"必须到齐"的名单：他们无法确认门（确认必须由站立玩家执行），
+## 且会在下一章开头满血归队，所以让他们阻塞过门只会造成软锁。
+## 真死亡（流血耗尽）同样不计入（同一条"不能移动/不能确认"的理由）。
+## 全员倒地时返回 false —— 无人能确认门，本就不该触发转场。
 func _are_all_players_at_safe_door(door: Node2D) -> bool:
-	var peer_ids: Array[int] = net.get_peer_ids()
-	if peer_ids.is_empty():
+	var required: Array[int] = _get_safe_door_required_peer_ids()
+	if required.is_empty():
 		return false
-	for peer_id: int in peer_ids:
-		var entry: Dictionary = _players.get(peer_id, {})
-		var node := _player_node(entry)
-		if is_instance_valid(node) and node.is_network_dead() and not bool(entry.get("downed", false)):
-			continue
+	for peer_id: int in required:
 		if not _is_host_player_at_safe_door(peer_id, door):
 			return false
 	return true
+
+
+## 必须到门的玩家名单（未倒地、未真死亡的站立玩家）。
+## 倒地/死亡玩家（`is_network_dead()` 对二者都为 true）不计入 —— 他们既不能确认门，
+## 也不该阻塞团队过门；下一章开头由 spawn 满血复活兜底归队。
+func _get_safe_door_required_peer_ids() -> Array[int]:
+	var out: Array[int] = []
+	for peer_id: int in net.get_peer_ids():
+		var entry: Dictionary = _players.get(peer_id, {})
+		var node := _player_node(entry)
+		if not is_instance_valid(node) or node.is_network_dead():
+			continue
+		out.append(peer_id)
+	return out
 
 
 func _get_safe_door_arrival_count(door: Node2D) -> int:
 	if not is_instance_valid(door):
 		return 0
 	var count := 0
-	for peer_id: int in net.get_peer_ids():
+	## 与"必须到门名单"同口径：只统计未倒地玩家中已到门的数量（分母见 total_count）。
+	for peer_id: int in _get_safe_door_required_peer_ids():
 		if _is_host_player_at_safe_door(peer_id, door):
 			count += 1
 	return count
@@ -4433,12 +4519,14 @@ func _refresh_host_safe_door_readiness() -> void:
 func _broadcast_safe_door_ready_status(door_key: String, force: bool = false) -> void:
 	var door := _find_safe_door(door_key)
 	var arrived_count := _get_safe_door_arrival_count(door)
-	var total_count: int = net.get_peer_ids().size()
+	## 分母与 `_are_all_players_at_safe_door` 同口径：只算"未倒地/未死亡"的玩家，
+	## 否则 UI 会显示 "2/4 已到门" 却早已满足转场条件（两人倒地时），玩家以为还差人。
+	var total_count: int = _get_safe_door_required_peer_ids().size()
 	var previous: Dictionary = _door_ready_status.get(door_key, {}) as Dictionary
 	if not force and int(previous.get("ready_count", -1)) == arrived_count and int(previous.get("total_count", -1)) == total_count:
 		return
 	_apply_safe_door_ready_status(door_key, arrived_count, total_count)
-	safe_door_ready_status.rpc(door_key, arrived_count, total_count)
+	_send_to_ready_clients(&"safe_door_ready_status", [door_key, arrived_count, total_count])
 
 
 func _apply_safe_door_ready_status(door_key: String, ready_count: int, total_count: int) -> void:
@@ -4471,7 +4559,7 @@ func broadcast_holdout_state(phase: int, remaining: float, total: float, token: 
 	if not force and now - _holdout_last_broadcast_msec < 500:
 		return
 	_holdout_last_broadcast_msec = now
-	holdout_state_sync.rpc(phase, remaining, total, token)
+	_send_to_ready_clients(&"holdout_state_sync", [phase, remaining, total, token])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -4498,7 +4586,7 @@ func _apply_holdout_state(phase: int, remaining: float, total: float, token: int
 func broadcast_holdout_completed(token: int) -> void:
 	if not net or not net.is_host:
 		return
-	holdout_completed.rpc(int(token))
+	_send_to_ready_clients(&"holdout_completed", [int(token)])
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -4522,7 +4610,7 @@ func holdout_completed(token: int) -> void:
 func broadcast_campaign_ending(fade_seconds: float) -> void:
 	if not net or not net.is_host:
 		return
-	campaign_ending_start.rpc(fade_seconds)
+	_send_to_ready_clients(&"campaign_ending_start", [fade_seconds])
 
 
 @rpc("authority", "call_remote", "reliable")
