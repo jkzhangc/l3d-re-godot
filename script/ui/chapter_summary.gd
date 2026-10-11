@@ -111,7 +111,7 @@ func show_summary() -> void:
 	if cutscene_mode and _multiplayer_mode:
 		_bind_cutscene_network()
 	## Host 必须挂保险丝，防止有人不确认时两端永久卡住。
-	if cutscene_mode and _multiplayer_mode and multiplayer.is_server():
+	if cutscene_mode and _multiplayer_mode and _is_server():
 		_start_cutscene_watchdog()
 	_play_summary_music()
 	if pause_game:
@@ -160,7 +160,7 @@ func _submit_cutscene_confirmation() -> void:
 	## ★先按**网络身份**记账：seat 映射未就绪时 `confirm_seat()` 会早退（seat 不在
 	## _required_seats 就 return），只靠它是记不上的 —— 会让自己和别人都少算一人。
 	_confirmed_peer_ids[my_peer] = true
-	print("[ChapterSummary] ED_CONFIRM_LOCAL peer=%d host=%s" % [my_peer, str(multiplayer.is_server())])
+	print("[ChapterSummary] ED_CONFIRM_LOCAL peer=%d host=%s" % [my_peer, str(_is_server())])
 	## 本端即时反馈：把自己的那一行标成已准备（纯本地，不依赖任何网络往返）。
 	var seat: int = _find_seat_owned_by_peer(my_peer)
 	if seat < 0:
@@ -169,7 +169,7 @@ func _submit_cutscene_confirmation() -> void:
 	var world: Node = _find_network_world()
 	if world == null:
 		return
-	if multiplayer.is_server():
+	if _is_server():
 		## ★2026-09-27 实测修复（"客户端看到的准备人数恒少 1"）：
 		## Host 自己的确认此前**从未广播给 Client** —— 只在自己这边记账，而 Client 只能
 		## 通过回声知道别人的确认（`_ending_confirm_echo.rpc()` 是广播）。于是三个玩家的
@@ -207,7 +207,7 @@ func _on_ed_peer_confirmed(peer_id: int) -> void:
 	## 先按网络身份记账再刷 UI：`confirm_seat()` 在 seat 映射尚未建立时会早退，
 	## 那样这一位的行会一直显示"等待"、计数也少一人（自己/别人都受影响）。
 	_confirmed_peer_ids[peer_id] = true
-	print("[ChapterSummary] ED_CONFIRM_PEER peer=%d host=%s" % [peer_id, str(multiplayer.is_server())])
+	print("[ChapterSummary] ED_CONFIRM_PEER peer=%d host=%s" % [peer_id, str(_is_server())])
 	## Client 收到 Host 的广播 → 别人的行也一起同步。
 	var seat: int = _find_seat_owned_by_peer(peer_id)
 	if seat >= 0:
@@ -215,19 +215,19 @@ func _on_ed_peer_confirmed(peer_id: int) -> void:
 	else:
 		_rebuild_player_rows()
 		_refresh_status()
-	if multiplayer.is_server():
+	if _is_server():
 		_refresh_cutscene_completion()
 
 
 ## Host：全员到齐 → 广播收口 + 本端关闭。
 func _refresh_cutscene_completion() -> void:
-	if not multiplayer.is_server():
+	if not _is_server():
 		return
 	for peer_id: int in _get_expected_session_peer_ids():
 		if not _ed_confirmed_peers.get(peer_id, false):
 			return
 	print("[ChapterSummary] ED_ALL_CONFIRMED host=%s peers=%s" % [
-		str(multiplayer.is_server()), str(_get_expected_session_peer_ids())])
+		str(_is_server()), str(_get_expected_session_peer_ids())])
 	var world: Node = _find_network_world()
 	if world != null and world.has_method("announce_ending_summary_all_confirmed"):
 		world.call("announce_ending_summary_all_confirmed")
@@ -235,7 +235,7 @@ func _refresh_cutscene_completion() -> void:
 
 
 func _on_ed_all_confirmed() -> void:
-	if multiplayer.is_server():
+	if _is_server():
 		return   ## Host 自己已在 _refresh_cutscene_completion 里收口
 	print("[ChapterSummary] ED_ALL_CONFIRMED_RX（Client 收口）")
 	call_deferred("_finish_after_ed_all_confirmed")
@@ -300,12 +300,12 @@ func confirm_seat(seat_index: int) -> void:
 	_refresh_status()
 	if not _multiplayer_mode and _all_players_confirmed():
 		_finish_summary()
-	elif _multiplayer_mode and multiplayer.is_server():
+	elif _multiplayer_mode and _is_server():
 		_try_complete_network_summary()
 
 
 func _submit_local_confirmation() -> void:
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+	if multiplayer.has_multiplayer_peer() and not _is_server():
 		# 客户端不得上传本地 seat 编号：每台机器的 active_seat_index 不是网络身份。
 		_server_confirm.rpc_id(1)
 		return
@@ -349,7 +349,7 @@ func _confirm_local_after_network_flush(seat_index: int, peer_id: int) -> void:
 
 
 func _try_complete_network_summary() -> void:
-	if not _multiplayer_mode or not multiplayer.is_server() or _network_completion_started:
+	if not _multiplayer_mode or not _is_server() or _network_completion_started:
 		return
 	var expected := _get_expected_session_peer_ids()
 	if expected.is_empty():
@@ -380,7 +380,7 @@ func _finish_network_summary_after_flush() -> void:
 @rpc("authority", "call_remote", "reliable")
 func _network_summary_complete() -> void:
 	# Host 是唯一完成裁决者；避免 Client 依据场景本地 seat 顺序提前或永久无法结束。
-	if _multiplayer_mode and not multiplayer.is_server():
+	if _multiplayer_mode and not _is_server():
 		_finish_summary()
 
 
@@ -394,7 +394,7 @@ func _broadcast_remote_confirmation(confirmed_peer_id: int) -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _server_confirm() -> void:
-	if multiplayer.has_multiplayer_peer() and not multiplayer.is_server():
+	if multiplayer.has_multiplayer_peer() and not _is_server():
 		return
 	var sender_id: int = multiplayer.get_remote_sender_id()
 	if sender_id <= 1:
@@ -414,7 +414,7 @@ func _process(_delta: float) -> void:
 		return
 	_sync_required_multiplayer_seats()
 	var now := Time.get_ticks_msec()
-	if multiplayer.is_server():
+	if _is_server():
 		for value: Variant in _pending_peer_confirmations.keys():
 			var peer_id := int(value)
 			var seat_index := _find_seat_owned_by_peer(peer_id)
@@ -450,7 +450,7 @@ func _run_auto_safe_door_summary_test() -> void:
 	var tree := get_tree()
 	if not tree:
 		return
-	if multiplayer.is_server():
+	if _is_server():
 		# 留出 Client 先提交确认的窗口，专门覆盖此前“Client 无法准备”的失败时序。
 		await tree.create_timer(1.20, true).timeout
 		if visible and not _finishing:
@@ -498,6 +498,21 @@ func _apply_remote_confirmation(peer_id: int) -> void:
 
 func _has_real_multiplayer_session() -> bool:
 	return multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
+
+
+## ── 安全取「本机是否服务器」（2026-10-11 实测修复）──
+## `MultiplayerAPI.is_server()` / `get_unique_id()` 在**没有分配 peer** 时会向引擎打印
+## 「No multiplayer peer is assigned. Unable to get unique ID.」（scene_multiplayer.cpp @ get_unique_id）。
+## 触发场景：客户端与主机断线（`SERVER_DISCONNECTED` → `Net.leave()` 把 peer 置空）后，
+## 本页仍在**安全屋里保持可见**，而 `_process`（PROCESS_MODE_WHEN_PAUSED）每帧执行裸
+## `multiplayer.is_server()` → **每帧一条**引擎错误。用户实测日志刷了 29579 行
+##（≈8 分钟 × 60fps），报错界面反复弹出。
+## 约定：凡本文件取服务器身份一律走这里；无 peer 时按离线语义回退 true
+##（Godot 的 OfflineMultiplayerPeer 默认即服务器语义，且单机总结页本就走 Host 分支）。
+func _is_server() -> bool:
+	if not multiplayer.has_multiplayer_peer():
+		return true
+	return multiplayer.is_server()
 
 
 func _collect_required_seats() -> Array[int]:
@@ -568,7 +583,7 @@ func _finish_summary() -> void:
 	## `_refresh_cutscene_completion` 已经广播过一次，这里是幂等补发
 	##（覆盖 Host 从 watchdog 超时或其它路径关闭的情形）。全部路径都在同一场景内触发，
 	## 所以 `_find_network_world()` 此时一定可用。
-	if cutscene_mode and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+	if cutscene_mode and multiplayer.has_multiplayer_peer() and _is_server():
 		var world: Node = _find_network_world()
 		if world != null and world.has_method("announce_ending_summary_all_confirmed"):
 			world.call("announce_ending_summary_all_confirmed")
@@ -581,10 +596,10 @@ func _finish_summary() -> void:
 		get_tree().paused = false
 	summary_finished.emit()
 	if _is_auto_safe_door_test():
-		var role := "host" if multiplayer.is_server() else "client"
+		var role := "host" if _is_server() else "client"
 		print("[ChapterSummary] AUTO_SUMMARY_COMPLETE role=%s" % role)
 		var tree := get_tree()
-		if multiplayer.is_server():
+		if _is_server():
 			# Host 必须给可靠确认包足够的 flush 时间，随后才结束无头回归。
 			tree.create_timer(1.0, true).timeout.connect(func():
 				var net: Node = tree.root.get_node_or_null("Net")

@@ -171,7 +171,11 @@ func debug_gather_players_to_host() -> int:
 		entry["walking"] = false
 		_players[peer_id] = entry
 		## 只发给"被移动的那位"：其他客户端通过常规快照看到他的新位置（远端本来就走插值）。
-		debug_snap_player.rpc_id(peer_id, target)
+		## ⚠ 必须传 **2 个参数**：`debug_snap_player` 的签名是 (target_peer_id, position)。
+		## 旧实现只传了 position → 引擎在接收端直接报
+		## 「Method expected 2 argument(s), but called with 1」并弹报错界面（用户实测）。
+		## 接收方就是 peer_id 自己，故第一个参数即 peer_id。
+		debug_snap_player.rpc_id(peer_id, peer_id, target)
 		moved += 1
 	print("[DebugHotkey] HOST_GATHER moved=%d base=%s" % [moved, str(base.round())])
 	return moved
