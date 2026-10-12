@@ -361,4 +361,45 @@ describe('TunnelRelay', () => {
     assert.ok(tunnelPort > 0, '正常注册仍成功（帧长校验未误伤合法流量）');
     host.end();
   });
+
+  // ── 每 IP 并发隧道上限（2026-10 补 P4：中继 REGISTER 无凭据 → 用每 IP 并发上限
+  //    做纵深防御，防单 IP 刷满仅 27 个的公网端口池）──
+
+  test('★ 每 IP 并发隧道达上限后被拒绝（too_many_tunnels）', async () => {
+    const relay2 = new TunnelRelay({
+      tcpPort: 10091,
+      portStart: 40010,
+      portEnd: 40012,
+      maxTunnelsPerIp: 2,
+    });
+    await relay2.start();
+    try {
+      // 前 2 个同源（127.0.0.1）隧道应成功
+      const h1 = await createHostClient(10091);
+      h1.write(encodeMessage(MSG.REGISTER, '{}'));
+      assert.strictEqual((await readMessage(h1)).type, MSG.REGISTERED);
+
+      const h2 = await createHostClient(10091);
+      h2.write(encodeMessage(MSG.REGISTER, '{}'));
+      assert.strictEqual((await readMessage(h2)).type, MSG.REGISTERED);
+
+      // 第 3 个应被拒绝
+      const h3 = await createHostClient(10091);
+      h3.write(encodeMessage(MSG.REGISTER, '{}'));
+      const msg = await readMessage(h3);
+      assert.strictEqual(msg.type, MSG.ERROR);
+      assert.match(JSON.parse(msg.payload.toString()).message, /too_many_tunnels/);
+
+      // 释放一个后，同 IP 应能再注册（计数随销毁递减）
+      h1.end();
+      await new Promise(r => setTimeout(r, 150));
+      const h4 = await createHostClient(10091);
+      h4.write(encodeMessage(MSG.REGISTER, '{}'));
+      assert.strictEqual((await readMessage(h4)).type, MSG.REGISTERED, '释放后应可再注册');
+
+      h2.end(); h3.end(); h4.end();
+    } finally {
+      await relay2.stop();
+    }
+  });
 });

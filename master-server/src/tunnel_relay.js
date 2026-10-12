@@ -53,6 +53,7 @@ const MAX_FRAME_SIZE = 8192;
  * @param {number} [opts.tcpPort] TCP 控制端口（房主连接），默认 10001
  * @param {number} [opts.portStart] UDP 公网端口池起始
  * @param {number} [opts.portEnd] UDP 公网端口池结束
+ * @param {number} [opts.maxTunnelsPerIp] 每来源 IP 的并发隧道上限（默认 8，防端口池耗尽 DoS）
  * @param {() => number} [opts.now] 注入时间函数（便于测试）
  */
 export class TunnelRelay {
@@ -60,6 +61,11 @@ export class TunnelRelay {
     this.tcpPort = opts.tcpPort || DEFAULT_TCP_PORT;
     this.portStart = opts.portStart || DEFAULT_PORT_START;
     this.portEnd = opts.portEnd || DEFAULT_PORT_END;
+    // ★ 每 IP 并发隧道上限（2026-10 补 P4）：中继 REGISTER 无凭据（共享密钥对可逆向的
+    //   客户端是安全剧场，未采用），故用「每来源 IP 并发上限」做纵深防御 —— 单 IP 无法
+    //   独自刷满仅 27 个的公网端口池。默认 8 远高于正常玩家用量（每人 1 个），不会误伤
+    //   NAT 后同 IP 的少数玩家；真要 DoS 需多个 IP，成本抬高。
+    this.maxTunnelsPerIp = opts.maxTunnelsPerIp || 8;
     this._now = opts.now || (() => Date.now());
 
     this.availablePorts = new Set();
@@ -130,6 +136,8 @@ export class TunnelRelay {
     socket.setNoDelay(true);
     socket._recvBuf = Buffer.alloc(0);
     socket._tunnel = null;
+    // 记录来源 IP，供「每 IP 并发隧道上限」使用（见 maxTunnelsPerIp）。
+    socket._remoteIp = (socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
 
     socket.on('data', (data) => {
       socket._recvBuf = Buffer.concat([socket._recvBuf, data]);
@@ -191,6 +199,18 @@ export class TunnelRelay {
       this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'already_registered' }));
       return;
     }
+    // ★ 每 IP 并发隧道上限（P4）：先于端口分配检查，避免单 IP 刷满端口池。
+    const ip = socket._remoteIp || 'unknown';
+    let owned = 0;
+    for (const t of this.tunnels.values()) {
+      if (t.ownerIp === ip) owned++;
+    }
+    if (owned >= this.maxTunnelsPerIp) {
+      this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'too_many_tunnels' }));
+      console.warn(`[tunnel-relay] ${ip} 并发隧道已达上限 ${this.maxTunnelsPerIp}，拒绝注册`);
+      socket.end();
+      return;
+    }
     if (this.availablePorts.size === 0) {
       this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'no_available_ports' }));
       socket.end();
@@ -206,6 +226,7 @@ export class TunnelRelay {
     const tunnel = {
       id: Math.random().toString(36).substring(2, 10),
       port,
+      ownerIp: ip,
       udpSocket: null,
       hostSocket: socket,
       clients: new Map(),         // clientId -> {address, port, lastSeen}
