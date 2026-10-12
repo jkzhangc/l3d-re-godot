@@ -372,6 +372,23 @@ func request_remote_ending() -> void:
 		push_warning("[HoldoutMachine] 联机 Client 请求进 ED，但找不到 NetworkWorld（请求未发出）")
 
 
+## 客户端按键 → 请求 Host 权威启动防守战（2026-10-12 用户需求）。
+## 与 request_remote_ending 同一寻址方式（NetworkWorld 专用通道），Host 侧幂等闸防重复。
+func request_remote_start() -> void:
+	var world: Node = _find_network_world()
+	if world != null and world.has_method("holdout_start_request"):
+		world.call("holdout_start_request")
+	else:
+		push_warning("[HoldoutMachine] 联机 Client 请求开启防守战，但找不到 NetworkWorld（请求未发出）")
+
+
+## Host 收到客户端「开启防守战」请求后调用：由主机权威地启动（复用 trigger 的幂等闸）。
+func start_from_peer() -> void:
+	if _is_network_client():
+		return  ## 只认 Host 端；客户端再怎么被调也不本地启动
+	trigger()
+
+
 ## Host 收到客户端「进 ED」请求后调用：由主机权威地起 ED 并广播。
 func start_ending_from_peer() -> void:
 	if _is_network_client():
@@ -559,10 +576,8 @@ func _update_label() -> void:
 	# 终章待触发：显示「进入列车」一类文字（用户 2026-09-13）
 	if _completed and _ending_pending():
 		var t: String = finished_interact_label if not finished_interact_label.is_empty() else interact_label_done
-		if _is_network_client():
-			label.text = "%s（需主机操作）" % t
-		else:
-			label.text = "%s  [%s]" % [t, Global.key_hint(&"功能键")]
+		## 2026-10-12：客户端也能按键触发（转交 Host），不再标注「需主机操作」。
+		label.text = "%s  [%s]" % [t, Global.key_hint(&"功能键")]
 		label.visible = _can_interact and not t.is_empty()
 		return
 
@@ -571,9 +586,8 @@ func _update_label() -> void:
 		label.visible = _can_interact and not interact_label_done.is_empty()
 		return
 
-	if _is_network_client():
-		label.text = "%s（需主机操作）" % interact_label
-	elif auto_start_on_approach:
+	## 2026-10-12：客户端也能开启防守战（转交 Host 权威）→ 正常显示按键提示。
+	if auto_start_on_approach:
 		label.text = interact_label
 	else:
 		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
@@ -585,16 +599,17 @@ func _update_label() -> void:
 # ═══════════════════════════════════════
 
 ## 手动启动防守战（也可由其它脚本/事件直接调用）。
-## 仅单机或联机 Host 可执行；Client 靠近只提示需主机操作（避免 Client 本地倒计时与 Host 权威漂移）。
+## 联机：Client 靠近按功能键 → 本方法转交 Host 权威启动（2026-10-12 用户需求：
+## 客户端也应能开启防守战）。启动、剧本事件、刷怪都是 Host 权威，Client 只发请求。
 func trigger() -> void:
 	if _active:
 		return
 	if _started and one_shot:
 		return
 
-	# 剧本事件与敌人生成都是 Host 权威，Client 本地启动只会造成不同步
+	# Client 不能本地启动（否则本地倒计时/刷怪与 Host 权威漂移）→ 转交 Host。
 	if _is_network_client():
-		print("[HoldoutMachine] %s 联机 Client 不能自行启动防守战，需由主机操作" % event_name)
+		request_remote_start()
 		return
 
 	var director: Node = get_node_or_null("/root/Director")

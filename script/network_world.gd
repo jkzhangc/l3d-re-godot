@@ -587,8 +587,9 @@ func _active_client_peer_ids() -> Array:
 ## 未就绪 Client 不会因此漏状态：它 ready 后会在 `_accept_ready_peer` 收到**完整可靠世界快照**，
 ## 敌人/玩家/掉落物/防守战倒计时都会在那时一次性重建。
 ##
-## ⚠ 只用于 `call_remote` 的 Host→Client 广播；`call_local` 语义的 RPC（如
-## `team_wipe_presentation` / `apply_quest_flag_rpc`）仍走 `.rpc()`，否则 Host 自身收不到。
+## ⚠ 需 Host 本地也生效的广播（如 `team_wipe_presentation`）仍走 `.rpc()`，否则 Host
+## 自身收不到；但**凡能拆成「Host 本地应用 + 只发 ready 客户端」的**都应走本收口
+## （`apply_quest_flag_rpc` 已于 2026-10-12 改造为此模式，见 `_broadcast_quest_flag`）。
 ## ⚠ `_scene_transitioning` 时一律不发：旧场景的 NetworkWorld 已静默，但客户端可能已
 ## 先一步切到新场景（其 `NetworkWorld` 尚未 deferred 建好）→ 同样会撞路径找不到。
 func _send_to_ready_clients(method: StringName, args: Array = []) -> void:
@@ -2272,6 +2273,21 @@ func holdout_ending_request() -> void:
 	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
 		if machine.has_method("start_ending_from_peer"):
 			machine.call("start_ending_from_peer")
+			return
+
+
+## Client → Host：请求开启防守战（2026-10-12 用户需求：客户端也能开启防守战）。
+## 启动 / 剧本事件 / 刷怪全是 Host 权威，Client 只发请求；Host 侧幂等闸防重复。
+@rpc("any_peer", "call_remote", "reliable")
+func holdout_start_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender <= 1 or not _players.has(sender):
+		return
+	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
+		if machine.has_method("start_from_peer"):
+			machine.call("start_from_peer")
 			return
 
 
@@ -5317,11 +5333,22 @@ func submit_quest_flag(flag_name: String, value: bool = true) -> bool:
 		Global.apply_quest_flag(flag_name, value)
 		return true
 	if net.is_host:
-		# call_local：Host 本地与 Client 一次性同步生效
-		apply_quest_flag_rpc.rpc(flag_name, value)
+		_broadcast_quest_flag(flag_name, value)
 		return true
 	quest_flag_request.rpc_id(1, flag_name, value)
 	return false
+
+
+## Host：本地立即生效 + 只向**已就绪**客户端广播。
+## ★为什么不用 `apply_quest_flag_rpc.rpc()`（2026-10-12 修「切场景主机端/客户端节点报错」）：
+## 裸 `.rpc()` 广播给**所有已连接 peer**，含"本场景尚未加载完、还没上报 scene-ready"的
+## 客户端 —— RPC 按节点路径寻址（`<场景根>/NetworkWorld`），对端树上没这个节点 →
+## 引擎打印 `Node not found` 并弹报错界面。矿洞钥匙门开门时「先置 flag 再切图」两条 RPC
+## 背靠背发出（teleport_point._do_teleport），最容易撞上这个竞态。
+## 未就绪客户端不会漏 flag：它 ready 后走 `quest_flag_sync_request` 全量拉取（见 world_snapshot）。
+func _broadcast_quest_flag(flag_name: String, value: bool) -> void:
+	Global.apply_quest_flag(flag_name, value)
+	_send_to_ready_clients(&"apply_quest_flag_rpc", [flag_name, value])
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -5329,10 +5356,14 @@ func quest_flag_request(flag_name: String, value: bool) -> void:
 	## Client → Host 的 flag 请求。LAN 合作场景，与拾取请求同级信任，不再二次校验。
 	if not net.is_host:
 		return
-	apply_quest_flag_rpc.rpc(flag_name, value)
+	_broadcast_quest_flag(flag_name, value)
 
 
-@rpc("authority", "call_local", "reliable")
+## Host → 客户端：应用一个剧情 flag。仅由 `_broadcast_quest_flag`（收口）调用。
+## ⚠ 改回 `authority` + `call_remote`（不再 `call_local`）：Host 自身由 `_broadcast_quest_flag`
+## 直接调用 `Global.apply_quest_flag` 生效，无需本 RPC 回环；`call_remote` 也避免 Host
+## 把包也投给自己造成重复应用。
+@rpc("authority", "call_remote", "reliable")
 func apply_quest_flag_rpc(flag_name: String, value: bool) -> void:
 	Global.apply_quest_flag(flag_name, value)
 
