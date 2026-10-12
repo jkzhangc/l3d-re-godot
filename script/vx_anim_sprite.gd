@@ -358,5 +358,13 @@ static func play_scene(packed: PackedScene, pos: Vector2, parent: Node, fps: flo
 	if follow:
 		anim.follow_target = follow
 		anim.follow_enabled = true
+	## ★父节点仍在装配子树（`_ready` 期间）时不能直接 add_child —— 引擎会拒绝并报
+	## `Parent node is busy setting up children, add_child() failed`（2026-10-11 用户实测：
+	## 进矿洞时 `blast_wall._ready()` → `_apply_destroyed_visual()` → 本函数，两端都报）。
+	## 典型触发：地图加载时"已被 flag 标记为炸毁"的墙在 `_ready` 里补播爆裂动画，
+	## 而当前场景树尚未装配完。此时**推迟到本帧末**再挂，动画晚 1~2 帧播（视觉无感）。
+	if parent != null and is_instance_valid(parent) and not parent.is_node_ready():
+		parent.call_deferred("add_child", anim)
+		return anim
 	parent.add_child(anim)
 	return anim
