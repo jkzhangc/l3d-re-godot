@@ -1443,6 +1443,20 @@ func _check_scene_change() -> void:
 	# 场景切换 → 同步清空禁刷怪层缓存（NoSpawnLayer）
 	_no_spawn_layers.clear()
 	_no_spawn_cache_ready = false
+	## ★场景切换（含**同图传送**，如第三关矿洞钥匙门：目标场景 = 本图自己，同样会建新实例）
+	## → 清掉只指向**旧场景已释放节点**的引用集合（2026-10-12 修「尸潮切图时主机端节点报错」）。
+	## `_horde_locked_enemies` 存的是旧场景敌人节点；旧实例被释放后这些引用**悬垂**，
+	## 若残留到新场景再被遍历/操作即报错。这里只做**引用清理**，不动 pacing 语义
+	##（遵守 2026-09-23「换图不重置 pacing」教训）；`_horde_rage` 是否残留由
+	## 安全屋收尾（`_reset_live_combat_state`）负责，普通图保持既有行为。
+	_horde_locked_enemies = _horde_locked_enemies.filter(
+		func(e: Node2D) -> bool: return is_instance_valid(e))
+	_boss_music_watchlist = _boss_music_watchlist.filter(
+		func(e: Node2D) -> bool: return is_instance_valid(e))
+	## 子节点 EventManager 也持有敌人引用集合（防守战 target_lock），同款清理。
+	var em_reset: Node = get_node_or_null("EventManager")
+	if em_reset and em_reset.has_method("prune_scene_switched_references"):
+		em_reset.call("prune_scene_switched_references")
 	# 场景切换 → 复位前方补位记账（09-27 实测修复）：_batch_player_pos 里存的是**旧图玩家的
 	# instance_id**，字典非空会让新图的 _max_advance 查不到坐标恒返回 0 → 必须真实走满
 	# advance_step 才开始补位。表现就是用户报的「从安全屋/换图出来后前面怪很少、很迟」

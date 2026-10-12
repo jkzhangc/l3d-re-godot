@@ -212,6 +212,19 @@ func _release_locked_enemies() -> void:
 		print("[EventManager] 已解除 %d 个敌人的目标锁定" % released)
 
 
+## 场景切换（含**同图传送**）时清掉指向旧场景已释放敌人的悬垂引用（2026-10-12）。
+## 与 `_release_locked_enemies` 的区别：**不调** `release_forced_target`（旧节点已释放，
+## 调不得），只把引用集合收敛为仍有效的项，避免残留悬垂引用在后续遍历/操作时报错。
+func prune_scene_switched_references() -> void:
+	if _locked_enemies.is_empty():
+		return
+	var kept: Array[Node2D] = []
+	for enemy: Node2D in _locked_enemies:
+		if is_instance_valid(enemy):
+			kept.append(enemy)
+	_locked_enemies = kept
+
+
 ## 防守战开局：把 center 半径内的已存在丧尸强制锁定追击最近玩家。
 ## 这些丧尸不是本次事件刷出来的（属于开局前就有的普通尸潮），但仍要参与防守战，
 ## 因此直接拉进 _locked_enemies，待事件结束（_release_locked_enemies）时统一解锁，恢复普通 AI。
