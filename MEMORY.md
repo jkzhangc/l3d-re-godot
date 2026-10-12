@@ -1,4 +1,5 @@
 - [设计方向](游戏设计方向-L3D混合.md) — **设计总纲（2026-09 定稿）**：L3D 混合路线、敌人阵容、角色差异化、第一章范围与里程碑；与其他文档冲突时以此为准
+- [AI记忆规约](AI记忆规约.md) — **所有 AI（除 WorkBuddy）开工必读、收工必写**的记忆硬规则；记忆统一落 `.workbuddy/memory/`
 - [核心记忆](.workbuddy/memory/MEMORY.md) — 长期记忆核心层：进度/待办/铁律（★ 速查）
 - [细节参考](.workbuddy/memory/REFERENCE.md) — 按需 Read、不自动注入：场景规范、RM2K3 还原管线、历史沿革
 - [日日志](.workbuddy/memory/) — 过程细节 `2026-09-XX.md` / `2026-10-XX.md`
