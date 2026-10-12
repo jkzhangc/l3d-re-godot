@@ -402,4 +402,33 @@ describe('TunnelRelay', () => {
       await relay2.stop();
     }
   });
+
+  // ── NAT 端口漂移（P5，2026-10 记录语义，非缺陷）──
+  //   clientId 以来源 "addr:port" 为键；对称 NAT 下同一客户端源端口会变 →
+  //   被当作新 clientId（ENet 视角里成为另一个 peer）。这是 UDP-over-TCP 的固有边界，
+  //   硬按 IP 归并会误伤同 IP 的多玩家（NAT 后多人共用一个公网 IP），故不修，仅钉住语义。
+
+  test('NAT 端口漂移：不同源端口 → 不同 clientId（记录固有语义）', async () => {
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    const reg = await readMessage(host);
+    const tunnelPort = JSON.parse(reg.payload.toString()).tunnelPort;
+    const tunnel = [...relay.tunnels.values()].find(t => t.port === tunnelPort);
+
+    const c1 = createUdpClient();
+    await new Promise(r => c1.on('listening', r));
+    c1.send(Buffer.from('A'), tunnelPort, '127.0.0.1');
+    await new Promise(r => setTimeout(r, 200));
+    const afterFirst = tunnel.clients.size;
+
+    const c2 = createUdpClient();
+    await new Promise(r => c2.on('listening', r));
+    c2.send(Buffer.from('B'), tunnelPort, '127.0.0.1');
+    await new Promise(r => setTimeout(r, 200));
+
+    assert.strictEqual(tunnel.clients.size, afterFirst + 1,
+      '不同源端口被登记为不同 clientId（端口漂移 = 新会话）');
+    c1.close(); c2.close();
+    host.end();
+  });
 });
