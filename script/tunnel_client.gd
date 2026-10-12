@@ -81,6 +81,17 @@ var _clients: Dictionary = {}
 var _idle_check_accum: float = 0.0
 
 
+## ★必须**永不暂停**（2026-10-12 实测：进安全屋客户端 SERVER_DISCONNECTED 的根因）：
+## 章节完成页会 `get_tree().paused = true`（chapter_summary.gd），而本节点是 autoload，
+## 默认 `PROCESS_MODE_INHERIT` → 继承根节点的 PAUSABLE → 暂停时 `_process` 停摆
+## → **TCP 隧道不再转发任何 UDP** → 两端 ENet 收不到包 → 客户端报 `SERVER_DISCONNECTED`。
+## 隧道是**传输层**，必须独立于游戏暂停持续搬运字节；否则任何"暂停整树"的界面（章节完成、
+## 暂停菜单、安全屋台词窗口）都会把联机打断。探针证据：默认 process_mode 的节点在
+## paused 时 `_process` 计数为 0、设 ALWAYS（枚举值 3）后照常。
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+
 # ═════════════════════════════ 对外接口 ═════════════════════════════
 
 ## 从 Master Server URL 提取主机名（去掉协议、端口、路径）。
