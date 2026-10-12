@@ -1449,10 +1449,11 @@ func _check_scene_change() -> void:
 	## 若残留到新场景再被遍历/操作即报错。这里只做**引用清理**，不动 pacing 语义
 	##（遵守 2026-09-23「换图不重置 pacing」教训）；`_horde_rage` 是否残留由
 	## 安全屋收尾（`_reset_live_combat_state`）负责，普通图保持既有行为。
-	_horde_locked_enemies = _horde_locked_enemies.filter(
-		func(e: Node2D) -> bool: return is_instance_valid(e))
-	_boss_music_watchlist = _boss_music_watchlist.filter(
-		func(e: Node2D) -> bool: return is_instance_valid(e))
+	## ⚠ **绝不能**用 `arr.filter(func(e: Node2D) -> bool: ...)`：数组含**已释放 Object** 时，
+	## 带类型标注的 lambda 参数转换会失败（`Cannot convert argument 1 from Object to Object`
+	## → filter 返回空 Array → 再赋值回 Array[Node2D] 二次报错，2026-10-11 用户实测主机端崩溃）。
+	_horde_locked_enemies = _prune_freed_nodes(_horde_locked_enemies)
+	_boss_music_watchlist = _prune_freed_nodes(_boss_music_watchlist)
 	## 子节点 EventManager 也持有敌人引用集合（防守战 target_lock），同款清理。
 	var em_reset: Node = get_node_or_null("EventManager")
 	if em_reset and em_reset.has_method("prune_scene_switched_references"):
@@ -1518,6 +1519,20 @@ func _apply_immediate_spawn_start() -> void:
 	if fs and fs.has_method("prime_immediate_spawn"):
 		fs.call("prime_immediate_spawn")
 	print("[Director] 开场立即刷怪：跳过喘息，直接 build + 前方补位放行")
+
+
+## 收敛一个「节点引用集合」：剔除所有已释放（freed）的引用，返回仍有效的 Node2D 数组。
+## ⚠ 必须**无类型迭代**：源数组里可能含已释放 Object，若写 `for e: Node2D in src`
+## 或 `src.filter(func(e: Node2D)...)`，元素到 Node2D 的类型转换会失败并抛
+## `Cannot convert argument 1 from Object to Object`（2026-10-11 用户实测主机端崩溃）。
+## 遍历变量保持 Variant，仅在确认 `is_instance_valid` 后再 append 到类型化数组。
+func _prune_freed_nodes(src: Array) -> Array[Node2D]:
+	var out: Array[Node2D] = []
+	for e: Variant in src:
+		if is_instance_valid(e) and e is Node2D:
+			out.append(e as Node2D)
+	return out
+
 
 
 func _find_director_config(node: Node) -> DirectorConfig:

@@ -215,13 +215,15 @@ func _release_locked_enemies() -> void:
 ## 场景切换（含**同图传送**）时清掉指向旧场景已释放敌人的悬垂引用（2026-10-12）。
 ## 与 `_release_locked_enemies` 的区别：**不调** `release_forced_target`（旧节点已释放，
 ## 调不得），只把引用集合收敛为仍有效的项，避免残留悬垂引用在后续遍历/操作时报错。
+## ⚠ 必须**无类型迭代**：`_locked_enemies` 里可能含已释放 Object，写 `for e: Node2D in ...`
+## 会抛 `Cannot convert argument 1 from Object to Object`（2026-10-11 用户实测崩溃）。
 func prune_scene_switched_references() -> void:
 	if _locked_enemies.is_empty():
 		return
 	var kept: Array[Node2D] = []
-	for enemy: Node2D in _locked_enemies:
-		if is_instance_valid(enemy):
-			kept.append(enemy)
+	for e: Variant in _locked_enemies:
+		if is_instance_valid(e) and e is Node2D:
+			kept.append(e as Node2D)
 	_locked_enemies = kept
 
 
