@@ -41,6 +41,12 @@ const CLIENT_TIMEOUT_MS = 60000;
 const HOST_TIMEOUT_MS = 120000;
 const SWEEP_INTERVAL_MS = 10000;
 
+// ★ 单帧长度上限（2026-10 修 P3）：帧头是**对端可控的 32 位值**，旧实现直接信任，
+// 攻击者发 `msgLen=0xFFFFFFFF` 后持续灌数据 → `_recvBuf` 无限增长（实测灌 5MB 涨 5MB、
+// socket 不断）→ 中继内存被线性吃光。合法帧最大 = [2字节 clientId] + UDP 数据(≤1500)
+// 或 REGISTER 的小 JSON，全都 < 8KB，故 8KB 上限有充足余量。
+const MAX_FRAME_SIZE = 8192;
+
 /**
  * 隧道中继服务。
  * @param {object} [opts]
@@ -129,6 +135,12 @@ export class TunnelRelay {
       socket._recvBuf = Buffer.concat([socket._recvBuf, data]);
       while (socket._recvBuf.length >= 4) {
         const msgLen = socket._recvBuf.readUInt32BE(0);
+        // ★ 帧长越界 → 视为协议违规（伪造帧头），立即断开并释放端口，避免缓冲被灌爆。
+        if (msgLen < 1 || msgLen > MAX_FRAME_SIZE) {
+          console.warn(`[tunnel-relay] 帧长越界（${msgLen}B），断开该连接`);
+          socket.destroy();
+          return;
+        }
         if (socket._recvBuf.length < 4 + msgLen) break;
         const msgBuf = socket._recvBuf.subarray(4, 4 + msgLen);
         socket._recvBuf = socket._recvBuf.subarray(4 + msgLen);

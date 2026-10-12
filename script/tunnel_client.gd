@@ -57,6 +57,10 @@ const CLIENT_IDLE_TIMEOUT := 60.0
 const MAX_OUTGOING_PER_CLIENT := 64
 ## 单包上限（对齐 ENet MTU 1392 + 安全余量；超过的包直接丢，与 frps udpPacketSize 同义）。
 const MAX_PACKET_SIZE := 1500
+## 单帧上限（★ 2026-10 修 P3）：帧长来自 TCP 流、对端可控；若不校验，恶意/损坏的
+## 大 length 会让 `_recv_buffer` 无限增长（服务端同款漏洞实测灌 5MB 涨 5MB）。
+## 合法帧最大 = [2字节 clientId] + UDP 数据(≤1500) 或 REGISTERED 的小 JSON，均 < 8KB。
+const MAX_FRAME_SIZE := 8192
 
 var _tcp: StreamPeerTCP = null
 var _server_host: String = ""
@@ -249,6 +253,10 @@ func _process_messages() -> void:
 			## 跳过空消息
 			_recv_buffer = _recv_buffer.slice(4)
 			continue
+		## ★ 帧长越界 → 协议违规，断开而不是让缓冲被灌爆（见 MAX_FRAME_SIZE）。
+		if length > MAX_FRAME_SIZE:
+			_handle_disconnect("收到非法帧长（%d 字节）" % length)
+			return
 		if _recv_buffer.size() < 4 + length:
 			break  # 不完整，等更多数据
 		var type := _recv_buffer[4]

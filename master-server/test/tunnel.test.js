@@ -332,4 +332,33 @@ describe('TunnelRelay', () => {
     c.close();
     host.end();
   });
+
+  // ── 接收缓冲上限（2026-10 修 P3：帧头是对端可控的 32 位值，旧实现直接信任 →
+  //    伪造 msgLen=0xFFFFFFFF 后灌数据会让 _recvBuf 无限增长，实测 5MB→5MB）──
+
+  test('★ 伪造超大帧头：立即断开连接，缓冲不无限增长', async () => {
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    await readMessage(host);
+
+    // 发一个声称 msgLen=0xFFFFFFFF 的帧头，随后灌 1MB 数据
+    host.write(Buffer.from([0xff, 0xff, 0xff, 0xff]));
+    const chunk = Buffer.alloc(64 * 1024, 0x41);
+    for (let i = 0; i < 16; i++) host.write(chunk);
+
+    const closed = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(false), 2000);
+      host.once('close', () => { clearTimeout(timer); resolve(true); });
+    });
+    assert.ok(closed, '协议违规连接应被中继断开（socket.destroy）');
+  });
+
+  test('正常帧长（≤ 上限）不受影响', async () => {
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    const reg = await readMessage(host);
+    const tunnelPort = JSON.parse(reg.payload.toString()).tunnelPort;
+    assert.ok(tunnelPort > 0, '正常注册仍成功（帧长校验未误伤合法流量）');
+    host.end();
+  });
 });
