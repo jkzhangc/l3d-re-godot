@@ -186,6 +186,15 @@ const NETWORK_CORRECTION_DEAD_ZONE := 0.5
 ## 稳态滞后落在带宽内 → 不纠偏（预测领先就是对的）；只有**超出**滞后带宽（真不同步/
 ## 丢包/切图）才纠。Host 的命中校验用它自己模拟的权威坐标，客户端显示领先十几像素无害。
 const NETWORK_CORRECTION_RTT_FALLBACK := 0.05
+## ── 平滑 RTT（2026-10-12 修互联网联机「拉扯/瞬移」，用户实测）──
+## Net.rtt_ms 是**每秒一次的单次采样**；互联网（经隧道+公网）下抖动大，采样值会在
+## 60~150ms 间跳。而死区 dead_band = 速度 × RTT → 采样到偏小值时 dead_band 骤降 →
+## **本属正常的网络滞后被当成"偏差"反复回拉** = 拉扯/瞬移感。
+## 对策：本地维护一个平滑估计，**跟涨快（立即抬高）、回落慢（缓降）** —— dead_band 只会
+## 取"近期偏大"的 RTT，宁可多容忍一点滞后（少纠、更顺滑），也不因一次小采样就狂纠。
+## ⚠ 与「少纠一点、更顺滑」的既有设计取向一致（见 _network_rtt_seconds 注释）。
+const NETWORK_RTT_SMOOTH_FALL := 0.05   ## 回落速率（秒/秒）：每秒最多降 5% 的当前估计
+var _network_rtt_smooth: float = 0.0    ## 平滑后的 RTT 估计（秒）；0 = 尚未初始化
 ## 停止移动后滞后预算的衰减速率（px/s²）：平滑回落，避免「一停就弹回」。
 const NETWORK_CORRECTION_SPEED_DECAY := 300.0
 ## 近期速度峰值（平滑衰减）：用于估算期望滞后。停止后逐步归零。
@@ -466,7 +475,7 @@ func _process(delta: float) -> void:
 			## 稳态移动时误差恰好落在此带宽内 → 不纠偏，预测领先就让它领先；
 			## 只有超出（真不同步/丢包/切图残留）才纠。这消除了逐帧回拽的果冻感。
 			var recent_speed := _update_network_recent_speed(delta)
-			var expected_lag := recent_speed * _network_rtt_seconds()
+			var expected_lag := recent_speed * _network_rtt_seconds(delta)
 			var dead_band: float = maxf(NETWORK_CORRECTION_DEAD_ZONE, expected_lag)
 			if error_length > NETWORK_CORRECTION_SNAP_DISTANCE:
 				# 大偏差（丢包/传送/切图残留）才硬校准
@@ -663,15 +672,27 @@ func _update_network_recent_speed(delta: float) -> float:
 	return _network_recent_speed
 
 
-## 本机 ↔ 主机的单程估计（秒）。用 Net.rtt_ms（往返），没有则用保守回退值 ——
+## 本机 ↔ 主机的单程估计（秒）。**用平滑后的 RTT**（见 NETWORK_RTT_SMOOTH_FALL）：
+## 跟涨快、回落慢，避免单次采样抖动让死区忽大忽小 → 误纠偏（拉扯/瞬移）。
+## 平滑量未初始化时用 Net.rtt_ms 兜底；都没有则用保守回退值 ——
 ## 宁可高估滞后带宽（少纠一点、更顺滑），也不要低估（多纠一点、发果冻）。
-func _network_rtt_seconds() -> float:
+func _network_rtt_seconds(delta: float) -> float:
 	var net: Node = get_node_or_null("/root/Net")
+	var sample: float = NETWORK_CORRECTION_RTT_FALLBACK
 	if net != null:
 		var rtt: int = int(net.get("rtt_ms"))
 		if rtt > 0:
-			return float(rtt) / 1000.0
-	return NETWORK_CORRECTION_RTT_FALLBACK
+			sample = float(rtt) / 1000.0
+	if _network_rtt_smooth <= 0.0:
+		_network_rtt_smooth = sample
+	elif sample >= _network_rtt_smooth:
+		_network_rtt_smooth = sample                                ## 跟涨：立即抬高
+	else:
+		## 回落：向本次采样指数缓降（≈ 每秒降 NETWORK_RTT_SMOOTH_FALL 比例），
+		## 但不低于本次采样。跟涨快、回落慢 → 死区稳定。
+		var decayed: float = _network_rtt_smooth - NETWORK_RTT_SMOOTH_FALL * _network_rtt_smooth * delta
+		_network_rtt_smooth = maxf(sample, decayed)
+	return _network_rtt_smooth
 
 
 ## 本地预测玩家专用：把 Host 权威坐标登记为纠偏目标，绝不直接写位置。
