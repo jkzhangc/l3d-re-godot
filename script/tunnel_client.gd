@@ -37,6 +37,18 @@ const MSG_ERROR := 0x07
 
 ## 中继服务 TCP 端口（与服务端 tunnel_relay.js DEFAULT_TCP_PORT 一致）。
 const TUNNEL_TCP_PORT := 10001
+## 连接中继的**自控超时**（秒）。
+## ★ 为什么必须自控（2026-10 实测 + 引擎源码坐实）：Godot 的 StreamPeerTCP 在「对端不响应」
+## 与「对端主动拒绝(RST)」两种情况下**都不会及时暴露失败** —— 实测黑洞地址与本地无监听
+## 端口**都恰好等到 30.0s** 才转 STATUS_ERROR（回归用例：
+## `.workbuddy/tmp/tunnel_connect_timeout_check.*`）。
+## 根因（引擎源码，已坐实）：`core/io/stream_peer_tcp.cpp` 的 `poll()` 在 STATUS_CONNECTING 时
+## 重试 `_sock->connect_to_host()`，**只有等到 `timeout` 才转 STATUS_ERROR**；`timeout` 由
+## `connect_to_host()` 设为 `now + GLOBAL_GET("network/limits/tcp/connect_timeout_seconds")*1000`
+## —— 该设置**官方默认 30 秒**，本项目 project.godot 未覆盖 → 恒为 30s。
+## 不设自控超时，玩家会卡在「正在连接隧道服务…」整整 30 秒且**无法取消/重试**，
+## 且"地址填错"与"防火墙丢包"在 UI 上完全同相、无法区分。
+const CONNECT_TIMEOUT := 10.0
 ## 房主侧心跳间隔（与服务端 HOST_TIMEOUT_MS 配套，10s 一次，120s 超时）。
 const KEEPALIVE_INTERVAL := 10.0
 ## per-client UDP socket 空闲多久后回收（秒，对齐中继 60s 客户端超时）。
@@ -55,6 +67,11 @@ var _state: String = "idle"  # idle / connecting / awaiting_registered / registe
 var _public_port: int = 0
 var _tunnel_id: String = ""
 var _keepalive_accum: float = 0.0
+## 连接阶段的累计耗时（秒）——用于自控超时（见 CONNECT_TIMEOUT）。
+## 声明为实例变量而非直接读常量：无头用例可注入短值，避免测试真等 10s。
+var _connect_accum: float = 0.0
+## 实际的连接超时秒数（默认取 CONNECT_TIMEOUT，用例可覆写）。
+var connect_timeout: float = CONNECT_TIMEOUT
 ## clientId(int) → { "socket": PacketPeerUDP, "last_seen": float(Time.get_ticks_msec) }
 var _clients: Dictionary = {}
 var _idle_check_accum: float = 0.0
@@ -95,6 +112,7 @@ func start(game_port: int) -> void:
 		return
 	_tcp = StreamPeerTCP.new()
 	_state = "connecting"
+	_connect_accum = 0.0
 	print("[TunnelClient] 正在连接中继 %s:%d …" % [_server_host, _server_port])
 	var err := _tcp.connect_to_host(_server_host, _server_port)
 	if err != OK:
@@ -153,6 +171,12 @@ func _process(delta: float) -> void:
 			_tcp.set_no_delay(true)
 			_send_register()
 			_state = "awaiting_registered"
+			return
+		## ★ 自控连接超时（见 CONNECT_TIMEOUT 注释）：引擎在本机实测要 30s 才暴露失败，
+		## 且"地址填错"与"被丢包"同相 → 这里主动计时，到点即失败，让 UI 能给出可操作反馈。
+		_connect_accum += delta
+		if _connect_accum >= connect_timeout:
+			_handle_disconnect("连接中继超时（%.0fs）" % connect_timeout)
 		return
 
 	if _state != "awaiting_registered" and _state != "registered":
