@@ -199,6 +199,7 @@ export class TunnelRelay {
       clients: new Map(),         // clientId -> {address, port, lastSeen}
       addrToClientId: new Map(),   // "addr:port" -> clientId
       nextClientId: 1,
+      freeClientIds: [],           // 回收的 clientId（仅当新 id 用尽时才复用，见 _allocClientId）
       lastKeepalive: this._now(),
       gameVersion: info.gameVersion || '',
       protocol: info.protocol || '',
@@ -226,7 +227,14 @@ export class TunnelRelay {
     const addrKey = `${rinfo.address}:${rinfo.port}`;
     let clientId = tunnel.addrToClientId.get(addrKey);
     if (clientId === undefined) {
-      clientId = tunnel.nextClientId++;
+      clientId = this._allocClientId(tunnel);
+      if (clientId === null) {
+        // ★ 16 位 clientId 用尽：丢弃该包而不是让上游抛 ERR_OUT_OF_RANGE
+        // （旧实现 `nextClientId++` 无上限 → `buf.writeUInt16BE(>65535)` 抛异常，
+        //  该异常位于 dgram 'message' 回调内 → uncaughtException → 中继进程退出）。
+        console.warn(`[tunnel-relay] Tunnel ${tunnel.id}: clientId 池耗尽，丢弃来自 ${addrKey} 的包`);
+        return;
+      }
       tunnel.clients.set(clientId, { address: rinfo.address, port: rinfo.port, lastSeen: this._now() });
       tunnel.addrToClientId.set(addrKey, clientId);
       console.log(`[tunnel-relay] Tunnel ${tunnel.id}: client ${clientId} ← ${addrKey}`);
@@ -240,6 +248,33 @@ export class TunnelRelay {
     buf.writeUInt16BE(clientId, 0);
     msg.copy(buf, 2);
     this._sendMsg(tunnel.hostSocket, MSG_RELAY_TO_HOST, buf);
+  }
+
+  /**
+   * 分配一个 16 位 clientId。
+   * 优先用全新自增值（正常路径不重用，避免与刚超时客户端的旧映射混淆）；
+   * 新 id 用尽后，从回收池（_freeClientId 归还）取；池也空则返回 null（调用方丢弃并告警）。
+   * @returns {number|null}
+   */
+  _allocClientId(tunnel) {
+    if (tunnel.nextClientId <= 0xffff) {
+      return tunnel.nextClientId++;
+    }
+    while (tunnel.freeClientIds.length > 0) {
+      const id = tunnel.freeClientIds.pop();
+      // 防御：回收池里的 id 必须确实空闲、且仍在 16 位范围
+      if (id >= 1 && id <= 0xffff && !tunnel.clients.has(id)) {
+        return id;
+      }
+    }
+    return null;
+  }
+
+  /** 归还一个 clientId 到回收池（由超时清理调用）。 */
+  _freeClientId(tunnel, clientId) {
+    if (clientId >= 1 && clientId <= 0xffff && !tunnel.freeClientIds.includes(clientId)) {
+      tunnel.freeClientIds.push(clientId);
+    }
   }
 
   _handleRelayFromHost(socket, payload) {
@@ -295,6 +330,7 @@ export class TunnelRelay {
         if (now - client.lastSeen > CLIENT_TIMEOUT_MS) {
           tunnel.addrToClientId.delete(`${client.address}:${client.port}`);
           tunnel.clients.delete(cid);
+          this._freeClientId(tunnel, cid);   // ★ 归还 id，供池耗尽时复用
           console.log(`[tunnel-relay] Tunnel ${id}: client ${cid} timeout`);
         }
       }

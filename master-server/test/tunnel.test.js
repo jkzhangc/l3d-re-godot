@@ -23,9 +23,9 @@ const UDP_END = 40002;
 
 let relay;
 
-function createHostClient() {
+function createHostClient(port = TCP_PORT) {
   return new Promise((resolve, reject) => {
-    const sock = net.connect(TCP_PORT, '127.0.0.1', () => resolve(sock));
+    const sock = net.connect(port, '127.0.0.1', () => resolve(sock));
     sock.on('error', reject);
     sock._recvBuf = Buffer.alloc(0);
     sock.on('data', (data) => {
@@ -235,5 +235,101 @@ describe('TunnelRelay', () => {
 
     for (const h of hosts) h.end();
     h4.end();
+  });
+
+  // ── clientId 溢出 / 回收（2026-10 修：旧实现 nextClientId++ 无上限，
+  //    超 65535 时 buf.writeUInt16BE 抛 ERR_OUT_OF_RANGE → dgram 回调未捕获 →
+  //    中继进程退出，所有房间/隧道全挂）──
+
+  test('★ clientId 用尽后从回收池复用，绝不抛 ERR_OUT_OF_RANGE', async () => {
+    await new Promise(r => setTimeout(r, 200));   // 等端口池清理
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    const reg = await readMessage(host);
+    const tunnelPort = JSON.parse(reg.payload.toString()).tunnelPort;
+    const tunnel = [...relay.tunnels.values()].find(t => t.port === tunnelPort);
+
+    // 前置：模拟"新 id 已耗尽、回收池里有 3 个空闲 id"
+    tunnel.nextClientId = 0x10000;      // 已越界
+    tunnel.freeClientIds = [7, 300, 65535];
+    const errors = [];
+    tunnel.udpSocket.on('error', (e) => errors.push(e));
+    let uncaught = null;
+    const onUncaught = (e) => { uncaught = e; };
+    process.on('uncaughtException', onUncaught);
+
+    // 3 个不同来源的客户端各发一包 → 应从回收池取到 3 个 id（且都 ≤ 65535）
+    const clients = [];
+    for (let i = 0; i < 3; i++) {
+      const c = createUdpClient();
+      await new Promise(r => c.on('listening', r));
+      clients.push(c);
+      c.send(Buffer.from(`C${i}`), tunnelPort, '127.0.0.1');
+    }
+    await new Promise(r => setTimeout(r, 400));
+
+    process.off('uncaughtException', onUncaught);
+    assert.strictEqual(uncaught, null, '不得抛未捕获异常（否则进程会退出）');
+    assert.strictEqual(errors.length, 0, 'udp socket 不应报错');
+    assert.strictEqual(tunnel.freeClientIds.length, 0, '回收池应被取空');
+    // 每个 clientId 都在 16 位内
+    for (const id of tunnel.clients.keys()) {
+      assert.ok(id >= 1 && id <= 0xffff, `clientId ${id} 应在 1..65535`);
+    }
+    clients.forEach(c => c.close());
+    host.end();
+  });
+
+  test('★ clientId 池彻底耗尽：丢弃并告警，不崩溃', async () => {
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    const reg = await readMessage(host);
+    const tunnelPort = JSON.parse(reg.payload.toString()).tunnelPort;
+    const tunnel = [...relay.tunnels.values()].find(t => t.port === tunnelPort);
+
+    // 前置：新 id 越界 + 回收池为空 → 无法再分配
+    tunnel.nextClientId = 0x10000;
+    tunnel.freeClientIds = [];
+    const before = tunnel.clients.size;
+    let uncaught = null;
+    const onUncaught = (e) => { uncaught = e; };
+    process.on('uncaughtException', onUncaught);
+
+    const c = createUdpClient();
+    await new Promise(r => c.on('listening', r));
+    c.send(Buffer.from('DROP'), tunnelPort, '127.0.0.1');
+    await new Promise(r => setTimeout(r, 400));
+
+    process.off('uncaughtException', onUncaught);
+    assert.strictEqual(uncaught, null, '池耗尽也必须不抛异常');
+    assert.strictEqual(tunnel.clients.size, before, '池耗尽时不新增客户端映射');
+    c.close();
+    host.end();
+  });
+
+  test('clientId 回收：超时客户端的 id 被归还到回收池', async () => {
+    const host = await createHostClient();
+    host.write(encodeMessage(MSG.REGISTER, '{}'));
+    const reg = await readMessage(host);
+    const tunnelPort = JSON.parse(reg.payload.toString()).tunnelPort;
+    const tunnel = [...relay.tunnels.values()].find(t => t.port === tunnelPort);
+
+    const c = createUdpClient();
+    await new Promise(r => c.on('listening', r));
+    c.send(Buffer.from('X'), tunnelPort, '127.0.0.1');
+    await new Promise(r => setTimeout(r, 300));
+    assert.ok(tunnel.clients.size >= 1, '客户端应已被映射');
+    const assignedIds = [...tunnel.clients.keys()];
+
+    // 把所有客户端的 lastSeen 推到超时之外，触发 _sweep
+    for (const cl of tunnel.clients.values()) cl.lastSeen = 0;
+    relay._sweep();
+
+    assert.strictEqual(tunnel.clients.size, 0, '超时客户端应被清理');
+    for (const id of assignedIds) {
+      assert.ok(tunnel.freeClientIds.includes(id), `id ${id} 应被归还到回收池`);
+    }
+    c.close();
+    host.end();
   });
 });
