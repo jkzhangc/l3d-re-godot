@@ -298,6 +298,10 @@ static func apply_weapon_ground_display(pickup: Node2D, wd: WeaponData) -> void:
 
 ## 在线联机中由 NetworkWorld 分配；0 表示离线旧逻辑。
 var network_pickup_id: int = 0
+## ★来源补给点 key（2026-10-12）：由 random_pickup 预摆实例刷出时透传。
+## 拾取成功时回标「本补给点已消耗」（走 quest_flags 持久化）→ 死亡重载/读档不复活。
+## 空 = 非地图预摆补给（敌人掉落 / 玩家丢弃 / 动态投放）→ 不持久化。
+var map_source_key: String = ""
 ## 地面放置物上限豁免：地图预摆的拾取物（含 random_pickup 预摆实例刷出的）不参与
 ## GroundItemCap(8) 计数与淘汰 —— 它们是关卡设计的一部分，不是掉落杂物。
 ## _ready 里按 owner 判定（编辑器摆进场景的实例 owner 非空）；动态刷出保持 false。
@@ -807,6 +811,10 @@ func _do_pickup() -> void:
 	# 不自动进入武器举起状态，玩家按 Shift 自行举起
 	## 拾取音效：武器数据（ItemData.pickup_sound）可配，留空用全局默认（2026-09-15）
 	Global.play_pickup_sfx(weapon_data.pickup_sound, weapon_data.pickup_sound_pitch)
+	## ★地图预摆补给：拾取成功即标记该补给点已消耗（随存档持久化，防重载复活）。
+	## 走 Global 入口而非直接写 quest_flags —— 联机下 Client 会转交 Host 复核。
+	if not map_source_key.is_empty():
+		Global.mark_map_pickup_consumed(map_source_key)
 	queue_free()
 
 

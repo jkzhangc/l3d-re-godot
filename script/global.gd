@@ -650,6 +650,7 @@ func _reset_session_state() -> void:
 	checkpoint.clear()
 	quest_flags.clear()
 	seen_safehouse_dialogues.clear()
+	map_pickup_rolls.clear()
 	corpse_list.clear()
 	gold = 0
 	print("[Global] 会话状态已清空（座位表 / checkpoint / 任务旗标 / 金币）")
@@ -913,6 +914,52 @@ func has_seen_safehouse_dialogue(key: String) -> bool:
 func mark_safehouse_dialogue_seen(key: String) -> void:
 	if key != "":
 		seen_safehouse_dialogues[key] = true
+
+
+# ═══════════════════════════════════════
+# 地图预摆拾取物的「已消耗」持久化（2026-10-12）
+# ═══════════════════════════════════════
+## 【为什么需要】地图里预摆的 random_pickup（急救喷雾 / 冲锋枪类 …）在拾取后 `queue_free()`，
+## 但这是**运行时**行为、不落盘。而死亡重载 / 读档都会**从 .tscn 重新实例化整个场景** →
+## 已捡走的补给**复活**（玩家身上武器却在）→ 出现「身上有 + 地上又刷」的重复。
+## 关键道具走 `item_pickup_point`（手工配 `pickup_flag`）能持久化，但普通补给没有。
+##
+## 【方案】复用 `quest_flags` 的持久化语义（随存档存、**不随 checkpoint 回滚** ——
+## 「世界进度」性质正合适）。key 由**场景路径 + 节点路径**自动生成，无需手工配置。
+## 另存一次「本图的 roll 结果」，保证同一局重载时同一补给点内容不变（否则每次重载
+## 都会重新随机：这次冲锋枪、下次霰弹枪）。
+## key 形如 "mappickup::<场景路径>::<节点路径>"。
+const MAP_PICKUP_KEY_PREFIX := "mappickup::"
+
+## 自动生成地图拾取点 key（联机两端算法一致，故 Host 广播的 flag 名两端相同）。
+func map_pickup_key(scene_path: String, node_path: String) -> String:
+	if scene_path.is_empty() or node_path.is_empty():
+		return ""
+	return "%s%s::%s" % [MAP_PICKUP_KEY_PREFIX, scene_path, node_path]
+
+
+## 该地图补给点是否已被消耗（已拾取）。
+func is_map_pickup_consumed(key: String) -> bool:
+	return key != "" and has_quest_flag(key)
+
+
+## 标记地图补给点已被消耗（走 quest_flags 持久化：随存档、不随 checkpoint 回滚）。
+## 联机 Host 权威：Client 侧由 Host 广播的 flag 回包写入。
+func mark_map_pickup_consumed(key: String) -> void:
+	if key != "":
+		request_quest_flag(key, true)
+
+
+## 地图补给点的「本次 roll 结果」（item_id）持久化 —— 保证同一局重载内容不变。
+## key → item_id（字符串）；非 bool，故不与 quest_flags 混存。
+var map_pickup_rolls: Dictionary = {}
+
+func get_map_pickup_roll(key: String) -> String:
+	return str(map_pickup_rolls.get(key, ""))
+
+func set_map_pickup_roll(key: String, item_id: String) -> void:
+	if key != "" and not item_id.is_empty():
+		map_pickup_rolls[key] = item_id
 
 
 ## 全队投掷物槽里是否还有「能炸墙的爆炸物」（explosion_radius>0 且叠数>0）。
@@ -1367,6 +1414,7 @@ func init_new_game() -> void:
 	corpse_list.clear()
 	quest_flags.clear()
 	seen_safehouse_dialogues.clear()
+	map_pickup_rolls.clear()
 	# 战役累计统计（终章 ED 排名用）同步清零
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("reset_campaign"):

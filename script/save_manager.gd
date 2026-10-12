@@ -115,6 +115,9 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
 		"quest_flags": Global.quest_flags.duplicate(),
+		# ★地图补给点「本次 roll 结果」（2026-10-12）：保证重载后同一补给点内容不变
+		# （防「这次冲锋枪、下次霰弹枪」）。已消耗状态本身走 quest_flags，不在此。
+		"map_pickup_rolls": Global.map_pickup_rolls.duplicate(),
 		# ★已看过的安全屋台词 key（2026-10-05）：读档后已看过的不再重放。
 		"seen_safehouse_dialogues": Global.seen_safehouse_dialogues.duplicate(),
 		# 槽位列表预览用的轻量数据（避免开菜单时逐槽加载 CharacterData 卡顿）
@@ -262,6 +265,12 @@ static func load_slot(idx: int) -> Dictionary:
 	if not saved_seen.is_empty():
 		for k: Variant in saved_seen:
 			Global.seen_safehouse_dialogues[str(k)] = bool(saved_seen[k])
+	# ★地图补给点 roll 结果（2026-10-12）：旧档无该键 → 空 → 下次进图重新 roll 并记下。
+	Global.map_pickup_rolls.clear()
+	var saved_rolls: Dictionary = data.get("map_pickup_rolls", {})
+	if not saved_rolls.is_empty():
+		for k: Variant in saved_rolls:
+			Global.map_pickup_rolls[str(k)] = str(saved_rolls[k])
 	var campaign_path: String = data.get("selected_campaign", "")
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData

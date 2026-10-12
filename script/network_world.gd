@@ -4081,6 +4081,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		return
 	if player.global_position.distance_to(pickup.global_position) > 40.0:
 		return
+	## ★地图预摆补给点（2026-10-12）：Host 权威提交时标记该点已消耗（走 quest_flags 广播
+	## → 两端持久化，防死亡重载/读档复活）。动态掉落（敌人掉落/玩家丢弃）无此 key，跳过。
+	var map_key: String = str(pickup.get("map_source_key"))
 	if is_healing_pickup:
 		# D2 实测修复：治疗品（喷雾/药品）Host 权威拾取事务。复用 healing_pickup
 		# 的 _do_pickup（**自己座位**持有/上限判定都在其中；2026-09-24 用户定稿取消
@@ -4109,6 +4112,8 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		_pickups.erase(pickup_id)
 		pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 		pickup.queue_free()
+		if not map_key.is_empty():
+			Global.mark_map_pickup_consumed(map_key)
 		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
@@ -4138,6 +4143,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	_pickups.erase(pickup_id)
 	pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
 	pickup.queue_free()
+	## ★地图预摆武器补给点：Host 权威提交时标记已消耗（同上，防重载复活）。
+	if not map_key.is_empty():
+		Global.mark_map_pickup_consumed(map_key)
 	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
 	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])

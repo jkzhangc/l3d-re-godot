@@ -84,6 +84,10 @@ var _indicator_node: Node2D = null
 
 ## 在线联机中由 NetworkWorld 分配；0 表示尚未收到 Host 的权威快照。
 var network_pickup_id: int = 0
+## ★来源补给点 key（2026-10-12）：由 random_pickup 预摆实例刷出时透传。
+## 拾取成功时回标「本补给点已消耗」（走 quest_flags 持久化）→ 死亡重载/读档不复活。
+## 空 = 非地图预摆补给（敌人掉落 / 玩家丢弃 / 动态投放）→ 不持久化。
+var map_source_key: String = ""
 var network_presentation_only: bool = false
 var _network_pickup_request_pending: bool = false
 var _network_request_msec: int = 0          ## 请求发出时刻（超时自愈用）
@@ -298,6 +302,9 @@ func _do_pickup() -> bool:
 	## 拾取音效：物品数据（ItemData.pickup_sound）可配，留空用全局默认（2026-09-15）。
 	## 放满留在地上的分支在上面已 return，不会响。
 	Global.play_pickup_sfx(item.pickup_sound, item.pickup_sound_pitch)
+	## ★地图预摆补给：拾取成功即标记该补给点已消耗（随存档持久化，防重载复活）。
+	if not map_source_key.is_empty():
+		Global.mark_map_pickup_consumed(map_source_key)
 	queue_free()
 	return true
 

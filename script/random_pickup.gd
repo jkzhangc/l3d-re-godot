@@ -31,6 +31,10 @@ const DIRECTIONS: int = 4
 ## （武器空槽也不再触碰自动拾取）；关闭（默认）保持触碰拾取。透传给刷出的拾取物。
 @export var require_function_key: bool = false
 
+## ★持久化 key（2026-10-12）：地图预摆（owner 非空）时 = 场景路径 + 本节点路径，
+## 用于「已拾取不复活」+「重载后内容不变」。动态生成（owner 空）时为空 = 不持久化。
+var _source_key: String = ""
+
 
 func _ready() -> void:
 	if Engine.is_editor_hint():
@@ -44,7 +48,20 @@ func _ready() -> void:
 		hide()
 		set_process(false)
 		return
-	var picked: Resource = pool.roll() if pool else null
+
+	## ★地图预摆补给点：算持久化 key；已消费则不刷出（防重载复活，2026-10-12）。
+	## 动态生成（owner 空，如 Director/ItemManager 随机投放）不持久化，保持旧行为。
+	if owner != null:
+		var tree: SceneTree = get_tree()
+		if tree != null and tree.current_scene != null:
+			_source_key = Global.map_pickup_key(
+				tree.current_scene.scene_file_path, str(tree.current_scene.get_path_to(self)))
+		if not _source_key.is_empty() and Global.is_map_pickup_consumed(_source_key):
+			print("[随机掉落物] 已消耗，跳过刷出：%s" % _source_key)
+			queue_free()
+			return
+
+	var picked: Resource = _roll_deterministic()
 	if picked == null:
 		print("[随机掉落物] 掉落池为空或全 0 权重，未生成拾取物")
 		queue_free()
@@ -78,6 +95,9 @@ func _ready() -> void:
 	# 豁免 GroundItemCap(8)——初始安全屋的补给囤积不属于掉落杂物。
 	var is_placed: bool = owner != null
 	spawned.set("cap_exempt", is_placed)
+	## ★把持久化 key 传给刷出的拾取物：拾取成功时由它回标「本补给点已消耗」。
+	if not _source_key.is_empty():
+		spawned.set("map_source_key", _source_key)
 	parent.add_child.call_deferred(spawned)
 	spawned.set_deferred("global_position", pos)
 	print("[随机掉落物] 刷出 %s（%s）@ (%d, %d)" % [
@@ -85,6 +105,36 @@ func _ready() -> void:
 		"武器" if picked is WeaponData else "物品",
 		int(pos.x), int(pos.y)])
 	queue_free()
+
+
+## 确定性 roll（2026-10-12）：同一补给点若已记录过结果（map_pickup_rolls），复用之 ——
+## 否则每次场景重载都会**重新随机**（这次冲锋枪、下次霰弹枪），玩家观感是「内容在变」。
+## 新 roll 的结果按 item_id 记进 Global，随存档持久化。
+func _roll_deterministic() -> Resource:
+	if pool == null:
+		return null
+	if not _source_key.is_empty():
+		var saved_id: String = Global.get_map_pickup_roll(_source_key)
+		if not saved_id.is_empty():
+			var saved: Resource = _find_pool_item_by_id(saved_id)
+			if saved != null:
+				return saved
+	var picked: Resource = pool.roll()
+	if picked != null and not _source_key.is_empty():
+		var picked_id: String = str(picked.get("item_id"))
+		if not picked_id.is_empty():
+			Global.set_map_pickup_roll(_source_key, picked_id)
+	return picked
+
+
+## 在掉落池里按 item_id 找回条目（重载后复现同一补给内容）。
+func _find_pool_item_by_id(item_id: String) -> Resource:
+	if pool == null or item_id.is_empty():
+		return null
+	for entry: Resource in pool.items:
+		if entry != null and str(entry.get("item_id")) == item_id:
+			return entry
+	return null
 
 
 ## 联机 Client 判定（与 director.gd / dev_enemy_spawner.gd 同款：用节点路径而非
