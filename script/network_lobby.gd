@@ -121,6 +121,7 @@ func _ready() -> void:
 	start_btn.disabled = true
 	leave_btn.disabled = true
 	character_select.disabled = true
+	_setup_player_name()
 	_log("请创建房间或加入已有房间（默认 127.0.0.1:27015）")
 	_refresh_ui()
 	_add_back_button()
@@ -332,6 +333,13 @@ func _setup_connection_tabs() -> void:
 				_tunnel_client.connect(sig, handler)
 
 	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
+	## ★昵称行移到「页签栏上方」（2026-10-13 用户需求：互联网/局域网共用名字且都能改）。
+	## 它在第 1 步被搬进了直连容器 → 互联网页签看不到；这里再移出，固定到 `_tab_bar`
+	## 之上（VBox 第 1 位正好是 _tab_bar，昵称行插到它前面 = 全局可见）。
+	var name_row: Control = get_node_or_null("ConnectPanel/VBox/Center/Window/Form/NameRow") as Control
+	if name_row != null and name_row.get_parent() == _direct_container:
+		name_row.reparent(vbox)
+		vbox.move_child(name_row, 1)   ## 0 是标题，1 = 昵称行，2 = 页签栏
 	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
 	## 需要再套一次缩进，否则页签会压在页标题上。
 	_push_down_content(connect_panel)
@@ -350,6 +358,39 @@ func _select_tab(which: String) -> void:
 	if internet:
 		_internet_panel.show_list()
 		_log("已切到互联网模式：从大厅房间列表加入，或创建互联网房间。")
+
+
+## 玩家昵称（2026-10-13 用户需求）：互联网 / 局域网**共用一份**并持久化。
+## 直连表单里的 `NameEdit` 是唯一输入框，但它在 `_setup_connection_tabs()` 里被搬进
+## 「直连」容器 → 互联网页签看不到。这里把它**移出**两个页签容器、固定到页签栏上方，
+## 使两种连接方式都能改同一份名字；并回填 `Global.player_name`、变更即时存盘。
+func _setup_player_name() -> void:
+	## 回填存下来的昵称（空 → 保留 tscn 默认「玩家」），并同步到 Net 真源。
+	var saved: String = str(Global.player_name).strip_edges()
+	if not saved.is_empty():
+		name_edit.text = saved
+	net.player_name = name_edit.text
+	## 变更即持久化（失焦 / 回车提交两个时机都存，覆盖手机端无回车的场景）。
+	if not name_edit.text_changed.is_connected(_on_player_name_changed):
+		name_edit.text_changed.connect(_on_player_name_changed)
+	if not name_edit.text_submitted.is_connected(_on_player_name_submitted):
+		name_edit.text_submitted.connect(_on_player_name_submitted)
+
+
+func _on_player_name_changed(new_text: String) -> void:
+	net.player_name = new_text
+	Global.player_name = new_text
+
+
+func _on_player_name_submitted(_new_text: String) -> void:
+	_persist_player_name()
+
+
+## 把当前昵称写入 `Global.player_name` 并存盘（互联网 / 局域网共用同一份）。
+func _persist_player_name() -> void:
+	Global.player_name = name_edit.text
+	net.player_name = name_edit.text
+	Global.save_config()
 
 
 ## 互联网列表里点「加入」→ 复用现有 Net.join_game 入口（零改动，方案 §5.4）。
@@ -907,6 +948,7 @@ func _get_game_scene_for_launch() -> String:
 
 func _on_create_pressed() -> void:
 	net.player_name = name_edit.text
+	_persist_player_name()
 	net.upnp_enabled = upnp_check.button_pressed
 	# ★创建房间用**独立的本机监听端口**（2026-09-27 用户需求：建主端口与加入端口分开设置）。
 	# 使用 frp 等端口映射型内网穿透时，这里填穿透隧道指向本机的本地 UDP 端口。
@@ -922,6 +964,7 @@ func _on_create_pressed() -> void:
 
 func _on_join_pressed() -> void:
 	net.player_name = name_edit.text
+	_persist_player_name()
 	# 端口由大厅输入框提供：默认 27015；内网穿透场景填穿透服务分配的远程 UDP 端口。
 	var port := int(port_edit.value)
 	var err: Error = net.join_game(ip_edit.text, port)

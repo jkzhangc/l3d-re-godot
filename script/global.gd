@@ -306,6 +306,11 @@ var master_server_url: String = "http://8.138.99.96:10000"
 ## 上次使用的房间名（大厅「创建互联网房间」表单回填用）。
 var last_room_name: String = ""
 
+## 玩家昵称（大厅里设置，互联网 / 局域网**共用一份**，持久化到 config.json）。
+## 空串 = 未设置 → 大厅回填默认「玩家」。名字真源仍是 `Net.player_name`，
+## 各连接入口从 `Net.player_name` 读取；本变量只负责跨启动保存与两页签共用。
+var player_name: String = ""
+
 
 ## 当前字体选项索引（代理到 FontService，保持 `Global.font_option` 读写语义）。
 var font_option: int:
@@ -1209,6 +1214,7 @@ func _apply_config_file(path: String) -> void:
 	if not cfg_url.is_empty():
 		master_server_url = cfg_url
 	last_room_name = str(cfg.get("last_room_name", last_room_name))
+	player_name = str(cfg.get("player_name", player_name))
 	_apply_touch_layout(cfg.get("touch_layout", null))
 	_apply_touch_hidden(cfg.get("touch_hidden", null))
 
@@ -1231,6 +1237,7 @@ func save_config() -> void:
 		"changelog_seen_version": changelog_seen_version,
 		"master_server_url": master_server_url,
 		"last_room_name": last_room_name,
+		"player_name": player_name,
 		"touch_layout": _touch_layout_to_json(),
 		"touch_hidden": touch_hidden.duplicate()
 	}
