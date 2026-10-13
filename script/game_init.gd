@@ -230,20 +230,20 @@ func _open_safehouse_dialogue(key: String) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null or tree.current_scene == null:
 		return
-	## ★台词归属到**当前操控角色**（原作把「谁说什么」写死在事件文本里）。
+	## ★台词归属到**本机玩家角色**（原作把「谁说什么」写死在事件文本里）。
 	## 联机各端各取自己的角色 —— 纯本地表现，零 RPC。
+	var character: CharacterData = _resolve_local_character()
 	var speaker: String = ""
 	var char_id: String = ""
 	var portrait: Texture2D = null
-	var state: PlayerState = Players.get_active_state()
-	if state != null and state.character != null:
-		var jp: String = state.character.character_name
+	if character != null:
+		var jp: String = character.character_name
 		## ★台词框用**短名**（原作口径：大雄 / 静香 / 小夫 / 胖虎）；
 		## 全名版 CHARACTER_NAME_ZH 继续留给 ED 对话与 credits 战报。
 		speaker = str(Global.CHARACTER_NAME_SHORT.get(
 			jp, Global.CHARACTER_NAME_ZH.get(jp, jp)))
-		char_id = state.character.get_character_key()
-		portrait = state.character.portrait_texture()
+		char_id = character.get_character_key()
+		portrait = character.portrait_texture()
 	## ★一次给出全部**页**（A 批一屏 → 按确定键 → B 批一屏），每页内部的多行同屏显示。
 	var pages: Array = SAFEHOUSE_DIALOGUE_DATA.pages_for(key, char_id)
 	if pages.is_empty():
@@ -255,6 +255,29 @@ func _open_safehouse_dialogue(key: String) -> void:
 	dlg.call("open_character", pages, speaker, portrait)
 	print("[GameInit] 安全屋台词：%s（角色=%s，%d 页，说话人=%s，头像=%s）" % [
 		key, char_id, pages.size(), speaker, "有" if portrait != null else "无"])
+
+
+## 解析「本机玩家」的 CharacterData（台词 / 头像归属）。
+##
+## ★为什么联机不能直接用 `Players.get_active_state()`（2026-10-12 用户实测）：
+##   `_spawn_safehouse_dialogue` 在 `_ready()` 顶部 `call_deferred`，而 NetworkWorld
+##   是在其后才 deferred 创建的 —— deferred 是 **FIFO**，台词先于网络座位表建立。
+##   此刻 `Players.seats` 仍为空 → `get_active_state()` 懒创建一个**默认座位（大雄）**
+##   → 客户端显示的是「默认角色」而非自己选的；主机恰是大雄时表现成「显示主机角色的台词」。
+##   联机座位表自身的注释也警告过：动态玩家不能按单机 active_seat 自动推断归属。
+##   故联机改走 **Net 的角色表**（大厅选角即写入、跨图常驻，早于座位表可用）。
+func _resolve_local_character() -> CharacterData:
+	var net: Node = get_node_or_null("/root/Net")
+	if net != null and net.has_method("is_online_session") and bool(net.is_online_session()) \
+			and net.has_method("get_player_character_path") and net.has_method("get_my_peer_id"):
+		var path: String = str(net.call("get_player_character_path", int(net.call("get_my_peer_id"))))
+		if not path.is_empty() and ResourceLoader.exists(path):
+			var res: Resource = load(path)
+			if res is CharacterData:
+				return res as CharacterData
+	## 单机（或联机取不到角色路径）回退到激活座位。
+	var state: PlayerState = Players.get_active_state()
+	return state.character if state != null else null
 
 
 func _spawn_switch_manager() -> void:
