@@ -2167,6 +2167,17 @@ func _set_all_enemies_rage(on: bool) -> void:
 # 特感编排（SpecialEnemyData：ハンター 等）
 # ═══════════════════════════════════════
 
+## 特感/坦克的概率倍率：**单人受难度、多人受人数**（2026-10-13 用户需求）。
+## 直接复用 `Players.spawn_scale()`（= 人数表 ×（n≤1 时）难度倍率）——该函数语义
+## 恰好就是「单人有难度、多人有人数」，无需另建表。缺 Players 时回退 1.0。
+## 用于：缩短特感/坦克冷却（÷倍率）、放宽紧张度门槛（÷倍率）、放宽同屏上限。
+func _special_rate_scale() -> float:
+	var players: Node = get_node_or_null("/root/Players")
+	if players == null or not players.has_method("spawn_scale"):
+		return 1.0
+	return maxf(0.5, float(players.call("spawn_scale")))
+
+
 func _update_specials(delta: float, player: Node2D, current_phase: StringName) -> void:
 	## 特感低频高压编排：紧张度门槛 + 随机冷却 + 同屏上限（special_max_alive）。
 	## 池空 = 本关未启用特感，直接待机；尸潮（peak）期间计时冻结，不与尸潮叠加施压。
@@ -2174,14 +2185,18 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 		return
 	if current_phase == &"peak":
 		return
+	## ★概率随难度/人数上调（2026-10-13 用户需求：单人受难度、多人受人数）。
+	## 倍率同时作用于「同屏上限」与「紧张度门槛」；冷却在刷出后按 ÷倍率 重掷。
+	var rate: float = _special_rate_scale()
 	# 同屏上限（2026-09-16 修复）：此前写死「有任意一只存活特感就不刷」，把地图 Inspector
 	# 配的 special_max_alive=2/3 彻底架空 —— 叠加 Hunter β 正面免疫导致的高存活率，
 	# 表现为「很少有特感出现」（用户实测反馈）。现在按本关卡配置计数放行。
+	var cap: int = maxi(1, int(round(float(special_max_alive) * rate)))
 	var alive_specials: int = 0
 	for e: Node2D in get_tree().get_nodes_in_group("special_enemies"):
 		if is_instance_valid(e) and e.get("_is_dying") != true and e.get("_is_dead") != true:
 			alive_specials += 1
-	if alive_specials >= maxi(1, special_max_alive):
+	if alive_specials >= cap:
 		return
 	# 第一只特感的登场延迟（_apply_config 掷 first_delay_min~max）
 	if _special_first_delay_left > 0.0:
@@ -2191,8 +2206,9 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 	if _special_cooldown_left > 0.0:
 		_special_cooldown_left -= delta
 		return
-	# 紧张度门槛：玩家压力不足时特感不登场（特感是压力放大器，不是开场惊喜）
-	if get_intensity() < special_intensity_threshold:
+	# 紧张度门槛：玩家压力不足时特感不登场（特感是压力放大器，不是开场惊喜）。
+	# 门槛按 ÷倍率 放宽：难度/人数越高越容易够到。
+	if get_intensity() < special_intensity_threshold / rate:
 		return
 
 	var data: SpecialEnemyData = _pick_special_enemy()
@@ -2211,7 +2227,7 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 	if pos == Vector2.ZERO:
 		return  # 本帧没有合法点位：保持冷却为 0，下一帧重试
 	if spawn_special_enemy(pos, data, decor_layer, -1):
-		_special_cooldown_left = randf_range(special_cooldown_min, special_cooldown_max)
+		_special_cooldown_left = randf_range(special_cooldown_min, special_cooldown_max) / rate
 
 
 func _pick_special_enemy() -> SpecialEnemyData:
@@ -2255,24 +2271,29 @@ func _update_tanks(delta: float, player: Node2D, current_phase: StringName, spaw
 func _update_regular_tank(delta: float, player: Node2D, current_phase: StringName) -> void:
 	if not tank_enabled or _tank_data == null:
 		return
-	# 尸潮 peak 期间冻结计时：Tank 不与尸潮叠加（原作里两者是分开的高压事件）
-	if current_phase == &"peak":
-		return
+	## ★去掉「peak 期间冻结」（2026-10-13 用户需求：最终章前也该能遇到坦克）。
+	## 旧实现要求 `intensity ≥ tank_intensity_threshold(0.6)` **且** 非 peak，而强度 ≥0.6
+	## 几乎恰好落在 peak —— 两条件近乎互斥 → 常规坦克基本刷不出来（用户实测）。
+	## 现在 peak 不再排除（Tank 与尸潮并存本就是原作的高压场面）。紧张度门槛接下一条。
+	## 概率随难度/人数上调（同特感：单人受难度、多人受人数）。
+	var rate: float = _special_rate_scale()
 	if _count_alive_tanks() > 0:
 		return
 	if _tank_cooldown_left > 0.0:
 		_tank_cooldown_left -= delta
 		return
-	# Tank 门槛比特感更高：局面已经吃力时才是它出场的时候
-	if get_intensity() < tank_intensity_threshold:
+	# Tank 门槛比特感高：局面吃力时才出场。按 ÷倍率 放宽（难度/人数越高越易触发）。
+	if get_intensity() < tank_intensity_threshold / rate:
 		return
 	if _spawn_tank(_tank_data, player):
-		_tank_cooldown_left = randf_range(tank_cooldown_min, tank_cooldown_max)
+		_tank_cooldown_left = randf_range(tank_cooldown_min, tank_cooldown_max) / rate
 
 
 func _update_holdout_tank(delta: float, player: Node2D) -> void:
 	if not holdout_tank_enabled or _holdout_tank_data == null:
 		return
+	## 防守战 Tank 也随难度/人数上调（2026-10-13）：缩短首只延迟与冷却。
+	var rate: float = _special_rate_scale()
 	if _count_alive_tanks() >= maxi(holdout_tank_max_alive, 1):
 		return
 	# 首只延迟：防守战开始后先给一段预热，再上 Tank
@@ -2284,7 +2305,7 @@ func _update_holdout_tank(delta: float, player: Node2D) -> void:
 		return
 	if _spawn_tank(_holdout_tank_data, player):
 		_holdout_tank_cooldown_left = randf_range(
-			holdout_tank_cooldown_min, holdout_tank_cooldown_max)
+			holdout_tank_cooldown_min, holdout_tank_cooldown_max) / rate
 
 
 ## 生成一只 Tank。与特感共用 spawn_special_enemy（Tank 也是 SpecialEnemyData），

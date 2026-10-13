@@ -112,20 +112,24 @@ class_name DirectorConfig extends Node
 ## .tres 拖进本数组）。同屏互斥由 special_max_alive 控制。
 @export var special_pool: Array[SpecialEnemyData] = []
 ## 开场后到第一只特感出现的最短延迟秒数。先给玩家一段普通战斗再上强度。
-@export var special_first_delay_min: float = 10.0
+@export var special_first_delay_min: float = 8.0
 ## 第一只特感的最长延迟秒数。
-@export var special_first_delay_max: float = 50.0
+@export var special_first_delay_max: float = 30.0
 ## 两只特感之间的最短冷却秒数（自上一只刷出起算）。
 ## 2026-09-16 用户反馈「很少有特感出现」→ 50/90 下调到 30/50。
-@export var special_cooldown_min: float = 30.0
+## 2026-10-13 用户再反馈「特感概率太小、原作高很多」→ 大幅下调到 12/22（接近原作高频）。
+## 实际间隔还会被 `Players.spawn_scale()`（单人难度 / 多人人数）再除一遍 → 更高频。
+@export var special_cooldown_min: float = 12.0
 ## 两只特感之间的最长冷却秒数。
-@export var special_cooldown_max: float = 50.0
+@export var special_cooldown_max: float = 22.0
 ## 同屏最多存活几只特感（含濒死/倒地中的）。默认 1 = 互斥。
 ## ⚠ 2026-09-16 起本值才真正生效：此前 _update_specials 写死「有任意存活特感就不刷」，
 ## 地图 Inspector 配 2/3 全被无视（叠加"打不死的特感长期占位"→ 特感绝迹）。
-@export var special_max_alive: int = 1
+## 运行时还会乘 `Players.spawn_scale()` 放宽同屏上限。
+@export var special_max_alive: int = 2
 ## 紧张度门槛（0.0~1.0）：低于此值不刷特感。特感是压力放大器，玩家闲逛时不出现。
-@export var special_intensity_threshold: float = 0.25
+## 运行时按 ÷`Players.spawn_scale()` 放宽（难度/人数越高越易够到）。
+@export var special_intensity_threshold: float = 0.1
 
 @export_group("夜间视界（Night Hunter）")
 ## 黑暗强度 0~1。0=白天（不生成 NightOverlay，默认，现有关卡行为不变）。
@@ -136,17 +140,21 @@ class_name DirectorConfig extends Node
 @export_group("生成 — Boss / Tank（タイラント T-002）")
 ## 常规流程里可否刷 Tank。原作：ステージ中に遭遇した時は逃げられることもある
 ## （普通关卡里 Tank 是可选遭遇，不一定非打）。false = 常规不刷，只靠防守战/组件触发。
-@export var tank_enabled: bool = false
+## 2026-10-13 用户需求「最终章前也该能遇到坦克」→ 默认改为 **true**（各图可单独关）。
+@export var tank_enabled: bool = true
 ## 常规刷 Tank 用的资源（留空 = 用内置默认 tres/specials/タイラントT002.tres）。
 @export var tank_data: SpecialEnemyData = null
 ## 常规流程里的 Tank 冷却（秒）：两只 Tank 之间的最短间隔。
-## 原作 Tank 是低频压迫型，频率应远低于特感 → 默认 180 秒起。
-@export var tank_cooldown_min: float = 180.0
-@export var tank_cooldown_max: float = 300.0
+## 原作 Tank 是低频压迫型，频率应远低于特感 → 2026-10-13 用户要求提高出现率，
+## 从 180~300 大幅下调到 70~130（再经 `Players.spawn_scale()` 按难度/人数除一遍）。
+@export var tank_cooldown_min: float = 70.0
+@export var tank_cooldown_max: float = 130.0
 ## 同屏最多几只 Tank（默认 1 = 互斥，对应原作「重点敌人互斥」var1361 机制）。
 @export var tank_max_alive: int = 1
 ## 常规刷 Tank 的紧张度门槛。比特感更高：Tank 只在局面已经吃力时出现。
-@export var tank_intensity_threshold: float = 0.6
+## 2026-10-13 从 0.6 下调到 0.35（运行时还会按 ÷`Players.spawn_scale()` 再放宽；
+## 且不再排除尸潮 peak —— 旧 0.6 与「非 peak」近乎互斥导致坦克基本刷不出）。
+@export var tank_intensity_threshold: float = 0.35
 
 @export_subgroup("防守战专属 Tank（HoldoutMachine 期间）")
 ## 防守战期间是否刷 Tank。原作 147 图防守战里 Tank 是核心压迫源，频率也与常规不同。

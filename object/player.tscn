@@ -20,7 +20,7 @@ size = Vector2(24, 27)
 [node name="Player" type="CharacterBody2D" unique_id=1681709351]
 z_index = 1
 collision_layer = 4
-collision_mask = 15
+collision_mask = 11
 platform_floor_layers = 4294967040
 script = ExtResource("1")
 

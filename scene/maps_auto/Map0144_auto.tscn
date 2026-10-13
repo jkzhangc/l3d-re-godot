@@ -20,7 +20,7 @@ position = Vector2(2400, 2672)
 [node name="Player" type="CharacterBody2D" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_r0den")]
 z_index = 1
 collision_layer = 4
-collision_mask = 15
+collision_mask = 11
 platform_floor_layers = 4294967040
 script = ExtResource("3_nijgi")
 
