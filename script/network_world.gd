@@ -391,12 +391,12 @@ func _ready() -> void:
 	else:
 		# 先接管地图预置 Player，阻止其继续执行离线状态机；随后才告知 Host 场景已就绪。
 		_client_initialize_world()
-		# 专用回归在 scene-ready 上报前直接调用生产输入采集函数，
-		# 从而证明首图无需等待 world_snapshot 也能发出 submit_input。
+		# ★新契约（2026-10-13）：客户端在收到 Host 首个世界快照（= Host 的
+		# `<场景>/NetworkWorld` 已存在）之前**不发**场景节点 RPC，否则首图切换时
+		# 命中 Host 尚未创建的节点路径而刷屏 `Node not found: "Map0136/NetworkWorld"`。
+		# 这里只记录门控状态；实际输入由下方协程在快照到达后驱动并断言 Host 收到。
 		if _is_auto_client_ready_input_test():
-			Input.action_press("右")
-			_capture_client_input(LOCAL_INPUT_INTERVAL)
-			print("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_SENT initial_world_received=%s" % _initial_world_received)
+			print("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_GATED initial_world_received=%s send_ready=%s" % [_initial_world_received, _client_ready_to_send()])
 		# 不能直接对场景根 RPC：Host 可能尚在切图；Net 是常驻 Autoload，会缓冲 ready。
 		net.report_game_scene_ready.rpc_id(1, _scene_path)
 		if "--net-test=client" in OS.get_cmdline_user_args():
@@ -796,7 +796,7 @@ func _capture_revive_input() -> bool:
 			if net.is_host:
 				if not _revive_attempts.has(peer_id):
 					_try_host_start_revive(peer_id, target_id)
-			elif _client_local_ready:
+			elif _client_ready_to_send():
 				# 跟随宿主上报本机预测坐标（滞后补偿）：Host 的起救距离校验在权威坐标上做，
 				# 不补偿会把"看着贴在队友身上"判成超出 52px 而静默拒绝。
 				var attempt: Dictionary = _revive_attempts.get(peer_id, {})
@@ -815,7 +815,7 @@ func _capture_revive_input() -> bool:
 	if Input.is_action_just_released("功能键") and _revive_attempts.has(peer_id):
 		if net.is_host:
 			_cancel_host_revive(peer_id)
-		elif _client_local_ready:
+		elif _client_ready_to_send():
 			_revive_attempts.erase(peer_id)
 			revive_cancel_request.rpc_id(1)
 		return true
@@ -1077,7 +1077,7 @@ func _capture_throwable_input() -> bool:
 	if Global.item_key_just_pressed("投掷物键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, not held)
-		elif _client_local_ready:
+		elif _client_ready_to_send():
 			throwable_hold_request.rpc_id(1, not held)
 		return true
 	if not held:
@@ -1085,20 +1085,20 @@ func _capture_throwable_input() -> bool:
 	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, false)
-		elif _client_local_ready:
+		elif _client_ready_to_send():
 			throwable_hold_request.rpc_id(1, false)
 		return true
 	if not aiming and Input.is_action_just_pressed("确定键"):
 		if net.is_host:
 			_try_host_set_throwable_aiming(local_id, true)
-		elif _client_local_ready:
+		elif _client_ready_to_send():
 			throwable_aim_request.rpc_id(1, true)
 		return true
 	if aiming:
 		if Input.is_action_just_pressed("取消键"):
 			if net.is_host:
 				_try_host_set_throwable_aiming(local_id, false)
-			elif _client_local_ready:
+			elif _client_ready_to_send():
 				throwable_aim_request.rpc_id(1, false)
 		elif Input.is_action_just_pressed("投掷加格键"):
 			_request_throwable_range(1)
@@ -1107,7 +1107,7 @@ func _capture_throwable_input() -> bool:
 		elif Input.is_action_just_released("确定键"):
 			if net.is_host:
 				_try_host_throw_throwable(local_id)
-			elif _client_local_ready:
+			elif _client_ready_to_send():
 				throwable_throw_request.rpc_id(1)
 		return true
 	return true
@@ -1116,7 +1116,7 @@ func _capture_throwable_input() -> bool:
 func _request_throwable_range(delta: int) -> void:
 	if net.is_host:
 		_try_host_adjust_throwable_range(int(net.my_peer_id), delta)
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		throwable_range_request.rpc_id(1, clampi(delta, -1, 1))
 
 
@@ -1132,7 +1132,7 @@ func _capture_weapon_raise_input() -> void:
 		return
 	if net.is_host:
 		_try_host_toggle_weapon(int(net.my_peer_id))
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		weapon_toggle_request.rpc_id(1)
 
 
@@ -1166,7 +1166,7 @@ func _request_facing_lock(toggle: bool, locked: bool) -> void:
 	var local_id := int(net.my_peer_id)
 	if net.is_host:
 		_try_host_set_facing_lock(local_id, toggle, locked)
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		var entry: Dictionary = _players.get(local_id, {})
 		var node := _player_node(entry)
 		if not is_instance_valid(node):
@@ -1181,7 +1181,7 @@ func _request_facing_lock(toggle: bool, locked: bool) -> void:
 func _request_weapon_switch(slot: String) -> void:
 	if net.is_host:
 		_try_host_weapon_switch(int(net.my_peer_id), slot)
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		# Client 只提交槽位意图；Host 从自身 PlayerState 校验真实装备。
 		weapon_switch_request.rpc_id(1, slot)
 
@@ -1191,7 +1191,7 @@ func _capture_reload_input() -> void:
 		return
 	if net.is_host:
 		_try_host_reload(int(net.my_peer_id))
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		# Client 仅请求装填；Host 校验库存并一次性提交权威弹药结果。
 		reload_request.rpc_id(1)
 
@@ -1201,7 +1201,7 @@ func _capture_shove_input() -> void:
 		return
 	if net.is_host:
 		_try_host_shove(int(net.my_peer_id))
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		# 带本机位置上报（滞后补偿）：Host 按权威坐标做命中查询，需要客户端位置提示。
 		shove_request.rpc_id(1, _local_claim_position())
 
@@ -1213,7 +1213,7 @@ func _capture_awaken_input() -> void:
 		return
 	if net.is_host:
 		_try_host_awaken(int(net.my_peer_id))
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		# 轻量预校验（本地 node 的武器模式由表现接口维护）减少无效请求；TP 由 Host 权威校验。
 		var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 		var node := _player_node(entry)
@@ -1281,7 +1281,7 @@ func _capture_fire_input() -> void:
 		return
 	if net.is_host:
 		_try_host_attack(local_id)
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		# Client 只提交攻击意图；位置、朝向、武器、弹药和伤害均由 Host 重建与校验。
 		var now := Time.get_ticks_msec()
 		var interval := _get_attack_cooldown_msec(weapon) if weapon else 100
@@ -1299,6 +1299,24 @@ func _local_claim_position() -> Variant:
 	return node.global_position if is_instance_valid(node) else null
 
 
+## 客户端此刻是否可以向 Host 发送「场景节点 RPC」。
+##
+## ★必须同时满足两点：本地世界已初始化（`_client_local_ready`）+ **已收到 Host 的首个世界快照**
+## （`_initial_world_received`，等价于「Host 的 `<场景>/NetworkWorld` 节点已存在」）。
+##
+## 【为什么】（2026-10-13 用户真机 + 无头复现，报错逐字一致）
+## RPC 按**节点路径**寻址（形如 `<场景根>/NetworkWorld`）。首图切换时 Host 的场景更重
+## （大图要额外跑一次性 A* 预构建）→ 其 `NetworkWorld` 的 deferred 创建**晚于** Client；
+## 而 Client 一旦本地就绪就每 50ms 发 `submit_input` → Host 树里此刻还没有该节点 →
+## 引擎刷屏 `get_node: Node not found: "Map0136/NetworkWorld"` +
+## `Failed to get cached node from peer …` + `Invalid packet received. Requested node was not found.`。
+## `0383c02d` 只收敛了**反向**（Host→Client，见 `_send_to_ready_clients`），本方向当时漏了。
+## 未就绪期间 Client 仍照常**本地预测**移动/表现（那些不走 RPC），只是暂不向 Host 提交；
+## Host 首个可靠世界快照到达后即解封，不丢任何权威请求（它们本就在此窗口后才该生效）。
+func _client_ready_to_send() -> bool:
+	return _client_local_ready and _initial_world_received
+
+
 func _capture_host_input(blocked: bool = false) -> void:
 	if not _players.has(net.my_peer_id):
 		return
@@ -1311,8 +1329,11 @@ func _capture_host_input(blocked: bool = false) -> void:
 ## RPC 丢失时，下一次输入包会覆盖旧状态；因此该 RPC 可以使用 unreliable_ordered。
 ## Host 收到后才会真正改变远端玩家的速度和位置。
 func _capture_client_input(delta: float, blocked: bool = false) -> void:
-	# 首图的本地预置玩家在 _client_initialize_world() 已安全接管；不必等待完整世界快照。
-	if not _client_local_ready:
+	# ★必须等 Host 首个世界快照（= Host 的 `<场景>/NetworkWorld` 已存在）再发：否则首图
+	# 切换时 Host 建世界更慢（大图要预构建 A*），本端 `submit_input` 会命中不存在的节点路径
+	# 刷屏 `Node not found: "Map0136/NetworkWorld"`（2026-10-13 用户真机复现，见 `_client_ready_to_send`）。
+	# 未就绪期间仅**本地预测**移动（`_predict_client_local_movement` 照常），手感不受影响。
+	if not _client_ready_to_send():
 		return
 	_input_accumulator += delta
 	if _input_accumulator < LOCAL_INPUT_INTERVAL:
@@ -1322,6 +1343,8 @@ func _capture_client_input(delta: float, blocked: bool = false) -> void:
 
 
 func _predict_client_local_movement(blocked: bool = false) -> void:
+	## 纯本地预测（不发 RPC）—— 仅需本地世界就绪，不必等 Host 快照，
+	## 否则加载期玩家会"按了不动"。
 	if not _client_local_ready:
 		return
 	var peer_id := int(net.my_peer_id)
@@ -4217,7 +4240,7 @@ func request_drop_all() -> void:
 		return
 	if net.is_host:
 		_try_host_drop_all(int(net.my_peer_id))
-	elif _client_local_ready:
+	elif _client_ready_to_send():
 		drop_all_request.rpc_id(1)
 
 

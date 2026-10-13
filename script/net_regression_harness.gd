@@ -461,8 +461,20 @@ func _run_auto_client_ready_input_test() -> void:
 	if not _client_local_ready:
 		printerr("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_FAILED local_ready=false")
 		return
-	# 输入已在 _ready() 中、scene-ready 上报前发出；短暂保持按键以避免网络帧恰好错过，
-	# 再等待 Host 对该输入的权威接收。
+	## ★契约变更（2026-10-13）：不再在 world snapshot 前发 submit_input（那会命中 Host
+	## 尚未创建的场景节点路径 → 报错刷屏）。改为**等首个世界快照到达后**再发，并断言
+	## 此时 `_client_ready_to_send()` 已放行 —— 既覆盖"客户端能连续提交输入"，
+	## 又覆盖"快照前被正确门控"。
+	var deadline := Time.get_ticks_msec() + 6000
+	while not _initial_world_received and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _initial_world_received or not _client_ready_to_send():
+		printerr("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_FAILED world=%s send_ready=%s" % [
+			str(_initial_world_received), str(_client_ready_to_send())])
+		return
+	print("[NetworkWorld] AUTO_CLIENT_READY_INPUT_CLIENT_SENT initial_world_received=%s" % _initial_world_received)
+	# 快照已到 → 门控放行，按右并让生产输入采集路径持续提交，等待 Host 权威接收。
+	Input.action_press("右")
 	await get_tree().create_timer(0.35).timeout
 	Input.action_release("右")
 	await get_tree().create_timer(1.00).timeout
