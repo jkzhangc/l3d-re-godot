@@ -1827,6 +1827,14 @@ func deactivate_awaken() -> void:
 	_special_action.deactivate_awaken()
 
 
+## ★覚醒发动核心（补转发门面，2026-10-13）：`network_world.gd::_try_host_awaken`
+## 以 `node._activate_awaken_core()` 直调本方法（Host 替 Client 结算覚醒）；2026-10-08
+## 服务拆分时漏了这条门面 → 联机 Host 玩家按觉醒键会报 `Nonexistent function`
+## （`awaken_net_check` 命中的 `_activate_awaken_core` 报错即此）。补上，外部调用点零改动。
+func _activate_awaken_core() -> bool:
+	return _special_action._activate_awaken_core()
+
+
 func _deactivate_awaken() -> void:
 	_special_action.deactivate_awaken()
 
