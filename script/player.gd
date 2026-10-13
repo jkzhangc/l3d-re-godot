@@ -468,7 +468,8 @@ func _process(delta: float) -> void:
 		_update_network_sa_state(delta)
 		# 本地预测实体由 NetworkWorld 在物理帧直接移动；权威快照只提供纠偏目标，
 		# 绝不直接写位置 —— 否则预测位置被反复拉回权威坐标，表现为拖影/顿挫。
-		if network_local_prediction and not _is_dying and _network_has_target:
+		# ⚠ 倒地玩家（network_downed）两端都要能爬行 → 纠偏**必须放行**；只有真死亡才跳过。
+		if network_local_prediction and _network_has_target and (not _is_dying or network_downed):
 			var error := _network_target_position - global_position
 			var error_length := error.length()
 			## 期望滞后带宽 = 近期速度 × RTT（即"本预测领先权威多少属正常"）。
@@ -699,8 +700,12 @@ func _network_rtt_seconds(delta: float) -> float:
 ## 位置仍由本地输入驱动（_physics_process 预测），_process 按偏差平滑收敛。
 ## 朝向在有本地移动输入时由预测立即驱动、不回写；静止或被锁定时以权威值为准 ——
 ## 脚本化输入（回归测试直接 submit_input）没有本地按键，锁定向/转向都依赖这一路。
+##
+## ⚠ **倒地（downed）与真死亡都令 `_is_dying` 为真，但语义不同**（2026-10-13 用户实测
+## 「主机倒地能爬、客户端不能」）：倒地玩家两端都应能爬行，本地预测与权威纠偏**必须放行**；
+## 真死亡才冻结（尸体直接对齐权威死亡坐标）。用 `network_downed` 区分二者。
 func apply_network_authority_target(authority_position: Vector2, authority_facing: int) -> void:
-	if not network_local_prediction or _is_dying:
+	if not network_local_prediction or (_is_dying and not network_downed):
 		return
 	_network_target_position = authority_position
 	_network_has_target = true

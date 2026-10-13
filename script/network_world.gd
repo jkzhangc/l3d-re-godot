@@ -1350,16 +1350,26 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 	var peer_id := int(net.my_peer_id)
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := _player_node(entry)
-	if not is_instance_valid(node) or node.is_network_dead() or not node.network_local_prediction:
+	if not is_instance_valid(node) or not node.network_local_prediction:
+		return
+	## ★倒地（downed）与真死亡都令 `is_network_dead()` 为真，但**倒地玩家要能爬行**：
+	## 本地预测必须放行，否则客户端倒地后原地不动（与主机不一致，2026-10-13 用户实测）。
+	## 真死亡（非倒地）才跳过。爬行速度与 Host 的 DOWNED_CRAWL_SPEED 保持一致。
+	var downed: bool = bool(entry.get("downed", false))
+	if node.is_network_dead() and not downed:
 		return
 	var direction := Vector2.ZERO if blocked else _read_local_direction()
 	var walking := false if blocked else Input.is_action_pressed("行走键")
 	var moving := not direction.is_zero_approx()
-	node.velocity = direction * (node.walk_speed if walking else node.run_speed)
+	if downed:
+		# 倒地：固定爬行速度（忽略走/跑），与 Host `_simulate_host_players` 同口径
+		node.velocity = direction.limit_length(1.0) * DOWNED_CRAWL_SPEED
+	else:
+		node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 	if moving:
 		node.update_facing(direction)
 	node.move_with_corner_assist()
-	node.update_appearance(moving, walking)
+	node.update_appearance(moving, true if downed else walking)
 	_set_input(peer_id, direction, walking)
 
 
@@ -3036,7 +3046,11 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 		return
 	var entry: Dictionary = _players.get(sender, {})
 	var node := _player_node(entry)
-	if is_instance_valid(node) and node.is_network_dead():
+	## ★倒地（downed）与真死亡（dead）都令 `is_network_dead()` 为真，但**倒地玩家必须
+	## 保留移动输入**（Host 以 DOWNED_CRAWL_SPEED 结算爬行）。旧实现不区分二者 →
+	## 客户端倒地玩家的输入被这里清零 → 永远爬不动，与「主机可爬、客户端不可」不一致
+	## （2026-10-13 用户实测）。只有**真死亡**（非倒地）才清零。
+	if is_instance_valid(node) and node.is_network_dead() and not bool(entry.get("downed", false)):
 		_set_input(sender, Vector2.ZERO, false)
 		return
 	_set_input(sender, direction, walking)

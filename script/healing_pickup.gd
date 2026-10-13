@@ -180,7 +180,15 @@ func _process_network_pickup(delta: float) -> bool:
 	if not throwable_replacement and not require_function_key:
 		_request_network_pickup()
 		return false
-	return _process_hold(delta, throwable_replacement)
+	## ★投掷物替换（已持有→换新）也必须走**网络版按住**（2026-10-13 用户实测）：
+	## 旧实现落到 `_process_hold → _do_pickup()` 的单机本地事务 —— 在 Client 本地域直接
+	## 改 `state.throwable`、本地掉落旧物、本地 `queue_free`，**Host 完全不知情**，
+	## 下一拍 Host 快照（`throwable_id` + `pickup_snapshot`）把状态写回旧值、掉落物重建 →
+	## 表现为「按确定键替换没同步 / 换完又变回去 / 地上掉落物复活」。
+	## 与 weapon_pickup 的网络版按住同款：满进度只提交请求，事务在 Host。
+	if throwable_replacement:
+		return _process_network_hold(delta, true)
+	return _process_hold(delta, false)
 
 
 func _request_network_pickup() -> void:
@@ -201,6 +209,26 @@ func _request_network_pickup() -> void:
 		world.request_pickup(network_pickup_id, claim)
 	else:
 		_network_pickup_request_pending = false
+
+
+## 网络版按住流程（2026-10-13）：交互条件与单机 `_process_hold` 一致，但满进度**只提交
+## 拾取请求**，绝不本地 `_do_pickup()` —— 事务在 Host（与 weapon_pickup 的
+## `_process_network_hold` 同款）。用于「已持有→替换」的分支（默认按确定键）。
+func _process_network_hold(delta: float, throwable_replacement: bool) -> bool:
+	## 玩家正在武器/投掷物举起/瞄准状态时不触发替换（避免与确定键瞄准冲突）。
+	if not throwable_replacement:
+		return false
+	if _player_ref.get("player_in_weapon_state"):
+		_hold_timer = 0.0
+		return false
+	if Input.is_action_pressed("确定键"):
+		_hold_timer += delta
+		if _hold_timer >= hold_time:
+			_request_network_pickup()
+			return false
+		return true
+	_hold_timer = 0.0
+	return false
 
 
 func configure_network_pickup(pickup_id: int, presentation_only: bool = false) -> void:

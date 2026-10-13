@@ -234,6 +234,15 @@ var _tree_hooked: bool = false      ## 是否已挂 SceneTree.node_added（补�
 ## 结束音效是否已播（一场防守战只响一次）—— Host 的 `_finish_holdout` 与客户端的
 ## `apply_remote_completion` 都可能到达，中途加入补发也会重放完成广播，必须幂等。
 var _finish_sound_played: bool = false
+## Client 侧镜像的防守战进行态（2026-10-13）：客户端 `_active` 恒为 false（启动权在
+## Host），但 label 需据此显示「防守中…」—— 否则站在机器旁永远显示「启动机器」（未启动态）。
+var _remote_active: bool = false
+## Client 侧镜像的阶段（用于只在 **进入 PREPARE / ACTIVE** 的边沿各播一次音效，
+## 避免 500ms 周期包重复触发）。0=IDLE 与默认值一致。
+var _remote_phase: int = Phase.IDLE
+## Client 侧是否已播过本场的 prepare_sound / alert_sound（边沿去重，防周期包重放）。
+var _remote_prepare_played: bool = false
+var _remote_alert_played: bool = false
 
 
 # ═══════════════════════════════════════
@@ -568,7 +577,8 @@ func _update_label() -> void:
 	if not label:
 		return
 
-	if _active:
+	## ★`_remote_active` 供 Client 用（客户端 `_active` 恒 false，进行态经广播镜像）。
+	if _active or _remote_active:
 		label.text = interact_label_running
 		label.visible = _can_interact and not interact_label_running.is_empty()
 		return
@@ -1079,6 +1089,24 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 	if _net_token != 0 and token != _net_token:
 		return  # 旧场景残留包，忽略
 	_net_token = token
+	## ★Client 侧镜像进行态（2026-10-13 用户实测）：客户端启动权在 Host，`_active` 恒 false，
+	## 但 label 需要「防守中…」。此处按权威 phase 镜像；PREPARE/ACTIVE 视为进行中。
+	_remote_active = phase == Phase.PREPARE or phase == Phase.ACTIVE
+	## 音效边沿同步（prepare_sound / alert_sound 只在 Host 本地播 → 客户端静默，
+	## 用户实测「客户端开机器 alert_sound 不响」）。只在**首次进入该阶段**播一次，
+	## 500ms 周期包不重放；进入新一场（phase 回到 IDLE/PREPARE）时重新武装。
+	if phase == Phase.IDLE or phase == Phase.SETTLE:
+		_remote_prepare_played = false
+		_remote_alert_played = false
+	if phase == Phase.PREPARE and not _remote_prepare_played:
+		_remote_prepare_played = true
+		if prepare_sound:
+			Global.play_sfx_managed(prepare_sound, get_tree().current_scene)
+	if phase == Phase.ACTIVE and not _remote_alert_played:
+		_remote_alert_played = true
+		if alert_sound:
+			Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+	_remote_phase = phase
 	if phase <= 0:
 		## ★结束哨兵：必须**记住是哪一场结束了**（2026-09-26）——
 		## Host 的 _finish_holdout 先广播 IDLE（本行把 _net_token 置 -1）、
@@ -1089,6 +1117,9 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 		_net_token = -1  # 结束哨兵：后续迟到包一律忽略，直到下一场 trigger 重置
 	_drive_local_hud(phase, remaining, total)
 	_drive_remote_holdout_music(phase)
+	## ★label 也要随权威状态刷新（2026-10-13）：`_process` 每帧的 `_update_label()`
+	## 依赖 `_remote_active`，此处置位后立即刷新一次，避免"站机器旁仍显示未启动"。
+	_update_label()
 
 
 ## Client 防守战 BGM 驱动（A6，2026-09-18）：复用 holdout_state_sync 通道按
@@ -1128,6 +1159,7 @@ func apply_remote_completion(token: int) -> void:
 	## 与权威端保持一致：客户端也把本场标记为已结束（否则还能再"完成"一次、
 	## 提示文字/标签状态与权威端不一致）。
 	_active = false
+	_remote_active = false
 	_completed = true
 	_local_hud_shown = false
 	## 结束音效也两端同源（与外观/节点显隐一样）：客户端听到的完成音效由本路径负责。

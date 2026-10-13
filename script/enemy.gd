@@ -479,13 +479,16 @@ var _current_char_index: int = 0
 ## （旧的每帧 lerp 会让远端实体起停带"摩擦力"观感）。
 const NETWORK_SNAPSHOT_INTERP := preload("res://script/network_snapshot_interp.gd")
 ## 敌人快照跟随 player_snapshot 到达（60Hz）。
-## 2026-10-10（用户：敌人移动"一卡一卡"，要求延迟降到 ~15ms）：
-##   · 下限降到 0.015（15ms）—— 已**低于** 60Hz 快照间隔 16.7ms，纯插值会因缓冲干涸而卡；
-##   · 因此敌人插值器**开启有限外推**（第 3 个参数 true），在样本耗尽时按速度补一小段，
-##     把"一卡一卡"抹平。远端玩家仍用纯插值（已确认流畅，不引入外推副作用）。
-const NETWORK_RENDER_DELAY := 0.015
-## 生效延迟**硬上限**（抖动时不无限膨胀，延迟可预期）。
-const NETWORK_MAX_RENDER_DELAY := 0.045
+## 2026-10-10（用户：敌人移动"一卡一卡"，要求延迟降到 ~15ms）：曾把下限压到 0.015
+##   —— 但 15ms **低于** 60Hz 快照间隔 16.7ms，纯插值每周期都会缓冲干涸，
+##   只能靠受限外推硬撑；一旦丢包/抖动（间隔 > 外推上限）就"停一下再跳" → 反而更顿。
+## 2026-10-13（用户再反馈"一卡一卡"）：把基延迟抬到 **略高于快照间隔**（1.25×16.7≈21ms），
+##   使每个渲染周期都有 ≥ 1 个完整样本可插值，干涸窗口消失 → 抖动时也平滑。
+##   代价是远端敌人延迟约 +6ms（21ms 起），换取无停顿的匀速运动，性价比更高。
+const NETWORK_RENDER_DELAY := 0.021
+## 生效延迟**硬上限**（抖动时不无限膨胀，延迟可预期）。抖动时按到达间隔自适应上调，
+## 上限放宽到 0.06 以便抖动期吸收更多样本、避免外推不足造成的停顿跳变。
+const NETWORK_MAX_RENDER_DELAY := 0.060
 
 var _remote_interp: Variant = null
 
@@ -682,8 +685,11 @@ func _process(delta: float) -> void:
 			var render_position: Variant = _remote_interp.sample_render_position()
 			if render_position != null:
 				global_position = render_position
-		# 步行/跑步模式：Client 无 AI，按同一距离规则本地推导（零网络改动）
-		_update_run_mode()
+		# 步行/跑步模式：**Client 不跑本地距离启发式**（2026-10-13 修「坦克走路无动画」）。
+		# 旧实现让 Client 本地调 `_update_run_mode()`，但它的清除点 `notify_run_mode_hit()`
+		# 只在被禁用的状态机里被调用 → `_run_mode` 一旦置真就永久锁死 → 与 Host 权威形态
+		# 分叉（走路时会误停动画 timer → 平移）。现改为完全跟随快照的 `visual_char_index`
+		# （在 `apply_network_presentation` 里更新），零网络改动、两端形态必然一致。
 		if Global.debug_visuals:
 			queue_redraw()
 		return
@@ -807,18 +813,33 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		return
 
 	_is_dead = false
+	## ★客户端形态跟随（2026-10-13 用户实测「坦克走路无动画、只有跑步有，像平移」）：
+	## 客户端的本地 `_run_mode` 会**永久锁死**——它的清除点 `notify_run_mode_hit()` 只在
+	## 状态机（攻击/突进状态）里被调用，而 Client 的 StateMachine 被 `PROCESS_MODE_DISABLED`
+	## （见 `_disable_network_simulation`）→ 一旦曾判定为跑步形态就再也回不到步行 →
+	## 本地 `walk_char_index` 恒为跑步行。此后 Host 走路下发行走行时，下面旧逻辑把它
+	## 误判成"非行走的动作帧"→ **停掉 animation_timer**、只画一张站立帧 → 走路变平移。
+	## 修法：非动作表期间，**直接跟随快照的 `visual_char_index` 更新本地行走行**，
+	## 使客户端形态与 Host 权威形态始终一致。动作表（攻击/突进）期间不受影响 —— 那由
+	## `enemy_action_presentation` RPC 维护的 `has_action_texture()` + 快照动作帧驱动。
+	if visual_char_index >= 0 and not has_action_texture() \
+			and visual_char_index != walk_char_index:
+		walk_char_index = visual_char_index
+		_anim_step = 0
 	update_moving(moving)
 	# 联机（09-22 实测「客户端丧尸攻击动画反复抽搐」根因）：Client 敌人显示动作帧
 	# （攻击/突进/张嘴等非行走角色格）期间**必须停掉行走动画 timer** —— timer 回调
 	# _on_animation_timer_timeout → _refresh_sprite() 会按 _anim_step 把 walk_char 的
 	# 行走帧插进动作帧之间，与快照下发的动作帧互相覆盖，表现为「第二帧瞬间跳第一帧、又跳回
 	# 第二帧」。与 Host 动作状态同规则（动作表激活期间禁 _refresh_sprite）。
-	# 快照 char 与 walk_char 一致时（正常行走/跑步）恢复 timer，行走动画仍本地推进。
-	if visual_char_index >= 0 and visual_char_index != walk_char_index:
+	# ★判据用 `has_action_texture()`（由 announce_enemy_action RPC 同步），而非
+	# `visual_char_index != walk_char_index` —— 后者会把「客户端锁死形态」误当动作帧。
+	if has_action_texture():
 		_anim_step = 0
 		if animation_timer and not animation_timer.is_stopped():
 			animation_timer.stop()
-		_refresh_sprite_with_index(visual_char_index)
+		if visual_char_index >= 0:
+			_refresh_sprite_with_index(visual_char_index)
 	elif animation_timer and animation_timer.is_stopped():
 		animation_timer.start()
 	# P0-B3 元素染色（炎/雷/氷）随快照同步；-1 = 本包未携带，保持现状。

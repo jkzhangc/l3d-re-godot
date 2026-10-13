@@ -188,6 +188,7 @@ func leave() -> void:
 	_session_player_states.clear()
 	## 延迟测量一并复位：新会话要重新量，不能沿用上一局残留的数值/界面。
 	rtt_ms = -1
+	rtt_smooth_ms = -1
 	_peer_rtt_ms.clear()
 	_ping_accum = 0.0
 	if _ping_layer != null and is_instance_valid(_ping_layer):
@@ -730,8 +731,15 @@ const PING_RECT := Rect2(12.0, -46.0, 280.0, 34.0)
 ## HUD 层级：在战斗 HUD(10) 之上、触摸层(80)/黑幕(90)/菜单(100) 之下。
 const PING_LAYER: int = 20
 
-var rtt_ms: int = -1                   ## 本机 ↔ 主机的往返延迟；-1 = 尚未测到
+var rtt_ms: int = -1                   ## 本机 ↔ 主机最近一次往返的**原始**采样（预测侧消费）
 var _peer_rtt_ms: Dictionary = {}      ## 主机专用：client peer_id → 它上报的往返延迟
+## HUD 展示用的平滑 RTT（2026-10-13 用户实测「延迟 20↔100 反复跳」）。
+## `rtt_ms` 是每秒一次的**单次采样**（且走 reliable，丢包重传会让单发飙到 100ms+），
+## 直接显示必然抖动。这里做 EMA（指数滑动平均）：小幅抖动被抹平，真实趋势仍跟得上。
+## 预测侧（player.gd 死区）仍读原始 `rtt_ms`（带自身「跟涨快、回落慢」的保守平滑），不受影响。
+var rtt_smooth_ms: int = -1
+## EMA 权重：新样本占比（越小越平滑、越迟钝）。0.25 ≈ 4 拍时间常数。
+const RTT_EMA_ALPHA: float = 0.25
 var _ping_accum: float = 0.0
 var _ping_layer: CanvasLayer = null
 var _ping_label: Label = null
@@ -769,9 +777,9 @@ func _ping_text() -> String:
 		if worst < 0:
 			return "延迟 —"
 		return "最差 %dms" % worst
-	if rtt_ms < 0:
+	if rtt_smooth_ms < 0:
 		return "延迟 —"
-	return "延迟 %dms" % rtt_ms
+	return "延迟 %dms" % rtt_smooth_ms
 
 
 ## 主机视角：所有**仍在连接中**的 Client 里最差的一条往返延迟；一条都没有 → -1。
@@ -803,9 +811,15 @@ func net_ping(sent_msec: int, sender_rtt_ms: int) -> void:
 
 
 ## Host → Client：把时间戳原样回传，由发起方自己算往返。
+## `rtt_ms` 保留原始采样（预测侧消费）；`rtt_smooth_ms` 是其 EMA（HUD 展示用）。
 @rpc("authority", "call_remote", "reliable")
 func net_pong(sent_msec: int) -> void:
 	rtt_ms = maxi(0, int(Time.get_ticks_msec()) - sent_msec)
+	if rtt_smooth_ms < 0:
+		rtt_smooth_ms = rtt_ms
+	else:
+		rtt_smooth_ms = int(roundf(
+			rtt_smooth_ms + RTT_EMA_ALPHA * float(rtt_ms - rtt_smooth_ms)))
 
 
 ## 左下角 HUD 懒创建（一次）。挂在 Net 下 → 跨场景常驻，不随地图重建。
