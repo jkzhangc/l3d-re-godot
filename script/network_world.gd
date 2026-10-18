@@ -499,10 +499,9 @@ func _physics_process(delta: float) -> void:
 	# 丸呑み（C3）：本地玩家被吞期间输入全冻结（移动按 blocked 归零提交，
 	# Host 侧由 network_swallow_locked 同步冻结，两端一致静止在吞入点）。
 	var local_swallowed := _is_local_player_swallow_locked()
-	# 输入冻结条件：菜单打开、本地玩家真死亡、团灭收束中、或被丸呑み吞入
-	# ——四者都把移动输入归零。
-	# 倒地（local_life == 1）仍可提交移动输入，由 Host 以爬行速度结算。
-	var inputs_frozen := local_menu_open or local_life == 2 or _wipe_active or local_swallowed
+	# 输入冻结条件：菜单打开、本地玩家倒地/真死亡、团灭收束中、或被丸呑み吞入
+	# ——这些状态都把移动输入归零；倒地只保留等待队友救援，不允许爬行。
+	var inputs_frozen := local_menu_open or local_life != 0 or _wipe_active or local_swallowed
 	if not inputs_frozen and local_life == 0:
 		# 救援占用功能键(D)、投掷占用确定键，都必须在普通战斗输入前优先处理。
 		# 倒地/死亡的本地玩家不进入此分支：他们不能开火、装填、投掷或救援他人。
@@ -735,15 +734,16 @@ func _client_initialize_world() -> void:
 	if state.current_hp <= 0.0:
 		state.current_hp = state.get_max_hp()
 	state.owner_peer_id = local_id
+	# 先把本机状态写入联机座位表，再按 seat_index 选择 PlayerSpawnSlot。
+	# 旧顺序在这里先 find_seat_by_owner_peer_id()，但状态尚未 add_seat，永远得到 -1，
+	# 导致 Client 端预置 Player 不会站到作者槽位；随后才被 Host 快照拉回，表现为槽位节点无效。
+	var seat_index := _ensure_player_state_seat(state)
 	## 作者定点槽位（客户端本地预置）：按**自己的座位号**取，与 HUD 的「NP玩家」一致。
 	## Host 的权威坐标随后会经快照确认；两端用同一套规则就不会出现"先站错再被拽过去"。
 	if not _arrival_applied:
-		var own_seat: int = Players.find_seat_by_owner_peer_id(local_id)
-		if own_seat >= 0:
-			_apply_own_spawn_slot(local_node, own_seat + 1)
+		_apply_own_spawn_slot(local_node, seat_index + 1)
 	state.position = local_node.global_position
 	state.facing = local_node.facing
-	var seat_index := _ensure_player_state_seat(state)
 	local_node.configure_network_entity(local_id, local_id)
 	local_node.network_local_player = true
 	# 本地预测：Client 立即按本地输入移动自己，Host 权威坐标经快照平滑纠偏。
@@ -1258,29 +1258,36 @@ func _client_has_tp_for(node: Node2D, trigger: String) -> bool:
 ## 代为驱动，SA 请求信任 Client 的 validate_skill_motion 预校验（Host 无法
 ## 重放输入序列，与射击瞄准同类的意图信任）。
 func _capture_sa_input() -> void:
-	if net.is_host or not _client_local_ready:
+	if not _client_local_ready:
 		return
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := _player_node(entry)
 	if not is_instance_valid(node):
 		return
 	node.poll_network_motion_input()
-	# SA 键：技能释放请求（**存活与最终 TP 判定仍由 Host 权威校验**）。
-	# ★2026-10-04 补本地 TP 预校验：本地显示域积分不够就别发请求 —— 一来减少无效请求，
-	# 二来让"TP 见底"在本机**立刻**有感（否则要等 Host 拒绝，而 Host 拒绝是静默的，
-	# 玩家只会看到"按了没反应"却不知道是没蓝）。
+	var host_local: bool = bool(net.is_host)
+	if not host_local and not _client_ready_to_send():
+		return
+	# Host 本机直接结算，Client 只提交意图。
 	if Input.is_action_just_pressed("SA键"):
-		if node.validate_skill_motion("SA键") and _client_has_tp_for(node, "SA键"):
+		if host_local:
+			if node.validate_skill_motion("SA键"):
+				node._use_skill_core("SA键", true)
+		elif node.validate_skill_motion("SA键") and _client_has_tp_for(node, "SA键"):
 			sa_skill_request.rpc_id(1, "SA键")
-	# 确定键：见切窗口登记请求（窗口/间隔状态登记在 Host 权威实体上；
-	# _try_mukiri_input 只读 Time/Heat，零拆分直调）。
-	if Input.is_action_just_pressed("确定键"):
-		mukiri_request.rpc_id(1)
-	# しゃがみ回避发动中：SA 键按住状态的边沿上报（Host 权威实体据此延长蹲下）。
-	# 表现晚到时按 mismatch 补报：蹲下染色生效瞬间按住=true 而登记=false 会立即上报。
+	# 只有放下武器才能见切；Host 本地直接登记，Client 请求 Host。
+	if Input.is_action_just_pressed("确定键") and not node.is_weapon_mode_active() \
+			and not bool(node.get("player_in_weapon_state")):
+		if host_local:
+			node._try_mukiri_input()
+		else:
+			mukiri_request.rpc_id(1)
 	var crouch_active: bool = node.get("_sa_crouch_active") == true
-	if crouch_active:
-		var hold := Input.is_action_pressed("SA键")
+	var hold := Input.is_action_pressed("SA键")
+	if host_local:
+		if crouch_active:
+			node.set_network_crouch_hold(hold)
+	elif crouch_active:
 		if hold != _sa_crouch_hold_reported:
 			_sa_crouch_hold_reported = hold
 			sa_crouch_hold.rpc_id(1, hold)
@@ -1370,24 +1377,21 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 	var node := _player_node(entry)
 	if not is_instance_valid(node) or not node.network_local_prediction:
 		return
-	## ★倒地（downed）与真死亡都令 `is_network_dead()` 为真，但**倒地玩家要能爬行**：
-	## 本地预测必须放行，否则客户端倒地后原地不动（与主机不一致，2026-10-13 用户实测）。
-	## 真死亡（非倒地）才跳过。爬行速度与 Host 的 DOWNED_CRAWL_SPEED 保持一致。
+	## 倒地（downed）与真死亡都令 `is_network_dead()` 为真；当前设计是倒地期间
+	## 所有玩家实体都不可移动，因此 downed 与 dead 都跳过本地预测。
 	var downed: bool = bool(entry.get("downed", false))
-	if node.is_network_dead() and not downed:
+	if node.is_network_dead():
+		node.velocity = Vector2.ZERO
+		_set_input(peer_id, Vector2.ZERO, false)
 		return
 	var direction := Vector2.ZERO if blocked else _read_local_direction()
 	var walking := false if blocked else Input.is_action_pressed("行走键")
 	var moving := not direction.is_zero_approx()
-	if downed:
-		# 倒地：固定爬行速度（忽略走/跑），与 Host `_simulate_host_players` 同口径
-		node.velocity = direction.limit_length(1.0) * DOWNED_CRAWL_SPEED
-	else:
-		node.velocity = direction * (node.walk_speed if walking else node.run_speed)
+	node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 	if moving:
 		node.update_facing(direction)
 	node.move_with_corner_assist()
-	node.update_appearance(moving, true if downed else walking)
+	node.update_appearance(moving, walking)
 	_set_input(peer_id, direction, walking)
 
 
@@ -1429,26 +1433,10 @@ func _simulate_host_players(delta: float) -> void:
 			continue
 		if node.has_method("is_network_dead") and node.is_network_dead():
 			_clear_host_combat_state_for_dead_peer(peer_id)
-			# 倒地（downed）与真死亡（dead）都进入本分支，但移动规则不同：
-			# 倒地玩家仍可按 DOWNED_CRAWL_SPEED 缓慢爬行（方向来自其 Client 提交的
-			# 输入），真死亡玩家完全冻结。躺地状态下 _refresh_sprite 拒绝刷新精灵，
-			# 因此移动不会破坏死亡帧，只会同步位置与朝向（爬行转向）。
-			# 团灭收束（_wipe_active）期间连爬行也一并冻结。
-			if not bool(entry.get("downed", false)) or _wipe_active:
-				node.velocity = Vector2.ZERO
-				_set_input(peer_id, Vector2.ZERO, false)
-				_sync_state_from_node(peer_id, node, false, false)
-				continue
-			var crawl_dir: Vector2 = entry.get("input", Vector2.ZERO)
-			if peer_id != int(net.my_peer_id) and float(_remote_input_age.get(peer_id, 0.0)) > REMOTE_INPUT_TIMEOUT_SECONDS:
-				crawl_dir = Vector2.ZERO
-			var crawling := not crawl_dir.is_zero_approx()
-			node.velocity = crawl_dir.limit_length(1.0) * DOWNED_CRAWL_SPEED
-			if crawling:
-				node.update_facing(crawl_dir)
-			node.move_with_corner_assist()
-			node.update_appearance(crawling, true)
-			_sync_state_from_node(peer_id, node, crawling, true)
+			# 倒地与真死亡都冻结移动。倒地只保留等待救援，不再允许爬行。
+			node.velocity = Vector2.ZERO
+			_set_input(peer_id, Vector2.ZERO, false)
+			_sync_state_from_node(peer_id, node, false, false)
 			continue
 		if node.get("network_swallow_locked") == true:
 			# 丸呑み（C3）：被吞玩家由 EnemySwallowState 冻结在吞入点，
@@ -1498,16 +1486,18 @@ func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bo
 	if state.current_hp <= 0.0:
 		state.current_hp = state.get_max_hp()
 	state.owner_peer_id = peer_id
-	state.position = node.global_position
-	state.facing = node.facing
 	node.configure_network_entity(peer_id, peer_id)
 	if _is_network_regression_loadout():
 		_configure_network_loadout(state, node)
 	else:
 		node.exit_weapon_mode()
+	# PlayerSpawnSlot 的编号与网络座位号一一对应，不能使用当前 _players.size()：
+	# 掉线/重连和 Client 预置玩家初始化都会让字典顺序与座位号不同。
 	var seat_index := _ensure_player_state_seat(state)
 	if not is_preplaced:
-		node.global_position = _spawn_position(_players.size())
+		node.global_position = _spawn_position(seat_index)
+	state.position = node.global_position
+	state.facing = node.facing
 	Players.register_entity(node, seat_index)
 	_attach_player_nameplate(node, peer_id, seat_index)
 	# Host 也走同一套表现初始化，保证新实体的角色、HP 和朝向与 PlayerState 一致。
@@ -1612,7 +1602,7 @@ func _on_host_enemy_damage_applied(damage: float, position: Vector2, is_headshot
 func _add_host_peer(peer_id: int) -> void:
 	if _players.has(peer_id):
 		return
-	var node := _instantiate_player(_spawn_position(_players.size()), peer_id)
+	var node := _instantiate_player(_spawn_position(_players.size() - 1), peer_id)
 	_register_host_player(peer_id, node, false)
 	_broadcast_spawn_player(peer_id)
 
@@ -2623,7 +2613,11 @@ func _try_host_mukiri(peer_id: int) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
 	var node := _player_node(_players.get(peer_id, {}))
+	# 规则：只有放下武器才能见切。这里是 Host 最终权威闸门，不能信任 Client
+	# 自报状态；举枪或正在举放过渡时直接拒绝，不登记见切窗口。
 	if not is_instance_valid(node) or node.current_hp <= 0.0:
+		return
+	if node.is_weapon_mode_active() or bool(node.get("player_in_weapon_state")):
 		return
 	node._try_mukiri_input()
 

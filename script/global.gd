@@ -1025,11 +1025,18 @@ func capture_checkpoint() -> void:
 	for s: PlayerState in Players.seats:
 		seat_clones.append(s.clone())
 
+	var checkpoint_map_pickups: Dictionary = {}
+	for key: Variant in quest_flags.keys():
+		var flag_name := str(key)
+		if flag_name.begins_with(MAP_PICKUP_KEY_PREFIX) and bool(quest_flags[key]):
+			checkpoint_map_pickups[flag_name] = true
 	checkpoint = {
 		"scene_path": scene_path,
 		"seats": seat_clones,
 		"active_seat_index": Players.active_seat_index,
 		"team_spray_count": Players.team_spray_count,
+		"map_pickup_consumed": checkpoint_map_pickups,
+		"map_pickup_rolls": map_pickup_rolls.duplicate(),
 		## ★2026-10-03：必须连 `team_spray_item` 一起存（此前只存了 count）。
 		## `restore_checkpoint()` 里的 `Players.clear_seats()` 会把 `team_spray_item` 置 null，
 		## 而 `consume_team_spray()` 判的是 `team_spray_count <= 0` → count 被恢复成 >0、
@@ -1091,8 +1098,26 @@ func restore_checkpoint() -> void:
 		Players.team_spray_item = _default_spray_item()
 		print("[Checkpoint] 急救喷雾数据缺失（count=%d），已按默认资源回填"
 			% Players.team_spray_count)
+	# 地图补给的已消耗状态属于 checkpoint 世界快照；恢复时先清理当前会话中
+	# 不属于该快照的 mappickup flag，避免死亡后把后续场景刚拾取的物资带回去。
+	var checkpoint_pickups: Dictionary = checkpoint.get("map_pickup_consumed", {})
+	for key: Variant in quest_flags.keys().duplicate():
+		var flag_name := str(key)
+		if flag_name.begins_with(MAP_PICKUP_KEY_PREFIX):
+			quest_flags.erase(key)
+	for key: Variant in checkpoint_pickups.keys():
+		quest_flags[str(key)] = bool(checkpoint_pickups[key])
+	map_pickup_rolls = (checkpoint.get("map_pickup_rolls", {}) as Dictionary).duplicate()
 	selected_campaign = checkpoint.get("selected_campaign")
 	selected_difficulty = checkpoint.get("selected_difficulty", 0)
+	# 联机团灭重载由 NetworkWorld 驱动；Host 的 Net 会话状态必须同步指向
+	# checkpoint 恢复后的座位对象，否则下一张图仍会拿旧的 HP/装备/物资状态。
+	var net: Node = get_node_or_null("/root/Net")
+	if net and net.has_method("is_online_session") and bool(net.is_online_session()) \
+			and bool(net.get("is_host")) and net.has_method("set_session_player_state"):
+		for state: PlayerState in Players.seats:
+			if state and state.owner_peer_id > 0:
+				net.call("set_session_player_state", state.owner_peer_id, state)
 	print("[Checkpoint] 已恢复: 座位=%d %s" % [
 		Players.seat_count(), Players.get_active_state().describe(),
 	])

@@ -514,6 +514,10 @@ func _play_mukiri_anim() -> void:
 ## Heat 中见切使用不可（原作 system.html ◆ヒート：「見切り使用不可(カウンター不可)」）——
 ## 输入直接吞掉并给反馈，不再登记无效窗口（无效化判定侧本就有 is_heat_active 门）。
 func _try_mukiri_input() -> void:
+	# 操作说明口径：只有放下武器才能见切。单机与联机 Host 共用此入口，
+	# 防止任何绕过 NetworkWorld 输入层的调用重新打开举枪见切。
+	if _p.is_weapon_mode_active() or _p.player_in_weapon_state:
+		return
 	var now: int = Time.get_ticks_msec()
 	if is_heat_active():
 		if now - _p._mukiri_last_attempt_msec >= MUKIRI_INTERVAL_MS:

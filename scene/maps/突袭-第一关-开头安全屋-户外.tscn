@@ -28,6 +28,7 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="16_42lar"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="17_df6p2"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="17_g836h"]
+[ext_resource type="Script" uid="uid://cxd1favc5ntj4" path="res://script/director/player_spawn_slot.gd" id="25_525qf"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="25_dlfhy"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="29_od0b1"]
 
@@ -178,9 +179,32 @@ tile_set = ExtResource("4_5gk8a")
 
 [node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=1676720400]
 y_sort_enabled = true
-position = Vector2(-208, 56)
+position = Vector2(-224, 112)
 
 [node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("5_vqqwu")]
+
+[node name="PlayerSpawnSlot" type="Node2D" parent="DecorLayer" unique_id=613730682]
+position = Vector2(-224, 120)
+script = ExtResource("25_525qf")
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot2" type="Node2D" parent="DecorLayer" unique_id=124635017]
+position = Vector2(-224, 168)
+script = ExtResource("25_525qf")
+peer_slot = 2
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot3" type="Node2D" parent="DecorLayer" unique_id=422013706]
+position = Vector2(-224, 64)
+script = ExtResource("25_525qf")
+peer_slot = 3
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot4" type="Node2D" parent="DecorLayer" unique_id=1764046791]
+position = Vector2(-184, 120)
+script = ExtResource("25_525qf")
+peer_slot = 4
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1543960742]
 y_sort_enabled = true

@@ -2,18 +2,12 @@
 
 [ext_resource type="TileSet" uid="uid://ch31nfqohx0f5" path="res://tres/Map0136_lower_tileset.tres" id="1_ulf3g"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_rxu8s"]
+[ext_resource type="Script" uid="uid://cxd1favc5ntj4" path="res://script/director/player_spawn_slot.gd" id="3_ipxkt"]
 [ext_resource type="PackedScene" uid="uid://om55cuudhhrx" path="res://object/safe_door.tscn" id="4_hi542"]
 [ext_resource type="TileSet" uid="uid://bk4pbj6x8ftyx" path="res://tres/Map0136_upper_tileset.tres" id="4_prx1j"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="5_pp46g"]
 [ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="6_p0mpj"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_nm20j"]
-[ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="po_enemy_drop"]
-[ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="po_bowgun"]
-[ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="po_frypan"]
-[ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="po_metalbat"]
-[ext_resource type="Resource" uid="uid://b7glacid5x2m" path="res://object/weapon_launcher_acid.tres" id="po_lacid"]
-[ext_resource type="Resource" uid="uid://b4glice3nx8q" path="res://object/weapon_launcher_ice.tres" id="po_lice"]
-[ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="po_lthunder"]
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="8_6qe4w"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="9_u3gcr"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="10_3u1bt"]
@@ -37,13 +31,20 @@
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="28_s36s2"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="29_6hlab"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="30_bwis6"]
-[ext_resource type="PackedScene" path="res://scene/menu.tscn" id="31_2rfq6"]
+[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="31_2rfq6"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="32_n2pj4"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="33_176ys"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="34_nx3kv"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="37_jykwv"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 [ext_resource type="Resource" uid="uid://bbflshgr4n2x" path="res://object/throwable_flash.tres" id="91_flsh"]
+[ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="po_bowgun"]
+[ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="po_enemy_drop"]
+[ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="po_frypan"]
+[ext_resource type="Resource" uid="uid://b7glacid5x2m" path="res://object/weapon_launcher_acid.tres" id="po_lacid"]
+[ext_resource type="Resource" uid="uid://b4glice3nx8q" path="res://object/weapon_launcher_ice.tres" id="po_lice"]
+[ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="po_lthunder"]
+[ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="po_metalbat"]
 
 [sub_resource type="Resource" id="Resource_uyu2p"]
 script = ExtResource("7_nm20j")
@@ -100,6 +101,29 @@ y_sort_enabled = true
 position = Vector2(1008, 4680)
 
 [node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_rxu8s")]
+
+[node name="PlayerSpawnSlot" type="Node2D" parent="DecorLayer" unique_id=599576491]
+position = Vector2(1024, 4688)
+script = ExtResource("3_ipxkt")
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot2" type="Node2D" parent="DecorLayer" unique_id=905271512]
+position = Vector2(1024, 4648)
+script = ExtResource("3_ipxkt")
+peer_slot = 2
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot3" type="Node2D" parent="DecorLayer" unique_id=1111663015]
+position = Vector2(1024, 4736)
+script = ExtResource("3_ipxkt")
+peer_slot = 3
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
+
+[node name="PlayerSpawnSlot4" type="Node2D" parent="DecorLayer" unique_id=2004331101]
+position = Vector2(1056, 4688)
+script = ExtResource("3_ipxkt")
+peer_slot = 4
+metadata/_custom_type_script = "uid://cxd1favc5ntj4"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=35821521]
 y_sort_enabled = true
@@ -171,7 +195,6 @@ scatter_interval_max = 36.0
 zombie_pool = Array[ExtResource("14_xkstu")]([ExtResource("15_lflo2"), ExtResource("16_53xi5"), ExtResource("17_1ay4o"), ExtResource("18_073qg"), ExtResource("19_7mdkf")])
 special_pool = Array[ExtResource("20_3qsa4")]([ExtResource("21_drpki"), ExtResource("22_bdghi"), ExtResource("23_2vp1k"), ExtResource("24_yd3nf"), ExtResource("91_demos")])
 special_first_delay_min = 5.0
-special_first_delay_max = 30.0
 special_max_alive = 3
 drop_pool = SubResource("Resource_05vas")
 enemy_drop_pool = ExtResource("po_enemy_drop")
