@@ -43,6 +43,9 @@ signal upnp_mapping_failed(reason: String)
 const PROTOCOL_VERSION := "l3d_main_v2_combat_rpc"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
+## ENet channel 0 保留 reliable；1=玩家热状态，2=敌人/世界热状态。
+## 显式申请3个channel，否则自定义RPC channel可能退化为默认流。
+const ENET_CHANNEL_COUNT := 3
 ## 给 LAN 上已发送的 scene-RPC 一小段排空时间；切图时双方仍保留旧 NetworkWorld，随后再同时释放。
 const SCENE_TRANSITION_FLUSH_SECONDS := 0.25
 ## UPnP 端口映射在路由器上显示的描述名。
@@ -133,7 +136,7 @@ func _create_peer() -> MultiplayerPeer:
 func host_game(port: int = DEFAULT_PORT) -> Error:
 	leave()
 	var peer := _create_peer() as ENetMultiplayerPeer
-	var err := peer.create_server(port, MAX_CLIENTS)
+	var err := peer.create_server(port, MAX_CLIENTS, ENET_CHANNEL_COUNT)
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
@@ -156,7 +159,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	leave()
 	var peer := _create_peer() as ENetMultiplayerPeer
-	var err := peer.create_client(address.strip_edges(), port)
+	var err := peer.create_client(address.strip_edges(), port, ENET_CHANNEL_COUNT)
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer

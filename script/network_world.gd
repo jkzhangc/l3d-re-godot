@@ -92,9 +92,9 @@ const NETWORK_VARIANTS: Dictionary = Whitelist.NETWORK_VARIANTS
 ## - Host 每帧运行真实玩家、敌人、子弹和伤害逻辑。
 ## - Client 只提交输入，并接收 Host 的表现数据。
 ## - 两条高频路径（2026-10-01 起**同为 60Hz**）：
-##   ① 玩家状态 `player_position_snapshot`（27 字段紧凑数组）；
+##   ① 玩家状态 `player_position_snapshot`（最多29字段的紧凑数组，超预算时省略低频字段）；
 ##   ② 敌人/世界表现 `player_snapshot`（敌人为主，**玩家状态不再重复发** —— 合并成一个大包
-##      会超过 ENet MTU，所以刻意分成两条 RPC）。
+##      会超过 ENet MTU，所以刻意分成两条RPC，并使用独立ENet channel）。
 ## - 高频快照使用 unreliable_ordered，因为旧位置没有保存价值；可靠快照只用于
 ##   首次进图、掉落物变化、实体列表收敛等结构性同步。
 ## 作者摆的「玩家出生槽位」脚本（2026-09-26 用户需求）。
@@ -121,6 +121,12 @@ const PLAYER_SNAPSHOT_INTERVAL := 1.0 / 60.0
 const LOCAL_INPUT_INTERVAL := 1.0 / 60.0
 const RELIABLE_WORLD_RESYNC_INTERVAL := 2.0
 const SPAWN_SEPARATION := 56.0
+## 热路径只传位置与必要表现字段；昵称/角色/装备结构应由可靠状态承载。
+## 当前先以稳定字节上限保护四人局，超过预算时丢弃低频字段而不改变权威状态。
+const PLAYER_HOT_ROW_MAX_BYTES := 320
+## Host 连续收不到 Client 输入时，停止沿用旧方向；避免短暂断流期间继续向前走，
+## 让恢复后的权威位置一次性把本地预测拉回。
+const REMOTE_INPUT_TIMEOUT_SECONDS := 0.20
 
 
 # ═══════════════════════════════════════
@@ -305,6 +311,13 @@ var _wipe_fade_overlay: ColorRect = null
 var _snapshot_accumulator := 0.0
 var _player_snapshot_accumulator := 0.0
 var _reliable_resync_accumulator := 0.0
+## Host 热状态序号；玩家流与敌人分片流各自单调递增，Client 用它拒绝迟到/乱序状态。
+var _player_hot_snapshot_seq: int = 0
+var _enemy_hot_snapshot_seq: int = 0
+var _last_player_hot_snapshot_seq: int = -1
+var _last_enemy_hot_snapshot_seq: int = -1
+var _reliable_world_snapshot_seq: int = 0
+var _last_reliable_world_snapshot_seq: int = -1
 var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
@@ -317,6 +330,7 @@ var _last_client_fire_request_msec := 0
 ## Net 在双方真正换图前发出的过渡信号；置位后本场景不再发送任何 RPC，避免旧节点路径的在途包。
 var _scene_transitioning := false
 var _last_logged_remote_input: Dictionary = {}
+var _remote_input_age: Dictionary = {}
 var _auto_client_fire_confirmed := false
 var _auto_client_bullet_seen := false
 ## 自动双端回归统计本次攻击由 Host 确认并生成的视觉弹丸数量。
@@ -529,13 +543,16 @@ func _physics_process(delta: float) -> void:
 		## 构建结果是只读的，同一份 Array 交给多次 `rpc_id` 是安全的。
 		if _player_snapshot_accumulator >= PLAYER_SNAPSHOT_INTERVAL:
 			_player_snapshot_accumulator = fmod(_player_snapshot_accumulator, PLAYER_SNAPSHOT_INTERVAL)
+			_player_hot_snapshot_seq += 1
 			var position_targets: Array = _active_client_peer_ids()
 			if not position_targets.is_empty():
 				var player_states: Array = _build_compact_player_snapshot()
 				for peer_id: int in position_targets:
-					player_position_snapshot.rpc_id(peer_id, player_states)
+					player_position_snapshot.rpc_id(peer_id, _player_hot_snapshot_seq, player_states)
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
+			_enemy_hot_snapshot_seq += 1
+			# Client按实体流分别拒绝旧序号。
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			var snapshot_targets: Array = _active_client_peer_ids()
 			if not snapshot_targets.is_empty():
@@ -553,7 +570,7 @@ func _physics_process(delta: float) -> void:
 				## `_apply_client_enemy_snapshot(states, false)` 对每包独立 ensure/更新，可安全分片。
 				for chunk: Array in _chunk_enemy_snapshot(enemy_states):
 					for peer_id: int in snapshot_targets:
-						player_snapshot.rpc_id(peer_id, [], chunk)
+						player_snapshot.rpc_id(peer_id, _enemy_hot_snapshot_seq, chunk)
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
@@ -744,6 +761,7 @@ func _client_initialize_world() -> void:
 		"moving": false,
 		"walking": false,
 	}
+	_remote_input_age[local_id] = 0.0
 	_set_local_player(local_node, seat_index)
 	_reconcile_network_seats(net.get_peer_ids())
 	_prepare_client_preplaced_enemies()
@@ -1399,8 +1417,11 @@ func _set_input(peer_id: int, direction: Vector2, walking: bool) -> void:
 ## `_players[peer_id]` 中的 input 是最近一次 Client 提交的输入。Host 不信任
 ## Client 上传的位置，而是用同一套速度、碰撞和 move_and_slide() 重新计算位置。
 ## 因此所有攻击距离、拾取距离和子弹出生点都必须使用这里产生的 Host 坐标。
-func _simulate_host_players(_delta: float) -> void:
+func _simulate_host_players(delta: float) -> void:
 	for key: Variant in _players.keys():
+		var age := float(_remote_input_age.get(int(key), 0.0)) + delta
+		_remote_input_age[int(key)] = age
+
 		var peer_id := int(key)
 		var entry: Dictionary = _players[peer_id]
 		var node := _player_node(entry)
@@ -1419,6 +1440,8 @@ func _simulate_host_players(_delta: float) -> void:
 				_sync_state_from_node(peer_id, node, false, false)
 				continue
 			var crawl_dir: Vector2 = entry.get("input", Vector2.ZERO)
+			if peer_id != int(net.my_peer_id) and float(_remote_input_age.get(peer_id, 0.0)) > REMOTE_INPUT_TIMEOUT_SECONDS:
+				crawl_dir = Vector2.ZERO
 			var crawling := not crawl_dir.is_zero_approx()
 			node.velocity = crawl_dir.limit_length(1.0) * DOWNED_CRAWL_SPEED
 			if crawling:
@@ -1437,6 +1460,10 @@ func _simulate_host_players(_delta: float) -> void:
 			continue
 		var direction: Vector2 = entry.get("input", Vector2.ZERO)
 		var walking: bool = bool(entry.get("walking", false))
+		if peer_id != int(net.my_peer_id) and float(_remote_input_age.get(peer_id, 0.0)) > REMOTE_INPUT_TIMEOUT_SECONDS:
+			## 仅在Host端清零过期远端输入；本地Host输入每帧会被_capture_host_input刷新。
+			direction = Vector2.ZERO
+			walking = false
 		var moving := not direction.is_zero_approx()
 		node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 		if moving:
@@ -1494,6 +1521,7 @@ func _register_host_player(peer_id: int, node: CharacterBody2D, is_preplaced: bo
 		"moving": false,
 		"walking": false,
 	}
+	_remote_input_age[peer_id] = 0.0
 	_sync_state_from_node(peer_id, node, false, false)
 	_connect_host_player_damage_signal(peer_id, node)
 	print("[NetworkWorld] HOST_SPAWN peer=%d preplaced=%s" % [peer_id, is_preplaced])
@@ -3054,6 +3082,7 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 		_set_input(sender, Vector2.ZERO, false)
 		return
 	_set_input(sender, direction, walking)
+	_remote_input_age[sender] = 0.0
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -3227,9 +3256,10 @@ func auto_character_world_ack() -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func world_snapshot(player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
-	if net.is_host:
+func world_snapshot(snapshot_seq: int, player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
+	if net.is_host or snapshot_seq <= _last_reliable_world_snapshot_seq:
 		return
+	_last_reliable_world_snapshot_seq = snapshot_seq
 	_apply_client_snapshot(player_states, true)
 	_apply_client_enemy_snapshot(enemy_states, true)
 	_apply_client_pickup_snapshot(pickup_states)
@@ -3264,18 +3294,21 @@ func sync_quest_flags_rpc(flags: Dictionary) -> void:
 		Global.apply_quest_flag(str(k), bool(flags[k]))
 
 
-@rpc("authority", "call_remote", "unreliable_ordered")
-func player_snapshot(player_states: Array, enemy_states: Array) -> void:
-	if net.is_host:
+## 玩家与敌人快照使用不同 ENet channel，避免可变大小的敌人分片淘汰玩家位置包。
+## channel 2 仍受下层互联网 TCP 隧道的队头阻塞影响，但直连/UDP路径先隔离。
+@rpc("authority", "call_remote", "unreliable_ordered", 2)
+func player_snapshot(snapshot_seq: int, enemy_states: Array) -> void:
+	if net.is_host or snapshot_seq <= _last_enemy_hot_snapshot_seq:
 		return
-	_apply_client_snapshot(player_states, false)
+	_last_enemy_hot_snapshot_seq = snapshot_seq
 	_apply_client_enemy_snapshot(enemy_states, false)
 
 
-@rpc("authority", "call_remote", "unreliable_ordered")
-func player_position_snapshot(player_states: Array) -> void:
-	if net.is_host:
+@rpc("authority", "call_remote", "unreliable_ordered", 1)
+func player_position_snapshot(snapshot_seq: int, player_states: Array) -> void:
+	if net.is_host or snapshot_seq <= _last_player_hot_snapshot_seq:
 		return
+	_last_player_hot_snapshot_seq = snapshot_seq
 	_apply_client_snapshot(player_states, false)
 
 
@@ -3328,7 +3361,8 @@ func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 func _send_reliable_world_snapshot(peer_id: int) -> void:
 	if not net.is_host or peer_id <= 1:
 		return
-	world_snapshot.rpc_id(peer_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	_reliable_world_snapshot_seq += 1
+	world_snapshot.rpc_id(peer_id, _reliable_world_snapshot_seq, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	_auto_world_snapshot_sent_count += 1
 	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
@@ -3409,7 +3443,7 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 	state.equipment["secondary"] = secondary
 	var requested_slot := str(public_state.get("active_weapon_slot", "primary"))
 	state.active_weapon_slot = requested_slot if requested_slot == "primary" or requested_slot == "secondary" else "primary"
-	var packet_magazines: Variant = public_state.get("weapon_magazines", {})
+	var packet_magazines: Variant = public_state.get("weapon_magazines", null)
 	if packet_magazines is Dictionary:
 		state.weapon_magazines = (packet_magazines as Dictionary).duplicate()
 	var remote_weapon := state.get_active_weapon()
@@ -3472,8 +3506,8 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			return {}
 		return {
 			"peer_id": int(packet[0]),
-			"name": packet[1],
-			"character_path": packet[2],
+			"name": packet[1] if packet[1] != null else "",
+			"character_path": packet[2] if packet[2] != null else "",
 			"hp": packet[3],
 			"position": packet[4],
 			"facing": int(packet[5]),
@@ -3483,12 +3517,12 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			"primary_weapon_id": packet[9],
 			"secondary_weapon_id": packet[10],
 			"active_weapon_slot": packet[11],
-			"weapon_magazines": packet[12],
-			"weapon_raised": bool(packet[13]),
-			"weapon_transition": packet[14],
-			"throwable_id": packet[15],
-			"throwable_held": bool(packet[16]),
-			"throwable_aiming": bool(packet[17]),
+			"weapon_magazines": packet[12] if packet[12] is Dictionary else null,
+			"weapon_raised": bool(packet[13]) if packet[13] != null else false,
+			"weapon_transition": packet[14] if packet[14] != null else "",
+			"throwable_id": packet[15] if packet[15] != null else null,
+			"throwable_held": bool(packet[16]) if packet[16] != null else false,
+			"throwable_aiming": bool(packet[17]) if packet[17] != null else false,
 			"throw_range": int(packet[18]),
 			"dead": bool(packet[19]),
 			"magazine_ammo": int(packet[20]),
@@ -3591,11 +3625,16 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
 		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
 		var remote_weapon := _apply_client_weapon_snapshot(state, node, public_state)
-		var remote_throwable := _get_network_throwable_data_by_id(str(public_state.get("throwable_id", "")))
-		var throwable_held := bool(public_state.get("throwable_held", false)) and remote_throwable != null
-		var throwable_aiming := bool(public_state.get("throwable_aiming", false)) and throwable_held
-		var throwable_range := clampi(int(public_state.get("throw_range", 3)), 0, remote_throwable.throw_range_max if remote_throwable else 0)
-		state.throwable = remote_throwable
+		var raw_throwable_id: Variant = public_state.get("throwable_id", "")
+		var throwable_field_present := raw_throwable_id is String
+		var remote_throwable_id := str(raw_throwable_id) if throwable_field_present else ""
+		var remote_throwable := _get_network_throwable_data_by_id(remote_throwable_id) if throwable_field_present and not remote_throwable_id.is_empty() else state.throwable
+		var previous_throw_state: Dictionary = _network_throwable_state.get(peer_id, {}) as Dictionary
+		var throwable_held := bool(public_state.get("throwable_held", previous_throw_state.get("held", false))) and remote_throwable != null
+		var throwable_aiming := bool(public_state.get("throwable_aiming", previous_throw_state.get("aiming", false))) and throwable_held
+		var throwable_range := clampi(int(public_state.get("throw_range", previous_throw_state.get("range", 3))), 0, remote_throwable.throw_range_max if remote_throwable else 0)
+		if throwable_field_present:
+			state.throwable = remote_throwable
 		_network_throwable_state[peer_id] = {"held": throwable_held, "aiming": throwable_aiming, "range": throwable_range}
 		# 每帧状态回放：投掷物外观照常更新，但朝向锁由 facing_lock_presentation 权威通道管理，
 		# 不要因 held=false 把固定朝向锁解掉（固定朝向锁与投掷物瞄准锁共用 _facing_locked）。
@@ -3796,6 +3835,8 @@ func _remove_client_enemy(entity_id: int) -> void:
 
 
 func _remove_player(peer_id: int) -> void:
+	_remote_input_age.erase(peer_id)
+	_last_logged_remote_input.erase(peer_id)
 	_revive_attempts.erase(peer_id)
 	_network_throwable_state.erase(peer_id)
 	_weapon_transition_state.erase(peer_id)
@@ -4954,21 +4995,25 @@ func _build_compact_player_snapshot() -> Array:
 	var states: Array = []
 	for key: Variant in _players.keys():
 		var state := _public_state(int(key))
-		states.append([
+		var hot_row: Array = [
 			state["peer_id"], state["name"], state["character_path"], state["hp"], state["position"],
 			state["facing"], state["moving"], state["walking"], state["weapon_id"],
 			state["primary_weapon_id"], state["secondary_weapon_id"], state["active_weapon_slot"],
 			state["weapon_magazines"], state["weapon_raised"], state["weapon_transition"],
 			state["throwable_id"], state["throwable_held"], state["throwable_aiming"],
 			state["throw_range"], state["dead"], state["magazine_ammo"],
-			# 倒地扩展字段（尾部追加；_normalize_player_snapshot 对旧长度包向后兼容）。
 			state["downed"], state["bleed_ratio"], state["revive_progress"],
 			state["facing_locked"], state["locked_facing"],
-			# D2 备弹同步（尾部追加）：ammo_item_id → count。
-			state["ammo_counts"],
-			# 急救喷雾库存（尾部追加，2026-09-24）：id + 数量，与 _normalize 的末两位对应。
-			state["healing_id"], state["healing_count"],
-		])
+			state["ammo_counts"], state["healing_id"], state["healing_count"],
+		]
+		## 先保护高频位置包的实际Variant字节预算；低频字段由可靠快照恢复。
+		if var_to_bytes(hot_row).size() > PLAYER_HOT_ROW_MAX_BYTES:
+			## null 表示“本热包省略，等待可靠快照”，不能用空字典覆盖客户端库存。
+			hot_row[1] = null
+			hot_row[2] = null
+			hot_row[12] = null
+			hot_row[26] = null
+		states.append(hot_row)
 	states.sort_custom(func(a: Array, b: Array) -> bool: return int(a[0]) < int(b[0]))
 	return states
 

@@ -509,7 +509,7 @@ func _run_auto_host_feature_test() -> void:
 	client_state.active_weapon_slot = "primary"
 	client_state.set_magazine_ammo(NETWORK_PISTOL.item_id, NETWORK_PISTOL.magazine_capacity)
 	client_state.throwable = NETWORK_GRENADE
-	world_snapshot.rpc_id(client_id, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	world_snapshot.rpc_id(client_id, 1, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	deadline = Time.get_ticks_msec() + 6000
 	while client_state.throwable != null and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout
@@ -728,6 +728,10 @@ func _run_auto_client_feature_test() -> void:
 	var lock_state_synced: bool = local_node.is_facing_locked()
 	facing_lock_request.rpc_id(1, false, false)
 	await get_tree().create_timer(0.12).timeout
+	## 同一方向输入需要跨过新的Host输入过期保护；持续提交两拍，避免把
+	## 回归结果取在单个unreliable输入包的边界上。
+	submit_input.rpc_id(1, test_direction, false)
+	await get_tree().create_timer(0.08).timeout
 	submit_input.rpc_id(1, test_direction, false)
 	await get_tree().create_timer(0.20).timeout
 	var facing_after_unlock: Vector2 = local_node.get_facing_vector()

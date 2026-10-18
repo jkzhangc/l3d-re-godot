@@ -47,6 +47,9 @@ var _max_delay: float
 var _extra_delay: float = 0.0
 var _interval_ema: float = 0.0
 var _last_decay_time: float = 0.0
+## 渲染游标只允许前进。自适应延迟抬高时，目标渲染时刻不能倒退，否则正常
+## 单向移动会出现短暂倒放（网络回弹的另一种表现）。
+var _render_time_cursor: float = -INF
 
 ## ── 有限外推（2026-10-10，仅远端敌人启用）──
 ## 当渲染延迟**小于**快照间隔时（用户要求敌人 15ms < 16.7ms），缓冲每个周期会干涸一小段，
@@ -87,9 +90,11 @@ func max_delay() -> float:
 ## 权威校准（可靠快照 / 生成 / 死亡定位）：清空历史并直接落位，同时复位自适应量。
 func reset(position: Vector2) -> void:
 	_samples.clear()
-	_samples.append({"t": _now(), "pos": position})
+	var now := _now()
+	_samples.append({"t": now, "pos": position})
 	_extra_delay = 0.0
-	_last_decay_time = _now()
+	_last_decay_time = now
+	_render_time_cursor = now - _base_delay
 
 
 ## 追加一个不可靠快照样本；缓冲为空时等价于 reset（首包直接落位）。
@@ -129,7 +134,11 @@ func sample_render_position() -> Variant:
 		_extra_delay = maxf(_extra_delay - EXTRA_DECAY_PER_SEC * maxf(now - _last_decay_time, 0.0), 0.0)
 	_last_decay_time = now
 
-	var render_time := now - render_delay()
+	var desired_render_time := now - render_delay()
+	## 自适应缓冲只允许把未来目标推迟；已经显示过的时间点不倒退。
+	## 这会在缓冲增加时短暂降低追赶速度，而不是把实体倒放。
+	var render_time := maxf(desired_render_time, _render_time_cursor)
+	_render_time_cursor = render_time
 	var newest: Dictionary = _samples[_samples.size() - 1]
 	if render_time >= float(newest["t"]):
 		# 新样本之后没有更多数据。
@@ -139,9 +148,15 @@ func sample_render_position() -> Variant:
 			var lead := minf(render_time - float(newest["t"]), MAX_EXTRAPOLATE_SECONDS)
 			if lead > 0.0 and _samples.size() >= 2:
 				var prev: Dictionary = _samples[_samples.size() - 2]
-				var span := maxf(float(newest["t"]) - float(prev["t"]), 0.0001)
-				var velocity := (newest["pos"] as Vector2 - prev["pos"] as Vector2) / span
-				return (newest["pos"] as Vector2) + velocity * lead
+				var span := float(newest["t"]) - float(prev["t"])
+				## 同一批TCP/主线程交付的样本可能拥有相同到达时刻。
+				## 不能用0.0001秒把极小位移放大成超高速外推；该样本对本次外推无效。
+				if span > 0.001:
+					var velocity := (newest["pos"] as Vector2 - prev["pos"] as Vector2) / span
+					var max_speed := _max_reasonable_speed()
+					if max_speed > 0.0:
+						velocity = velocity.limit_length(max_speed)
+					return (newest["pos"] as Vector2) + velocity * lead
 		# 不外推（或外推不可用）：停在最新位置等待下一包。
 		return newest["pos"]
 	var oldest: Dictionary = _samples[0]
@@ -155,6 +170,13 @@ func sample_render_position() -> Variant:
 			var weight := clampf((render_time - float(a["t"])) / span, 0.0, 1.0)
 			return (a["pos"] as Vector2).lerp(b["pos"], weight)
 	return newest["pos"]
+
+
+func _max_reasonable_speed() -> float:
+	## 远端实体速度上限只用于保护网络外推，不参与Host权威移动。
+	## 这个通用上限高于当前玩家/敌人常规速度，避免改动玩法数值；突进也会
+	## 在下一权威样本到来时回收，而不会被异常到达间隔放大。
+	return 600.0
 
 
 func _now() -> float:
