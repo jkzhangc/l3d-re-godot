@@ -37,6 +37,24 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "多人大厅"
 
+[node name="NameRow" type="HBoxContainer" parent="ConnectPanel/VBox" unique_id=924446196]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NameTag" type="Label" parent="ConnectPanel/VBox/NameRow" unique_id=290855698]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "昵称："
+
+[node name="NameEdit" type="LineEdit" parent="ConnectPanel/VBox/NameRow" unique_id=1125376809]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "玩家"
+max_length = 16
+tooltip_text = "互联网 / 局域网共用，修改自动保存；连接期间不可修改。"
+
 [node name="SubTitle" type="Label" parent="ConnectPanel/VBox" unique_id=2110000002]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
@@ -54,21 +72,6 @@ layout_mode = 2
 [node name="Form" type="VBoxContainer" parent="ConnectPanel/VBox/Center/Window" unique_id=2110000005]
 layout_mode = 2
 theme_override_constants/separation = 10
-
-[node name="NameRow" type="HBoxContainer" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=924446196]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="NameTag" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/NameRow" unique_id=290855698]
-layout_mode = 2
-text = "昵称："
-
-[node name="NameEdit" type="LineEdit" parent="ConnectPanel/VBox/Center/Window/Form/NameRow" unique_id=1125376809]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-text = "玩家"
-max_length = 16
 
 [node name="JoinRow" type="HBoxContainer" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=1293217784]
 layout_mode = 2

@@ -1266,9 +1266,10 @@ func save_config() -> void:
 		"touch_layout": _touch_layout_to_json(),
 		"touch_hidden": touch_hidden.duplicate()
 	}
-	## ★移动端 res:// 只读 → 写 user://；桌面端仍写 res://config.json，
-	## 保持「开发时手改 config.json 切 debug」的既有工作流不变。
-	var path: String = CONFIG_FILE_USER if is_mobile_platform() else CONFIG_FILE
+	## 移动端与导出包的 res:// 都可能在只读 PCK/APK 内，必须写 user://。
+	## 仅编辑器构建的桌面开发环境仍写 res://config.json，保留手改 debug 的工作流。
+	## _load_config 已按 res:// 默认值 → user:// 覆盖读取，昵称可跨启动保存。
+	var path: String = CONFIG_FILE_USER if is_mobile_platform() or not OS.has_feature("editor") else CONFIG_FILE
 	var f: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if f:
 		f.store_string(JSON.stringify(cfg, "\t"))

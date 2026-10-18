@@ -35,6 +35,8 @@ const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
+## 地图弹药补给节点类型白名单：上行只收节点路径，不能接受客户端指定补给量或资源。
+const AMMO_SUPPLY_SCRIPT := preload("res://script/ammo_supply.gd")
 ## 联机资源白名单（2026-10-08 拆分）：真源已移到 script/network_whitelist.gd。
 ## 这里保留**同名 const 转发别名** —— net_regression_harness.gd 子类直接引用
 ## NETWORK_KNIFE / NETWORK_WEAPONS 等常量，别名保证其零改动。
@@ -4062,6 +4064,68 @@ func pickup_request(pickup_id: int, claimed_position: Variant = null) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender > 1:
 		_try_host_pickup(sender, pickup_id, claimed_position)
+
+
+# ---------------------------------------------------------------- 地图弹药补给（Host 权威事务）
+
+func request_ammo_supply(node_path: NodePath, claimed_position: Variant = null) -> void:
+	if _scene_transitioning or not is_instance_valid(net) or not net.is_online_session():
+		return
+	if net.is_host:
+		_try_host_ammo_supply(int(net.my_peer_id), node_path, claimed_position)
+	elif _client_ready_to_send():
+		ammo_supply_request.rpc_id(1, node_path, claimed_position)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func ammo_supply_request(node_path: NodePath, claimed_position: Variant = null) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender > 1 and _ready_client_peers.has(sender):
+		_try_host_ammo_supply(sender, node_path, claimed_position)
+
+
+## 路径必须指向本场景内真正的补给节点；玩家必须存活且在交互范围内。
+## 备弹目标由 Host 的随身 WeaponData 决定，Client 不能传入数量或弹种。
+func _try_host_ammo_supply(peer_id: int, node_path: NodePath, claimed_position: Variant = null) -> int:
+	if not net.is_host or _scene_transitioning or _wipe_active or not _players.has(peer_id):
+		return 0
+	if node_path.is_empty() or node_path.is_absolute() or ".." in String(node_path).split("/"):
+		return 0
+	var scene := get_tree().current_scene
+	var supply := scene.get_node_or_null(node_path) as Node2D if scene else null
+	if not is_instance_valid(supply) or not (supply.get_script() == AMMO_SUPPLY_SCRIPT) \
+			or supply.is_queued_for_deletion() or not supply.is_visible_in_tree():
+		return 0
+	var entry: Dictionary = _players[peer_id]
+	var player := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(player) or state == null or state.current_hp <= 0.0 \
+			or player.is_network_dead() or player.get("network_swallow_locked") == true:
+		return 0
+	_apply_lag_compensated_position(peer_id, player, claimed_position)
+	if player.global_position.distance_to(supply.global_position) > float(supply.get("interact_range")) + 8.0:
+		return 0
+	var added: int = int(supply.call("refill_state", state))
+	if added <= 0:
+		return 0
+	# 和拾取相同的可靠库存收敛；广播入口遵守就绪与切图静默门控。
+	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+	supply.call("play_refill_feedback")
+	_send_to_ready_clients(&"ammo_supply_feedback", [node_path])
+	print("[NetworkWorld] HOST_AMMO_SUPPLY peer=%d added=%d path=%s" % [peer_id, added, node_path])
+	return added
+
+
+@rpc("authority", "call_remote", "reliable")
+func ammo_supply_feedback(node_path: NodePath) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var scene := get_tree().current_scene
+	var supply := scene.get_node_or_null(node_path) if scene else null
+	if is_instance_valid(supply) and supply.get_script() == AMMO_SUPPLY_SCRIPT:
+		supply.call("play_refill_feedback")
 
 
 # ---------------------------------------------------------------- 急救喷雾使用（Host 权威事务）

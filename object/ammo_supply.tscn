@@ -1,0 +1,28 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/ammo_supply.gd" id="1_ammo"]
+
+[sub_resource type="RectangleShape2D" id="AmmoSupplyRect"]
+size = Vector2(32, 32)
+
+[node name="AmmoSupply" type="Node2D"]
+script = ExtResource("1_ammo")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -16)
+
+[node name="HintLabel" type="Label" parent="."]
+visible = false
+offset_left = -180.0
+offset_top = -70.0
+offset_right = 180.0
+offset_bottom = -46.0
+mouse_filter = 2
+horizontal_alignment = 1
+
+[node name="Collision" type="StaticBody2D" parent="."]
+collision_layer = 33
+collision_mask = 0
+
+[node name="Shape" type="CollisionShape2D" parent="Collision"]
+shape = SubResource("AmmoSupplyRect")

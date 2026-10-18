@@ -31,6 +31,11 @@ const DIRECTIONS: int = 4
 ## （武器空槽也不再触碰自动拾取）；关闭（默认）保持触碰拾取。透传给刷出的拾取物。
 @export var require_function_key: bool = false
 
+@export_group("出现条件")
+## 勾选后只在联机会话出现；单机不抽取、不刷物，也不改补给点持久化状态。
+## 编辑器始终显示预览，方便摆放。
+@export var multiplayer_only: bool = false
+
 ## ★持久化 key（2026-10-12）：地图预摆（owner 非空）时 = 场景路径 + 本节点路径，
 ## 用于「已拾取不复活」+「重载后内容不变」。动态生成（owner 空）时为空 = 不持久化。
 var _source_key: String = ""
@@ -39,6 +44,11 @@ var _source_key: String = ""
 func _ready() -> void:
 	if Engine.is_editor_hint():
 		_editor_preview()
+		return
+	if multiplayer_only and not _is_online_session():
+		hide()
+		set_process(false)
+		queue_free()
 		return
 	# 联机 Client 不得本地随机刷掉落物（09-22 实测）：两端各自 roll 的结果不同 →
 	# Client 会多出 Host 不认的物件（「莫名多出一个急救喷雾且拿不了」）、同时
@@ -135,6 +145,11 @@ func _find_pool_item_by_id(item_id: String) -> Resource:
 		if entry != null and str(entry.get("item_id")) == item_id:
 			return entry
 	return null
+
+
+func _is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and bool(net.is_online_session())
 
 
 ## 联机 Client 判定（与 director.gd / dev_enemy_spawner.gd 同款：用节点路径而非

@@ -257,7 +257,7 @@ func _setup_connection_tabs() -> void:
 	if vbox == null:
 		return
 
-	## 1) 把现有表单控件收进一个「直连」容器：除标题与返回按钮外全部搬进去。
+	## 1) 把连接表单收进「直连」容器；公共昵称行、标题与大厅按钮留在页签外。
 	_direct_container = VBoxContainer.new()
 	_direct_container.name = "DirectView"
 	_direct_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -268,18 +268,19 @@ func _setup_connection_tabs() -> void:
 			continue
 		if child is Label and (child as Label).name == "Title":
 			continue      ## 窗内标题留在外面（它是面板级标题）
-		if (child as Node).name == "BackToTitleBtn" or (child as Node).name == "WipNotice":
-			continue      ## 属于大厅界面而非表单
+		if child.name in ["NameRow", "BackToTitleBtn", "WipNotice"]:
+			continue      ## 属于大厅界面而非连接方式
 		if child is Control:
 			vbox.remove_child(child)
 			_direct_container.add_child(child)
 
-	## 2) 页签栏插到标题正下方。
+	## 2) 页签栏插到公共昵称行下方。
 	_tab_bar = HBoxContainer.new()
 	_tab_bar.name = "ConnectionTabs"
 	_tab_bar.add_theme_constant_override("separation", 8)
 	vbox.add_child(_tab_bar)
-	vbox.move_child(_tab_bar, 1)   ## 0 是标题
+	vbox.move_child($ConnectPanel/VBox/NameRow, 1)
+	vbox.move_child(_tab_bar, 2)   ## 标题 → 公共昵称 → 连接方式页签
 
 	_internet_tab_btn = Button.new()
 	_internet_tab_btn.name = "InternetTabBtn"
@@ -333,13 +334,6 @@ func _setup_connection_tabs() -> void:
 				_tunnel_client.connect(sig, handler)
 
 	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
-	## ★昵称行移到「页签栏上方」（2026-10-13 用户需求：互联网/局域网共用名字且都能改）。
-	## 它在第 1 步被搬进了直连容器 → 互联网页签看不到；这里再移出，固定到 `_tab_bar`
-	## 之上（VBox 第 1 位正好是 _tab_bar，昵称行插到它前面 = 全局可见）。
-	var name_row: Control = get_node_or_null("ConnectPanel/VBox/Center/Window/Form/NameRow") as Control
-	if name_row != null and name_row.get_parent() == _direct_container:
-		name_row.reparent(vbox)
-		vbox.move_child(name_row, 1)   ## 0 是标题，1 = 昵称行，2 = 页签栏
 	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
 	## 需要再套一次缩进，否则页签会压在页标题上。
 	_push_down_content(connect_panel)
@@ -360,42 +354,58 @@ func _select_tab(which: String) -> void:
 		_log("已切到互联网模式：从大厅房间列表加入，或创建互联网房间。")
 
 
-## 玩家昵称（2026-10-13 用户需求）：互联网 / 局域网**共用一份**并持久化。
-## 直连表单里的 `NameEdit` 是唯一输入框，但它在 `_setup_connection_tabs()` 里被搬进
-## 「直连」容器 → 互联网页签看不到。这里把它**移出**两个页签容器、固定到页签栏上方，
-## 使两种连接方式都能改同一份名字；并回填 `Global.player_name`、变更即时存盘。
+## 公共昵称行预置在页签外；Global 只保存本机偏好，Net 保留当前连接使用的名字。
 func _setup_player_name() -> void:
-	## 回填存下来的昵称（空 → 保留 tscn 默认「玩家」），并同步到 Net 真源。
-	var saved: String = str(Global.player_name).strip_edges()
+	var saved: String = Global.player_name.strip_edges()
 	if not saved.is_empty():
 		name_edit.text = saved
-	net.player_name = name_edit.text
-	## 变更即持久化（失焦 / 回车提交两个时机都存，覆盖手机端无回车的场景）。
+	name_edit.editable = not net.has_network()
+	if name_edit.editable:
+		net.player_name = name_edit.text
 	if not name_edit.text_changed.is_connected(_on_player_name_changed):
 		name_edit.text_changed.connect(_on_player_name_changed)
+	if not name_edit.focus_exited.is_connected(_persist_player_name):
+		name_edit.focus_exited.connect(_persist_player_name)
 	if not name_edit.text_submitted.is_connected(_on_player_name_submitted):
 		name_edit.text_submitted.connect(_on_player_name_submitted)
 
 
-func _on_player_name_changed(new_text: String) -> void:
-	net.player_name = new_text
-	Global.player_name = new_text
+func _on_player_name_changed(_new_text: String) -> void:
+	## 输入即落盘：只改名后直接关窗口也能保留；编辑中不去空格、不重置光标。
+	_persist_player_name(false)
 
 
 func _on_player_name_submitted(_new_text: String) -> void:
 	_persist_player_name()
 
 
-## 把当前昵称写入 `Global.player_name` 并存盘（互联网 / 局域网共用同一份）。
-func _persist_player_name() -> void:
-	Global.player_name = name_edit.text
+func _persist_player_name(normalize: bool = true) -> void:
+	## 连接中也必须锁定，避免 hello 发出前后本机名字与握手名单不一致。
+	if net == null or _connected or net.has_network():
+		return
+	if normalize:
+		var value: String = name_edit.text.strip_edges()
+		name_edit.text = value if not value.is_empty() else "玩家"
 	net.player_name = name_edit.text
+	## 自动回归只改运行时昵称，不改本机偏好或用户配置。
+	if not _can_save_name_preference() or Global.player_name == name_edit.text:
+		return
+	Global.player_name = name_edit.text
 	Global.save_config()
+
+
+func _can_save_name_preference() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	for argument: String in OS.get_cmdline_user_args():
+		if argument.begins_with("--net-test"):
+			return false
+	return true
 
 
 ## 互联网列表里点「加入」→ 复用现有 Net.join_game 入口（零改动，方案 §5.4）。
 func _on_internet_join_requested(address: String, port: int, room_name: String) -> void:
-	net.player_name = name_edit.text
+	_persist_player_name()
 	_log("正在加入互联网房间「%s」：%s:%d …" % [room_name, address, port])
 	var err: Error = net.join_game(address, port)
 	if err != OK:
@@ -410,7 +420,7 @@ func _on_internet_join_requested(address: String, port: int, room_name: String) 
 ## 自动模式（路线二）：tunnel_address 为空 → 启动内置隧道客户端 → 等隧道就绪 → 注册。
 ## 手动模式：tunnel_address 非空 → 直接用玩家填的穿透地址注册（现有逻辑）。
 func _on_internet_create_requested(room_name: String, tunnel_address: String, tunnel_port: int) -> void:
-	net.player_name = name_edit.text
+	_persist_player_name()
 	var port := int(host_port_edit.value)
 
 	## 自动模式不需要 UPnP（隧道处理 NAT 穿透）；手动模式保留 UPnP 预填逻辑。
@@ -785,6 +795,7 @@ func _connect_vbox() -> Control:
 
 
 func _on_back_to_title_pressed() -> void:
+	_persist_player_name()
 	if net and _connected:
 		## 与「离开该大厅」同一套退出顺序：先销房，再断连接（方案 §4.6）。
 		_delete_internet_room_if_host()
@@ -947,7 +958,6 @@ func _get_game_scene_for_launch() -> String:
 # ---------------------------------------------------------------- 按钮
 
 func _on_create_pressed() -> void:
-	net.player_name = name_edit.text
 	_persist_player_name()
 	net.upnp_enabled = upnp_check.button_pressed
 	# ★创建房间用**独立的本机监听端口**（2026-09-27 用户需求：建主端口与加入端口分开设置）。
@@ -963,7 +973,6 @@ func _on_create_pressed() -> void:
 
 
 func _on_join_pressed() -> void:
-	net.player_name = name_edit.text
 	_persist_player_name()
 	# 端口由大厅输入框提供：默认 27015；内网穿透场景填穿透服务分配的远程 UDP 端口。
 	var port := int(port_edit.value)
@@ -1135,6 +1144,7 @@ func _on_upnp_mapping_failed(reason: String) -> void:
 func _refresh_ui() -> void:
 	if not is_node_ready() or not net:
 		return
+	name_edit.editable = not _connected and not net.has_network()
 	var selection_ready: bool = _connected and bool(net.handshake_ok)
 	if net.is_host:
 		status_label.text = "状态：主机（UDP 端口 %d）" % int(net.active_port)
@@ -1196,6 +1206,7 @@ func _refresh_character_select(selection_ready: bool) -> void:
 
 
 func _set_connect_buttons_disabled(value: bool) -> void:
+	name_edit.editable = not value and not _connected and not net.has_network()
 	create_btn.disabled = value
 	join_btn.disabled = value
 	start_btn.disabled = true
