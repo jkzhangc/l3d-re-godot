@@ -12,23 +12,20 @@ script = ExtResource("1_lab")
 position = Vector2(320, 240)
 zoom = Vector2(2, 2)
 
-[node name="NightOverlay" type="CanvasLayer" parent="."]
+[node name="NightOverlay" type="CanvasLayer" parent="." unique_id=1322468570]
 layer = 5
 script = ExtResource("2_night")
-darkness = 0.9
-glow_strength = 0.5
 
 [node name="Torch" type="Node2D" parent="." unique_id=1601042816]
 position = Vector2(110, 150)
 script = ExtResource("3_light")
 radius = 320.0
-intensity = 1.0
 light_color = Color(1, 0.5, 0.2, 1)
 flicker = 0.26
-occlude = true
+shadow_scale = null
+shadow_range = null
 embers_enabled = true
 ember_amount = 16
-ember_color = Color(1, 0.7, 0.28, 1)
 ember_speed = 46.0
 ember_radius = 18.0
 
@@ -39,7 +36,8 @@ radius = 360.0
 intensity = 0.7
 light_color = Color(1, 0.96, 0.86, 1)
 flicker = 0.03
-occlude = true
+shadow_scale = null
+shadow_range = null
 
 [node name="CoolLight" type="Node2D" parent="." unique_id=1921672210]
 position = Vector2(330, 390)
@@ -48,7 +46,8 @@ radius = 300.0
 intensity = 0.85
 light_color = Color(0.52, 0.72, 1, 1)
 flicker = 0.08
-occlude = true
+shadow_scale = null
+shadow_range = null
 embers_enabled = true
 ember_amount = 10
 ember_color = Color(0.6, 0.8, 1, 1)
@@ -63,24 +62,35 @@ radius = 260.0
 intensity = 0.95
 light_color = Color(1, 0.28, 0.22, 1)
 flicker = 0.7
-occlude = true
+shadow_scale = null
+shadow_range = null
 
-[node name="Dummy" type="Node2D" parent="." groups=["lab_dummy"]]
+[node name="Dummy" type="Node2D" parent="." unique_id=112076654 groups=["lab_dummy"]]
 position = Vector2(392, 396)
 
-[node name="Sprite2D" type="Sprite2D" parent="Dummy"]
-position = Vector2(0, -16)
+[node name="Sprite2D" type="Sprite2D" parent="Dummy" unique_id=1939870285]
 z_index = 1
+position = Vector2(0, -16)
 texture = ExtResource("4_dummy")
 region_enabled = true
 region_rect = Rect2(0, 0, 48, 64)
 
-[node name="Dummy2" type="Node2D" parent="." groups=["lab_dummy"]]
+[node name="Dummy2" type="Node2D" parent="." unique_id=1483470449 groups=["lab_dummy"]]
 position = Vector2(185, 205)
 
-[node name="Sprite2D" type="Sprite2D" parent="Dummy2"]
+[node name="Sprite2D" type="Sprite2D" parent="Dummy2" unique_id=200043909]
+z_index = 1
+position = Vector2(0, -16)
+texture = ExtResource("4_dummy")
+region_enabled = true
+region_rect = Rect2(48, 0, 48, 64)
+
+[node name="Dummy3" type="Node2D" parent="." groups=["lab_dummy"]]
+position = Vector2(470, 210)
+
+[node name="Sprite2D" type="Sprite2D" parent="Dummy3"]
 position = Vector2(0, -16)
 z_index = 1
 texture = ExtResource("4_dummy")
 region_enabled = true
-region_rect = Rect2(48, 0, 48, 64)
+region_rect = Rect2(0, 64, 48, 64)

@@ -62,6 +62,10 @@ const TILE_PX: float = 32.0
 const SHADOW_SCALE: float = 0.5     ## 原 cast_scale：影子长度 = 角色高 × 距离(格) × 本值
 const SHADOW_RANGE: float = 0.0     ## 原 cast_distance：投影作用距离（px），0 = 跟随灯半径
 const SHADOW_OPACITY: float = 0.45  ## 最大不透明度
+## 影子整体朝角色方向回缩的比例（× 角色帧高）。翻转后帧内的空白会落在脚底端，
+## 看起来就像影子浮在下面一段（2026-10-19 用户：影子离脚部太远）。
+## 0.16 × 64px ≈ 10px，正常身高正好贴住脚底；大体型敌人会自动按比例放大。
+const SHADOW_NEAR_NUDGE_RATIO: float = 0.16
 
 static var _gradient_tex: ImageTexture = null
 
@@ -471,6 +475,7 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	var fade: float = clampf(1.0 - dist / maxf(range_px, 1.0), 0.0, 1.0)
 	var base_w: float = s.region_rect.size.x if s.region_rect.size.x > 0.0 else float(s.texture.get_width())
 	var base_h: float = s.region_rect.size.y if s.region_rect.size.y > 0.0 else float(s.texture.get_height())
+	var h: float = base_h * absf(s.scale.y)
 	var sh := _shadow_for(node)
 	sh.texture = s.texture
 	sh.region_enabled = s.region_enabled
@@ -478,7 +483,7 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	sh.flip_h = s.flip_h
 	# 支点放到底边中点（脚底），这样 scale.y / rotation 都绕脚底做。
 	sh.offset = Vector2(-base_w * 0.5, -base_h)
-	sh.position = s.position + Vector2(0.0, base_h * absf(s.scale.y) * 0.5)
+	sh.position = s.position + Vector2(0.0, h * 0.5) - dir * (h * SHADOW_NEAR_NUDGE_RATIO)
 	# 拉得越长越收窄一点，避免变成一条胖带子
 	var width_scale: float = clampf(1.0 - 0.14 * stretch, 0.55, 1.0)
 	# ⚠ 不做插值/阻尼：原工程每帧直接用 angle / zoom_y 重算。
