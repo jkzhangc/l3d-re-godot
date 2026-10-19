@@ -30,6 +30,17 @@ const ANGLE_STEPS: int = 12
 ## 与 player.tscn 的 collision_mask=15 同口径（bit2 当前无人使用）。
 const BLOCKING_MASK: int = 1 | 4 | 8
 
+## ── 「薄障碍」阈值（2026-10-19 用户实测）──
+## 卡墙自救的判据是「玩家/敌人**中心所在格**有没有碰撞」，而不是"身体是否真的被卡住"。
+## 街道图（街道B.tres）里有一批**围栏**图块：碰撞多边形只有 ~10×32 或 32×10
+## （整格 32×32 的一部分）。玩家贴上去时中心会落进该格 → 被判"在墙里" →
+## 连续命中 2 次后整人被瞬移出去。用户实测：「走进围栏，过一会就被瞬移，
+## 但玩家并没有卡墙」。
+## 规则：碰撞多边形**宽或高任一 < 32px**（不满一整格）时视为薄障碍，
+## 不参与"脱离墙"判定（自救）；整格 32×32 的墙/家具照旧触发。
+## ⚠ 只用于自救判据；刷怪/落点探测仍按"有碰撞就不能站"处理（宁可多挪一格）。
+const THIN_COLLIDER_MIN_EXTENT: float = 32.0
+
 
 ## 该点是否可以站人。`world_node` 必须已入树（取它的 World2D）。
 ## `probe_radius` 供不同体积的使用者覆盖（玩家盒 24×27 → 14；敌人盒 20×28 → 14 同样够用）。
@@ -95,8 +106,12 @@ static func find_around_anchor(world_node: Node2D, anchor: Vector2, min_sep: flo
 ## 该点是否被**图块碰撞**挡住（墙 / 桌椅等挂物理层的格子）。
 ## 【公开入口的用途（2026-10-02）】玩家"卡墙自救"的判据 —— 只看地图，**不看敌人 body**，
 ## 否则被敌人贴脸（body 重叠）会被误判成卡墙并瞬移出去。
-static func is_tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
-	return _tile_blocked(world_node, pos)
+## `require_full_cell`（2026-10-19）：只把**占满一整格**（宽、高都 ≥ 32px）的碰撞多边形
+## 算作阻挡。卡墙自救必须传 true —— 围栏等薄碰撞（~10×32）不整格阻挡，
+## 玩家贴上去并没有卡墙，不该被瞬移出去。刷怪/落点探测保持默认 false。
+static func is_tile_blocked(world_node: Node2D, pos: Vector2,
+		require_full_cell: bool = false) -> bool:
+	return _tile_blocked(world_node, pos, require_full_cell)
 
 
 ## 该点是否落在**有效图块**上（地图外的虚空 / 未铺图块的区域 = false）。
@@ -143,7 +158,8 @@ static func _acceptable(world_node: Node2D, pos: Vector2, probe_radius: float,
 ## physics layer 0 ↔ tileset 的 `physics_layer_0/collision_layer = 1`（角色层），
 ## 与 Director._is_walkable 同一判据；这里**不查** NoSpawn 层（作者标注的是"禁刷怪"，
 ## 不代表玩家不能站）。
-static func _tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
+static func _tile_blocked(world_node: Node2D, pos: Vector2,
+		require_full_cell: bool = false) -> bool:
 	var tree: SceneTree = world_node.get_tree()
 	if tree == null:
 		return false
@@ -166,9 +182,38 @@ static func _tile_blocked(world_node: Node2D, pos: Vector2) -> bool:
 		##   · physics layer 0 = 图块的**角色层**（`physics_layer_0/collision_layer = 1`）——
 		##     墙壁与桌椅等家具都挂在这一层，正是"卡住玩家"的直接原因；
 		##   · 其余层（如子弹阻挡层 32）一并避开：宁可多挪一格，也不要落在"看着是墙里"的格子。
+		## `require_full_cell` 时跳过"薄障碍"（围栏等，宽或高 < 32px）——见常量注释。
 		for layer_id: int in range(tm.tile_set.get_physics_layers_count()):
-			if data.get_collision_polygons_count(layer_id) > 0:
-				return true
+			var poly_count: int = data.get_collision_polygons_count(layer_id)
+			if poly_count <= 0:
+				continue
+			if require_full_cell and not _has_full_cell_polygon(data, layer_id, poly_count):
+				continue
+			return true
+	return false
+
+
+## 该物理层里是否存在「占满一整格」的碰撞多边形（宽、高都 ≥ 32px）。
+## 一张图块可能有多个多边形（L 形墙常被拆成两块）：**任一**块占满整格就算实墙；
+## 全部都是薄条（围栏/栏杆/桌沿）则整格不算"卡死"。
+static func _has_full_cell_polygon(data: TileData, layer_id: int, poly_count: int) -> bool:
+	for i: int in range(poly_count):
+		var points: PackedVector2Array = data.get_collision_polygon_points(layer_id, i)
+		if points.size() < 3:
+			continue
+		var min_x: float = points[0].x
+		var max_x: float = points[0].x
+		var min_y: float = points[0].y
+		var max_y: float = points[0].y
+		for p: Vector2 in points:
+			min_x = minf(min_x, p.x)
+			max_x = maxf(max_x, p.x)
+			min_y = minf(min_y, p.y)
+			max_y = maxf(max_y, p.y)
+		## 留 0.05px 容差：Tiled/转换器导出的整格多边形偶尔是 31.99…。
+		if (max_x - min_x) >= THIN_COLLIDER_MIN_EXTENT - 0.05 \
+				and (max_y - min_y) >= THIN_COLLIDER_MIN_EXTENT - 0.05:
+			return true
 	return false
 
 

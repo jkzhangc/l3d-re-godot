@@ -5402,17 +5402,29 @@ func _is_player_slot_node(node: Node) -> bool:
 		or String(script.resource_path).ends_with("player_spawn_slot.gd")
 
 
-## 槽位是否可用：在有效图块上、不压墙、不与已分配落点（含本人当前站位）过近。
-func _slot_available(pos: Vector2) -> bool:
-	var anchor := _find_preplaced_player()
-	if not is_instance_valid(anchor):
+## 槽位是否可用 = **只判「这个点能不能站人」**：不压图块碰撞、不落虚空。
+##
+## ★刻意不看其它玩家/敌人 body，也不做落点间距检查（2026-10-19 用户实测修复）：
+##   · 玩家之间本来没有碰撞 —— `player.tscn` 的 `collision_layer = 4`（第 3 层），
+##     而 `collision_mask = 11`（层 1/2/4）不含第 3 层 → 出生重叠不会互相推挤；
+##   · 旧实现把「离已分配落点 < SPAWN_SEPARATION × 0.6 = 33.6px」判成不可用，
+##     而作者在 街道 / R市 摆的 1↔4 号位只有 32px、1↔2 号位 32~40px →
+##     2/4 号位整体被判非法 → 被 SpawnSpotResolver 挪到"最近空位"，
+##     表现就是「PlayerSpawnSlot 不生效 / 出生时自动避让队友」；
+##   · `is_free(..., ignore_bodies = true)` 只查图块碰撞与"是否踩在地图上"，
+##     作者摆错位置（压墙/虚空）时仍会被修正，不会把人放进墙里。
+func _slot_standable(node: Node2D, pos: Vector2) -> bool:
+	if not is_instance_valid(node):
 		return false
-	if not SPOT_RESOLVER.is_free(anchor, pos, 14.0, true):
-		return false
-	for assigned: Vector2 in _spawn_assignments:
-		if pos.distance_to(assigned) < SPAWN_SEPARATION * 0.6:
-			return false
-	return true
+	return SPOT_RESOLVER.is_free(node, pos, 14.0, true, true)
+
+
+## 作者槽位摆在不合法位置（压墙/虚空）时的兜底：只按图块找最近可站点，
+## **仍然忽略实体占用**（与 `_slot_standable` 同口径，避免又绕回"避让队友"）。
+func _resolve_slot_position(node: Node2D, slot_pos: Vector2) -> Vector2:
+	var found: Variant = SPOT_RESOLVER.find_near(
+		node, slot_pos, 14.0, Callable(), true, true)
+	return (found as Vector2) if found is Vector2 else slot_pos
 
 
 ## 本机玩家站到自己的槽位上（Host 是 1 号，Client 按座位号）。
@@ -5425,10 +5437,18 @@ func _apply_own_spawn_slot(node: CharacterBody2D, slot: int) -> bool:
 		return false
 	var slot_pos: Vector2 = value as Vector2
 	var target: Vector2 = slot_pos
-	if not _slot_available(slot_pos):
-		target = SPOT_RESOLVER.resolve(node, slot_pos, true)
-		push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
-			% [slot, str(slot_pos.round()), str(target.round())])
+	if not _slot_standable(node, slot_pos):
+		var nudged: Vector2 = _resolve_slot_position(node, slot_pos)
+		if _slot_standable(node, nudged):
+			target = nudged
+			push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
+				% [slot, str(slot_pos.round()), str(target.round())])
+		else:
+			## 槽位与 144px 内都没有可站点（槽位摆在地图外的虚空）→ 保留玩家原有出生位置。
+			## 绝不把本机玩家扔进虚空/墙里。
+			target = node.global_position
+			push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）且附近无可站点 → 保留原有出生位置 %s"
+				% [slot, str(slot_pos.round()), str(target.round())])
 	node.global_position = target
 	_spawn_assignments.append(target)
 	print("[NetworkWorld] PLAYER_SLOT 第 %d 位（本机）→ %s" % [slot, str(target.round())])
@@ -5480,21 +5500,27 @@ func _spawn_position(index: int) -> Vector2:
 		return origin
 	## ① 作者定点槽位优先（第 index 位玩家 → 槽位 index + 1）。
 	##    "传送抵达"时不使用槽位：那是入口位置，不是关卡起点。
+	##    ★槽位只判"能不能站"（图块/虚空），不判实体占用与间距 —— 见 _slot_standable。
 	if not _arrival_applied:
 		var slot_value: Variant = _player_spawn_slots.get(index + 1)
 		if slot_value is Vector2:
 			var slot_pos: Vector2 = slot_value as Vector2
-			if _slot_available(slot_pos):
+			if _slot_standable(anchor, slot_pos):
 				_spawn_assignments.append(slot_pos)
 				print("[NetworkWorld] PLAYER_SLOT 第 %d 位 → %s" % [index + 1, str(slot_pos.round())])
 				return slot_pos
-			## 槽位摆在不合法位置（压墙/虚空/与队友重叠）：挪到最近可用点，仍优先于环形搜索。
-			var nudged: Vector2 = SPOT_RESOLVER.resolve(anchor, slot_pos, true)
-			push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
-				% [index + 1, str(slot_pos.round()), str(nudged.round())])
-			if nudged.distance_to(slot_pos) > 0.5 or _slot_available(nudged):
+			## 槽位摆在不合法位置（压墙/虚空）：挪到最近可用点，仍优先于环形搜索。
+			var nudged: Vector2 = _resolve_slot_position(anchor, slot_pos)
+			if _slot_standable(anchor, nudged):
 				_spawn_assignments.append(nudged)
+				push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）→ 已改用 %s；建议在编辑器里修正该点位"
+					% [index + 1, str(slot_pos.round()), str(nudged.round())])
 				return nudged
+			## 连 144px 内都没有可站点（槽位摆在地图外的虚空）→ 交给下面的环形搜索兜底。
+			## ⚠ 绝不能把 `nudged`（= 原非法点）直接返回：那会把玩家放进虚空/墙里
+			## （player_placement_check 的「非法槽位（虚空）不会把人放进去」就是这条）。
+			push_warning("[NetworkWorld] 玩家槽位 %d 不可用（%s）且附近无可站点 → 回退到锚点环形搜索"
+				% [index + 1, str(slot_pos.round())])
 	## 锚点自己也算"已占用"，保证队形从锚点往外展开。
 	if _spawn_assignments.is_empty():
 		_spawn_assignments.append(origin)

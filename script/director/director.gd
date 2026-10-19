@@ -622,6 +622,9 @@ signal boss_music_changed(active: bool)
 
 var _boss_music_player: AudioStreamPlayer = null
 var _boss_music_active: bool = false
+## 「boss_music 未配置」只告警一次：这是"坦克登场却没音乐"的直接原因（2026-10-19），
+## 但每次坦克刷新都 push 会刷屏，因此只在首次留痕。
+var _boss_music_missing_warned: bool = false
 ## 需要由本模块监视存活的 Boss 实体（含未入 tank_enemies 组的 BossEncounter 生成物）。
 var _boss_music_watchlist: Array[Node2D] = []
 
@@ -630,6 +633,12 @@ var _boss_music_watchlist: Array[Node2D] = []
 func play_boss_music(watch: Node2D = null) -> void:
 	var stream: AudioStream = current_config.boss_music if current_config else null
 	if stream == null:
+		## ★不要静默早退：旧日志里"坦克出现了但没音乐"完全查不到原因。
+		## 默认值已在 DirectorConfig 设为「ボス１」；走到这里说明该图把它清空了
+		## 或 current_config 还没应用（Client 首个 BGM 包早到）。
+		if not _boss_music_missing_warned:
+			_boss_music_missing_warned = true
+			push_warning("[Director] current_config.boss_music 为空 → 坦克/Boss 登场不播 BGM（DirectorConfig「音乐 — Boss」组默认应为 ボス１）")
 		return
 	if watch and is_instance_valid(watch) and not _boss_music_watchlist.has(watch):
 		_boss_music_watchlist.append(watch)
@@ -657,14 +666,19 @@ func is_boss_music_active() -> bool:
 	return _boss_music_active
 
 
-## Boss 全灭 / 全员死亡冻结时调用。resume_horde=true 且尸潮仍在 peak 时接回尸潮 BGM。
+## Boss 全灭 / 全员死亡冻结 / 换图时调用。resume_horde=true 且尸潮仍在 peak 时接回尸潮 BGM。
+## ★2026-10-19 加固：不再以 `_boss_music_active` 作为唯一早退条件 ——
+## 状态位与播放器短暂不同步时（例如 play() 后立刻收到结束），旧写法会直接 return，
+## 坦克已经没了 BGM 却还在响。现在先无条件 stop 播放器，只有"确实由激活态转入停止"
+## 才广播/发信号，避免 Client 侧无意义的状态抖动。
 func stop_boss_music(resume_horde: bool = false) -> void:
-	if not _boss_music_active:
-		return
+	var was_active: bool = _boss_music_active
 	_boss_music_active = false
 	_boss_music_watchlist.clear()
 	if _boss_music_player:
 		_boss_music_player.stop()
+	if not was_active:
+		return
 	boss_music_changed.emit(false)
 	_announce_music("boss", false)
 	print("[Director] Boss BGM 停止")
@@ -735,8 +749,11 @@ func _update_boss_music() -> void:
 		return
 	if _count_alive_tanks() > 0:
 		return
+	## ⚠ 先剔已释放引用再 filter：数组里含 **已释放 Object** 时，带类型标注的 lambda
+	## 参数转换会失败（`Cannot convert argument 1 from Object to Object`，2026-10-11 教训）。
+	_boss_music_watchlist = _prune_freed_nodes(_boss_music_watchlist)
 	_boss_music_watchlist = _boss_music_watchlist.filter(func(e: Node2D) -> bool:
-		return is_instance_valid(e) and e.get("_is_dead") != true and e.get("_is_dying") != true)
+		return e.get("_is_dead") != true and e.get("_is_dying") != true)
 	if not _boss_music_watchlist.is_empty():
 		return
 	stop_boss_music(true)
@@ -1433,6 +1450,15 @@ func _check_scene_change() -> void:
 	if scene == _last_scene:
 		return
 	_last_scene = scene
+	## ★Boss BGM 绝不跨图（2026-10-19 用户要求「切换场景时坦克音乐也要停止」）：
+	## 坦克实体属于本场景，换图（含同图重建）后旧坦克随场景释放 —— 若 BGM 继续播，
+	## 就是"场上没有 Boss 却响 Boss 曲"。放在缓存清理之前，让本帧后续的
+	## `_update_boss_music()` 看到的是已停止状态。
+	## ⚠ 尸潮 BGM **不能**在这里停：尸潮跨图是本项目既定设计（Pacing 阶段不随换图重置），
+	## 停尸潮只由 phase=cooldown / 全灭冻结 / 进安全屋 / 回标题负责。
+	if _boss_music_active:
+		stop_boss_music(false)
+		print("[Director] 场景切换：Boss BGM 已停止（坦克不跨图）")
 	# 场景切换 → 失效生成图判定缓存 + 关键字小写缓存（新图配置可能不同）
 	_spawn_map_cache_path = _SCENE_PATH_SENTINEL
 	_spawn_kw_lower.clear()

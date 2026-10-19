@@ -221,5 +221,11 @@ class_name DirectorConfig extends Node
 ## 登场即停尸潮 BGM 改播本曲（L4D2 Tank 音乐式），Boss 全灭自动停止；
 ## 若停止时尸潮仍在 peak，尸潮 BGM 自动接回。留空 = 不播 Boss BGM（尸潮 BGM 照常）。
 ## 防守战 BGM 不停播，Boss BGM 播放期间防守战 BGM 暂停（stream_paused），Boss 灭后恢复。
-@export var boss_music: AudioStream = null
+##
+## ★默认值 = 原作「ボス１」（2026-10-19 用户实测修复）：此前默认是 **null**，而全项目只有
+## 测试图与第四关列车台两张图在 DirectorConfig 里显式配了 boss_music → 其余地图
+## `play_boss_music()` 第一行就 `stream == null` 早退，坦克登场/存活全程无声，
+## 尸潮结束后也不会补播。原作坦克登场本来就播「ボス１」（见 147 图分析 #603 消息），
+## 因此把它设为默认值，让所有地图开箱即有坦克 BGM；作者仍可逐图覆盖或清空。
+@export var boss_music: AudioStream = preload("res://music/ボス１.mp3")
 @export_range(-80.0, 12.0, 0.5) var boss_music_volume_db: float = 0.0

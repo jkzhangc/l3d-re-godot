@@ -2289,7 +2289,9 @@ func _rescue_if_stuck(delta: float) -> void:
 	if not is_inside_tree():
 		return
 	var here: Vector2 = global_position
-	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here)
+	## 与玩家同口径（2026-10-19）：薄碰撞（围栏等，宽或高 < 32px）不算卡墙，
+	## 否则敌人贴着围栏站一会也会被整只瞬移走。
+	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here, true)
 	var off_map: bool = not SPOT_RESOLVER.has_tile(self, here)
 	if not (in_wall or off_map):
 		_stuck_hits = 0

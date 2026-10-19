@@ -430,7 +430,10 @@ func _rescue_if_stuck(delta: float) -> void:
 	if not is_inside_tree():
 		return
 	var here: Vector2 = global_position
-	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here)
+	## `require_full_cell = true`（2026-10-19 用户实测）：围栏/栏杆这类薄碰撞
+	## （宽或高 < 32px）不整格阻挡，玩家贴上去并没有卡墙 —— 旧判据只看"中心格有没有碰撞"，
+	## 于是走进围栏约 1 秒后被整人瞬移出去。只有占满整格的墙/家具才触发自救。
+	var in_wall: bool = SPOT_RESOLVER.is_tile_blocked(self, here, true)
 	var off_map: bool = not SPOT_RESOLVER.has_tile(self, here)
 	if not (in_wall or off_map):
 		_stuck_hits = 0
