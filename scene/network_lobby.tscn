@@ -55,6 +55,23 @@ text = "玩家"
 max_length = 16
 tooltip_text = "互联网 / 局域网共用，修改自动保存；连接期间不可修改。"
 
+[node name="NextRoomFriendlyFireRow" type="HBoxContainer" parent="ConnectPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NextRoomFriendlyFireCheck" type="CheckBox" parent="ConnectPanel/VBox/NextRoomFriendlyFireRow"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = false
+tooltip_text = "下一次创建房间使用；加入时以房主为准，离房后恢复关闭。"
+
+[node name="FriendlyFireLabel" type="Label" parent="ConnectPanel/VBox/NextRoomFriendlyFireRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "友伤（每次1–2点）"
+autowrap_mode = 2
+
 [node name="SubTitle" type="Label" parent="ConnectPanel/VBox" unique_id=2110000002]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
@@ -221,6 +238,24 @@ text = "难度："
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+
+[node name="FriendlyFireRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FriendlyFireCheck" type="CheckBox" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+button_pressed = false
+tooltip_text = "仅房主可以修改，所有玩家共享此房间设置。"
+
+[node name="FriendlyFireLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "友伤（每次1–2点）"
+autowrap_mode = 2
 
 [node name="RoomInfoLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000022]
 unique_name_in_owner = true

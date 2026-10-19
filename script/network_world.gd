@@ -313,13 +313,16 @@ var _wipe_fade_overlay: ColorRect = null
 var _snapshot_accumulator := 0.0
 var _player_snapshot_accumulator := 0.0
 var _reliable_resync_accumulator := 0.0
-## Host 热状态序号；玩家流与敌人分片流各自单调递增，Client 用它拒绝迟到/乱序状态。
-var _player_hot_snapshot_seq: int = 0
-var _enemy_hot_snapshot_seq: int = 0
-var _last_player_hot_snapshot_seq: int = -1
-var _last_enemy_hot_snapshot_seq: int = -1
-var _reliable_world_snapshot_seq: int = 0
-var _last_reliable_world_snapshot_seq: int = -1
+## Host 快照状态版本：每构建一批快照前自增，玩家热包 / 敌人分片 / 可靠全量**共用同一个
+## 计数器**。三套独立计数器无法互相比较 —— 迟到的可靠全量包会覆盖更新的热状态。
+var _snapshot_epoch: int = 0
+var _last_player_hot_epoch: int = -1
+var _last_enemy_hot_epoch: int = -1
+## 同版本下已接收的敌人分片序号；分片必须共享版本但序号各不相同，否则只有第一片生效。
+var _enemy_hot_epoch_chunks: Dictionary = {}
+var _last_reliable_world_epoch: int = -1
+## Client 已应用到实体的最新动态版本；比它旧的包仍可补低频数据，但不能改位置/血量。
+var _last_dynamic_epoch: int = -1
 var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
@@ -544,16 +547,19 @@ func _physics_process(delta: float) -> void:
 		## 构建结果是只读的，同一份 Array 交给多次 `rpc_id` 是安全的。
 		if _player_snapshot_accumulator >= PLAYER_SNAPSHOT_INTERVAL:
 			_player_snapshot_accumulator = fmod(_player_snapshot_accumulator, PLAYER_SNAPSHOT_INTERVAL)
-			_player_hot_snapshot_seq += 1
+			_snapshot_epoch += 1
+			var player_epoch: int = _snapshot_epoch
 			var position_targets: Array = _active_client_peer_ids()
 			if not position_targets.is_empty():
 				var player_states: Array = _build_compact_player_snapshot()
 				for peer_id: int in position_targets:
-					player_position_snapshot.rpc_id(peer_id, _player_hot_snapshot_seq, player_states)
+					player_position_snapshot.rpc_id(peer_id, player_epoch, player_states)
 		if _snapshot_accumulator >= SNAPSHOT_INTERVAL:
 			_snapshot_accumulator = fmod(_snapshot_accumulator, SNAPSHOT_INTERVAL)
-			_enemy_hot_snapshot_seq += 1
-			# Client按实体流分别拒绝旧序号。
+			_snapshot_epoch += 1
+			var enemy_epoch: int = _snapshot_epoch
+			# 同一轮的所有分片共享 enemy_epoch，各自携带 chunk_index；
+			# Client 按「版本 + 分片序号」收齐，不能只收第一片就丢掉同版本后续分片。
 			# 高频不可靠快照使用紧凑数组格式，避免敌人数量增长后超过 ENet MTU。
 			var snapshot_targets: Array = _active_client_peer_ids()
 			if not snapshot_targets.is_empty():
@@ -569,9 +575,11 @@ func _physics_process(delta: float) -> void:
 				## ENet MTU(1392)（实测 1448B），引擎报 "Sending ... above the MTU" 并丢包。
 				## 切成多个不可靠小包：单包丢失只影响该包内的敌人，下一帧重发；客户端
 				## `_apply_client_enemy_snapshot(states, false)` 对每包独立 ensure/更新，可安全分片。
-				for chunk: Array in _chunk_enemy_snapshot(enemy_states):
+				var chunks: Array = _chunk_enemy_snapshot(enemy_states)
+				for chunk_index: int in range(chunks.size()):
+					var chunk: Array = chunks[chunk_index]
 					for peer_id: int in snapshot_targets:
-						player_snapshot.rpc_id(peer_id, _enemy_hot_snapshot_seq, chunk)
+						player_snapshot.rpc_id(peer_id, enemy_epoch, chunk_index, chunk)
 		_reliable_resync_accumulator += delta
 		if _reliable_resync_accumulator >= RELIABLE_WORLD_RESYNC_INTERVAL:
 			_reliable_resync_accumulator = fmod(_reliable_resync_accumulator, RELIABLE_WORLD_RESYNC_INTERVAL)
@@ -811,11 +819,14 @@ func _capture_revive_input() -> bool:
 		# 玩家必须松开重按 —— 表现为"按了没反应 / 救不了人"。
 		# 改为按住期间持续重试：目标一旦进入可救状态/范围即补发请求，Host 仍做权威
 		# 复核（`_try_host_start_revive` 幂等：已有进行中的救援不会被重复受理）。
-		var target_id := _find_revive_target_for(peer_id)
+		var ongoing: Dictionary = _revive_attempts.get(peer_id, {})
+		var target_id := int(ongoing.get("target", 0))
+		# 优先维持当前目标，避免三人以上时最近者切换或52→88px滞回间隙重起计时。
+		if target_id <= 0 or not _is_host_revive_target_in_range(peer_id, target_id, REVIVE_HOLD_RANGE):
+			target_id = _find_revive_target_for(peer_id)
 		if target_id > 0:
 			if net.is_host:
-				if not _revive_attempts.has(peer_id):
-					_try_host_start_revive(peer_id, target_id)
+				_try_host_start_revive(peer_id, target_id, null, true)
 			elif _client_ready_to_send():
 				# 跟随宿主上报本机预测坐标（滞后补偿）：Host 的起救距离校验在权威坐标上做，
 				# 不补偿会把"看着贴在队友身上"判成超出 52px 而静默拒绝。
@@ -832,7 +843,12 @@ func _capture_revive_input() -> bool:
 			return true
 		# 按住但暂无目标：维持输入占用（避免同帧抢去触发投掷等），不误吞其它战斗输入。
 		return _revive_attempts.has(peer_id)
-	if Input.is_action_just_released("功能键") and _revive_attempts.has(peer_id):
+	# 用松开后的持续状态而非just_released：菜单/倒地等门控可能错过释放那一帧。
+	if _revive_attempts.has(peer_id):
+		# 只有"本机按键发起"的救援才由按键状态取消；脚本/回归直接调用 Host 受理的救援
+		# 与远程 Client 的请求不受本机输入影响（远程由 revive_cancel_request 取消）。
+		if net.is_host and not bool((_revive_attempts[peer_id] as Dictionary).get("local_input", false)):
+			return false
 		if net.is_host:
 			_cancel_host_revive(peer_id)
 		elif _client_ready_to_send():
@@ -848,8 +864,17 @@ func _capture_revive_input() -> bool:
 ## `claimed_position`（可选）为 Client 自报的本机预测坐标（滞后补偿，同拾取/开火）：
 ## 真实外网 RTT 下客户端预测位置领先权威坐标 ≈ 速度×RTT，不补偿会把"看着贴着队友"
 ## 判成超出 REVIVE_RANGE(52px) 而静默拒绝 —— 这正是用户实测「多人救不了玩家」的成因之一。
-func _try_host_start_revive(reviver_id: int, target_id: int, claimed_position: Variant = null) -> void:
-	if not net.is_host or reviver_id == target_id or not _players.has(reviver_id) or not _players.has(target_id):
+func _try_host_start_revive(reviver_id: int, target_id: int, claimed_position: Variant = null,
+		local_input: bool = false) -> void:
+	if _scene_transitioning or _wipe_active or not net.is_host or reviver_id == target_id \
+			or not _players.has(reviver_id) or not _players.has(target_id):
+		return
+	# 长按期间Client每200ms重试，同目标已经受理时必须保留原始起点。
+	# 先按持续救援的滞回范围复核，不能用起手范围把合法进行中的救援重置。
+	var existing: Dictionary = _revive_attempts.get(reviver_id, {})
+	if int(existing.get("target", 0)) == target_id \
+			and _is_host_revive_target_in_range(reviver_id, target_id, REVIVE_HOLD_RANGE) \
+			and not _is_host_combat_busy(reviver_id):
 		return
 	if claimed_position is Vector2:
 		_apply_lag_compensated_position(reviver_id, _player_node(_players.get(reviver_id, {})), claimed_position)
@@ -859,7 +884,12 @@ func _try_host_start_revive(reviver_id: int, target_id: int, claimed_position: V
 	## 表现为"明明站在倒地队友身边却救不了"。现在只要求该目标本身合法且在范围内。
 	if _is_host_combat_busy(reviver_id) or not _is_host_revive_target_in_range(reviver_id, target_id, REVIVE_RANGE):
 		return
-	_revive_attempts[reviver_id] = {"target": target_id, "started_msec": Time.get_ticks_msec()}
+	_revive_attempts[reviver_id] = {
+		"target": target_id,
+		"started_msec": Time.get_ticks_msec(),
+		# 仅用于 Host 本地玩家：区分"玩家按住功能键发起"与脚本/回归直接受理。
+		"local_input": local_input,
+	}
 	print("[NetworkWorld] HOST_REVIVE_START reviver=%d target=%d" % [reviver_id, target_id])
 
 
@@ -2768,7 +2798,7 @@ func swallow_presentation(entity_id: int, peer_id: int, active: bool) -> void:
 ## 默认值保证旧调用点（回归用例 / 旧包）仍兼容。
 @rpc("any_peer", "call_remote", "reliable")
 func revive_start_request(target_peer_id: int, claimed_position: Variant = null) -> void:
-	if net.is_host:
+	if net.is_host and not _scene_transitioning and not _wipe_active:
 		var sender := multiplayer.get_remote_sender_id()
 		if sender > 1:
 			_try_host_start_revive(sender, target_peer_id, claimed_position)
@@ -3252,13 +3282,20 @@ func auto_character_world_ack() -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func world_snapshot(snapshot_seq: int, player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
-	if net.is_host or snapshot_seq <= _last_reliable_world_snapshot_seq:
+func world_snapshot(snapshot_epoch: int, player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
+	if net.is_host or snapshot_epoch <= _last_reliable_world_epoch:
 		return
-	_last_reliable_world_snapshot_seq = snapshot_seq
-	_apply_client_snapshot(player_states, true)
-	_apply_client_enemy_snapshot(enemy_states, true)
-	_apply_client_pickup_snapshot(pickup_states)
+	_last_reliable_world_epoch = snapshot_epoch
+	## 可靠包保证送达但不保证"比热包新"：若它在热包之后才到，动态字段已过期。
+	## 低频数据（昵称/装备/库存/实体成员）仍照常应用，位置与血量交给更新的热包。
+	var dynamic_ok: bool = _accept_dynamic_epoch(snapshot_epoch)
+	## 过期包也不能收敛实体列表：它构建于更早时刻，按它删除"快照里没有"的实体会把
+	## 之后新刷的敌人/玩家误删到下一次可靠重同步。过期包只补充身份/库存等低频数据。
+	_apply_client_snapshot(player_states, dynamic_ok, dynamic_ok)
+	_apply_client_enemy_snapshot(enemy_states, dynamic_ok, dynamic_ok)
+	if dynamic_ok:
+		# 掉落物列表按"不在包内即销毁"收敛；过期包同样不能拿旧列表删新建的掉落物。
+		_apply_client_pickup_snapshot(pickup_states)
 	# 回归观测（仅回归会话）：掉落物包明细，便于定位掉落物同步类问题。
 	if _is_net_test_session():
 		var kinds: Array[String] = []
@@ -3293,19 +3330,38 @@ func sync_quest_flags_rpc(flags: Dictionary) -> void:
 ## 玩家与敌人快照使用不同 ENet channel，避免可变大小的敌人分片淘汰玩家位置包。
 ## channel 2 仍受下层互联网 TCP 隧道的队头阻塞影响，但直连/UDP路径先隔离。
 @rpc("authority", "call_remote", "unreliable_ordered", 2)
-func player_snapshot(snapshot_seq: int, enemy_states: Array) -> void:
-	if net.is_host or snapshot_seq <= _last_enemy_hot_snapshot_seq:
+func player_snapshot(snapshot_epoch: int, chunk_index: int, enemy_states: Array) -> void:
+	if net.is_host or snapshot_epoch < _last_enemy_hot_epoch:
 		return
-	_last_enemy_hot_snapshot_seq = snapshot_seq
+	if snapshot_epoch == _last_enemy_hot_epoch:
+		# 同一轮的其他分片：只有重复序号才拒绝，不能因为版本相同就整片丢弃。
+		if _enemy_hot_epoch_chunks.has(chunk_index):
+			return
+	else:
+		_last_enemy_hot_epoch = snapshot_epoch
+		_enemy_hot_epoch_chunks.clear()
+	_enemy_hot_epoch_chunks[chunk_index] = true
+	if not _accept_dynamic_epoch(snapshot_epoch):
+		return
 	_apply_client_enemy_snapshot(enemy_states, false)
 
 
 @rpc("authority", "call_remote", "unreliable_ordered", 1)
-func player_position_snapshot(snapshot_seq: int, player_states: Array) -> void:
-	if net.is_host or snapshot_seq <= _last_player_hot_snapshot_seq:
+func player_position_snapshot(snapshot_epoch: int, player_states: Array) -> void:
+	if net.is_host or snapshot_epoch <= _last_player_hot_epoch:
 		return
-	_last_player_hot_snapshot_seq = snapshot_seq
+	_last_player_hot_epoch = snapshot_epoch
+	if not _accept_dynamic_epoch(snapshot_epoch):
+		return
 	_apply_client_snapshot(player_states, false)
+
+
+## 跨流比较动态状态新旧：同一版本允许（可靠包与同轮分片），更旧的一律不动实体。
+func _accept_dynamic_epoch(snapshot_epoch: int) -> bool:
+	if snapshot_epoch < _last_dynamic_epoch:
+		return false
+	_last_dynamic_epoch = snapshot_epoch
+	return true
 
 
 func _on_game_scene_ready_received(peer_id: int, ready_scene_path: String) -> void:
@@ -3357,8 +3413,10 @@ func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 func _send_reliable_world_snapshot(peer_id: int) -> void:
 	if not net.is_host or peer_id <= 1:
 		return
-	_reliable_world_snapshot_seq += 1
-	world_snapshot.rpc_id(peer_id, _reliable_world_snapshot_seq, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	# 可靠全量也占用同一个版本号：构建即代表"当前最新状态"，
+	# 因此它一定比此前发出的热包新，而之后的热包一定比它新。
+	_snapshot_epoch += 1
+	world_snapshot.rpc_id(peer_id, _snapshot_epoch, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	_auto_world_snapshot_sent_count += 1
 	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
@@ -3463,7 +3521,7 @@ func _apply_client_weapon_snapshot(state: PlayerState, node: CharacterBody2D, pu
 ## `snap=true` 表示可靠完整快照：允许创建/删除实体并校准初始状态。
 ## `snap=false` 表示高频移动快照：只能更新已有实体的表现，不能因为丢包而
 ## 删除玩家。玩家快照同时兼容旧的 Dictionary 格式和新的紧凑 Array 格式。
-func _apply_client_snapshot(states: Array, snap: bool) -> void:
+func _apply_client_snapshot(states: Array, snap: bool, apply_dynamic: bool = true) -> void:
 	# ★ 悬垂条目清扫必须放在最前（2026-09-23 审计）：本函数是 20Hz 热路径，
 	# 若某条目的 node 已被释放而未 erase，下面的强转/访问会抛错并**静默中止整个
 	# 函数** —— 而「不在快照即回收」的收敛写在函数末尾，于是收敛永远执行不到，
@@ -3483,7 +3541,7 @@ func _apply_client_snapshot(states: Array, snap: bool) -> void:
 			continue
 		seen[peer_id] = true
 		authoritative_peer_ids.append(peer_id)
-		_ensure_client_player(peer_id, public_state, snap)
+		_ensure_client_player(peer_id, public_state, snap, apply_dynamic)
 	# 不可靠移动快照可能丢包或乱序；只允许可靠的 world_snapshot 收敛实体列表。
 	if snap:
 		for key: Variant in _players.keys():
@@ -3561,7 +3619,8 @@ func _pickup_node(pickup_id: int) -> Node2D:
 	return null
 
 
-func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -> void:
+func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
+		apply_dynamic: bool = true) -> void:
 	var entry: Dictionary = _players.get(peer_id, {})
 	var node := _player_node(entry)
 	var created := false
@@ -3594,30 +3653,31 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 		if character:
 			state.character = character
 			state.character_path = str(public_state.get("character_path", ""))
-		state.current_hp = float(public_state.get("hp", state.current_hp))
-		state.position = _packet_position(public_state)
-		state.facing = int(public_state.get("facing", state.facing))
-		var snapshot_locked: bool = bool(public_state.get("facing_locked", false))
-		var snapshot_locked_facing: int = int(public_state.get("locked_facing", -1))
-		# facing_lock 是 Host 权威属性：Host 处理远端 Client 上报的状态时，绝不能让 Client
-		# 自报的 facing_locked 覆盖 Host 权威值（否则 Host 每帧把它刷回 false，再经快照广播成
-		# 海量 locked=false，客户端本地 is_facing_locked() 永远对不上）。
-		# 仅当"客户端接收 Host 快照"时才应用此字段。
-		var is_host_applying_remote: bool = net.is_host and peer_id != int(net.my_peer_id)
-		if is_host_applying_remote:
-			pass  # Host 权威值由 _try_host_set_facing_lock / unlock_facing 维护，忽略 Client 自报
-		else:
-			# 快照也是权威收敛兜底；但不能让请求确认前的旧快照覆盖本地预测。
-			var has_pending_lock_request: bool = peer_id == int(net.my_peer_id) and _facing_lock_requests.has(peer_id)
-			if has_pending_lock_request:
-				if bool(_facing_lock_requests[peer_id]) != snapshot_locked:
-					# Host 尚未处理请求，保留预测状态，等待可靠确认包。
-					pass
-				else:
-					_facing_lock_requests.erase(peer_id)
-					node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
+		if apply_dynamic:
+			state.current_hp = float(public_state.get("hp", state.current_hp))
+			state.position = _packet_position(public_state)
+			state.facing = int(public_state.get("facing", state.facing))
+			var snapshot_locked: bool = bool(public_state.get("facing_locked", false))
+			var snapshot_locked_facing: int = int(public_state.get("locked_facing", -1))
+			# facing_lock 是 Host 权威属性：Host 处理远端 Client 上报的状态时，绝不能让 Client
+			# 自报的 facing_locked 覆盖 Host 权威值（否则 Host 每帧把它刷回 false，再经快照广播成
+			# 海量 locked=false，客户端本地 is_facing_locked() 永远对不上）。
+			# 仅当"客户端接收 Host 快照"时才应用此字段。
+			var is_host_applying_remote: bool = net.is_host and peer_id != int(net.my_peer_id)
+			if is_host_applying_remote:
+				pass  # Host 权威值由 _try_host_set_facing_lock / unlock_facing 维护，忽略 Client 自报
 			else:
-				node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
+				# 快照也是权威收敛兜底；但不能让请求确认前的旧快照覆盖本地预测。
+				var has_pending_lock_request: bool = peer_id == int(net.my_peer_id) and _facing_lock_requests.has(peer_id)
+				if has_pending_lock_request:
+					if bool(_facing_lock_requests[peer_id]) != snapshot_locked:
+						# Host 尚未处理请求，保留预测状态，等待可靠确认包。
+						pass
+					else:
+						_facing_lock_requests.erase(peer_id)
+						node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
+				else:
+					node.apply_facing_lock_state(snapshot_locked, snapshot_locked_facing)
 		# 快照中的 weapon_id 由 Host 的 active_weapon_slot 生成；只在实际变化时更新外观，
 		# 避免每个 20Hz 包打断攻击动画或重置行走帧。
 		var remote_weapon := _apply_client_weapon_snapshot(state, node, public_state)
@@ -3664,53 +3724,61 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool) -
 	# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
 	# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
 	# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
-	var established: bool = (not created) and node.has_network_position_tracking()
-	# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
-	# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
-	# 客户端角色会永远停在同一张行走帧上。
-	if snap and (not is_local_prediction or not _initial_world_received):
-		var spawn_position := _packet_position(public_state)
-		if is_local_prediction and _initial_world_received:
-			# 本地预测玩家只吃首次校准；此后的权威坐标经 apply_network_authority_target 纠偏。
-			pass
-		elif established:
-			node.apply_network_resync_state(character, spawn_position, int(public_state.get("facing", 0)))
+	# 迟到的旧包只能补实体成员与低频库存；位置/血量/倒地等动态字段必须由更新的包驱动，
+	# 否则可靠重发的旧快照会把角色拉回旧位置（直接表现为回弹）。
+	# 本包刚创建实体时没有"更新的本地状态"可保留，仍按本包初始化。
+	var dynamic_ok: bool = apply_dynamic or created
+	if dynamic_ok:
+		# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
+		# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
+		# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
+		var established: bool = (not created) and node.has_network_position_tracking()
+		# 只有可靠的 spawn/world snapshot 才能重置初始状态。移动快照不能先写入
+		# stopped 状态再写回 moving，否则每个 20Hz 快照都会把 _anim_step 清零，
+		# 客户端角色会永远停在同一张行走帧上。
+		if snap and (not is_local_prediction or not _initial_world_received):
+			var spawn_position := _packet_position(public_state)
+			if is_local_prediction and _initial_world_received:
+				# 本地预测玩家只吃首次校准；此后的权威坐标经 apply_network_authority_target 纠偏。
+				pass
+			elif established:
+				node.apply_network_resync_state(character, spawn_position, int(public_state.get("facing", 0)))
+			else:
+				node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
+		var is_dead := bool(public_state.get("dead", false))
+		node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
+		# 倒地状态 reconcile：downed 只可能伴随 dead=true（躺地表现已由
+		# apply_network_health_state 触发）。set_network_downed 负责碰撞/染色；
+		# 同时把权威值写回 entry —— 本地救援预估（_find_revive_target_for）与
+		# 本地玩家生命三态判定（_get_local_player_life_state）都依赖它。
+		# revive_progress 驱动头顶救援进度环；不可靠快照偶尔丢包只会让环短暂停顿。
+		var downed := is_dead and bool(public_state.get("downed", false))
+		entry["downed"] = downed
+		entry["dead"] = is_dead and not downed
+		entry["bleed_ratio"] = float(public_state.get("bleed_ratio", -1.0))
+		var revive_progress := float(public_state.get("revive_progress", 0.0))
+		entry["revive_progress"] = revive_progress
+		node.set_network_downed(downed)
+		_update_network_revive_indicator(node, revive_progress)
+		if is_local_prediction:
+			# 本地预测玩家：快照只提供权威纠偏目标与朝向，位置由本地输入驱动。
+			node.apply_network_authority_target(_packet_position(public_state), int(public_state.get("facing", 0)))
 		else:
-			node.apply_network_spawn_state(character, float(public_state.get("hp", node.current_hp)), spawn_position, int(public_state.get("facing", 0)), true)
-	var is_dead := bool(public_state.get("dead", false))
-	node.apply_network_health_state(float(public_state.get("hp", node.current_hp)), is_dead, not snap)
-	# 倒地状态 reconcile：downed 只可能伴随 dead=true（躺地表现已由
-	# apply_network_health_state 触发）。set_network_downed 负责碰撞/染色；
-	# 同时把权威值写回 entry —— 本地救援预估（_find_revive_target_for）与
-	# 本地玩家生命三态判定（_get_local_player_life_state）都依赖它。
-	# revive_progress 驱动头顶救援进度环；不可靠快照偶尔丢包只会让环短暂停顿。
-	var downed := is_dead and bool(public_state.get("downed", false))
-	entry["downed"] = downed
-	entry["dead"] = is_dead and not downed
-	entry["bleed_ratio"] = float(public_state.get("bleed_ratio", -1.0))
-	var revive_progress := float(public_state.get("revive_progress", 0.0))
-	entry["revive_progress"] = revive_progress
-	node.set_network_downed(downed)
-	_update_network_revive_indicator(node, revive_progress)
-	if is_local_prediction:
-		# 本地预测玩家：快照只提供权威纠偏目标与朝向，位置由本地输入驱动。
-		node.apply_network_authority_target(_packet_position(public_state), int(public_state.get("facing", 0)))
-	else:
-		node.apply_network_presentation(
-			_packet_position(public_state),
-			int(public_state.get("facing", 0)),
-			false if is_dead else bool(public_state.get("moving", false)),
-			false if is_dead else bool(public_state.get("walking", false)),
-			snap and not established
-		)
-	entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
-	entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
+			node.apply_network_presentation(
+				_packet_position(public_state),
+				int(public_state.get("facing", 0)),
+				false if is_dead else bool(public_state.get("moving", false)),
+				false if is_dead else bool(public_state.get("walking", false)),
+				snap and not established
+			)
+		entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
+		entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
 	_players[peer_id] = entry
 
 
 # ---------------------------------------------------------------- Client enemy presentation
 
-func _apply_client_enemy_snapshot(states: Array, snap: bool) -> void:
+func _apply_client_enemy_snapshot(states: Array, snap: bool, apply_dynamic: bool = true) -> void:
 	var seen: Dictionary = {}
 	for value: Variant in states:
 		var public_state := _normalize_enemy_snapshot(value)
@@ -3720,7 +3788,7 @@ func _apply_client_enemy_snapshot(states: Array, snap: bool) -> void:
 		if entity_id <= 0:
 			continue
 		seen[entity_id] = true
-		_ensure_client_enemy(entity_id, public_state, snap)
+		_ensure_client_enemy(entity_id, public_state, snap, apply_dynamic)
 	# 只有可靠完整快照才收敛动态实体；预置尸体不会被 Host 自动移除。
 	if snap:
 		for key: Variant in _enemies.keys():
@@ -3752,7 +3820,8 @@ func _normalize_enemy_snapshot(value: Variant) -> Dictionary:
 	return {}
 
 
-func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) -> void:
+func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
+		apply_dynamic: bool = true) -> void:
 	var entry: Dictionary = _enemies.get(entity_id, {})
 	var node := _resolve_enemy_entry(entry)
 	# 已存在的敌人属于"平滑渲染中"的实体：可靠重同步对它按软并流处理，
@@ -3807,17 +3876,19 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool) 
 	# 「不许把尸体拉回行走状态」这件事其实已由 player.apply_network_presentation 的
 	# _is_dying 分支保证：它只对齐权威坐标并丢弃插值目标，绝不再调 update_appearance。
 	# 而可靠包与不可靠包同走 ENet 有序通道，不存在「死亡后仍收到死亡前位置」的乱序。
-	node.apply_network_presentation(
-		_packet_position(public_state),
-		int(public_state.get("facing", 0)),
-		bool(public_state.get("moving", false)),
-		float(public_state.get("hp", node.current_hp)),
-		int(public_state.get("visual_char_index", -1)),
-		bool(public_state.get("dead", false)),
-		bool(public_state.get("headshot", false)),
-		snap and not established,
-		int(public_state.get("element_state", -1))  # P0-B3
-	)
+	# 新建的敌人没有更可信的本地状态，必须用本包初始化；已存在的才受版本门控。
+	if apply_dynamic or not established:
+		node.apply_network_presentation(
+			_packet_position(public_state),
+			int(public_state.get("facing", 0)),
+			bool(public_state.get("moving", false)),
+			float(public_state.get("hp", node.current_hp)),
+			int(public_state.get("visual_char_index", -1)),
+			bool(public_state.get("dead", false)),
+			bool(public_state.get("headshot", false)),
+			snap and not established,
+			int(public_state.get("element_state", -1))  # P0-B3
+		)
 
 
 func _remove_client_enemy(entity_id: int) -> void:
@@ -3970,7 +4041,7 @@ func _register_untracked_host_pickups(delta: float) -> void:
 		_register_host_pickup(pickup)
 		registered_any = true
 	if registered_any:
-		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+		_send_pickup_snapshot_to_ready_clients()
 
 
 func _register_host_pickup(pickup: Node2D) -> int:
@@ -4111,7 +4182,7 @@ func _try_host_ammo_supply(peer_id: int, node_path: NodePath, claimed_position: 
 	if added <= 0:
 		return 0
 	# 和拾取相同的可靠库存收敛；广播入口遵守就绪与切图静默门控。
-	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+	_send_pickup_snapshot_to_ready_clients()
 	supply.call("play_refill_feedback")
 	_send_to_ready_clients(&"ammo_supply_feedback", [node_path])
 	print("[NetworkWorld] HOST_AMMO_SUPPLY peer=%d added=%d path=%s" % [peer_id, added, node_path])
@@ -4180,7 +4251,7 @@ func _try_host_use_healing(peer_id: int) -> void:
 		## 成就「不行。绝对不行。」（联机路径，与 player.gd 单机路径同规则）
 		ACHIEVEMENTS.on_heal_item(state.seat_index)
 	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
-	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+	_send_pickup_snapshot_to_ready_clients()
 	print("[NetworkWorld] HOST_HEALING_USE peer=%d item=%s left=%d hp=%.0f" % [
 		peer_id, used.item_id, state.healing_item_count, node.current_hp])
 
@@ -4245,7 +4316,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		if not pickup.call("_do_pickup"):
 			return
 		_pickups.erase(pickup_id)
-		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+		_send_pickup_snapshot_to_ready_clients()
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d healing=%s" % [peer_id, pickup_id, healing.item_id])
 		return
 	if throwable:
@@ -4266,7 +4337,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		pickup.queue_free()
 		if not map_key.is_empty():
 			Global.mark_map_pickup_consumed(map_key)
-		_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+		_send_pickup_snapshot_to_ready_clients()
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
 	if state.character and not state.character.can_use_weapon(weapon):
@@ -4299,7 +4370,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	if not map_key.is_empty():
 		Global.mark_map_pickup_consumed(map_key)
 	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
-	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+	_send_pickup_snapshot_to_ready_clients()
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
 
 
@@ -4393,7 +4464,7 @@ func _try_host_drop_all(peer_id: int) -> void:
 	## 手里空了 → 收起武器模式（表现层交给客户端 PlayerPistolState 的 _wd==null → Idle 自愈）
 	if player.is_weapon_mode_active() and player.has_method("exit_weapon_mode"):
 		player.exit_weapon_mode()
-	_send_to_ready_clients(&"pickup_snapshot", [_build_snapshot(), _build_pickup_snapshot()])
+	_send_pickup_snapshot_to_ready_clients()
 	print("[NetworkWorld] HOST_DROP_ALL peer=%d dropped=%d" % [peer_id, dropped])
 
 
@@ -4419,13 +4490,26 @@ func _find_ammo_resource_for_weapon(state: PlayerState, ammo_item_id: String) ->
 	return null
 
 
+## 拾取 / 补给事件后立即补发一次可靠状态。
+## 与热包共用同一版本号：拾取包晚到时不能把角色拉回事件发生前的位置。
+func _send_pickup_snapshot_to_ready_clients() -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	_snapshot_epoch += 1
+	_send_to_ready_clients(&"pickup_snapshot",
+		[_snapshot_epoch, _build_snapshot(), _build_pickup_snapshot()])
+
+
 @rpc("authority", "call_remote", "reliable")
-func pickup_snapshot(player_states: Array, pickup_states: Array) -> void:
+func pickup_snapshot(snapshot_epoch: int, player_states: Array, pickup_states: Array) -> void:
 	if net.is_host or _scene_transitioning:
 		return
 	# 与 Host 的 _try_host_pickup() 同包发送，先收敛装备/弹匣，再更新掉落物。
-	_apply_client_snapshot(player_states, false)
-	_apply_client_pickup_snapshot(pickup_states)
+	# 库存/装备字段不受动态版本门控；位置与血量只接受不旧于当前实体的版本。
+	var dynamic_ok: bool = _accept_dynamic_epoch(snapshot_epoch)
+	_apply_client_snapshot(player_states, false, dynamic_ok)
+	if dynamic_ok:
+		_apply_client_pickup_snapshot(pickup_states)
 
 
 ## 已被认领的镜像节点（instance_id → pickup_id）。

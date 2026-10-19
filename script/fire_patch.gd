@@ -32,9 +32,12 @@ var _frame_timer: float = 0.0
 var _fire_sprites: Array[Sprite2D] = []
 var _authoritative: bool = true
 var _damage_players: bool = true
+var _source_owner: Node = null
+var _source_is_player_origin: bool = true
+const HitResolver := preload("res://script/hit_resolver.gd")
 
 
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true) -> void:
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -44,6 +47,8 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._ambient_sound = ambient_sound
 	patch._authoritative = authoritative
 	patch._damage_players = damage_players
+	patch._source_owner = source_owner
+	patch._source_is_player_origin = HitResolver.is_player(source_owner) if is_instance_valid(source_owner) else source_is_player_origin
 	patch.global_position = pos
 	parent.add_child(patch)
 	patch._build_fire()
@@ -130,11 +135,16 @@ func _process(delta: float) -> void:
 
 
 func _burn() -> void:
+	if not _authoritative or not HitResolver.is_damage_authority():
+		return
 	var radius_px: float = _radius * 32.0 + 16.0
 	for group: StringName in ([&"enemy", &"player"] if _damage_players else [&"enemy"]):
 		for n: Node in get_tree().get_nodes_in_group(group):
 			if n is Node2D and (n as Node2D).global_position.distance_to(global_position) <= radius_px:
 				if (n as Node2D).has_method("take_damage"):
-					# source_id=0 跳过源头去重，保证持续灼烧按 tick 间隔生效；
-					# 元素传 FIRE → 站火海即点燃灼烧 DoT（2026-09-15 灼烧 debuff 接线）
-					(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE)
+					# source_id=0 跳过源头去重，保证持续灼烧按 tick 间隔生效。
+					# 玩家来源火海统一经过 Player.take_damage，关闭时不扣 HP/不点燃。
+					if (n as Node2D).is_in_group("player"):
+						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE, false, _source_owner, _source_is_player_origin)
+					else:
+						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE)

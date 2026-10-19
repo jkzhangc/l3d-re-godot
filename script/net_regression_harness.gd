@@ -509,7 +509,9 @@ func _run_auto_host_feature_test() -> void:
 	client_state.active_weapon_slot = "primary"
 	client_state.set_magazine_ammo(NETWORK_PISTOL.item_id, NETWORK_PISTOL.magazine_capacity)
 	client_state.throwable = NETWORK_GRENADE
-	world_snapshot.rpc_id(client_id, 1, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
+	# 快照版本与热包共用同一计数器：手工补发也要取"当前最新"，否则会被 Client 判为旧包。
+	_snapshot_epoch += 1
+	world_snapshot.rpc_id(client_id, _snapshot_epoch, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 	deadline = Time.get_ticks_msec() + 6000
 	while client_state.throwable != null and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.05).timeout

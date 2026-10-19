@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-19",
+  "scope": "联机快照版本统一、多人救援、误友伤修复与房间友伤开关",
+  "protocol_version": "l3d_main_v3_snapshot_versions",
+  "changed_files": [
+    "script/network_world.gd",
+    "script/network_manager.gd",
+    "script/network_lobby.gd",
+    "scene/network_lobby.tscn",
+    "script/player.gd",
+    "script/bullet.gd",
+    "script/fire_patch.gd",
+    "script/throwable_projectile.gd",
+    "script/hit_resolver.gd",
+    "script/net_regression_harness.gd"
+  ],
+  "new_tests": [
+    "tools/net_revive_hold_check.gd/.tscn",
+    "tools/net_room_settings_check.gd/.tscn",
+    "tools/net_friendly_damage_check.gd/.tscn"
+  ],
+  "fixes": {
+    "snapshot": {
+      "root_cause": [
+        "玩家热包/敌人分片/可靠全量各用独立序号，跨流无法比较，迟到的可靠包会覆盖更新的位置与状态",
+        "同一轮敌人多分片共享同一序号，接收端收到第一片后把其余同序号分片当成旧包丢弃"
+      ],
+      "change": [
+        "Host 统一 _snapshot_epoch，覆盖玩家热包、敌人分片、可靠全量、拾取补发",
+        "player_snapshot 增加 chunk_index，同版本按分片去重",
+        "Client _last_dynamic_epoch 跨流拒旧；旧包只补低频字段，不收敛实体/掉落物列表"
+      ]
+    },
+    "revive": {
+      "root_cause": "Client 按住每 200ms 重发，Host 每次重置 started_msec，3 秒永远走不完",
+      "change": [
+        "同目标在滞回范围内幂等保留原始起点",
+        "Host 本地 attempt 标记 local_input，只有按键发起的才随松开取消"
+      ]
+    },
+    "friendly_fire": {
+      "root_cause": "bullet._explode 对半径内所有玩家结算（含队友），直射弹原本已排除玩家",
+      "change": [
+        "房间选项 friendly_fire_enabled 默认 false，仅 Host 可改，可靠广播并随握手/开局/跨图同步",
+        "关闭：队友子弹穿过、不消耗穿透、不触发爆炸；爆炸不伤队友；自伤与敌人伤害不变",
+        "开启：每次有效命中随机 1~2 HP，无击退/Heat/灼烧/爆头；装甲与见切仍先判定",
+        "Client 不结算权威伤害"
+      ],
+      "notes": [
+        "联机火海仍 damage_players=false，开启友伤时火焰不会伤队友",
+        "霰弹每颗弹丸各算一次有效命中"
+      ]
+    }
+  },
+  "verification": {
+    "net_regression": "11/11（features 第 2 次通过，属已知时序抖动）",
+    "net_revive_hold_check": "71/71",
+    "net_room_settings_check": "31/31",
+    "net_friendly_damage_check": "17/17",
+    "batch_check": "4/4（net_interp_check / net_ping_hud_check / tunnel_pause_mode_check / script_compile_check）",
+    "master_server_node_tests": "32/32",
+    "godot_parse": "通过（仅既有退出期资源警告）"
+  },
+  "pending": [
+    "真机互联网弱网验收（0/1/3/5% 丢包、200~500ms 断流、四人高敌人数量）",
+    "主机与客户端敌人碰撞一致性（玩法决策项）",
+    "TCP 隧道队头阻塞专项",
+    "改动尚未提交"
+  ]
+}

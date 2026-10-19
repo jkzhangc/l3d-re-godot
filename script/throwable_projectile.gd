@@ -25,9 +25,14 @@ var _arc_height: float = 0.0   ## 抛物线最高点（像素）
 var _spin_speed: float = 0.0    ## 旋转速度（弧度/秒）
 var _authoritative: bool = true
 var _damage_players: bool = true
+var _source_owner: Node = null
+## 只有确认来源是玩家时才置 true；未知/敌人来源一律 false，避免把敌方火海误判成友伤。
+var _source_is_player_origin: bool = false
+var _explosion_applied: bool = false
+const HitResolver := preload("res://script/hit_resolver.gd")
 
 
-static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context: Node, authoritative: bool = true, damage_players: bool = true) -> void:
+static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null) -> void:
 	if not is_instance_valid(scene_context):
 		return
 	var tree := scene_context.get_tree()
@@ -39,6 +44,8 @@ static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context
 	proj._end = end
 	proj._authoritative = authoritative
 	proj._damage_players = damage_players
+	proj._source_owner = source_owner if is_instance_valid(source_owner) else (scene_context if HitResolver.is_player(scene_context) else null)
+	proj._source_is_player_origin = HitResolver.is_player(proj._source_owner) if is_instance_valid(proj._source_owner) else false
 	var scene := tree.current_scene
 	scene.add_child(proj)
 	proj.global_position = start
@@ -99,7 +106,7 @@ func _land() -> void:
 	if _authoritative and _td.flash_radius > 0:
 		_apply_flash()
 	if _td.fire_radius > 0:
-		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players)
+		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner)
 	queue_free()
 
 

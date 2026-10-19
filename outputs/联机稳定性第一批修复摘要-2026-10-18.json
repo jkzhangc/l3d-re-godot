@@ -1,0 +1,61 @@
+{
+  "date": "2026-10-18",
+  "status": "implemented_and_verified",
+  "scope": "First batch of internet multiplayer stability fixes; gameplay collision policy intentionally unchanged",
+  "changed_files": [
+    {
+      "path": "script/network_snapshot_interp.gd",
+      "changes": [
+        "Added monotonic render-time cursor to prevent adaptive-buffer playback reversal",
+        "Rejected same/abnormally short sample intervals for extrapolation",
+        "Capped extrapolation velocity at 600 px/s"
+      ]
+    },
+    {
+      "path": "script/network_world.gd",
+      "changes": [
+        "Separated player and enemy hot snapshots onto ENet channels 1 and 2",
+        "Added independent hot snapshot sequence numbers and reliable world snapshot stale-packet rejection",
+        "Added 320-byte Variant budget fallback for low-frequency player fields; omitted fields use null and do not overwrite client state",
+        "Stopped Host from continuing stale remote input after 0.20 seconds without an update"
+      ]
+    },
+    {
+      "path": "script/network_manager.gd",
+      "changes": [
+        "Explicitly allocated three ENet channels for reliable, player-hot, and enemy-hot traffic"
+      ]
+    },
+    {
+      "path": "script/net_regression_harness.gd",
+      "changes": [
+        "Adapted reliable snapshot argument and made facing regression submit input across the input-expiry window"
+      ]
+    },
+    {
+      "path": ".workbuddy/tmp/net_interp_check.gd",
+      "changes": [
+        "Added same-timestamp extrapolation and monotonic-render checks",
+        "Changed failed checks to return a non-zero exit code"
+      ]
+    }
+  ],
+  "verification": {
+    "godot_headless_quit": "passed; existing ObjectDB/resource-leak exit warnings remain",
+    "network_special_batch": "4/4 passed",
+    "full_dual_peer_regression": "11/11 passed",
+    "master_server_and_tunnel_tests": "32/32 passed",
+    "git_diff_check": "passed",
+    "real_internet_device_test": "not performed",
+    "android_host_test": "not performed",
+    "packet_loss_netem_test": "not performed"
+  },
+  "next_bug_queue": [
+    "Resolve or explicitly choose the player/enemy prediction collision policy; current Host/Client dynamic collision worlds differ",
+    "Run two-device Internet tests for empty-space movement, stop/reverse, enemy crowding, scene transitions, and short packet loss",
+    "Add tunnel backpressure and packet-age telemetry before deciding on a UDP data plane",
+    "Separate remaining low-frequency player metadata from the hot snapshot and measure worst-case RPC size",
+    "Continue the bug queue only after the first real-device network trace is available"
+  ],
+  "commit_status": "not_committed"
+}

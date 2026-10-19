@@ -84,6 +84,7 @@ var _distance_traveled: float = 0.0
 var _hits: int = 0
 var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防止重复命中同一目标）
 var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
+var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
 
@@ -110,6 +111,9 @@ func _ready() -> void:
 		else:
 			_area.area_entered.connect(_on_area_entered)
 			_area.body_entered.connect(_on_body_entered)
+			if _source_is_player_origin and HitResolver.is_online_session():
+				# 玩家来源子弹才打开玩家体/受击盒层；镜像子弹仍在上方关闭碰撞。
+				_area.collision_mask |= HitResolver.PLAYER_HIT_MASK
 			# 玩家弹组（2026-09-17）：敌方酸弹靠它识别并相消（layer_7「玩家弹」同用途）。
 			_area.add_to_group("player_bullets")
 	_refresh_sprite()
@@ -153,6 +157,7 @@ func setup(params: Dictionary) -> void:
 	_hit_effect_offset_override = params.get("hit_effect_offset_override", Vector2.ZERO)
 	_hit_sound = params.get("hit_sound", null)
 	_shooter = params.get("shooter", null)
+	_source_is_player_origin = HitResolver.is_player(_shooter)
 	_source_id = _next_source_id
 	_next_source_id += 1
 	_apply_collision_shape()
@@ -317,7 +322,8 @@ func _on_body_entered(body: Node2D) -> void:
 
 func _hit(target: Node2D) -> void:
 	## 击中目标的默认处理 — 子类或外部可覆写
-	if target == null:
+	if not is_instance_valid(target) or network_visual_only or _finished \
+			or not HitResolver.is_damage_authority():
 		return
 
 	# 解析真正的可伤害目标（如果传入的是受击碰撞体 Area2D，取其父节点）
@@ -328,11 +334,12 @@ func _hit(target: Node2D) -> void:
 	if not damageable.has_method("take_damage"):
 		return
 
-	# 防止击中发射者自己，以及联机队友互相伤害。必须早于命中去重/穿透计数。
-	if _shooter and damageable == _shooter:
+	# 关闭友伤的队友必须透明：早于去重、穿透计数和爆炸触发。单机保留旧排除。
+	if damageable == _shooter:
 		return
-	if _shooter and _shooter.is_in_group("player") and damageable.is_in_group("player"):
-		return
+	if HitResolver.is_friendly_player_hit(_shooter, damageable, _source_is_player_origin):
+		if not HitResolver.is_online_session() or not HitResolver.friendly_fire_enabled():
+			return
 
 	# 去重：永久标记已命中目标，绝不对同一目标重复判定
 	var tid: int = damageable.get_instance_id()
@@ -373,7 +380,7 @@ func _hit(target: Node2D) -> void:
 	## 背刺是否在本击生效（供击杀归属：即死击杀成就 / 必杀次数成就）
 	var backstab_applied: bool = false
 	if not _instant_kill \
-			and _shooter != null and _shooter.is_in_group("player") \
+			and HitResolver.is_player(_shooter) \
 			and damageable.is_in_group("enemy") \
 			and damageable.has_method("is_backstab_hit") \
 			and bool(damageable.call("is_backstab_hit", direction)):
@@ -388,7 +395,12 @@ func _hit(target: Node2D) -> void:
 	# 传递击退参数 + 硬直时长 + 源头ID（供目标侧去重）
 	print("[子弹] >>> 造成伤害！tid=%d name=%s damage=%d <<<" % [tid, damageable.name, int(final_damage)])
 	var hp_before: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else 0.0
-	damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0)
+	if damageable.is_in_group("player"):
+		# causes_heat 必须沿用原语义（爆炸家族附加 Heat）；友伤关闭/开启的差异
+		# 已在 Player.take_damage 内统一处理，不能在这里替敌人子弹关掉 Heat。
+		damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0, _shooter, _source_is_player_origin)
+	else:
+		damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0)
 	var hp_after: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else hp_before
 	_record_chapter_damage(hp_before, hp_after, is_headshot, backstab_applied)
 
@@ -439,12 +451,15 @@ func cancel_by_enemy_acid() -> void:
 ## 调试用爆炸范围环（TAB 打开 `Global.debug_visuals` 后才真的生成节点）。
 ## 静态入口内部自带开关判断 —— 关闭时零开销，调用点不需要再写一遍 if。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+const HitResolver := preload("res://script/hit_resolver.gd")
 
 
 func _explode() -> void:
 	## 原地爆炸：半径内敌人统一结算（超プッシュ按子弹击退参数），
 	## 可波及玩家（自爆，explosion_hurts_players），并引爆 blast_wall。
 	## 仅单机/Host 的权威子弹会走到这里（Client 镜像子弹 monitoring 已关，不会命中）。
+	if _exploded or network_visual_only or not HitResolver.is_damage_authority():
+		return
 	_exploded = true
 	var center: Vector2 = global_position
 	## ★调试可视化（2026-10-01 用户需求）：把这一炸的**实际范围**画出来并停留 2 秒。
@@ -501,8 +516,8 @@ func _explode() -> void:
 			if pl.get("_is_dying") == true:
 				continue
 			var pdir: Vector2 = (pl.global_position - center).normalized() if pl.global_position != center else Vector2.UP
-			# 自爆：发射者自己也在半径内照伤（原作爆発物「自爆あり」）
-			pl.take_damage(damage, applied_force, pdir, false, 0.3, 0.2, _source_id, element)
+			# 自爆保留原伤害；队友友伤统一由 Player.take_damage 最终入口处理。
+			pl.take_damage(damage, applied_force, pdir, false, 0.3, 0.2, _source_id, element, false, _shooter, _source_is_player_origin)
 
 	## 可爆破墙体（blast_wall）：与投掷物爆炸同一入口
 	for w: Node in get_tree().get_nodes_in_group("blast_wall"):
@@ -512,7 +527,7 @@ func _explode() -> void:
 
 func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool,
 		instant: bool = false) -> void:
-	if not _shooter:
+	if not is_instance_valid(_shooter):
 		return
 	var shooter_state: PlayerState = Players.get_state_for_entity(_shooter)
 	if not shooter_state:

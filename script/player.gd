@@ -113,6 +113,7 @@ const STAND_FRAME: int = SpriteRenderer.STAND_FRAME
 ## 方向 → 行偏移（VX Ace: 下/左/右/上）
 const DIR_ROWS: Array[int] = SpriteRenderer.DIR_ROWS
 const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源重复命中冷却（毫秒）
+const HitResolver := preload("res://script/hit_resolver.gd")
 
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
@@ -1528,7 +1529,7 @@ func _ignite_burn() -> void:
 
 ## 每帧更新：灼烧 DoT 掉血 + 计时与火焰视觉摘除。
 func _update_burn_status(delta: float) -> void:
-	if _is_dying or _burning_time <= 0.0:
+	if _is_dying or _burning_time <= 0.0 or not HitResolver.is_damage_authority():
 		return
 	_burning_time -= delta
 	_burn_tick -= delta
@@ -1551,8 +1552,17 @@ func _update_burn_status(delta: float) -> void:
 		BurnEffect.detach(self)
 
 
-func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, causes_heat: bool = false) -> void:
-	if _is_dying:
+func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, causes_heat: bool = false, source_owner: Node = null, source_is_player_origin: bool = false) -> void:
+	if _is_dying or not HitResolver.is_damage_authority():
+		return
+
+	var online: bool = HitResolver.is_online_session()
+	var friendly_enabled: bool = HitResolver.friendly_fire_enabled()
+	var is_online_friendly_hit: bool = online and HitResolver.is_friendly_player_hit(
+		source_owner, self, source_is_player_origin)
+	# 先做无随机的开关判定，关闭时连去重、见切反馈与元素负效果都不触发。
+	if not HitResolver.is_player_damage_allowed(source_owner, self, online,
+			friendly_enabled, source_is_player_origin):
 		return
 
 	# 源头去重：同一伤害源 1 秒内不会对玩家重复判定。
@@ -1572,6 +1582,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	if _should_negate_hit(damage):
 		return
 
+	# 必须放在无敌/见切与所有普通减免之后，最终 HP 结算之前；只随机一次，
+	# 不让武器伤、爆头倍率或防御把友伤放大或减成零。ガッツ仍按原规则保命。
+	damage = HitResolver.resolve_player_damage_for_mode(damage, source_owner, self,
+		online, friendly_enabled, source_is_player_origin)
 	var hp_before: float = current_hp
 	# ── ガッツ（原作 system.html ◆ガッツ）：HP≥2 时任何攻击保底 1 HP 不死（Heat 中停止）──
 	if damage > 0.0 and not is_heat_active() and current_hp >= 2.0 and damage >= current_hp:
@@ -1580,6 +1594,16 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	else:
 		current_hp = maxf(0.0, current_hp - damage)
 	var actual_damage: float = maxf(0.0, hp_before - current_hp)
+
+	# 联机友伤只允许一次轻量 HP 命中，不附带击退、Heat、削り或元素负效果；
+	# 单机与自爆仍保留原有元素/反馈语义。
+	if is_online_friendly_hit:
+		_is_headshot = false
+		_knockback_force = 0.0
+		_knockback_stun = 0.0
+		_hitstun_duration = 0.0
+		causes_heat = false
+		element = 0
 
 	# ── 削り / Heat（原作 §4.6）：酸或 Heat 攻击命中 → 削减武器弹药/耐久；Heat 攻击附加 Heat ──
 	if damage > 0.0 and (element == WeaponData.Element.ACID or causes_heat):

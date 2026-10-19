@@ -32,6 +32,10 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var host_port_edit: SpinBox = %HostPortEdit
 ## 建主时是否尝试 UPnP 自动端口映射（路由器不支持时改用 frp/樱花等穿透工具）。
 @onready var upnp_check: CheckBox = %UpnpCheck
+@onready var next_room_friendly_fire_check: CheckBox = %NextRoomFriendlyFireCheck
+@onready var friendly_fire_check: CheckBox = %FriendlyFireCheck
+## 仅保存当前大厅的下一房间预选，不写 Net/配置；离房后清零。
+var _pending_friendly_fire_enabled := false
 @onready var create_btn: Button = %CreateBtn
 @onready var join_btn: Button = %JoinBtn
 @onready var start_btn: Button = %StartBtn
@@ -111,6 +115,9 @@ func _ready() -> void:
 	net.handshake_completed.connect(_on_handshake_completed)
 	net.player_list_changed.connect(_refresh_ui)
 	net.player_character_list_changed.connect(_refresh_ui)
+	net.room_settings_changed.connect(_on_room_settings_changed)
+	next_room_friendly_fire_check.toggled.connect(_on_next_room_friendly_fire_toggled)
+	friendly_fire_check.toggled.connect(_on_friendly_fire_toggled)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
@@ -245,6 +252,46 @@ func _sync_panels() -> void:
 		room_panel.visible = _connected
 
 
+# ---------------------------------------------------------------- 房间友伤设置
+
+func _on_next_room_friendly_fire_toggled(enabled: bool) -> void:
+	if net == null or net.has_network():
+		_refresh_friendly_fire_controls()
+		return
+	_pending_friendly_fire_enabled = enabled
+
+
+func _on_friendly_fire_toggled(enabled: bool) -> void:
+	if not net.set_host_friendly_fire_enabled(enabled):
+		_refresh_friendly_fire_controls()
+
+
+func _on_room_settings_changed() -> void:
+	if not net.has_network():
+		_pending_friendly_fire_enabled = false
+	_refresh_friendly_fire_controls()
+
+
+func _refresh_friendly_fire_controls() -> void:
+	var online: bool = net.has_network()
+	next_room_friendly_fire_check.disabled = online
+	next_room_friendly_fire_check.set_pressed_no_signal(_pending_friendly_fire_enabled)
+	friendly_fire_check.disabled = not (online and net.is_host and net.handshake_ok)
+	friendly_fire_check.set_pressed_no_signal(bool(net.friendly_fire_enabled))
+
+
+## host_game 开头会 leave/reset 并刷新 UI，必须先保存预选再建房、成功后应用。
+func _host_game_with_room_settings(port: int) -> Error:
+	var selected: bool = _pending_friendly_fire_enabled
+	var err: Error = net.host_game(port)
+	if err == OK:
+		net.set_host_friendly_fire_enabled(selected)
+	else:
+		_pending_friendly_fire_enabled = selected
+	_refresh_friendly_fire_controls()
+	return err
+
+
 # ---------------------------------------------------------------- 互联网 / 直连 页签（2026-10-09）
 
 ## 在 ConnectPanel 内加一条页签栏，并把现有表单收进「直连」子容器。
@@ -268,7 +315,7 @@ func _setup_connection_tabs() -> void:
 			continue
 		if child is Label and (child as Label).name == "Title":
 			continue      ## 窗内标题留在外面（它是面板级标题）
-		if child.name in ["NameRow", "BackToTitleBtn", "WipNotice"]:
+		if child.name in ["NameRow", "NextRoomFriendlyFireRow", "BackToTitleBtn", "WipNotice"]:
 			continue      ## 属于大厅界面而非连接方式
 		if child is Control:
 			vbox.remove_child(child)
@@ -280,7 +327,8 @@ func _setup_connection_tabs() -> void:
 	_tab_bar.add_theme_constant_override("separation", 8)
 	vbox.add_child(_tab_bar)
 	vbox.move_child($ConnectPanel/VBox/NameRow, 1)
-	vbox.move_child(_tab_bar, 2)   ## 标题 → 公共昵称 → 连接方式页签
+	vbox.move_child($ConnectPanel/VBox/NextRoomFriendlyFireRow, 2)
+	vbox.move_child(_tab_bar, 3)   ## 标题 → 公共昵称 → 下一房间设置 → 连接方式页签
 
 	_internet_tab_btn = Button.new()
 	_internet_tab_btn.name = "InternetTabBtn"
@@ -429,7 +477,7 @@ func _on_internet_create_requested(room_name: String, tunnel_address: String, tu
 	else:
 		net.upnp_enabled = upnp_check.button_pressed
 
-	var err: Error = net.host_game(port)
+	var err: Error = _host_game_with_room_settings(port)
 	if err != OK:
 		_log("创建房间失败：%s" % error_string(err))
 		if _internet_panel != null and _internet_panel.has_method("on_create_failed"):
@@ -830,7 +878,7 @@ func _add_wip_notice() -> void:
 func _run_auto_host() -> void:
 	net.player_name = "HostAuto"
 	_set_connect_buttons_disabled(true)
-	var err: Error = net.host_game()
+	var err: Error = _host_game_with_room_settings(Net.DEFAULT_PORT)
 	if err != OK:
 		printerr("[AUTO] host 创建房间失败: ", error_string(err))
 		get_tree().quit(1)
@@ -853,7 +901,7 @@ func _run_auto_host() -> void:
 	print("[AUTO] host 握手完成，广播开始游戏: %s" % game_scene)
 	# D2 修正：开局 RPC 必须携带难度（B1 随 start_game 广播）；原调用漏参导致
 	# net-test 流程恒走 -1（不覆盖），Client 的 Global.selected_difficulty 与 Host 脱钩。
-	net.start_game.rpc(game_scene, "", null, Global.selected_difficulty)
+	net.start_game.rpc(game_scene, "", null, Global.selected_difficulty, net.friendly_fire_enabled)
 
 
 func _run_auto_client() -> void:
@@ -963,7 +1011,7 @@ func _on_create_pressed() -> void:
 	# ★创建房间用**独立的本机监听端口**（2026-09-27 用户需求：建主端口与加入端口分开设置）。
 	# 使用 frp 等端口映射型内网穿透时，这里填穿透隧道指向本机的本地 UDP 端口。
 	var port := int(host_port_edit.value)
-	var err: Error = net.host_game(port)
+	var err: Error = _host_game_with_room_settings(port)
 	if err != OK:
 		_log("创建房间失败：%s" % error_string(err))
 		return
@@ -1008,7 +1056,7 @@ func _on_start_pressed() -> void:
 	# 联机开局的 Client 难度从未被同步，只有中途切图（request_scene_change）才带上。
 	## 起始关卡 = 房间里选的章节（2026-09-27 用户需求：主机可选战役/章节）；
 	## 没选就回退到默认第一关。这样"不想从头测"可以直接从房间跳到目标关。
-	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty)
+	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty, net.friendly_fire_enabled)
 
 
 ## 开局前向大厅下架房间（**保留隧道**），并等 DELETE 送达或超时。
@@ -1145,6 +1193,7 @@ func _refresh_ui() -> void:
 	if not is_node_ready() or not net:
 		return
 	name_edit.editable = not _connected and not net.has_network()
+	_refresh_friendly_fire_controls()
 	var selection_ready: bool = _connected and bool(net.handshake_ok)
 	if net.is_host:
 		status_label.text = "状态：主机（UDP 端口 %d）" % int(net.active_port)
@@ -1206,6 +1255,7 @@ func _refresh_character_select(selection_ready: bool) -> void:
 
 
 func _set_connect_buttons_disabled(value: bool) -> void:
+	_refresh_friendly_fire_controls()
 	name_edit.editable = not value and not _connected and not net.has_network()
 	create_btn.disabled = value
 	join_btn.disabled = value

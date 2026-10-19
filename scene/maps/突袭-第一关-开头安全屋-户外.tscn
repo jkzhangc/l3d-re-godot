@@ -28,6 +28,7 @@
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="16_42lar"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="17_df6p2"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="17_g836h"]
+[ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="23_83dy4"]
 [ext_resource type="Script" uid="uid://cxd1favc5ntj4" path="res://script/director/player_spawn_slot.gd" id="25_525qf"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="25_dlfhy"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="29_od0b1"]
@@ -123,54 +124,77 @@ walk_direction = 2
 [node name="手枪类" parent="GroundLayer" unique_id=1863981552 instance=ExtResource("5_5gk8a")]
 position = Vector2(-50, 38)
 pool = SubResource("Resource_wqyqx")
+multiplayer_only = null
 
 [node name="霰弹枪类" parent="GroundLayer" unique_id=850161950 instance=ExtResource("5_5gk8a")]
 position = Vector2(0, 40)
 pool = SubResource("Resource_bktjj")
+multiplayer_only = null
 
 [node name="冲锋枪类" parent="GroundLayer" unique_id=752304803 instance=ExtResource("5_5gk8a")]
 position = Vector2(55, 40)
 pool = SubResource("Resource_60l2m")
+multiplayer_only = null
 
 [node name="近战类" parent="GroundLayer" unique_id=1855184450 instance=ExtResource("5_5gk8a")]
 position = Vector2(104, 40)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="近战类2" parent="GroundLayer" unique_id=368916585 instance=ExtResource("5_5gk8a")]
 position = Vector2(144, 40)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="近战类3" parent="GroundLayer" unique_id=902987106 instance=ExtResource("5_5gk8a")]
 position = Vector2(176, 40)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="急救喷雾" parent="GroundLayer" unique_id=1203128696 instance=ExtResource("5_5gk8a")]
 position = Vector2(-120, 160)
 pool = SubResource("Resource_rio6q")
+multiplayer_only = null
 
 [node name="药品类" parent="GroundLayer" unique_id=765970585 instance=ExtResource("5_5gk8a")]
 position = Vector2(-80, 160)
 pool = SubResource("Resource_l6qwe")
+multiplayer_only = null
 
 [node name="榴弹炮类" parent="GroundLayer" unique_id=1181497606 instance=ExtResource("5_5gk8a")]
 position = Vector2(-24, 160)
 pool = SubResource("Resource_id55e")
+multiplayer_only = null
 
 [node name="重型手枪类" parent="GroundLayer" unique_id=986755693 instance=ExtResource("5_5gk8a")]
 position = Vector2(240, 160)
 pool = SubResource("Resource_g836h")
+multiplayer_only = null
 
 [node name="投掷物类" parent="GroundLayer" unique_id=880955252 instance=ExtResource("5_5gk8a")]
 position = Vector2(16, 168)
 pool = SubResource("Resource_ttyuf")
+multiplayer_only = null
 
 [node name="步枪类" parent="GroundLayer" unique_id=1196097831 instance=ExtResource("5_5gk8a")]
 position = Vector2(96, 160)
 pool = SubResource("Resource_4l6e3")
+multiplayer_only = null
 
 [node name="狙击步枪类" parent="GroundLayer" unique_id=2107357427 instance=ExtResource("5_5gk8a")]
 position = Vector2(168, 160)
 pool = SubResource("Resource_bxgyg")
+multiplayer_only = null
+
+[node name="急救喷雾2" parent="GroundLayer" unique_id=1177644017 instance=ExtResource("5_5gk8a")]
+position = Vector2(240, 32)
+pool = SubResource("Resource_rio6q")
+multiplayer_only = true
+
+[node name="药品类2" parent="GroundLayer" unique_id=790679319 instance=ExtResource("5_5gk8a")]
+position = Vector2(272, 32)
+pool = SubResource("Resource_l6qwe")
+multiplayer_only = true
 
 [node name="DecorLayer" type="TileMapLayer" parent="." unique_id=1677088665]
 y_sort_enabled = true
@@ -213,6 +237,9 @@ tile_set = ExtResource("4_5gk8a")
 
 [node name="SavePoint" parent="UpperLayer" unique_id=1088350981 instance=ExtResource("25_dlfhy")]
 position = Vector2(-144, 32)
+
+[node name="AmmoSupply" parent="UpperLayer" unique_id=1639448038 instance=ExtResource("23_83dy4")]
+position = Vector2(-104, 48)
 
 [node name="Menu" parent="." unique_id=1067404182 instance=ExtResource("6_57ke7")]
 

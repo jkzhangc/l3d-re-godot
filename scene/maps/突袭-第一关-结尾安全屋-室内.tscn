@@ -32,6 +32,7 @@
 [ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="22_8d8vq"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="23_8d8vq"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="27_io11d"]
+[ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="28_1g0bs"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="32_13v0d"]
 
 [sub_resource type="Resource" id="Resource_id55e"]
@@ -104,6 +105,18 @@ script = ExtResource("12_e6jfg")
 items = Array[Resource]([ExtResource("23_8d8vq")])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
+[sub_resource type="Resource" id="Resource_1g0bs"]
+script = ExtResource("12_e6jfg")
+items = Array[Resource]([ExtResource("15_lfj0y")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_028cn"]
+script = ExtResource("12_e6jfg")
+items = Array[Resource]([ExtResource("15_lfj0y")])
+weights = Array[float]([1.0])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
 [node name="突袭第一关结尾安全屋室内" type="Node2D" unique_id=1021800740]
 metadata/_edit_horizontal_guides_ = [337.0]
 
@@ -151,61 +164,88 @@ sprite_offset = Vector2(0, -10)
 [node name="榴弹炮类" parent="UpperLayer" unique_id=1863981552 instance=ExtResource("10_4tjii")]
 position = Vector2(1, 124)
 pool = SubResource("Resource_id55e")
+multiplayer_only = null
 
 [node name="投掷物类" parent="UpperLayer" unique_id=995820344 instance=ExtResource("10_4tjii")]
 position = Vector2(44, 137)
 pool = SubResource("Resource_ymy3p")
+multiplayer_only = null
 
 [node name="急救喷雾" parent="UpperLayer" unique_id=932441859 instance=ExtResource("10_4tjii")]
 position = Vector2(112, 96)
 pool = SubResource("Resource_rvkbe")
+multiplayer_only = null
 
 [node name="药品类" parent="UpperLayer" unique_id=1241664349 instance=ExtResource("10_4tjii")]
 position = Vector2(144, 96)
 pool = SubResource("Resource_putw2")
+multiplayer_only = null
 
 [node name="近战类" parent="UpperLayer" unique_id=1309619081 instance=ExtResource("10_4tjii")]
 position = Vector2(72, -24)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="近战类2" parent="UpperLayer" unique_id=1263983828 instance=ExtResource("10_4tjii")]
 position = Vector2(112, -24)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="近战类3" parent="UpperLayer" unique_id=2060691940 instance=ExtResource("10_4tjii")]
 position = Vector2(144, -24)
 pool = SubResource("Resource_rkbvx")
+multiplayer_only = null
 
 [node name="重型手枪类" parent="UpperLayer" unique_id=809851080 instance=ExtResource("10_4tjii")]
 position = Vector2(-32, -24)
 pool = SubResource("Resource_278n4")
+multiplayer_only = null
 
 [node name="步枪类" parent="UpperLayer" unique_id=1052786434 instance=ExtResource("10_4tjii")]
 position = Vector2(-176, -24)
 pool = SubResource("Resource_8d8vq")
+multiplayer_only = null
 
 [node name="狙击步枪类" parent="UpperLayer" unique_id=563969395 instance=ExtResource("10_4tjii")]
 position = Vector2(-104, -24)
 pool = SubResource("Resource_8uec1")
+multiplayer_only = null
 
 [node name="手枪类" parent="UpperLayer" unique_id=767300983 instance=ExtResource("10_4tjii")]
 position = Vector2(-16, -120)
 pool = SubResource("Resource_dgg5q")
+multiplayer_only = null
 
 [node name="霰弹枪类" parent="UpperLayer" unique_id=766404639 instance=ExtResource("10_4tjii")]
 position = Vector2(40, -120)
 pool = SubResource("Resource_7n5my")
+multiplayer_only = null
 
 [node name="冲锋枪类" parent="UpperLayer" unique_id=72000343 instance=ExtResource("10_4tjii")]
 position = Vector2(128, -120)
 pool = SubResource("Resource_5x104")
+multiplayer_only = null
 
 [node name="火箭炮类" parent="UpperLayer" unique_id=495434962 instance=ExtResource("10_4tjii")]
 position = Vector2(-184, 128)
 pool = SubResource("Resource_u66fg")
+multiplayer_only = null
 
 [node name="SavePoint2" parent="UpperLayer" unique_id=1088350981 instance=ExtResource("27_io11d")]
 position = Vector2(16, -128)
+
+[node name="AmmoSupply" parent="UpperLayer" unique_id=1669686152 instance=ExtResource("28_1g0bs")]
+position = Vector2(-96, 144)
+
+[node name="急救喷雾2" parent="UpperLayer" unique_id=1381002729 instance=ExtResource("10_4tjii")]
+position = Vector2(-48, 64)
+pool = SubResource("Resource_1g0bs")
+multiplayer_only = true
+
+[node name="药品类2" parent="UpperLayer" unique_id=1121066889 instance=ExtResource("10_4tjii")]
+position = Vector2(-48, 32)
+pool = SubResource("Resource_028cn")
+multiplayer_only = true
 
 [node name="Menu" parent="." unique_id=610287889 instance=ExtResource("5_sjj6e")]
 

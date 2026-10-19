@@ -25,6 +25,60 @@ extends RefCounted
 ## 与 player.tscn / enemy.tscn 的层定义同口径（见 project.godot [layer_names] 与 README）。
 ## ⚠ 这四处曾各自硬编码裸数字 24；集中到常量后改层定义只需动这里。
 const ENEMY_HIT_MASK: int = (1 << 3) | (1 << 4)  ## = 24
+## 玩家本体层（layer 3 = 4）。players 没有独立受击盒，子弹靠 body_entered 命中本体。
+const PLAYER_HIT_MASK: int = 1 << 2  ## = 4
+const FRIENDLY_FIRE_MIN_DAMAGE: float = 1.0
+const FRIENDLY_FIRE_MAX_DAMAGE: float = 2.0
+
+
+## 返回当前是否为联机房间。单机不启用友伤规则，保持原有伤害语义。
+static func is_online_session() -> bool:
+	var net: Node = Engine.get_main_loop().get_root().get_node_or_null("Net") \
+		if Engine.get_main_loop() else null
+	return net != null and net.has_method("is_online_session") and bool(net.call("is_online_session"))
+
+
+## 读取 Host 下发/维护的房间开关。缺失或非联机时一律关闭。
+static func friendly_fire_enabled() -> bool:
+	var net: Node = Engine.get_main_loop().get_root().get_node_or_null("Net") \
+		if Engine.get_main_loop() else null
+	return is_online_session() and net != null and bool(net.get("friendly_fire_enabled"))
+
+
+## 仅单机或 Host 可以结算伤害；客户端只能消费权威快照与表现。
+static func is_damage_authority() -> bool:
+	if not is_online_session():
+		return true
+	var net: Node = Engine.get_main_loop().get_root().get_node_or_null("Net")
+	return is_instance_valid(net) and bool(net.get("is_host"))
+
+
+## 来源释放后仍用生成时保存的阵营标记，不能对失效节点调用方法。
+static func is_friendly_player_hit(source: Node, target: Node,
+		source_is_player_origin: bool = false) -> bool:
+	if not is_player(target) or source == target:
+		return false
+	return is_player(source) if is_instance_valid(source) else source_is_player_origin
+
+
+## 是否允许一次玩家来源命中进入友伤结算。不会随机，调用方可先用它决定是否计为有效命中。
+static func is_player_damage_allowed(source: Node, target: Node, online: bool,
+		enabled: bool, source_is_player_origin: bool = false) -> bool:
+	return not is_friendly_player_hit(source, target, source_is_player_origin) or not online or enabled
+
+
+## 统一玩家来源伤害解析：返回负数表示整次命中无效；有效友伤只在此处随机一次。
+## source_is_player_origin 用于爆炸/火海等来源节点暂时缺失时，防止在线无来源绕过开关。
+## 可注入模式的纯判定入口，供 tools 行为测试复用。
+static func resolve_player_damage_for_mode(raw_damage: float, source: Node, target: Node,
+		online: bool, enabled: bool, source_is_player_origin: bool = false) -> float:
+	if not is_friendly_player_hit(source, target, source_is_player_origin):
+		return raw_damage
+	if not is_player_damage_allowed(source, target, online, enabled, source_is_player_origin):
+		return -1.0
+	if not online or raw_damage <= 0.0:
+		return raw_damage
+	return float(randi_range(int(FRIENDLY_FIRE_MIN_DAMAGE), int(FRIENDLY_FIRE_MAX_DAMAGE)))
 
 
 ## 目标是否已死亡（`_is_dead`）。所有实体（玩家/敌人）都有该字段。
@@ -42,7 +96,7 @@ static func is_removed(node: Node) -> bool:
 
 ## 是否为玩家实体（近战/推击必须排除玩家，只打敌人）。
 static func is_player(node: Node) -> bool:
-	return node != null and node.is_in_group("player")
+	return is_instance_valid(node) and node.is_in_group("player")
 
 
 ## 溅射击退的力度衰减：边缘 = 50%、中心 = 100%。

@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-16",
+  "baseline_commit": "2d0bfb2f",
+  "engine": "Godot 4.6.3 official 7d41c59c4",
+  "scope": "Source review and isolated local reproductions; not internet gameplay acceptance",
+  "production_business_code_changed": false,
+  "config_or_saves_changed": false,
+  "public_server_deployed_or_tested": false,
+  "existing_node_tests": {
+    "command": "node --test master-server/test/tunnel.test.js master-server/test/contract.test.js",
+    "tests": 32,
+    "pass": 32,
+    "fail": 0,
+    "coverage_limit": "Functional relay/directory tests, not latency/jitter/weak-network quality"
+  },
+  "isolated_interp_checks": {
+    "checks": 7,
+    "failed": 0,
+    "meaning": "Checks confirm behavior and successful defect reproduction, not product acceptance",
+    "source_sha256": "e1e32bdca3936d5f5251056a86d144cf8a3b3d68aa52845d58064d075b863c4f",
+    "clock_injected_into_memory_copy_only": true,
+    "enemy_same_timestamp_sample_delta_px": 4,
+    "enemy_extrapolated_x_px": 684.000061035156,
+    "enemy_overshoot_px": 680.000061035156,
+    "remote_player_no_extrapolation_control_x": 4,
+    "adaptive_render_reverse_px": 1.23125076293945
+  },
+  "local_real_enet_rpc": {
+    "row_fields": 29,
+    "data_scope": "Synthetic representative state with production field order, not gameplay packet capture",
+    "variant_array_bytes_by_player_count": [392, 776, 1160, 1544],
+    "engine_warning_four_players": "Sending 1548 bytes unreliably which is above the MTU (1392), this will result in higher packet loss",
+    "all_four_counts_received_locally": true,
+    "reordered_cross_rpc_receive_order": ["enemy"],
+    "reordered_player_packet_was_discarded": true
+  },
+  "minimal_physics": {
+    "production_player_layer_mask": [4, 11],
+    "production_enemy_layer_mask": [8, 15],
+    "player_box_px": [24, 27],
+    "enemy_box_px": [20, 28],
+    "host_final_x": 77.9296875,
+    "client_final_x": 150,
+    "divergence_px": 72.0703125,
+    "scope": "Stationary synthetic enemy; client shape disabled like production; minimal collision reproduction, not full battle"
+  },
+  "not_run": [
+    "Real internet two-device gameplay",
+    "Android host profiling",
+    "Production server bandwidth, CPU, RTT and loss measurement",
+    "Production reliable stale world snapshot end-to-end retransmission reproduction",
+    "Full project Godot multiplayer regression suite"
+  ],
+  "recommended_priority": [
+    "Align prediction collision policy without silently changing gameplay",
+    "Guard same/abnormal timestamps, extrapolation speed/displacement and monotonic playback",
+    "Snapshot epoch/tick freshness and stream/chunk semantics",
+    "Split hot/cold player state and enforce actual RPC byte budget",
+    "Input validity and fixed-tick ACK/replay plus diagnostics",
+    "Measure tunnel backpressure and consider UDP data plane with TCP fallback"
+  ]
+}
