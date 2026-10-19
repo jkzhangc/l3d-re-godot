@@ -30,6 +30,10 @@ const FIRE_LIGHT_COLOR := Color(1.0, 0.52, 0.22)
 const FIRE_LIGHT_FLICKER: float = 0.26
 ## 火海运炭粒子数量（0 = 不起粒子）。
 const FIRE_EMBER_AMOUNT: int = 10
+## 火光下的角色投影默认值（可被 ThrowableData.fire_shadow_* 覆盖）
+const FIRE_SHADOW_DISTANCE: float = 14.0
+const FIRE_SHADOW_STRETCH: float = 1.05
+const FIRE_SHADOW_OPACITY: float = 0.45
 
 var _radius: int = 1
 var _duration: float = 5.0
@@ -52,10 +56,15 @@ var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
 var _night_light_color: Color = FIRE_LIGHT_COLOR
 var _night_light_flicker: float = FIRE_LIGHT_FLICKER
 var _ember_amount: int = FIRE_EMBER_AMOUNT
+var _shadow_distance: float = FIRE_SHADOW_DISTANCE
+var _shadow_stretch: float = FIRE_SHADOW_STRETCH
+var _shadow_opacity: float = FIRE_SHADOW_OPACITY
 const HitResolver := preload("res://script/hit_resolver.gd")
 
 
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY, night_light_color: Color = FIRE_LIGHT_COLOR, night_light_flicker: float = FIRE_LIGHT_FLICKER, ember_amount: int = FIRE_EMBER_AMOUNT) -> void:
+## shadow: 角色投影参数（可省略）。键：distance / stretch / opacity ——
+##   参数太多，这里用字典而不是继续加位置参数（见 ThrowableData.fire_shadow_*）。
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY, night_light_color: Color = FIRE_LIGHT_COLOR, night_light_flicker: float = FIRE_LIGHT_FLICKER, ember_amount: int = FIRE_EMBER_AMOUNT, shadow: Dictionary = {}) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -72,6 +81,9 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._night_light_color = night_light_color
 	patch._night_light_flicker = night_light_flicker
 	patch._ember_amount = ember_amount
+	patch._shadow_distance = float(shadow.get("distance", FIRE_SHADOW_DISTANCE))
+	patch._shadow_stretch = float(shadow.get("stretch", FIRE_SHADOW_STRETCH))
+	patch._shadow_opacity = float(shadow.get("opacity", FIRE_SHADOW_OPACITY))
 	patch.global_position = pos
 	parent.add_child(patch)
 	patch._build_fire()
@@ -132,6 +144,7 @@ func _setup_night_light() -> void:
 			maxf(_night_light_intensity, 0.0),
 			_night_light_color,
 			_night_light_flicker)
+		overlay.set_light_shadow(self, _shadow_distance, _shadow_stretch, _shadow_opacity, true)
 
 
 func _setup_ambient_sound() -> void:

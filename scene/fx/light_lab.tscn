@@ -74,3 +74,13 @@ z_index = 1
 texture = ExtResource("4_dummy")
 region_enabled = true
 region_rect = Rect2(0, 0, 48, 64)
+
+[node name="Dummy2" type="Node2D" parent="." groups=["lab_dummy"]]
+position = Vector2(138, 170)
+
+[node name="Sprite2D" type="Sprite2D" parent="Dummy2"]
+position = Vector2(0, -16)
+z_index = 1
+texture = ExtResource("4_dummy")
+region_enabled = true
+region_rect = Rect2(48, 0, 48, 64)

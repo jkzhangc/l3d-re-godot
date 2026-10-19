@@ -49,10 +49,14 @@ const FLICKER_TAU: float = 0.35
 ## 闪烁时半径的呼吸比例（强度变化的百分比）。
 const FLICKER_RADIUS_RATIO: float = 0.35
 
-## 角色投影
-const SHADOW_ALPHA: float = 0.45
-const SHADOW_OFFSET: float = 9.0
-const SHADOW_MAX_ALPHA: float = 0.6
+## 角色投影默认值（可被每盏灯覆盖，见 set_light_shadow）。
+## 参考原工程的 :cast_distance / :cast_scale / :shadow_opacity。
+## 影子是**保持直立的剪影**，只沿"灯 → 角色"方向平移 + 竖向拉伸（不旋转）：
+##   · 旋转会让剪影躺倒，换个光源角度就成了倒着的角色，看起来"朝向不对"；
+##   · 距离也不能大：太远会像两个角色并排站着。
+const SHADOW_DISTANCE: float = 14.0   ## 投影距离（世界像素，角色与影子的错位）
+const SHADOW_STRETCH: float = 1.0     ## 剪影竖向倍率（1.0 = 与角色等高，1.4 = 更长）
+const SHADOW_OPACITY: float = 0.45    ## 最大不透明度（低浓度下别糊成纯黑）
 
 static var _gradient_tex: ImageTexture = null
 
@@ -71,6 +75,11 @@ class LightRecord:
 	var phase: float = 0.0
 	var value: float = 1.0
 	var poly: Polygon2D = null
+	## 角色投影参数（原工程 :cast_shadow / :cast_distance / :cast_scale / :shadow_opacity）
+	var cast_shadow: bool = true
+	var shadow_distance: float = SHADOW_DISTANCE
+	var shadow_stretch: float = SHADOW_STRETCH
+	var shadow_opacity: float = SHADOW_OPACITY
 	var last_pos: Vector2 = Vector2(INF, INF)
 	var last_radius: float = -1.0
 	var settle_left: float = 0.6      ## 延迟重建：地图碰撞体可能比光源晚就绪
@@ -214,6 +223,27 @@ func register_light(source: Node2D, radius_px: float, intensity: float = 1.0,
 	rec.occlude = occlude
 	rec.last_pos = Vector2(INF, INF)      ## 参数变了 → 下一帧重建
 	rec.settle_left = 0.6
+
+
+## 设置某盏灯的角色投影参数（原工程的 cast_shadow / cast_distance / cast_scale / shadow_opacity）。
+## distance_px: 投影距离（世界像素）。影子按"离灯越近越长"再乘系数，见 _set_shadow。
+## stretch:     剪影沿光线的长度倍率，1.0 ≈ 等身长，1.5 更长更夸张。
+## opacity:     最大不透明度（0 = 不投影）。
+## cast:        false = 这盏灯不投影（原工程 [noshadow] 语义）。
+func set_light_shadow(source: Node2D, distance_px: float = SHADOW_DISTANCE,
+		stretch: float = SHADOW_STRETCH, opacity: float = SHADOW_OPACITY,
+		cast: bool = true) -> void:
+	var rec: LightRecord = null
+	for r: LightRecord in _records:
+		if r.source == source:
+			rec = r
+			break
+	if rec == null:
+		return
+	rec.cast_shadow = cast
+	rec.shadow_distance = maxf(distance_px, 0.0)
+	rec.shadow_stretch = maxf(stretch, 0.05)
+	rec.shadow_opacity = clampf(opacity, 0.0, 1.0)
 
 
 func unregister_light(source: Node2D) -> void:
@@ -360,19 +390,27 @@ func _update_character_shadows(zoom: float) -> void:
 				continue
 			var best: float = 0.0
 			var best_dir := Vector2.ZERO
+			var best_close: float = 0.0
+			var best_rec: LightRecord = null
 			for rec: LightRecord in _records:
-				if rec.intensity <= 0.0 or not is_instance_valid(rec.source):
+				if rec.intensity <= 0.0 or not rec.cast_shadow or not is_instance_valid(rec.source):
 					continue
 				var wr: float = rec.radius / zoom
 				var delta: Vector2 = node.global_position - rec.source.global_position
 				var d: float = delta.length()
 				if d > wr * 1.05 or d < 0.001:
 					continue
-				var strength: float = (1.0 - d / (wr * 1.05)) * rec.intensity * rec.value
+				var closeness: float = 1.0 - d / (wr * 1.05)
+				var strength: float = closeness * rec.intensity * rec.value
 				if strength > best:
 					best = strength
+					best_close = closeness
 					best_dir = delta / d
-			_set_shadow(node, best_dir, best)
+					best_rec = rec
+			if best_rec == null:
+				_hide_shadow(node)
+			else:
+				_set_shadow(node, best_dir, best_close, best_rec)
 
 
 func _shadow_for(node: Node2D) -> Sprite2D:
@@ -391,8 +429,12 @@ func _shadow_for(node: Node2D) -> Sprite2D:
 	return sh
 
 
-func _set_shadow(node: Node2D, dir: Vector2, strength: float) -> void:
-	if strength <= 0.03:
+## 角色剪影保持直立，只沿"灯 → 角色"方向平移一小段并做竖向拉伸：
+##   · 不旋转 —— 旋转让剪影躺倒，光源一换方向就成了倒着的角色（朝向看起来是错的）；
+##   · 错位距离小 —— 太远会读成"两个角色并排"，影子和本体必须贴在一起；
+##   · 长度：shadow_distance / shadow_stretch 都随"离灯越近"放大（真实点光源）。
+func _set_shadow(node: Node2D, dir: Vector2, closeness: float, rec: LightRecord) -> void:
+	if closeness <= 0.02 or rec.shadow_opacity <= 0.0:
 		_hide_shadow(node)
 		return
 	# 角色脚本一般有 `sprite` 属性；没有的话退回找名为 Sprite2D 的子节点（试验场假人）。
@@ -404,16 +446,20 @@ func _set_shadow(node: Node2D, dir: Vector2, strength: float) -> void:
 		return
 	var s := spr as Sprite2D
 	var sh := _shadow_for(node)
+	var base_h: float = s.region_rect.size.y if s.region_rect.size.y > 0.0 else float(s.texture.get_height())
+	var h: float = base_h * absf(s.scale.y)
+	var near: float = clampf(closeness, 0.0, 1.0)
+	var offset: float = rec.shadow_distance * (0.55 + 0.75 * near)
+	var stretch: float = rec.shadow_stretch * (0.9 + 0.3 * near)
 	sh.texture = s.texture
 	sh.region_enabled = s.region_enabled
 	sh.region_rect = s.region_rect
 	sh.flip_h = s.flip_h
-	# 压扁模拟"贴地投影"，同时把脚底钉住（居中精灵压扁会整体上浮）。
-	var squash: float = 0.6
-	var drop: float = s.region_rect.size.y * (1.0 - squash) * 0.5 * s.scale.y
-	sh.scale = Vector2(s.scale.x, s.scale.y * squash)
-	sh.position = s.position + dir * SHADOW_OFFSET + Vector2(0.0, drop)
-	sh.modulate = Color(0.0, 0.0, 0.0, clampf(SHADOW_ALPHA * strength, 0.0, SHADOW_MAX_ALPHA))
+	sh.rotation = 0.0
+	sh.scale = Vector2(s.scale.x, s.scale.y * stretch)
+	# 竖向拉伸是绕中心缩放的，往下补半格，保证"脚底"仍贴着角色的脚底。
+	sh.position = s.position + dir * offset + Vector2(0.0, h * (stretch - 1.0) * 0.5)
+	sh.modulate = Color(0.0, 0.0, 0.0, clampf(rec.shadow_opacity * (0.5 + 0.5 * near), 0.0, 1.0))
 	sh.visible = true
 
 

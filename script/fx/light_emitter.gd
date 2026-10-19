@@ -23,6 +23,16 @@ class_name LightEmitter extends Node2D
 ## 是否被墙体/家具挡住（原工程的"建筑遮挡"）。关掉可以对比"光穿墙"。
 @export var occlude: bool = true
 
+@export_group("角色投影")
+## 是否让角色在这盏灯下投出影子（原工程 :cast_shadow / [noshadow]）
+@export var cast_shadow: bool = true
+## 投影距离（世界像素）：影子相对角色的错位，**不要太大**（太远会像两个人并排）
+@export_range(0.0, 80.0, 1.0) var shadow_distance: float = 14.0
+## 影子竖向倍率（1.0 = 与角色等高，1.4 更长）
+@export_range(0.2, 3.0, 0.05) var shadow_stretch: float = 1.0
+## 影子最大不透明度
+@export_range(0.0, 1.0, 0.01) var shadow_opacity: float = 0.45
+
 @export_group("火星粒子（可选）")
 ## 勾上会在光源位置生成一层上升的火星（CPUParticles2D，加法混合）
 @export var embers_enabled: bool = false
@@ -76,6 +86,7 @@ func _try_register() -> void:
 		return
 	_overlay = ov
 	ov.register_light(self, radius, intensity, light_color, flicker, occlude)
+	ov.set_light_shadow(self, shadow_distance, shadow_stretch, shadow_opacity, cast_shadow)
 	_registered = true
 
 
@@ -94,6 +105,7 @@ func apply_params() -> void:
 		_try_register()
 		return
 	_overlay.register_light(self, radius, intensity, light_color, flicker, occlude)
+	_overlay.set_light_shadow(self, shadow_distance, shadow_stretch, shadow_opacity, cast_shadow)
 
 
 func set_light_enabled(value: bool) -> void:
