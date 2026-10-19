@@ -30,6 +30,10 @@ const FIRE_LIGHT_COLOR := Color(1.0, 0.52, 0.22)
 const FIRE_LIGHT_FLICKER: float = 0.26
 ## 火海运炭粒子数量（0 = 不起粒子）。
 const FIRE_EMBER_AMOUNT: int = 10
+## 火光淡入/淡出时长（秒）。燃烧瓶落地时灯不是"啪"地亮/灭，
+## 熄灭前先把亮度收下去，免得火没了还剩一个突兀的光圈。
+const LIGHT_FADE_IN: float = 0.25
+const LIGHT_FADE_OUT: float = 0.7
 ## 火光下的角色投影默认值（可被 ThrowableData.fire_shadow_* 覆盖）
 const FIRE_SHADOW_SCALE: float = 0.55
 const FIRE_SHADOW_RANGE: float = 0.0
@@ -56,6 +60,9 @@ var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
 var _night_light_color: Color = FIRE_LIGHT_COLOR
 var _night_light_flicker: float = FIRE_LIGHT_FLICKER
 var _ember_amount: int = FIRE_EMBER_AMOUNT
+var _overlay: NightOverlay = null
+var _light_px: float = 0.0
+var _light_scale: float = -1.0
 var _shadow_scale: float = FIRE_SHADOW_SCALE
 var _shadow_range: float = FIRE_SHADOW_RANGE
 var _shadow_opacity: float = FIRE_SHADOW_OPACITY
@@ -138,13 +145,29 @@ func _setup_night_light() -> void:
 	## NightOverlay 不存在（白天关卡）时零开销。
 	var overlay := NightOverlay.find_any(self)
 	if overlay:
-		overlay.register_light(
-			self,
-			float(_radius) * 32.0 + maxf(_night_light_extra_px, 0.0),
-			maxf(_night_light_intensity, 0.0),
-			_night_light_color,
-			_night_light_flicker)
+		_overlay = overlay
+		_light_px = float(_radius) * 32.0 + maxf(_night_light_extra_px, 0.0)
+		overlay.register_light(self, _light_px, 0.0, _night_light_color, _night_light_flicker)
 		overlay.set_light_shadow(self, _shadow_scale, _shadow_opacity, _shadow_range, true)
+		_update_light_fade(0.0)
+
+
+## 火光淡入淡出：改亮度不会重建可见性扇形（NightOverlay.register_light 只在
+## 半径/遮挡变化时才重建），所以每帧调用也不贵。
+func _update_light_fade(_delta: float) -> void:
+	if _overlay == null or not is_instance_valid(_overlay):
+		return
+	var k: float = 1.0
+	if LIGHT_FADE_IN > 0.0 and _elapsed < LIGHT_FADE_IN:
+		k = _elapsed / LIGHT_FADE_IN
+	var left: float = _duration - _elapsed
+	if LIGHT_FADE_OUT > 0.0 and left < LIGHT_FADE_OUT:
+		k = minf(k, maxf(left / LIGHT_FADE_OUT, 0.0))
+	if is_equal_approx(k, _light_scale):
+		return
+	_light_scale = k
+	_overlay.register_light(self, _light_px,
+		maxf(_night_light_intensity, 0.0) * k, _night_light_color, _night_light_flicker)
 
 
 func _setup_ambient_sound() -> void:
@@ -190,6 +213,8 @@ func _process(delta: float) -> void:
 		if _tick_timer >= _tick_interval:
 			_tick_timer = 0.0
 			_burn()
+
+	_update_light_fade(delta)
 
 	# 熄灭
 	if _elapsed >= _duration:

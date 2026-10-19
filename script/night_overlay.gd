@@ -221,13 +221,18 @@ func register_light(source: Node2D, radius_px: float, intensity: float = 1.0,
 		rec.exit_hook = unregister_light.bind(source)
 		source.tree_exiting.connect(rec.exit_hook)
 		_records.append(rec)
+	# 只有"会改变可见性扇形"的参数变化才需要重建（160 条射线不便宜）。
+	# 改亮度/颜色/闪烁（比如火焰熄灭时的淡出）每帧调用也不会触发重建。
+	var geometry_changed: bool = not is_equal_approx(rec.radius, maxf(radius_px, 8.0)) \
+			or rec.occlude != occlude
 	rec.radius = maxf(radius_px, 8.0)
 	rec.intensity = maxf(intensity, 0.0)
 	rec.color = color
 	rec.flicker = clampf(flicker, 0.0, 1.0)
 	rec.occlude = occlude
-	rec.last_pos = Vector2(INF, INF)      ## 参数变了 → 下一帧重建
-	rec.settle_left = 0.6
+	if geometry_changed:
+		rec.last_pos = Vector2(INF, INF)  ## 下一帧重建
+		rec.settle_left = 0.6
 
 
 ## 设置某盏灯的角色投影参数（对应原工程的 cast_shadow / cast_distance / cast_scale /
@@ -402,8 +407,8 @@ func _update_character_shadows(zoom: float) -> void:
 				if rec.intensity <= 0.0 or not rec.cast_shadow or not is_instance_valid(rec.source):
 					continue
 				var wr: float = rec.radius / zoom
-				var delta: Vector2 = node.global_position - rec.source.global_position
-				var d: float = delta.length()
+				var to_caster: Vector2 = node.global_position - rec.source.global_position
+				var d: float = to_caster.length()
 				if d > wr * 1.05 or d < 0.001:
 					continue
 				var closeness: float = 1.0 - d / (wr * 1.05)
@@ -411,7 +416,7 @@ func _update_character_shadows(zoom: float) -> void:
 				if strength > best:
 					best = strength
 					best_dist = d
-					best_dir = delta / d
+					best_dir = to_caster / d
 					best_rec = rec
 			if best_rec == null:
 				_hide_shadow(node)
@@ -474,11 +479,20 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	# 支点放到底边中点（脚底），这样 scale.y / rotation 都绕脚底做。
 	sh.offset = Vector2(-base_w * 0.5, -base_h)
 	sh.position = s.position + Vector2(0.0, base_h * absf(s.scale.y) * 0.5)
-	sh.rotation = atan2(dir.x, -dir.y)
 	# 拉得越长越收窄一点，避免变成一条胖带子
 	var width_scale: float = clampf(1.0 - 0.14 * stretch, 0.55, 1.0)
+	# ⚠ 不做插值/阻尼：原工程每帧直接用 angle / zoom_y 重算。
+	#   加平滑会让影子跟着走位"弹"，看着像橡皮筋（2026-10-19 用户反馈）。
+	sh.rotation = atan2(dir.x, -dir.y)
 	sh.scale = Vector2(s.scale.x * width_scale, s.scale.y * stretch)
-	var alpha: float = rec.shadow_opacity * (0.35 + 0.65 * fade)
+	# 原工程 opacity_factor_near = 1-(len-1)/(cast_distance-1)：到边界时已经几乎是 0，
+	# 所以它的 visible=false 看不出来。旧实现留了 0.35 的下限，走到边界会"啪"地消失。
+	# 再乘灯的当前亮度：火焰熄灭时灯是渐暗的，影子要跟着一起淡掉，不能等灯被移除才消失。
+	var alpha: float = rec.shadow_opacity * smoothstep(0.0, 1.0, fade) \
+			* clampf(rec.intensity * rec.value, 0.0, 1.0)
+	if alpha <= 0.004:
+		_hide_shadow(node)
+		return
 	var mat := sh.material as ShaderMaterial
 	if mat:
 		mat.set_shader_parameter("fade_near", alpha)
