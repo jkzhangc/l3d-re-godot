@@ -26,11 +26,11 @@ class_name LightEmitter extends Node2D
 @export_group("角色投影")
 ## 是否让角色在这盏灯下投出影子（原工程 :cast_shadow / [noshadow]）
 @export var cast_shadow: bool = true
-## 投影距离（世界像素）：影子相对角色的错位，**不要太大**（太远会像两个人并排）
-@export_range(0.0, 80.0, 1.0) var shadow_distance: float = 14.0
-## 影子竖向倍率（1.0 = 与角色等高，1.4 更长）
-@export_range(0.2, 3.0, 0.05) var shadow_stretch: float = 1.0
-## 影子最大不透明度
+## 影子长度倍率：长度 = 角色高 × (离灯距离/32) × 本值 —— 离灯越远影子越长
+@export_range(0.0, 3.0, 0.05) var shadow_scale: float = 0.5
+## 投影作用距离（世界像素）。0 = 跟随灯半径；超出不投影
+@export_range(0.0, 800.0, 1.0) var shadow_range: float = 0.0
+## 影子在脚底处的最大不透明度（远端会自动淡出）
 @export_range(0.0, 1.0, 0.01) var shadow_opacity: float = 0.45
 
 @export_group("火星粒子（可选）")
@@ -86,7 +86,7 @@ func _try_register() -> void:
 		return
 	_overlay = ov
 	ov.register_light(self, radius, intensity, light_color, flicker, occlude)
-	ov.set_light_shadow(self, shadow_distance, shadow_stretch, shadow_opacity, cast_shadow)
+	ov.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 	_registered = true
 
 
@@ -105,7 +105,7 @@ func apply_params() -> void:
 		_try_register()
 		return
 	_overlay.register_light(self, radius, intensity, light_color, flicker, occlude)
-	_overlay.set_light_shadow(self, shadow_distance, shadow_stretch, shadow_opacity, cast_shadow)
+	_overlay.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 
 
 func set_light_enabled(value: bool) -> void:

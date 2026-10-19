@@ -107,7 +107,7 @@ func _land() -> void:
 		_apply_flash()
 	if _td.fire_radius > 0:
 		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity, _td.fire_light_color, _td.fire_light_flicker, _td.fire_ember_amount,
-			{"distance": _td.fire_shadow_distance, "stretch": _td.fire_shadow_stretch, "opacity": _td.fire_shadow_opacity})
+			{"scale": _td.fire_shadow_scale, "range": _td.fire_shadow_range, "opacity": _td.fire_shadow_opacity})
 	queue_free()
 
 

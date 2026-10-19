@@ -59,11 +59,11 @@ class_name ThrowableData extends ItemData
 @export_range(0.0, 1.0, 0.01) var fire_light_flicker: float = 0.26
 ## 火海运炭粒子数量（0 = 不起粒子）。纯表现，各端各自播。
 @export_range(0, 40, 1) var fire_ember_amount: int = 10
-## 火光下的角色投影：错位距离（世界像素）。别调太大，否则像两个人并排。
-@export_range(0.0, 80.0, 1.0) var fire_shadow_distance: float = 14.0
-## 火光下的角色投影：竖向倍率（1.0 = 与角色等高）。
-@export_range(0.2, 3.0, 0.05) var fire_shadow_stretch: float = 1.05
-## 火光下的角色投影：最大不透明度（0 = 不投影）。
+## 火光下的角色投影：长度倍率（长度 = 角色高 × 离火距离/32 × 本值，越远越长）。
+@export_range(0.0, 3.0, 0.05) var fire_shadow_scale: float = 0.55
+## 火光下的角色投影：作用距离（世界像素）。0 = 跟随火光半径。
+@export_range(0.0, 800.0, 1.0) var fire_shadow_range: float = 0.0
+## 火光下的角色投影：脚底处的最大不透明度（0 = 不投影）。
 @export_range(0.0, 1.0, 0.01) var fire_shadow_opacity: float = 0.45
 
 @export_group("音效")
