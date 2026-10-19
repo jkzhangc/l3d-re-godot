@@ -568,7 +568,8 @@ func _ready() -> void:
 
 	_refresh_sprite()
 	if network_presentation_only:
-		_disable_network_simulation()
+		# 活的镜像保留实体碰撞，否则客户端预测可以穿过敌人而 Host 会被挡住 → 回弹。
+		_disable_network_simulation(true)
 
 	# ── 女巫：初始进徘徊态（不主动接近/攻击）──
 	# 状态机的 initial_state 在 .tscn 里硬编码为 Idle，各特感不宜各自改内核；
@@ -753,7 +754,11 @@ func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
 	network_presentation_only = presentation_only
 	velocity = Vector2.ZERO
 	if network_presentation_only and is_node_ready():
-		_disable_network_simulation()
+		# 同 _ready：镜像存活期间保留实体碰撞（两端物理规则必须一致）。
+		# 已知死亡时不要重新打开 —— apply_network_presentation 的 is_dead 分支与
+		# apply_network_death 都会走无参版本把碰撞关掉，这里不能抢先开回来。
+		if not _is_dead:
+			_disable_network_simulation(true)
 
 
 ## Client 专用：应用 Host 快照；位置在 _process 中平滑，攻击/死亡帧由 Host 当前角色索引驱动。
@@ -1014,9 +1019,26 @@ func clear_target_if_matches(target: Node) -> void:
 		sm._on_transition_requested("Idle")
 
 
-func _disable_network_simulation() -> void:
+## 关停本节点的本地模拟。
+##
+## `keep_body_collision`：**活的** Client 镜像要保留实体碰撞（见下），尸体不要。
+##
+## ★ 为什么镜像必须保留碰撞（2026-10-19 用户拍板方案 A）：
+## Host 用真实物理模拟**所有**玩家（`network_world._simulate_host_players` →
+## `move_with_corner_assist()` → `move_and_slide()`），而玩家 `collision_mask = 11`
+## 含敌人层 8 → 玩家会被敌人实体挡住。Client 镜像原本把 `CollisionShape2D` 一起关掉，
+## 本机预测于是直接穿身而过 —— **同一段输入两端物理规则不同**：Host 停在僵尸边缘，
+## Client 已经推进 70px 量级。纠偏死区只有 `max(0.5, 最近速度 × RTT)`（跑动约 10~14px），
+## 远超死区 → 逐帧回拽，就是用户报的「回弹」。
+## 保留碰撞后两端规则一致；镜像的 `global_position` 是快照直写（不走 `move_and_slide`），
+## 所以镜像之间只会重叠、不会互相推挤，也不会被玩家推动 —— 受影响的只有"玩家撞上去"。
+## 剩余偏差只有镜像自身的插值滞后（敌速 × 滞后时间），量级落在死区附近，可接受。
+##
+## AI 状态机 / 视野 / 受击盒仍然要关：那些是"消费输入并产出结果"的模拟，
+## 客户端再跑一遍就是双份结算（伤害已另有权威门控，这里不重复依赖它）。
+func _disable_network_simulation(keep_body_collision: bool = false) -> void:
 	velocity = Vector2.ZERO
-	if $CollisionShape2D:
+	if $CollisionShape2D and not keep_body_collision:
 		$CollisionShape2D.set_deferred("disabled", true)
 	if vision_area:
 		vision_area.set_deferred("monitoring", false)
