@@ -14,16 +14,18 @@ shader_type canvas_item;
 uniform float darkness : hint_range(0.0, 1.0) = 0.85;
 uniform float flash_strength : hint_range(0.0, 1.0) = 0.0;
 uniform int light_count = 0;
-uniform vec3 lights[32];
+// x,y = 屏幕坐标；z = 半径(px)；w = 亮度倍率（2026-10-19：火光可单独调亮，w>1 会把亮核撑大）
+uniform vec4 lights[32];
 void fragment() {
 	vec2 px = UV / SCREEN_PIXEL_SIZE;
 	float lit = 0.0;
 	for (int i = 0; i < light_count; i++) {
 		float d = distance(px, lights[i].xy);
 		float l = 1.0 - clamp(d / max(lights[i].z, 1.0), 0.0, 1.0);
-		lit = max(lit, l * l * (3.0 - 2.0 * l));  // smoothstep 软边
+		l = l * l * (3.0 - 2.0 * l);  // smoothstep 软边
+		lit = max(lit, l * max(lights[i].w, 0.0));
 	}
-	float a = darkness * (1.0 - lit) - flash_strength;
+	float a = darkness * (1.0 - clamp(lit, 0.0, 1.0)) - flash_strength;
 	COLOR = vec4(0.015, 0.015, 0.04, clamp(a, 0.0, 1.0));
 }
 "
@@ -33,6 +35,7 @@ var _rect: ColorRect
 var _mat: ShaderMaterial
 var _lights: Array[Node2D] = []
 var _light_radius: Dictionary = {}      ## Node2D → radius px
+var _light_intensity: Dictionary = {}   ## Node2D → 亮度倍率（1.0 = 原样）
 var _flash_left: float = 0.0
 var _flash_total: float = 0.0
 var _flash_strength: float = 0.0
@@ -69,18 +72,23 @@ func set_darkness(value: float) -> void:
 
 ## 注册动态光源（source 在退出场景树时自动注销）。
 ## radius_px: 屏幕像素亮圈半径；zoom=2x 视口下 1 世界像素 = 1 屏幕像素（CanvasLayer 无缩放）。
-func register_light(source: Node2D, radius_px: float) -> void:
+## intensity: 亮度倍率（2026-10-19 用户需求「火光再亮一些」）。1.0 = 原样；
+##   >1 会把亮核撑大（`lit` 提前到达 1），观感是"更亮 + 范围更实"。
+##   燃烧瓶的这两个值都由 ThrowableData 的 fire_light_* 暴露给作者调。
+func register_light(source: Node2D, radius_px: float, intensity: float = 1.0) -> void:
 	if source == null:
 		return
 	if not _lights.has(source):
 		_lights.append(source)
 		source.tree_exiting.connect(unregister_light.bind(source))
 	_light_radius[source] = maxf(radius_px, 16.0)
+	_light_intensity[source] = maxf(intensity, 0.0)
 
 
 func unregister_light(source: Node2D) -> void:
 	_lights.erase(source)
 	_light_radius.erase(source)
+	_light_intensity.erase(source)
 
 
 ## 闪光弹白闪：短暂把黑幕整体压向透明（夜间视界下"照亮全场"）。
@@ -96,14 +104,14 @@ func _process(delta: float) -> void:
 	# ── 光源uniform刷新（世界→屏幕坐标）──
 	var xform := get_viewport().get_canvas_transform()
 	var count: int = 0
-	var arr := PackedVector3Array()
+	var arr := PackedVector4Array()
 	for s: Node2D in _lights:
 		if not is_instance_valid(s) or not s.is_inside_tree():
 			continue
 		if count >= MAX_LIGHTS:
 			break
 		var sp: Vector2 = xform * s.global_position
-		arr.append(Vector3(sp.x, sp.y, _light_radius.get(s, 96.0)))
+		arr.append(Vector4(sp.x, sp.y, _light_radius.get(s, 96.0), _light_intensity.get(s, 1.0)))
 		count += 1
 	_mat.set_shader_parameter("light_count", count)
 	_mat.set_shader_parameter("lights", arr)

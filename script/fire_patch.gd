@@ -18,6 +18,11 @@ const DIRECTIONS: int = 4
 const FRAME_DURATION: float = 0.1   ## 火精灵动画帧间隔
 const STEP_FRAMES: int = 3          ## 每个方向的踏步帧数（VX Ace 3 列）
 const TOTAL_FRAMES: int = STEP_FRAMES * DIRECTIONS  ## 4方向 × 3帧 = 12 帧完整动画
+## 夜间视界默认值（2026-10-19 用户实测「照亮范围和亮度都不够」）：
+## 光圈半径 = 火海半径(px) + EXTRA；旧实现硬编码 +64 → 现 +88（+24px）。
+## 两个值都可被 ThrowableData 的 fire_light_* 逐投掷物覆盖。
+const NIGHT_LIGHT_EXTRA_PX: float = 88.0
+const NIGHT_LIGHT_INTENSITY: float = 1.35
 
 var _radius: int = 1
 var _duration: float = 5.0
@@ -34,10 +39,13 @@ var _authoritative: bool = true
 var _damage_players: bool = true
 var _source_owner: Node = null
 var _source_is_player_origin: bool = true
+## 夜间视界光源参数（ThrowableData 注入；默认 = 本文件常量）
+var _night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX
+var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
 const HitResolver := preload("res://script/hit_resolver.gd")
 
 
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false) -> void:
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -49,6 +57,8 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._damage_players = damage_players
 	patch._source_owner = source_owner
 	patch._source_is_player_origin = HitResolver.is_player(source_owner) if is_instance_valid(source_owner) else source_is_player_origin
+	patch._night_light_extra_px = night_light_extra_px
+	patch._night_light_intensity = night_light_intensity
 	patch.global_position = pos
 	parent.add_child(patch)
 	patch._build_fire()
@@ -78,11 +88,16 @@ func _build_fire() -> void:
 
 func _setup_night_light() -> void:
 	## 夜间视界：火海本身就是光源。NightOverlay 存在时把火海注册成亮圈。
-	## 光圈半径=火海半径(px)+余量；NightOverlay 不存在（白天关卡）时零开销。
+	## 光圈半径 = 火海半径(px) + 余量（默认 88）；亮度倍率默认 1.35。
+	## 两个值由 ThrowableData.fire_light_* 逐投掷物注入 → 作者可在 .tres 里调。
+	## NightOverlay 不存在（白天关卡）时零开销。
 	var scene := get_tree().current_scene if get_tree() else null
 	var overlay := NightOverlay.find_in_scene(scene)
 	if overlay:
-		overlay.register_light(self, float(_radius) * 32.0 + 64.0)
+		overlay.register_light(
+			self,
+			float(_radius) * 32.0 + maxf(_night_light_extra_px, 0.0),
+			maxf(_night_light_intensity, 0.0))
 
 
 func _setup_ambient_sound() -> void:
