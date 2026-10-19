@@ -106,7 +106,7 @@ func _land() -> void:
 	if _authoritative and _td.flash_radius > 0:
 		_apply_flash()
 	if _td.fire_radius > 0:
-		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity)
+		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity, _td.fire_light_color, _td.fire_light_flicker, _td.fire_ember_amount)
 	queue_free()
 
 
@@ -120,7 +120,7 @@ func _apply_flash() -> void:
 				var dir: Vector2 = (e as Node2D).global_position - global_position
 				# 0 伤害 + 长硬直：走 take_damage 的 hitstun 通道（雷/氷同款），source_id=0 跳过去重
 				(e as Node2D).take_damage(0.0, 0.0, dir.normalized(), false, 0.0, _td.flash_stun_duration)
-	var overlay := NightOverlay.find_in_scene(get_tree().current_scene)
+	var overlay := NightOverlay.find_any(self)
 	if overlay:
 		overlay.flash(_td.flash_light_duration)
 	if _td.flash_screen_duration > 0.0:

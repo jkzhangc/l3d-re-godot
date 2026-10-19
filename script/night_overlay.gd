@@ -1,67 +1,169 @@
 class_name NightOverlay extends CanvasLayer
 
 ## ── 架构定位 ──
-## 系统：夜间视界 ｜ 层：表现（CanvasLayer）
+## 系统：夜间视界 ｜ 层：表现（CanvasLayer 5）
 ## 联机：表现层，各端自行渲染（不联网）
-## 职责：Night Hunter 夜间关卡的黑幕遮罩——全屏压暗，按注册光源在屏幕空间"挖亮"。
-##       提供光源注册 API（火海/燃烧瓶/起火点等 Node2D 动态光源）与闪光弹全局白闪。
-## 依赖：Director 按 DirectorConfig.night_darkness 创建/销毁；FirePatch / 投掷物注册光源。
+## 职责：Night Hunter 夜间关卡的黑幕 + 光照合成。三个部分：
+##   ① 光照缓冲（SubViewport）：每盏灯一个"可见性扇形"多边形 + 径向光晕贴图，加法累加；
+##   ② 黑幕：采样缓冲，按亮度挖掉黑暗；
+##   ③ 发光：采样缓冲做加法上色 + 色调映射。
+## 依赖：Director 按 DirectorConfig.night_darkness 创建/销毁；FirePatch / LightEmitter 注册光源。
+##
+## ── 参考（RGD Lighting / RGSS，作者 invwindy）──
+## 原工程正是"视口之间混合"：@viewport2 里用 light.png 挖黑暗，@viewport1 里用
+## light-illum.png 加法叠色，再对每帧的 light_rand 做低通滤波得到火苗抖动。
+## 这里同构搬到 Godot：SubViewport = 光照缓冲，两个全屏 ColorRect = 两次合成。
+## 径向曲线也不是拍脑袋 —— 见 GRADIENT_PROFILE，直接从原工程 light.png 量出来的。
 
-## 光源上限（shader uniform 数组定长；超出的忽略——同屏火源不会超过这个量级）
+const GROUP: StringName = &"night_overlay"
+## 上限只用于记录数量保护；缓冲里多画几个多边形本身不贵。
 const MAX_LIGHTS: int = 32
-const SHADER := "
-shader_type canvas_item;
-uniform float darkness : hint_range(0.0, 1.0) = 0.85;
-uniform float flash_strength : hint_range(0.0, 1.0) = 0.0;
-uniform int light_count = 0;
-// x,y = 屏幕坐标；z = 半径(px)；w = 亮度倍率（2026-10-19：火光可单独调亮，w>1 会把亮核撑大）
-uniform vec4 lights[32];
-void fragment() {
-	vec2 px = UV / SCREEN_PIXEL_SIZE;
-	float lit = 0.0;
-	for (int i = 0; i < light_count; i++) {
-		float d = distance(px, lights[i].xy);
-		float l = 1.0 - clamp(d / max(lights[i].z, 1.0), 0.0, 1.0);
-		l = l * l * (3.0 - 2.0 * l);  // smoothstep 软边
-		lit = max(lit, l * max(lights[i].w, 0.0));
-	}
-	float a = darkness * (1.0 - clamp(lit, 0.0, 1.0)) - flash_strength;
-	COLOR = vec4(0.015, 0.015, 0.04, clamp(a, 0.0, 1.0));
-}
-"
+
+## 层级（2026-10-19 用户实测修复）：夜晚黑幕必须**压在世界之上、所有 UI 之下**。
+## 旧值 80 会盖住 CombatHUD（layer 10）与触摸控件（layer 80）。
+## 5 = 世界(0) 之上，CombatHUD(10) / 色调(50) / 触摸(80) / 黑幕(90) / ED(95) / 菜单(100) 之下。
+## ⚠ 别改回 >=10：这是「滤镜只染世界、不染 UI」的唯一手段。
+const OVERLAY_LAYER: int = 5
+
+const SHADOW_SHADER := preload("res://shader/night_shadow.gdshader")
+const GLOW_SHADER := preload("res://shader/night_glow.gdshader")
+
+## 光被什么挡住：只对图块"角色层"（collision_layer bit0 = 1）做射线检测。
+## 墙体、桌椅都挂在这一层 —— 与原工程"建筑遮挡"同义。
+const OCCLUSION_MASK: int = 1
+## 可见性扇形射线数。160 条 = 2.25° 一条，墙角落差在 640×480 世界里够细。
+const RAY_COUNT: int = 160
+## 光照缓冲相对视口的分辨率。0.5 = 半分辨率，靠线性过滤天然得到柔和的影子边缘。
+const BUFFER_SCALE: float = 0.5
+const LIGHT_TEX_SIZE: int = 128
+
+## 原工程 light.png 的径向亮度实测值（半径比例 0%~100%，11 个采样点）。
+## 形状是"亮核 + 长尾"的高斯型，跟线性/平台曲线观感差别很大 —— 这是"过渡真实"的关键。
+const GRADIENT_PROFILE := [
+	0.958, 0.887, 0.791, 0.680, 0.559, 0.435, 0.314, 0.203, 0.106, 0.030, 0.0
+]
+
+## 闪烁节奏：对应原工程每 5 帧（60fps ≈ 0.083s）重掷一次 light_rand。
+const FLICKER_STEP: float = 0.083
+const FLICKER_TAU: float = 0.35
+## 闪烁时半径的呼吸比例（强度变化的百分比）。
+const FLICKER_RADIUS_RATIO: float = 0.35
+
+## 角色投影
+const SHADOW_ALPHA: float = 0.45
+const SHADOW_OFFSET: float = 9.0
+const SHADOW_MAX_ALPHA: float = 0.6
+
+static var _gradient_tex: ImageTexture = null
+
+
+## 单盏光源的运行时状态。flicker>0 时每 FLICKER_STEP 重掷 target，指数平滑逼近。
+class LightRecord:
+	var source: Node2D
+	var radius: float = 96.0          ## 屏幕像素（会按 zoom 折算成世界半径）
+	var intensity: float = 1.0
+	var color: Color = Color.WHITE
+	var flicker: float = 0.0
+	var occlude: bool = true
+	var cur: float = 0.0
+	var target: float = 0.0
+	var step_left: float = 0.0
+	var phase: float = 0.0
+	var value: float = 1.0
+	var poly: Polygon2D = null
+	var last_pos: Vector2 = Vector2(INF, INF)
+	var last_radius: float = -1.0
+	var settle_left: float = 0.6      ## 延迟重建：地图碰撞体可能比光源晚就绪
+	var exit_hook: Callable = Callable()
+
 
 var darkness: float = 0.85
+## 发光整体倍率。0 = 只挖黑暗不上色；1 = 原工程强度；0.4~0.6 比较克制。
+var glow_strength: float = 0.5
+
+var _sv: SubViewport
+var _root: Node2D
+var _tex: ViewportTexture
 var _rect: ColorRect
-var _mat: ShaderMaterial
-var _lights: Array[Node2D] = []
-var _light_radius: Dictionary = {}      ## Node2D → radius px
-var _light_intensity: Dictionary = {}   ## Node2D → 亮度倍率（1.0 = 原样）
+var _mat: ShaderMaterial          ## 黑幕材质（既有用例按此名读取）
+var _rect_glow: ColorRect
+var _mat_glow: ShaderMaterial
+var _add_mat: CanvasItemMaterial
+var _records: Array = []
+var _shadow_cache: Dictionary = {}   ## 角色 Node2D → 影子 Sprite2D
+## 参与投影的节点组。正式关卡用 player/enemy；试验场可追加自己的假人组。
+var shadow_groups: Array[StringName] = [&"player", &"enemy"]
+var _time: float = 0.0
+var _glow_enabled: bool = true
 var _flash_left: float = 0.0
 var _flash_total: float = 0.0
 var _flash_strength: float = 0.0
 
 
-## 层级（2026-10-19 用户实测修复）：夜晚黑幕必须**压在世界之上、所有 UI 之下**。
-## 旧值 80 会盖住 CombatHUD（layer 10）与触摸控件（layer 80）—— 玩家在夜里看不见血条/
-## 弹药/倒计时，手机端连虚拟按键都被压暗。现在取 5：世界画布(0) 之上，
-## CombatHUD(10) / 画面色调(50) / 触摸(80→菜单态 110) / 黑幕(90) / ED(95) / 菜单(100) 之下。
-## ⚠ 别改回 >=10：这是「滤镜只染世界、不染 UI」的唯一手段（本 shader 不采样屏幕，
-##   只能靠 CanvasLayer.layer 排序，见 screen_tone 的对照说明）。
-const OVERLAY_LAYER: int = 5
-
-
 func _ready() -> void:
 	layer = OVERLAY_LAYER
-	_rect = ColorRect.new()
-	_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_mat = ShaderMaterial.new()
-	var sh := Shader.new()
-	sh.code = SHADER
-	_mat.shader = sh
+	add_to_group(GROUP)
+	_build_light_buffer()
+	_rect = _make_rect()
+	_mat = _make_material(SHADOW_SHADER)
 	_rect.material = _mat
 	add_child(_rect)
+	# 加法 pass 必须晚于黑幕绘制（同一 CanvasLayer 内按子节点顺序）。
+	_rect_glow = _make_rect()
+	_mat_glow = _make_material(GLOW_SHADER)
+	_rect_glow.material = _mat_glow
+	add_child(_rect_glow)
+	if _tex:
+		_mat.set_shader_parameter("light_tex", _tex)
+		_mat_glow.set_shader_parameter("light_tex", _tex)
 	set_darkness(darkness)
+	set_glow_strength(glow_strength)
+	var vp := get_viewport()
+	if vp and not vp.size_changed.is_connected(_sync_size):
+		vp.size_changed.connect(_sync_size)
+
+
+## 光照缓冲：一个透明的 SubViewport，里面只有"灯光多边形"。
+func _build_light_buffer() -> void:
+	_sv = SubViewport.new()
+	_sv.name = "LightBuffer"
+	_sv.transparent_bg = true
+	_sv.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_sv.disable_3d = true
+	_sv.msaa_2d = Viewport.MSAA_DISABLED
+	_sv.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_LINEAR
+	# HDR：允许 rgb > 1，发光那一步才能做漂亮的指数色调映射（不爆白）。
+	if "use_hdr_2d" in _sv:
+		_sv.use_hdr_2d = true
+	add_child(_sv)
+	_root = Node2D.new()
+	_root.name = "Lights"
+	_sv.add_child(_root)
+	_sync_size()
+	_tex = _sv.get_texture()
+	_add_mat = CanvasItemMaterial.new()
+	_add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+
+
+func _sync_size() -> void:
+	var vp := get_viewport()
+	if vp == null or _sv == null:
+		return
+	var s: Vector2 = vp.get_visible_rect().size * BUFFER_SCALE
+	_sv.size = Vector2i(maxi(int(s.x), 8), maxi(int(s.y), 8))
+
+
+func _make_rect() -> ColorRect:
+	var r := ColorRect.new()
+	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return r
+
+
+func _make_material(sh: Shader) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	return m
 
 
 func set_darkness(value: float) -> void:
@@ -70,25 +172,65 @@ func set_darkness(value: float) -> void:
 		_mat.set_shader_parameter("darkness", darkness)
 
 
-## 注册动态光源（source 在退出场景树时自动注销）。
-## radius_px: 屏幕像素亮圈半径；zoom=2x 视口下 1 世界像素 = 1 屏幕像素（CanvasLayer 无缩放）。
-## intensity: 亮度倍率（2026-10-19 用户需求「火光再亮一些」）。1.0 = 原样；
-##   >1 会把亮核撑大（`lit` 提前到达 1），观感是"更亮 + 范围更实"。
-##   燃烧瓶的这两个值都由 ThrowableData 的 fire_light_* 暴露给作者调。
-func register_light(source: Node2D, radius_px: float, intensity: float = 1.0) -> void:
+## 发光整体倍率：0 = 关闭加法上色，1 = 原工程强度。
+func set_glow_strength(value: float) -> void:
+	glow_strength = maxf(value, 0.0)
+	_glow_enabled = glow_strength > 0.0
+	if _mat_glow:
+		_mat_glow.set_shader_parameter("glow_strength", glow_strength)
+	if _rect_glow:
+		_rect_glow.visible = _glow_enabled
+
+
+## 注册动态光源（source 退出场景树时自动注销）。对同一 source 再调 = 更新参数。
+## radius_px: 屏幕像素亮圈半径（会按当前 zoom 折算成世界半径）。
+## intensity:  亮度。1.0 ≈ 完全点亮中心；0.6~0.8 更接近原工程的克制感。
+## color:      光色（加法发光）。火 ≈ Color(1.0, 0.52, 0.22)。
+## flicker:    闪烁幅度（0 = 稳定；0.25 火苗；>0.5 故障灯）。
+## occlude:    true = 被墙体/家具遮挡（原工程"建筑遮挡"）。
+func register_light(source: Node2D, radius_px: float, intensity: float = 1.0,
+		color: Color = Color.WHITE, flicker: float = 0.0, occlude: bool = true) -> void:
 	if source == null:
 		return
-	if not _lights.has(source):
-		_lights.append(source)
-		source.tree_exiting.connect(unregister_light.bind(source))
-	_light_radius[source] = maxf(radius_px, 16.0)
-	_light_intensity[source] = maxf(intensity, 0.0)
+	var rec: LightRecord = null
+	for r: LightRecord in _records:
+		if r.source == source:
+			rec = r
+			break
+	if rec == null:
+		if _records.size() >= MAX_LIGHTS:
+			return
+		rec = LightRecord.new()
+		rec.source = source
+		rec.phase = randf() * TAU
+		rec.step_left = randf() * FLICKER_STEP
+		rec.exit_hook = unregister_light.bind(source)
+		source.tree_exiting.connect(rec.exit_hook)
+		_records.append(rec)
+	rec.radius = maxf(radius_px, 8.0)
+	rec.intensity = maxf(intensity, 0.0)
+	rec.color = color
+	rec.flicker = clampf(flicker, 0.0, 1.0)
+	rec.occlude = occlude
+	rec.last_pos = Vector2(INF, INF)      ## 参数变了 → 下一帧重建
+	rec.settle_left = 0.6
 
 
 func unregister_light(source: Node2D) -> void:
-	_lights.erase(source)
-	_light_radius.erase(source)
-	_light_intensity.erase(source)
+	for i: int in range(_records.size() - 1, -1, -1):
+		var rec: LightRecord = _records[i]
+		if rec.source == source:
+			if is_instance_valid(source) and rec.exit_hook.is_valid() \
+					and source.tree_exiting.is_connected(rec.exit_hook):
+				source.tree_exiting.disconnect(rec.exit_hook)
+			_drop_poly(rec)
+			_records.remove_at(i)
+
+
+func _drop_poly(rec: LightRecord) -> void:
+	if rec.poly != null and is_instance_valid(rec.poly):
+		rec.poly.queue_free()
+	rec.poly = null
 
 
 ## 闪光弹白闪：短暂把黑幕整体压向透明（夜间视界下"照亮全场"）。
@@ -101,33 +243,252 @@ func flash(duration: float, strength: float = 0.95) -> void:
 func _process(delta: float) -> void:
 	if _mat == null:
 		return
-	# ── 光源uniform刷新（世界→屏幕坐标）──
+	_time += delta
 	var xform := get_viewport().get_canvas_transform()
-	var count: int = 0
-	var arr := PackedVector4Array()
-	for s: Node2D in _lights:
-		if not is_instance_valid(s) or not s.is_inside_tree():
+	var zoom: float = maxf(xform.get_scale().x, 0.001)
+	# 世界坐标 → 缓冲像素：先套主画布变换，再整体缩到缓冲分辨率。
+	var buffer_scale := Transform2D(0.0, Vector2(BUFFER_SCALE, BUFFER_SCALE), 0.0, Vector2.ZERO)
+	_root.transform = buffer_scale * xform
+	_refresh_lights(delta, zoom)
+	_update_character_shadows(zoom)
+	_update_flash(delta)
+
+
+func _refresh_lights(delta: float, zoom: float) -> void:
+	var live: Array = []
+	for rec: LightRecord in _records:
+		if not is_instance_valid(rec.source) or not rec.source.is_inside_tree():
+			_drop_poly(rec)
 			continue
-		if count >= MAX_LIGHTS:
-			break
-		var sp: Vector2 = xform * s.global_position
-		arr.append(Vector4(sp.x, sp.y, _light_radius.get(s, 96.0), _light_intensity.get(s, 1.0)))
-		count += 1
-	_mat.set_shader_parameter("light_count", count)
-	_mat.set_shader_parameter("lights", arr)
-	# ── 闪光衰减：前 30% 保持近全亮（闪光致盲的"白感"），之后 smoothstep 平滑渐暗——
-	# 曲线两端斜率趋 0，开始变暗和归零都不会跳变（2026-09-16 用户反馈：要慢慢变回）。
+		live.append(rec)
+		_advance_flicker(rec, delta)
+		var pos: Vector2 = rec.source.global_position
+		var world_radius: float = maxf(rec.radius / zoom, 8.0)
+		if rec.poly == null or pos.distance_to(rec.last_pos) > 3.0 \
+				or absf(world_radius - rec.last_radius) > 1.5:
+			_rebuild_poly(rec, pos, world_radius)
+		elif rec.occlude and rec.settle_left > 0.0:
+			# 地图碰撞体可能比光源晚一帧就绪：延迟补一次重建，避免"光穿墙"的假象。
+			rec.settle_left -= delta
+			if rec.settle_left <= 0.0:
+				_rebuild_poly(rec, pos, world_radius)
+		var e: float = rec.intensity * rec.value
+		rec.poly.color = Color(rec.color.r * e, rec.color.g * e, rec.color.b * e, 1.0)
+		rec.poly.visible = e > 0.001
+	_records = live
+
+
+## 重建可见性扇形 → 多边形顶点 + UV（UV 让光晕贴图正好铺满以光源为心、半径 R 的方框）。
+func _rebuild_poly(rec: LightRecord, pos: Vector2, world_radius: float) -> void:
+	if rec.poly == null or not is_instance_valid(rec.poly):
+		rec.poly = Polygon2D.new()
+		rec.poly.name = "Light%d" % _root.get_child_count()
+		rec.poly.texture = _gradient_texture()
+		rec.poly.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		rec.poly.material = _add_mat
+		_root.add_child(rec.poly)
+	var fan: PackedVector2Array = _cast_fan(pos, world_radius, rec.occlude)
+	var pts := PackedVector2Array()
+	var uvs := PackedVector2Array()
+	pts.resize(fan.size())
+	uvs.resize(fan.size())
+	var inv: float = 1.0 / (2.0 * world_radius)
+	for i: int in fan.size():
+		var rel: Vector2 = fan[i] - pos
+		pts[i] = rel
+		# ⚠ Polygon2D.uv 是**贴图像素坐标**，不是 0~1 归一化（2026-10-19 实测：
+		# 传归一化值会让整个多边形采样到贴图左上角 alpha=0 → 灯完全不亮）。
+		uvs[i] = (rel * inv + Vector2(0.5, 0.5)) * float(LIGHT_TEX_SIZE)
+	rec.poly.position = pos
+	rec.poly.polygon = pts
+	rec.poly.uv = uvs
+	rec.last_pos = pos
+	rec.last_radius = world_radius
+
+
+## 在半径内做一圈射线，被图块挡住的点回退到碰撞面前 → 扇形即为"可见范围"。
+## occlusion = false 时返回整圆（白天/无遮挡需求的光源零成本）。
+func _cast_fan(center: Vector2, radius: float, occlusion: bool) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	pts.resize(RAY_COUNT)
+	if not occlusion:
+		for i: int in RAY_COUNT:
+			var a: float = TAU * float(i) / float(RAY_COUNT)
+			pts[i] = center + Vector2(cos(a), sin(a)) * radius
+		return pts
+	var vp := get_viewport()
+	var space: PhysicsDirectSpaceState2D = vp.world_2d.direct_space_state if vp else null
+	if space == null:
+		for i: int in RAY_COUNT:
+			var a0: float = TAU * float(i) / float(RAY_COUNT)
+			pts[i] = center + Vector2(cos(a0), sin(a0)) * radius
+		return pts
+	var q := PhysicsRayQueryParameters2D.create(center, center, OCCLUSION_MASK)
+	q.collide_with_areas = false
+	for i: int in RAY_COUNT:
+		var a: float = TAU * float(i) / float(RAY_COUNT)
+		var dir := Vector2(cos(a), sin(a))
+		q.from = center
+		q.to = center + dir * radius
+		var hit: Dictionary = space.intersect_ray(q)
+		if hit.is_empty():
+			pts[i] = q.to
+		else:
+			var hp: Vector2 = hit["position"]
+			var d: float = hp.distance_to(center)
+			# 贴墙的灯：命中点几乎重合时按整半径处理，否则会缩成一个黑点。
+			pts[i] = center + dir * maxf(d - 1.5, radius * 0.02)
+	return pts
+
+
+## 角色投影：找身边最强的灯，把角色剪影作为自己的子节点放到背光侧
+## （show_behind_parent → 与角色同一排序槽位，且不会掉到地面图块下面）。
+func _update_character_shadows(zoom: float) -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	if _records.is_empty():
+		_hide_all_shadows()
+		return
+	for group: StringName in shadow_groups:
+		for n: Node in tree.get_nodes_in_group(group):
+			if not (n is Node2D):
+				continue
+			var node := n as Node2D
+			if node.get("_is_dead") == true or node.get("_is_dying") == true:
+				_hide_shadow(node)
+				continue
+			var best: float = 0.0
+			var best_dir := Vector2.ZERO
+			for rec: LightRecord in _records:
+				if rec.intensity <= 0.0 or not is_instance_valid(rec.source):
+					continue
+				var wr: float = rec.radius / zoom
+				var delta: Vector2 = node.global_position - rec.source.global_position
+				var d: float = delta.length()
+				if d > wr * 1.05 or d < 0.001:
+					continue
+				var strength: float = (1.0 - d / (wr * 1.05)) * rec.intensity * rec.value
+				if strength > best:
+					best = strength
+					best_dir = delta / d
+			_set_shadow(node, best_dir, best)
+
+
+func _shadow_for(node: Node2D) -> Sprite2D:
+	var cached: Variant = _shadow_cache.get(node)
+	if cached is Sprite2D and is_instance_valid(cached):
+		return cached as Sprite2D
+	var sh := Sprite2D.new()
+	sh.name = "NightShadow"
+	sh.centered = true
+	# show_behind_parent：画在角色自身之前，但仍在同一个 y-sort 槽位。
+	sh.show_behind_parent = true
+	sh.z_index = 0
+	sh.z_as_relative = true
+	node.add_child(sh)
+	_shadow_cache[node] = sh
+	return sh
+
+
+func _set_shadow(node: Node2D, dir: Vector2, strength: float) -> void:
+	if strength <= 0.03:
+		_hide_shadow(node)
+		return
+	# 角色脚本一般有 `sprite` 属性；没有的话退回找名为 Sprite2D 的子节点（试验场假人）。
+	var spr: Variant = node.get("sprite")
+	if not (spr is Sprite2D):
+		spr = node.get_node_or_null("Sprite2D")
+	if not (spr is Sprite2D) or (spr as Sprite2D).texture == null:
+		_hide_shadow(node)
+		return
+	var s := spr as Sprite2D
+	var sh := _shadow_for(node)
+	sh.texture = s.texture
+	sh.region_enabled = s.region_enabled
+	sh.region_rect = s.region_rect
+	sh.flip_h = s.flip_h
+	# 压扁模拟"贴地投影"，同时把脚底钉住（居中精灵压扁会整体上浮）。
+	var squash: float = 0.6
+	var drop: float = s.region_rect.size.y * (1.0 - squash) * 0.5 * s.scale.y
+	sh.scale = Vector2(s.scale.x, s.scale.y * squash)
+	sh.position = s.position + dir * SHADOW_OFFSET + Vector2(0.0, drop)
+	sh.modulate = Color(0.0, 0.0, 0.0, clampf(SHADOW_ALPHA * strength, 0.0, SHADOW_MAX_ALPHA))
+	sh.visible = true
+
+
+func _hide_shadow(node: Node2D) -> void:
+	var cached: Variant = _shadow_cache.get(node)
+	if cached is Sprite2D and is_instance_valid(cached):
+		(cached as Sprite2D).visible = false
+
+
+func _hide_all_shadows() -> void:
+	for key: Variant in _shadow_cache.keys():
+		var v: Variant = _shadow_cache[key]
+		if is_instance_valid(v):
+			(v as Sprite2D).visible = false
+		else:
+			_shadow_cache.erase(key)
+
+
+func _update_flash(delta: float) -> void:
+	# 前 30% 保持近全亮（闪光致盲的"白感"），之后 smoothstep 平滑渐暗。
 	var f: float = 0.0
 	if _flash_left > 0.0:
 		_flash_left = maxf(0.0, _flash_left - delta)
-		var t: float = 1.0 - _flash_left / maxf(_flash_total, 0.001)  ## 0→1 衰减进度
+		var t: float = 1.0 - _flash_left / maxf(_flash_total, 0.001)
 		var k: float = clampf((t - 0.3) / 0.7, 0.0, 1.0)
 		f = _flash_strength * (1.0 - k * k * (3.0 - 2.0 * k))
 	_mat.set_shader_parameter("flash_strength", f)
-	# 闪光完全结束后复位强度
 	if _flash_left <= 0.0 and _flash_strength != 0.0:
 		_flash_strength = 0.0
 		_mat.set_shader_parameter("flash_strength", 0.0)
+
+
+## 闪烁推进：随机游走（低频）+ 正弦抖动（高频），两者都乘 flicker 幅度。
+func _advance_flicker(rec: LightRecord, delta: float) -> void:
+	if rec.flicker <= 0.0:
+		rec.value = 1.0
+		rec.cur = 0.0
+		rec.target = 0.0
+		return
+	rec.step_left -= delta
+	if rec.step_left <= 0.0:
+		rec.step_left = FLICKER_STEP * randf_range(0.75, 1.35)
+		rec.target = randf_range(-1.0, 1.0)
+	var k: float = 1.0 - exp(-delta / FLICKER_TAU)
+	rec.cur = lerpf(rec.cur, rec.target, k)
+	var fast: float = sin(_time * 7.5 + rec.phase) * 0.22 + sin(_time * 17.0 + rec.phase * 2.3) * 0.1
+	rec.value = maxf(0.0, 1.0 + rec.flicker * (rec.cur * 0.8 + fast))
+
+
+## 光晕贴图：按原工程 light.png 的实测曲线生成（白色 + alpha 衰减），所有光源共用。
+func _gradient_texture() -> ImageTexture:
+	if _gradient_tex != null:
+		return _gradient_tex
+	var img := Image.create(LIGHT_TEX_SIZE, LIGHT_TEX_SIZE, false, Image.FORMAT_RGBA8)
+	var c: float = float(LIGHT_TEX_SIZE) * 0.5
+	for y: int in LIGHT_TEX_SIZE:
+		for x: int in LIGHT_TEX_SIZE:
+			var d: float = Vector2(x - c + 0.5, y - c + 0.5).length() / c
+			img.set_pixel(x, y, Color(1.0, 1.0, 1.0, _profile(d)))
+	_gradient_tex = ImageTexture.create_from_image(img)
+	return _gradient_tex
+
+
+## 线性插值取 GRADIENT_PROFILE；半径外为 0。
+func _profile(t: float) -> float:
+	if t >= 1.0:
+		return 0.0
+	if t <= 0.0:
+		return GRADIENT_PROFILE[0]
+	var f: float = t * 10.0
+	var i: int = int(f)
+	var frac: float = f - float(i)
+	var a: float = GRADIENT_PROFILE[i]
+	var b: float = GRADIENT_PROFILE[mini(i + 1, GRADIENT_PROFILE.size() - 1)]
+	return lerpf(a, b, frac)
 
 
 ## ── 场景级工具：在 current_scene 下查找/创建/移除 NightOverlay ──
@@ -139,6 +500,18 @@ static func find_in_scene(scene: Node) -> NightOverlay:
 		if child is NightOverlay:
 			return child
 	return null
+
+
+## 任意节点找本图的遮罩：先按组（试验场 / 单元测试里 current_scene 可能不是地图根），
+## 再退回 current_scene 的直接子节点。找不到返回 null（白天关卡）。
+static func find_any(node: Node) -> NightOverlay:
+	if node == null or not node.is_inside_tree():
+		return null
+	var tree: SceneTree = node.get_tree()
+	var by_group: Node = tree.get_first_node_in_group(GROUP)
+	if by_group is NightOverlay:
+		return by_group as NightOverlay
+	return find_in_scene(tree.current_scene)
 
 
 ## 按 darkness 值同步 overlay 存在性：<=0 移除，>0 创建并设置。

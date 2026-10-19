@@ -18,11 +18,18 @@ const DIRECTIONS: int = 4
 const FRAME_DURATION: float = 0.1   ## 火精灵动画帧间隔
 const STEP_FRAMES: int = 3          ## 每个方向的踏步帧数（VX Ace 3 列）
 const TOTAL_FRAMES: int = STEP_FRAMES * DIRECTIONS  ## 4方向 × 3帧 = 12 帧完整动画
-## 夜间视界默认值（2026-10-19 用户实测「照亮范围和亮度都不够」）：
+## 夜间视界默认值（2026-10-19 用户实测「照亮范围和亮度都不够」→ 又反馈「太亮」）：
 ## 光圈半径 = 火海半径(px) + EXTRA；旧实现硬编码 +64 → 现 +88（+24px）。
+## 亮度 1.0 = 中心刚好完全点亮，超过 1 只会扩大亮核（2026-10-19 换缓冲管线后）。
 ## 两个值都可被 ThrowableData 的 fire_light_* 逐投掷物覆盖。
 const NIGHT_LIGHT_EXTRA_PX: float = 88.0
-const NIGHT_LIGHT_INTENSITY: float = 1.35
+const NIGHT_LIGHT_INTENSITY: float = 1.0
+## 火光颜色（加法发光）：暖橙，参考 RGD Lighting 的 torch = [250,126,100]。
+const FIRE_LIGHT_COLOR := Color(1.0, 0.52, 0.22)
+## 火光闪烁幅度（0.26 ≈ 火苗明暗跳动 + 半径轻微呼吸）。
+const FIRE_LIGHT_FLICKER: float = 0.26
+## 火海运炭粒子数量（0 = 不起粒子）。
+const FIRE_EMBER_AMOUNT: int = 10
 
 var _radius: int = 1
 var _duration: float = 5.0
@@ -42,10 +49,13 @@ var _source_is_player_origin: bool = true
 ## 夜间视界光源参数（ThrowableData 注入；默认 = 本文件常量）
 var _night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX
 var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
+var _night_light_color: Color = FIRE_LIGHT_COLOR
+var _night_light_flicker: float = FIRE_LIGHT_FLICKER
+var _ember_amount: int = FIRE_EMBER_AMOUNT
 const HitResolver := preload("res://script/hit_resolver.gd")
 
 
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY) -> void:
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY, night_light_color: Color = FIRE_LIGHT_COLOR, night_light_flicker: float = FIRE_LIGHT_FLICKER, ember_amount: int = FIRE_EMBER_AMOUNT) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -59,6 +69,9 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._source_is_player_origin = HitResolver.is_player(source_owner) if is_instance_valid(source_owner) else source_is_player_origin
 	patch._night_light_extra_px = night_light_extra_px
 	patch._night_light_intensity = night_light_intensity
+	patch._night_light_color = night_light_color
+	patch._night_light_flicker = night_light_flicker
+	patch._ember_amount = ember_amount
 	patch.global_position = pos
 	parent.add_child(patch)
 	patch._build_fire()
@@ -83,21 +96,42 @@ func _build_fire() -> void:
 			_fire_sprites.append(s)
 
 	_setup_ambient_sound()
+	_setup_embers()
 	_setup_night_light()
 
 
+## 火星：从火海里往上飘的余烬（纯表现，各端各自播）。
+## 数量由 ThrowableData.fire_ember_amount 控制，0 = 不起。
+func _setup_embers() -> void:
+	if _ember_amount <= 0:
+		return
+	var embers := EmberParticles.new()
+	embers.name = "Embers"
+	embers.particle_count = _ember_amount
+	embers.start_color = _night_light_color.lightened(0.18)
+	embers.end_color = Color(0.9, 0.2, 0.05, 0.0)
+	embers.size_px = 2.6
+	embers.particle_lifetime = 1.15
+	embers.rise_speed = 42.0
+	embers.emit_radius = float(_radius) * 32.0 * 0.62
+	embers.z_index = 5
+	add_child(embers)
+
+
 func _setup_night_light() -> void:
-	## 夜间视界：火海本身就是光源。NightOverlay 存在时把火海注册成亮圈。
-	## 光圈半径 = 火海半径(px) + 余量（默认 88）；亮度倍率默认 1.35。
-	## 两个值由 ThrowableData.fire_light_* 逐投掷物注入 → 作者可在 .tres 里调。
+	## 夜间视界：火海本身就是光源。NightOverlay 存在时把火海注册成暖橙亮圈。
+	## 光圈半径 = 火海半径(px) + 余量（默认 88）；亮度倍率 / 颜色 / 闪烁都由
+	## ThrowableData.fire_light_* 逐投掷物注入。
+	## 用 find_any 而不是 find_in_scene：试验场/自定义场景里遮罩不一定挂在 current_scene 下。
 	## NightOverlay 不存在（白天关卡）时零开销。
-	var scene := get_tree().current_scene if get_tree() else null
-	var overlay := NightOverlay.find_in_scene(scene)
+	var overlay := NightOverlay.find_any(self)
 	if overlay:
 		overlay.register_light(
 			self,
 			float(_radius) * 32.0 + maxf(_night_light_extra_px, 0.0),
-			maxf(_night_light_intensity, 0.0))
+			maxf(_night_light_intensity, 0.0),
+			_night_light_color,
+			_night_light_flicker)
 
 
 func _setup_ambient_sound() -> void:

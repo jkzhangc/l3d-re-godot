@@ -1,0 +1,76 @@
+[gd_scene format=3 uid="uid://0d6v66iwi8nx"]
+
+[ext_resource type="Script" uid="uid://dewlto1tshh66" path="res://script/fx/light_lab.gd" id="1_lab"]
+[ext_resource type="Script" uid="uid://b8udnx3eyss6u" path="res://script/night_overlay.gd" id="2_night"]
+[ext_resource type="Script" uid="uid://cbcmumw4yim7d" path="res://script/fx/light_emitter.gd" id="3_light"]
+[ext_resource type="Texture2D" uid="uid://dsmgfx2at3vf6" path="res://art/Characters/のび太セット.png" id="4_dummy"]
+
+[node name="LightLab" type="Node2D" unique_id=1562653784]
+script = ExtResource("1_lab")
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1289887182]
+position = Vector2(320, 240)
+zoom = Vector2(2, 2)
+
+[node name="NightOverlay" type="CanvasLayer" parent="."]
+layer = 5
+script = ExtResource("2_night")
+darkness = 0.9
+glow_strength = 0.5
+
+[node name="Torch" type="Node2D" parent="." unique_id=1601042816]
+position = Vector2(110, 150)
+script = ExtResource("3_light")
+radius = 320.0
+intensity = 1.0
+light_color = Color(1, 0.5, 0.2, 1)
+flicker = 0.26
+occlude = true
+embers_enabled = true
+ember_amount = 16
+ember_color = Color(1, 0.7, 0.28, 1)
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Lamp" type="Node2D" parent="." unique_id=1773345731]
+position = Vector2(520, 120)
+script = ExtResource("3_light")
+radius = 360.0
+intensity = 0.7
+light_color = Color(1, 0.96, 0.86, 1)
+flicker = 0.03
+occlude = true
+
+[node name="CoolLight" type="Node2D" parent="." unique_id=1921672210]
+position = Vector2(330, 390)
+script = ExtResource("3_light")
+radius = 300.0
+intensity = 0.85
+light_color = Color(0.52, 0.72, 1, 1)
+flicker = 0.08
+occlude = true
+embers_enabled = true
+ember_amount = 10
+ember_color = Color(0.6, 0.8, 1, 1)
+ember_lifetime = 1.8
+ember_speed = 26.0
+ember_radius = 10.0
+
+[node name="PulseLight" type="Node2D" parent="." unique_id=1109033207]
+position = Vector2(560, 390)
+script = ExtResource("3_light")
+radius = 260.0
+intensity = 0.95
+light_color = Color(1, 0.28, 0.22, 1)
+flicker = 0.7
+occlude = true
+
+[node name="Dummy" type="Node2D" parent="." groups=["lab_dummy"]]
+position = Vector2(392, 396)
+
+[node name="Sprite2D" type="Sprite2D" parent="Dummy"]
+position = Vector2(0, -16)
+z_index = 1
+texture = ExtResource("4_dummy")
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 64)

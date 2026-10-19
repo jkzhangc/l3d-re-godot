@@ -50,9 +50,15 @@ class_name ThrowableData extends ItemData
 ## 夜间视界：光圈半径 = 火海半径(px) + 本余量（px）。
 ## 2026-10-19 用户实测「燃烧瓶照亮的范围不够大」→ 默认 88（旧实现硬编码 64，+24px）。
 @export var fire_light_extra_px: float = 88.0
-## 夜间视界：火光亮度倍率。1.0 = 原样；>1 会让亮核更大（观感更亮）。
-## 2026-10-19 用户需求：默认 1.35，可在此逐投掷物调。
-@export_range(0.2, 3.0, 0.05) var fire_light_intensity: float = 1.35
+## 夜间视界：火光亮度倍率。1.0 = 中心完全点亮；>1 只会扩大亮核。
+## 2026-10-19 先按「太亮」反馈从 1.35 降到 1.0，可在此逐投掷物调。
+@export_range(0.2, 3.0, 0.05) var fire_light_intensity: float = 1.0
+## 夜间视界：火光颜色（加法发光）。默认暖橙；想要青火/鬼火就改这里。
+@export var fire_light_color: Color = Color(1.0, 0.52, 0.22)
+## 夜间视界：火光闪烁幅度（0=稳定，0.26≈火苗跳动，>0.6 会变成故障灯）。
+@export_range(0.0, 1.0, 0.01) var fire_light_flicker: float = 0.26
+## 火海运炭粒子数量（0 = 不起粒子）。纯表现，各端各自播。
+@export_range(0, 40, 1) var fire_ember_amount: int = 10
 
 @export_group("音效")
 @export var throw_sound: AudioStream = null
