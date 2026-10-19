@@ -38,8 +38,17 @@ var _flash_total: float = 0.0
 var _flash_strength: float = 0.0
 
 
+## 层级（2026-10-19 用户实测修复）：夜晚黑幕必须**压在世界之上、所有 UI 之下**。
+## 旧值 80 会盖住 CombatHUD（layer 10）与触摸控件（layer 80）—— 玩家在夜里看不见血条/
+## 弹药/倒计时，手机端连虚拟按键都被压暗。现在取 5：世界画布(0) 之上，
+## CombatHUD(10) / 画面色调(50) / 触摸(80→菜单态 110) / 黑幕(90) / ED(95) / 菜单(100) 之下。
+## ⚠ 别改回 >=10：这是「滤镜只染世界、不染 UI」的唯一手段（本 shader 不采样屏幕，
+##   只能靠 CanvasLayer.layer 排序，见 screen_tone 的对照说明）。
+const OVERLAY_LAYER: int = 5
+
+
 func _ready() -> void:
-	layer = 80   ## 单位层之上、黑幕(90)/ED名单(95)/章节总结(100)之下
+	layer = OVERLAY_LAYER
 	_rect = ColorRect.new()
 	_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE

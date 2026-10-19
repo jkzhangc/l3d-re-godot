@@ -42,6 +42,10 @@
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="40_qtngj"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="41_f2h8c"]
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
+[ext_resource type="Resource" path="res://tres/specials/ネメシス.tres" id="92_nemesis"]
+[ext_resource type="Resource" path="res://tres/specials/バイオゲラス.tres" id="93_biogeras"]
+[ext_resource type="Resource" path="res://tres/specials/ブラックタイガー.tres" id="94_tiger"]
+[ext_resource type="Resource" path="res://tres/specials/ティンダロス.tres" id="95_tindalos"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="po_bowgun"]
 [ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="po_enemy_drop"]
@@ -312,7 +316,7 @@ front_target_ahead = 9
 front_batch = 2
 front_max_dist = 640.0
 zombie_pool = Array[ExtResource("22_fip0u")]([ExtResource("23_ofivu"), ExtResource("24_u4r11"), ExtResource("25_bf637"), ExtResource("26_bnwod"), ExtResource("27_ofivu")])
-special_pool = Array[ExtResource("29_8ufbj")]([ExtResource("30_ewla6"), ExtResource("31_kbwfp"), ExtResource("32_sa5qe"), ExtResource("90_90_gm"), ExtResource("91_demos")])
+special_pool = Array[ExtResource("29_8ufbj")]([ExtResource("30_ewla6"), ExtResource("31_kbwfp"), ExtResource("32_sa5qe"), ExtResource("90_90_gm"), ExtResource("91_demos"), ExtResource("92_nemesis"), ExtResource("93_biogeras"), ExtResource("94_tiger"), ExtResource("95_tindalos")])
 special_max_alive = 2
 tank_enabled = true
 tank_data = ExtResource("28_u4r11")

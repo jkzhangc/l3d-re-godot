@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://cj6ronrk1ci3v" path="res://art/Characters/ネメシス１.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://b2tex3v4qbavc" path="res://sound/SDK2死ボス2.ogg" id="3"]
+
+[resource]
+script = ExtResource("1")
+id = &"nemesis"
+weight = 0.2
+boss_tier = true
+instant_kill_immune = true
+texture = ExtResource("2")
+walk_char_index = 0
+attack_char_sequence = Array[int]([1, 2, 3])
+attack_frame_durations = Array[float]([0.12, 0.12, 0.16])
+hit_at_sequence_idx = 1
+death_char_index = 4
+max_hp = 2600.0
+move_speed = 165.0
+attack_damage = 55.0
+attack_range = Vector2(130, 70)
+attack_hit_range = Vector2(130, 70)
+attack_cooldown_frames = 100
+vision_range = 900.0
+hurtbox_size = Vector2(36, 54)
+hurtbox_offset = Vector2(0, -14)
+death_sound = ExtResource("3")

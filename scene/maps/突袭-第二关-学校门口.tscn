@@ -40,6 +40,10 @@
 [ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="po_lthunder"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="34_x5jg0"]
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
+[ext_resource type="Resource" path="res://tres/specials/ネメシス.tres" id="92_nemesis"]
+[ext_resource type="Resource" path="res://tres/specials/バイオゲラス.tres" id="93_biogeras"]
+[ext_resource type="Resource" path="res://tres/specials/ブラックタイガー.tres" id="94_tiger"]
+[ext_resource type="Resource" path="res://tres/specials/ティンダロス.tres" id="95_tindalos"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 
 [sub_resource type="Resource" id="Resource_21b8x"]
@@ -111,7 +115,7 @@ scatter_interval_min = 22.0
 scatter_interval_max = 36.0
 horde_total_max = 20
 zombie_pool = Array[ExtResource("11_7ot67")]([ExtResource("12_fstvt"), ExtResource("13_h3ljj"), ExtResource("14_kfi8g"), ExtResource("15_wsc62"), ExtResource("16_fstvt")])
-special_pool = Array[ExtResource("17_gu674")]([ExtResource("18_sjh6m"), ExtResource("19_oqsjd"), ExtResource("20_x5jg0"), ExtResource("90_90_gm"), ExtResource("91_demos")])
+special_pool = Array[ExtResource("17_gu674")]([ExtResource("18_sjh6m"), ExtResource("19_oqsjd"), ExtResource("20_x5jg0"), ExtResource("90_90_gm"), ExtResource("91_demos"), ExtResource("92_nemesis"), ExtResource("93_biogeras"), ExtResource("94_tiger"), ExtResource("95_tindalos")])
 special_max_alive = 3
 drop_pool = SubResource("Resource_21b8x")
 enemy_drop_pool = ExtResource("po_enemy_drop")

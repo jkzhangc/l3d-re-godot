@@ -989,6 +989,15 @@ func spawn_special_enemy(pos: Vector2, data: SpecialEnemyData, decor_layer: Node
 	decor_layer.add_child(enemy)
 	# 入树后再进组：同屏互斥计数（_update_specials）依赖本组。
 	enemy.add_to_group("special_enemies")
+	## ★Boss 级特感（ネメシス / バイオゲラス / ブラックタイガー，2026-10-19）：
+	## 与タイラント同级 —— 额外入 tank_enemies：
+	##   · `_count_alive_tanks()` 统计 → 与坦克共用「同屏最多一只 Boss」；
+	##   · 子弹/背刺按 Boss 规则结算（即死 ×、必杀 ×）；
+	##   · `play_boss_music` 复用 Boss BGM 与「Boss 灭后接回尸潮」的既有链路。
+	if data.boss_tier:
+		enemy.add_to_group("tank_enemies")
+		tank_spawned.emit(String(data.id))
+		play_boss_music(enemy)
 
 	_spawn_history.append({
 		"time": Time.get_ticks_msec(),
@@ -2237,7 +2246,7 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 	if get_intensity() < special_intensity_threshold / rate:
 		return
 
-	var data: SpecialEnemyData = _pick_special_enemy()
+	var data: SpecialEnemyData = _pick_special_enemy(not _boss_on_field())
 	if data == null:
 		return
 	var decor_layer: Node = _find_decor_layer()
@@ -2256,21 +2265,44 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 		_special_cooldown_left = randf_range(special_cooldown_min, special_cooldown_max) / rate
 
 
-func _pick_special_enemy() -> SpecialEnemyData:
+## 场上是否已有「Boss 级」敌人（含 T-002 与 Boss 级特感）。
+## 原作 #603 的开关[388][395][1714][1715][1870] 就是「重点敌人在场 → 本帧不再增援」。
+## Boss 级特感入的是 tank_enemies 组，所以与坦克共用这一判据。
+func _boss_on_field() -> bool:
+	return _count_alive_tanks() > 0
+
+
+func _pick_special_enemy(allow_boss: bool = true) -> SpecialEnemyData:
 	## 按 weight 从关卡特感池随机选一种（weight=0 的不会被选中）。空池返回 null。
+	## `allow_boss=false`（场上已有 Boss）→ 跳过 boss_tier 条目，
+	## 保证同屏最多一只 Boss 级敌人（原作「重点敌人互斥」）。
 	if _special_pool.is_empty():
 		return null
 	var total: float = 0.0
 	for v: Resource in _special_pool:
-		total += maxf(float(v.weight), 0.0)
+		var d: SpecialEnemyData = v as SpecialEnemyData
+		if d == null:
+			continue
+		if not allow_boss and d.boss_tier:
+			continue
+		total += maxf(float(d.weight), 0.0)
 	if total <= 0.0:
-		return _special_pool[0] as SpecialEnemyData
+		## 兼容旧语义：池里全是 0 权重时取第一个（作者用它做定点测试）；
+		## 但「当前不允许 Boss」时不能把 Boss 条目当兜底 → 直接不刷。
+		if allow_boss:
+			return _special_pool[0] as SpecialEnemyData
+		return null
 	var roll: float = randf() * total
 	for v: Resource in _special_pool:
-		roll -= maxf(float(v.weight), 0.0)
+		var d: SpecialEnemyData = v as SpecialEnemyData
+		if d == null:
+			continue
+		if not allow_boss and d.boss_tier:
+			continue
+		roll -= maxf(float(d.weight), 0.0)
 		if roll <= 0.0:
-			return v as SpecialEnemyData
-	return _special_pool.back() as SpecialEnemyData
+			return d
+	return null
 
 
 # ═══════════════════════════════════════

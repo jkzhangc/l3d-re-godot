@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://co0oponebfhi6" path="res://art/Characters/!$バイオゲラス01.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://c84g3wvehkffk" path="res://art/Characters/!$バイオゲラス噛みつき01.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://bwqkuj4dmqu4i" path="res://art/Characters/!$バイオゲラス死体01.png" id="4"]
+[ext_resource type="AudioStream" uid="uid://oarhu3b7yher" path="res://sound/バイオゲラス声.ogg" id="5"]
+[ext_resource type="AudioStream" uid="uid://xxucdci4a5fu" path="res://sound/バイオゲラス声2.ogg" id="6"]
+[ext_resource type="AudioStream" uid="uid://b2tex3v4qbavc" path="res://sound/SDK2死ボス2.ogg" id="7"]
+
+[resource]
+script = ExtResource("1")
+id = &"biogeras"
+weight = 0.2
+boss_tier = true
+instant_kill_immune = true
+texture = ExtResource("2")
+walk_char_index = 0
+sprite_frame_w = 96
+sprite_frame_h = 96
+attack_texture = ExtResource("3")
+attack_char_sequence = Array[int]([0])
+attack_frame_durations = Array[float]([0.4])
+hit_at_sequence_idx = 0
+death_texture = ExtResource("4")
+death_char_index = 0
+max_hp = 1900.0
+move_speed = 175.0
+attack_damage = 45.0
+attack_range = Vector2(95, 60)
+attack_hit_range = Vector2(95, 60)
+attack_cooldown_frames = 85
+vision_range = 500.0
+pounce_enabled = true
+pounce_trigger_min_dist = 150.0
+pounce_trigger_max_dist = 420.0
+pounce_windup_seconds = 0.3
+pounce_dash_seconds = 0.55
+pounce_dash_speed = 520.0
+pounce_hit_radius = 48.0
+pounce_damage_mult = 1.25
+pounce_cooldown_seconds = 3.5
+hurtbox_size = Vector2(54, 46)
+hurtbox_offset = Vector2(0, -16)
+discover_sound = ExtResource("5")
+attack_sound = ExtResource("6")
+death_sound = ExtResource("7")

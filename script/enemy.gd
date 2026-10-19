@@ -272,6 +272,17 @@ const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害�
 ## 例如 0.6 → 100 伤只吃 40，10 伤只吃 4（高伤被削得更狠）。
 @export var frontal_normalize_ratio: float = 0.6
 
+# ── 気まぐれ撤离（ティンダロス，2026-10-19）──
+## 原作 enemy.html：「やや気まぐれなところもあり、何をしに来たのかを忘れて勝手に
+## 帰ってしまうこともある」。被 SpecialEnemyData.apply_to_enemy 注入（默认关闭）。
+@export_group("気まぐれ撤离（ティンダロス）")
+@export var disengage_enabled: bool = false
+@export var disengage_min_seconds: float = 18.0
+@export var disengage_max_seconds: float = 32.0
+@export var disengage_check_interval: float = 4.0
+@export_range(0.0, 1.0, 0.01) var disengage_chance: float = 0.35
+@export var disengage_flee_seconds: float = 2.5
+
 # ── 属性状态运行时 ──
 ## 本次命中是否被正面抗性完全回避（供 take_damage 跳过"推击"分支的误打印/二次闪白，
 ## 但保留受击转向、Idle→Discover 等既有副作用）。2026-09-16。
@@ -680,6 +691,9 @@ func _process(delta: float) -> void:
 	## 与 `Player._rescue_if_stuck()` 同构。必须在 `network_presentation_only`
 	## 早退**之前**调用 —— 远端镜像实体由快照定位、不需要自救，权威侧才需要。
 	_rescue_if_stuck(delta)
+	## ★気まぐれ撤离（2026-10-19）：与卡墙自救同位置 —— 在 network_presentation_only
+	## 早退之前调用，但函数内部对镜像实体直接跳过（只有权威侧决定/执行离场）。
+	_update_disengage(delta)
 	if network_presentation_only:
 		if _network_has_target:
 			# 远端实体：按固定延迟在两个快照样本间插值，起停干脆、匀速贴合。
@@ -1194,6 +1208,15 @@ const STUCK_CONFIRM_HITS: int = 2         ## 连续命中几次才动手（≈1 
 const STUCK_PROBE_RADIUS: float = 16.0    ## 与 SpawnSpotResolver.PROBE_RADIUS 同口径
 var _stuck_timer: float = 0.0
 var _stuck_hits: int = 0
+
+## ── 気まぐれ撤离运行时（ティンダロス，2026-10-19）──
+## 触发与移动分离：本文件只负责"决定何时走"，实际位移由 EnemyChaseState 调 tick_flee。
+var _disengage_age: float = 0.0
+var _disengage_age_limit: float = -1.0   ## <0 = 尚未抽取（每只个体在 min~max 间随机）
+var _disengage_roll_left: float = 0.0
+var _flee_left: float = 0.0
+var _flee_dir: Vector2 = Vector2.DOWN
+
 ## 本击是否为背刺。**由 apply_backstab 置位，take_damage 开头消费并清零** ——
 ## 用一次性标志而不是加参数，是为了不动 take_damage 的既有签名（调用点很多）。
 var _backstab_this_hit: bool = false
@@ -2315,3 +2338,70 @@ func _rescue_if_stuck(delta: float) -> void:
 
 ## 卡墙自救用的可通行判定（与玩家同一入口；preload 常量而非 class_name，见 MEMORY）。
 const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
+
+
+# ═══════════════════════════════════════
+# 気まぐれ撤离（ティンダロス，2026-10-19）
+# ═══════════════════════════════════════
+## 原作 enemy.html：「やや気まぐれなところもあり、何をしに来たのかを忘れて
+## 勝手に帰ってしまうこともある」。实现分两段：
+##   ① 本文件的 `_update_disengage` 只做**判定**（存活够久 + 到点掷骰）；
+##   ② 命中后置 `_flee_left` 与远离玩家的方向，由 `EnemyChaseState.physics_update`
+##      调 `tick_flee` 执行位移 —— 追击状态本来就在跑移动，不另建状态可避免与
+##      攻击/受击/突进的状态互斥表打架。
+## ⚠ 只有权威侧（单机 / Host）执行：Client 镜像走快照，实体消失会由快照收敛移除。
+
+## 是否处于撤离移动中（追击状态据此改走"远离玩家"）。
+func is_fleeing() -> bool:
+	return _flee_left > 0.0
+
+
+## 撤离判定（每帧由 `_process` 调用）。只在权威侧生效。
+func _update_disengage(delta: float) -> void:
+	if not disengage_enabled or _is_dead or network_presentation_only:
+		return
+	if _flee_left > 0.0:
+		return                      ## 撤离移动中：计时与位移由 tick_flee 负责
+	if _disengage_age_limit < 0.0:
+		## 每只个体随机化离场门槛，避免同批特感在同一秒集体走人。
+		var lo: float = maxf(disengage_min_seconds, 1.0)
+		var hi: float = maxf(disengage_max_seconds, lo)
+		_disengage_age_limit = randf_range(lo, hi)
+	_disengage_age += delta
+	if _disengage_age < _disengage_age_limit:
+		return
+	_disengage_roll_left -= delta
+	if _disengage_roll_left > 0.0:
+		return
+	_disengage_roll_left = maxf(disengage_check_interval, 0.5)
+	if randf() > disengage_chance:
+		return
+	var target: Node2D = _player_ref if is_instance_valid(_player_ref) else null
+	if not is_instance_valid(target):
+		return
+	var away: Vector2 = global_position - target.global_position
+	if away.length() < 1.0:
+		away = Vector2.DOWN
+	_flee_dir = away.normalized()
+	_flee_left = maxf(disengage_flee_seconds, 0.3)
+	_disengage_roll_left = disengage_check_interval
+	## 撤离期间不再被"发现/攻击"打断：清掉当前受击减速，速度由 tick_flee 直接驱动。
+	velocity = Vector2.ZERO
+	if Global.debug_visuals:
+		print("[敌人] %s 気まぐれ撤离：远离玩家 %s，%.1fs 后离场"
+			% [name, str(target.global_position.round()), _flee_left])
+
+
+## 撤离移动（追击状态每物理帧调用）。返回 true = 本帧已被撤离逻辑接管。
+func tick_flee(delta: float) -> bool:
+	if _flee_left <= 0.0:
+		return false
+	_flee_left -= delta
+	velocity = _flee_dir * maxf(move_speed, 1.0)
+	move_with_corner_assist()
+	if _flee_left <= 0.0:
+		## 原作「勝手に帰ってしまう」：直接离场，不留尸体（不是死亡）。
+		if Global.debug_visuals:
+			print("[敌人] %s 撤离结束，离场" % name)
+		queue_free()
+	return true

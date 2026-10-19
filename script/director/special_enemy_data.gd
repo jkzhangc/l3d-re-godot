@@ -269,6 +269,32 @@ extends Resource
 ## true = 集中射撃命中时走 Boss 同款结算：伤害 ×1.5 + 0.8s 怯み，不死。
 @export var instant_kill_immune: bool = false
 
+@export_group("Boss 定位（ネメシス / バイオゲラス / ブラックタイガー）")
+## true = 与タイラント同级（原作 enemy.html 的「ボスポジション」）：
+##   · 生成时额外入 `tank_enemies` 组 → 共用 Boss BGM、Boss 即死/背刺规则；
+##   · 参与「全场同屏只允许一只 Boss 级敌人」互斥（含 T-002 与其它 Boss 级特感），
+##     对应原作 #603 的开关[388][395][1714][1870]「重点敌人在场 → 不再增援」；
+##   · 仍计入普通特感的 `special_enemies` 上限，不额外放宽。
+## ティンダロス 不属于 Boss 级（原作列为 AD/ティンダロス，体力低）。
+@export var boss_tier: bool = false
+
+@export_group("気まぐれ撤离（ティンダロス）")
+## 原作 enemy.html ティンダロス条：「やや気まぐれなところもあり、何をしに来たのかを
+## 忘れて勝手に帰ってしまうこともある」。
+## true = 存活超过 min~max 秒后，每 check_interval 秒掷一次 chance；
+## 命中则脱离战斗、朝远离玩家的方向走 flee_seconds 秒后自行消失（不留尸体）。
+@export var disengage_enabled: bool = false
+## 最早可能离场的存活时长（秒）。
+@export var disengage_min_seconds: float = 18.0
+## 最晚（用于每只个体随机化，避免同批同时走）。
+@export var disengage_max_seconds: float = 32.0
+## 判定间隔（秒）。
+@export var disengage_check_interval: float = 4.0
+## 每次判定的成功率（0~1）。
+@export_range(0.0, 1.0, 0.01) var disengage_chance: float = 0.35
+## 撤离移动时长（秒）：以 move_speed 远离玩家，结束后离场。
+@export var disengage_flee_seconds: float = 2.5
+
 @export_group("掉落（2026-10-01：敌人死亡掉落）")
 ## 该特感 / Boss 的**专属**掉落池。留空 = 回落地图的 DirectorConfig.enemy_drop_pool。
 @export var drop_pool: DropPoolData = null
@@ -405,6 +431,13 @@ func apply_to_enemy(enemy: Node) -> void:
 		enemy.death_sound = death_sound
 	if death_sound_pitch > 0.0:
 		enemy.death_sound_pitch = death_sound_pitch
+	# 気まぐれ撤离（ティンダロス）：AI 字段，Client 不跑状态机 → 注入也无副作用
+	enemy.disengage_enabled = disengage_enabled
+	enemy.disengage_min_seconds = disengage_min_seconds
+	enemy.disengage_max_seconds = disengage_max_seconds
+	enemy.disengage_check_interval = disengage_check_interval
+	enemy.disengage_chance = disengage_chance
+	enemy.disengage_flee_seconds = disengage_flee_seconds
 	# 首狩り起跳/突进音效（空 = 沿用敌人自身 pounce_sound，再回退 attack_sound）
 	if pounce_sound != null:
 		enemy.pounce_sound = pounce_sound

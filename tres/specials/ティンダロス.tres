@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="SpecialEnemyData" format=3]
+
+[ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b0kwtped8wl6j" path="res://art/Characters/ティン_ポス.png" id="2"]
+[ext_resource type="AudioStream" uid="uid://b2tex3v4qbavc" path="res://sound/SDK2死ボス2.ogg" id="3"]
+
+[resource]
+script = ExtResource("1")
+id = &"tindalos"
+weight = 0.35
+instant_kill_immune = true
+texture = ExtResource("2")
+walk_char_index = 0
+attack_char_sequence = Array[int]([1, 2, 3])
+attack_frame_durations = Array[float]([0.09, 0.09, 0.15])
+hit_at_sequence_idx = 2
+death_char_index = 4
+max_hp = 420.0
+move_speed = 245.0
+attack_damage = 30.0
+attack_range = Vector2(72, 56)
+attack_hit_range = Vector2(56, 40)
+attack_cooldown_frames = 55
+vision_range = 420.0
+frontal_damage_mult = 0.0
+frontal_arc_degrees = 70.0
+disengage_enabled = true
+disengage_min_seconds = 18.0
+disengage_max_seconds = 32.0
+disengage_check_interval = 4.0
+disengage_chance = 0.35
+disengage_flee_seconds = 2.5
+death_sound = ExtResource("3")

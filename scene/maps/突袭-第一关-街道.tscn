@@ -36,6 +36,10 @@
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="33_176ys"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="34_nx3kv"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="37_jykwv"]
+[ext_resource type="Resource" path="res://tres/specials/ネメシス.tres" id="92_nemesis"]
+[ext_resource type="Resource" path="res://tres/specials/バイオゲラス.tres" id="93_biogeras"]
+[ext_resource type="Resource" path="res://tres/specials/ブラックタイガー.tres" id="94_tiger"]
+[ext_resource type="Resource" path="res://tres/specials/ティンダロス.tres" id="95_tindalos"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 [ext_resource type="Resource" uid="uid://bbflshgr4n2x" path="res://object/throwable_flash.tres" id="91_flsh"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="po_bowgun"]
@@ -193,7 +197,7 @@ cooldown_intensity_threshold = 0.75
 scatter_interval_min = 22.0
 scatter_interval_max = 36.0
 zombie_pool = Array[ExtResource("14_xkstu")]([ExtResource("15_lflo2"), ExtResource("16_53xi5"), ExtResource("17_1ay4o"), ExtResource("18_073qg"), ExtResource("19_7mdkf")])
-special_pool = Array[ExtResource("20_3qsa4")]([ExtResource("21_drpki"), ExtResource("22_bdghi"), ExtResource("23_2vp1k"), ExtResource("24_yd3nf"), ExtResource("91_demos")])
+special_pool = Array[ExtResource("20_3qsa4")]([ExtResource("21_drpki"), ExtResource("22_bdghi"), ExtResource("23_2vp1k"), ExtResource("24_yd3nf"), ExtResource("91_demos"), ExtResource("92_nemesis"), ExtResource("93_biogeras"), ExtResource("94_tiger"), ExtResource("95_tindalos")])
 special_first_delay_min = 5.0
 special_max_alive = 3
 drop_pool = SubResource("Resource_05vas")

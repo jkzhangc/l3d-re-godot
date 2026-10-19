@@ -105,6 +105,11 @@ const NETWORK_SPECIAL_HUNTER_BETA: SpecialEnemyData = preload("res://tres/specia
 const NETWORK_SPECIAL_HUNTER_GAMMA: SpecialEnemyData = preload("res://tres/specials/ハンターγ.tres")
 const NETWORK_SPECIAL_WITCH: SpecialEnemyData = preload("res://tres/specials/ブレアウィッチ.tres")
 const NETWORK_SPECIALDEMOS: SpecialEnemyData = preload("res://tres/specials/ブレインディモス.tres")
+## 2026-10-19 补齐原作缺失的 4 只（ネメシス/バイオゲラス/ブラックタイガー/ティンダロス）。
+const NETWORK_SPECIAL_NEMESIS: SpecialEnemyData = preload("res://tres/specials/ネメシス.tres")
+const NETWORK_SPECIAL_BIOGERAS: SpecialEnemyData = preload("res://tres/specials/バイオゲラス.tres")
+const NETWORK_SPECIAL_BLACK_TIGER: SpecialEnemyData = preload("res://tres/specials/ブラックタイガー.tres")
+const NETWORK_SPECIAL_TINDALOS: SpecialEnemyData = preload("res://tres/specials/ティンダロス.tres")
 const NETWORK_SPECIALS: Dictionary = {
 	"green_soldier": NETWORK_SPECIAL_GREEN,
 	"tyrant_t002": NETWORK_SPECIAL_TYRANT,
@@ -113,6 +118,10 @@ const NETWORK_SPECIALS: Dictionary = {
 	"hunter_gamma": NETWORK_SPECIAL_HUNTER_GAMMA,
 	"blare_witch": NETWORK_SPECIAL_WITCH,
 	"brain_demos": NETWORK_SPECIALDEMOS,
+	"nemesis": NETWORK_SPECIAL_NEMESIS,
+	"biogeras": NETWORK_SPECIAL_BIOGERAS,
+	"black_tiger": NETWORK_SPECIAL_BLACK_TIGER,
+	"tindalos": NETWORK_SPECIAL_TINDALOS,
 }
 
 

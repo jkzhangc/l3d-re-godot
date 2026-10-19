@@ -351,6 +351,12 @@ func physics_update(delta: float) -> void:
 
 	var enemy: Node2D = character
 
+	## ── 気まぐれ撤离（ティンダロス，2026-10-19）──
+	## 撤离期内不寻路、不攻击，直接朝远离玩家的方向走；计时结束由 enemy 自行离场。
+	## 放在所有寻路/卡住检测之前：撤离是"回家"，不该被 A* 或同伴避让改写方向。
+	if enemy.has_method("tick_flee") and enemy.call("tick_flee", delta) == true:
+		return
+
 	# ── 先结算「有没有在靠近当前航点」（进度式卡住检测，理由见 STUCK_SKIP_FRAMES 注释）──
 	# 放在最前面是为了不被后面多处 return 打断。
 	_update_stuck_state(enemy)
