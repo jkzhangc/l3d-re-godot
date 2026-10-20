@@ -62,10 +62,10 @@ const TILE_PX: float = 32.0
 const SHADOW_SCALE: float = 0.5     ## 原 cast_scale：影子长度 = 角色高 × 距离(格) × 本值
 const SHADOW_RANGE: float = 0.0     ## 原 cast_distance：投影作用距离（px），0 = 跟随灯半径
 const SHADOW_OPACITY: float = 0.45  ## 最大不透明度
-## 影子整体朝角色方向回缩的比例（× 角色帧高）。翻转后帧内的空白会落在脚底端，
-## 看起来就像影子浮在下面一段（2026-10-19 用户：影子离脚部太远）。
-## 0.16 × 64px ≈ 10px，正常身高正好贴住脚底；大体型敌人会自动按比例放大。
-const SHADOW_NEAR_NUDGE_RATIO: float = 0.16
+## 影子整体朝角色方向回缩的比例（× 角色帧高）。
+## 0 = 影子脚底与角色脚底精确重合（默认，符合原工程 spr.oy = frame_height 的语义）。
+## 只有某些素材帧底部带空白时，才需要把它调大（0.1 ≈ 6px）来补掉空隙。
+const SHADOW_NEAR_NUDGE_RATIO: float = 0.0
 
 static var _gradient_tex: ImageTexture = null
 
