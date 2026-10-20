@@ -86,7 +86,7 @@ region_enabled = true
 region_rect = Rect2(48, 0, 48, 64)
 
 [node name="Dummy3" type="Node2D" parent="." groups=["lab_dummy"]]
-position = Vector2(470, 210)
+position = Vector2(520, 250)
 
 [node name="Sprite2D" type="Sprite2D" parent="Dummy3"]
 position = Vector2(0, -16)

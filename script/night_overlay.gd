@@ -62,10 +62,12 @@ const TILE_PX: float = 32.0
 const SHADOW_SCALE: float = 0.5     ## 原 cast_scale：影子长度 = 角色高 × 距离(格) × 本值
 const SHADOW_RANGE: float = 0.0     ## 原 cast_distance：投影作用距离（px），0 = 跟随灯半径
 const SHADOW_OPACITY: float = 0.45  ## 最大不透明度
-## 影子整体朝角色方向回缩的比例（× 角色帧高）。
-## 0 = 影子脚底与角色脚底精确重合（默认，符合原工程 spr.oy = frame_height 的语义）。
-## 只有某些素材帧底部带空白时，才需要把它调大（0.1 ≈ 6px）来补掉空隙。
+## 影子整体朝角色方向回缩的比例（× 角色帧高）。0 = 影子脚底与角色脚底精确重合。
 const SHADOW_NEAR_NUDGE_RATIO: float = 0.0
+## 角色帧底部的透明留白（帧内像素）。行走图脚底下通常有几行全透明，
+## 这段留白会被 stretch 放大：2px 留白 × 2 倍拉伸 = 脚下 4px 的空隙，
+## 看起来就是"影子比脚底低十几像素"。这里在缩放前补掉，空隙随拉伸等比消失。
+const SHADOW_FRAME_BOTTOM_PAD: float = 2.0
 
 static var _gradient_tex: ImageTexture = null
 
@@ -482,7 +484,7 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	sh.region_rect = s.region_rect
 	sh.flip_h = s.flip_h
 	# 支点放到底边中点（脚底），这样 scale.y / rotation 都绕脚底做。
-	sh.offset = Vector2(-base_w * 0.5, -base_h)
+	sh.offset = Vector2(-base_w * 0.5, -base_h + SHADOW_FRAME_BOTTOM_PAD)
 	sh.position = s.position + Vector2(0.0, h * 0.5) - dir * (h * SHADOW_NEAR_NUDGE_RATIO)
 	# 拉得越长越收窄一点，避免变成一条胖带子
 	var width_scale: float = clampf(1.0 - 0.14 * stretch, 0.55, 1.0)
