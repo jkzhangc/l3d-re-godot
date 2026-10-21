@@ -29,6 +29,9 @@ const LIGHT_CULL_MASK: int = 7
 const SHADOW_CULL_MASK: int = 1
 ## PCF5 + 平滑，夜景要软边；None 会看到硬锯齿。
 const SHADOW_SMOOTH: float = 3.0
+## 灯的离地高度（px）。**必须 > 0 法线贴图才会参与**（PointLight2D.height 默认 0）。
+## 角色帧高 64px 时取 32~64 比较自然；值越大光越"平"，越小越贴地容易过曝。
+const LIGHT_HEIGHT: float = 48.0
 
 ## glow_strength 的基准值。旧管线里 0.5 是"原工程强度"，现在把它当灯光亮度倍率，
 ## 除以基准后 0.5 → ×1.0，这样 FirePatch / LightLab 现有的 0.5 调用点行为不变。
@@ -100,6 +103,8 @@ class LightRecord:
 	var step_left: float = 0.0
 	var phase: float = 0.0
 	var value: float = 1.0
+	## 离地高度（px）。>0 时法线贴图才参与光照；0 = 完全忽略法线。
+	var light_height: float = LIGHT_HEIGHT
 	## 本盏灯的渲染对象
 	var light: PointLight2D = null
 	## 角色投影参数（原工程 :cast_shadow / :cast_distance / :cast_scale / :shadow_opacity）
@@ -315,8 +320,20 @@ func _ensure_light(rec: LightRecord) -> void:
 	l.shadow_enabled = rec.occlude
 	l.shadow_filter = Light2D.SHADOW_FILTER_PCF5
 	l.shadow_filter_smooth = SHADOW_SMOOTH
+	l.height = rec.light_height
 	_builtin_root.add_child(l)
 	rec.light = l
+
+
+## 设置某盏灯的离地高度（px）。**>0 才会让法线贴图参与光照**，0 = 忽略法线。
+## 默认取 LIGHT_HEIGHT(48)；吊灯/路灯可以调大，地面物件调小。
+func set_light_height(source: Node2D, height_px: float) -> void:
+	for rec: LightRecord in _records:
+		if rec.source == source:
+			rec.light_height = maxf(height_px, 0.0)
+			if rec.light != null and is_instance_valid(rec.light):
+				rec.light.height = rec.light_height
+			return
 
 
 func _drop_light(rec: LightRecord) -> void:

@@ -134,7 +134,7 @@ func _apply_standin_appearance(standin: Node2D, st: PlayerState) -> void:
 	var sprite: Sprite2D = standin.get_node_or_null("Sprite2D")
 	if not sprite:
 		return
-	sprite.texture = cd.walk_texture
+	sprite.texture = NormalMaps.canvas(cd.walk_texture)
 	sprite.region_enabled = true
 	var facing: int = st.facing
 	var char_idx: int = cd.walk_char_index

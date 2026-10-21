@@ -554,6 +554,9 @@ func _ready() -> void:
 	_update_facing_sprite()
 
 	# 加入敌人组（用于友军伤害等场景查找）
+	# 行走图包一层 CanvasTexture（带法线）：此后所有 sprite.texture = walk_texture 都带法线。
+	# 没配法线图的敌人自动原样返回，零开销。
+	walk_texture = NormalMaps.canvas(walk_texture)
 	_base_walk_texture = walk_texture
 	_base_move_speed = move_speed
 	_base_attack_damage = attack_damage
@@ -2234,7 +2237,7 @@ func set_rage(on: bool) -> void:
 		return  ## 无狂暴形态的外观（如中年ゾンビ）保持普通
 	_rage = on
 	if on:
-		walk_texture = variant_rage_texture
+		walk_texture = NormalMaps.canvas(variant_rage_texture)
 		if variant_rage_move_speed > 0.0:
 			move_speed = variant_rage_move_speed
 		if variant_rage_attack_damage > 0.0:

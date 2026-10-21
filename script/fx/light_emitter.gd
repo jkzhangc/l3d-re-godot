@@ -22,6 +22,9 @@ class_name LightEmitter extends Node2D
 @export_range(0.0, 1.0, 0.01) var flicker: float = 0.0
 ## 是否被墙体/家具挡住（原工程的"建筑遮挡"）。关掉可以对比"光穿墙"。
 @export var occlude: bool = true
+## 灯的离地高度（px）。**> 0 时法线贴图才参与光照**，0 = 完全忽略法线（灯变成纯圆形亮斑）。
+## 角色帧高 64px 时 32~64 比较自然；吊灯/路灯可调大，地面物件调小。
+@export_range(0.0, 512.0, 1.0) var light_height: float = 48.0
 
 @export_group("角色投影")
 ## 是否让角色在这盏灯下投出影子（原工程 :cast_shadow / [noshadow]）
@@ -91,6 +94,7 @@ func _try_register() -> void:
 		return
 	_overlay = ov
 	ov.register_light(self, radius, intensity, light_color, flicker, occlude)
+	ov.set_light_height(self, light_height)
 	ov.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 	_registered = true
 
@@ -110,6 +114,7 @@ func apply_params() -> void:
 		_try_register()
 		return
 	_overlay.register_light(self, radius, intensity, light_color, flicker, occlude)
+	_overlay.set_light_height(self, light_height)
 	_overlay.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 
 
