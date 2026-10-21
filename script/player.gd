@@ -330,7 +330,7 @@ func _ready() -> void:
 		_disable_network_state_machine()
 
 	if walk_texture == null:
-		walk_texture = load("res://art/Characters/のび太セット.png") as Texture2D
+		walk_texture = NormalMaps.canvas(load("res://art/Characters/のび太セット.png") as Texture2D)
 	if run_texture == null:
 		run_texture = load("res://art/Characters/のび太歩行セット.png") as Texture2D
 
@@ -1448,13 +1448,15 @@ func _apply_character_data() -> void:
 func _apply_current_character_data(cd: CharacterData) -> void:
 	if not cd:
 		return
-	if cd.walk_texture:   walk_texture = cd.walk_texture
+	# 贴图包一层 CanvasTexture（带法线），PointLight2D 才有表面起伏；
+	# 没有对应法线图时 NormalMaps.canvas() 原样返回，零开销。
+	if cd.walk_texture:   walk_texture = NormalMaps.canvas(cd.walk_texture)
 	walk_char_index = cd.walk_char_index
 	walk_frame_duration = cd.walk_frame_duration
-	if cd.run_texture:    run_texture = cd.run_texture
+	if cd.run_texture:    run_texture = NormalMaps.canvas(cd.run_texture)
 	run_char_index = cd.run_char_index
 	run_frame_duration = cd.run_frame_duration
-	if cd.death_texture:  death_texture = cd.death_texture
+	if cd.death_texture:  death_texture = NormalMaps.canvas(cd.death_texture)
 	death_char_index = cd.death_char_index
 	max_hp = float(cd.get_effective_max_hp())
 	if cd.hurt_sound:     hurt_sound = cd.hurt_sound
