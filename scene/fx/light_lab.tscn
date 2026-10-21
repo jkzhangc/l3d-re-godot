@@ -12,7 +12,7 @@ script = ExtResource("1_lab")
 position = Vector2(320, 240)
 zoom = Vector2(2, 2)
 
-[node name="NightOverlay" type="CanvasLayer" parent="." unique_id=1322468570]
+[node name="NightOverlay" type="Node2D" parent="." unique_id=1322468570]
 layer = 5
 script = ExtResource("2_night")
 

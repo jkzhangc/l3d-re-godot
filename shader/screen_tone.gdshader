@@ -21,8 +21,22 @@ uniform float brightness : hint_range(0.0, 2.0) = 1.0;
 uniform float saturation : hint_range(0.0, 2.0) = 1.0;
 uniform float contrast : hint_range(0.0, 2.0) = 1.0;
 
+// ── 亮度保护（2026-10-21）──
+// 色调层在世界之上，采样的是「已经包含 2D 灯光」的画面。夜图用蓝色调压暗时，
+// 火光/路灯光也被一起乘蓝、一起压暗 —— 暖橙会变成脏蓝，亮度也会掉一截。
+// 这里按「原始亮度」给色调降低权重：够亮的像素（被灯照到）少染色，暗处照常染。
+//   0 = 完全不管（旧行为，默认）
+//   1 = 亮部完全不吃色调，只有暗部染
+uniform float light_protect : hint_range(0.0, 1.0) = 0.0;
+// 保护起止亮度：低于 lo 全染，高于 hi 全保护，中间平滑过渡。
+uniform float protect_lo : hint_range(0.0, 1.0) = 0.30;
+uniform float protect_hi : hint_range(0.0, 1.0) = 0.70;
+
 void fragment() {
 	vec3 c = texture(screen_tex, SCREEN_UV).rgb;
+	// 进入任何调整前的原始亮度 —— 用它判断"这里是否被灯照亮"。
+	float raw_lum = dot(c, vec3(0.299, 0.587, 0.114));
+	float protect = light_protect * smoothstep(protect_lo, protect_hi, raw_lum);
 
 	// 对比度（绕 0.5 枢轴）
 	c = (c - 0.5) * contrast + 0.5;
@@ -31,9 +45,9 @@ void fragment() {
 	// 饱和度（按亮度加权）
 	float lum = dot(c, vec3(0.299, 0.587, 0.114));
 	c = mix(vec3(lum), c, saturation);
-	// 染色（乘法）并按强度与原画面混合
+	// 染色（乘法）并按强度与原画面混合；亮部按 protect 减少染色量
 	vec3 tinted = c * tone_color.rgb;
-	c = mix(c, tinted, intensity * tone_color.a);
+	c = mix(c, tinted, intensity * tone_color.a * (1.0 - protect));
 
 	COLOR = vec4(clamp(c, vec3(0.0), vec3(1.0)), 1.0);
 }

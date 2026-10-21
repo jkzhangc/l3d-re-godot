@@ -25,14 +25,19 @@
 
 ## 本项目怎么对应的
 
-| 原工程 | 本项目 |
+> ⚠ 2026-10-21 起，本工程的夜间渲染已改用 **Godot 内置 2D 灯光节点**
+> （`CanvasModulate` + `PointLight2D` + `LightOccluder2D`），下表里"两个视口 / 射线扇形 /
+> 加法叠色 pass"那几行是**历史实现**，已删除。保留原样只为对照原工程思路。
+> 现行对应关系见 `内置2D灯光迁移方案.md`。
+
+| 原工程 | 本项目（历史映射 → 现行做法） |
 |---|---|
-| 两个视口 | `NightOverlay` 里的 `SubViewport`（光照缓冲）+ 两个全屏合成 pass |
-| `light.png` 径向曲线 | `NightOverlay.GRADIENT_PROFILE`（从原图逐圈量出来的 11 个采样点） |
-| `light-illum.png` 加法叠色 | `shader/night_glow.gdshader`（`blend_add` + 指数色调映射） |
-| `:color` | `register_light(..., color)` / `LightEmitter.light_color` |
-| `:light_rand` | `register_light(..., flicker)`（0.26 ≈ 火苗） |
-| 建筑遮挡 | 每盏灯 160 条射线打 `collision_layer = 1`（图块角色层），扇形即可见范围 |
-| 人物阴影 | 角色节点的 `NightShadow` 子精灵（`show_behind_parent`，压扁 + 背光偏移） |
+| 两个视口 | ~~`NightOverlay` 里的 `SubViewport` + 两个全屏合成 pass~~ → `CanvasModulate`（黑幕+夜色调）+ 每灯一个 `PointLight2D` |
+| `light.png` 径向曲线 | `NightOverlay.GRADIENT_PROFILE`（未变，仍是内置灯贴图的来源） |
+| `light-illum.png` 加法叠色 | ~~`shader/night_glow.gdshader`~~ → 由 `PointLight2D` 的 ADD 混合直接完成 |
+| `:color` | `register_light(..., color)` / `LightEmitter.light_color`（未变） |
+| `:light_rand` | `register_light(..., flicker)`（未变，节奏已放缓） |
+| 建筑遮挡 | ~~每盏灯 160 条射线打 `collision_layer = 1`~~ → TileSet 遮挡层生成的 `LightOccluder2D`（GPU 裁剪） |
+| 人物阴影 | 角色节点的 `NightShadow` 子精灵（`show_behind_parent`，压扁 + 背光偏移）（未变，新增拉伸量羽化） |
 
 试验场：`scene/fx/light_lab.tscn`（F6 直接跑），可实时开关发光/遮挡/闪烁对比。

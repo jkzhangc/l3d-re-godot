@@ -47,6 +47,26 @@ extends CanvasLayer
 		contrast = v
 		_push_params()
 
+@export_group("亮度保护")
+## 让「已被 2D 灯光照亮的地方」少上色调，暗处照常染色（2026-10-21，为夜间+灯光共存而加）。
+## 色调层采样的是含灯光的画面，蓝色夜调会把暖橙火光一起乘蓝、一起压暗；这个参数按亮度
+## 给色调降权，火光保留暖色，夜景蓝调仍在。
+## 0 = 旧行为（完全不管）；1 = 亮部完全不吃色调；0.7~0.9 适合夜图。
+@export_range(0.0, 1.0, 0.01) var light_protect: float = 0.0:
+	set(v):
+		light_protect = v
+		_push_params()
+## 保护区间下限：亮度低于此值 → 完全染色。
+@export_range(0.0, 1.0, 0.01) var protect_lo: float = 0.30:
+	set(v):
+		protect_lo = v
+		_push_params()
+## 保护区间上限：亮度高于此值 → 完全不吃色调。
+@export_range(0.0, 1.0, 0.01) var protect_hi: float = 0.70:
+	set(v):
+		protect_hi = v
+		_push_params()
+
 @export_group("层级与排除")
 ## 本色调层所在的 CanvasLayer 层号。默认 50 = 世界(0) 之上、UI(90+) 之下。
 ## ★任何 layer **大于**此值的 CanvasLayer 都不参与色调 —— 这是排除 UI 的主要手段。
@@ -123,6 +143,9 @@ func _push_params() -> void:
 	_mat.set_shader_parameter("brightness", brightness)
 	_mat.set_shader_parameter("saturation", saturation)
 	_mat.set_shader_parameter("contrast", contrast)
+	_mat.set_shader_parameter("light_protect", light_protect)
+	_mat.set_shader_parameter("protect_lo", protect_lo)
+	_mat.set_shader_parameter("protect_hi", protect_hi)
 	## 完全无效果时干脆不绘制：省掉一次全屏 back-buffer 拷贝（移动端有感知）。
 	var ov: ColorRect = get_node_or_null("Overlay")
 	if ov != null:

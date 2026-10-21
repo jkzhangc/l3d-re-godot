@@ -48,6 +48,11 @@ class_name LightEmitter extends Node2D
 @export_group("编辑器预览")
 ## 没勾时，编辑器里只画一圈细线；勾上会填一层半透明色，方便看光池大小
 @export var preview_fill: bool = true
+## ⚠ 编辑器预览圈 = radius / preview_zoom。
+## 运行时 radius 是"屏幕像素"，NightOverlay 会除以相机 zoom 折算成世界半径，
+## 而编辑器画布是 1:1 世界坐标 —— 不折算就会画成两倍大（2026-10-21 用户实测反馈）。
+## 默认 2.0 对齐 `script/camera_follow.gd` 的 default_zoom；改相机缩放时同步改这里。
+@export_range(0.1, 8.0, 0.1) var preview_zoom: float = 2.0
 
 var _overlay: NightOverlay = null
 var _registered: bool = false
@@ -144,11 +149,13 @@ func _exit_tree() -> void:
 
 
 ## ── 编辑器预览：一圈光池轮廓（不参与游戏）──
+## 画的是**世界半径** = radius / preview_zoom，和运行时实际照亮范围一致。
 func _draw() -> void:
 	if not Engine.is_editor_hint():
 		return
+	var r: float = radius / maxf(preview_zoom, 0.1)
 	var c: Color = light_color
 	c.a = 0.12 if preview_fill else 0.0
 	if preview_fill:
-		draw_circle(Vector2.ZERO, radius, c)
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 64, Color(light_color.r, light_color.g, light_color.b, 0.65), 1.0, true)
+		draw_circle(Vector2.ZERO, r, c)
+	draw_arc(Vector2.ZERO, r, 0.0, TAU, 64, Color(light_color.r, light_color.g, light_color.b, 0.65), 1.0, true)
