@@ -1165,6 +1165,52 @@ static func _holdout_entry_allow_in_view(entry: Variant) -> bool:
 	return false
 
 
+## 固定刷怪点条目 → 出生演出配置（空 Dictionary = 不演出）。
+## 裸 `Vector2` / 老格式一律返回空 —— 老地图行为零变化。
+static func _holdout_entry_performance(entry: Variant) -> Dictionary:
+	if entry is Dictionary:
+		var cfg: Variant = (entry as Dictionary).get("entry", null)
+		if cfg is Dictionary:
+			return cfg
+	return {}
+
+
+## 出生演出执行器（2026-10-22）。preload 常量而非 class_name —— 与项目既有做法一致，
+## 避免新增 class_name 后需要编辑器重扫全局类缓存。
+const ENTRY_PERFORMER := preload("res://script/director/enemy_entry_performance.gd")
+
+
+## 给刚生成的敌人挂上出生演出：冻结 AI → 跳/落到落点 → 落地僵直 → 交还。
+## 落点必须**站得住**（SpawnSpotResolver 二次校验）：找不到空地就整段跳过，
+## 敌人退回"直接出现在刷怪点"的旧行为 —— 宁可不演出，也不要落进墙里。
+func _play_entry_performance(enemy: Node2D, entry: Variant, probe_node: Node2D) -> void:
+	if enemy == null or not is_instance_valid(enemy):
+		return
+	var cfg: Dictionary = _holdout_entry_performance(entry)
+	if cfg.is_empty():
+		return
+	var landing: Variant = cfg.get("to", Vector2.ZERO)
+	if not (landing is Vector2):
+		return
+	var target: Vector2 = Vector2.ZERO
+	if probe_node != null:
+		var found: Variant = SPOT_RESOLVER.find_near(
+			probe_node, landing as Vector2, ENEMY_SPOT_PROBE_RADIUS,
+			Callable(self, "is_holdout_spot_ok"))
+		if found is Vector2:
+			target = found as Vector2
+	if target == Vector2.ZERO:
+		print("[Director] 出生演出落点 (%d,%d) 找不到可站空位 → 跳过演出"
+			% [int((landing as Vector2).x), int((landing as Vector2).y)])
+		return
+	var play_cfg: Dictionary = cfg.duplicate()
+	play_cfg["to"] = target
+	var performer: Node = ENTRY_PERFORMER.new()
+	performer.name = "EntryPerformance"
+	performer.configure(play_cfg)
+	enemy.add_child(performer)
+
+
 ## 防守战**固定刷怪点**批（2026-09-26 用户需求）：把 count 只敌人**轮转均分**到 positions 上。
 ##   例：5 只 / 3 点 → 2、2、1；`wave_index` 让每批的起点轮转（避免永远同一个点多一只）。
 ##
@@ -1217,6 +1263,8 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 		var enemy: Node2D = spawn_enemy(pos, decor_layer, -1)
 		if enemy != null:
 			spawned_nodes.append(enemy)
+			## 出生演出（2026-10-22）：配置挂在刷怪点上，逐只播放；不配就完全不影响。
+			_play_entry_performance(enemy, entry, probe_node)
 	if blocked_swapped > 0:
 		print("[Director] 固定刷怪点 %d 只被「玩家画面/近旁」暂时屏蔽 → 改走屏幕外刷法（本批 %d 只，点位 %d 个）"
 			% [blocked_swapped, count, point_count])

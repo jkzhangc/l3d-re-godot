@@ -3,10 +3,12 @@ class_name HoldoutSpawnPoint extends Node2D
 
 ## ── 架构定位 ──
 ## 系统：防守战（HoldoutMachine） ｜ 层：玩法（Node2D，关卡作者标记）
-## 联机：仅单机 / Host —— 坐标在防守战开始时被写进事件配置，Client 不需要
+## 联机：仅单机 / Host —— 坐标与演出配置在防守战开始时被写进事件配置，Client 不需要
 ## 职责：防守战**固定刷怪点**标记。挂上之后，防守战每批敌人在这些点之间**轮转均分**
 ##       （5 只 / 3 点 → 2、2、1）；一个都没挂则完全沿用原来的"屏幕外刷"。
+##       可选「出生演出」（2026-10-22）：兵力从该点蹦/落到指定落点，演出结束才开始活动。
 ## 依赖：HoldoutMachine._collect_spawn_points → EventManager → Director.spawn_horde_nodes_at_positions
+##       → script/director/enemy_entry_performance.gd（演出执行器）
 
 ## 【为什么需要它】2026-09-25 用户需求：
 ## 屏外刷法只保证"玩家看不到凭空出现"，位置完全由算法决定 ——
@@ -20,6 +22,13 @@ class_name HoldoutSpawnPoint extends Node2D
 ## 生成时每个落点都会先过 SpawnSpotResolver（图块碰撞 + 物理探测 墙/玩家/敌人）
 ## 挪到最近的可站空位；实在找不到空位的才退回屏幕外刷法。
 
+## ── 出生演出模式（2026-10-22 用户需求）──
+## 数值与 `enemy_entry_performance.gd` 的 MODE_* 常量一一对应（走 Dictionary 协议传过去）。
+##   NONE 直接出现（旧行为）
+##   JUMP 从**本点位**沿抛物线跳到落点，落地后僵直 `land_hold` 秒才开始活动
+##   DROP 从**落点正上方** `arc_height` 像素处垂直坠落（天井/破洞落怪的观感）
+enum EntryMode { NONE = 0, JUMP = 1, DROP = 2 }
+
 @export var enabled: bool = true                  ## 关掉后该点不参与均分（便于临时对比）
 ## ★「玩家画面内也照常刷怪」（2026-10-03 用户需求）。
 ## 默认 false = 旧行为：该点若落在任一玩家的**画面内**、或离玩家不足
@@ -32,6 +41,40 @@ class_name HoldoutSpawnPoint extends Node2D
 @export var allow_in_view: bool = false
 @export var marker_color: Color = Color(1.0, 0.35, 0.25, 1.0)  ## 编辑器标记色（仅编辑器可见）
 @export_range(4.0, 40.0, 2.0) var marker_radius: float = 10.0
+
+
+@export_group("出生演出")
+## 出生演出：刷出的丧尸先表演一段入场动作，**演出结束才开始活动**（追击/攻击）。
+## 演出期间该丧尸的 AI（StateMachine）与自身 _process 全部冻结 —— 它不会走、不会打，
+## 但**可以被攻击**（受击/死亡照常结算；演出中被击杀会立刻落地并交还控制权）。
+@export var entry_mode: EntryMode = EntryMode.NONE:  ## 演出模式
+	set(v):
+		entry_mode = v
+		queue_redraw()
+## 落点：填了 marker 就用它的全局坐标（**相对本节点解析**，同场景兄弟写 `../落点`），
+## 留空则用下面的 `entry_target_offset`。落点会过 SpawnSpotResolver 挪到最近可站格，
+## 找不到空地就**跳过演出**（宁可直接出现，也不要落进墙里）。
+@export var entry_target_marker: NodePath:
+	set(v):
+		entry_target_marker = v
+		queue_redraw()
+@export var entry_target_offset: Vector2 = Vector2(64.0, 0.0):  ## 落点偏移（相对本点位，像素）
+	set(v):
+		entry_target_offset = v
+		queue_redraw()
+@export_range(0.1, 3.0, 0.05) var entry_duration: float = 0.6:  ## 演出时长（秒）
+	set(v):
+		entry_duration = v
+		queue_redraw()
+## JUMP = 抛物弧高；DROP = 起始悬空高度（像素）
+@export_range(0.0, 256.0, 4.0) var entry_arc_height: float = 48.0:
+	set(v):
+		entry_arc_height = v
+		queue_redraw()
+## 落地后僵直多久才交还 AI（秒）：0 = 落地立刻活动
+@export_range(0.0, 3.0, 0.05) var entry_land_hold: float = 0.25
+@export var entry_sound: AudioStream = null        ## 起跳 / 坠落风声（可空）
+@export var entry_land_sound: AudioStream = null   ## 落地音效（可空）
 
 
 ## 运行时默认不画标记（只在编辑器可见）；按 TAB 打开 `Global.debug_visuals` 才在游戏里显示。
@@ -71,3 +114,39 @@ func _draw() -> void:
 	## 「画面内也刷」的点位再套一圈外环 —— TAB 调试视图里一眼能和普通点区分开。
 	if allow_in_view and enabled:
 		draw_arc(Vector2.ZERO, marker_radius + 6.0, 0.0, TAU, 24, col, 1.0)
+	_draw_entry_preview(col)
+
+
+## 落点的**全局**坐标：marker 优先，其次「点位 + 偏移」。
+## HoldoutMachine 收集事件配置时也走这里，保证编辑器预览与实际演出同源。
+func entry_target_global() -> Vector2:
+	if not entry_target_marker.is_empty():
+		var m: Node = get_node_or_null(entry_target_marker)
+		if m is Node2D:
+			return (m as Node2D).global_position
+	return global_position + entry_target_offset
+
+
+## 出生演出轨迹预览（编辑器 / TAB 调试视图）：轨迹 + 落点十字。
+func _draw_entry_preview(col: Color) -> void:
+	if entry_mode == EntryMode.NONE:
+		return
+	var tap: Vector2 = to_local(entry_target_global())
+	var c: Color = Color(col.r, col.g, col.b, col.a * 0.75)
+	const STEPS: int = 20
+	var prev: Vector2 = Vector2.ZERO
+	for i: int in range(STEPS + 1):
+		var k: float = float(i) / float(STEPS)
+		var p: Vector2
+		if entry_mode == EntryMode.JUMP:
+			## 起点在本节点原点，沿直线插值 + 正弦抬升（与执行器同一公式）
+			p = tap * k + Vector2(0.0, -entry_arc_height * sin(PI * k))
+		else:
+			## DROP：从落点正上方垂直落下，末段加速
+			p = Vector2(tap.x, lerpf(tap.y - entry_arc_height, tap.y, k * k))
+		if i > 0:
+			draw_line(prev, p, c, 1.0)
+		prev = p
+	draw_arc(tap, marker_radius * 0.8, 0.0, TAU, 16, c, 1.0)
+	draw_line(tap + Vector2(-6.0, 0.0), tap + Vector2(6.0, 0.0), c, 1.0)
+	draw_line(tap + Vector2(0.0, -6.0), tap + Vector2(0.0, 6.0), c, 1.0)

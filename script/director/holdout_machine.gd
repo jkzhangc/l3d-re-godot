@@ -965,6 +965,7 @@ func _build_config() -> Dictionary:
 ## ★2026-10-03：元素从裸 `Vector2` 升级为
 ##   `{"pos": Vector2, "allow_in_view": bool}` —— 因为要支持「该点位在玩家画面内也照常刷怪」
 ##   这个**逐点位**开关（见 `HoldoutSpawnPoint.allow_in_view`）。只带坐标就丢掉了节点属性。
+## ★2026-10-22：再加一个 `entry` 字段（出生演出配置，空 Dictionary = 不演出）。
 ##   ⚠ 下游（EventManager → Director.spawn_horde_nodes_at_positions）**同时兼容裸 Vector2**，
 ##     所以别处直接传坐标数组的老调用不受影响。
 func _collect_spawn_points() -> Array:
@@ -1032,8 +1033,33 @@ func _collect_spawn_points_recursive(node: Node, out: Array) -> void:
 				"pos": (child as Node2D).global_position,
 				## 该点位是否"画面内也照常刷"（2026-10-03 用户需求）。
 				"allow_in_view": bool(child.get("allow_in_view")),
+				## 出生演出（2026-10-22 用户需求）：空 Dictionary = 不演出，下游据此跳过。
+				"entry": _spawn_entry_performance(child),
 			})
 		_collect_spawn_points_recursive(child, out)
+
+
+## 刷怪点的「出生演出」配置 → 事件配置里的 `entry` 字段。
+## 落点走 `HoldoutSpawnPoint.entry_target_global()`（与编辑器预览同源）。
+## 返回空 Dictionary = 该点不演出（`entry_mode == NONE`）。
+## ⚠ 这里**只做数据搬运**，落点的可站性校验与播放都在 Director 侧（那里才有物理探针）。
+static func _spawn_entry_performance(node: Node) -> Dictionary:
+	var mode: int = int(node.get("entry_mode"))
+	if mode == 0:
+		return {}
+	var point: Node2D = node as Node2D
+	var target: Vector2 = point.global_position
+	if node.has_method("entry_target_global"):
+		target = node.call("entry_target_global")
+	return {
+		"mode": mode,
+		"to": target,
+		"duration": float(node.get("entry_duration")),
+		"arc_height": float(node.get("entry_arc_height")),
+		"land_hold": float(node.get("entry_land_hold")),
+		"sound": node.get("entry_sound"),
+		"land_sound": node.get("entry_land_sound"),
+	}
 
 
 func _is_spawn_point(node: Node) -> bool:
