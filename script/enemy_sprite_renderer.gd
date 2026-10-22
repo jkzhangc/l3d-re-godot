@@ -182,6 +182,46 @@ func draw_sprite_rect(char_idx: int, frame: int) -> void:
 	var x: int = char_col * (fw * 3) + frame * fw
 	var y: int = char_row * (fh * DIRECTIONS) + dir_row * fh
 	_e.sprite.region_rect = Rect2(x, y, fw, fh)
+	_apply_water_split(x, y, fw, fh)
+
+
+## 水面行走（ハンターγ，2026-10-22）：站在水面时把「没入水中的下半身」拆出来，
+## 用第二个精灵以半透明重画；上半身保持原样。
+##
+## 为什么不用 shader：敌人贴图是 `NormalMaps.canvas()` 包过的 CanvasTexture（带法线），
+## 自定义 canvas_item shader 要自己重写 NORMAL_TEXTURE 采样，改坏会牵连所有敌人光照；
+## 两个互补的 region 是最小侵入的做法（offset 只需补偿各自的半高）。
+func _apply_water_split(x: int, y: int, fw: int, fh: int) -> void:
+	var base: Vector2 = _e._sprite_base_offset
+	var overlay: Sprite2D = null
+	if _e.water_walk_enabled:
+		overlay = _e.water_overlay()
+	# 先还原（非水面/无覆盖精灵时走这里）
+	_e.sprite.offset = base
+	if overlay != null:
+		overlay.visible = false
+	if overlay == null or not _e.is_water_submerged():
+		return
+	var ratio: float = clampf(_e.water_submerge_ratio, 0.0, 0.95)
+	if ratio <= 0.0:
+		return   ## 0 = 只保留音效，不做视觉拆分
+	var keep: int = int(round(float(fh) * (1.0 - ratio)))   ## 露出水面的上半身
+	var drop: int = fh - keep                               ## 没入水中的下半身
+	if keep <= 0 or drop <= 0:
+		return
+	# 上半身：region 截到上半，offset 上移半个 drop，使顶端位置保持不变
+	_e.sprite.region_rect = Rect2(x, y, fw, keep)
+	_e.sprite.offset = base + Vector2(0.0, -float(drop) * 0.5)
+	# 下半身：region 截到下半，offset 下移半个 keep（与上半身无缝拼接）
+	overlay.texture = _e.sprite.texture
+	overlay.region_enabled = true
+	overlay.region_rect = Rect2(x, y + keep, fw, drop)
+	overlay.position = _e.sprite.position
+	overlay.offset = base + Vector2(0.0, float(keep) * 0.5)
+	overlay.z_index = _e.sprite.z_index
+	overlay.z_as_relative = _e.sprite.z_as_relative
+	overlay.modulate = Color(1.0, 1.0, 1.0, clampf(_e.water_submerge_alpha, 0.0, 1.0))
+	overlay.visible = true
 
 
 # ═══════════════════════════════════════

@@ -49,6 +49,7 @@
 | **自动喷雾**（オートスプレー，HP=0 自动复活） | `player.gd::_try_auto_spray_revive()` |
 | **属性 炎/雷/氷/酸**（+ 敌人抗性表） | `enemy.gd::take_damage` match element；`resist_fire/ice/lightning`；炎=BurnEffect DoT、雷=感电硬直、氷=冻结+受击 ×1.5 |
 | **敌人机制谜题**（β 正面回避 / γ 丸呑み+多段削り / 女巫徘徊 / Normalize） | `enemy.gd::_apply_frontal_resist`、`EnemyPounceState`、`EnemySwallowState`、`EnemyWitchIdleState` |
+| **γ 水陸両用**（水面行走 + 下半身没入 + 进出水音效） | `SpecialEnemyData.water_*` → `enemy.gd::_update_water_state()`；判定 `EnemyChaseState.is_water_at()`；视觉拆分 `enemy_sprite_renderer.gd::_apply_water_split()`。水面标记 = TileSet 自定义数据层 `is_water`（生成器自动勾 `A:*` 图块） |
 | **敌人阵容 7 种** | `tres/specials/`：ハンター / β / γ、ブレインディモス、ブレアウィッチ、タイラントT002、グリーンソルジャー；`enemys/`：疾走体（Crimson Head）、重装体 |
 | **Crimson Head 10s 力竭** | `script/enemy/EnemyExhaustedState.gd` |
 | **Rush 三型** | `holdout_machine.gd` end_mode `0=TIMER 耐久型 / 1=KILL_COUNT 单发型 / 2=EXTERNAL 永续型` |

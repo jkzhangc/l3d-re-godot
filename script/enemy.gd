@@ -442,6 +442,27 @@ var _swallow_cooldown_left: float = 0.0
 ## 丸呑み诊断日志节流（2026-10-01，仅 `Global.debug_enabled`）：回答"贴脸却不丸吞"卡在哪一道闸。
 var _swallow_diag_left: float = 0.0
 
+@export_group("水面行走（ハンターγ）")
+## 两栖：能在**水面图块**上行走（原作 enemy.html「水陸両用のハンター改良種」）。
+## 判定靠地图 TileSet 的自定义数据层 `is_water`（自动转换的地图由生成器按 RM2K3 水面 ID 标好）。
+## 开启后：①寻路允许直接跨水（不再绕岸）②水面格跳过图块碰撞 ③下半身半透明 + 进出水音效。
+@export var water_walk_enabled: bool = false
+## 下水时「没入水中的下半身」占比（0.5 = 下半身）。
+@export_range(0.0, 0.95, 0.05) var water_submerge_ratio: float = 0.5
+## 水下部分的透明度（0.45 = 半透）。
+@export_range(0.0, 1.0, 0.01) var water_submerge_alpha: float = 0.45
+## 入水音效（陆地 → 水面的瞬间，播放一次）。
+@export var water_enter_sound: AudioStream = null
+## 上岸音效（水面 → 陆地的瞬间，播放一次）。
+@export var water_exit_sound: AudioStream = null
+
+## 当前是否浸在水里（决定下半身透明/音效；由 `_update_water_state()` 每帧维护）。
+var _water_submerged: bool = false
+## 下半身覆盖精灵（没入水中的部分用半透明另外画一层；懒创建，同 Sprite2D 的兄弟节点）。
+var _water_overlay: Sprite2D = null
+## Sprite2D 的原始 offset（拆分上下半身时要在此基础上加偏移）。
+var _sprite_base_offset: Vector2 = Vector2.ZERO
+
 @export_group("动画特效")
 ## 攻击命中时的特效场景，拖入 anim/ 目录下的 .tscn 文件
 @export var attack_effect_anim: PackedScene = null
@@ -581,6 +602,9 @@ func _ready() -> void:
 		discover_label.hide()
 
 	_refresh_sprite()
+	## 水面行走：记下 Sprite2D 的原始 offset（上下半身拆分时在此基础上叠加）
+	if sprite:
+		_sprite_base_offset = sprite.offset
 	if network_presentation_only:
 		# 活的镜像保留实体碰撞，否则客户端预测可以穿过敌人而 Host 会被挡住 → 回弹。
 		_disable_network_simulation(true)
@@ -749,6 +773,65 @@ func _process(delta: float) -> void:
 		_swallow_cooldown_left = maxf(0.0, _swallow_cooldown_left - delta)
 	if _swallow_diag_left > 0.0:
 		_swallow_diag_left = maxf(0.0, _swallow_diag_left - delta)
+
+	# 水面行走（ハンターγ）：水陆切换 → 下半身透明 + 进出水音效
+	_update_water_state()
+
+
+# ═══════════════════════════════════════
+# 水面行走（ハンターγ）
+# ═══════════════════════════════════════
+
+## 两栖判定（供 EnemyChaseState 决定「能否直接跨水」）。
+func is_amphibious() -> bool:
+	return water_walk_enabled and not _is_dead and not network_presentation_only
+
+
+## 当前是否浸在水里（渲染器据此拆分上下半身）。
+func is_water_submerged() -> bool:
+	return _water_submerged
+
+
+## 每帧维护「是否在水面」：只在**切换瞬间**做三件事 —— 播进出水音效、重画精灵、切碰撞。
+## 常驻开销 = 一次格子查询（水面层不存在时立即返回）。
+func _update_water_state() -> void:
+	if not water_walk_enabled or _is_dead or network_presentation_only:
+		return
+	var wet: bool = EnemyChaseState.is_water_at(global_position)
+	if wet == _water_submerged:
+		return
+	_water_submerged = wet
+	## 水陆切换音效（踩水/上岸）
+	var stream: AudioStream = water_enter_sound if wet else water_exit_sound
+	if stream != null:
+		var g: Node = get_node_or_null("/root/Global")
+		if g and g.has_method("play_sfx_managed"):
+			var tree: SceneTree = get_tree()
+			if tree:
+				g.play_sfx_managed(stream, tree.current_scene)
+	## 立即重画（上/下半身拆分由 EnemySpriteRenderer 负责）
+	_refresh_sprite()
+
+
+## 下半身覆盖精灵：与 Sprite2D 同父、同坐标，只在没入水中的部分显示。
+## 用「第二个精灵」而不是 shader —— 敌人贴图是 CanvasTexture（带法线），
+## 自定义 canvas_item shader 必须自己重写 NORMAL_TEXTURE 采样，风险远大于收益。
+func water_overlay() -> Sprite2D:
+	if _water_overlay != null and is_instance_valid(_water_overlay):
+		return _water_overlay
+	if sprite == null or sprite.get_parent() == null:
+		return null
+	_water_overlay = Sprite2D.new()
+	_water_overlay.name = "WaterSubmergeOverlay"
+	_water_overlay.centered = true
+	_water_overlay.region_enabled = true
+	_water_overlay.z_index = sprite.z_index
+	_water_overlay.z_as_relative = sprite.z_as_relative
+	_water_overlay.visible = false
+	_water_overlay.modulate = Color(1.0, 1.0, 1.0, water_submerge_alpha)
+	sprite.get_parent().add_child(_water_overlay)
+	_water_overlay.position = sprite.position
+	return _water_overlay
 
 
 # ═══════════════════════════════════════

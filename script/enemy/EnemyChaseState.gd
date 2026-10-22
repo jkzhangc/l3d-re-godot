@@ -195,7 +195,9 @@ func enter() -> void:
 	# 找到所有 TileMapLayer（static 缓存，只在首次进入时搜索并打印）
 	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
 		_tilemaps.clear()
+		_tilemap_scan_done = false
 		_tile_walk_cache.clear()
+		_water_cell_cache.clear()
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
 		_astar_grid = null  ## 失效 AStarGrid2D，触发重建
@@ -376,6 +378,16 @@ func physics_update(delta: float) -> void:
 
 	var speed: float = enemy.move_speed
 
+	## ── 水面行走（ハンターγ，2026-10-22）──
+	## A* 网格是**全体敌人共享**的（水面在那里被当成墙），不能为单只改；
+	## 两栖敌人只要「直线到玩家没有墙」就直接趟过去 —— 水面本身就是开阔地，
+	## 让它沿 A* 绕岸反而会卡在岸边（且永远不下水）。
+	if enemy.has_method("is_amphibious") and bool(enemy.call("is_amphibious")) \
+			and _segment_crosses_water(enemy.global_position, player.global_position) \
+			and not _segment_has_wall(enemy.global_position, player.global_position):
+		_move_direct(enemy, to_player, speed, delta)
+		return
+
 	# ── 降级模式：连续失败2次 → 切到直接追击（避免A*卡顿）──
 	if _fallback_mode:
 		_repath_timer += delta
@@ -487,6 +499,13 @@ func _move_with_stuck_recovery(body: CharacterBody2D, move_dir: Vector2, speed: 
 	body.collision_mask = saved_mask & ~ENEMY_LAYER_BIT
 
 	var motion := move_dir * speed * delta
+	## 两栖（ハンターγ）：下一步落在水面上 → 直接位移，绕过水面图块的碰撞体。
+	## 目标格有 wall 层图块时不做这一步（避免贴着岸边时顺手穿墙）。
+	if _can_swim_step(body, motion):
+		body.global_position += motion
+		body.velocity = move_dir * speed
+		body.collision_mask = saved_mask
+		return
 	for _i in range(6):
 		var col := body.move_and_collide(motion)
 		if not col:
@@ -668,7 +687,9 @@ static func _ensure_astar_grid() -> bool:
 	# 重新发现 tilemaps
 	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
 		_tilemaps.clear()
+		_tilemap_scan_done = false
 		_tile_walk_cache.clear()
+		_water_cell_cache.clear()
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
 		_find_all_tilemaps()
@@ -1103,6 +1124,7 @@ static func notify_map_changed() -> void:
 	## 清空全部静态缓存并要求重建 A* 网格，下一次 _is_walkable/_ensure_astar_grid
 	## 访问时按新地形重建（与场景重载失效走同一套保护，分帧构建会安全中止）。
 	_tile_walk_cache.clear()
+	_water_cell_cache.clear()
 	_stand_cache.clear()
 	_cell_rect_cache.clear()
 	_astar_grid = null
@@ -1193,6 +1215,7 @@ static func _is_walkable(gp: Vector2i) -> bool:
 		## 而 `_ensure_roles()` 是按 size 判"要不要重算" → 旧角色会原地粘住。
 		_tilemap_roles.clear()
 		_tile_walk_cache.clear()
+		_water_cell_cache.clear()
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
 		_astar_grid = null  ## 场景重载 → 失效网格
@@ -1299,7 +1322,84 @@ static func _is_full_cell_only(blocks: Array[Rect2]) -> bool:
 	return true
 
 
+# ═══════════════════════════════════════
+# 水面判定（水面行走：ハンターγ，2026-10-22）
+# ═══════════════════════════════════════
+#
+# 水面通过 **TileSet 自定义数据层 `is_water`（bool）** 标记：
+#   · 自动转换的地图：`map_tilemap_generator.gd` 按 RM2K3 水面 ID（JSON 里的 `A:*` 键）自动勾好；
+#   · 手工地图：在 TileSet 面板给水面图块勾 `is_water`。
+# 没有任何一层标 `is_water` 时，本文件所有水面逻辑都是零开销的空操作。
+
+const WATER_DATA_LAYER: StringName = &"is_water"
+static var _water_cell_cache: Dictionary = {}   ## Vector2i → bool（与可行走缓存同生命周期）
+static var _tilemap_scan_done: bool = false     ## 已在空表状态下扫过场景（防每帧全树扫描）
+
+
+## 该图块层的 `is_water` 自定义数据层索引；-1 = 这层没标水面。
+static func _water_layer_id(tm: TileMapLayer) -> int:
+	if tm == null or tm.tile_set == null:
+		return -1
+	return tm.tile_set.get_custom_data_layer_by_name(WATER_DATA_LAYER)
+
+
+## 世界坐标是否落在水面上（任意一层标记即可）。
+static func is_water_at(world_pos: Vector2) -> bool:
+	if _tilemaps.is_empty() and not _tilemap_scan_done:
+		## 追击前（Idle/登场帧）也要能判定：整个场景只扫一次，扫不到就不再重试
+		## （测试场景 / 无图块的战斗场里，每帧全树扫描是纯浪费）。
+		_find_all_tilemaps()
+		_tilemap_scan_done = not _tilemaps.is_empty()
+	_ensure_roles()
+	if _tilemaps.is_empty():
+		return false
+	var gp := Vector2i(floori(world_pos.x / _cell_size), floori(world_pos.y / _cell_size))
+	if _water_cell_cache.has(gp):
+		return bool(_water_cell_cache[gp])
+	var wet: bool = false
+	for tm in _tilemaps:
+		if not is_instance_valid(tm):
+			continue
+		var lid: int = _water_layer_id(tm)
+		if lid < 0:
+			continue
+		var td: TileData = tm.get_cell_tile_data(gp)
+		if td != null and bool(td.get_custom_data_by_layer_id(lid)):
+			wet = true
+			break
+	_water_cell_cache[gp] = wet
+	return wet
+
+
+## 线段是否经过水面（用于决定两栖敌人能否直接趟过去）。
+static func _segment_crosses_water(a: Vector2, b: Vector2) -> bool:
+	for gp in _segment_cells(a, b):
+		if is_water_at(Vector2((float(gp.x) + 0.5) * _cell_size, (float(gp.y) + 0.5) * _cell_size)):
+			return true
+	return false
+
+
+## 线段是否经过 wall 层（两栖的直线追击必须保证不穿墙）。
+static func _segment_has_wall(a: Vector2, b: Vector2) -> bool:
+	for gp in _segment_cells(a, b):
+		if _has_wall_at(gp):
+			return true
+	return false
+
+
+## 这一步能否「游过去」：两栖 + 落点是水面 + 落点没有 wall 图块。
+func _can_swim_step(body: CharacterBody2D, motion: Vector2) -> bool:
+	if not body.has_method("is_amphibious") or not bool(body.call("is_amphibious")):
+		return false
+	var to_pos: Vector2 = body.global_position + motion
+	var gp := Vector2i(floori(to_pos.x / _cell_size), floori(to_pos.y / _cell_size))
+	if _has_wall_at(gp):
+		return false
+	return is_water_at(to_pos)
+
+
 static func _has_ground_at(gp: Vector2i) -> bool:
+
 	_ensure_roles()
 	for i in range(_tilemaps.size()):
 		if _tilemap_roles[i] != ROLE_GROUND:

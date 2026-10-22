@@ -8,6 +8,8 @@
 [ext_resource type="Texture2D" uid="uid://upitvel8y2f2" path="res://art/Characters/ハンターγ2.png" id="4"]
 [ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="5_f22bx"]
 [ext_resource type="AudioStream" uid="uid://b7m7w0o2h1hqf" path="res://sound/ハンター声3.ogg" id="6"]
+[ext_resource type="AudioStream" uid="uid://udocs53ts6g3" path="res://sound/水1.ogg" id="7_water_in"]
+[ext_resource type="AudioStream" uid="uid://5egmmyqq1283" path="res://sound/水2.ogg" id="8_water_out"]
 
 [resource]
 script = ExtResource("1")
@@ -45,3 +47,6 @@ swallow_trigger_range = 64.0
 swallow_texture = ExtResource("4")
 swallow_char_sequence = Array[int]([1, 2, 3])
 swallow_weapon_attrition = 16.0
+water_walk_enabled = true
+water_enter_sound = ExtResource("7_water_in")
+water_exit_sound = ExtResource("8_water_out")

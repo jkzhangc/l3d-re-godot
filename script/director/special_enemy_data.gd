@@ -233,7 +233,23 @@ extends Resource
 ## 丸呑み期间对玩家造成的多段削り总量（弹药/耐久削减，原作「多段削りで武器も駄目に」）。
 @export var swallow_weapon_attrition: float = 0.0
 
+@export_group("水面行走（ハンターγ）")
+## 两栖：能在**水面图块**上行走（原作 enemy.html「水陸両用のハンター改良種」）。
+## ⚠ 判定依赖地图 TileSet 的自定义数据层 `is_water`（bool）：
+##   自动转换的地图由 `map_tilemap_generator.gd` 按 RM2K3 水面 ID（A:*）**自动标好**；
+##   手工地图需要在 TileSet 面板里给水面图块勾上该层。
+@export var water_walk_enabled: bool = false
+## 下水时「没入水中的下半身」占比（0.5 = 下半身一半；0 = 不裁，仅音效）。
+@export_range(0.0, 0.95, 0.05) var water_submerge_ratio: float = 0.5
+## 水下部分的透明度（1 = 不透明，0.45 = 半透）。
+@export_range(0.0, 1.0, 0.01) var water_submerge_alpha: float = 0.45
+## 入水音效（从陆地踏入水面的瞬间播放一次）。
+@export var water_enter_sound: AudioStream = null
+## 上岸音效（从水面踏上陆地的瞬间播放一次）。
+@export var water_exit_sound: AudioStream = null
+
 @export_group("远程吐酸（ブレインディモス）")
+
 ## 是否启用远程吐酸（全工程首个敌人远程攻击）。普通僵尸与近战特感保持 false。
 ## 原作依据（enemy.html ブレインディモス条）：「遠距離から酸をはきかけてくる」「この酸には
 ## 削り効果があり、連続で食らうと武器があっという間にダメにされてしまう」。
@@ -374,6 +390,12 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.pounce_cooldown_seconds = pounce_cooldown_seconds
 	# 冲刺期锁定突刺帧（ハンターγ：原作「直到突刺移动结束之前，一直保持1」）
 	enemy.pounce_hold_frame_during_dash = pounce_hold_frame_during_dash
+	# 水面行走（ハンターγ：原作「水陸両用」）
+	enemy.water_walk_enabled = water_walk_enabled
+	enemy.water_submerge_ratio = water_submerge_ratio
+	enemy.water_submerge_alpha = water_submerge_alpha
+	enemy.water_enter_sound = water_enter_sound
+	enemy.water_exit_sound = water_exit_sound
 	# 特感专属攻击动画帧序列（空 = 沿用丧尸默认帧）
 	if attack_char_sequence.size() > 0:
 		enemy.attack_char_sequence = attack_char_sequence
