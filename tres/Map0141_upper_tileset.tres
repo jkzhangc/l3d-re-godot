@@ -174,12 +174,12 @@ texture_region_size = Vector2i(32, 32)
 6:1/0/physics_layer_1/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
 6:1/0/occlusion_layer_0/polygon_0/polygon = SubResource("OccluderPolygon2D_eset_5")
 7:1/0 = 0
-7:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-16, -16, -12.107969, -16, -12.107969, 16, -16, 16)
-7:1/0/physics_layer_1/polygon_0/points = PackedVector2Array(-16, -16, -12.107969, -16, -12.107969, 16, -16, 16)
+7:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+7:1/0/physics_layer_1/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
 7:1/0/occlusion_layer_0/polygon_0/polygon = SubResource("OccluderPolygon2D_eset_6")
 8:1/0 = 0
-8:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(16, -16, 12.107967, -16, 11.789337, 16, 16, 16)
-8:1/0/physics_layer_1/polygon_0/points = PackedVector2Array(16, -16, 12.107967, -16, 11.789337, 16, 16, 16)
+8:1/0/physics_layer_0/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
+8:1/0/physics_layer_1/polygon_0/points = PackedVector2Array(-16, -16, 16, -16, 16, 16, -16, 16)
 8:1/0/occlusion_layer_0/polygon_0/polygon = SubResource("OccluderPolygon2D_eset_7")
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_25qm5"]
