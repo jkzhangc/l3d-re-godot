@@ -30,7 +30,6 @@
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="22_62rj6"]
 [ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="23_6gl1x"]
 [ext_resource type="Script" uid="uid://b8udnx3eyss6u" path="res://script/night_overlay.gd" id="28_rbq3v"]
-[ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="29_o5kda"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="30_h4ipw"]
 [ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="31_7ervs"]
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="32_62rj6"]
@@ -256,16 +255,11 @@ wait_for_chapter_summary = false
 [node name="GameInit" type="Node" parent="." unique_id=1299451149]
 script = ExtResource("9_ggl6r")
 
-[node name="ScreenTone" parent="." unique_id=1513161502 instance=ExtResource("29_o5kda")]
-visible = false
-tone_color = Color(0.2694199, 0.5116678, 0.7522286, 0.591)
-intensity = 0.5
-excluded_nodes = Array[NodePath]([NodePath("../CombatHUD")])
-
 [node name="NightOverlay" type="Node2D" parent="." unique_id=91757001]
 script = ExtResource("28_rbq3v")
 night_tint = Color(0.2694199, 0.5116678, 0.7522286, 0.591)
-night_tint_strength = 0.5
+night_tint_strength = 0.2
+shadow_softness = 2.0
 metadata/_custom_type_script = "uid://b8udnx3eyss6u"
 
 [node name="DirectorConfig" type="Node" parent="." unique_id=2026193401]
@@ -291,11 +285,27 @@ metadata/_custom_type_script = "uid://blx0cs5m3w80f"
 [node name="Torch" type="Node2D" parent="." unique_id=66793347]
 position = Vector2(368, 440)
 script = ExtResource("54_6gl1x")
-radius = 258.0
+radius = 207.0
 light_color = Color(1, 0.94195384, 0.7655037, 1)
-flicker = 0.2
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
 shadow_scale = 1.0
-shadow_opacity = 0.85
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch2" type="Node2D" parent="." unique_id=1436962993]
+position = Vector2(688, 552)
+script = ExtResource("54_6gl1x")
+radius = 207.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
 ember_amount = 16
 ember_speed = 46.0
 ember_radius = 18.0
