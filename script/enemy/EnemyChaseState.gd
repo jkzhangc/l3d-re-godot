@@ -71,8 +71,6 @@ static var _body_half: Vector2 = Vector2(10.0, 14.0)  ## 敌人碰撞体半尺�
 static var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 static var _tilemap_roles: Array[int] = []  ## 与 _tilemaps 平行：图层角色（名字判定只做一次）
-## 与 _tilemaps 平行：该图层的 TileSet 里「寻路障碍」自定义数据层的下标（-1 = 该 tileset 没建这层）。
-static var _tilemap_block_layers: Array[int] = []
 static var _astar_grid: AStarGrid2D = null  ## Godot 内置 A* 网格（静态，全图共享）
 static var _grid_building: bool = false   ## 是否正在分帧构建网格
 static var _grid_build_y: int = 0         ## 当前构建到的行
@@ -157,20 +155,11 @@ const ROLE_SOLID_HINT: int = 2   ## upper / decor / 未知名：参与碰撞判�
 const SCAN_GROUND: int = 1        ## _scan_cell 位掩码：本格有 ground/floor 图块
 const SCAN_WALL: int = 2          ## _scan_cell 位掩码：本格有 wall 层图块（整格阻挡）
 
-## ★「寻路障碍」自定义数据层（2026-09-28 用户需求，方案 A）。
-## TileSet 的**自定义数据层**里建一个名为 `path_blocked` 的 bool 层，给某个图块勾上之后，
-## 该图块所占的格子会被寻路当作**整格阻挡**（与 wall 层同效）。
-##
-## 【为什么需要它】可行走判据是「敌人碰撞体能不能在这一格里站下」（找一个立足点即可），
-## 不是「这格有没有障碍」——这是刻意的：旧规则（任一图块带碰撞 → 整格墙）会把自动图块
-## 漏进通道格的**薄碰撞边带**当成整格墙，32px 窄通道全被误判走不通。
-## 代价则是**碰撞体只占格子一部分**的图块（路障 / 护栏 / 立柱 / 斑马线挡板…）旁边站得下 →
-## 敌人从旁边挤过去（用户实测「这几个图块寻路不判断为障碍物」）。
-## 与其回到会误伤窄通道的旧规则，不如让作者**显式标注**哪些图块是实心障碍。
-##
-## 建层工具：`godot --headless --path . res://tools/add_path_blocked_layer.tscn`（幂等）。
-## 没建这一层的 tileset 一律按原逻辑走，零行为变化。
-const PATH_BLOCKED_LAYER: StringName = &"path_blocked"
+## 注：2026-09-28 曾引入 TileSet 自定义数据层 `path_blocked`，让作者给「碰撞不铺满整格」
+## 的图块逐个打勾，从而按整格阻挡处理。该方案只能覆盖标过的图块，换地图必然复发
+## （R市实测），2026-10-22 起改为**项目规范：图块物理层一律做成整格 32×32**，
+## 本读取逻辑与建层工具 `add_path_blocked_layer` 一并移除。
+## 体检工具：`godot --headless --path . res://tools/report_non_full_collision.tscn`
 
 const NO_STAND: Vector2 = Vector2(-1e9, -1e9)  ## _stand_center 的"该格站不下"返回值
 
@@ -1131,43 +1120,14 @@ static func _ensure_roles() -> void:
 	## 图层角色只在图层集合变化时算一次。**不要在热路径里直接 to_lower() + 子串搜索**：
 	## 那会为每格每层分配两个临时字符串，6.5 万格 × 9 次 ≈ 60 万次分配，
 	## 实测是旧实现里仅次于几何求交的第二大开销。
-	##
-	## 「寻路障碍」自定义数据层的下标同样在这里一次性解析（与角色表同生命周期）。
-	if _tilemap_roles.size() == _tilemaps.size() and _tilemap_block_layers.size() == _tilemaps.size():
+	if _tilemap_roles.size() == _tilemaps.size():
 		return
 	_tilemap_roles.clear()
-	_tilemap_block_layers.clear()
 	for tm in _tilemaps:
 		if not is_instance_valid(tm):
 			_tilemap_roles.append(ROLE_SOLID_HINT)
-			_tilemap_block_layers.append(-1)
 			continue
 		_tilemap_roles.append(_layer_role(tm.name.to_lower()))
-		_tilemap_block_layers.append(_find_block_layer(tm))
-
-
-static func _find_block_layer(tm: TileMapLayer) -> int:
-	## 在 tileset 的自定义数据层里找 `path_blocked`，返回下标；没有则 -1。
-	## 用「层名 → 下标」而不是按名字取值：TileData.get_custom_data(名字) 在层不存在时会报错刷屏。
-	var ts: TileSet = tm.tile_set
-	if ts == null:
-		return -1
-	for i in range(ts.get_custom_data_layers_count()):
-		if ts.get_custom_data_layer_name(i) == PATH_BLOCKED_LAYER:
-			return i
-	return -1
-
-## 该格 TileData 是否勾了 `path_blocked`。**★两个坑（2026-09-29 电脑端实测报错）**：
-##   ① **TileSet 有这一层 ≠ 每个图块都存过这个值** —— 图块从未赋过值时它内部的 `custom_data`
-##      还是**空数组**，直接 `get_custom_data_by_layer_id(idx)` 会报
-##      `Index p_layer_id = 0 is out of bounds (custom_data.size() = 0)` 并每帧刷屏
-##      （生成器产出的地图大量图块从未赋值）。必须先 `has_custom_data()` 探测 —— 越界时它返回 false。
-##   ② **不能写 `bool(td.get_custom_data(...))`** —— GDScript 没有 `bool()` 构造，
-##      会报 `Invalid call. Nonexistent 'bool' constructor.`（同一个错同时刷两条）。直接与 `true` 比。
-static func _cell_path_blocked(td: TileData) -> bool:
-	if td == null:
-		return false
-	return td.has_custom_data(PATH_BLOCKED_LAYER) and td.get_custom_data(PATH_BLOCKED_LAYER) == true
 
 
 static func _search_tilemaps(node: Node) -> void:
@@ -1229,10 +1189,9 @@ static func _is_walkable(gp: Vector2i) -> bool:
 	# 检测静态缓存是否失效（场景重载后）
 	if not _tilemaps.is_empty() and not is_instance_valid(_tilemaps[0]):
 		_tilemaps.clear()
-		## ⚠ 角色表/障碍层表必须一起清：`_tilemaps` 清空后重新搜索**可能凑出同一个 size**，
+		## ⚠ 角色表必须跟着清：`_tilemaps` 清空后重新搜索**可能凑出同一个 size**，
 		## 而 `_ensure_roles()` 是按 size 判"要不要重算" → 旧角色会原地粘住。
 		_tilemap_roles.clear()
-		_tilemap_block_layers.clear()
 		_tile_walk_cache.clear()
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
@@ -1291,14 +1250,6 @@ static func _scan_cell(gp: Vector2i, blocks: Array[Rect2]) -> int:
 		if td == null:
 			continue
 		var role: int = _tilemap_roles[i]
-		## ★显式「寻路障碍」优先于图层角色：TileSet 自定义数据层里勾了 path_blocked 的图块，
-		##   不论它挂在哪一层（ground / upper / wall），该格一律按整格阻挡处理。
-		##   这一层要解决的问题是「碰撞体只占格子一部分」——只靠立足点判定会被从旁边挤过去。
-		var blk: int = _tilemap_block_layers[i]
-		if blk >= 0 and _cell_path_blocked(td):
-			mask |= SCAN_WALL
-			blocks.append(Rect2(0.0, 0.0, _cell_size, _cell_size))
-			continue
 		if role == ROLE_GROUND:
 			mask |= SCAN_GROUND
 		elif role == ROLE_WALL:
