@@ -186,7 +186,41 @@ func _build_tileset(atlas_path: String, mapping: Dictionary, tile_size: int, ani
 		source.create_tile(Vector2i(int(coord[0]), int(coord[1])))
 	tileset.add_source(source)
 	_apply_animation(source, mapping, anim)
+	_apply_water_flags(tileset, source, mapping)
 	return tileset
+
+
+## ── 水面标记（2026-10-22）──
+## 给 TileSet 加 bool 自定义数据层 `is_water`，并把 JSON 里 `A:*` 键（RM2K3 下层
+## < 3000 = 水面/岸线自动图块，见 export_map.py 的 BLOCK_A_SUBTILES_IDS）置 true。
+## 用途：ハンターγ 的「水陸両用」判定（EnemyChaseState.is_water_at）。
+## 全自动：重跑转换即生效；手工地图可在 TileSet 面板手动勾同名自定义数据层。
+const WATER_CUSTOM_LAYER: StringName = &"is_water"
+
+func _apply_water_flags(tileset: TileSet, source: TileSetAtlasSource, mapping: Dictionary) -> void:
+	var has_water := false
+	for key: String in mapping:
+		if key.begins_with("A:"):
+			has_water = true
+			break
+	if not has_water:
+		return
+	var lid: int = tileset.get_custom_data_layer_by_name(WATER_CUSTOM_LAYER)
+	if lid < 0:
+		tileset.add_custom_data_layer()
+		lid = tileset.get_custom_data_layers_count() - 1
+		tileset.set_custom_data_layer_name(lid, WATER_CUSTOM_LAYER)
+		tileset.set_custom_data_layer_type(lid, TYPE_BOOL)
+	for key: String in mapping:
+		if _is_anim_frame_key(key):
+			continue
+		var coord: Array = mapping[key]
+		var cell := Vector2i(int(coord[0]), int(coord[1]))
+		if not source.has_tile(cell):
+			continue
+		var td: TileData = source.get_tile_data(cell, 0)
+		if td != null:
+			td.set_custom_data_by_layer_id(lid, key.begins_with("A:"))
 
 ## 给动画图块设帧数与帧时长。帧必须位于本体右侧连续格且无格，否则跳过并告警。
 func _apply_animation(source: TileSetAtlasSource, mapping: Dictionary, anim: Dictionary) -> void:
@@ -271,6 +305,7 @@ func _reuse_tileset(existing_path: String, mapping: Dictionary, tile_size: int,
 				source.create_tile(cell)
 				added += 1
 		_apply_animation(source, mapping, anim)
+		_apply_water_flags(kept, source, mapping)
 		if sources == 0 and _refresh_texture(source, atlas_path):
 			refreshed += 1
 		sources += 1

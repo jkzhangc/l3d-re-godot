@@ -39,10 +39,34 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 
 ## 当前编码约定
 
-- `4000 + 50×group + variant`：Block D 自动图块，按 EasyRPG 四象限规则烘焙。
-- `5000+n`：Block E 普通下层图块。
-- `10000+n`：Block F 普通上层图块；`10000` 是透明保留格并跳过。
-- LMU 图层矩阵按 `y * width + x` 读取。
+下层 ID 分区（EasyRPG `map_data.h`，**权威**）：
+
+| 区间 | 内容 | 处理 |
+|---|---|---|
+| `0..999` / `1000..1999` / `2000..2999` | **水面自动图块**（Block A ×2 + Block B 深水） | 按 `block*1000 + b_subtile*50 + a_subtile` 解码，4 个 8×8 象限拼装（见下） |
+| `3000..3149` | **Block C**：3 个 4 帧动画（漩涡、水面装饰…） | 列 `3..5`、行 `4..7`，静态取第 0 帧 |
+| `4000+50×group+variant` | Block D 自动图块（屋顶/墙壁/草地） | 按 4 象限表烘焙（12 组 × 50 = 4000..4599） |
+| `5000+n` | Block E 普通下层 | 原样裁切 |
+| `10000+n` | Block F 普通上层；`10000` = 透明格，跳过 | 原样裁切 |
+
+LMU 图层矩阵按 `y * width + x` 读取。
+
+### ★水面「水池边」的拼装规则（与屋顶边缘不同，2026-10-22 查实）
+
+- 地图里存的下层 ID **已经编码了解算后的变体**：
+  `ID = block*1000 + b_subtile*50 + a_subtile`
+  - `block 0/1` = 浅水（A 组两套），`block 2` = 深水
+  - `a_subtile ∈ 0..46` = 岸线形状 → `BLOCK_A_SUBTILES_IDS[a][row][col]`
+    给出**每个 8×8 象限取自芯片组 A 组哪一行（0..3）**，`-1` = 该象限改取 B 组水身
+  - `b_subtile ∈ 0..15` = 深水边界位（位序 TL,TR,BL,BR），该象限取 B 组第 `4+t` 行；
+    深水块（block 2）额外 `t ^= 3`
+  - 还有第三趟：`b/a` 同时非零时用 B 组覆盖（别删，删了内角会错）
+- ⚠ **不要套用 Block D 的表**：D 是 50 项、每项给 4 个显式 `(x,y)` 偏移；
+  水面只有 47 项、每项只给「行号」，列由动画帧 `animID` 决定（`block 1` 再 `+3`）。
+- 动画：水面的「帧」是**列**（0..2，3 帧）；Block C 的「帧」是**行**（0..3，4 帧）。
+- 规则来源：EasyRPG Player `src/tilemap_layer.cpp`
+  （`BlockA_Subtiles_IDS` / `GenerateAutotileAB` / `RecalculateAutotile`）。
+  自检：`python verify_water_rules.py`（20 项，EXIT 0）。
 
 不要直接使用 `2K_TO_VA/batch_convert.py` 的 A2 结果：它会把 RM2K3 左侧自动图块统一压成 VX Ace A2，河流和水面等 A1 语义内容会错位。
 

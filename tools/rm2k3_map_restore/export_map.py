@@ -8,17 +8,80 @@ from PIL import Image
 D_GROUP_ORIGIN=((0,8),(3,8),(0,12),(3,12),(6,0),(9,0),(6,4),(9,4),(6,8),(9,8),(6,12),(9,12))
 # RPG Maker 2000/2003 地图最小尺寸，用于在 LMU 缺宽高字段时反推唯一尺寸
 MIN_MAP_WIDTH,MIN_MAP_HEIGHT=20,15
-# ── Block A：下层动画图块（水面等）────────────────────────────────────────
-# RM2K3 下层 ID 2000 段 = 芯片组左侧的「动画图块区」，每行 6 格 = 1 个动画图块的
-# 3 帧（col 0..2）+ 3 个装饰变体（col 3..5）。ID → 行号的完整表未标定，目前只
-# 实测了下面两个（Map0143 水池 vs RM2K3 编辑器截图逐像素比对，见 2026-09-11 日志）：
-#   2000 ×23 格 → row 7 深水（平均差 2.3）；2004 ×1 格 → 同一深水（差 5.2）。
-# 未在表内的 2000 段 ID 会告警并跳过（needs_calibration）。
-# 1000 = 奨L3D.xyz（Map0136 市街地）的河面：位置与 143 的 01 - 仜.bmp 深水（row 7）一致
-# （用户 2026-09-16 确认），id 段不同只是两套芯片组编号差异 —— Map0136 有 1485 格
-# id=1000，此前 1000 段无任何处理分支被静默丢弃，河流整条消失。
-BLOCK_A_BASE,BLOCK_A_FRAMES,BLOCK_A_DURATION=2000,3,0.3
-BLOCK_A_ANIM={2000:7,2004:7,1000:7}
+# ── 下层 ID 分区（EasyRPG map_data.h，权威）─────────────────────────────
+#   BLOCK_A 0     ..  1999   水面自动图块（2 个 A 组，见下）
+#   BLOCK_B 2000  ..  2999   深水（同属水面自动图块，用 A 组做岸线 + B 组做水身）
+#   BLOCK_C 3000  ..  3149   另外 3 个 4 帧动画（列 3..5，行 4..7）—— 漩涡等
+#   BLOCK_D 4000  ..  4599   12 个自动图块（屋顶/墙壁/草地…）
+#   BLOCK_E 5000  ..  5143   普通下层
+#   BLOCK_F 10000 .. 10143   普通上层（10000 = 透明）
+BLOCK_B_BASE = 2000
+BLOCK_C_BASE, BLOCK_C_END, BLOCK_C_TILES = 3000, 3150, 3
+BLOCK_A_FRAMES, BLOCK_C_FRAMES, BLOCK_ANIM_DURATION = 3, 4, 0.3
+
+# ── 水面自动图块的四象限规则（2026-10-22 查实）──────────────────────────
+# RM2K3 把「岸线形状」和「深水边界」直接编码进地图里的下层 ID：
+#     ID(<3000) = block*1000 + b_subtile*50 + a_subtile
+#       block 0/1 = 浅水（0..1999，A 组两套），block 2 = 深水（2000..2999）
+#       a_subtile 0..46 → BlockA_Subtiles_IDS：**每个 8×8 象限取自芯片组哪一行**
+#                          （-1 = 该象限改从 B 组取水身）
+#       b_subtile 0..15 → 深水边界位（bit 顺序 TL,TR,BL,BR），该象限取 B 组第 4+t 行
+#   来源：EasyRPG Player `src/tilemap_layer.cpp`
+#         `BlockA_Subtiles_IDS` / `GenerateAutotileAB` / `RecalculateAutotile`。
+#   ⚠ 与 Block D（屋顶边缘）**规则不同**：D 用 50 项、每项给出 4 个显式 (x,y) 偏移；
+#     水面只有 47 项、每项只给「行号」，列由动画帧 animID（+3 用于 block 1）决定，
+#     另有一趟「b/a 同时非零时用 B 组覆盖」的修正。别把两张表混用。
+#   ⚠ 只做「按 ID 解码」：LMU 里存的就是已解算的变体 ID，不需要再按邻居重算。
+BLOCK_A_SUBTILES_IDS = (
+ ((None,None),(None,None)),                       # 0  四面都是水（全取 B 组水身）
+ ((3,None),(None,None)),                          # 1
+ ((None,3),(None,None)),                          # 2
+ ((3,3),(None,None)),                             # 3
+ ((None,None),(None,3)),                          # 4  ← 单格水池边的典型值
+ ((3,None),(None,3)),                             # 5
+ ((None,3),(None,3)),                             # 6
+ ((3,3),(None,3)),                                # 7
+ ((None,None),(3,None)),                          # 8
+ ((3,None),(3,None)),                             # 9
+ ((None,3),(3,None)),                             # 10
+ ((3,3),(3,None)),                                # 11
+ ((None,None),(3,3)),                             # 12
+ ((3,None),(3,3)),                                # 13
+ ((None,3),(3,3)),                                # 14
+ ((3,3),(3,3)),                                   # 15
+ ((1,None),(1,None)),                             # 16
+ ((1,3),(1,None)),                                # 17
+ ((1,None),(1,3)),                                # 18
+ ((1,3),(1,3)),                                   # 19
+ ((2,2),(None,None)),                             # 20
+ ((2,2),(None,3)),                                # 21
+ ((2,2),(3,None)),                                # 22
+ ((2,2),(3,3)),                                   # 23
+ ((None,1),(None,1)),                             # 24
+ ((None,1),(3,1)),                                # 25
+ ((3,1),(None,1)),                                # 26
+ ((3,1),(3,1)),                                   # 27
+ ((None,None),(2,2)),                             # 28
+ ((3,None),(2,2)),                                # 29
+ ((None,3),(2,2)),                                # 30
+ ((3,3),(2,2)),                                   # 31
+ ((1,1),(1,1)),                                   # 32
+ ((2,2),(2,2)),                                   # 33
+ ((0,2),(1,None)),                                # 34
+ ((0,2),(1,3)),                                   # 35
+ ((2,0),(None,1)),                                # 36
+ ((2,0),(3,1)),                                   # 37
+ ((None,1),(2,0)),                                # 38
+ ((3,1),(2,0)),                                   # 39
+ ((1,None),(0,2)),                                # 40
+ ((1,3),(0,2)),                                   # 41
+ ((0,0),(1,1)),                                   # 42
+ ((0,2),(0,2)),                                   # 43
+ ((1,1),(0,0)),                                   # 44
+ ((2,0),(2,0)),                                   # 45
+ ((0,0),(0,0)),                                   # 46 孤立单格水（四象限全取 A 组第 0 行）
+)
+
 D_QUARTER_OFFSETS=(
 (((1,2),(1,2)),((1,2),(1,2))),(((2,0),(1,2)),((1,2),(1,2))),(((1,2),(2,0)),((1,2),(1,2))),(((2,0),(2,0)),((1,2),(1,2))),
 (((1,2),(1,2)),((1,2),(2,0))),(((2,0),(1,2)),((1,2),(2,0))),(((1,2),(2,0)),((1,2),(2,0))),(((2,0),(2,0)),((1,2),(2,0))),
@@ -101,12 +164,78 @@ def render_regular(source,value):
     else: return None
     return source.crop((tx*16,ty*16,tx*16+16,ty*16+16))
 
-def render_tile(source,value):
+def water_quarters(block,b_subtile,a_subtile):
+    """水面自动图块 → 4 个 8×8 象限的 (芯片组列偏移, 行号)。
+
+    与 EasyRPG `GenerateAutotileAB` 同序（三趟覆盖），列偏移是**相对动画帧列**的：
+    实际列 = animID + offset。返回 [[(dx,row)]*2]*2，索引 [row][col]。
+    """
+    q=[[None,None],[None,None]]
+    table=BLOCK_A_SUBTILES_IDS[a_subtile]
+    # ① 表里为 None 的象限：取 B 组水身（行 4+t，t 来自 b_subtile 的 TL,TR,BL,BR 位）
+    for j in range(2):
+        for i in range(2):
+            if table[j][i] is not None:
+                continue
+            t=(b_subtile>>(j*2+i))&1
+            if block==2: t^=3
+            q[j][i]=(0,4+t)
+    # ② 表里给了行号的象限：取 A 组该行（block 1 用右侧那一组列）
+    for j in range(2):
+        for i in range(2):
+            if table[j][i] is None:
+                continue
+            q[j][i]=(3 if block==1 else 0,table[j][i])
+    # ③ b、a 同时非零：深水边界再覆盖一次（与上游实现一致，别删）
+    if b_subtile!=0 and a_subtile!=0:
+        for j in range(2):
+            for i in range(2):
+                t=(b_subtile>>(j*2+i))&1
+                if block==2: t*=2
+                if t==0: continue
+                q[j][i]=(0,4+t)
+    return q
+
+def render_water(source,value,frame=0):
+    """水面（ID < 3000）：按 4 个 8×8 象限拼一张完整 16×16。
+
+    frame = 动画帧（0..2）= 芯片组 A 组内的列偏移。
+    非法变体（a>46 / b>15）按「全水」处理而不是丢弃 —— 宁可画成水，也不要在
+    地图上留一个洞（2026-10-22：旧实现静默丢弃导致水池边整圈变空洞）。
+    """
+    block=value//1000
+    rest=value-block*1000
+    b_subtile,a_subtile=divmod(rest,50)
+    if a_subtile>=len(BLOCK_A_SUBTILES_IDS) or b_subtile>=16:
+        b_subtile,a_subtile=0,0
+    plan=water_quarters(block,b_subtile,a_subtile)
+    out=Image.new('RGBA',(16,16))
+    for j in range(2):
+        for i in range(2):
+            dx,row=plan[j][i]
+            sx=(frame+dx)*16+i*8
+            sy=row*16+j*8
+            out.alpha_composite(source.crop((sx,sy,sx+8,sy+8)),(i*8,j*8))
+    return out
+
+def render_block_c(source,value,frame=0):
+    """Block C（3000..3149）：3 个 4 帧动画，列 3..5、行 4..7（漩涡等）。
+
+    frame = 0..3（RM2K3 每 6 个游戏帧换一帧）。静态转换取 frame 0。
+    """
+    n=(value-BLOCK_C_BASE)//50
+    if n<0 or n>=BLOCK_C_TILES:
+        return None
+    col=3+n
+    row=4+(frame%BLOCK_C_FRAMES)
+    return source.crop((col*16,row*16,col*16+16,row*16+16))
+
+def render_tile(source,value,frame=0):
     if 4000<=value<4600: return render_d(source,value)
-    if value in BLOCK_A_ANIM:
-        row = BLOCK_A_ANIM[value]
-        return source.crop((0, row*16, 16, row*16+16))   # Block A 第 0 帧
+    if 0<=value<BLOCK_C_BASE: return render_water(source,value,frame)
+    if BLOCK_C_BASE<=value<BLOCK_C_END: return render_block_c(source,value,frame)
     return render_regular(source,value)
+
 
 def infer_dimensions(cell_count):
     """LMU 缺宽高字段时，用格数 + RM2K3 地图最小尺寸反推唯一尺寸。
@@ -213,18 +342,21 @@ def main():
     w, h = m['width'], m['height']
     lower_unique, upper_unique = {}, {}
     cells, render = [], Image.new('RGBA', (w * 32, h * 32))
-    pending_anim, anim_lower, unknown_anim = {}, {}, set()
+    pending_anim, anim_lower = {}, {}
 
     def key_for(value):
         if value == 10000:
             return None
-        if value in BLOCK_A_ANIM or (BLOCK_A_BASE <= value < BLOCK_A_BASE + 128):
-            if value not in BLOCK_A_ANIM:
-                unknown_anim.add(value)
-                return None
+        ## 水面自动图块（Block A/B：0..2999）。旧实现只认 1000/2000/2004 三个 ID，
+        ## 其余一律丢弃 → 水池边/河岸整圈变空洞（2026-10-22 用户实测）。
+        if 0 <= value < BLOCK_C_BASE:
             key = 'A:%d' % value
-            pending_anim[key] = BLOCK_A_ANIM[value]
             anim_lower[key] = BLOCK_A_FRAMES
+            return key
+        ## Block C（3000..3149）：漩涡等 3 个 4 帧动画，旧实现没有分支。
+        if BLOCK_C_BASE <= value < BLOCK_C_END:
+            key = 'C:%d' % value
+            anim_lower[key] = BLOCK_C_FRAMES
             return key
         if 4000 <= value < 4600:
             key, target = 'D:' + str(value), lower_unique
@@ -251,26 +383,60 @@ def main():
                       'upper_id': up, 'upper_key': uk})
 
     # 动画帧放在最后追加：既有图块的格位坐标保持不变，复用 TileSet 时才稳定。
-    # 帧占据 base 右侧连续 2 格（Godot set_tile_animation_frames_count 的要求）。
-    for key, row in pending_anim.items():
-        for f in range(BLOCK_A_FRAMES):
-            frame = source.crop((f * 16, row * 16, f * 16 + 16, row * 16 + 16))
-            # 第 0 帧沿用本体键（场景 set_cell 用它），其余帧加 #序号 后缀
+    # 本体键 + #序号 帧键由 write_atlas 统一摆位（帧必须在本体**右邻**）。
+    for key in anim_lower:
+        value = int(key.split(':')[1])
+        frames = anim_lower[key]
+        for f in range(frames):
+            frame = render_tile(source, value, f)
+            if frame is None:
+                continue
             frame_key = key if f == 0 else '%s#%d' % (key, f)
             lower_unique[frame_key] = frame.resize((32, 32), Image.Resampling.NEAREST)
-    if unknown_anim:
-        print('WARNING: 未标定的下层动画 ID 已跳过（needs_calibration）: %s'
-              % ','.join(str(v) for v in sorted(unknown_anim)))
 
     def write_atlas(unique, suffix):
+        """把 unique 拼成 atlas。
+
+        ★动画本体的帧格必须**紧贴右侧**（Godot `set_tile_animation_frames_count`
+        只认 cell + (i, 0)，否则采样到别的图块 → 水面闪烁串图）。因此这里先为本体
+        预留 frames 个连续格，其余图块填剩下的空位。
+        """
         cols = 16
-        rows = max(1, (len(unique) + cols - 1) // cols)
+        placed = {}
+        occupied = set()
+
+        def reserve(frames):
+            x, y = 0, 0
+            while True:
+                if x + frames <= cols and all((x + i, y) not in occupied for i in range(frames)):
+                    break
+                x += 1
+                if x + frames > cols:
+                    x, y = 0, y + 1
+            for i in range(frames):
+                occupied.add((x + i, y))
+            return x, y
+
+        for key in unique:
+            if '#' in key:
+                continue
+            placed[key] = reserve(int(anim_lower.get(key, 1)))
+        for key in unique:
+            if '#' not in key:
+                continue
+            base, idx = key.split('#', 1)
+            bx = placed.get(base)
+            if bx is not None:
+                placed[key] = (bx[0] + int(idx), bx[1])
+        rows = max(1, max((y for _, y in occupied), default=0) + 1)
         atlas = Image.new('RGBA', (cols * 32, rows * 32))
         tiles = {}
-        for idx, (key, tile) in enumerate(unique.items()):
-            coord = [idx % cols, idx // cols]
+        for key, tile in unique.items():
+            coord = placed.get(key)
+            if coord is None:
+                continue
             atlas.alpha_composite(tile, (coord[0] * 32, coord[1] * 32))
-            tiles[key] = coord
+            tiles[key] = [coord[0], coord[1]]
         path = out / ('Map%04d_%s_tiles.png' % (args.map_id, suffix))
         atlas.save(path)
         return path, cols, rows, tiles
@@ -288,14 +454,20 @@ def main():
             'upper_atlas': upper_path.name, 'upper_atlas_columns': upper_cols,
             'upper_atlas_rows': upper_rows, 'upper_tiles': upper_tiles,
             'render': render_path.name, 'cells': cells,
-            'mapping': {'4000+50*g+v': 'D baked quadrants',
+            'mapping': {'0..2999': 'water autotile (Block A/B): '
+                                   'block*1000 + b_subtile*50 + a_subtile, '
+                                   '4 quadrants from A rows 0..3 / B rows 4..7',
+                        '3000..3149': 'Block C animated decoration (whirlpool etc.), '
+                                      '4 frames at chipset cols 3..5 rows 4..7',
+                        '4000+50*g+v': 'D baked quadrants',
                         '5000+n': 'E ordinary lower',
                         '10000+n': 'F ordinary upper; 10000 transparent',
-                        'A:<id>': 'Block A animated water; frames share the row, '
-                                  'frame files carry the #<index> suffix'},
-            'animation': {'lower': anim_lower, 'duration': BLOCK_A_DURATION,
+                        'A:<id>': 'Block A/B water; frames share the row, '
+                                  'frame files carry the #<index> suffix',
+                        'C:<id>': 'Block C 4-frame animation; same #<index> suffix'},
+            'animation': {'lower': anim_lower, 'duration': BLOCK_ANIM_DURATION,
                           'note': 'frame 0 的格位即 lower_tiles 里的坐标，'
-                                  '右侧连续 %d-1 格为其余帧' % BLOCK_A_FRAMES}}
+                                  '右侧连续格为其余帧（水面 3 帧 / Block C 4 帧）'}}
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf8')
     print('saved', json_path); print('saved', lower_path); print('saved', upper_path)
     print('saved', render_path); print('lower tiles', len(lower_tiles), 'upper tiles', len(upper_tiles), 'map', w, 'x', h)
