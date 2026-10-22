@@ -20,6 +20,13 @@ class_name LightEmitter extends Node2D
 @export var light_color: Color = Color(1.0, 0.52, 0.22)
 ## 闪烁幅度：0 = 稳定；0.2~0.3 ≈ 火苗；0.6+ = 故障灯
 @export_range(0.0, 1.0, 0.01) var flicker: float = 0.0
+## 闪烁模式。混合 = 随机游走 + 高频正弦（最像火苗）；
+## 固定间隔 = 每 interval 秒重掷一次、不起正弦（节奏整齐）；
+## 随机间隔 = 间隔忽长忽短，不起正弦。
+@export_enum("混合（随机游走+正弦）", "固定间隔", "随机间隔") var flicker_mode: int = 0
+## 闪烁重掷间隔（秒）。0 = 用全局默认（NightOverlay.FLICKER_STEP，当前 0.16）。
+## 0.05 ≈ 神经质；0.15~0.25 ≈ 火苗；0.4+ ≈ 快熄灭的火。
+@export_range(0.0, 2.0, 0.01) var flicker_interval: float = 0.0
 ## 是否被墙体/家具挡住（原工程的"建筑遮挡"）。关掉可以对比"光穿墙"。
 @export var occlude: bool = true
 ## 灯的离地高度（px）。**> 0 时法线贴图才参与光照**，0 = 完全忽略法线（灯变成纯圆形亮斑）。
@@ -34,7 +41,7 @@ class_name LightEmitter extends Node2D
 ## 投影作用距离（世界像素）。0 = 跟随灯半径；超出不投影
 @export_range(0.0, 800.0, 1.0) var shadow_range: float = 0.0
 ## 影子在脚底处的最大不透明度（远端会自动淡出）
-@export_range(0.0, 1.0, 0.01) var shadow_opacity: float = 0.45
+@export_range(0.0, 1.0, 0.01) var shadow_opacity: float = 0.34
 
 @export_group("火星粒子（可选）")
 ## 勾上会在光源位置生成一层上升的火星（CPUParticles2D，加法混合）
@@ -95,6 +102,7 @@ func _try_register() -> void:
 	_overlay = ov
 	ov.register_light(self, radius, intensity, light_color, flicker, occlude)
 	ov.set_light_height(self, light_height)
+	ov.set_light_flicker(self, flicker, flicker_mode, flicker_interval)
 	ov.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 	_registered = true
 
@@ -115,6 +123,7 @@ func apply_params() -> void:
 		return
 	_overlay.register_light(self, radius, intensity, light_color, flicker, occlude)
 	_overlay.set_light_height(self, light_height)
+	_overlay.set_light_flicker(self, flicker, flicker_mode, flicker_interval)
 	_overlay.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
 
 
