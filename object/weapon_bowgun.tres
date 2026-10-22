@@ -49,6 +49,7 @@ script = ExtResource("11")
 left = Vector2(0, -8)
 right = Vector2(0, -8)
 
+
 [resource]
 script = ExtResource("1")
 attack_power = 90

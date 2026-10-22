@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[ext_resource type="Texture2D" uid="uid://hwvns5eraexi" path="res://art/Ui/装備アイコングリーンハーブ調合.png" id="icon"]
+
+[resource]
+script = ExtResource("1")
+item_id = "herb_mixed_01"
+item_name = "グリーンハーブ調合"
+item_type = 0
+hp_restore = 80
+description = "原作 調合ハーブ。比单株草药回复更多。"
+effect_text = "回复 +80 HP"
+sell_price = 25
+stackable = true
+max_stack = 10
+icon = ExtResource("icon")

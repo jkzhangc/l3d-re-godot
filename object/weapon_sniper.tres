@@ -15,7 +15,7 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="9_q7ktf"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="10_2eh8r"]
-[ext_resource type="Texture2D" uid="uid://dkuax4v4pm7eu" path="res://art/Ui/装備アイコンスナイパーライフル.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://b7o8l4bdnlqy8" path="res://art/Ui/装備アイコンスナイパーライフル２.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_sniper1"]
 script = ExtResource("2")
@@ -50,6 +50,7 @@ right = Vector2(0, -10)
 [resource]
 script = ExtResource("1")
 attack_power = 55
+attack_speed = 1.00
 attack_range = 300.0
 weapon_state_name = "Sniper"
 weapon_walk_texture = ExtResource("9_q7ktf")
@@ -81,9 +82,9 @@ attack_frame_durations = Array[float]([0.18, 0.1, 0.16, 0.14])
 bullet_list = Array[ExtResource("2")]([SubResource("Resource_sniper1")])
 hitstun_duration = 0.15
 item_id = "sniper_01"
-item_name = "狙击枪"
+item_name = "M700 狙击枪"
 item_type = 3
-description = "大威力狙击枪。一发子弹可以贯穿最多5个敌人。"
+description = "原作 ｽﾅｲﾊﾟｰﾗｲﾌﾙ/M700（威力150／连射D／射程A）。栓动狙击。"
 icon = ExtResource("icon")
 sell_price = 200
 max_stack = 1

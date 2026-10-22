@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://script/item_data.gd" id="1"]
 
+[ext_resource type="Texture2D" uid="uid://joehtx1ybmtr" path="res://art/Ui/装備アイコングリーンハーブ.png" id="icon"]
+
 [resource]
 script = ExtResource("1")
 item_id = "potion_01"
@@ -12,3 +14,4 @@ effect_text = "回复 +50 HP"
 sell_price = 25
 stackable = true
 max_stack = 10
+icon = ExtResource("icon")

@@ -49,6 +49,11 @@ enum ItemType {
 @export var hp_restore: int = 0
 ## 使用时回复的 TP 量（0=不回复）
 @export var tp_restore: int = 0
+## 鎮痛剤（原作 強化アイテム）：持续秒数内受到的伤害归零。0 = 无此效果。
+## ⚠ 只免疫伤害数字，Heat/削り/Push 等状态照常生效（原作说明书明确）。
+@export var painkiller_seconds: float = 0.0
+## アドレナリン（原作 強化アイテム）：持续秒数内攻击力 ×2。0 = 无此效果。
+@export var adrenaline_seconds: float = 0.0
 
 @export_group("拾取音效")
 ## 拾取该物品（武器/治疗品/投掷物等，所有子类通用）时的音效。

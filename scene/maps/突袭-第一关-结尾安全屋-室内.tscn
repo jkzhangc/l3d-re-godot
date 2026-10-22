@@ -35,15 +35,50 @@
 [ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="28_1g0bs"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="32_13v0d"]
 
+[ext_resource type="Resource" path="res://object/weapon_pistol_02.tres" id="nw1"]
+[ext_resource type="Resource" path="res://object/weapon_pistol_03.tres" id="nw2"]
+[ext_resource type="Resource" path="res://object/weapon_pistol_04.tres" id="nw3"]
+[ext_resource type="Resource" path="res://object/weapon_smg_02.tres" id="nw4"]
+[ext_resource type="Resource" path="res://object/weapon_smg_03.tres" id="nw5"]
+[ext_resource type="Resource" path="res://object/weapon_rifle_02.tres" id="nw6"]
+[ext_resource type="Resource" path="res://object/weapon_rifle_03.tres" id="nw7"]
+[ext_resource type="Resource" path="res://object/weapon_mg_01.tres" id="nw8"]
+[ext_resource type="Resource" path="res://object/weapon_shotgun_02.tres" id="nw9"]
+[ext_resource type="Resource" path="res://object/weapon_shotgun_03.tres" id="nw10"]
+[ext_resource type="Resource" path="res://object/weapon_sniper_02.tres" id="nw11"]
+[ext_resource type="Resource" path="res://object/weapon_sniper_03.tres" id="nw12"]
+[ext_resource type="Resource" path="res://object/weapon_at_rifle_01.tres" id="nw13"]
+[ext_resource type="Resource" path="res://object/weapon_magnum_02.tres" id="nw14"]
+[ext_resource type="Resource" path="res://object/weapon_magnum_03.tres" id="nw15"]
+[ext_resource type="Resource" path="res://object/weapon_launcher_02.tres" id="nw16"]
+[ext_resource type="Resource" path="res://object/weapon_rocket_02.tres" id="nw17"]
+[ext_resource type="Resource" path="res://object/weapon_rocket_03.tres" id="nw18"]
+[ext_resource type="Resource" path="res://object/item_painkiller.tres" id="cw1"]
+[ext_resource type="Resource" path="res://object/item_adrenaline.tres" id="cw2"]
+[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="cw3"]
+[ext_resource type="Resource" path="res://object/item_bolt_grenade.tres" id="cw4"]
+[ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="cw5"]
+[ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="cw6"]
+[ext_resource type="Resource" path="res://object/item_aid_box.tres" id="cw7"]
+[ext_resource type="Resource" path="res://object/item_herb_mixed.tres" id="cw8"]
+[ext_resource type="Resource" path="res://object/weapon_launcher_acid.tres" id="cw9"]
+[ext_resource type="Resource" path="res://object/weapon_launcher_ice.tres" id="cw10"]
+[ext_resource type="Resource" path="res://object/weapon_launcher_thunder.tres" id="cw11"]
+[ext_resource type="Resource" path="res://object/throwable_dynamite.tres" id="cw12"]
+[ext_resource type="Resource" path="res://object/throwable_flash.tres" id="cw13"]
+[ext_resource type="Resource" path="res://object/item_potion.tres" id="cw14"]
+[ext_resource type="Resource" path="res://object/item_tp_potion.tres" id="cw15"]
+[ext_resource type="Resource" path="res://object/item_pills.tres" id="cw16"]
 [sub_resource type="Resource" id="Resource_id55e"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("11_ach4w"), ExtResource("12_7n5my")])
+items = Array[Resource]([ExtResource("11_ach4w"), ExtResource("nw16"), ExtResource("cw9"), ExtResource("cw10"), ExtResource("cw11"), ExtResource("12_7n5my")])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+weights = Array[float]([1.00, 0.04, 0.14, 0.14, 0.14, 1.00])
 
 [sub_resource type="Resource" id="Resource_ymy3p"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("13_e6jfg"), ExtResource("14_lfj0y")])
-weights = Array[float]([0.5, 0.5])
+items = Array[Resource]([ExtResource("13_e6jfg"), ExtResource("14_lfj0y"), ExtResource("cw12"), ExtResource("cw13"), ExtResource("cw3"), ExtResource("cw4"), ExtResource("cw5"), ExtResource("cw6")])
+weights = Array[float]([0.50, 0.50, 0.47, 0.47, 0.50, 0.50, 0.40, 0.40])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_rvkbe"]
@@ -54,56 +89,57 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_putw2"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("15_lfj0y")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("15_lfj0y"), ExtResource("cw14"), ExtResource("cw15"), ExtResource("cw16"), ExtResource("cw7"), ExtResource("cw8"), ExtResource("cw1"), ExtResource("cw2")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_rkbvx"]
 script = ExtResource("12_e6jfg")
 items = Array[Resource]([ExtResource("16_ymy3p"), ExtResource("18_u66fg"), ExtResource("19_13v0d")])
-weights = Array[float]([1.0])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_278n4"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("17_iub5q")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("17_iub5q"), ExtResource("nw14"), ExtResource("nw15")])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_8d8vq"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("18_hsddj")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("18_hsddj"), ExtResource("nw6"), ExtResource("nw7")])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_8uec1"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("19_dgg5q")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("19_dgg5q"), ExtResource("nw11"), ExtResource("nw12")])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_dgg5q"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("20_hsddj")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("20_hsddj"), ExtResource("nw1"), ExtResource("nw2"), ExtResource("nw3")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_7n5my"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("21_278n4")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("21_278n4"), ExtResource("nw9"), ExtResource("nw10")])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_5x104"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("22_8d8vq")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("22_8d8vq"), ExtResource("nw4"), ExtResource("nw5")])
+weights = Array[float]([1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_u66fg"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("23_8d8vq")])
+items = Array[Resource]([ExtResource("23_8d8vq"), ExtResource("nw17"), ExtResource("nw18")])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+weights = Array[float]([1.00, 1.00, 1.00])
 
 [sub_resource type="Resource" id="Resource_1g0bs"]
 script = ExtResource("12_e6jfg")
@@ -113,8 +149,8 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_028cn"]
 script = ExtResource("12_e6jfg")
-items = Array[Resource]([ExtResource("15_lfj0y")])
-weights = Array[float]([1.0])
+items = Array[Resource]([ExtResource("15_lfj0y"), ExtResource("cw14"), ExtResource("cw15"), ExtResource("cw16"), ExtResource("cw7"), ExtResource("cw8"), ExtResource("cw1"), ExtResource("cw2")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="突袭第一关结尾安全屋室内" type="Node2D" unique_id=1021800740]

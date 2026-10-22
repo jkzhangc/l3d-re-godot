@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[ext_resource type="Texture2D" uid="uid://678r0gyqt7ua" path="res://art/Ui/装備アイコン鎮痛剤.png" id="icon"]
+
+[resource]
+script = ExtResource("1")
+item_id = "painkiller_01"
+item_name = "镇痛剂"
+item_type = 7
+description = "原作 強化アイテム/鎮痛剤。短时间内完全免疫伤害，但 Heat/削り/Push 等状态照常生效。"
+effect_text = "15 秒内受到的伤害为 0"
+sell_price = 80
+stackable = true
+max_stack = 5
+painkiller_seconds = 15.0
+icon = ExtResource("icon")

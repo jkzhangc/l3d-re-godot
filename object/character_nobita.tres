@@ -49,8 +49,8 @@ weapon_walk_textures = {
 "Smg": ExtResource("26_smg"),
 "Sniper": ExtResource("29_snp")
 }
-allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01"])
-allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01"])
+allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01", "rifle_02", "rifle_03", "shotgun_02", "shotgun_03", "smg_02", "smg_03", "sniper_02", "sniper_03", "launcher_02", "rocket_02", "rocket_03", "mg_01", "at_rifle_01"])
+allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01", "pistol_02", "pistol_03", "pistol_04", "magnum_02", "magnum_03"])
 shove_walk_texture = ExtResource("6_o5s41")
 shove_fatigue_limit = 10
 hurt_sound = ExtResource("3_o5s41")

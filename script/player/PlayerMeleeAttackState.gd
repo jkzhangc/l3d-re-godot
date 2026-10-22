@@ -190,6 +190,8 @@ func _check_melee_hits() -> void:
 
 	## 暴击时伤害按武器倍率放大（数值与黄色伤害数字一致）
 	var damage: float = _wd.get_effective_damage() * (_wd.critical_damage if _is_headshot else 1.0)
+	# アドレナリン（原作 強化アイテム）：15 秒内出伤 ×2
+	damage *= character.get_attack_damage_mult()
 	var hit_any: bool = false
 	var hit_ids: Array[int] = []  ## 已命中目标 instance_id（防双次命中）
 

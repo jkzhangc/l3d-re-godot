@@ -2,6 +2,8 @@
 
 [ext_resource type="Script" path="res://script/item_data.gd" id="1"]
 
+[ext_resource type="Texture2D" uid="uid://hwvns5eraexi" path="res://art/Ui/装備アイコングリーンハーブ調合.png" id="icon"]
+
 [resource]
 script = ExtResource("1")
 item_id = "tp_potion_01"
@@ -13,3 +15,4 @@ tp_restore = 30
 sell_price = 30
 stackable = false
 max_stack = 1
+icon = ExtResource("icon")

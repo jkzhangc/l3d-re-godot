@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="2_rtgqi"]
-[ext_resource type="Texture2D" uid="uid://dwp2vko8s307e" path="res://art/Ui/装備アイコン手榴弾.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://0my24uhy42x" path="res://art/Ui/装備アイコンダイナマイト.png" id="3"]
 [ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="4_butmx"][ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="5_58x6b"]
 [resource]
 script = ExtResource("1")

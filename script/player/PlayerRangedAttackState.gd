@@ -166,6 +166,8 @@ func _fire_bullet() -> void:
 		var awaken: bool = character.is_awaken_active()
 		if awaken:
 			damage *= character.AWAKEN_DAMAGE_MULT
+		# アドレナリン（原作 強化アイテム）：15 秒内出伤 ×2
+		damage *= character.get_attack_damage_mult()
 
 		if bullet.has_method("setup"):
 			# 参数由 BulletData.build_setup_params 统一给出（与联机 Host 同一入口，

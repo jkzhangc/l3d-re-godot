@@ -267,6 +267,12 @@ const ATTRITION_AMMO: int = SpecialAction.ATTRITION_AMMO            ## 削り：
 const ATTRITION_DURABILITY: float = SpecialAction.ATTRITION_DURABILITY  ## 削り：耐久每次 -8
 var _heat_time: float = 0.0                 ## Heat 剩余时间（>0=禁止见切/TP停/Guts停）
 
+# ── 強化アイテム（原作 weapon.html：鎮痛剤 / アドレナリン）──
+## 鎮痛剤截止时刻（Time.get_ticks_msec）；期间受到的伤害归零，状态异常照旧。
+var _painkiller_until_msec: int = 0
+## アドレナリン截止时刻；期间出伤 ×2。
+var _adrenaline_until_msec: int = 0
+
 # ── 覚醒コマンド（原作：構え中 Z+X；のび太=集中射撃）──
 const AWAKEN_TP_DRAIN_PER_SEC: float = SpecialAction.AWAKEN_TP_DRAIN_PER_SEC  ## 发动中 TP 缓慢消耗
 const AWAKEN_DAMAGE_MULT: float = SpecialAction.AWAKEN_DAMAGE_MULT            ## 射撃威力上升倍率
@@ -1591,6 +1597,10 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	# 不让武器伤、爆头倍率或防御把友伤放大或减成零。ガッツ仍按原规则保命。
 	damage = HitResolver.resolve_player_damage_for_mode(damage, source_owner, self,
 		online, friendly_enabled, source_is_player_origin)
+	## 鎮痛剤（原作 強化アイテム）：期间伤害归零 —— 但**不能 return**，
+	## 后面的 Heat / 削り / Push / 元素负效果要照常生效（原作说明书明确这点）。
+	if is_painkiller_active():
+		damage = 0.0
 	var hp_before: float = current_hp
 	# ── ガッツ（原作 system.html ◆ガッツ）：HP≥2 时任何攻击保底 1 HP 不死（Heat 中停止）──
 	if damage > 0.0 and not is_heat_active() and current_hp >= 2.0 and damage >= current_hp:
@@ -1762,6 +1772,25 @@ func apply_item_effects(item: ItemData) -> void:
 		heal(item.hp_restore)
 	if item.tp_restore > 0:
 		restore_tp(item.tp_restore)
+	## 強化アイテム（原作 weapon.html）：鎮痛剤 / アドレナリン
+	## 重复使用取「较晚结束」而不是叠加时长（原作只写 15 秒，没有叠加语义）。
+	var now: int = Time.get_ticks_msec()
+	if item.painkiller_seconds > 0.0:
+		_painkiller_until_msec = maxi(_painkiller_until_msec, now + int(item.painkiller_seconds * 1000.0))
+		print("[玩家] 鎮痛剤：%.0f 秒内伤害归零" % item.painkiller_seconds)
+	if item.adrenaline_seconds > 0.0:
+		_adrenaline_until_msec = maxi(_adrenaline_until_msec, now + int(item.adrenaline_seconds * 1000.0))
+		print("[玩家] アドレナリン：%.0f 秒内攻击力 ×2" % item.adrenaline_seconds)
+
+
+## アドレナリン：攻击力倍率（1.0 = 无增益）。远程子弹与近战伤害在**出伤时**乘这个值。
+func get_attack_damage_mult() -> float:
+	return 2.0 if Time.get_ticks_msec() < _adrenaline_until_msec else 1.0
+
+
+## 鎮痛剤是否生效中。
+func is_painkiller_active() -> bool:
+	return Time.get_ticks_msec() < _painkiller_until_msec
 
 
 ## 回复 TP（技能点）。供物品使用效果与自动回复共用。

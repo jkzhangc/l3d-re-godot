@@ -14,7 +14,7 @@
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_p5ubh"]
-[ext_resource type="Texture2D" uid="uid://drdndudt6q038" path="res://art/Ui/装備アイコンサブマシンガン.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://1olunt4udqhd" path="res://art/Ui/装備アイコンサブマシンガン３.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_o8qhj"]
 script = ExtResource("2_a1cwu")
@@ -46,8 +46,9 @@ right = Vector2(0, -12)
 
 [resource]
 script = ExtResource("7_nmfdk")
-attack_power = 30
-attack_range = 200.0
+attack_power = 23
+attack_speed = 1.10
+attack_range = 190.0
 weapon_state_name = "Smg"
 weapon_walk_texture = ExtResource("8_0clvs")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
@@ -72,16 +73,16 @@ bullet_spawn_offsets = {
 "shizuka": SubResource("WSO_smg_01_shizuka"),
 "suneo": SubResource("WSO_smg_01_suneo")
 }
-magazine_capacity = 30
+magazine_capacity = 20
 ammo_item_id = "ammo_smg"
 attack_char_sequence = Array[int]([3, 2])
 attack_frame_durations = Array[float]([0.1, 0.03])
 bullet_list = Array[ExtResource("2_a1cwu")]([SubResource("Resource_o8qhj")])
 hitstun_duration = 0.1
 item_id = "smg_01"
-item_name = "冲锋枪"
+item_name = "Vz61 蝎式"
 item_type = 3
-description = "一把普通的手枪。远程攻击。"
+description = "原作 ｻﾌﾞﾏｼﾝｶﾞﾝ/Vz61（威力15／连射A）。轻小、弹匣少，撒得快。"
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1

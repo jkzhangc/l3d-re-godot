@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://script/item_data.gd" id="1"]
+
+[ext_resource type="Texture2D" uid="uid://35wtgkdklaur" path="res://art/Ui/装備アイコンアドレナリン.png" id="icon"]
+
+[resource]
+script = ExtResource("1")
+item_id = "adrenaline_01"
+item_name = "肾上腺素"
+item_type = 7
+description = "原作 強化アイテム/アドレナリン。短时间内攻击力翻倍；即死类攻击不会因此变得更"即死"。"
+effect_text = "15 秒内攻击力 ×2"
+sell_price = 120
+stackable = true
+max_stack = 5
+adrenaline_seconds = 15.0
+icon = ExtResource("icon")
