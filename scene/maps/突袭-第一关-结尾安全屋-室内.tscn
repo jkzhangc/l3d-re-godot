@@ -92,7 +92,7 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_putw2"]
 script = ExtResource("12_e6jfg")
-items = ([ExtResource("15_lfj0y"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
+items = Array[Resource]([ExtResource("15_lfj0y"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
 weights = Array[float]([1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
@@ -152,7 +152,7 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_028cn"]
 script = ExtResource("12_e6jfg")
-items = ([ExtResource("15_lfj0y"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
+items = Array[Resource]([ExtResource("15_lfj0y"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
 weights = Array[float]([1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 

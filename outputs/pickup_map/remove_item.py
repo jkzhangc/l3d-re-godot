@@ -37,7 +37,8 @@ def strip_array(line, key, remove_ids):
         return line, None
     for i in sorted(idxs, reverse=True):
         toks.pop(i)
-    return "%s = %s([%s])" % (key, line[line.index("(") : line.index("([")], ", ".join(toks)), set(idxs)
+    prefix = line[:line.index("([")]          # 例如 `items = Array[Resource]`
+    return "%s([%s])" % (prefix, ", ".join(toks)), set(idxs)
 
 
 def main(argv):

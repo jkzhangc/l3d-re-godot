@@ -102,7 +102,7 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_l6qwe"]
 script = ExtResource("7_caxuo")
-items = ([ExtResource("13_rkbvx"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
+items = Array[Resource]([ExtResource("13_rkbvx"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
 weights = Array[float]([1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 

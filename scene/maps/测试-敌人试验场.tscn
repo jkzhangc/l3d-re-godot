@@ -5,6 +5,7 @@
 [ext_resource type="TileSet" uid="uid://b2v2ndordnd7n" path="res://tres/Map0147_upper_tileset.tres" id="3_02tox"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="4_4shf0"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="4_hf72w"]
+[ext_resource type="Resource" uid="uid://cjequ6xby4tg5" path="res://tres/specials/ティンダロス.tres" id="4_ravsi"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="5_543jk"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="5_u60el"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="6_mkn31"]
@@ -38,7 +39,6 @@
 [ext_resource type="Resource" uid="uid://dpvwesq5my6dx" path="res://tres/specials/タイラントT002.tres" id="21_y2uxk"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="24_qj87a"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="30_543jk"]
-[ext_resource type="AudioStream" uid="uid://c3wls25s18k2n" path="res://music/ボス１.mp3" id="30_rx6vf"]
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="90_90_gm"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="91_demos"]
 [ext_resource type="Script" uid="uid://cceesvgqn00di" path="res://script/dev_enemy_spawner.gd" id="99_devspawn"]
@@ -136,8 +136,10 @@ position = Vector2(465, 938)
 
 [node name="DevEnemySpawner" type="Node2D" parent="DecorLayer" unique_id=991501218]
 script = ExtResource("99_devspawn")
+zombie_enabled = false
 zombie_mode = 1
-special_fixed = ExtResource("90_90_gm")
+special_enabled = true
+special_fixed = ExtResource("4_ravsi")
 special_interval = 1.0
 special_max_alive = 1
 
@@ -249,10 +251,8 @@ front_max_dist = 500.0
 zombie_pool = Array[ExtResource("11_y2uxk")]([ExtResource("12_5fbns"), ExtResource("13_oj32u"), ExtResource("14_vpsco"), ExtResource("15_8depf"), ExtResource("16_723xh")])
 special_pool = Array[ExtResource("17_flfka")]([ExtResource("18_t3ys5"), ExtResource("19_4shf0"), ExtResource("20_543jk"), ExtResource("90_90_gm"), ExtResource("91_demos")])
 special_first_delay_min = 5.0
-special_first_delay_max = 30.0
 special_max_alive = 3
 holdout_tank_data = ExtResource("21_y2uxk")
-boss_music = ExtResource("30_rx6vf")
 metadata/_custom_type_script = "uid://blx0cs5m3w80f"
 
 [node name="NoSpawnLayer" parent="." unique_id=522033998 instance=ExtResource("30_543jk")]
