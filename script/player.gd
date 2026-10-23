@@ -124,6 +124,11 @@ enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 @onready var animation_timer: Timer = $AnimationTimer
 @onready var hurt_area: Area2D = _setup_hurt_area()
 
+## 武器单体动作图（人物与武器分开显示）。`_setup_weapon_sprite()` 在 `_ready` 建出来，
+## 挂在 `sprite` 下 —— 这样它自动继承角色精灵的 position(0,-16)（画布中心天然对齐角色格中心）
+## 与光罩/可见层。没有配动作图的武器一直 `visible = false`（= 旧行为）。
+var weapon_sprite: Sprite2D = null
+
 ## 精灵渲染服务（_ready 创建；持有本实体引用，见 script/player_sprite_renderer.gd）。
 var _sprite_renderer: SpriteRenderer = null
 ## 音效服务（_ready 创建；见 script/player_sfx.gd）。
@@ -147,6 +152,11 @@ var _is_walking: bool = false   ## 当前外观是行走(true)还是跑步(false
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
+## 当前处于**武器攻击序列**的第几步（`melee_attack_char_sequence` 的下标）。
+## -1 = 不在攻击动画里（走路/举起/后摇收尾…）→ 武器单体动作图隐藏。
+## 与 `_current_weapon_char_idx` 分开记：同一个 char_idx 可能在序列里出现多次，
+## 只有步号才能区分「这是前摇还是后摇」（见 WeaponData.melee_weapon_sprite_seq_cols）。
+var _current_weapon_seq_idx: int = -1
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
 var _throwable_mode: bool = false           ## 是否处于投掷物举起模式（使用投掷物行走图）
 var _throwable_texture: Texture2D = null    ## 投掷物举起行走图精灵表
@@ -346,6 +356,7 @@ func _ready() -> void:
 	animation_timer.wait_time = _mode_anim_duration(true)
 	animation_timer.timeout.connect(_on_animation_timer_timeout)
 	animation_timer.start()
+	_setup_weapon_sprite()
 	_refresh_sprite()
 
 	# 从本实体对应座位恢复 HP（用于存档加载后）。联机实体的状态由
@@ -907,6 +918,7 @@ func enter_weapon_mode(wd: WeaponData) -> void:
 	_weapon_mode = true
 	_weapon_data = wd
 	_current_weapon_char_idx = wd.get_raise_char_sequence()[0]
+	_current_weapon_seq_idx = -1
 	if animation_timer:
 		animation_timer.wait_time = _mode_anim_duration(true)
 		animation_timer.start()
@@ -917,6 +929,7 @@ func exit_weapon_mode() -> void:
 	_weapon_mode = false
 	_weapon_data = null
 	_current_weapon_char_idx = 0
+	_current_weapon_seq_idx = -1
 	## ★★ 这里**不再**解除覚醒、也**不再**解除固定朝向（2026-10-03 用户实测两条）。
 	## 【根因】本函数**职责过载**：它同时被「真的放下武器」（`_begin_lower()`）和
 	##   「状态切换」（攻击 / 装弹 / 推击的 `exit()` 都会先退再进武器模式）调用。
@@ -981,6 +994,7 @@ func _sanitize_facing_lock() -> void:
 func set_weapon_frame(idx: int) -> void:
 	if _weapon_data:
 		_current_weapon_char_idx = _weapon_data.get_raise_char_sequence()[idx]
+		_current_weapon_seq_idx = -1
 	_refresh_sprite()
 
 
@@ -989,12 +1003,17 @@ func set_weapon_ready_frame() -> void:
 	if _weapon_data:
 		var seq: Array[int] = _weapon_data.get_raise_char_sequence()
 		_current_weapon_char_idx = seq[seq.size() - 1]
+		_current_weapon_seq_idx = -1
 	_refresh_sprite()
 
 
 ## 设置攻击动画的角色索引（直接使用 char_idx 值）
-func set_attack_char_index(char_idx: int) -> void:
+## 设置武器攻击姿态。`seq_idx` = 该姿态在**攻击序列**里的下标（第 1 步 = 0）；
+## 传 -1（默认）= 不在攻击动画里 → 武器单体动作图隐藏。
+## 只有近战攻击状态会传步号；远程攻击/举起/后摇收尾传默认值即可。
+func set_attack_char_index(char_idx: int, seq_idx: int = -1) -> void:
 	_current_weapon_char_idx = char_idx
+	_current_weapon_seq_idx = seq_idx
 	_refresh_sprite()
 
 
@@ -1220,6 +1239,7 @@ func rebind_weapon_after_equip(wd: WeaponData) -> void:
 	if _weapon_mode and wd and not wd.weapon_state_name.is_empty():
 		_weapon_data = wd
 		_current_weapon_char_idx = wd.get_raise_char_sequence()[0]
+		_current_weapon_seq_idx = -1
 		# 跳过举起动画直接落到就绪帧（等价联机侧的 weapon_skip_raise 语义）
 		set_weapon_ready_frame()
 		print("[玩家] 换装后重绑武器表现: %s" % wd.item_name)
@@ -1227,6 +1247,7 @@ func rebind_weapon_after_equip(wd: WeaponData) -> void:
 	## 不在武器模式：清掉旧快照即可（下次举起会从新武器读起）
 	_weapon_data = null
 	_current_weapon_char_idx = 0
+	_current_weapon_seq_idx = -1
 	_refresh_sprite()
 
 
@@ -1497,6 +1518,7 @@ func refresh_after_switch() -> void:
 	##      而投掷物/推击等状态的 exit 路径不覆盖全部组合）。
 	## 这里走与 `exit_weapon_mode()` 相同的收敛逻辑（幂等），不依赖状态机 exit 链。
 	_current_weapon_char_idx = 0
+	_current_weapon_seq_idx = -1
 	_shove_mode = false
 	_shove_texture = null
 	exit_throwable_mode()
@@ -2103,6 +2125,27 @@ func _draw() -> void:
 
 func _refresh_sprite() -> void:
 	_sprite_renderer.refresh_sprite()
+
+
+## 建「武器单体动作图」子节点（2026-10-23）。
+## 为什么挂在 `sprite` 下而不是 player 根节点：
+##   · 角色 Sprite2D 的 position 是 (0,-16)（把 48x64 帧的底边对齐脚部），
+##     武器画布挂在它下面 → 两者的"中心"天然一致，配偏移时只需调差值；
+##   · z_index 默认相对父节点，朝上时设 -1 就画到人物身后，不用碰 y-sort；
+##   · 光罩 / 可见层跟角色精灵保持一致，夜间灯光不会把武器漏在光外。
+## 没有配 `melee_weapon_sprite` 的武器保持 `visible = false`，行为与改动前完全一致。
+func _setup_weapon_sprite() -> void:
+	if weapon_sprite != null or sprite == null:
+		return
+	weapon_sprite = Sprite2D.new()
+	weapon_sprite.name = "WeaponSprite"
+	weapon_sprite.region_enabled = true
+	weapon_sprite.centered = true
+	weapon_sprite.visible = false
+	weapon_sprite.light_mask = sprite.light_mask
+	weapon_sprite.visibility_layer = sprite.visibility_layer
+	sprite.add_child(weapon_sprite)
+
 
 ## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
 ## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。

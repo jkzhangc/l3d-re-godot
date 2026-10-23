@@ -136,9 +136,12 @@ func physics_update(delta: float) -> void:
 		_check_melee_hits()
 
 
+## 设置攻击帧。**步号必须一并传下去** —— 「武器单体动作图」按
+## `WeaponData.melee_weapon_sprite_seq_cols` 用步号选列（前摇/挥动/后摇），
+## 只传 char_idx 无法区分同一姿态在序列里的不同位置。
 func _set_attack_frame(seq_idx: int) -> void:
 	var char_idx: int = _wd.get_melee_attack_char_sequence()[seq_idx]
-	character.set_attack_char_index(char_idx)
+	character.set_attack_char_index(char_idx, seq_idx)
 
 
 func _set_post_attack_frame(seq_idx: int) -> void:

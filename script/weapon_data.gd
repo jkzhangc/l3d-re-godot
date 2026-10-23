@@ -121,6 +121,83 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 ## 命中特效位置偏移覆盖（非零时替换 .tscn 内置的 position_offset）
 @export var hit_effect_offset_override: Vector2 = Vector2.ZERO
 
+@export_group("武器单体动作图（人物与武器分开显示）")
+## 4 方向 × 3 帧的「武器单独攻击动作图」。
+## 布局：**3 列 = 前摇 / 挥动(带残影) / 后摇**，**4 行 = 下 / 左 / 右 / 上**（与 FaceDir 同序）。
+## `art/WeaponAttack/<武器>/<武器>_attack1.png` 就是按这个布局生成的；`_attack2.png` 是第二段连招。
+## **留空 = 不显示单独武器**，只靠角色行走图表现（= 旧行为，零改动）。
+@export var melee_weapon_sprite: Texture2D = null
+## 攻击序列步号 → 动作图列号（0=前摇 / 1=挥动 / 2=后摇）。
+## **键 = `melee_attack_char_sequence` 的下标**（第 1 步 = 0），**值 = 动作图用第几列**。
+## 例：`{1: 0, 2: 1, 3: 2}` = 动作图第 1/2/3 帧分别落在角色攻击的第 2/3/4 步；
+## 没列出的步号（如第 1 步）就不显示武器。
+## 字典为空 → 自动按步序推：第 1 步=前摇、最后 1 步=后摇、中间都算挥动。
+@export var melee_weapon_sprite_seq_cols: Dictionary = {}
+## 动作图相对角色格中心的偏移（像素）。键 = CharacterData.character_id
+## （留空回退 tres 文件名），值 = WeaponEffectOffsets（四方向 Vector2）。
+## 留空字典 = 全零，即动作图画布中心对齐角色格中心。
+@export var melee_weapon_sprite_offsets: Dictionary = {}
+## 朝上（背对镜头）时把动作图画在人物**身后**；其余方向画在身前。
+@export var melee_weapon_sprite_behind_on_up: bool = true
+## 强制在「专用近战身体」上也叠动作图。
+## 默认关：**只有行走图文件名带「近战 / 近接」的通用近战身体才会自动叠**。
+## 原因（2026-10-23 用户口径）：专用身体（のび太セットナイフ / ジャイアンセット金属バット…）
+## 的**攻击帧本身自带武器**，再叠一层就成两把武器；而通用近战身体往往只有举起帧带武器、
+## 攻击帧是空手（`のび太セット近战1.png` 实测 idx3/4/5/2 全是空手）→ 正好由动作图补。
+@export var melee_weapon_sprite_force: bool = false
+
+
+## 行走图是不是「通用近战身体」（文件名带 近战 / 近接）—— 只有这类才需要叠动作图。
+## 这是**数据侧的口径检查**，渲染层拿它当默认开关（`melee_weapon_sprite_force` 可强制打开）。
+func is_generic_melee_body(tex: Texture2D) -> bool:
+	if tex == null or tex.resource_path.is_empty():
+		return false
+	var n: String = tex.resource_path.get_file()
+	return n.contains("近战") or n.contains("近接")
+
+
+## 该武器是否配了单独的动作图。
+func has_melee_weapon_sprite() -> bool:
+	return melee_weapon_sprite != null
+
+
+## 攻击序列步号 → 动作图列号；**-1 = 这一步不显示武器**。
+## `seq_idx` 是 `melee_attack_char_sequence` 的下标（第 1 步 = 0），不是 char_idx ——
+## 同一个 char_idx 在序列里出现多次时，按步号才能区分是前摇还是后摇。
+## 见 `melee_weapon_sprite_seq_cols` 的两种模式（显式表 / 按步序自动推）。
+func get_melee_weapon_sprite_col(seq_idx: int) -> int:
+	if melee_weapon_sprite == null or seq_idx < 0:
+		return -1
+	var seq: Array[int] = get_melee_attack_char_sequence()
+	if seq_idx >= seq.size():
+		return -1
+	if not melee_weapon_sprite_seq_cols.is_empty():
+		if not melee_weapon_sprite_seq_cols.has(seq_idx):
+			return -1
+		return clampi(int(melee_weapon_sprite_seq_cols[seq_idx]), 0, 2)
+	if seq.size() <= 1:
+		return 1
+	if seq_idx == 0:
+		return 0
+	if seq_idx == seq.size() - 1:
+		return 2
+	return 1
+
+
+## 取某角色在该武器下的动作图偏移（按朝向）。无条目 → Vector2.ZERO。
+## 与 `get_attack_effect_offset` 同构，只是没有武器级兜底（画布中心对齐已足够）。
+func get_melee_weapon_sprite_offset(cd: CharacterData, facing: int) -> Vector2:
+	if cd == null or melee_weapon_sprite_offsets.is_empty():
+		return Vector2.ZERO
+	var key: String = cd.get_character_key()
+	if key.is_empty() or not melee_weapon_sprite_offsets.has(key):
+		return Vector2.ZERO
+	var offs: WeaponEffectOffsets = melee_weapon_sprite_offsets[key] as WeaponEffectOffsets
+	if offs == null:
+		return Vector2.ZERO
+	return offs.get_offset(facing)
+
+
 @export_group("子弹发射点（按角色 × 方向）")
 ## 每个角色的枪口额外偏移。键 = CharacterData.character_id（如 "nobita"；留空回退 tres 文件名），
 ## 值 = WeaponEffectOffsets（四方向 Vector2）。
