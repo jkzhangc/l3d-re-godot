@@ -7,6 +7,7 @@
 [ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="2_butmx"]
 [ext_resource type="Texture2D" uid="uid://cnn1rpqt41nlw" path="res://art/Barrages/手榴弾PIC.png" id="3_pamkk"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_58x6b"]
+[ext_resource type="Texture2D" uid="uid://d4l853mw2cgxy" path="res://art/Weapon/[2K-VX]-A武器セット１２.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
@@ -26,6 +27,7 @@ description = "原作 投擲物/液体窒素ボトル。低温冻结范围内的
 icon = ExtResource("2")
 effect_text = "冰结"
 sell_price = 50
-pickup_texture = ExtResource("2_4iaia")
+pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 5
+pickup_direction = 0
 pickup_step_frames = Array[int]([1])

@@ -3,9 +3,13 @@
 [ext_resource type="Script" path="res://script/item_data.gd" id="1"]
 
 [ext_resource type="Texture2D" uid="uid://joehtx1ybmtr" path="res://art/Ui/装備アイコングリーンハーブ.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://b03tvwwyemq4h" path="res://art/Weapon/[2K-VX]-A武器セット１１.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 0
+pickup_direction = 0
 item_id = "potion_01"
 item_name = "回复药水"
 item_type = 0

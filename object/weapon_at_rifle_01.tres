@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://1jy877j5nbdh"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ckopb8d73wj80" path="res://anim/anim_effect_手枪攻击下.tscn" id="1_atn7b"]
@@ -11,10 +11,10 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="6"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8_oo4tp"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="9_q7ktf"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="10_2eh8r"]
+[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="13_xruco"]
 [ext_resource type="Texture2D" uid="uid://by1ngs7mnk8sj" path="res://art/Ui/装備アイコンアンチマテリアルライフル.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_sniper1"]
@@ -50,7 +50,7 @@ right = Vector2(0, -10)
 [resource]
 script = ExtResource("1")
 attack_power = 110
-attack_speed = 0.80
+attack_speed = 0.8
 attack_range = 320.0
 weapon_state_name = "Sniper"
 weapon_walk_texture = ExtResource("9_q7ktf")
@@ -78,7 +78,7 @@ attack_effect_offsets = {
 }
 magazine_capacity = 10
 ammo_item_id = "ammo_sniper"
-attack_frame_durations = Array[float]([0.225, 0.125, 0.200, 0.175])
+attack_frame_durations = Array[float]([0.225, 0.125, 0.2, 0.175])
 bullet_list = Array[ExtResource("2")]([SubResource("Resource_sniper1")])
 hitstun_duration = 0.15
 item_id = "at_rifle_01"
@@ -88,6 +88,5 @@ description = "原作 対戦車ﾗｲﾌﾙ/ﾊﾞﾚｯﾄM82（威力300／连
 icon = ExtResource("icon")
 sell_price = 200
 max_stack = 1
-pickup_texture = ExtResource("8_oo4tp")
-pickup_char_idx = 2
+pickup_texture = ExtResource("13_xruco")
 pickup_step_frames = Array[int]([1])

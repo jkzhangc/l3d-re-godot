@@ -38,4 +38,5 @@ sell_price = 80
 max_stack = 1
 pickup_texture = ExtResource("7_yijck")
 pickup_char_idx = 4
+pickup_direction = 0
 pickup_step_frames = Array[int]([0])

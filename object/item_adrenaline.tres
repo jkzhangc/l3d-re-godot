@@ -3,9 +3,14 @@
 [ext_resource type="Script" path="res://script/item_data.gd" id="1"]
 
 [ext_resource type="Texture2D" uid="uid://35wtgkdklaur" path="res://art/Ui/装備アイコンアドレナリン.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://xorgyc5g8lc8" path="res://art/Weapon/[2K-VX]-A武器セット１４.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
+use_flash_color = Color(1, 0.55, 0.22, 1)
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 7
+pickup_direction = 0
 item_id = "adrenaline_01"
 item_name = "肾上腺素"
 item_type = 7

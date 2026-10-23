@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://c8wad2y7x0axn"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
@@ -48,11 +48,9 @@ script = ExtResource("9wspawn")
 left = Vector2(0, -4)
 right = Vector2(0, -4)
 
-
 [resource]
 script = ExtResource("1")
 attack_power = 300
-attack_speed = 1.00
 attack_range = 280.0
 weapon_state_name = "RLauncher"
 weapon_walk_texture = ExtResource("10")
@@ -80,5 +78,5 @@ icon = ExtResource("9")
 sell_price = 400
 max_stack = 1
 pickup_texture = ExtResource("11")
-pickup_char_idx = 5
+pickup_char_idx = 6
 pickup_step_frames = Array[int]([0])

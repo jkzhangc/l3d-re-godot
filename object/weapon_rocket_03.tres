@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bxdfrkdx1cpw5"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
@@ -11,7 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://kudm1h8k8qaf" path="res://art/Ui/装備アイコンロケットランチャー３.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="10"]
-[ext_resource type="Texture2D" uid="uid://c6mufmlgssema" path="res://art/Weapon/[2K-VX]-A武器セット４.png" id="11"]
+[ext_resource type="Texture2D" uid="uid://3pnx2cypqcey" path="res://art/Weapon/A武器セット2.png" id="10_ntswo"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="11_4ooyv"]
 
 [sub_resource type="Resource" id="Resource_rk1"]
@@ -48,11 +48,9 @@ script = ExtResource("9wspawn")
 left = Vector2(0, -4)
 right = Vector2(0, -4)
 
-
 [resource]
 script = ExtResource("1")
 attack_power = 300
-attack_speed = 1.00
 attack_range = 320.0
 weapon_state_name = "RLauncher"
 weapon_walk_texture = ExtResource("10")
@@ -79,6 +77,6 @@ description = "原作 携帯式地対空ミサイル（威力300／连射D）。
 icon = ExtResource("9")
 sell_price = 400
 max_stack = 1
-pickup_texture = ExtResource("11")
-pickup_char_idx = 5
+pickup_texture = ExtResource("10_ntswo")
+pickup_char_idx = 4
 pickup_step_frames = Array[int]([0])

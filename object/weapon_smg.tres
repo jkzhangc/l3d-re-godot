@@ -7,12 +7,12 @@
 [ext_resource type="PackedScene" uid="uid://dvnf6mrtf1ccb" path="res://anim/anim_effect_步枪攻击右.tscn" id="3_4rdge"]
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_onao4"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_o8qhj"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_4rdge"]
 [ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="6_o8qhj"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="7_nmfdk"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://drq65x6hjqrsp" path="res://art/Weapon/A武器セット３.png" id="12_p5ubh"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_p5ubh"]
 [ext_resource type="Texture2D" uid="uid://1olunt4udqhd" path="res://art/Ui/装備アイコンサブマシンガン３.png" id="icon"]
 
@@ -47,7 +47,7 @@ right = Vector2(0, -12)
 [resource]
 script = ExtResource("7_nmfdk")
 attack_power = 23
-attack_speed = 1.10
+attack_speed = 1.1
 attack_range = 190.0
 weapon_state_name = "Smg"
 weapon_walk_texture = ExtResource("8_0clvs")
@@ -86,6 +86,6 @@ description = "原作 ｻﾌﾞﾏｼﾝｶﾞﾝ/Vz61（威力15／连射A）�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_4rdge")
-pickup_direction = 2
+pickup_texture = ExtResource("12_p5ubh")
+pickup_char_idx = 5
 pickup_step_frames = Array[int]([2])

@@ -10,11 +10,11 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="5"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="6"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8"]
 [ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_7663u"]
 [ext_resource type="Texture2D" uid="uid://besgsj4eo73rp" path="res://art/Ui/装備アイコンマグナム.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://bb6m0rlww24k" path="res://art/Weapon/[2K-VX]-A武器セット３.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="Resource_magnum1"]
 script = ExtResource("2")
@@ -85,6 +85,6 @@ description = "大口径左轮手枪。威力高且子弹贯穿，普通敌人�
 icon = ExtResource("icon")
 sell_price = 250
 max_stack = 1
-pickup_texture = ExtResource("8")
-pickup_direction = 3
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 2
 pickup_step_frames = Array[int]([0])

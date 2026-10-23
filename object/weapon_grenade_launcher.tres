@@ -11,8 +11,8 @@
 [ext_resource type="Texture2D" uid="uid://dkr5x1yk1s2xf" path="res://art/Ui/装備アイコングレネードランチャー２.png" id="7_6c8tl"]
 [ext_resource type="Texture2D" uid="uid://csoysbu3j0wy" path="res://art/Characters/のび太グレネードランチャー.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
-[ext_resource type="Texture2D" uid="uid://3pnx2cypqcey" path="res://art/Weapon/A武器セット2.png" id="9_6c8tl"]
 [ext_resource type="AudioStream" uid="uid://cq67g7gquqvou" path="res://sound/グレネードランチャー2.ogg" id="10_vbg3o"]
+[ext_resource type="Texture2D" uid="uid://b6am68hfgm5ks" path="res://art/Weapon/[2K-VX]-A武器セット８.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="Resource_gl1"]
 script = ExtResource("2")
@@ -51,7 +51,6 @@ script = ExtResource("9wspawn")
 left = Vector2(0, -8)
 right = Vector2(0, -8)
 
-
 [resource]
 script = ExtResource("1")
 attack_power = 150
@@ -84,5 +83,5 @@ description = "M79 炸裂弹发射器。命中后爆炸，波及周围敌人并�
 icon = ExtResource("7_6c8tl")
 sell_price = 300
 max_stack = 1
-pickup_texture = ExtResource("9_6c8tl")
+pickup_texture = ExtResource("pickup_tex")
 pickup_step_frames = Array[int]([0])

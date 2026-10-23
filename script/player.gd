@@ -1153,8 +1153,11 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 			if not scene_tree:
 				return
 			var scene := scene_tree.current_scene
-			if wd.attack_sound and scene:
-				Global.play_sfx_managed(wd.attack_sound, scene)
+			if wd.attack_sound:
+				## 枪声/挥击音挂在本玩家节点上并做距离衰减（2026-10-20）：
+				## 联机时其他玩家开火由本机表现协程播放，旧实现挂 current_scene（非定位）
+				## 导致「远处队友开枪和贴脸一样响」。单机/本机玩家仍恒满音量。
+				_play_network_sfx(wd.attack_sound)
 			var effect_scene := wd.get_attack_effect_anim(facing)
 			if effect_scene and scene:
 				## 特效偏移（2026-09-23 迁移）：改由武器数据按角色提供，与子弹偏移同构。
@@ -1781,6 +1784,24 @@ func apply_item_effects(item: ItemData) -> void:
 	if item.adrenaline_seconds > 0.0:
 		_adrenaline_until_msec = maxi(_adrenaline_until_msec, now + int(item.adrenaline_seconds * 1000.0))
 		print("[玩家] アドレナリン：%.0f 秒内攻击力 ×2" % item.adrenaline_seconds)
+	## 使用表现（2026-10-23）：治疗品与辅助品走同一个入口 → 同一套全屏闪烁 + 音效，
+	## 颜色/时长/音效都在 ItemData「使用表现」组里逐物品配。
+	_play_item_use_feedback(item)
+
+
+## 使用消耗品的视觉/听觉反馈。**只在本机操控的玩家身上播**：
+## 联机 Host 会代远程玩家调用 apply_item_effects，那一下不能闪 Host 自己的屏幕。
+func _play_item_use_feedback(item: ItemData) -> void:
+	if not item:
+		return
+	var local: Node2D = Players.get_local_entity()
+	if is_instance_valid(local) and local != self:
+		return
+	if item.use_flash_duration > 0.0:
+		Global.flash_screen(item.use_flash_color, item.use_flash_duration)
+	var snd: AudioStream = item.use_sound if item.use_sound != null else Global.default_item_use_sound
+	if snd != null:
+		Global.play_player_sfx(snd, self, item.use_sound_pitch)
 
 
 ## アドレナリン：攻击力倍率（1.0 = 无增益）。远程子弹与近战伤害在**出伤时**乘这个值。

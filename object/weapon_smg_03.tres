@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://eoolxq3n7bow"]
 
 [ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_0clvs"]
 [ext_resource type="PackedScene" uid="uid://dj5fqkmk5oxqx" path="res://anim/anim_effect_步枪攻击下.tscn" id="1_onao4"]
@@ -7,7 +7,6 @@
 [ext_resource type="PackedScene" uid="uid://dvnf6mrtf1ccb" path="res://anim/anim_effect_步枪攻击右.tscn" id="3_4rdge"]
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_onao4"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_o8qhj"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_4rdge"]
 [ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="6_o8qhj"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="7_nmfdk"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
@@ -15,6 +14,7 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_p5ubh"]
 [ext_resource type="Texture2D" uid="uid://b2xmbeprxumk5" path="res://art/Ui/装備アイコンサブマシンガン５.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://b03tvwwyemq4h" path="res://art/Weapon/[2K-VX]-A武器セット１１.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="Resource_o8qhj"]
 script = ExtResource("2_a1cwu")
@@ -86,6 +86,6 @@ description = "原作 ｻﾌﾞﾏｼﾝｶﾞﾝ/FN-P90（威力18／连射A）
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_4rdge")
-pickup_direction = 2
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 3
 pickup_step_frames = Array[int]([2])

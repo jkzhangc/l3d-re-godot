@@ -20,8 +20,9 @@ const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面
 ## 设置项（2026-09-30：移动端多一项「按键布局」—— 手机端可自由拖动按键/摇杆位置）。
 ## ⚠ 用函数而非 const（项数随平台变）；「按键布局」插在「返回」之前，
 ##   所以 0~2（音量 / 固定朝向）的序号在任何平台上都不变。
+## 「BGS音量」（2026-10-23）固定为第 3 项：环境音独立音量，与音乐/音效互不干扰。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -81,6 +82,9 @@ var _settings_labels: Array[GradientLabel] = []
 var _settings_value_labels: Array = []
 var _settings_bar_bg: Array[ColorRect] = []
 var _settings_bar_fill: Array[ColorRect] = []
+## 哪些**行号**带音量条（本文件约定：0=音乐、1=音效、3=BGS）。
+## 行号与 `_settings_bar_*` 的下标不是一回事（2 是固定朝向），所以单独记一份。
+var _settings_bar_rows: Array[int] = []
 
 
 func _ready() -> void:
@@ -356,8 +360,9 @@ func _build_settings_items() -> void:
 		_menu_panel.add_child(gl)
 		_settings_labels.append(gl)
 
-		if i < 2:
+		if i == 0 or i == 1 or i == 3:
 			# 音量条：背景 + 填充 + 百分比标签
+			_settings_bar_rows.append(i)
 			var bar_y: float = pos_y + (menu_item_height - BAR_H) * 0.5
 
 			var bg := ColorRect.new()
@@ -418,6 +423,7 @@ func _clear_settings_ui() -> void:
 		if is_instance_valid(fg):
 			fg.queue_free()
 	_settings_bar_fill.clear()
+	_settings_bar_rows.clear()
 
 
 ## 设置页输入。**返回是否消费了该事件** —— 调用方据此决定要不要 `_mark_handled()`。
@@ -474,6 +480,9 @@ func _handle_settings_input(event: InputEvent) -> bool:
 		"音效音量":
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_volume_display(1)
+		"BGS音量":
+			Global.set_bgs_volume(clampi(Global.bgs_volume + delta_vol, 0, 100))
+			_update_volume_display(3)
 	return true
 
 
@@ -508,17 +517,31 @@ func _refresh_settings_cursor() -> void:
 	)
 
 
-func _update_volume_display(idx: int) -> void:
-	var vol: int = Global.music_volume if idx == 0 else Global.sfx_volume
-	if idx < _settings_value_labels.size() and _settings_value_labels[idx]:
-		_settings_value_labels[idx].text = "%d%%" % vol
-	if idx < _settings_bar_fill.size() and _settings_bar_fill[idx]:
-		_settings_bar_fill[idx].size.x = BAR_W * vol / 100.0
+## 行号 → 当前音量值（0=音乐、1=音效、3=BGS）。
+func _volume_of_row(row: int) -> int:
+	match row:
+		0:
+			return Global.music_volume
+		1:
+			return Global.sfx_volume
+		3:
+			return Global.bgs_volume
+	return 0
+
+
+## row 是**设置项行号**，不是音量条数组下标（2=固定朝向 没有条）。
+func _update_volume_display(row: int) -> void:
+	var vol: int = _volume_of_row(row)
+	if row < _settings_value_labels.size() and _settings_value_labels[row]:
+		_settings_value_labels[row].text = "%d%%" % vol
+	var bar: int = _settings_bar_rows.find(row)
+	if bar >= 0 and bar < _settings_bar_fill.size() and _settings_bar_fill[bar]:
+		_settings_bar_fill[bar].size.x = BAR_W * vol / 100.0
 
 
 func _update_all_volume_display() -> void:
-	_update_volume_display(0)
-	_update_volume_display(1)
+	for row: int in _settings_bar_rows:
+		_update_volume_display(row)
 
 
 # ═══════════════════════════════════════

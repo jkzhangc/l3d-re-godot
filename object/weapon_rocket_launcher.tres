@@ -48,7 +48,6 @@ script = ExtResource("9wspawn")
 left = Vector2(0, -4)
 right = Vector2(0, -4)
 
-
 [resource]
 script = ExtResource("1")
 attack_power = 300

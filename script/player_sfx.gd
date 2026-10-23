@@ -19,7 +19,9 @@ func _init(player: Node) -> void:
 func play_sound(stream: AudioStream) -> void:
 	if not stream:
 		return
-	Global.play_sfx_managed(stream, _p)
+	## 世界音效距离衰减（2026-10-20）：走玩家专用入口 —— 联机时非本机玩家的声音
+	## 以本地玩家为听者做 2D 距离衰减；单机/本机玩家恒满音量。
+	Global.play_player_sfx(stream, _p)
 
 
 ## 联机表现专用音效入口（装填/攻击后/推击等）。与单机同一套 SFX 管理器与并发上限，
@@ -28,7 +30,7 @@ func play_sound(stream: AudioStream) -> void:
 func play_network_sfx(stream: AudioStream) -> void:
 	if not stream or not _p.is_inside_tree():
 		return
-	Global.play_sfx_managed(stream, _p)
+	Global.play_player_sfx(stream, _p)
 
 
 ## 播放替换式音乐（挂在 player 节点下的 DeathMusicPlayer）。再次调用会先停掉旧实例。

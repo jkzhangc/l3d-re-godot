@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://jm88weoi4nm4"]
 
 [ext_resource type="PackedScene" uid="uid://dhskiw348es7t" path="res://anim/anim_effect_霰弹枪攻击下.tscn" id="1_8u1tt"]
 [ext_resource type="AudioStream" uid="uid://vggmnq7ygbjk" path="res://sound/ショットガン.ogg" id="1_outme"]
@@ -8,7 +8,6 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_juw25"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_5xpys"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_0fguu"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_juw25"]
 [ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="6_y02tm"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_8fi51"]
 [ext_resource type="AudioStream" uid="uid://8dyndnamhh5n" path="res://sound/ジッポライター1.ogg" id="8_45qvp"]
@@ -17,6 +16,7 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="14_fwhge"]
 [ext_resource type="Texture2D" uid="uid://ba51m20q0tee5" path="res://art/Ui/装備アイコンショットガン３.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://ddi2lqjarsikf" path="res://art/Weapon/[2K-VX]-A武器オブジェクト.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="AEO_shotgun_01_bigg"]
 script = ExtResource("9wspawn")
@@ -79,9 +79,8 @@ right = Vector2(0, -16)
 [resource]
 script = ExtResource("6_0fguu")
 attack_power = 34
-attack_speed = 1.30
+attack_speed = 1.3
 attack_range = 200.0
-attack_frame_durations = Array[float]([0.077, 0.077, 0.077, 0.077])
 weapon_state_name = "Shotgun"
 weapon_walk_texture = ExtResource("8_sw0ir")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
@@ -115,6 +114,7 @@ attack_effect_offsets = {
 }
 magazine_capacity = 8
 ammo_item_id = "ammo_shotgun"
+attack_frame_durations = Array[float]([0.077, 0.077, 0.077, 0.077])
 bullet_list = Array[ExtResource("2_sw0ir")]([SubResource("Resource_8fi51"), SubResource("Resource_y02tm"), SubResource("Resource_j63fi")])
 item_id = "shotgun_03"
 item_name = "Striker"
@@ -123,6 +123,6 @@ description = "原作 ショットガン/Striker（威力30／连射B）。弹�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_juw25")
-pickup_direction = 1
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 4
 pickup_step_frames = Array[int]([1])

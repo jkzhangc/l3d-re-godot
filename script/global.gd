@@ -1230,6 +1230,7 @@ func _apply_config_file(path: String) -> void:
 	debug_requested = bool(cfg.get("debug", debug_requested))
 	music_volume = int(cfg.get("music_volume", music_volume))
 	sfx_volume = int(cfg.get("sfx_volume", sfx_volume))
+	bgs_volume = int(cfg.get("bgs_volume", bgs_volume))
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
@@ -1257,6 +1258,7 @@ func save_config() -> void:
 		"debug": debug_requested,
 		"music_volume": music_volume,
 		"sfx_volume": sfx_volume,
+		"bgs_volume": bgs_volume,
 		"facing_lock_mode": facing_lock_mode,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
@@ -1288,6 +1290,18 @@ func save_config() -> void:
 ##   这样 `_apply_config_file` / `save_config` 里的 `music_volume` 读写零改动。
 
 @export var max_sfx_concurrency: int = 2  ## 同一音效最大同时播放数（防止音量叠加；2026-09-13 用户要求 4→2）
+
+@export_group("世界音效距离衰减")
+## 世界内音效（敌人叫声/攻击、联机其他玩家开枪等）随「与本地玩家的距离」变小
+## （2026-10-20 用户需求）。以下三项由 AudioService.play_sfx_managed 的 2D 分支读取。
+##
+## 调参参考（视口 1280×960、zoom 2x → 可见半径约 640×480，屏角 ≈800）：
+##   attenuation=1.4 / max_distance=1000 时，实测线性音量约为
+##     320px≈0.58(-4.7dB) / 640px≈0.24(-12.4dB) / 800px≈0.11(-19.6dB) / ≥1000px 静音，
+##   即「身边正常、屏边明显变小、屏外基本听不见」，同时保留屏内远处的一点预警声。
+@export var world_sfx_max_distance: float = 1000.0  ## 超过此距离完全无声（世界像素）
+@export_range(0.1, 8.0, 0.1) var world_sfx_attenuation: float = 1.4  ## 衰减指数：1=线性，越大远处掉得越快
+@export_range(0.0, 2.0, 0.05) var world_sfx_panning_strength: float = 0.8  ## 左右声像强度（0=不偏声）
 
 @export_group("UI 窗口音效")
 ## 各界面窗口通用的光标（选择）/确定/取消音效（2026-09-15）。
@@ -1323,22 +1337,99 @@ var sfx_volume: int:
 			_audio_service.sfx_volume = v
 
 
+## BGS（环境音）音量 0–100（代理到 AudioService）。地图里的 `BGS` 节点走 "BGS" 总线。
+var bgs_volume: int:
+	get:
+		return _audio_service.bgs_volume if _audio_service != null else 80
+	set(v):
+		if _audio_service != null:
+			_audio_service.bgs_volume = v
+
+
 ## 播放拾取音效（override 优先，否则全局默认）。
 func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
 	if _audio_service != null:
 		_audio_service.play_pickup_sfx(override, pitch)
 
 
-## 播放音效（带并发限制 + voice stealing）。pos/positional 语义见 AudioService。
-func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0) -> void:
+## 播放音效（带并发限制 + voice stealing）。pos/positional/at_position 语义见 AudioService。
+func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0,
+		at_position: Vector2 = Vector2.INF) -> void:
 	if _audio_service != null:
-		_audio_service.play_sfx_managed(stream, parent, positional, pitch)
+		_audio_service.play_sfx_managed(stream, parent, positional, pitch, at_position)
+
+
+## 播放玩家音效：单机/联机同一入口。联机中「非本机玩家」的声音自动走 2D 定位，
+## 按与本地玩家的距离衰减（详见 AudioService.play_player_sfx）。
+func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0) -> void:
+	if _audio_service != null:
+		_audio_service.play_player_sfx(stream, player_node, pitch)
 
 
 ## 播放界面窗口音效。kind = "cursor" | "confirm" | "cancel"。
 func play_ui_sfx(kind: String, override_path: String = "") -> void:
 	if _audio_service != null:
 		_audio_service.play_ui_sfx(kind, override_path)
+
+
+# ═══════════════════════════════════════
+# 物品使用表现：全屏闪烁（2026-10-23）
+# ═══════════════════════════════════════
+## 治疗品 / 辅助品「用掉了」的统一视觉反馈。颜色与时长由 `ItemData.use_flash_color` /
+## `use_flash_duration` 逐物品决定，这里只负责画。
+##
+## 层级取 88：在 UI（HUD 通常 90+ 之外的部分）之上、黑幕(90)/ED(95)/章节总结(100) 之下，
+## 既盖住世界画面，又不会糊住过场字幕。节点挂在 Global（autoload）下，跨场景常驻不泄漏。
+@export_group("物品使用表现")
+## 使用音效的全局默认（ItemData.use_sound 留空时使用）。
+@export var default_item_use_sound: AudioStream = preload("res://sound/回復1.ogg")
+## 闪烁峰值不透明度上限；ItemData.use_flash_color 的 alpha 会再乘这个值。
+@export_range(0.0, 1.0, 0.01) var item_use_flash_peak_alpha: float = 0.38
+
+var _item_flash_layer: CanvasLayer = null
+var _item_flash_rect: ColorRect = null
+var _item_flash_tween: Tween = null
+
+
+## 全屏闪一下。duration <= 0 直接忽略（等价「本物品不闪」）。
+func flash_screen(color: Color, duration: float = 0.3) -> void:
+	if duration <= 0.0:
+		return
+	_ensure_item_flash()
+	if _item_flash_rect == null:
+		return
+	if _item_flash_tween != null and _item_flash_tween.is_valid():
+		_item_flash_tween.kill()
+	var peak: float = clampf(item_use_flash_peak_alpha, 0.0, 1.0) * clampf(color.a, 0.0, 1.0)
+	_item_flash_rect.color = Color(color.r, color.g, color.b, 0.0)
+	_item_flash_rect.visible = true
+	var fade_in: float = minf(duration * 0.25, 0.08)
+	_item_flash_tween = create_tween()
+	_item_flash_tween.tween_property(_item_flash_rect, "color:a", peak, fade_in)
+	_item_flash_tween.tween_property(_item_flash_rect, "color:a", 0.0, maxf(duration - fade_in, 0.01))
+	_item_flash_tween.tween_callback(_on_item_flash_done)
+
+
+func _on_item_flash_done() -> void:
+	if is_instance_valid(_item_flash_rect):
+		_item_flash_rect.visible = false
+
+
+## 惰性建节点：没人用物品时零成本（不占 CanvasLayer 绘制）。
+func _ensure_item_flash() -> void:
+	if is_instance_valid(_item_flash_rect):
+		return
+	_item_flash_layer = CanvasLayer.new()
+	_item_flash_layer.name = "ItemUseFlashLayer"
+	_item_flash_layer.layer = 88
+	add_child(_item_flash_layer)
+	_item_flash_rect = ColorRect.new()
+	_item_flash_rect.name = "ItemUseFlash"
+	_item_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_item_flash_rect.color = Color(1.0, 1.0, 1.0, 0.0)
+	_item_flash_rect.visible = false
+	_item_flash_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_item_flash_layer.add_child(_item_flash_rect)
 
 
 func _ensure_audio_buses() -> void:
@@ -1359,6 +1450,11 @@ func set_music_volume(pct: int) -> void:
 func set_sfx_volume(pct: int) -> void:
 	if _audio_service != null:
 		_audio_service.set_sfx_volume(pct)
+
+
+func set_bgs_volume(pct: int) -> void:
+	if _audio_service != null:
+		_audio_service.set_bgs_volume(pct)
 
 
 func set_facing_lock_mode(mode: int) -> void:

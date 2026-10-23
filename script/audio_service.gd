@@ -19,9 +19,13 @@ extends RefCounted
 ## 宿主节点（Global），用于配置读取、挂播放器、回调 save_config。
 var _host: Node = null
 
-## 音乐/音效音量 0–100（config 持久化；Global 以属性代理暴露）。
+## 音乐/音效/BGS（环境音）音量 0–100（config 持久化；Global 以属性代理暴露）。
 var music_volume: int = 80
 var sfx_volume: int = 80
+## 环境音（地图 BGS：虫鸣/风声/室内的空调声…）独立音量。
+## 2026-10-23：地图里的 `BGS` AudioStreamPlayer 原本直连 Master，设置里的音乐/音效
+## 两个滑条都管不到它（和 2026-09-13 fire_patch 漏网是同一类问题）。
+var bgs_volume: int = 80
 
 ## 同一音效资源的活跃播放器计数（resource_path → Array[AudioStreamPlayer]）
 var _active_sfx: Dictionary = {}
@@ -29,6 +33,17 @@ var _active_sfx: Dictionary = {}
 var _lobby_music_player: AudioStreamPlayer = null
 
 const LOBBY_MUSIC_PATH: String = "res://music/l3d_lobby.mp3"
+
+## ── 世界音效距离衰减（2026-10-20 用户需求）──
+## 「敌人发出的各种声音」与「联机时其他玩家开枪等各种声音」都要随距离变小。
+## 实际数值由 Global 的 @export 提供（AudioService 每次播放时读取，改默认值即生效）：
+##   world_sfx_max_distance     —— 超过此距离完全无声（世界像素；视口 1280×960、可见半径≈640×480）
+##   world_sfx_attenuation      —— 衰减指数（1=线性，越大远处掉得越快）
+##   world_sfx_panning_strength —— 左右声像强度（0=不作声像，1=完全按相对方位偏声）
+## 宿主缺失（harness 裸实例）时用这组保守默认。
+const DEFAULT_WORLD_SFX_MAX_DISTANCE: float = 1000.0
+const DEFAULT_WORLD_SFX_ATTENUATION: float = 1.4
+const DEFAULT_WORLD_SFX_PANNING_STRENGTH: float = 0.8
 
 
 func _init(host: Node) -> void:
@@ -45,19 +60,26 @@ func ensure_audio_buses() -> void:
 		AudioServer.add_bus(1)
 	if bc < 3:
 		AudioServer.add_bus(2)
+	if bc < 4:
+		AudioServer.add_bus(3)
 	AudioServer.set_bus_name(1, "SFX")
 	AudioServer.set_bus_name(2, "Music")
+	AudioServer.set_bus_name(3, "BGS")
 	apply_volume()
-	print("[Global] 音频总线已创建: Master, SFX, Music")
+	print("[Global] 音频总线已创建: Master, SFX, Music, BGS")
 
 
 func apply_volume() -> void:
 	var sfx_idx: int = AudioServer.get_bus_index("SFX")
 	var music_idx: int = AudioServer.get_bus_index("Music")
+	var bgs_idx: int = AudioServer.get_bus_index("BGS")
 	if sfx_idx >= 0:
 		AudioServer.set_bus_volume_db(sfx_idx, linear_to_db(sfx_volume / 100.0))
 	if music_idx >= 0:
 		AudioServer.set_bus_volume_db(music_idx, linear_to_db(music_volume / 100.0))
+	if bgs_idx >= 0:
+		## 0% 用 -80dB 而不是线性值本身：linear_to_db(0) 是 -inf，部分平台会报错。
+		AudioServer.set_bus_volume_db(bgs_idx, linear_to_db(maxf(bgs_volume / 100.0, 0.0001)))
 
 
 func set_music_volume(pct: int) -> void:
@@ -74,6 +96,13 @@ func set_sfx_volume(pct: int) -> void:
 		_host.call("save_config")
 
 
+func set_bgs_volume(pct: int) -> void:
+	bgs_volume = clampi(pct, 0, 100)
+	apply_volume()
+	if _host != null and _host.has_method("save_config"):
+		_host.call("save_config")
+
+
 # ═══════════════════════════════════════
 # 音效播放（带并发限制）
 # ═══════════════════════════════════════
@@ -81,7 +110,12 @@ func set_sfx_volume(pct: int) -> void:
 ## 播放音效（带并发限制，防止同音效多实例叠加导致音量过大）。
 ## positional=true 且 parent 是 Node2D 时用 AudioStreamPlayer2D —— 音量随距离衰减、
 ## 带声像（丧尸叫等世界内音效必须走这个，否则屏外的僵尸和贴脸的一样响）。
-func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0) -> void:
+##
+## `at_position`：世界坐标定位点（默认 Vector2.INF = 用 parent 自身位置）。
+## 供「播放当刻就要消失」的宿主（子弹命中/投掷物爆炸）使用 —— 播放器挂场景、
+## 声源钉在该点，既不会被宿主 queue_free 截断，也不会跟着已消失的物体跑。
+func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0,
+		at_position: Vector2 = Vector2.INF) -> void:
 	if not stream:
 		return
 
@@ -112,8 +146,13 @@ func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = fals
 	var player: Node = null
 	if positional and parent is Node2D:
 		var p2d := AudioStreamPlayer2D.new()
-		# 可视世界半径 ≈ 分辨率/2（zoom=2x）≈ 640×480；衰减到屏外一圈即无声
-		p2d.max_distance = 1100.0
+		# 可视世界半径 ≈ 分辨率/2（zoom=2x）≈ 640×480，屏角 ≈800。
+		# 旧实现固定 max_distance=1100 + 默认线性衰减：屏边(640) 还剩 -7.5dB，
+		# 听感上「远处的僵尸和贴脸的一样响」（2026-10-20 用户反馈的根因）。
+		# 现改为「1000 处静音 + attenuation 指数」，屏边约 -12dB、屏角约 -20dB。
+		p2d.max_distance = _world_sfx_max_distance()
+		p2d.attenuation = _world_sfx_attenuation()
+		p2d.panning_strength = _world_sfx_panning_strength()
 		player = p2d
 	else:
 		player = AudioStreamPlayer.new()
@@ -126,8 +165,29 @@ func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = fals
 		player.queue_free()
 	player.finished.connect(cb)
 	parent.add_child(player)
+	## 世界坐标定位：播放器已入树才能写 global_position（未入树时 global==local）。
+	if positional and at_position.is_finite() and player is AudioStreamPlayer2D:
+		(player as AudioStreamPlayer2D).global_position = at_position
 	arr.append(player)
 	_active_sfx[key] = arr
+
+
+## 玩家音效（单机/联机通用）：以「本地玩家」为听者决定是否做距离衰减。
+##
+## · 单机 —— 场上只有本机玩家，恒满音量（保持既有手感，不引入相机偏移导致的轻微衰减）。
+## · 联机 —— 本地玩家自己恒满音量（相机平滑/朝向偏移不该让自己的枪声变小），
+##   其他玩家走 2D 定位 → 距离衰减 + 左右声像（2026-10-20 用户需求：
+##   「多人模式时其他玩家开枪等各种声音，离得越远越小」）。
+##
+## 是否本地玩家由 player 节点的 `network_local_player` 字段判定（player.gd 在
+## Host/Client 两侧都会正确写入）；节点没有该字段时按本地处理。
+func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0) -> void:
+	if not stream or player_node == null or not is_instance_valid(player_node):
+		return
+	var positional: bool = false
+	if _is_online_session():
+		positional = player_node.get("network_local_player") != true
+	play_sfx_managed(stream, player_node, positional, pitch)
 
 
 ## 播放界面窗口音效（2026-09-15）。kind = "cursor" | "confirm" | "cancel"；
@@ -218,3 +278,35 @@ func _host_sfx_path(prop: String) -> String:
 		return ""
 	var v: Variant = _host.get(prop)
 	return String(v) if v is String else ""
+
+
+## 是否联机会话（本服务不缓存 Net 引用：harness / 无 autoload 时返回 false）。
+func _is_online_session() -> bool:
+	if _host == null:
+		return false
+	var net: Node = _host.get_node_or_null("/root/Net")
+	if net == null or not net.has_method("is_online_session"):
+		return false
+	return bool(net.call("is_online_session"))
+
+
+## 读宿主上的世界音效衰减配置（Global 的 @export），缺失/非法时用服务内默认。
+func _world_sfx_max_distance() -> float:
+	var v: float = _host_float("world_sfx_max_distance", DEFAULT_WORLD_SFX_MAX_DISTANCE)
+	return v if v > 1.0 else DEFAULT_WORLD_SFX_MAX_DISTANCE
+
+
+func _world_sfx_attenuation() -> float:
+	var v: float = _host_float("world_sfx_attenuation", DEFAULT_WORLD_SFX_ATTENUATION)
+	return v if v > 0.0 else DEFAULT_WORLD_SFX_ATTENUATION
+
+
+func _world_sfx_panning_strength() -> float:
+	return clampf(_host_float("world_sfx_panning_strength", DEFAULT_WORLD_SFX_PANNING_STRENGTH), 0.0, 1.0)
+
+
+func _host_float(prop: String, fallback: float) -> float:
+	if _host == null:
+		return fallback
+	var v: Variant = _host.get(prop)
+	return float(v) if v is float or v is int else fallback

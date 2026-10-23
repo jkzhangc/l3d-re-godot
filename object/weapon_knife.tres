@@ -9,6 +9,7 @@
 [ext_resource type="AudioStream" uid="uid://c3vxqj720m3g4" path="res://sound/ナイフ.ogg" id="3_idirh"]
 [ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_kp675"]
 [ext_resource type="Texture2D" uid="uid://dmjow6qlmi38s" path="res://art/Ui/装備アイコンナイフ.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
@@ -33,7 +34,7 @@ description = "一把锋利的小刀。近战攻击。"
 icon = ExtResource("icon")
 sell_price = 50
 max_stack = 1
-pickup_texture = ExtResource("6_kp675")
-pickup_char_idx = 2
-pickup_direction = 3
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 7
+pickup_direction = 0
 pickup_step_frames = Array[int]([0])

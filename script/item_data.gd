@@ -62,6 +62,18 @@ enum ItemType {
 ## 拾取音效音调（<=0 = 按原调 1.0 播放，沿用项目 0=沿用惯例）。
 @export_range(0.0, 4.0, 0.1) var pickup_sound_pitch: float = 1.0
 
+@export_group("使用表现")
+## 使用本物品时的**全屏闪烁颜色**（治疗品 / 辅助品共用这一套表现）。
+## alpha 会再乘 `Global.item_use_flash_peak_alpha`（全局峰值上限），所以这里一般填 1。
+## 例：急救喷雾=绿、鎮痛剤=冷白、アドレナリン=橙。
+@export var use_flash_color: Color = Color(0.35, 1.0, 0.5, 1.0)
+## 闪烁总时长（秒）；0 = 本次使用不闪。
+@export_range(0.0, 2.0, 0.01) var use_flash_duration: float = 0.32
+## 使用音效。留空 = `Global.default_item_use_sound`（默认 回復1.ogg）。
+@export var use_sound: AudioStream = null
+## 使用音效音调（<=0 = 原调 1.0）。
+@export_range(0.0, 4.0, 0.1) var use_sound_pitch: float = 1.0
+
 
 func get_type_name() -> String:
 	match item_type:

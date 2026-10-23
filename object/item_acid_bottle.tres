@@ -8,6 +8,7 @@
 [ext_resource type="AudioStream" uid="uid://cecmrpdxsnek5" path="res://sound/炎上.WAV" id="3_8g5su"]
 [ext_resource type="Texture2D" uid="uid://du37ri6p1wxsl" path="res://art/Barrages/燃烧瓶.png" id="3_w5pto"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_8g5su"]
+[ext_resource type="Texture2D" uid="uid://cvug51luxwcfb" path="res://art/Weapon/[2K-VX]-A武器セット１０.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
@@ -32,5 +33,6 @@ description = "原作 投擲物/ディモ酢瓶。碎裂后泼出强酸，持续
 icon = ExtResource("2")
 effect_text = "酸液腐蚀"
 sell_price = 60
-pickup_texture = ExtResource("2_q0fks")
-pickup_char_idx = 2
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 3
+pickup_direction = 0

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cn484em6ad0d6"]
 
 [ext_resource type="PackedScene" uid="uid://dj5fqkmk5oxqx" path="res://anim/anim_effect_步枪攻击下.tscn" id="1_1qci5"]
 [ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_2b1o8"]
@@ -9,10 +9,10 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_tk8ak"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_5vlxl"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="5_tk8ak"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_lg75x"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_oiymr"]
 [ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="7_2b1o8"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://ddi2lqjarsikf" path="res://art/Weapon/[2K-VX]-A武器オブジェクト.png" id="12_lehtm"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_fjvgb"]
 [ext_resource type="Texture2D" uid="uid://dwhov11pfe44v" path="res://art/Ui/装備アイコンアサルトライフル５.png" id="icon"]
 
@@ -105,6 +105,6 @@ description = "原作 ｱｻﾙﾄﾗｲﾌﾙ/M4-A1（威力30／连射B）。�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_lg75x")
-pickup_direction = 2
+pickup_texture = ExtResource("12_lehtm")
+pickup_char_idx = 7
 pickup_step_frames = Array[int]([1])

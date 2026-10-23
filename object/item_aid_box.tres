@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://djh03jwcthe8x" path="res://art/misc/!地面掉落物整合.png" id="2_w7kbw"]
 
 [ext_resource type="Texture2D" uid="uid://bv8py2fch3op4" path="res://art/Ui/装備アイコン救急箱.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://bfit8lpxt1kk1" path="res://art/Weapon/[2K-VX]-A武器セット７.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
@@ -16,8 +17,8 @@ icon = ExtResource("1_w7kbw")
 effect_text = "回复 +100 HP"
 sell_price = 50
 max_stack = 1
-pickup_texture = ExtResource("2_w7kbw")
-pickup_char_idx = 7
-pickup_direction = 2
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 6
+pickup_direction = 0
 pickup_step_frames = Array[int]([2])
 hp_restore = 100

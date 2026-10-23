@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dcfsh5kehl30v"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ckopb8d73wj80" path="res://anim/anim_effect_手枪攻击下.tscn" id="1_jkkld"]
@@ -10,11 +10,11 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="3_55cd1"]
 [ext_resource type="AudioStream" uid="uid://bqptf36kc2nkw" path="res://sound/ベレッタ.ogg" id="4_dijym"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_oxqje"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_dijym"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_kl6un"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_kl6un"]
 [ext_resource type="Texture2D" uid="uid://b42gqx5fh8tk0" path="res://art/Ui/装備アイコンハンドガン８.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://bunpswvp134ux" path="res://art/Weapon/[2K-VX]-A武器セット１.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="AEO_pistol_01_bigg"]
 script = ExtResource("9wspawn")
@@ -65,7 +65,6 @@ script = ExtResource("1")
 attack_power = 25
 attack_speed = 1.25
 attack_range = 200.0
-attack_frame_durations = Array[float]([0.080, 0.080, 0.080, 0.080])
 weapon_state_name = "Pistol"
 weapon_walk_texture = ExtResource("2")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
@@ -96,6 +95,7 @@ attack_effect_offsets = {
 magazine_capacity = 20
 ammo_item_id = "ammo_pistol"
 ammo_is_infinite = true
+attack_frame_durations = Array[float]([0.08, 0.08, 0.08, 0.08])
 bullet_list = Array[ExtResource("1_tx4tb")]([ExtResource("3")])
 hitstun_duration = 0.1
 item_id = "pistol_04"
@@ -105,5 +105,6 @@ description = "原作 ハンドガン/ﾍﾞﾚｯﾀM93R（威力15／连射B�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_dijym")
+pickup_texture = ExtResource("pickup_tex")
+pickup_char_idx = 3
 pickup_step_frames = Array[int]([1])

@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cleyg8ps6s7nk"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ckopb8d73wj80" path="res://anim/anim_effect_手枪攻击下.tscn" id="1_qrpph"]
@@ -10,9 +10,9 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="5"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="6"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="7"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8"]
 [ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://ceiyxgqdn5g61" path="res://art/Weapon/A武器セット１３.png" id="12_xprwh"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_7663u"]
 [ext_resource type="Texture2D" uid="uid://dhdy77kcgiu07" path="res://art/Ui/装備アイコンマグナム４.png" id="icon"]
 
@@ -50,7 +50,6 @@ right = Vector2(0, -16)
 [resource]
 script = ExtResource("1")
 attack_power = 120
-attack_speed = 1.00
 attack_range = 260.0
 weapon_state_name = "Magnum"
 weapon_walk_texture = ExtResource("9")
@@ -86,6 +85,6 @@ description = "原作 マグナム/ｴﾝﾄﾞﾌｨｰﾙﾄﾞ（威力120／
 icon = ExtResource("icon")
 sell_price = 250
 max_stack = 1
-pickup_texture = ExtResource("8")
-pickup_direction = 3
+pickup_texture = ExtResource("12_xprwh")
+pickup_char_idx = 4
 pickup_step_frames = Array[int]([0])

@@ -39,7 +39,6 @@
 [ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="nw5"]
 [ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="nw6"]
 [ext_resource type="Resource" path="res://object/item_aid_box.tres" id="nw7"]
-[ext_resource type="Resource" path="res://object/item_herb_mixed.tres" id="nw8"]
 [ext_resource type="Resource" path="res://object/item_painkiller.tres" id="cw1"]
 [ext_resource type="Resource" path="res://object/item_adrenaline.tres" id="cw2"]
 [ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="cw3"]
@@ -47,7 +46,6 @@
 [ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="cw5"]
 [ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="cw6"]
 [ext_resource type="Resource" path="res://object/item_aid_box.tres" id="cw7"]
-[ext_resource type="Resource" path="res://object/item_herb_mixed.tres" id="cw8"]
 [ext_resource type="Resource" path="res://object/weapon_smg_02.tres" id="cw9"]
 [ext_resource type="Resource" path="res://object/weapon_smg_03.tres" id="cw10"]
 [ext_resource type="Resource" path="res://object/weapon_rifle_02.tres" id="cw11"]
@@ -60,8 +58,6 @@
 [ext_resource type="Resource" path="res://object/weapon_pistol_03.tres" id="cw18"]
 [ext_resource type="Resource" path="res://object/weapon_pistol_04.tres" id="cw19"]
 [ext_resource type="Resource" path="res://object/item_potion.tres" id="cw20"]
-[ext_resource type="Resource" path="res://object/item_tp_potion.tres" id="cw21"]
-[ext_resource type="Resource" path="res://object/item_pills.tres" id="cw22"]
 [ext_resource type="Resource" path="res://object/weapon_shotgun_02.tres" id="sw1"]
 [ext_resource type="Resource" path="res://object/weapon_shotgun_03.tres" id="sw2"]
 [sub_resource type="Resource" id="Resource_b6yju"]
@@ -126,14 +122,14 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_a1hri"]
 script = ExtResource("5_wpoj5")
-items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw20"), ExtResource("cw21"), ExtResource("cw22"), ExtResource("nw7"), ExtResource("nw8"), ExtResource("nw1"), ExtResource("nw2")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00])
+items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw20"), ExtResource("nw7"), ExtResource("nw1"), ExtResource("nw2")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_j78qc"]
 script = ExtResource("5_wpoj5")
-items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw20"), ExtResource("cw21"), ExtResource("cw22"), ExtResource("nw7"), ExtResource("nw8"), ExtResource("nw1"), ExtResource("nw2")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00])
+items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw20"), ExtResource("nw7"), ExtResource("nw1"), ExtResource("nw2")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0010" type="Node2D" unique_id=1160034262]

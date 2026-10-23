@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://ckqf4k1fb4ylo"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://ckopb8d73wj80" path="res://anim/anim_effect_手枪攻击下.tscn" id="1_atn7b"]
@@ -11,10 +11,10 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="6"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="8_oo4tp"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="9_q7ktf"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="10_2eh8r"]
+[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="13_ti8q5"]
 [ext_resource type="Texture2D" uid="uid://dkuax4v4pm7eu" path="res://art/Ui/装備アイコンスナイパーライフル.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_sniper1"]
@@ -50,7 +50,7 @@ right = Vector2(0, -10)
 [resource]
 script = ExtResource("1")
 attack_power = 44
-attack_speed = 1.10
+attack_speed = 1.1
 attack_range = 300.0
 weapon_state_name = "Sniper"
 weapon_walk_texture = ExtResource("9_q7ktf")
@@ -88,6 +88,5 @@ description = "原作 ｽﾅｲﾊﾟｰﾗｲﾌﾙ/H&K PSG1（威力120／连�
 icon = ExtResource("icon")
 sell_price = 200
 max_stack = 1
-pickup_texture = ExtResource("8_oo4tp")
-pickup_char_idx = 2
+pickup_texture = ExtResource("13_ti8q5")
 pickup_step_frames = Array[int]([1])

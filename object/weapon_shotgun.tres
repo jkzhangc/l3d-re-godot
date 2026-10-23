@@ -8,13 +8,13 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="4_juw25"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_5xpys"]
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="6_0fguu"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_juw25"]
 [ext_resource type="Texture2D" uid="uid://dgcnmj2ubdcdv" path="res://art/Barrages/bullet-1.png" id="6_y02tm"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_8fi51"]
 [ext_resource type="AudioStream" uid="uid://8dyndnamhh5n" path="res://sound/ジッポライター1.ogg" id="8_45qvp"]
 [ext_resource type="AudioStream" uid="uid://j81banot3gk0" path="res://sound/ショットガン_pomp.ogg" id="8_juw25"]
 [ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="8_sw0ir"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
+[ext_resource type="Texture2D" uid="uid://ddi2lqjarsikf" path="res://art/Weapon/[2K-VX]-A武器オブジェクト.png" id="12_fwhge"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="14_fwhge"]
 [ext_resource type="Texture2D" uid="uid://cmvvyglu8tiua" path="res://art/Ui/装備アイコンショットガン.png" id="icon"]
 
@@ -79,7 +79,6 @@ right = Vector2(0, -16)
 [resource]
 script = ExtResource("6_0fguu")
 attack_power = 45
-attack_speed = 1.00
 attack_range = 200.0
 weapon_state_name = "Shotgun"
 weapon_walk_texture = ExtResource("8_sw0ir")
@@ -122,6 +121,6 @@ description = "原作 ショットガン/M870（威力40／连射D）。泵动�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_juw25")
-pickup_direction = 1
+pickup_texture = ExtResource("12_fwhge")
+pickup_char_idx = 2
 pickup_step_frames = Array[int]([1])

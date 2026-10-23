@@ -10,6 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://dx7jfrrb2g6x8" path="res://art/Weapon/A武器セット６.png" id="7_e8ecx"]
 [ext_resource type="Texture2D" uid="uid://2di8l2lepdf2" path="res://art/Ui/装備アイコンバット.png" id="8"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_e8ecx"]
+[ext_resource type="Texture2D" uid="uid://b4dw7bdhfnwgb" path="res://art/Weapon/[2K-VX]-A武器セット６.png" id="pickup_tex"]
 
 [resource]
 script = ExtResource("1")
@@ -39,6 +40,7 @@ description = "重型近接武器，挥棒范围大、砸得很疼，但收招�
 icon = ExtResource("8")
 sell_price = 120
 max_stack = 1
-pickup_texture = ExtResource("7_e8ecx")
+pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 5
+pickup_direction = 0
 pickup_step_frames = Array[int]([0])

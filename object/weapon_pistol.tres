@@ -10,11 +10,11 @@
 [ext_resource type="AudioStream" uid="uid://c26wylxoqll4q" path="res://sound/ショットガン2.ogg" id="3_55cd1"]
 [ext_resource type="AudioStream" uid="uid://bqptf36kc2nkw" path="res://sound/ベレッタ.ogg" id="4_dijym"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="5_oxqje"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_dijym"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_kl6un"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_kl6un"]
 [ext_resource type="Texture2D" uid="uid://8wg5txttqrg3" path="res://art/Ui/装備アイコンハンドガン.png" id="icon"]
+[ext_resource type="Texture2D" uid="uid://bunpswvp134ux" path="res://art/Weapon/[2K-VX]-A武器セット１.png" id="pickup_tex"]
 
 [sub_resource type="Resource" id="AEO_pistol_01_bigg"]
 script = ExtResource("9wspawn")
@@ -63,7 +63,6 @@ right = Vector2(0, -14)
 [resource]
 script = ExtResource("1")
 attack_power = 25
-attack_speed = 1.00
 attack_range = 200.0
 weapon_state_name = "Pistol"
 weapon_walk_texture = ExtResource("2")
@@ -104,5 +103,5 @@ description = "原作 ハンドガン/ﾍﾞﾚｯﾀM92F（威力15／连射C�
 icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
-pickup_texture = ExtResource("6_dijym")
+pickup_texture = ExtResource("pickup_tex")
 pickup_step_frames = Array[int]([1])
