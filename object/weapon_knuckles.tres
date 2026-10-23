@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战1.png" id="2"]
+[ext_resource type="Texture2D" path="res://art/WeaponAttack/爪/爪_attack1.png" id="3"]
+[ext_resource type="Texture2D" path="res://art/Ui/装備アイコンメリケンサック.png" id="4"]
+[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
+[ext_resource type="AudioStream" path="res://sound/打撃5.ogg" id="6"]
+[ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="8"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 18
+attack_speed = 1.3
+weapon_state_name = "Melee"
+weapon_walk_texture = ExtResource("2")
+is_ranged = false
+weapon_slot = 1
+critical_rate = 25
+attack_sound = ExtResource("5")
+empty_fire_sound = ExtResource("7")
+raise_sound = ExtResource("7")
+lower_sound = ExtResource("7")
+hit_sound = ExtResource("6")
+hit_effect_anim = ExtResource("8")
+attack_char_sequence = Array[int]([3, 4, 5, 2])
+melee_attack_char_sequence = Array[int]([3, 4, 5, 2])
+melee_attack_frame_durations = Array[float]([0.1, 0.1, 0.2, 0.1])
+melee_range_size = Vector2(40, 32)
+melee_range_forward_offset = 18
+melee_weapon_sprite = ExtResource("3")
+melee_weapon_sprite_seq_cols = {0: 0, 1: 1, 2: 1, 3: 2}
+item_id = "knuckles"
+item_name = "指虎"
+item_type = 3
+description = "套在指节上的铁块。伤害最低但出手最快，适合贴身补刀。"
+icon = ExtResource("4")
+sell_price = 80
+max_stack = 1

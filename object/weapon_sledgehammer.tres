@@ -1,0 +1,40 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战1.png" id="2"]
+[ext_resource type="Texture2D" path="res://art/WeaponAttack/スレッジハンマー/スレッジハンマー_attack1.png" id="3"]
+[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン処刑者の大斧.png" id="4"]
+[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
+[ext_resource type="AudioStream" path="res://sound/打撃5.ogg" id="6"]
+[ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="8"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 65
+attack_speed = 0.55
+weapon_state_name = "Melee"
+weapon_walk_texture = ExtResource("2")
+is_ranged = false
+weapon_slot = 1
+critical_rate = 25
+attack_sound = ExtResource("5")
+empty_fire_sound = ExtResource("7")
+raise_sound = ExtResource("7")
+lower_sound = ExtResource("7")
+hit_sound = ExtResource("6")
+hit_effect_anim = ExtResource("8")
+attack_char_sequence = Array[int]([3, 4])
+melee_attack_char_sequence = Array[int]([3, 4])
+melee_attack_frame_durations = Array[float]([0.16, 0.2])
+melee_range_size = Vector2(86, 48)
+melee_range_forward_offset = 34
+melee_weapon_sprite = ExtResource("3")
+melee_weapon_sprite_seq_cols = {0: 0, 1: 1}
+item_id = "sledgehammer"
+item_name = "大锤"
+item_type = 3
+description = "工事用的大锤。伤害是近战里最高的一档，但抡起来几乎挪不动脚。"
+icon = ExtResource("4")
+sell_price = 300
+max_stack = 1
