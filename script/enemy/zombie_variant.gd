@@ -21,6 +21,7 @@ extends Resource
 ##   → 発生ＢＯＷ番号=40）；本设计按用户要求改为形态切换，数值可在此逐变体调整。
 
 @export_group("标识")
+## 变体 ID（刷怪池 / 掉落表按此引用）
 @export var id: StringName = &""
 ## 关卡池内被随机选中的权重（0 = 不会被选中）。
 @export var weight: float = 1.0
@@ -70,14 +71,22 @@ extends Resource
 ## 击中目标音效（攻击命中玩家且实际掉血时播放）。留空则沿用敌人自身 hit_target_sound。
 @export var hit_target_sound: AudioStream = null
 
-## ── 音效音调（2026-09-15）：每个音效可独立设置；0 = 沿用敌人自身默认音调 ──
+# ── 音效音调（2026-09-15）：每个音效可独立设置；0 = 沿用敌人自身默认音调 ──
+## 发现玩家音效音调（0 = 沿用敌人默认）
 @export var discover_sound_pitch: float = 0.0
+## 受击音效音调（0 = 沿用敌人默认）
 @export var hurt_sound_pitch: float = 0.0
+## 攻击音效音调（0 = 沿用敌人默认）
 @export var attack_sound_pitch: float = 0.0
+## 狂暴发现音效音调（0 = 沿用敌人默认）
 @export var rage_discover_sound_pitch: float = 0.0
+## 死亡音效音调（0 = 沿用敌人默认）
 @export var death_sound_pitch: float = 0.0
+## 爆头音效音调（0 = 沿用敌人默认）
 @export var headshot_sound_pitch: float = 0.0
+## 爆头倒地音效音调（0 = 沿用敌人默认）
 @export var headshot_fall_sound_pitch: float = 0.0
+## 命中目标音效音调（0 = 沿用敌人默认）
 @export var hit_target_sound_pitch: float = 0.0
 
 @export_group("数值扩展（0 / 零值 = 沿用敌人默认）")

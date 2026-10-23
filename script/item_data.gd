@@ -22,6 +22,7 @@ enum ItemType {
 
 @export var item_id: String = ""              ## 唯一标识
 @export var item_name: String = "新物品"       ## 显示名称
+## 物品类型（决定 HUD 槽位、拾取行为与收藏分类）
 @export var item_type: int = ItemType.CONSUMABLE
 @export_multiline var description: String = "" ## 描述
 @export var icon: Texture2D                    ## 图标（可选）

@@ -9,12 +9,16 @@ class_name CharacterData extends Resource
 ## 角色参数数据 — 可在检查器中可视化编辑
 
 @export_group("基础属性")
+## 角色显示名（安全屋台词 / 存档 / 选择界面）
 @export var character_name: String = "のび太"
 ## 稳定数据键（如 "nobita"）。武器侧的「按角色子弹发射点偏移」等按角色配置的数据用它做键；
 ## 留空则回退 tres 文件名（character_nobita.tres → nobita）。
 @export var character_id: String = ""
+## 初始等级
 @export var level: int = 1
+## 最大 HP
 @export var max_hp: int = 100
+## 最大 MP
 @export var max_mp: int = 50
 @export var max_tp: int = 100                  ## TP（技能点/气力，后续技能系统使用）
 
@@ -23,8 +27,11 @@ class_name CharacterData extends Resource
 @export var tp_regen_interval: float = 5.0     ## 每隔多少秒自动回复一次（0=不自动回复）
 
 @export_group("战斗属性")
+## 基础攻击力
 @export var base_attack: int = 15
+## 基础防御力
 @export var base_defense: int = 5
+## 基础移动速度倍率（1.0 = 标准）
 @export var base_speed: float = 1.0
 @export var critical_rate: float = 0.05    ## 暴击率 (0~1)
 @export var critical_damage: float = 1.5    ## 暴击倍率
@@ -35,9 +42,13 @@ class_name CharacterData extends Resource
 @export var initial_weapon: WeaponData = null
 
 @export_group("成长率")
+## 每级 HP 成长
 @export var hp_growth: int = 10
+## 每级 MP 成长
 @export var mp_growth: int = 5
+## 每级攻击成长
 @export var atk_growth: int = 3
+## 每级防御成长
 @export var def_growth: int = 2
 
 @export_group("外观")

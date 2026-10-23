@@ -78,7 +78,7 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 
 ## --- 霰弹枪装填（SHOTGUN 模式）---
 @export var shotgun_reload_loop_char_sequence: Array[int] = []     ## 单发装填循环帧序列
-@export var shotgun_reload_loop_frame_durations: Array[float] = [] # 循环每帧时长
+@export var shotgun_reload_loop_frame_durations: Array[float] = [] ## 循环每帧时长
 @export var shotgun_reload_loop_sound: AudioStream = null           ## 单发装填音效
 @export var shotgun_reload_end_char_sequence: Array[int] = []      ## 装填结束帧序列（上膛动作）
 @export var shotgun_reload_end_frame_durations: Array[float] = []  ## 结束帧每帧时长

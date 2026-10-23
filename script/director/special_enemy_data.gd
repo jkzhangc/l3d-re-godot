@@ -22,6 +22,7 @@ extends Resource
 ##     高速（240）、中攻（15）、攻击附带 Heat、攻击后摇长（90 帧 ≈1.5s 破绽）。
 
 @export_group("标识")
+## 特感 ID（刷怪池 / 掉落表按此引用）
 @export var id: StringName = &""
 ## 关卡特感池内被随机选中的权重（0 = 不会被选中）。
 @export var weight: float = 1.0
@@ -91,7 +92,8 @@ extends Resource
 
 @export_group("数值")
 ## 最大生命值。0 = 沿用敌人默认（enemy.gd 的 max_hp=100）。
-@export var max_hp: float = 150.0## 移动速度（px/s）。ハンター「すばやい動き」→ 240（普通僵尸约 120~160）。
+@export var max_hp: float = 150.0
+## 移动速度（px/s）。ハンター「すばやい動き」→ 240（普通僵尸约 120~160）
 @export var move_speed: float = 240.0
 
 ## ── 步行/跑步双移动模式（暴君・猎杀者，2026-09-13 用户指定素材映射）──
@@ -256,6 +258,7 @@ extends Resource
 @export var spit_enabled: bool = false
 ## 吐酸触发距离带（px）：更近走普通近战 Attack（melee_enabled 时），更远继续追击。
 @export var spit_trigger_min_dist: float = 0.0
+## 进入吐酸判定的最大距离（px）
 @export var spit_trigger_max_dist: float = 400.0
 ## 吐酸冷却（秒）：两次吐酸的最短间隔（从后摇结束后起算，与首狩り同规则）。
 @export var spit_cooldown_seconds: float = 1.8
@@ -273,6 +276,7 @@ extends Resource
 @export var spit_fire_at_sequence_idx: int = 1
 ## 吐酸音效。留空 = 不播（酸着弾音由酸弹场景自播）。
 @export var spit_sound: AudioStream = null
+## 吐酸音效音调（0 = 原调）
 @export var spit_sound_pitch: float = 1.0
 ## 酸弹命中/落地特效（anim/ 下的 VXAnimSprite 场景，如 anim_effect_酸.tscn）。
 ## 命中玩家与撞墙/落地共用。空 = 不播特效。

@@ -67,9 +67,11 @@ class_name ThrowableData extends ItemData
 @export_range(0.0, 1.0, 0.01) var fire_shadow_opacity: float = 0.45
 
 @export_group("音效")
+## 投出音效（手雷 / 燃烧瓶离手时播放）
 @export var throw_sound: AudioStream = null
 ## 投出音效音调（<=0 = 原调）。2026-09-15 用户定稿：手雷/炸药/燃烧瓶回避2 = 1.4（写在各 tres）。
 @export_range(0.0, 4.0, 0.1) var throw_sound_pitch: float = 1.0
+## 爆炸音效（爆炸瞬间播放）
 @export var explode_sound: AudioStream = null
 
 @export_group("闪光（閃光手榴弾 / Night Hunter）")
