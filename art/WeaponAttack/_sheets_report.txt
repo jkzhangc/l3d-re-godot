@@ -1,0 +1,69 @@
+# 武器攻击图集生成报告
+共 64 张
+
+布局：3 列（前摇/挥动/后摇）× 4 行（下/左/右/上）
+
+- art/WeaponAttack\DF剣\DF剣_attack1.png  (636x592)
+- art/WeaponAttack\DF剣\DF剣_attack2.png  (636x592)
+- art/WeaponAttack\アンジェロソード\アンジェロソード_attack1.png  (636x592)
+- art/WeaponAttack\アンジェロソード\アンジェロソード_attack2.png  (636x592)
+- art/WeaponAttack\カマイタチの刃\カマイタチの刃_attack1.png  (636x592)  缺失：缺 A1
+- art/WeaponAttack\クラウザーブレイード\クラウザーブレイード_attack1.png  (636x592)
+- art/WeaponAttack\クラウザーブレイード\クラウザーブレイード_attack2.png  (636x592)
+- art/WeaponAttack\シャベル\シャベル_attack1.png  (636x592)
+- art/WeaponAttack\スカルブレード\スカルブレード_attack1.png  (636x592)  缺失：缺 A1
+- art/WeaponAttack\スレッジハンマー\スレッジハンマー_attack1.png  (636x592)
+- art/WeaponAttack\ゼットセイバー\ゼットセイバー_attack1.png  (636x592)
+- art/WeaponAttack\ゼットセイバー\ゼットセイバー_attack2.png  (636x592)
+- art/WeaponAttack\ゼットセイバー氷\ゼットセイバー氷_attack1.png  (636x592)
+- art/WeaponAttack\ゼットセイバー氷\ゼットセイバー氷_attack2.png  (636x592)
+- art/WeaponAttack\ゼットセイバー炎\ゼットセイバー炎_attack1.png  (636x592)
+- art/WeaponAttack\ゼットセイバー炎\ゼットセイバー炎_attack2.png  (636x592)
+- art/WeaponAttack\ゼットセイバー雷\ゼットセイバー雷_attack1.png  (636x592)
+- art/WeaponAttack\ゼットセイバー雷\ゼットセイバー雷_attack2.png  (636x592)
+- art/WeaponAttack\チェンソー\チェンソー_attack1.png  (636x592)
+- art/WeaponAttack\ディファイラー\ディファイラー_attack1.png  (636x592)
+- art/WeaponAttack\デスサイズ\デスサイズ_attack1.png  (636x592)
+- art/WeaponAttack\デッキブラシ\デッキブラシ_attack1.png  (636x592)
+- art/WeaponAttack\ネロ剣\ネロ剣_attack1.png  (636x880)
+- art/WeaponAttack\ネロ剣\ネロ剣_attack2.png  (636x880)
+- art/WeaponAttack\ポスタルソード\ポスタルソード_attack1.png  (636x592)
+- art/WeaponAttack\ポスタルソード\ポスタルソード_attack2.png  (636x592)
+- art/WeaponAttack\人斬り包丁\人斬り包丁_attack1.png  (636x736)
+- art/WeaponAttack\伝説剣\伝説剣_attack1.png  (636x704)
+- art/WeaponAttack\伝説剣\伝説剣_attack2.png  (636x704)
+- art/WeaponAttack\処刑者の大斧\処刑者の大斧_attack1.png  (636x736)
+- art/WeaponAttack\大剣\大剣_attack1.png  (636x592)
+- art/WeaponAttack\大剣\大剣_attack2.png  (636x592)
+- art/WeaponAttack\大鎌\大鎌_attack1.png  (636x832)
+- art/WeaponAttack\小型チェーンソー\小型チェーンソー_attack1.png  (636x592)
+- art/WeaponAttack\小型チェーンソー\小型チェーンソー_attack2.png  (636x592)
+- art/WeaponAttack\小型チェーンソー左\小型チェーンソー左_attack1.png  (636x592)  缺失：缺 A1/左、缺 A1/右、缺 A2/左、缺 A2/右、缺 A3/左、缺 A3/右
+- art/WeaponAttack\打刀\打刀_attack1.png  (636x592)
+- art/WeaponAttack\木刀\木刀_attack1.png  (636x592)
+- art/WeaponAttack\消火器\消火器_attack1.png  (636x592)
+- art/WeaponAttack\爪\爪_attack1.png  (636x592)  缺失：缺 A1
+- art/WeaponAttack\理力刃\理力刃_attack1.png  (636x592)
+- art/WeaponAttack\理力刃\理力刃_attack2.png  (636x592)
+- art/WeaponAttack\貫きの剣\貫きの剣_attack1.png  (636x592)
+- art/WeaponAttack\貫きの剣\貫きの剣_attack2.png  (636x592)
+- art/WeaponAttack\赤姫\赤姫_attack1.png  (636x592)
+- art/WeaponAttack\赤姫\赤姫_attack2.png  (636x592)
+- art/WeaponAttack\赤姫刃\赤姫刃_attack1.png  (636x592)  缺失：缺 A1
+- art/WeaponAttack\赤姫左\赤姫左_attack1.png  (636x592)  缺失：缺 A1/左、缺 A1/右、缺 A2/左、缺 A2/右、缺 A3/左、缺 A3/右
+- art/WeaponAttack\赤姫左炎\赤姫左炎_attack1.png  (636x592)  缺失：缺 A1、缺 A2/左、缺 A2/右、缺 A3/左、缺 A3/右
+- art/WeaponAttack\赤姫炎\赤姫炎_attack1.png  (636x592)  缺失：缺 A1
+- art/WeaponAttack\金属バット\金属バット_attack1.png  (636x592)
+- art/WeaponAttack\鉄パイプ\鉄パイプ_attack1.png  (636x592)
+- art/WeaponAttack\鎧剣\鎧剣_attack1.png  (636x592)
+- art/WeaponAttack\鎧剣\鎧剣_attack2.png  (636x592)
+- art/WeaponAttack\鎧剣(炎)\鎧剣(炎)_attack1.png  (636x592)
+- art/WeaponAttack\鎧剣(炎)\鎧剣(炎)_attack2.png  (636x592)
+- art/WeaponAttack\鎧斧槍(大型)\鎧斧槍(大型)_attack1.png  (636x592)
+- art/WeaponAttack\閻魔刀\閻魔刀_attack1.png  (636x592)
+- art/WeaponAttack\閻魔刀\閻魔刀_attack2.png  (636x592)
+- art/WeaponAttack\閻魔刀刃\閻魔刀刃_attack1.png  (636x720)  缺失：缺 A1
+- art/WeaponAttack\閻魔刀刃(咲夜)\閻魔刀刃(咲夜)_attack1.png  (636x720)  缺失：缺 A1
+- art/WeaponAttack\防火斧\防火斧_attack1.png  (636x592)
+- art/WeaponAttack\Ｎソード\Ｎソード_attack1.png  (636x592)
+- art/WeaponAttack\Ｎソード\Ｎソード_attack2.png  (636x592)
