@@ -1485,7 +1485,7 @@ func _dict_type_info(prop: String, dict: Dictionary) -> Dictionary:
 					"kind": DV_INT, "label": "int（帧列号）",
 					"key_int": true, "res_script": null, "flexible": false,
 				}
-			"melee_weapon_sprite_offsets", "bullet_spawn_offsets", "attack_effect_offsets":
+			"melee_weapon_sprite_offsets", "melee_weapon_sprite_step_offsets", "bullet_spawn_offsets", "attack_effect_offsets":
 				return {
 					"kind": DV_RESOURCE, "label": "WeaponEffectOffsets",
 					"key_int": false,
@@ -2462,6 +2462,23 @@ func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> 
 
 func _dict_key_suggestions(prop: String) -> Array[String]:
 	var out: Array[String] = []
+	## 动作图「按步号」偏移表：键是 `角色:步号` 复合串，先给 `*:步号` 再给每个角色。
+	if prop == "melee_weapon_sprite_step_offsets":
+		var steps: int = 3
+		if _res is WeaponData:
+			var seq: Array[int] = (_res as WeaponData).get_melee_attack_char_sequence()
+			steps = maxi(seq.size(), 1)
+		for i: int in range(steps):
+			out.append("*:%d" % i)
+		for e: Dictionary in _entries:
+			if str(e.get("kind", "")) != K_PLAYER:
+				continue
+			var pid: String = str(e.get("id", "")).strip_edges()
+			if pid.is_empty():
+				continue
+			for i: int in range(steps):
+				out.append("%s:%d" % [pid, i])
+		return out
 	## 偏移表按角色 id 配（bullet_spawn_offsets / attack_effect_offsets /
 	## melee_weapon_sprite_offsets）；键建议直接列项目里的玩家角色 id。
 	if prop.ends_with("_offsets"):
@@ -3099,12 +3116,30 @@ func _set_offset_field(res: Resource, direction: int, value: Vector2) -> void:
 		3: res.set("up", value)
 
 
+## 当前显示的偏移值 + 它来自哪一层。
+## 武器动作模式按 `scope` 决定看哪一层：
+##   scope = "step"（默认）→ 本步专用 → 所有角色本步 → 角色基线 → 零；
+##   scope = "char"        → 只看角色基线（旧行为，所有步共用）。
+## 这样「显示的值」永远等于「拖动会写进去的那一层」，不会出现拖了却没反应。
 func _offset_effective(wd: WeaponData, mode: String, cid: String, direction: int,
-		bullet_index: int) -> Dictionary:
+		bullet_index: int, step: int = -1, scope: String = "step") -> Dictionary:
+	if mode == "weapon":
+		if scope == "char":
+			var base: Resource = wd.melee_weapon_sprite_offsets.get(cid) as Resource
+			return {
+				"value": _offset_field(base, direction),
+				"using_default": base == null,
+				"source": "char" if base != null else "none",
+				"res": base,
+			}
+		var source: String = wd.get_melee_weapon_sprite_offset_source(cid, step)
+		var value: Vector2 = wd.get_melee_weapon_sprite_offset_by_key(cid, direction, step)
+		return {"value": value, "using_default": source == "none", "source": source, "res": null}
 	var dict: Dictionary = wd.get(_offset_prop(mode))
 	var res: Resource = dict.get(cid) as Resource
 	if res != null:
-		return {"value": _offset_field(res, direction), "using_default": false, "res": res}
+		return {"value": _offset_field(res, direction), "using_default": false,
+			"source": "char", "res": res}
 	var fallback: Vector2 = Vector2.ZERO
 	match mode:
 		"bullet":
@@ -3112,7 +3147,7 @@ func _offset_effective(wd: WeaponData, mode: String, cid: String, direction: int
 				fallback = (wd.bullet_list[bullet_index] as BulletData).get_extra_offset(direction)
 		"effect":
 			fallback = wd.attack_effect_offset_override
-	return {"value": fallback, "using_default": true, "res": null}
+	return {"value": fallback, "using_default": true, "source": "none", "res": null}
 
 
 func _offset_commit(wd: WeaponData, state: Dictionary, value: Vector2) -> void:
@@ -3122,14 +3157,36 @@ func _offset_commit(wd: WeaponData, state: Dictionary, value: Vector2) -> void:
 	if cid.is_empty():
 		return
 	var prop: String = _offset_prop(mode)
+	var key: String = cid
+	## 武器动作：默认写「角色:步号」这一层；关掉「按步号」才写回角色基线。
+	if mode == "weapon" and str(state.get("scope", "step")) == "step":
+		prop = "melee_weapon_sprite_step_offsets"
+		key = "%s:%d" % [cid, maxi(0, int(state.get("step", 0)))]
 	var dict: Dictionary = wd.get(prop)
-	var res: Resource = dict.get(cid) as Resource
+	var res: Resource = dict.get(key) as Resource
 	if res == null:
 		res = load("res://script/weapon_effect_offsets.gd").new()
-		dict[cid] = res
+		dict[key] = res
 	_set_offset_field(res, direction, value)
 	wd.set(prop, dict)
 	_set_prop(prop, dict)
+
+
+## 删掉「本步专用」条目，让这一步回退到角色基线（没有条目就不动）。
+func _offset_drop_step(wd: WeaponData, state: Dictionary) -> bool:
+	if str(state.get("mode", "")) != "weapon":
+		return false
+	var cid: String = str(state.get("char_id", ""))
+	if cid.is_empty():
+		return false
+	var key: String = "%s:%d" % [cid, maxi(0, int(state.get("step", 0)))]
+	var dict: Dictionary = wd.get("melee_weapon_sprite_step_offsets")
+	if not dict.has(key):
+		return false
+	dict.erase(key)
+	wd.set("melee_weapon_sprite_step_offsets", dict)
+	_set_prop("melee_weapon_sprite_step_offsets", dict)
+	return true
 
 
 func _offset_preview_row(text: String, ctrl: Control) -> HBoxContainer:
@@ -3180,7 +3237,8 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 	var char_idx: int = maxi(0, int(state.get("char_idx", wd.get_ready_char_index())))
 	var frame: int = clampi(int(state.get("frame", 1)), 0, 2)
 	var cd: CharacterData = _character_by_id(cid)
-	var eff: Dictionary = _offset_effective(wd, mode, cid, direction, bullet_index)
+	var scope: String = str(state.get("scope", "step"))
+	var eff: Dictionary = _offset_effective(wd, mode, cid, direction, bullet_index, step, scope)
 	preview.call("set_preview", wd, cd, mode, direction, step, char_idx, frame,
 		bullet_index, eff["value"], eff["using_default"])
 	if reset_drag:
@@ -3190,6 +3248,14 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 		(ui["bullet_row"] as Control).visible = mode == "bullet"
 	if ui.has("step_row"):
 		(ui["step_row"] as Control).visible = mode == "weapon"
+	if ui.has("scope_row"):
+		(ui["scope_row"] as Control).visible = mode == "weapon"
+	if ui.has("drop_step"):
+		var drop: Button = ui["drop_step"] as Button
+		drop.visible = mode == "weapon"
+		drop.disabled = mode != "weapon" or scope != "step" \
+			or not wd.melee_weapon_sprite_step_offsets.has(
+				"%s:%d" % [cid, maxi(0, int(state.get("step", 0)))])
 	if ui.has("char_row"):
 		(ui["char_row"] as Control).visible = mode != "weapon"
 	if ui.has("frame_row"):
@@ -3207,13 +3273,30 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 		if mode == "bullet" and bullet_index < wd.bullet_list.size():
 			var bd: BulletData = wd.bullet_list[bullet_index]
 			bullet_name = bd.resource_path.get_file() if not bd.resource_path.is_empty() else "子弹%d" % (bullet_index + 1)
-		var source: String = "默认兜底" if bool(eff["using_default"]) else "武器级条目"
+		var source: String = "默认兜底"
+		var write_note: String = "（拖动后自动创建条目）"
+		if bool(eff["using_default"]):
+			source = "默认兜底"
+		elif mode == "weapon":
+			match str(eff["source"]):
+				"step": source = "本步专用"
+				"any": source = "所有角色·本步"
+				"char": source = "角色基线（本步未单独设置）"
+				_: source = "未配置"
+		else:
+			source = "武器级条目"
+		if mode == "weapon":
+			write_note = "（写入角色基线）" if scope == "char" else "（拖动写入本步）"
+			if str(eff["source"]) == "char" and scope == "step":
+				write_note = "（拖动后本步单独覆盖基线）"
 		var extra: String = (" · " + bullet_name) if not bullet_name.is_empty() else ""
+		var step_note := ""
+		if mode == "weapon":
+			step_note = " · 第%d步" % (step + 1)
 		var dirty_note: String = " · 未保存（Ctrl+S）" if _dirty else ""
-		(ui["status"] as Label).text = "%s%s · %s · %s%s\n偏移 (%d, %d) · %s%s" % [
-			_offset_mode_label(mode), extra, cid, dir_label, dirty_note,
-			roundi(eff["value"].x), roundi(eff["value"].y), source,
-			"" if not bool(eff["using_default"]) else "（拖动后自动创建条目）"]
+		(ui["status"] as Label).text = "%s%s%s · %s · %s%s\n偏移 (%d, %d) · %s%s" % [
+			_offset_mode_label(mode), extra, step_note, cid, dir_label, dirty_note,
+			roundi(eff["value"].x), roundi(eff["value"].y), source, write_note]
 
 
 func _open_offset_preview(focus_prop: String = "") -> void:
@@ -3236,6 +3319,7 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	match focus_prop:
 		"bullet_spawn_offsets": focus_mode = "bullet"
 		"melee_weapon_sprite_offsets": focus_mode = "weapon"
+		"melee_weapon_sprite_step_offsets": focus_mode = "weapon"
 		"attack_effect_offsets": focus_mode = "effect"
 	var mode: String = focus_mode if modes.has(focus_mode) else modes[0]
 	var cid: String = "nobita"
@@ -3254,6 +3338,8 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 		"bullet_index": 0,
 		"char_idx": wd.get_ready_char_index(),
 		"frame": 1,
+		## 武器动作默认按步号分开写；关掉才是「所有步共用角色基线」的旧行为。
+		"scope": "step",
 	}
 
 	var vp: Vector2 = get_viewport_rect().size
@@ -3371,6 +3457,35 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	vb.add_child(step_row)
 	ui["step_row"] = step_row
 
+	## 「按步号分别设置」：默认开。关掉 = 写回角色基线（所有步共用，旧行为）。
+	var scope_box := HBoxContainer.new()
+	scope_box.add_theme_constant_override("separation", 8)
+	var scope_label := _label("按步号分别设置", 12, C_MUTED)
+	scope_label.custom_minimum_size = Vector2(92, 0)
+	scope_box.add_child(scope_label)
+	var scope_check := CheckBox.new()
+	scope_check.button_pressed = true
+	scope_check.tooltip_text = "开：每一步各存一条偏移（推荐，前摇/挥动/后摇位置不同）\n" \
+		+ "关：只改角色基线 melee_weapon_sprite_offsets（所有步共用）"
+	scope_check.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	scope_box.add_child(scope_check)
+	vb.add_child(scope_box)
+	ui["scope_row"] = scope_box
+	scope_check.toggled.connect(func(on: bool):
+		state["scope"] = "step" if on else "char"
+		_offset_preview_refresh(wd, state, preview, ui, true))
+
+	var drop_step := _button("移除本步条目", false)
+	drop_step.tooltip_text = "删掉「角色:步号」这一条，让该步回退到角色基线"
+	drop_step.pressed.connect(func():
+		if _offset_drop_step(wd, state):
+			_toast_show("已移除本步条目，回退到角色基线", C_OK)
+		else:
+			_toast_show("这一步还没有单独条目", C_MUTED)
+		_offset_preview_refresh(wd, state, preview, ui))
+	vb.add_child(drop_step)
+	ui["drop_step"] = drop_step
+
 	var char_spin := _offset_spin(float(state["char_idx"]), 0, 63)
 	char_spin.value_changed.connect(func(v: float):
 		state["char_idx"] = int(v)
@@ -3420,10 +3535,11 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	ui["status"] = status
 
 	var hint := _label(
-		"子弹：黄点 = 角色原点 + 方向 × BulletData.spawn_offset + 武器级偏移。\n"
-		+ "武器动作：角色攻击帧 + 武器图（按步号选列）。\n"
+		"武器动作：每一步各有一条偏移 → 键 `角色:步号`（如 nobita:1），\n"
+		+ "　`*:步号` 可让所有角色共用；都没有才回退角色基线。\n"
+		+ "子弹：黄点 = 角色原点 + 方向 × BulletData.spawn_offset + 武器级偏移。\n"
 		+ "特效：橙十字 = 可配置偏移；不含 .tscn 内置 position_offset。\n"
-		+ "当前角色还没有条目时会先用 BulletData / override 兜底；拖动即创建条目。",
+		+ "拖动即写入当前层；Ctrl+S 保存到 .tres。",
 		11, C_MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(0, 100)

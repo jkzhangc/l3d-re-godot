@@ -147,7 +147,15 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 ## 动作图相对角色格中心的偏移（像素）。键 = CharacterData.character_id
 ## （留空回退 tres 文件名），值 = WeaponEffectOffsets（四方向 Vector2）。
 ## 留空字典 = 全零，即动作图画布中心对齐角色格中心。
+## ⚠ 这是**角色基线**：同一个角色所有攻击步号共用。要让每一帧（前摇/挥动/后摇）各偏一点，
+## 用下面的 `melee_weapon_sprite_step_offsets`（命中时优先于本表）。
 @export var melee_weapon_sprite_offsets: Dictionary = {}
+## 动作图偏移「按攻击步号」单独覆盖。键 = `<角色id>:<步号>`（步号从 0 起），
+## 也支持 `*:<步号>` 表示所有角色共用这一步的偏移；值 = WeaponEffectOffsets（四方向 Vector2）。
+## 命中优先级：`角色:步号` → `*:步号` → `melee_weapon_sprite_offsets[角色]` → 零。
+## 为什么需要：动作图的画布是固定大小的，但**每一列（前摇/挥动/后摇）武器的位置不同**，
+## 用同一个偏移会让某几帧明显错位（2026-10-23 用户实测：防火斧挥动帧偏移与后摇差很多）。
+@export var melee_weapon_sprite_step_offsets: Dictionary = {}
 ## 朝上（背对镜头）时把动作图画在人物**身后**；其余方向画在身前。
 @export var melee_weapon_sprite_behind_on_up: bool = true
 ## 强制在「专用近战身体」上也叠动作图。
@@ -196,17 +204,55 @@ func get_melee_weapon_sprite_col(seq_idx: int) -> int:
 
 
 ## 取某角色在该武器下的动作图偏移（按朝向）。无条目 → Vector2.ZERO。
+## `seq_idx` = `melee_attack_char_sequence` 的下标（第 1 步 = 0）；
+## 传 -1 表示「不看步号」，只取角色基线（旧行为）。
 ## 与 `get_attack_effect_offset` 同构，只是没有武器级兜底（画布中心对齐已足够）。
-func get_melee_weapon_sprite_offset(cd: CharacterData, facing: int) -> Vector2:
-	if cd == null or melee_weapon_sprite_offsets.is_empty():
+func get_melee_weapon_sprite_offset(cd: CharacterData, facing: int,
+		seq_idx: int = -1) -> Vector2:
+	if cd == null:
 		return Vector2.ZERO
-	var key: String = cd.get_character_key()
-	if key.is_empty() or not melee_weapon_sprite_offsets.has(key):
-		return Vector2.ZERO
-	var offs: WeaponEffectOffsets = melee_weapon_sprite_offsets[key] as WeaponEffectOffsets
+	return get_melee_weapon_sprite_offset_by_key(cd.get_character_key(), facing, seq_idx)
+
+
+## 同上，但直接给角色键（编辑器用：拿到的是 character_id，不必先实例化 CharacterData）。
+func get_melee_weapon_sprite_offset_by_key(char_key: String, facing: int,
+		seq_idx: int = -1) -> Vector2:
+	var src: Dictionary = resolve_melee_weapon_sprite_offset(char_key, seq_idx)
+	var offs: WeaponEffectOffsets = src.get("offs") as WeaponEffectOffsets
 	if offs == null:
 		return Vector2.ZERO
 	return offs.get_offset(facing)
+
+
+## 偏移来源：`step`（角色:步号） / `any`（*:步号） / `char`（角色基线） / `none`。
+## 编辑器用它告诉用户「当前显示的值是从哪一层来的」。
+func get_melee_weapon_sprite_offset_source(char_key: String, seq_idx: int) -> String:
+	return str(resolve_melee_weapon_sprite_offset(char_key, seq_idx).get("source", "none"))
+
+
+## 解析命中的偏移条目。返回 {offs: WeaponEffectOffsets|null, source: String}。
+func resolve_melee_weapon_sprite_offset(char_key: String, seq_idx: int) -> Dictionary:
+	if char_key.is_empty():
+		return {"offs": null, "source": "none"}
+	if seq_idx >= 0 and not melee_weapon_sprite_step_offsets.is_empty():
+		var exact: String = "%s:%d" % [char_key, seq_idx]
+		if melee_weapon_sprite_step_offsets.has(exact):
+			return {
+				"offs": melee_weapon_sprite_step_offsets[exact] as WeaponEffectOffsets,
+				"source": "step",
+			}
+		var wild: String = "*:%d" % seq_idx
+		if melee_weapon_sprite_step_offsets.has(wild):
+			return {
+				"offs": melee_weapon_sprite_step_offsets[wild] as WeaponEffectOffsets,
+				"source": "any",
+			}
+	if melee_weapon_sprite_offsets.has(char_key):
+		return {
+			"offs": melee_weapon_sprite_offsets[char_key] as WeaponEffectOffsets,
+			"source": "char",
+		}
+	return {"offs": null, "source": "none"}
 
 
 @export_group("子弹发射点（按角色 × 方向）")

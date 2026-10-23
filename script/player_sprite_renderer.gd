@@ -143,7 +143,10 @@ func _refresh_weapon_overlay() -> void:
 		return
 	ws.texture = tex
 	ws.region_rect = Rect2(col * cell_w, DIR_ROWS[_p._facing] * cell_h, cell_w, cell_h)
-	ws.position = wd.get_melee_weapon_sprite_offset(_p.current_character, _p._facing)
+	## 偏移按「角色 × 步号 × 朝向」取：前摇/挥动/后摇的武器位置不一样，
+	## 同一个偏移会让某一帧错位（2026-10-23 用户口径）。
+	ws.position = wd.get_melee_weapon_sprite_offset(
+		_p.current_character, _p._facing, _p._current_weapon_seq_idx)
 	## 朝上时人物背对镜头 → 武器画到身后；其余方向画在身前。
 	ws.z_index = -1 if (wd.melee_weapon_sprite_behind_on_up and _p._facing == 3) else 1
 	ws.visible = true
