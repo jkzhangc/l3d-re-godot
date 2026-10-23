@@ -73,6 +73,15 @@ const ENTRIES: Array[Dictionary] = [
 ]
 
 
+## 收藏馆要展示的条目：**弹药不算收藏品**（2026-10-23 用户定），其余全给。
+static func collection_entries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e: Dictionary in ENTRIES:
+		if str(e.get("group", "")) != "弹药":
+			out.append(e)
+	return out
+
+
 ## 按分组取条目（分组名见 catalog.json 的 groups）。
 static func by_group(group: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

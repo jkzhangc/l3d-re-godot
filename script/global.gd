@@ -1231,6 +1231,10 @@ func _apply_config_file(path: String) -> void:
 	music_volume = int(cfg.get("music_volume", music_volume))
 	sfx_volume = int(cfg.get("sfx_volume", sfx_volume))
 	bgs_volume = int(cfg.get("bgs_volume", bgs_volume))
+	for id: Variant in cfg.get("collection_ids", []):
+		var sid := str(id)
+		if not sid.is_empty() and not collection_ids.has(sid):
+			collection_ids.append(sid)
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
@@ -1259,6 +1263,7 @@ func save_config() -> void:
 		"music_volume": music_volume,
 		"sfx_volume": sfx_volume,
 		"bgs_volume": bgs_volume,
+		"collection_ids": Array(collection_ids),
 		"facing_lock_mode": facing_lock_mode,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
@@ -1335,6 +1340,24 @@ var sfx_volume: int:
 	set(v):
 		if _audio_service != null:
 			_audio_service.sfx_volume = v
+
+
+## ── 收藏馆（2026-10-23）──
+## 「拿到过」的物品 id 集合。**跨存档全局**（收藏馆属于元进度，不清档），
+## 落在 config.json 的 `collection_ids` 里，掉落/购买/调试召唤一旦入包就记一笔。
+## 只记 id，不记数量 —— 界面按 `ItemCatalogData.ENTRIES` 全表对照，命中才显示。
+var collection_ids: PackedStringArray = []
+
+
+func mark_collected(item_id: String) -> void:
+	if item_id.is_empty() or collection_ids.has(item_id):
+		return
+	collection_ids.append(item_id)
+	save_config()
+
+
+func has_collected(item_id: String) -> bool:
+	return collection_ids.has(item_id)
 
 
 ## BGS（环境音）音量 0–100（代理到 AudioService）。地图里的 `BGS` 节点走 "BGS" 总线。

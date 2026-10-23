@@ -405,6 +405,8 @@ func add_item(item: Resource) -> void:
 	if not item:
 		return
 	inventory.append(item)
+	## 收藏馆：拿到过就记一笔（跨存档全局，落在 config.json 的 collection_ids）
+	Global.mark_collected(str(item.get("item_id")))
 	print("[PlayerState] 获得物品: %s" % str(item.get("item_name")))
 
 
