@@ -1242,23 +1242,6 @@
       }
     },
     {
-      "file": "item_potion.tres",
-      "item_id": "potion_01",
-      "item_name": "回复药水",
-      "description": "恢复 50 点 HP。",
-      "item_type": 0,
-      "sell_price": 25,
-      "max_stack": 10,
-      "icon": "art/Ui/装備アイコングリーンハーブ.png",
-      "pickup_texture": "art/Weapon/[2K-VX]-A武器セット１１.png",
-      "pickup_char_idx": 0,
-      "script_class": "ItemData",
-      "group": "消耗品",
-      "in_enemy_pool": false,
-      "pool_weight": 0.0,
-      "orig": null
-    },
-    {
       "file": "item_bowgun_ammo.tres",
       "item_id": "ammo_bowgun",
       "item_name": "弩箭",

@@ -226,6 +226,7 @@ def main() -> None:
     (OUT / "道具武器总表.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     print("条目 %d → %s" % (len(recs), OUT))
+    emit_gd(recs)
     for g in GROUP_ORDER:
         n = totals.get(g, 0)
         if n:
@@ -233,6 +234,42 @@ def main() -> None:
     miss_icon = [r["item_id"] for r in recs if not r.get("icon")]
     if miss_icon:
         print("  缺图标 %d 项：%s" % (len(miss_icon), "、".join(miss_icon[:12])))
+
+
+GD_HEADER = '''class_name ItemCatalogData extends RefCounted
+
+## ── 架构定位 ──
+## 系统：物品总表 ｜ 层：数据（常量表）
+## 联机：不涉及
+## 职责：全游戏「武器 / 医疗品 / 辅助品 / 投掷物 / 弹药」的静态清单。
+## 依赖：被收藏馆界面与调试召唤菜单（Alt+W）读取
+##
+## ⚠ 本文件由 `tools/gen_item_catalog.py` 生成，**别手改** —— 改完 object/*.tres 重跑生成器。
+
+const ENTRIES: Array[Dictionary] = [
+%s
+]
+
+
+## 按分组取条目（分组名见 catalog.json 的 groups）。
+static func by_group(group: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e: Dictionary in ENTRIES:
+		if str(e.get("group", "")) == group:
+			out.append(e)
+	return out
+'''
+
+
+def emit_gd(recs) -> None:
+	rows = []
+	for r in recs:
+		rows.append('{"id": "%s", "name": "%s", "group": "%s", "path": "res://object/%s"}' % (
+			r.get("item_id", ""), (r.get("item_name") or "").replace('"', '\\"'),
+			r["group"], r["file"]))
+	path = ROOT / "script" / "item_catalog_data.gd"
+	path.write_text(GD_HEADER % ",\n".join("\t" + x for x in rows), encoding="utf-8", newline="\n")
+	print("  同时生成 %s（%d 条）" % (path, len(rows)))
 
 
 if __name__ == "__main__":

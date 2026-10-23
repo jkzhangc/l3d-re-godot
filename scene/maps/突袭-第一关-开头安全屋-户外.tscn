@@ -58,12 +58,18 @@
 [ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="cw5"]
 [ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="cw6"]
 [ext_resource type="Resource" path="res://object/item_aid_box.tres" id="cw7"]
-[ext_resource type="Resource" path="res://object/item_potion.tres" id="cw9"]
 [ext_resource type="Resource" path="res://object/weapon_launcher_acid.tres" id="cw12"]
 [ext_resource type="Resource" path="res://object/weapon_launcher_ice.tres" id="cw13"]
 [ext_resource type="Resource" path="res://object/weapon_launcher_thunder.tres" id="cw14"]
 [ext_resource type="Resource" path="res://object/throwable_dynamite.tres" id="cw15"]
 [ext_resource type="Resource" path="res://object/throwable_flash.tres" id="cw16"]
+[ext_resource type="Resource" path="res://object/weapon_combat_knife.tres" id="60"]
+[ext_resource type="Resource" path="res://object/weapon_knuckles.tres" id="61"]
+[ext_resource type="Resource" path="res://object/weapon_pipe.tres" id="62"]
+[ext_resource type="Resource" path="res://object/weapon_shovel.tres" id="63"]
+[ext_resource type="Resource" path="res://object/weapon_fire_axe.tres" id="64"]
+[ext_resource type="Resource" path="res://object/weapon_uchigatana.tres" id="65"]
+[ext_resource type="Resource" path="res://object/weapon_sledgehammer.tres" id="66"]
 [sub_resource type="Resource" id="Resource_wqyqx"]
 script = ExtResource("7_caxuo")
 items = Array[Resource]([ExtResource("6_oc1v5"), ExtResource("nw1"), ExtResource("nw2"), ExtResource("nw3")])
@@ -84,8 +90,8 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_rkbvx"]
 script = ExtResource("7_caxuo")
-items = Array[Resource]([ExtResource("12_60l2m"), ExtResource("13_id55e"), ExtResource("14_l6qwe")])
-weights = Array[float]([0.30, 0.30, 0.30])
+items = Array[Resource]([ExtResource("12_60l2m"), ExtResource("13_id55e"), ExtResource("14_l6qwe"), ExtResource("60"), ExtResource("61"), ExtResource("62"), ExtResource("63"), ExtResource("64"), ExtResource("65"), ExtResource("66")])
+weights = Array[float]([0.30, 0.30, 0.30, 0.10, 0.10, 0.08, 0.06, 0.05, 0.05, 0.03])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_rio6q"]
@@ -96,8 +102,8 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_l6qwe"]
 script = ExtResource("7_caxuo")
-items = Array[Resource]([ExtResource("13_rkbvx"), ExtResource("cw9"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00, 1.00])
+items = ([ExtResource("13_rkbvx"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
+weights = Array[float]([1.00, 1.00, 1.00, 1.00])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_id55e"]

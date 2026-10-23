@@ -170,11 +170,17 @@ func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
 		return
 	var key: InputEventKey = event
-	if not key.pressed or key.echo or not key.ctrl_pressed:
+	if not key.pressed or key.echo:
 		return
 	var code: int = key.physical_keycode
 	if code == 0:
 		code = key.keycode
+	## Alt+W：物品召唤菜单（不需要先选角色/拿武器，进图就能用）
+	if key.alt_pressed and code == SPAWN_KEY:
+		_toggle_spawn_panel()
+		return
+	if not key.ctrl_pressed:
+		return
 	if code == GATHER_KEY:
 		_gather()
 	elif code == HEAL_KEY:
@@ -277,3 +283,116 @@ func _heal_all_solo() -> void:
 			entity.set("current_hp", state.current_hp)
 			healed += 1
 	print("[DebugHotkey] Ctrl+H 单机：%d 名角色回满 HP" % healed)
+
+
+# ═══════════════════════════════════════
+# Alt+W：物品召唤菜单（调试）
+# ═══════════════════════════════════════
+
+## 【用途】改了武器/物品数值想立刻看效果，不必等掉落。
+## 列表来自 `ItemCatalogData.ENTRIES`（由 `tools/gen_item_catalog.py` 从 object/*.tres 生成，
+## 与收藏馆用同一份数据）。点任意一行 → 在玩家脚下生成一个只含该物品的随机拾取物。
+##
+## 【为什么复用 random_pickup】地面拾取物的外观/存档/联机同步都已在
+## `random_pickup.gd` 里处理完（含武器按 pickup_char_idx 取格）。这里只塞一个
+## 「单项池」，等于把它当成"召唤器"用，不新增第二条掉落生成路径。
+const DROP_POOL := preload("res://script/director/drop_pool_data.gd")
+const PICKUP_SCENE := preload("res://object/random_pickup.tscn")
+const CATALOG := preload("res://script/item_catalog_data.gd")
+
+const SPAWN_KEY: int = KEY_W
+const SPAWN_PANEL_LAYER: int = 90
+
+var _spawn_layer: CanvasLayer = null
+var _spawn_panel: PanelContainer = null
+var _spawn_list: VBoxContainer = null
+
+
+func _toggle_spawn_panel() -> void:
+	if _spawn_layer == null:
+		_build_spawn_panel()
+	_spawn_layer.visible = not _spawn_layer.visible
+	if _spawn_layer.visible:
+		_refresh_spawn_list()
+
+
+func _build_spawn_panel() -> void:
+	_spawn_layer = CanvasLayer.new()
+	_spawn_layer.name = "DebugItemSpawnLayer"
+	_spawn_layer.layer = SPAWN_PANEL_LAYER
+	add_child(_spawn_layer)
+
+	_spawn_panel = PanelContainer.new()
+	_spawn_panel.position = Vector2(24, 24)
+	_spawn_panel.custom_minimum_size = Vector2(420, 520)
+	_spawn_layer.add_child(_spawn_panel)
+
+	var scroll: ScrollContainer = ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(400, 480)
+	_spawn_panel.add_child(scroll)
+
+	_spawn_list = VBoxContainer.new()
+	_spawn_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_spawn_list)
+
+
+## 只列「能被玩家拿起来用」的类别（弹药/消耗品也列，方便测拾取）。
+func _refresh_spawn_list() -> void:
+	if _spawn_list == null:
+		return
+	for c: Node in _spawn_list.get_children():
+		c.queue_free()
+
+	var title: Label = Label.new()
+	title.text = "物品召唤（Alt+W 关闭）· 点一行生成到脚下"
+	_spawn_list.add_child(title)
+
+	var groups: Array[String] = [
+		"主武器（远程）", "副武器 / 近战", "治疗品", "辅助品", "投掷物", "消耗品", "弹药",
+	]
+	for g: String in groups:
+		var rows: Array[Dictionary] = CATALOG.by_group(g)
+		if rows.is_empty():
+			continue
+		var head: Label = Label.new()
+		head.text = "── %s（%d）──" % [g, rows.size()]
+		_spawn_list.add_child(head)
+		for e: Dictionary in rows:
+			var btn: Button = Button.new()
+			btn.text = "%s  [%s]" % [str(e.get("name", "?")), str(e.get("id", ""))]
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			var path: String = str(e.get("path", ""))
+			btn.pressed.connect(func() -> void: _spawn_item(path))
+			_spawn_list.add_child(btn)
+
+
+func _spawn_item(path: String) -> void:
+	if path.is_empty() or not ResourceLoader.exists(path):
+		print("[召唤] 资源不存在: %s" % path)
+		return
+	var res: Resource = load(path)
+	if res == null:
+		return
+	var target: Node2D = _local_player()
+	if target == null:
+		print("[召唤] 没有本机玩家实体，跳过（标题/菜单里不生效）")
+		return
+	var items: Array[Resource] = [res]
+	var weights: Array[float] = [1.0]
+	var pool: DropPoolData = DROP_POOL.new()
+	pool.items = items
+	pool.weights = weights
+	var node: Node2D = PICKUP_SCENE.instantiate()
+	node.set("pool", pool)
+	# 放在玩家脚下偏下一点，避免和玩家碰撞体重叠导致拾取判定抖动
+	node.global_position = target.global_position + Vector2(0, 20)
+	get_tree().current_scene.add_child(node)
+	print("[召唤] 已生成 %s → %s" % [res.get("item_name"), str(node.global_position)])
+
+
+## 本机玩家实体：单机走 Players 的 active_seat，联机取本地 peer 的实体。
+func _local_player() -> Node2D:
+	if Players == null:
+		return null
+	var e: Node = Players.get_local_entity()
+	return e as Node2D if e is Node2D else null
