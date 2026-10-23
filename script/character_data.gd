@@ -210,7 +210,7 @@ func get_effective_max_tp() -> int:
 
 
 ## 获取该角色的武器行走图纹理
-## weapon_state_name: WeaponData.weapon_state_name（如 "Pistol"/"Knife"/"Rifle"）
+## weapon_state_name: WeaponData.weapon_state_name（如 "Pistol"/"Knife"/"FireAxe"）
 ## 返回 Texture2D 或 null（null 表示回退到 WeaponData 的 weapon_walk_texture）
 func get_weapon_walk_texture(weapon_state_name: String) -> Texture2D:
 	if weapon_walk_textures.has(weapon_state_name):
