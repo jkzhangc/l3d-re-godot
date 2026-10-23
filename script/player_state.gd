@@ -185,6 +185,7 @@ func equip_weapon_in_slot(wd: WeaponData, slot: String) -> void:
 		inventory.append(old)
 		print("[PlayerState] 卸下 %s 槽: %s" % [slot, old.item_name])
 	equipment[slot] = wd
+	mark_acquired(wd)
 	print("[PlayerState] 装备到 %s 槽: %s" % [slot, wd.item_name])
 
 
@@ -266,17 +267,20 @@ func pickup_consumable(item: ItemData, healing_cap: int = -1) -> bool:
 				healing_item_count = 0
 			healing_item = item
 			healing_item_count += 1
+			mark_acquired(item)
 			print("[PlayerState] 拾取治疗品: %s ×%d" % [item.item_name, healing_item_count])
 		ItemData.ItemType.SUPPORT:
 			if support_item:
 				print("[PlayerState] 替换辅助品: %s → %s" % [support_item.item_name, item.item_name])
 			support_item = item
+			mark_acquired(item)
 			print("[PlayerState] 装备辅助品: %s" % item.item_name)
 		ItemData.ItemType.THROWABLE:
 			if throwable:
 				print("[PlayerState] 替换投掷物: %s → %s" % [throwable.item_name, item.item_name])
 			throwable = item as ThrowableData
 			throwable_count = 1
+			mark_acquired(item)
 			print("[PlayerState] 装备投掷物: %s" % item.item_name)
 	return true
 
@@ -293,6 +297,7 @@ func grant_throwable(td: ThrowableData, count: int = 1) -> int:
 			print("[PlayerState] 替换投掷物: %s → %s" % [throwable.item_name, td.item_name])
 		throwable = td
 		throwable_count = count
+	mark_acquired(td)
 	print("[PlayerState] 投掷物入包: %s ×%d" % [td.item_name, count])
 	return throwable_count
 
@@ -401,12 +406,25 @@ func _load_ammo_item_resource(ammo_item_id: String) -> ItemData:
 # 背包（迁自 global.gd:431-440）
 # ═══════════════════════════════════════
 
+## 收藏馆记账（2026-10-23 用户口径：**拿到就解锁**，与有没有存档/是否保存无关）。
+## ⚠ 武器/治疗品/辅助品/投掷物各自进专用槽位，**不经过 add_item** ——
+## 旧实现只在 add_item 里记账，所以捡枪、捡喷雾都不会解锁（用户实测复现）。
+## 唯一真源仍是 `Global.mark_collected()`：它只记 item_id、跨存档存 config.json。
+func mark_acquired(item: Resource) -> void:
+	if item == null:
+		return
+	var item_id: String = str(item.get("item_id"))
+	if item_id.is_empty():
+		return
+	Global.mark_collected(item_id)
+
+
 func add_item(item: Resource) -> void:
 	if not item:
 		return
 	inventory.append(item)
 	## 收藏馆：拿到过就记一笔（跨存档全局，落在 config.json 的 collection_ids）
-	Global.mark_collected(str(item.get("item_id")))
+	mark_acquired(item)
 	print("[PlayerState] 获得物品: %s" % str(item.get("item_name")))
 
 

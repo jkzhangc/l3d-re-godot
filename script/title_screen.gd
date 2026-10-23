@@ -16,11 +16,17 @@ extends Control
 ##   确定键  → 确认
 
 
+## ★2026-10-23 子菜单改版（用户定）：顶层只保留游戏入口，说明/成就/设置/日志/退出
+## 收进「其他」二级页 —— 原本 7 项平铺再塞「收藏馆」会顶破窗口。
 ## ★2026-10-03 新增「继续游戏」（置顶）：读取手动存档点的存档。
-## ⚠ 菜单项数从 6 → 7 → 窗口高度必须同步加高（否则最后一项会被挤进滚动区，
-##   标题菜单布局用例 title_menu_layout_check 的「全部一屏可见」断言会当场抓住）。
+## ⚠ 窗口高度不再手工同步：`_window_size_for()` 按项数推导（见 _ready），
+##   加项不会再出现「最后一项被挤进滚动区」。
 const MENU_ITEMS: Array[String] = [
-	"继续游戏", "开始游戏", "联机游戏", "操作说明", "成就", "设置", "退出游戏",
+	"继续游戏", "开始游戏", "联机游戏", "收藏馆", "其他",
+]
+## 「其他」二级菜单（6 项，含返回）。
+const OTHER_ITEMS: Array[String] = [
+	"操作说明", "成就", "设置", "更新日志", "退出游戏", "返回",
 ]
 const WINDOW_TITLE: String = "のび太的求生之路"
 
@@ -106,6 +112,13 @@ var _cursor_idx: int = 0
 var _scroll_offset: int = 0
 var _visible_items: int = 0
 
+## ── 「其他」二级菜单（2026-10-23）──
+## 两级菜单共用同一批 GradientLabel 节点与光标框：进入二级页时只换「当前项列表」
+## 与窗口高度，退出时恢复。两个光标各自记住位置，来回切不会丢选择。
+var _in_other_menu: bool = false
+var _other_cursor_idx: int = 0
+var _main_cursor_idx: int = 0
+
 var _scroll_arrow_down: TextureRect = null
 var _scroll_arrow_up: TextureRect = null
 var _title_gradient_label: GradientLabel = null
@@ -143,6 +156,7 @@ func _settings_window_size() -> Vector2:
 ## 音量条宽度——背景条与填充条必须同宽（旧版填充刷新写死 80、背景 160，
 ## 填充永远只有背景一半长，2026-09-15 用户截图复现）
 const SETTINGS_BAR_W: float = 160.0
+## 场景里作者的原始窗口尺寸（宽度基准）。设置页会临时改 `window_size`，退出要用它还原。
 var _base_window_size: Vector2 = Vector2.ZERO
 
 ## 场景节点引用（2026-09-15 节点化）：窗口底图/九宫格框/光标框预置在 title_screen.tscn
@@ -160,7 +174,27 @@ var _base_window_size: Vector2 = Vector2.ZERO
 # 初始化
 # ═══════════════════════════════════════
 
+## 当前菜单项列表（顶层 / 「其他」二级页）。
+func _active_items() -> Array[String]:
+	return OTHER_ITEMS if _in_other_menu else MENU_ITEMS
+
+
+## 按项数推导窗口高度（2026-10-23）。
+## 之前窗口高度写在场景里、每加一项都要手改，注释里已经记过一次「7 项顶破窗口」；
+## 改成按项数算之后，加项/改行距都不会再漏。
+## 宽度取**场景原始宽度**（`_base_window_size`），不能读运行中的 `window_size.x` ——
+## 设置页会把窗口临时加宽到 520，退出时若拿它当基准，主菜单就永久变宽了。
+func _window_size_for(items: Array[String]) -> Vector2:
+	var base_w: float = _base_window_size.x if _base_window_size.x > 0.0 else window_size.x
+	var rows_h: float = float(items.size()) * item_height \
+			+ maxf(0.0, float(items.size() - 1)) * item_spacing
+	return Vector2(base_w, item_start_y + rows_h + 24.0)
+
+
 func _ready() -> void:
+	## 窗口高度按当前项数推导（主菜单 5 项 / 「其他」6 项各自不同）。
+	_base_window_size = window_size
+	window_size = _window_size_for(MENU_ITEMS)
 	## 成就入口（2026-10-02）：菜单项比场景里预置的 Item 节点多一个 →
 	## 在这里**复制**最后一个预置节点补足（不手写 tscn：GradientLabel 是 @tool，
 	## 节点化时字体/字号/位置都调好了，复制即可继承）。
@@ -188,7 +222,6 @@ func _ready() -> void:
 	if _cursor_frame and not _cursor_atlas.is_empty():
 		_cursor_frame.texture = _cursor_atlas[0]
 	_create_menu_window()
-	_base_window_size = window_size
 	_refresh_all()
 	## 字体切换后重排本窗口（2026-09-24）：字号宽度随字体变，居中/量宽要重算。
 	if Global.has_signal("font_changed") and not Global.font_changed.is_connected(_on_global_font_changed):
@@ -217,13 +250,41 @@ func _maybe_show_update_log_on_first_launch() -> void:
 ## ── F1 更新日志（2026-09-17 用户需求）──
 ## 右上角「F1 更新日志」角标 + RM 窗口样式的更新日志面板（F1/Esc/确定键关闭）。
 
-const CHANGELOG_VERSION_TEXT := "v0.35（2026-10-18）"
+const CHANGELOG_VERSION_TEXT := "v0.38（2026-10-19 ~ 10-23）"
 ## 更新日志正文字号（12 整数倍铁律）。★折行量宽与建行必须用同一个值（`_wrap_text_to_width`）。
 const CHANGELOG_FONT_SIZE: int = 24
 
 ## ⚠ CHANGELOG_VERSION_TEXT 是「本版已看过」的判据（`Global.changelog_seen_version`）：
 ## 改了它 → 玩家下次启动会**自动弹一次**更新日志。所以每次发版必须换新字符串。
 const CHANGELOG_BODY := """【新内容】
+· 标题画面新增「收藏馆」：按分类查看拿到过的武器和道具，
+  没拿到的显示剪影和 ???；拿到就立即解锁（弹药不计入收藏）
+· 标题画面菜单重新整理：顶层保留「继续游戏 / 开始游戏 / 联机游戏 /
+  收藏馆 / 其他」，操作说明、成就、设置、更新日志、退出游戏收进「其他」
+· 新增 7 把近战武器：防火斧、大锤、铁锹、铁管、战斗刀、打刀、指虎
+  （目前大雄和胖虎可以使用；挥砍时武器有独立的动作表现）
+· 新增強化道具：鎮痛剤（一段时间内受到的伤害归零）、
+  アドレナリン（一段时间内攻击力翻倍）
+· ハンターγ 变成水陆两用：可以走进水里，下半身没入水面，进出水都有专属音效
+· 传送点改为触碰互动；防守战的刷怪点会有敌人登场演出
+· 夜行猎手第一关的 R 市改成夜间关卡，并补上结束安全屋
+· 地图里的水面换成自动图块，水流和岸边过渡更自然
+· 设置新增「BGS 音量」：环境音可以单独调节，不再和音乐 / 音效绑在一起
+· 远程武器补充到 30 把：数值、图标和掉落权重按原作重新整理，
+  所有武器都进了敌人掉落池
+
+【调整】
+· 删除回复药水、調合ハーブ、TP 恢复品（原作说明书里没有这三种），道具池更精简
+· 治疗品 / 辅助品使用时会闪一下对应颜色，并播放使用音效
+· 夜间影子继续打磨：更贴近脚底、随距离自然淡出，火光闪烁更柔和
+· 多人房间的「选择章节」不再出现测试地图
+
+【修复】
+· 修正「捡到武器或道具后收藏馆仍显示未解锁」：现在拿到就记录，不需要存档
+· 修正删除道具后 6 张安全屋场景加载报错的问题
+
+──────────────  v0.35（2026-10-18）  ──────────────
+【新内容】
 · 新增弹药补给点：靠近按功能键补足随身枪械的备弹，不改变弹夹，可反复使用
 · 弹药补给点和随机掉落物可设为「仅联机模式出现」，单机不会出现
 · 大厅昵称移到连接页签上方，互联网 / 直连共用；修改后自动保存，重启也会记住
@@ -609,10 +670,11 @@ func _build_update_log_icon() -> void:
 		_update_log_icon.position = Vector2(get_viewport_rect().size.x - _update_log_icon.size.x - 14.0, 10.0)
 
 
-func _open_update_log() -> void:
+func _open_update_log(play_sfx: bool = true) -> void:
 	if _update_log_panel != null:
 		return
-	Global.play_ui_sfx("confirm", sfx_confirm_path)
+	if play_sfx:
+		Global.play_ui_sfx("confirm", sfx_confirm_path)
 	var panel := Control.new()
 	panel.name = "UpdateLogPanel"
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -800,6 +862,9 @@ func _input(event: InputEvent) -> void:
 	# ── 存档槽位叠加层（2026-10-03）：打开时吞掉全部菜单输入（按键由叠加层自己处理）──
 	if _slot_overlay != null:
 		return
+	# ── 收藏馆叠加层（2026-10-23）：同上，按键全交给收藏馆自己处理 ──
+	if _collection_overlay != null:
+		return
 	# ── F1 更新日志（2026-09-17）：打开时吞掉全部菜单输入，F1/Esc/确定键关闭 ──
 	var f1_pressed: bool = event is InputEventKey and event.pressed and not event.echo \
 			and (event as InputEventKey).keycode == KEY_F1
@@ -824,12 +889,18 @@ func _input(event: InputEvent) -> void:
 		_handle_settings_input(event)
 		return
 
+	## 「其他」二级页：取消键返回主菜单（主菜单本身没有取消行为）。
+	if _in_other_menu and event.is_action_pressed("取消键"):
+		Global.play_ui_sfx("cancel", sfx_cancel_path)
+		_exit_other_menu()
+		return
+
 	if event.is_action_pressed("确定键"):
 		Global.play_ui_sfx("confirm", sfx_confirm_path)
 		_confirm()
 		return
 
-	var item_count: int = MENU_ITEMS.size()
+	var item_count: int = _active_items().size()
 	if event.is_action_pressed("上"):
 		_cursor_idx = (_cursor_idx - 1 + item_count) % item_count
 		Global.play_ui_sfx("cursor", sfx_cursor_path)
@@ -920,7 +991,7 @@ func _cursor_rect_w() -> float:
 
 func _calc_max_text_width() -> float:
 	var max_w: float = 0.0
-	for item: String in MENU_ITEMS:
+	for item: String in _active_items():
 		var ts := _measure_text("  %s" % item, item_font_size)
 		max_w = maxf(max_w, ts.x)
 	return max_w
@@ -996,10 +1067,7 @@ func _create_menu_window() -> void:
 		win.add_child(sep)
 
 	# 可见区域
-	var start_y: float = separator_y + item_title_gap if show_title else item_start_y
-	var avail_h: float = window_size.y - start_y - item_margin_bottom
-	var row_step: float = item_height + item_spacing
-	_visible_items = clampi(int(avail_h / row_step), 1, MENU_ITEMS.size())
+	_recalc_visible_items()
 
 	# 光标框：节点化（tscn 预置），这里只按导出参数摆初始几何；
 	# 宽度默认 = 窗口宽 - 左右内间距，之后 _refresh_cursor_frame 每次刷新
@@ -1014,9 +1082,17 @@ func _create_menu_window() -> void:
 
 	# 滚动箭头
 	_create_scroll_arrow(win, arrow_down_path, "ScrollArrowDown",
-		item_start_y + _visible_items * row_step + 4)
+		item_start_y + _visible_items * (item_height + item_spacing) + 4)
 	_create_scroll_arrow(win, arrow_up_path, "ScrollArrowUp",
 		item_start_y - 16)
+
+
+## 当前窗口高度 / 项数下能完整显示几项（子菜单切窗口后要重算）。
+func _recalc_visible_items() -> void:
+	var start_y: float = separator_y + item_title_gap if show_title else item_start_y
+	var avail_h: float = window_size.y - start_y - item_margin_bottom
+	var row_step: float = item_height + item_spacing
+	_visible_items = clampi(int(avail_h / row_step), 1, _active_items().size())
 
 
 func _create_scroll_arrow(parent: Control, path: String, pname: String, pos_y: float) -> void:
@@ -1040,8 +1116,10 @@ func _create_scroll_arrow(parent: Control, path: String, pname: String, pos_y: f
 func _rebuild_menu_items() -> void:
 	## 菜单项已节点化（Item0..Item4 预置在 title_screen.tscn，编辑器直接调样式）。
 	## 运行时只同步文本（居中开关加/去前缀）与位置，不再删建节点。
-	var end_idx: int = mini(_scroll_offset + _visible_items, MENU_ITEMS.size())
-	for i: int in range(MENU_ITEMS.size()):
+	## 2026-10-23：文本一律取「当前菜单」（顶层 / 「其他」），两级共用同一批节点。
+	var items: Array[String] = _active_items()
+	var end_idx: int = mini(_scroll_offset + _visible_items, items.size())
+	for i: int in range(items.size()):
 		if i >= _menu_item_labels.size():
 			break
 		var gl: GradientLabel = _menu_item_labels[i]
@@ -1050,7 +1128,7 @@ func _rebuild_menu_items() -> void:
 		## 显隐统一放在最后一行赋值。
 		var display_idx: int = i - _scroll_offset
 		# 居中模式去掉 "  " 前缀空格——否则量宽连空格一起居中，文字整体右偏
-		var item_text := MENU_ITEMS[i] if _is_centered() else "  %s" % MENU_ITEMS[i]
+		var item_text := items[i] if _is_centered() else "  %s" % items[i]
 		gl.text = item_text
 		## 文字行内垂直位置（2026-09-15 两轮实测校准）：完全顶行首偏上、居中偏移
 		## (44-24)/2=10 又偏下，+5（行高差四分之一）正好——fusion 度量 ascent20/descent4
@@ -1063,6 +1141,12 @@ func _rebuild_menu_items() -> void:
 		if _is_centered():
 			_center_label(gl)
 		gl.visible = display_idx >= 0 and i < end_idx
+
+	## 多出来的预置/复制节点（两级菜单项数不同）必须显式隐藏 ——
+	## 循环只覆盖当前菜单项数，上一级多出来的第 6 项否则会一直留在屏幕上。
+	for j: int in range(items.size(), _menu_item_labels.size()):
+		if is_instance_valid(_menu_item_labels[j]):
+			_menu_item_labels[j].visible = false
 
 	_update_scroll_arrows()
 
@@ -1096,7 +1180,7 @@ func _set_menu_items_visible(v: bool) -> void:
 
 func _update_scroll_arrows() -> void:
 	if _scroll_arrow_down:
-		_scroll_arrow_down.visible = (_scroll_offset + _visible_items < MENU_ITEMS.size())
+		_scroll_arrow_down.visible = (_scroll_offset + _visible_items < _active_items().size())
 	if _scroll_arrow_up:
 		_scroll_arrow_up.visible = (_scroll_offset > 0)
 
@@ -1122,21 +1206,60 @@ func _refresh_cursor_frame() -> void:
 
 
 func _confirm() -> void:
-	match MENU_ITEMS[_cursor_idx]:
+	match _active_items()[_cursor_idx]:
 		"继续游戏":
 			_go_to_load_game()
 		"开始游戏":
 			_go_to_campaign_select()
 		"联机游戏":
 			_go_to_network_lobby()
+		"收藏馆":
+			_open_collection()
+		"其他":
+			_enter_other_menu()
 		"操作说明":
 			_go_to_controls_guide()
 		"成就":
 			_open_achievements()
 		"设置":
 			_enter_settings()
+		"更新日志":
+			## 确定音效已在 _input 里播过 → 这里不再重复。
+			_open_update_log(false)
 		"退出游戏":
 			_quit_game()
+		"返回":
+			_exit_other_menu()
+
+
+# ═══════════════════════════════════════
+# 「其他」二级菜单（2026-10-23）
+# ═══════════════════════════════════════
+
+## 进入二级页：换项列表 + 按 6 项推导窗口高度；主菜单光标先存起来。
+func _enter_other_menu() -> void:
+	if _in_other_menu:
+		return
+	_main_cursor_idx = _cursor_idx
+	_in_other_menu = true
+	_cursor_idx = _other_cursor_idx
+	_scroll_offset = 0
+	_apply_window_size(_window_size_for(OTHER_ITEMS))
+	_rebuild_menu_items()
+	_refresh_all()
+
+
+## 返回主菜单：恢复主菜单光标与窗口高度。
+func _exit_other_menu() -> void:
+	if not _in_other_menu:
+		return
+	_other_cursor_idx = _cursor_idx
+	_in_other_menu = false
+	_cursor_idx = _main_cursor_idx
+	_scroll_offset = 0
+	_apply_window_size(_window_size_for(MENU_ITEMS))
+	_rebuild_menu_items()
+	_refresh_all()
 
 
 ## 操作说明（2026-09-14 新增菜单项）：界面与 txt 文档内容待用户确认后实现，
@@ -1163,7 +1286,9 @@ func _ensure_menu_item_nodes() -> void:
 	if _menu_item_labels.is_empty():
 		return
 	var parent: Node = _menu_item_labels[0].get_parent()
-	while _menu_item_labels.size() < MENU_ITEMS.size():
+	## 两级菜单里项数较多的一边决定节点数（「其他」6 项 > 顶层 5 项）。
+	var need: int = maxi(MENU_ITEMS.size(), OTHER_ITEMS.size())
+	while _menu_item_labels.size() < need:
 		var proto: Node = _menu_item_labels[_menu_item_labels.size() - 1]
 		var clone: Node = proto.duplicate()
 		parent.add_child(clone)
@@ -1184,6 +1309,28 @@ func _close_achievements() -> void:
 		return
 	_achievements_overlay.queue_free()
 	_achievements_overlay = null
+
+
+# ═══════════════════════════════════════
+# 收藏馆（2026-10-23）
+# ═══════════════════════════════════════
+var _collection_overlay: Control = null
+
+
+## 打开收藏馆（叠加在标题之上；关闭后销毁）。
+func _open_collection() -> void:
+	if _collection_overlay != null:
+		return
+	_collection_overlay = COLLECTION_MENU.new()
+	add_child(_collection_overlay)
+	_collection_overlay.connect("closed", _close_collection)
+
+
+func _close_collection() -> void:
+	if _collection_overlay == null:
+		return
+	_collection_overlay.queue_free()
+	_collection_overlay = null
 
 
 # ═══════════════════════════════════════
@@ -1245,6 +1392,8 @@ const SAVE_SLOT_MENU := preload("res://script/ui/save_slot_menu.gd")
 ## 成就页脚本（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
 ## 跨文件按名字引用会在 headless / 导出时报 Parse Error）。
 const ACHIEVEMENTS_MENU := preload("res://script/ui/achievements_menu.gd")
+## 收藏馆页脚本（同上：preload，不用 class_name）。
+const COLLECTION_MENU := preload("res://script/ui/collection_menu.gd")
 
 
 # ═══════════════════════════════════════
@@ -1265,6 +1414,12 @@ func _apply_window_size(s: Vector2) -> void:
 		_window_bg.size = s
 	if _window_frame:
 		_window_frame.size = s
+	_recalc_visible_items()
+
+
+## 当前菜单该用的窗口尺寸（设置页退出时恢复到「进去之前那一级」）。
+func _menu_window_size() -> Vector2:
+	return _window_size_for(OTHER_ITEMS) if _in_other_menu else _window_size_for(MENU_ITEMS)
 
 
 ## 设置页行距。默认与主菜单同（item_height + item_spacing），行数多到超出设置窗时
@@ -1290,7 +1445,8 @@ func _enter_settings() -> void:
 func _exit_settings() -> void:
 	_in_settings = false
 	_clear_settings_ui()
-	_apply_window_size(_base_window_size)
+	## 从「其他」子菜单进设置 → 退出要回到子菜单尺寸，否则 6 项会挤进 5 行窗口。
+	_apply_window_size(_menu_window_size())
 	_rebuild_menu_items()
 	_refresh_all()
 
