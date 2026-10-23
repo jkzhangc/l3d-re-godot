@@ -93,9 +93,27 @@ const _SUB_ORDER_KEYWORDS: Array[String] = [
 ]
 
 
-static func collect_all_level_entries(map_dir: String = "res://scene/maps") -> Array[Dictionary]:
+## ── 开发用地图（2026-10-23）──
+## 目录发现会把 `scene/maps/` 下的测试图一起带进来（`test.tscn`、`测试-敌人试验场.tscn`）。
+## 多人房间的「选择章节」是给玩家看的，不该出现调试地图 → 默认过滤掉；
+## 调试「跳转关卡」要跳测试图，调用时传 `include_dev_maps = true`。
+const DEV_MAP_KEYWORDS: Array[String] = ["测试", "试验场", "test"]
+
+
+## 是否开发/调试用地图（按文件名关键字判定，不看目录）。
+static func is_dev_map(scene_path: String) -> bool:
+	var base: String = scene_path.get_file().get_basename().to_lower()
+	for kw: String in DEV_MAP_KEYWORDS:
+		if base.contains(kw):
+			return true
+	return false
+
+
+## 全部可跳转关卡。`include_dev_maps = false` 时剔除测试图（多人房间用）。
+static func collect_all_level_entries(map_dir: String = "res://scene/maps",
+		include_dev_maps: bool = false) -> Array[Dictionary]:
 	var rows: Array[Dictionary] = []
-	for scene_path: String in _list_scene_paths(map_dir):
+	for scene_path: String in _list_scene_paths(map_dir, include_dev_maps):
 		rows.append(_describe_level(scene_path))
 	## 排序键统一成字符串（"组-关-关内序-文件名"），避免混合类型比较报错。
 	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -118,7 +136,7 @@ static func scene_path_from_dir_entry(map_dir: String, file_name: String) -> Str
 
 
 ## 关卡场景清单 = 显式清单 ∪ 目录发现（各自去重，并过滤掉真正不存在的路径）。
-static func _list_scene_paths(map_dir: String) -> Array[String]:
+static func _list_scene_paths(map_dir: String, include_dev_maps: bool = false) -> Array[String]:
 	var paths: Array[String] = []
 	for preset: String in MAP_SCENE_PATHS:
 		if not preset.is_empty() and ResourceLoader.exists(preset) and preset not in paths:
@@ -131,7 +149,8 @@ static func _list_scene_paths(map_dir: String) -> Array[String]:
 	var file_name: String = dir.get_next()
 	while not file_name.is_empty():
 		var found: String = scene_path_from_dir_entry(map_dir, file_name)
-		if not found.is_empty() and ResourceLoader.exists(found) and found not in paths:
+		if not found.is_empty() and ResourceLoader.exists(found) and found not in paths \
+				and (include_dev_maps or not is_dev_map(found)):
 			paths.append(found)
 		file_name = dir.get_next()
 	dir.list_dir_end()

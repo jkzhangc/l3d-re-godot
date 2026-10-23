@@ -121,7 +121,8 @@ func _ensure_jump_ui() -> void:
 	## ★用「全部可跳转关卡」而不是战役表：战役表 `level_scenes` 只登记了 5 关
 	##（第一关 3 张 + 第二关 2 张），而 `scene/maps/` 下有 12 张 —— 矿洞 / 实验室走廊 /
 	## 列车台 / 各安全屋 / 测试图都没登记。调试要的是"想跳哪张就跳哪张"。
-	for entry: Dictionary in CampaignData.collect_all_level_entries():
+	## ⚠ 测试图只有这里要（include_dev_maps=true）；多人房间的章节列表把它们过滤掉了。
+	for entry: Dictionary in CampaignData.collect_all_level_entries("res://scene/maps", true):
 		var btn: Button = Button.new()
 		btn.text = str(entry.get("label", "?"))
 		_apply_debug_font(btn)
