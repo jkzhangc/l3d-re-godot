@@ -1,40 +1,75 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
 [ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战1.png" id="2"]
+[ext_resource type="Script" path="res://script/bullet_data.gd" id="2_lklw2"]
 [ext_resource type="Texture2D" path="res://art/WeaponAttack/防火斧/防火斧_attack1.png" id="3"]
-[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン処刑者の大斧.png" id="4"]
 [ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
 [ext_resource type="AudioStream" path="res://sound/打撃5.ogg" id="6"]
+[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン消火斧.png" id="6_0cg7j"]
 [ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="Texture2D" path="res://art/Weapon/A武器セット６.png" id="8_0cg7j"]
+[ext_resource type="AudioStream" path="res://sound/チャキッ.ogg" id="8_fmbrv"]
+[ext_resource type="Script" path="res://script/weapon_effect_offsets.gd" id="8_gmy81"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战3.png" id="10_lklw2"]
+
+[sub_resource type="Resource" id="Resource_lgqdu"]
+script = ExtResource("8_gmy81")
+
+[sub_resource type="Resource" id="Resource_fmbrv"]
+script = ExtResource("8_gmy81")
+down = Vector2(12, 24)
+left = Vector2(12, 24)
+right = Vector2(12, 24)
+up = Vector2(0, 24)
+
+[sub_resource type="Resource" id="Resource_587vs"]
+script = ExtResource("8_gmy81")
+
+[sub_resource type="Resource" id="Resource_5chju"]
+script = ExtResource("8_gmy81")
 
 [resource]
 script = ExtResource("1")
 attack_power = 55
 attack_speed = 0.65
-weapon_state_name = "Melee"
-weapon_walk_texture = ExtResource("2")
+weapon_state_name = "FireAxe"
+weapon_walk_texture = ExtResource("10_lklw2")
+weapon_raise_char_sequence = Array[int]([0])
+weapon_raise_frame_durations = Array[float]([0.12])
 is_ranged = false
 weapon_slot = 1
-critical_rate = 20
+critical_rate = 20.0
 attack_sound = ExtResource("5")
 empty_fire_sound = ExtResource("7")
 raise_sound = ExtResource("7")
 lower_sound = ExtResource("7")
 hit_sound = ExtResource("6")
+gunshot_range = 0.0
 hit_effect_anim = ExtResource("8")
-attack_char_sequence = Array[int]([3, 4])
-melee_attack_char_sequence = Array[int]([3, 4])
-melee_attack_frame_durations = Array[float]([0.16, 0.2])
-melee_range_size = Vector2(78, 44)
-melee_range_forward_offset = 32
 melee_weapon_sprite = ExtResource("3")
-melee_weapon_sprite_seq_cols = {0: 0, 1: 1}
+melee_weapon_sprite_seq_cols = {
+0: 0,
+1: 1,
+2: 2.0
+}
+melee_weapon_sprite_offsets = {
+"bigg": SubResource("Resource_lgqdu"),
+"nobita": SubResource("Resource_fmbrv"),
+"shizuka": SubResource("Resource_587vs"),
+"suneo": SubResource("Resource_5chju")
+}
+attack_char_sequence = Array[int]([3, 4])
+melee_attack_char_sequence = Array[int]([6, 7, 7])
+melee_attack_frame_durations = Array[float]([0.16, 0.16, 0.2])
+melee_range_size = Vector2(78, 44)
+melee_range_forward_offset = 32.0
 item_id = "fire_axe"
 item_name = "防火斧"
 item_type = 3
 description = "消防栓旁的破拆斧。双手抡，砍中防具也照穿；起手慢，落空就是大破绽。"
-icon = ExtResource("4")
+icon = ExtResource("6_0cg7j")
 sell_price = 200
 max_stack = 1
+pickup_texture = ExtResource("8_0cg7j")
+pickup_char_idx = 7

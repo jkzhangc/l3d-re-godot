@@ -20,7 +20,7 @@
 [ext_resource type="Texture2D" uid="uid://dkcp52ael5rev" path="res://art/Characters/ジャイアンセットボウガン.png" id="17_bg"]
 [ext_resource type="Texture2D" uid="uid://b6atw6ouholp" path="res://art/Characters/ジャイアンセット金属バット.png" id="18_bat"]
 [ext_resource type="Texture2D" uid="uid://bogmeh8ficukd" path="res://art/Characters/ジャイアンセットスナイパー.png" id="19_snp"]
-[ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセット近接武器.png" id="31_melee"]
+[ext_resource type="Texture2D" uid="uid://b2qwpws4prfi5" path="res://art/Characters/ジャイアンセット近接武器.png" id="31_melee"]
 
 [resource]
 script = ExtResource("5_lxnma")
@@ -38,18 +38,25 @@ run_texture = ExtResource("4_lxnma")
 death_texture = ExtResource("7_yottv")
 death_char_index = 5
 weapon_walk_textures = {
-"Melee": ExtResource("31_melee"),
 "Bat": ExtResource("18_bat"),
 "Bowgun": ExtResource("17_bg"),
+"CombatKnife": ExtResource("31_melee"),
+"FireAxe": ExtResource("31_melee"),
 "Frypan": ExtResource("16_fp"),
+"Knuckles": ExtResource("31_melee"),
 "Launcher": ExtResource("14_rk"),
 "Magnum": ExtResource("13_rk"),
+"Melee": ExtResource("31_melee"),
+"Pipe": ExtResource("31_melee"),
 "Pistol": ExtResource("8_d74mw"),
 "RLauncher": ExtResource("15_rk"),
 "Rifle": ExtResource("10_lxnma"),
 "Shotgun": ExtResource("9_w6m76"),
+"Shovel": ExtResource("31_melee"),
+"Sledgehammer": ExtResource("31_melee"),
 "Smg": ExtResource("10_lxnma"),
-"Sniper": ExtResource("19_snp")
+"Sniper": ExtResource("19_snp"),
+"Uchigatana": ExtResource("31_melee")
 }
 allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01", "rifle_02", "rifle_03", "shotgun_02", "shotgun_03", "smg_02", "smg_03", "sniper_02", "sniper_03", "launcher_02", "rocket_02", "rocket_03", "mg_01", "at_rifle_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "magnum_01", "frypan_01", "bat_01", "pistol_02", "pistol_03", "pistol_04", "magnum_02", "magnum_03", "fire_axe", "sledgehammer", "shovel", "pipe", "combat_knife", "uchigatana", "knuckles"])

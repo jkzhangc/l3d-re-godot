@@ -15,11 +15,12 @@ extends Control
 ## 【操作】
 ##   左键资源行 → 编辑   Ctrl+S → 保存   重新加载 → 丢弃未保存修改
 ##   贴图行「…」→ 打开图像浏览器（可筛选文件夹、搜索、滚轮/按钮缩放预览）
-##   字典行「编辑…」→ JSON 编辑器（支持 int 键与 Vector2 值）
+##   字典行「编辑…」→ 行式编辑器（对象 / 标量）；「预览」→ 偏移可视化（拖黄点/武器图）
 ##
 ## ★本文件是开发工具，使用系统 UI 字体（14/16/20），不受游戏内像素字体 12 倍数规则约束。
 
 const BROWSER := preload("res://script/tools/asset_browser.gd")
+const OFFSET_PREVIEW := preload("res://script/tools/offset_preview.gd")
 
 const MODE_TEXTURE: int = 0
 const MODE_AUDIO: int = 1
@@ -81,6 +82,17 @@ const C_OK := Color("#89d185")
 const C_WARN := Color("#e2b93d")
 const C_ERR := Color("#f48771")
 
+## 通用字典的值类型（用于「对象 / 标量」字典的可视化编辑）
+const DV_JSON := "json"
+const DV_INT := "int"
+const DV_FLOAT := "float"
+const DV_BOOL := "bool"
+const DV_STRING := "string"
+const DV_VECTOR2 := "vector2"
+const DV_COLOR := "color"
+const DV_TEXTURE := "texture"
+const DV_RESOURCE := "resource"
+
 var _font: SystemFont = null
 var _entries: Array[Dictionary] = []
 var _filter: Dictionary = {}
@@ -125,6 +137,11 @@ var _open_in_browser_btn: Button = null
 var _browser: Control = null
 var _filter_overlay: Control = null
 var _json_overlay: Control = null
+var _texture_dict_overlay: Control = null
+var _generic_dict_overlay: Control = null
+var _resource_overlay: Control = null
+var _offset_overlay: Control = null
+var _offset_preview_btn: Button = null
 var _toast: Label = null
 var _toast_tween: Tween = null
 
@@ -343,8 +360,15 @@ func _build_ui() -> void:
 	_open_in_browser_btn.pressed.connect(_open_current_texture_browser)
 	right.add_child(_open_in_browser_btn)
 
+	_offset_preview_btn = _button("偏移预览", false)
+	_offset_preview_btn.position = Vector2(14, 384)
+	_offset_preview_btn.size = Vector2(180, 28)
+	_offset_preview_btn.tooltip_text = "可视化调整子弹 / 武器动作 / 特效偏移（仅武器）"
+	_offset_preview_btn.pressed.connect(func(): _open_offset_preview())
+	right.add_child(_offset_preview_btn)
+
 	_preview_info = _label("", 12, C_MUTED)
-	_preview_info.position = Vector2(14, 392)
+	_preview_info.position = Vector2(14, 420)
 	_preview_info.size = Vector2(360, 200)
 	_preview_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	right.add_child(_preview_info)
@@ -471,6 +495,7 @@ func _parse_tres_header(path: String) -> Dictionary:
 	var character_id: String = ""
 	var resource_id: String = ""
 	var fallback_tex: String = ""
+	var weapon_state: String = ""
 	var icon_index: int = -1
 	var icon_cols: int = 4
 	var icon_rows: int = 4
@@ -489,6 +514,8 @@ func _parse_tres_header(path: String) -> Dictionary:
 			item_type = int(_value_of(t))
 		elif t.begins_with("is_ranged = "):
 			is_ranged = t.ends_with("true")
+		elif t.begins_with("weapon_state_name = "):
+			weapon_state = _value_of(t)
 		elif t.begins_with("icon = ExtResource("):
 			icon_id = _between(t, "ExtResource(\"", "\"")
 		elif t.begins_with("pickup_texture = ExtResource("):
@@ -546,6 +573,8 @@ func _parse_tres_header(path: String) -> Dictionary:
 	e["icon_index"] = icon_index
 	e["icon_cols"] = icon_cols
 	e["icon_rows"] = icon_rows
+	## 武器状态名：贴图字典（weapon_walk_textures / shove_walk_textures）的键建议用
+	e["state"] = weapon_state
 	return e
 
 
@@ -729,6 +758,8 @@ func _select_entry(entry: Dictionary) -> void:
 
 
 func _update_header() -> void:
+	if _offset_preview_btn != null:
+		_offset_preview_btn.disabled = not (_res is WeaponData)
 	if _selected_path.is_empty():
 		_path_label.text = ""
 		_dirty_label.text = ""
@@ -1050,6 +1081,19 @@ func _add_property_row(parent: VBoxContainer, prop: String) -> void:
 	var editor: Control = _build_editor(prop, info)
 	editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	hbox.add_child(editor)
+
+	## 武器状态名容易被误认成状态机路由：把 get_state_node_name() 的实际值标在旁边。
+	## 放在源码注释**上面**，保证不用滚到底就能看到。
+	if prop == "weapon_state_name" and _res != null and _res.has_method("get_state_node_name"):
+		var route_margin := MarginContainer.new()
+		route_margin.add_theme_constant_override("margin_left", 8)
+		route_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var route_label := _label(
+			"状态机路由 → %s（get_state_node_name()，不是上面这个字段）"
+			% str(_res.call("get_state_node_name")), 10, Color("#6f9f6f"))
+		route_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		route_margin.add_child(route_label)
+		row.add_child(route_margin)
 
 	## 源码里的 ## 注释：放在属性名/编辑器下面，灰色小字，自动折行。
 	var doc: String = str(_field_docs.get(prop, "")).strip_edges()
@@ -1390,6 +1434,15 @@ func _build_array_editor(prop: String, info: Dictionary, arr: Array) -> Control:
 
 
 func _build_dict_editor(prop: String, dict: Dictionary) -> Control:
+	## 角色 / 武器的「状态名 → 贴图」字典（weapon_walk_textures / shove_walk_textures）
+	## 不能走 JSON：值是 Texture2D。给一套行式编辑器（键 + 缩略图 + 选图）。
+	if _dict_is_texture_dict(prop, dict):
+		return _build_texture_dict_editor(prop, dict)
+	## 标量 / Resource（如四方向偏移 WeaponEffectOffsets）也走行式编辑，
+	## 类型优先按现有值推断；空字典按字段名认。推断不出来才退回 JSON。
+	var ti: Dictionary = _dict_type_info(prop, dict)
+	if ti.get("kind", DV_JSON) != DV_JSON:
+		return _build_generic_dict_editor(prop, dict, ti)
 	var box := HBoxContainer.new()
 	box.add_theme_constant_override("separation", 8)
 	var summary := _label("%d 项" % dict.size(), 12, C_MUTED)
@@ -1400,10 +1453,204 @@ func _build_dict_editor(prop: String, dict: Dictionary) -> Control:
 	btn.custom_minimum_size = Vector2(64, 28)
 	btn.disabled = not editable
 	if not editable:
-		btn.tooltip_text = "字典里含资源/颜色等无法用 JSON 表示的值，请在 Godot 检查器编辑"
+		btn.tooltip_text = "字典里的值类型不一致或无法用 JSON / 行式编辑器表示，请在 Godot 检查器编辑"
 	btn.pressed.connect(func(): _open_json_dialog(prop, dict))
 	box.add_child(btn)
 	return box
+
+
+## 值全是 Texture2D 的字典（或空字典但字段名是 *walk_textures）。
+## 空字典无法从值判断类型，所以对这两个已知字段按名字认定，否则空字典仍走 JSON。
+func _dict_is_texture_dict(prop: String, dict: Dictionary) -> bool:
+	if dict.is_empty():
+		return prop == "weapon_walk_textures" or prop == "shove_walk_textures"
+	for v: Variant in dict.values():
+		if not (v is Texture2D):
+			return false
+	return true
+
+
+## 推断一个字典的「键类型 + 值类型」。优先看现有值（全一致才认），
+## 空字典按已知字段名认；实在认不出返回 DV_JSON（走旧 JSON 编辑器）。
+## 返回：{kind, label, key_int, res_script, flexible}
+func _dict_type_info(prop: String, dict: Dictionary) -> Dictionary:
+	var info: Dictionary = {
+		"kind": DV_JSON, "label": "混合 / JSON",
+		"key_int": false, "res_script": null, "flexible": false,
+	}
+	if dict.is_empty():
+		match prop:
+			"melee_weapon_sprite_seq_cols":
+				return {
+					"kind": DV_INT, "label": "int（帧列号）",
+					"key_int": true, "res_script": null, "flexible": false,
+				}
+			"melee_weapon_sprite_offsets", "bullet_spawn_offsets", "attack_effect_offsets":
+				return {
+					"kind": DV_RESOURCE, "label": "WeaponEffectOffsets",
+					"key_int": false,
+					"res_script": load("res://script/weapon_effect_offsets.gd"),
+					"flexible": false,
+				}
+			_:
+				## 真正未知的空字典：允许在弹窗里自己选值类型（默认 String）
+				return {
+					"kind": DV_STRING, "label": "String（可改）",
+					"key_int": false, "res_script": null, "flexible": true,
+				}
+
+	info["key_int"] = _dict_keys_are_int(dict)
+	var kinds: Dictionary = {}
+	for v: Variant in dict.values():
+		kinds[_dict_value_kind(v)] = true
+	if kinds.is_empty():
+		return info
+	var kind: String = ""
+	if kinds.size() == 1:
+		kind = str(kinds.keys()[0])
+	elif kinds.size() == 2 and kinds.has("int") and kinds.has("float"):
+		## int/float 混排：全是整数值（如 2.0）就按 int 处理，否则按 float。
+		## 例：防火斧 melee_weapon_sprite_seq_cols = {0:0, 1:1, 2:2.0} 实际是列号表。
+		var integral: bool = true
+		for v: Variant in dict.values():
+			if v is float and not is_equal_approx(v, round(v)):
+				integral = false
+				break
+		kind = "int" if integral else "float"
+	else:
+		return info
+	match kind:
+		"int", "float", "bool", "string", "vector2", "color":
+			info["kind"] = kind
+			info["label"] = _dict_value_kind_label(kind, null)
+		"resource":
+			var script: Script = null
+			var mixed: bool = false
+			for v: Variant in dict.values():
+				var s: Script = (v as Resource).get_script()
+				if script == null:
+					script = s
+				elif s != script:
+					mixed = true
+					break
+			if mixed:
+				return info
+			info["kind"] = DV_RESOURCE
+			info["res_script"] = script
+			info["label"] = _script_display_name(script)
+		_:
+			return info
+	return info
+
+
+func _dict_keys_are_int(dict: Dictionary) -> bool:
+	for k: Variant in dict.keys():
+		if not (k is int):
+			return false
+	return true
+
+
+func _dict_value_kind(v: Variant) -> String:
+	if v is bool:
+		return "bool"
+	if v is int:
+		return "int"
+	if v is float:
+		return "float"
+	if v is String or v is StringName:
+		return "string"
+	if v is Vector2:
+		return "vector2"
+	if v is Color:
+		return "color"
+	if v is Texture2D:
+		return "texture"
+	if v is Resource:
+		return "resource"
+	return "other"
+
+
+func _dict_value_kind_label(kind: String, script: Script) -> String:
+	match kind:
+		DV_INT: return "int"
+		DV_FLOAT: return "float"
+		DV_BOOL: return "bool"
+		DV_STRING: return "String"
+		DV_VECTOR2: return "Vector2"
+		DV_COLOR: return "Color"
+		DV_TEXTURE: return "Texture2D"
+		DV_RESOURCE: return _script_display_name(script)
+	return "混合"
+
+
+func _script_display_name(script: Script) -> String:
+	if script == null:
+		return "Resource"
+	var n: String = script.get_global_name()
+	if not n.is_empty():
+		return n
+	var p: String = script.resource_path
+	return p.get_file().get_basename() if not p.is_empty() else "Resource"
+
+
+func _build_generic_dict_editor(prop: String, dict: Dictionary, ti: Dictionary) -> Control:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	var summary := _label("%d 项 · %s" % [dict.size(), str(ti.get("label", ""))], 12, C_MUTED)
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var keys: Array[String] = []
+	for k: Variant in dict.keys():
+		keys.append(str(k))
+	if not keys.is_empty():
+		summary.tooltip_text = "\n".join(keys)
+	box.add_child(summary)
+	if prop.ends_with("_offsets"):
+		var pv := _button("预览", false)
+		pv.custom_minimum_size = Vector2(52, 28)
+		pv.tooltip_text = "可视化调整偏移（拖黄点 / 武器图）"
+		pv.pressed.connect(func(): _open_offset_preview(prop))
+		box.add_child(pv)
+	var btn := _button("编辑…", false)
+	btn.custom_minimum_size = Vector2(64, 28)
+	btn.pressed.connect(func(): _open_generic_dict_dialog(prop, dict, ti))
+	box.add_child(btn)
+	return box
+
+
+func _build_texture_dict_editor(prop: String, dict: Dictionary) -> Control:
+	var box := HBoxContainer.new()
+	box.add_theme_constant_override("separation", 8)
+	var summary := _label("贴图列表 · %d 项" % dict.size(), 12, C_MUTED)
+	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var keys: Array[String] = []
+	for k: Variant in dict.keys():
+		keys.append(str(k))
+	if not keys.is_empty():
+		summary.tooltip_text = "\n".join(keys)
+	box.add_child(summary)
+	var btn := _button("编辑…", false)
+	btn.custom_minimum_size = Vector2(64, 28)
+	btn.pressed.connect(func(): _open_texture_dict_dialog(prop, dict))
+	box.add_child(btn)
+	return box
+
+
+## 项目里出现过的所有 WeaponData.weapon_state_name（去重排序），用作键下拉建议。
+func _weapon_state_names() -> Array[String]:
+	var out: Array[String] = []
+	for e: Dictionary in _entries:
+		var s: String = str(e.get("state", "")).strip_edges()
+		if not s.is_empty() and not out.has(s):
+			out.append(s)
+	out.sort()
+	return out
+
+
+func _next_weapon_state(used: Dictionary) -> String:
+	for s: String in _weapon_state_names():
+		if not used.has(s):
+			return s
+	return ""
 
 
 func _dict_is_json_editable(dict: Dictionary) -> bool:
@@ -1551,7 +1798,26 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 		if key.keycode == KEY_ESCAPE:
-			if _json_overlay != null:
+			## 资源浏览器自己处理 Esc；它开着时不要把背后的弹窗一起关掉。
+			if _browser != null:
+				return
+			if _offset_overlay != null:
+				_offset_overlay.queue_free()
+				_offset_overlay = null
+				get_viewport().set_input_as_handled()
+			elif _resource_overlay != null:
+				_resource_overlay.queue_free()
+				_resource_overlay = null
+				get_viewport().set_input_as_handled()
+			elif _generic_dict_overlay != null:
+				_generic_dict_overlay.queue_free()
+				_generic_dict_overlay = null
+				get_viewport().set_input_as_handled()
+			elif _texture_dict_overlay != null:
+				_texture_dict_overlay.queue_free()
+				_texture_dict_overlay = null
+				get_viewport().set_input_as_handled()
+			elif _json_overlay != null:
 				_json_overlay.queue_free()
 				_json_overlay = null
 				get_viewport().set_input_as_handled()
@@ -1807,6 +2073,1378 @@ func _json_to_dict(parsed: Dictionary, original: Dictionary) -> Dictionary:
 		else:
 			out[key] = v
 	return out
+
+
+# ═══════════════════════════════════════
+# 贴图字典弹窗（角色 / 武器：状态名 → 行走图）
+# ═══════════════════════════════════════
+
+func _open_texture_dict_dialog(prop: String, dict: Dictionary) -> void:
+	if _texture_dict_overlay != null:
+		return
+	var vp: Vector2 = get_viewport_rect().size
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	_texture_dict_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _panel_sb(C_PANEL, C_BORDER, 6))
+	panel.size = Vector2(780, 660)
+	panel.position = ((vp - panel.size) * 0.5).floor()
+	overlay.add_child(panel)
+
+	var title := _label("编辑贴图列表：%s" % prop, 16, C_TEXT)
+	title.position = Vector2(18, 14)
+	title.size = Vector2(600, 26)
+	panel.add_child(title)
+
+	var hint := _label(
+		"键 = weapon_state_name；值 = 该武器状态下的行走图。\n"
+		+ "未配置的键回退到武器自带的 weapon_walk_texture。",
+		11, C_MUTED)
+	hint.position = Vector2(18, 40)
+	hint.size = Vector2(744, 34)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(hint)
+
+	var head_key := _label("武器状态（键）", 11, C_MUTED)
+	head_key.position = Vector2(24, 78)
+	head_key.size = Vector2(150, 16)
+	panel.add_child(head_key)
+	var head_tex := _label("贴图 / 路径", 11, C_MUTED)
+	head_tex.position = Vector2(248, 78)
+	head_tex.size = Vector2(300, 16)
+	panel.add_child(head_tex)
+
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(18, 100)
+	scroll.size = Vector2(744, 456)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	var rows: Array[Dictionary] = []
+	for k: Variant in dict.keys():
+		_add_texture_dict_row(list, rows, str(k), dict[k] as Texture2D)
+
+	var err := _label("", 12, C_ERR)
+	err.position = Vector2(18, 566)
+	err.size = Vector2(480, 18)
+	panel.add_child(err)
+
+	var add := _button("＋ 添加一项", false)
+	add.position = Vector2(18, 594)
+	add.size = Vector2(140, 32)
+	add.pressed.connect(func():
+		var used: Dictionary = {}
+		for r: Dictionary in rows:
+			used[(r["key"] as LineEdit).text.strip_edges()] = true
+		_add_texture_dict_row(list, rows, _next_weapon_state(used), null)
+		err.text = "")
+	panel.add_child(add)
+
+	var cancel := _button("取消", false)
+	cancel.position = Vector2(536, 594)
+	cancel.size = Vector2(100, 32)
+	cancel.pressed.connect(func():
+		overlay.queue_free()
+		_texture_dict_overlay = null)
+	panel.add_child(cancel)
+
+	var apply := _button("确定", true)
+	apply.position = Vector2(648, 594)
+	apply.size = Vector2(114, 32)
+	apply.pressed.connect(func():
+		var out: Dictionary = {}
+		for i: int in range(rows.size()):
+			var r: Dictionary = rows[i]
+			var key: String = (r["key"] as LineEdit).text.strip_edges()
+			if key.is_empty():
+				err.text = "第 %d 行的武器状态名为空（不要的项请点行尾 −）" % [i + 1]
+				return
+			if out.has(key):
+				err.text = "武器状态名重复：%s" % key
+				return
+			var tex: Texture2D = r["tex"] as Texture2D
+			if tex == null:
+				err.text = "「%s」还没有选择贴图" % key
+				return
+			out[key] = tex
+		_set_prop(prop, out)
+		overlay.queue_free()
+		_texture_dict_overlay = null
+		_rebuild_inspector())
+	panel.add_child(apply)
+
+
+## 一行：键输入 + 已有状态名下拉 + 缩略图 + 路径 + 选图/清除/删除。
+## `rows` 里存 {root,key,tex,thumb,path}，确定时按行顺序收集。
+func _add_texture_dict_row(list: VBoxContainer, rows: Array[Dictionary],
+		key_text: String, tex: Texture2D) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.custom_minimum_size = Vector2(0, 52)
+	list.add_child(row)
+
+	var key_edit := LineEdit.new()
+	key_edit.text = key_text
+	key_edit.custom_minimum_size = Vector2(150, 30)
+	key_edit.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	key_edit.placeholder_text = "如 Pistol / Melee"
+	key_edit.add_theme_font_override("font", _font)
+	key_edit.add_theme_font_size_override("font_size", 13)
+	row.add_child(key_edit)
+
+	var menu := MenuButton.new()
+	menu.text = "▾"
+	menu.tooltip_text = "从项目里出现过的 weapon_state_name 选择"
+	menu.custom_minimum_size = Vector2(32, 30)
+	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	menu.add_theme_font_override("font", _font)
+	menu.add_theme_font_size_override("font_size", 13)
+	menu.add_theme_color_override("font_color", C_TEXT)
+	menu.add_theme_stylebox_override("normal", _panel_sb(Color("#333333"), Color("#454545"), 3))
+	menu.add_theme_stylebox_override("hover", _panel_sb(Color("#3d3d3d"), Color("#505050"), 3))
+	menu.add_theme_stylebox_override("pressed", _panel_sb(Color("#2a2a2a"), Color("#454545"), 3))
+	var popup: PopupMenu = menu.get_popup()
+	popup.add_theme_font_override("font", _font)
+	for state: String in _weapon_state_names():
+		popup.add_item(state)
+	popup.id_pressed.connect(func(id: int):
+		key_edit.text = popup.get_item_text(id))
+	row.add_child(menu)
+
+	var thumb := TextureRect.new()
+	thumb.custom_minimum_size = Vector2(48, 48)
+	thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	thumb.texture = tex
+	row.add_child(thumb)
+
+	var path_label := _label("（未选择）" if tex == null else tex.resource_path, 11, C_MUTED)
+	path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	path_label.clip_text = true
+	path_label.mouse_filter = Control.MOUSE_FILTER_PASS
+	path_label.tooltip_text = "" if tex == null else tex.resource_path
+	row.add_child(path_label)
+
+	var pick := _button("…", false)
+	pick.custom_minimum_size = Vector2(30, 30)
+	pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pick.tooltip_text = "打开项目图像浏览器"
+	row.add_child(pick)
+
+	var clear := _button("✕", false)
+	clear.custom_minimum_size = Vector2(30, 30)
+	clear.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	clear.tooltip_text = "清除贴图（保留键）"
+	row.add_child(clear)
+
+	var del := _button("−", false)
+	del.custom_minimum_size = Vector2(30, 30)
+	del.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	del.tooltip_text = "删除这一项"
+	row.add_child(del)
+
+	var entry: Dictionary = {
+		"root": row, "key": key_edit, "tex": tex,
+		"thumb": thumb, "path": path_label,
+	}
+	rows.append(entry)
+
+	pick.pressed.connect(func():
+		var current: String = ""
+		var t: Texture2D = entry["tex"] as Texture2D
+		if t != null:
+			current = t.resource_path
+		_open_browser(MODE_TEXTURE, current, func(path: String):
+			var nt: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+			entry["tex"] = nt
+			thumb.texture = nt
+			path_label.text = path if nt != null else "（未选择）"
+			path_label.tooltip_text = path_label.text))
+	clear.pressed.connect(func():
+		entry["tex"] = null
+		thumb.texture = null
+		path_label.text = "（未选择）"
+		path_label.tooltip_text = "")
+	del.pressed.connect(func():
+		for i: int in range(rows.size() - 1, -1, -1):
+			if rows[i].get("root") == row:
+				rows.remove_at(i)
+				break
+		row.queue_free())
+
+
+# ═══════════════════════════════════════
+# 通用字典弹窗（标量 / Resource 值）
+# ═══════════════════════════════════════
+
+## 行式编辑任意「键 → 标量 / Resource」字典：
+##   · 键类型 / 值类型由 _dict_type_info 推断（空字典可从下拉选）；
+##   · 标量（int/float/bool/String/Vector2/Color）直接内联编辑；
+##   · Resource（如 WeaponEffectOffsets）点「编辑…」打开对象字段弹窗。
+func _open_generic_dict_dialog(prop: String, dict: Dictionary, ti: Dictionary) -> void:
+	if _generic_dict_overlay != null:
+		return
+	var info: Dictionary = ti.duplicate(true)
+	var vp: Vector2 = get_viewport_rect().size
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	_generic_dict_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.6)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _panel_sb(C_PANEL, C_BORDER, 6))
+	panel.size = Vector2(880, 700)
+	panel.position = ((vp - panel.size) * 0.5).floor()
+	overlay.add_child(panel)
+
+	var title := _label("编辑字典：%s" % prop, 16, C_TEXT)
+	title.position = Vector2(18, 14)
+	title.size = Vector2(600, 26)
+	panel.add_child(title)
+
+	var key_label := _label("键类型：%s" % ("int" if bool(info.get("key_int", false)) else "String"),
+		11, C_MUTED)
+	key_label.position = Vector2(18, 44)
+	key_label.size = Vector2(150, 18)
+	panel.add_child(key_label)
+
+	var val_label := _label("值类型：%s" % str(info.get("label", "")), 11, C_MUTED)
+	val_label.position = Vector2(180, 44)
+	val_label.size = Vector2(300, 18)
+	panel.add_child(val_label)
+
+	var type_btn: OptionButton = null
+	if bool(info.get("flexible", false)):
+		type_btn = OptionButton.new()
+		type_btn.position = Vector2(480, 40)
+		type_btn.size = Vector2(170, 26)
+		type_btn.add_theme_font_override("font", _font)
+		type_btn.add_theme_font_size_override("font_size", 12)
+		var type_rows: Array = [
+			[DV_STRING, "String"], [DV_INT, "int"], [DV_FLOAT, "float"],
+			[DV_BOOL, "bool"], [DV_VECTOR2, "Vector2"], [DV_COLOR, "Color"],
+			[DV_TEXTURE, "Texture2D"],
+		]
+		for i: int in range(type_rows.size()):
+			type_btn.add_item(str(type_rows[i][1]), i)
+			type_btn.set_item_metadata(i, str(type_rows[i][0]))
+			if str(type_rows[i][0]) == str(info.get("kind", DV_STRING)):
+				type_btn.select(i)
+		type_btn.item_selected.connect(func(idx: int):
+			info["kind"] = str(type_btn.get_item_metadata(idx))
+			info["label"] = _dict_value_kind_label(str(info["kind"]), null)
+			val_label.text = "值类型：%s" % str(info["label"]))
+		panel.add_child(type_btn)
+
+	var hint := _label(
+		"键 / 值类型按现有条目自动推断；新增行会沿用这个类型。\n"
+		+ "Resource 值点「编辑…」改对象字段（如四方向偏移），改的是副本，确定后才写回。",
+		11, C_MUTED)
+	hint.position = Vector2(18, 72)
+	hint.size = Vector2(844, 34)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(hint)
+
+	var head_key := _label("键", 11, C_MUTED)
+	head_key.position = Vector2(24, 116)
+	head_key.size = Vector2(150, 16)
+	panel.add_child(head_key)
+	var head_val := _label("值", 11, C_MUTED)
+	head_val.position = Vector2(196, 116)
+	head_val.size = Vector2(300, 16)
+	panel.add_child(head_val)
+
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(18, 138)
+	scroll.size = Vector2(844, 456)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 6)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	var rows: Array[Dictionary] = []
+	for k: Variant in dict.keys():
+		_add_generic_dict_row(list, rows, prop, k, dict[k], info)
+
+	var err := _label("", 12, C_ERR)
+	err.position = Vector2(18, 606)
+	err.size = Vector2(520, 18)
+	panel.add_child(err)
+
+	var add := _button("＋ 添加一项", false)
+	add.position = Vector2(18, 634)
+	add.size = Vector2(140, 32)
+	add.pressed.connect(func():
+		if type_btn != null:
+			type_btn.disabled = true
+			type_btn.tooltip_text = "已有条目后值类型固定"
+		var next_key: Variant = _next_generic_key(prop, rows, bool(info.get("key_int", false)))
+		var next_val: Variant = _default_dict_value(str(info.get("kind", DV_STRING)),
+			info.get("res_script") as Script)
+		_add_generic_dict_row(list, rows, prop, next_key, next_val, info)
+		err.text = "")
+	panel.add_child(add)
+
+	var cancel := _button("取消", false)
+	cancel.position = Vector2(636, 634)
+	cancel.size = Vector2(100, 32)
+	cancel.pressed.connect(func():
+		overlay.queue_free()
+		_generic_dict_overlay = null)
+	panel.add_child(cancel)
+
+	var apply := _button("确定", true)
+	apply.position = Vector2(748, 634)
+	apply.size = Vector2(114, 32)
+	apply.pressed.connect(func():
+		var out: Dictionary = {}
+		for i: int in range(rows.size()):
+			var r: Dictionary = rows[i]
+			var key: Variant = _generic_row_key(r)
+			if key is String and (key as String).strip_edges().is_empty():
+				err.text = "第 %d 行的键为空" % [i + 1]
+				return
+			if out.has(key):
+				err.text = "键重复：%s" % str(key)
+				return
+			var v: Variant = _generic_row_value(r)
+			var kind: String = str(r.get("kind", DV_STRING))
+			if (kind == DV_RESOURCE or kind == DV_TEXTURE) and v == null:
+				err.text = "「%s」还没有配置值" % str(key)
+				return
+			out[key] = v
+		_set_prop(prop, out)
+		overlay.queue_free()
+		_generic_dict_overlay = null
+		_rebuild_inspector())
+	panel.add_child(apply)
+
+
+func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> Variant:
+	var used: Dictionary = {}
+	for r: Dictionary in rows:
+		used[_generic_row_key(r)] = true
+	if key_int:
+		var mx: int = -1
+		for k: Variant in used.keys():
+			mx = maxi(mx, int(k))
+		return mx + 1
+	for s: String in _dict_key_suggestions(prop):
+		if not used.has(s):
+			return s
+	return ""
+
+
+func _dict_key_suggestions(prop: String) -> Array[String]:
+	var out: Array[String] = []
+	## 偏移表按角色 id 配（bullet_spawn_offsets / attack_effect_offsets /
+	## melee_weapon_sprite_offsets）；键建议直接列项目里的玩家角色 id。
+	if prop.ends_with("_offsets"):
+		for e: Dictionary in _entries:
+			if str(e.get("kind", "")) != K_PLAYER:
+				continue
+			var cid: String = str(e.get("id", "")).strip_edges()
+			if not cid.is_empty() and not out.has(cid):
+				out.append(cid)
+		out.sort()
+	return out
+
+
+func _default_dict_value(kind: String, res_script: Script) -> Variant:
+	match kind:
+		DV_INT: return 0
+		DV_FLOAT: return 0.0
+		DV_BOOL: return false
+		DV_STRING: return ""
+		DV_VECTOR2: return Vector2.ZERO
+		DV_COLOR: return Color.WHITE
+		DV_TEXTURE: return null
+		DV_RESOURCE:
+			if res_script != null:
+				return res_script.new()
+			return null
+	return null
+
+
+func _add_generic_dict_row(list: VBoxContainer, rows: Array[Dictionary],
+		prop: String, key_val: Variant, val: Variant, info: Dictionary) -> void:
+	var kind: String = str(info.get("kind", DV_STRING))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.custom_minimum_size = Vector2(0, 50)
+	list.add_child(row)
+
+	var key_ctrl: Control = null
+	if bool(info.get("key_int", false)):
+		var ks := SpinBox.new()
+		ks.min_value = -999999
+		ks.max_value = 999999
+		ks.step = 1
+		ks.value = int(key_val)
+		ks.custom_minimum_size = Vector2(120, 30)
+		ks.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ks.add_theme_font_override("font", _font)
+		ks.add_theme_font_size_override("font_size", 12)
+		key_ctrl = ks
+	else:
+		var ke := LineEdit.new()
+		ke.text = str(key_val)
+		ke.placeholder_text = "键（如 nobita）"
+		ke.custom_minimum_size = Vector2(150, 30)
+		ke.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ke.add_theme_font_override("font", _font)
+		ke.add_theme_font_size_override("font_size", 13)
+		key_ctrl = ke
+		var suggestions := _dict_key_suggestions(prop)
+		if not suggestions.is_empty():
+			var menu := MenuButton.new()
+			menu.text = "▾"
+			menu.tooltip_text = "从项目里的角色 id 选择"
+			menu.custom_minimum_size = Vector2(30, 30)
+			menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			menu.add_theme_font_override("font", _font)
+			menu.add_theme_font_size_override("font_size", 13)
+			menu.add_theme_color_override("font_color", C_TEXT)
+			menu.add_theme_stylebox_override("normal", _panel_sb(Color("#333333"), Color("#454545"), 3))
+			menu.add_theme_stylebox_override("hover", _panel_sb(Color("#3d3d3d"), Color("#505050"), 3))
+			menu.add_theme_stylebox_override("pressed", _panel_sb(Color("#2a2a2a"), Color("#454545"), 3))
+			var popup: PopupMenu = menu.get_popup()
+			popup.add_theme_font_override("font", _font)
+			for s: String in suggestions:
+				popup.add_item(s)
+			popup.id_pressed.connect(func(id: int):
+				ke.text = popup.get_item_text(id))
+			## 键固定 150，剩余宽度全部给值（偏移摘要/编辑器），否则键框会吃掉一半。
+			key_ctrl.size_flags_horizontal = Control.SIZE_FILL
+			row.add_child(key_ctrl)
+			row.add_child(menu)
+		else:
+			key_ctrl.size_flags_horizontal = Control.SIZE_FILL
+			row.add_child(key_ctrl)
+	if key_ctrl.get_parent() == null:
+		key_ctrl.size_flags_horizontal = Control.SIZE_FILL
+		row.add_child(key_ctrl)
+
+	var entry: Dictionary = {"root": row, "key": key_ctrl, "kind": kind}
+	row.add_child(_make_dict_value_control(kind, val, info, entry))
+	rows.append(entry)
+
+	var del := _button("−", false)
+	del.custom_minimum_size = Vector2(30, 30)
+	del.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	del.tooltip_text = "删除这一项"
+	del.pressed.connect(func():
+		for i: int in range(rows.size() - 1, -1, -1):
+			if rows[i].get("root") == row:
+				rows.remove_at(i)
+				break
+		row.queue_free())
+	row.add_child(del)
+
+
+func _generic_row_key(row: Dictionary) -> Variant:
+	var c: Control = row.get("key") as Control
+	if c is SpinBox:
+		return int((c as SpinBox).value)
+	if c is LineEdit:
+		return (c as LineEdit).text.strip_edges()
+	return ""
+
+
+func _generic_row_value(row: Dictionary) -> Variant:
+	match str(row.get("kind", DV_STRING)):
+		DV_INT:
+			return int((row["value"] as SpinBox).value)
+		DV_FLOAT:
+			return float((row["value"] as SpinBox).value)
+		DV_BOOL:
+			return bool((row["value"] as CheckBox).button_pressed)
+		DV_STRING:
+			return (row["value"] as LineEdit).text
+		DV_VECTOR2:
+			return Vector2(float((row["vx"] as SpinBox).value),
+				float((row["vy"] as SpinBox).value))
+		DV_COLOR:
+			return (row["value"] as ColorPickerButton).color
+		DV_TEXTURE:
+			return row.get("tex")
+		DV_RESOURCE:
+			return row.get("res")
+	return null
+
+
+func _make_dict_value_control(kind: String, val: Variant, info: Dictionary,
+		row: Dictionary) -> Control:
+	match kind:
+		DV_INT:
+			var si := SpinBox.new()
+			si.min_value = -999999
+			si.max_value = 999999
+			si.step = 1
+			si.value = int(val) if val != null else 0
+			si.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			si.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			si.add_theme_font_override("font", _font)
+			si.add_theme_font_size_override("font_size", 12)
+			row["value"] = si
+			return si
+		DV_FLOAT:
+			var sf := SpinBox.new()
+			sf.min_value = -999999.0
+			sf.max_value = 999999.0
+			sf.step = 0.1
+			sf.value = float(val) if val != null else 0.0
+			sf.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sf.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			sf.add_theme_font_override("font", _font)
+			sf.add_theme_font_size_override("font_size", 12)
+			row["value"] = sf
+			return sf
+		DV_BOOL:
+			var cb := CheckBox.new()
+			cb.button_pressed = bool(val) if val != null else false
+			cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row["value"] = cb
+			return cb
+		DV_STRING:
+			var le := LineEdit.new()
+			le.text = str(val) if val != null else ""
+			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			le.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			le.add_theme_font_override("font", _font)
+			le.add_theme_font_size_override("font_size", 13)
+			row["value"] = le
+			return le
+		DV_VECTOR2:
+			var box := HBoxContainer.new()
+			box.add_theme_constant_override("separation", 4)
+			box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var v: Vector2 = val if val is Vector2 else Vector2.ZERO
+			var sx := SpinBox.new()
+			sx.min_value = -99999.0
+			sx.max_value = 99999.0
+			sx.step = 0.1
+			sx.value = v.x
+			sx.custom_minimum_size = Vector2(100, 30)
+			sx.add_theme_font_override("font", _font)
+			sx.add_theme_font_size_override("font_size", 12)
+			var sy := SpinBox.new()
+			sy.min_value = -99999.0
+			sy.max_value = 99999.0
+			sy.step = 0.1
+			sy.value = v.y
+			sy.custom_minimum_size = Vector2(100, 30)
+			sy.add_theme_font_override("font", _font)
+			sy.add_theme_font_size_override("font_size", 12)
+			var lx := _label("x", 11, C_MUTED)
+			var ly := _label("y", 11, C_MUTED)
+			box.add_child(lx)
+			box.add_child(sx)
+			box.add_child(ly)
+			box.add_child(sy)
+			row["vx"] = sx
+			row["vy"] = sy
+			row["value"] = box
+			return box
+		DV_COLOR:
+			var cp := ColorPickerButton.new()
+			cp.color = val if val is Color else Color.WHITE
+			cp.custom_minimum_size = Vector2(140, 30)
+			cp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row["value"] = cp
+			return cp
+		DV_TEXTURE:
+			var box := HBoxContainer.new()
+			box.add_theme_constant_override("separation", 6)
+			box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var tex: Texture2D = val as Texture2D
+			var thumb := TextureRect.new()
+			thumb.custom_minimum_size = Vector2(42, 42)
+			thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			thumb.texture = tex
+			var path_label := _label("（未选择）" if tex == null else tex.resource_path, 11, C_MUTED)
+			path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			path_label.clip_text = true
+			path_label.mouse_filter = Control.MOUSE_FILTER_PASS
+			path_label.tooltip_text = "" if tex == null else tex.resource_path
+			var pick := _button("…", false)
+			pick.custom_minimum_size = Vector2(30, 30)
+			var clear := _button("✕", false)
+			clear.custom_minimum_size = Vector2(30, 30)
+			box.add_child(thumb)
+			box.add_child(path_label)
+			box.add_child(pick)
+			box.add_child(clear)
+			row["tex"] = tex
+			row["thumb"] = thumb
+			row["path"] = path_label
+			row["value"] = box
+			pick.pressed.connect(func():
+				var current: String = ""
+				var t: Texture2D = row.get("tex") as Texture2D
+				if t != null:
+					current = t.resource_path
+				_open_browser(MODE_TEXTURE, current, func(path: String):
+					var nt: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+					row["tex"] = nt
+					thumb.texture = nt
+					path_label.text = path if nt != null else "（未选择）"
+					path_label.tooltip_text = path_label.text))
+			clear.pressed.connect(func():
+				row["tex"] = null
+				thumb.texture = null
+				path_label.text = "（未选择）"
+				path_label.tooltip_text = "")
+			return box
+		DV_RESOURCE:
+			var box := HBoxContainer.new()
+			box.add_theme_constant_override("separation", 6)
+			box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			var res: Resource = val as Resource
+			var summary := _label(_resource_summary(res), 11, C_MUTED)
+			summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			summary.clip_text = true
+			summary.mouse_filter = Control.MOUSE_FILTER_PASS
+			var edit := _button("编辑…", false)
+			edit.custom_minimum_size = Vector2(64, 30)
+			edit.disabled = res == null
+			box.add_child(summary)
+			box.add_child(edit)
+			row["res"] = res
+			row["res_label"] = summary
+			row["value"] = box
+			edit.pressed.connect(func():
+				var cur: Resource = row.get("res") as Resource
+				if cur == null:
+					return
+				_open_resource_dialog(_script_display_name(cur.get_script()), cur,
+					func(new_res: Resource):
+						row["res"] = new_res
+						summary.text = _resource_summary(new_res)))
+			return box
+	return _label("（不支持的类型）", 11, C_ERR)
+
+
+func _resource_summary(res: Resource) -> String:
+	if res == null:
+		return "（未设置）"
+	## WeaponEffectOffsets 的四方向：紧凑显示，方便一眼看出哪一项偏了。
+	if res.get("down") is Vector2 and res.get("left") is Vector2 \
+			and res.get("right") is Vector2 and res.get("up") is Vector2:
+		return "下%s 左%s 右%s 上%s" % [
+			_fmt_vec(res.get("down")), _fmt_vec(res.get("left")),
+			_fmt_vec(res.get("right")), _fmt_vec(res.get("up"))]
+	var parts: Array[String] = []
+	for p: Dictionary in res.get_property_list():
+		if not (int(p.get("usage", 0)) & PROPERTY_USAGE_EDITOR):
+			continue
+		var n: String = str(p.get("name", ""))
+		if n.is_empty() or n == "script" or n.begins_with("resource_"):
+			continue
+		var v: Variant = res.get(n)
+		if v is int or v is float or v is bool or v is String:
+			parts.append("%s=%s" % [n, str(v)])
+		if parts.size() >= 3:
+			break
+	return " ".join(parts) if not parts.is_empty() else "（对象）"
+
+
+func _fmt_vec(v: Vector2) -> String:
+	return "(%.0f,%.0f)" % [v.x, v.y]
+
+
+# ═══════════════════════════════════════
+# 子对象弹窗（Resource 的简单字段）
+# ═══════════════════════════════════════
+
+## 编辑 Resource 值（如 WeaponEffectOffsets）的简单字段。
+## 写的是 duplicate 出来的副本，点确定才通过 on_ok 回写；取消/关窗不改原对象。
+func _open_resource_dialog(display_name: String, res: Resource, on_ok: Callable) -> void:
+	if _resource_overlay != null or res == null:
+		return
+	var work: Resource = res.duplicate(true)
+	var fields: Array[Dictionary] = []
+	for p: Dictionary in work.get_property_list():
+		var usage: int = int(p.get("usage", 0))
+		if not (usage & PROPERTY_USAGE_EDITOR) or not (usage & PROPERTY_USAGE_STORAGE):
+			continue
+		var n: String = str(p.get("name", ""))
+		if n.is_empty() or n == "script" or n.begins_with("resource_"):
+			continue
+		var t: int = int(p.get("type", 0))
+		if t in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_STRING_NAME,
+				TYPE_VECTOR2, TYPE_COLOR, TYPE_OBJECT]:
+			fields.append(p)
+
+	var vp: Vector2 = get_viewport_rect().size
+	var panel_h: float = clampf(170.0 + float(fields.size()) * 66.0, 280.0, 780.0)
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	_resource_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _panel_sb(C_PANEL, C_BORDER, 6))
+	panel.size = Vector2(640, panel_h)
+	panel.position = ((vp - panel.size) * 0.5).floor()
+	overlay.add_child(panel)
+
+	var title := _label("编辑对象：%s" % display_name, 15, C_TEXT)
+	title.position = Vector2(18, 14)
+	title.size = Vector2(500, 24)
+	panel.add_child(title)
+
+	var sub := _label("改的是副本；点「确定」才写回字典。", 11, C_MUTED)
+	sub.position = Vector2(18, 40)
+	sub.size = Vector2(500, 18)
+	panel.add_child(sub)
+
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(18, 66)
+	scroll.size = Vector2(604, panel_h - 132.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 4)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
+
+	var docs: Dictionary = {}
+	var scr: Script = work.get_script()
+	if scr != null and not scr.resource_path.is_empty():
+		docs = _parse_script_groups(scr.resource_path).get("field_doc", {})
+
+	var shown: int = 0
+	for p: Dictionary in fields:
+		var n: String = str(p.get("name", ""))
+		var editor: Control = _make_resource_field_editor(work, n, p)
+		if editor == null:
+			continue
+		shown += 1
+		var row := VBoxContainer.new()
+		row.add_theme_constant_override("separation", 1)
+		list.add_child(row)
+		var hbox := HBoxContainer.new()
+		hbox.add_theme_constant_override("separation", 8)
+		row.add_child(hbox)
+		var name_label := _label(n, 12, C_MUTED)
+		name_label.custom_minimum_size = Vector2(140, 0)
+		name_label.clip_text = true
+		name_label.tooltip_text = n
+		hbox.add_child(name_label)
+		editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.add_child(editor)
+		var doc: String = str(docs.get(n, "")).strip_edges()
+		if not doc.is_empty():
+			var doc_label := _label(doc, 11, Color("#8f8f8f"))
+			doc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			doc_label.custom_minimum_size = Vector2(0, 0)
+			row.add_child(doc_label)
+		var line := ColorRect.new()
+		line.color = Color(1, 1, 1, 0.035)
+		line.custom_minimum_size = Vector2(0, 1)
+		list.add_child(line)
+
+	if shown == 0:
+		var empty := _label("这个对象没有可用简单字段编辑（可能包含数组/嵌套资源）。", 12, C_MUTED)
+		empty.custom_minimum_size = Vector2(0, 60)
+		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		list.add_child(empty)
+
+	var cancel := _button("取消", false)
+	cancel.position = Vector2(396, panel_h - 48.0)
+	cancel.size = Vector2(100, 32)
+	cancel.pressed.connect(func():
+		overlay.queue_free()
+		_resource_overlay = null)
+	panel.add_child(cancel)
+
+	var ok := _button("确定", true)
+	ok.position = Vector2(508, panel_h - 48.0)
+	ok.size = Vector2(114, 32)
+	ok.pressed.connect(func():
+		overlay.queue_free()
+		_resource_overlay = null
+		on_ok.call(work))
+	panel.add_child(ok)
+
+
+func _make_resource_field_editor(res: Resource, prop: String, info: Dictionary) -> Control:
+	var type: int = int(info.get("type", 0))
+	var value: Variant = res.get(prop)
+	match type:
+		TYPE_BOOL:
+			var cb := CheckBox.new()
+			cb.button_pressed = bool(value)
+			cb.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			cb.toggled.connect(func(on: bool): res.set(prop, on))
+			return cb
+		TYPE_INT:
+			var si := SpinBox.new()
+			si.min_value = -999999
+			si.max_value = 999999
+			si.step = 1
+			si.value = int(value)
+			si.add_theme_font_override("font", _font)
+			si.add_theme_font_size_override("font_size", 12)
+			si.value_changed.connect(func(v: float): res.set(prop, int(v)))
+			return si
+		TYPE_FLOAT:
+			var sf := SpinBox.new()
+			sf.min_value = -999999.0
+			sf.max_value = 999999.0
+			sf.step = 0.1
+			sf.value = float(value)
+			sf.add_theme_font_override("font", _font)
+			sf.add_theme_font_size_override("font_size", 12)
+			sf.value_changed.connect(func(v: float): res.set(prop, float(v)))
+			return sf
+		TYPE_STRING:
+			var le := LineEdit.new()
+			le.text = str(value)
+			le.add_theme_font_override("font", _font)
+			le.add_theme_font_size_override("font_size", 13)
+			le.text_changed.connect(func(t: String): res.set(prop, t))
+			return le
+		TYPE_STRING_NAME:
+			var sn := LineEdit.new()
+			sn.text = str(value)
+			sn.add_theme_font_override("font", _font)
+			sn.add_theme_font_size_override("font_size", 13)
+			sn.text_changed.connect(func(t: String): res.set(prop, StringName(t)))
+			return sn
+		TYPE_VECTOR2:
+			var box := HBoxContainer.new()
+			box.add_theme_constant_override("separation", 4)
+			var v: Vector2 = value if value is Vector2 else Vector2.ZERO
+			var sx := SpinBox.new()
+			sx.min_value = -99999.0
+			sx.max_value = 99999.0
+			sx.step = 0.1
+			sx.value = v.x
+			sx.custom_minimum_size = Vector2(120, 30)
+			sx.add_theme_font_override("font", _font)
+			sx.add_theme_font_size_override("font_size", 12)
+			var sy := SpinBox.new()
+			sy.min_value = -99999.0
+			sy.max_value = 99999.0
+			sy.step = 0.1
+			sy.value = v.y
+			sy.custom_minimum_size = Vector2(120, 30)
+			sy.add_theme_font_override("font", _font)
+			sy.add_theme_font_size_override("font_size", 12)
+			box.add_child(_label("x", 11, C_MUTED))
+			box.add_child(sx)
+			box.add_child(_label("y", 11, C_MUTED))
+			box.add_child(sy)
+			var apply_vec := func(_v: float):
+				res.set(prop, Vector2(float(sx.value), float(sy.value)))
+			sx.value_changed.connect(apply_vec)
+			sy.value_changed.connect(apply_vec)
+			return box
+		TYPE_COLOR:
+			var cp := ColorPickerButton.new()
+			cp.color = value if value is Color else Color.WHITE
+			cp.custom_minimum_size = Vector2(160, 30)
+			cp.color_changed.connect(func(c: Color): res.set(prop, c))
+			return cp
+		TYPE_OBJECT:
+			## 只处理 Texture2D；其它对象（嵌套 Resource / 场景）跳过，避免做成半个通用检查器。
+			if not (value is Texture2D) and not (info.get("hint_string", "") == "Texture2D"):
+				return null
+			var box := HBoxContainer.new()
+			box.add_theme_constant_override("separation", 6)
+			var tex: Texture2D = value as Texture2D
+			var thumb := TextureRect.new()
+			thumb.custom_minimum_size = Vector2(42, 42)
+			thumb.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			thumb.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			thumb.texture = tex
+			var path_label := _label("（未选择）" if tex == null else tex.resource_path, 11, C_MUTED)
+			path_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			path_label.clip_text = true
+			path_label.mouse_filter = Control.MOUSE_FILTER_PASS
+			var pick := _button("…", false)
+			pick.custom_minimum_size = Vector2(30, 30)
+			var clear := _button("✕", false)
+			clear.custom_minimum_size = Vector2(30, 30)
+			box.add_child(thumb)
+			box.add_child(path_label)
+			box.add_child(pick)
+			box.add_child(clear)
+			pick.pressed.connect(func():
+				var current: String = ""
+				if res.get(prop) is Texture2D:
+					current = (res.get(prop) as Texture2D).resource_path
+				_open_browser(MODE_TEXTURE, current, func(path: String):
+					var nt: Texture2D = load(path) as Texture2D if ResourceLoader.exists(path) else null
+					res.set(prop, nt)
+					thumb.texture = nt
+					path_label.text = path if nt != null else "（未选择）"))
+			clear.pressed.connect(func():
+				res.set(prop, null)
+				thumb.texture = null
+				path_label.text = "（未选择）")
+			return box
+	return null
+
+
+# ═══════════════════════════════════════
+# 偏移可视化预览（子弹 / 武器动作 / 特效）
+# ═══════════════════════════════════════
+
+func _offset_prop(mode: String) -> String:
+	match mode:
+		"weapon": return "melee_weapon_sprite_offsets"
+		"effect": return "attack_effect_offsets"
+	return "bullet_spawn_offsets"
+
+
+func _offset_mode_label(mode: String) -> String:
+	match mode:
+		"weapon": return "武器动作"
+		"effect": return "攻击特效"
+	return "子弹"
+
+
+func _offset_modes(wd: WeaponData) -> Array[String]:
+	var out: Array[String] = []
+	if not wd.bullet_list.is_empty():
+		out.append("bullet")
+	if wd.melee_weapon_sprite != null:
+		out.append("weapon")
+	if wd.attack_effect_anim_down != null or wd.attack_effect_anim_left != null \
+			or wd.attack_effect_anim_right != null or wd.attack_effect_anim_up != null:
+		out.append("effect")
+	return out
+
+
+func _player_entries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e: Dictionary in _entries:
+		if str(e.get("kind", "")) != K_PLAYER:
+			continue
+		var cid: String = str(e.get("id", "")).strip_edges()
+		if cid.is_empty():
+			continue
+		var path: String = str(e.get("path", ""))
+		var cname: String = str(e.get("name", cid))
+		var cd: CharacterData = load(path) as CharacterData
+		if cd != null and not cd.character_name.is_empty():
+			cname = cd.character_name
+		out.append({"id": cid, "name": cname, "path": path})
+	return out
+
+
+func _character_by_id(cid: String) -> CharacterData:
+	for e: Dictionary in _entries:
+		if str(e.get("kind", "")) == K_PLAYER and str(e.get("id", "")) == cid:
+			var cd: CharacterData = load(str(e.get("path", ""))) as CharacterData
+			if cd != null:
+				return cd
+	var fallback: CharacterData = load("res://object/character_nobita.tres") as CharacterData
+	return fallback
+
+
+func _offset_field(res: Resource, direction: int) -> Vector2:
+	if res == null:
+		return Vector2.ZERO
+	match direction:
+		0: return res.get("down") as Vector2 if res.get("down") is Vector2 else Vector2.ZERO
+		1: return res.get("left") as Vector2 if res.get("left") is Vector2 else Vector2.ZERO
+		2: return res.get("right") as Vector2 if res.get("right") is Vector2 else Vector2.ZERO
+		3: return res.get("up") as Vector2 if res.get("up") is Vector2 else Vector2.ZERO
+	return Vector2.ZERO
+
+
+func _set_offset_field(res: Resource, direction: int, value: Vector2) -> void:
+	match direction:
+		0: res.set("down", value)
+		1: res.set("left", value)
+		2: res.set("right", value)
+		3: res.set("up", value)
+
+
+func _offset_effective(wd: WeaponData, mode: String, cid: String, direction: int,
+		bullet_index: int) -> Dictionary:
+	var dict: Dictionary = wd.get(_offset_prop(mode))
+	var res: Resource = dict.get(cid) as Resource
+	if res != null:
+		return {"value": _offset_field(res, direction), "using_default": false, "res": res}
+	var fallback: Vector2 = Vector2.ZERO
+	match mode:
+		"bullet":
+			if bullet_index >= 0 and bullet_index < wd.bullet_list.size():
+				fallback = (wd.bullet_list[bullet_index] as BulletData).get_extra_offset(direction)
+		"effect":
+			fallback = wd.attack_effect_offset_override
+	return {"value": fallback, "using_default": true, "res": null}
+
+
+func _offset_commit(wd: WeaponData, state: Dictionary, value: Vector2) -> void:
+	var mode: String = str(state.get("mode", "bullet"))
+	var cid: String = str(state.get("char_id", ""))
+	var direction: int = int(state.get("direction", 0))
+	if cid.is_empty():
+		return
+	var prop: String = _offset_prop(mode)
+	var dict: Dictionary = wd.get(prop)
+	var res: Resource = dict.get(cid) as Resource
+	if res == null:
+		res = load("res://script/weapon_effect_offsets.gd").new()
+		dict[cid] = res
+	_set_offset_field(res, direction, value)
+	wd.set(prop, dict)
+	_set_prop(prop, dict)
+
+
+func _offset_preview_row(text: String, ctrl: Control) -> HBoxContainer:
+	var h := HBoxContainer.new()
+	h.add_theme_constant_override("separation", 8)
+	var l := _label(text, 12, C_MUTED)
+	l.custom_minimum_size = Vector2(92, 0)
+	h.add_child(l)
+	ctrl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	h.add_child(ctrl)
+	return h
+
+
+func _offset_spin(value: float, min_v: float, max_v: float) -> SpinBox:
+	var sp := SpinBox.new()
+	sp.min_value = min_v
+	sp.max_value = max_v
+	sp.step = 1
+	sp.value = value
+	sp.add_theme_font_override("font", _font)
+	sp.add_theme_font_size_override("font_size", 12)
+	return sp
+
+
+func _offset_option(items: Array, selected: int) -> OptionButton:
+	var opt := OptionButton.new()
+	opt.add_theme_font_override("font", _font)
+	opt.add_theme_font_size_override("font_size", 12)
+	for i: int in range(items.size()):
+		opt.add_item(str(items[i][0]), i)
+		opt.set_item_metadata(i, items[i][1])
+	if opt.item_count > 0:
+		opt.select(clampi(selected, 0, opt.item_count - 1))
+	return opt
+
+
+func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control,
+		ui: Dictionary, reset_drag: bool = false) -> void:
+	var mode: String = str(state.get("mode", "bullet"))
+	var cid: String = str(state.get("char_id", ""))
+	var direction: int = clampi(int(state.get("direction", 0)), 0, 3)
+	var step: int = maxi(0, int(state.get("step", 0)))
+	var bullet_index: int = maxi(0, int(state.get("bullet_index", 0)))
+	if mode == "weapon":
+		var seq: Array[int] = wd.get_melee_attack_char_sequence()
+		if not seq.is_empty():
+			state["char_idx"] = seq[clampi(step, 0, seq.size() - 1)]
+	var char_idx: int = maxi(0, int(state.get("char_idx", wd.get_ready_char_index())))
+	var frame: int = clampi(int(state.get("frame", 1)), 0, 2)
+	var cd: CharacterData = _character_by_id(cid)
+	var eff: Dictionary = _offset_effective(wd, mode, cid, direction, bullet_index)
+	preview.call("set_preview", wd, cd, mode, direction, step, char_idx, frame,
+		bullet_index, eff["value"], eff["using_default"])
+	if reset_drag:
+		preview.call("cancel_drag")
+
+	if ui.has("bullet_row"):
+		(ui["bullet_row"] as Control).visible = mode == "bullet"
+	if ui.has("step_row"):
+		(ui["step_row"] as Control).visible = mode == "weapon"
+	if ui.has("char_row"):
+		(ui["char_row"] as Control).visible = mode != "weapon"
+	if ui.has("frame_row"):
+		## 武器动作也能切 0/1/2 帧查看（默认 1 = 游戏里攻击使用的站立帧）
+		(ui["frame_row"] as Control).visible = true
+	if ui.has("x"):
+		(ui["x"] as SpinBox).set_value_no_signal(float(eff["value"].x))
+	if ui.has("y"):
+		(ui["y"] as SpinBox).set_value_no_signal(float(eff["value"].y))
+	for m: String in (ui.get("mode_buttons", {}) as Dictionary).keys():
+		(ui["mode_buttons"][m] as Button).button_pressed = (m == mode)
+	if ui.has("status"):
+		var dir_label: String = ["下", "左", "右", "上"][direction]
+		var bullet_name := ""
+		if mode == "bullet" and bullet_index < wd.bullet_list.size():
+			var bd: BulletData = wd.bullet_list[bullet_index]
+			bullet_name = bd.resource_path.get_file() if not bd.resource_path.is_empty() else "子弹%d" % (bullet_index + 1)
+		var source: String = "默认兜底" if bool(eff["using_default"]) else "武器级条目"
+		var extra: String = (" · " + bullet_name) if not bullet_name.is_empty() else ""
+		var dirty_note: String = " · 未保存（Ctrl+S）" if _dirty else ""
+		(ui["status"] as Label).text = "%s%s · %s · %s%s\n偏移 (%d, %d) · %s%s" % [
+			_offset_mode_label(mode), extra, cid, dir_label, dirty_note,
+			roundi(eff["value"].x), roundi(eff["value"].y), source,
+			"" if not bool(eff["using_default"]) else "（拖动后自动创建条目）"]
+
+
+func _open_offset_preview(focus_prop: String = "") -> void:
+	if _offset_overlay != null:
+		return
+	if not (_res is WeaponData):
+		_toast_show("偏移预览只支持武器资源", C_WARN)
+		return
+	var wd: WeaponData = _res
+	var modes: Array[String] = _offset_modes(wd)
+	if modes.is_empty():
+		_toast_show("这把武器没有可预览的偏移（无子弹/武器动作/特效）", C_WARN)
+		return
+	var players: Array[Dictionary] = _player_entries()
+	if players.is_empty():
+		_toast_show("没扫描到玩家角色资源", C_ERR)
+		return
+
+	var focus_mode: String = ""
+	match focus_prop:
+		"bullet_spawn_offsets": focus_mode = "bullet"
+		"melee_weapon_sprite_offsets": focus_mode = "weapon"
+		"attack_effect_offsets": focus_mode = "effect"
+	var mode: String = focus_mode if modes.has(focus_mode) else modes[0]
+	var cid: String = "nobita"
+	var has_nobita: bool = false
+	for p: Dictionary in players:
+		if str(p["id"]) == "nobita":
+			has_nobita = true
+	if not has_nobita:
+		cid = str(players[0]["id"])
+
+	var state: Dictionary = {
+		"mode": mode,
+		"char_id": cid,
+		"direction": 0,
+		"step": 0,
+		"bullet_index": 0,
+		"char_idx": wd.get_ready_char_index(),
+		"frame": 1,
+	}
+
+	var vp: Vector2 = get_viewport_rect().size
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	_offset_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _panel_sb(C_PANEL, C_BORDER, 6))
+	panel.size = Vector2(1120, 840)
+	panel.position = ((vp - panel.size) * 0.5).floor()
+	overlay.add_child(panel)
+
+	var title := _label("偏移预览：%s" % wd.item_name, 16, C_TEXT)
+	title.position = Vector2(18, 14)
+	title.size = Vector2(600, 26)
+	panel.add_child(title)
+
+	var sub := _label("拖动黄点 / 武器图直接改偏移；Ctrl+S 保存到 .tres", 11, C_MUTED)
+	sub.position = Vector2(18, 40)
+	sub.size = Vector2(600, 18)
+	panel.add_child(sub)
+
+	## 先声明，模式按钮的闭包在上面创建时会捕获它（GDScript 需要先入作用域）。
+	var preview: Control = null
+	var ui: Dictionary = {"mode_buttons": {}}
+	var mode_buttons: Dictionary = {}
+	var group := ButtonGroup.new()
+	for i: int in range(modes.size()):
+		var m: String = modes[i]
+		var b := _button(_offset_mode_label(m), false)
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = (m == mode)
+		b.position = Vector2(18 + i * 118, 66)
+		b.size = Vector2(110, 30)
+		b.pressed.connect(func():
+			state["mode"] = m
+			state["frame"] = 1
+			if m != "weapon":
+				state["char_idx"] = wd.get_ready_char_index()
+			_offset_preview_refresh(wd, state, preview, ui, true))
+		panel.add_child(b)
+		mode_buttons[m] = b
+	ui["mode_buttons"] = mode_buttons
+
+	preview = OFFSET_PREVIEW.new()
+	preview.position = Vector2(18, 108)
+	preview.size = Vector2(660, 700)
+	preview.set("font", _font)
+	panel.add_child(preview)
+	preview.connect("offset_edited", func(m: String, c: String, d: int, v: Vector2):
+		state["mode"] = m
+		state["char_id"] = c
+		state["direction"] = d
+		_offset_commit(wd, state, v)
+		_offset_preview_refresh(wd, state, preview, ui))
+
+	var vb := VBoxContainer.new()
+	vb.position = Vector2(700, 108)
+	vb.size = Vector2(400, 700)
+	vb.add_theme_constant_override("separation", 10)
+	panel.add_child(vb)
+
+	var char_opt := _offset_option(
+		players.map(func(p: Dictionary): return ["%s (%s)" % [p["name"], p["id"]], p["id"]]),
+		_index_of_player(players, cid))
+	char_opt.item_selected.connect(func(i: int):
+		state["char_id"] = str(char_opt.get_item_metadata(i))
+		if str(state["mode"]) != "weapon":
+			state["char_idx"] = wd.get_ready_char_index()
+			state["frame"] = 1
+		_offset_preview_refresh(wd, state, preview, ui, true))
+	vb.add_child(_offset_preview_row("角色", char_opt))
+
+	var dir_opt := _offset_option(
+		[["下", 0], ["左", 1], ["右", 2], ["上", 3]], int(state["direction"]))
+	dir_opt.item_selected.connect(func(i: int):
+		state["direction"] = i
+		_offset_preview_refresh(wd, state, preview, ui, true))
+	vb.add_child(_offset_preview_row("方向", dir_opt))
+
+	var bullets: Array = []
+	for i: int in range(wd.bullet_list.size()):
+		var bd: BulletData = wd.bullet_list[i]
+		var nm: String = bd.resource_path.get_file() if not bd.resource_path.is_empty() else "子弹%d" % (i + 1)
+		bullets.append([nm, i])
+	var bullet_opt := _offset_option(bullets, int(state["bullet_index"]))
+	bullet_opt.item_selected.connect(func(i: int):
+		state["bullet_index"] = i
+		_offset_preview_refresh(wd, state, preview, ui, true))
+	var bullet_row := _offset_preview_row("子弹", bullet_opt)
+	vb.add_child(bullet_row)
+	ui["bullet_row"] = bullet_row
+
+	var steps: Array = []
+	var seq: Array[int] = wd.get_melee_attack_char_sequence()
+	for i: int in range(seq.size()):
+		var col: int = wd.get_melee_weapon_sprite_col(i)
+		var col_label: String = "前摇" if col == 0 else ("挥动" if col == 1 else ("后摇" if col == 2 else "不显示"))
+		steps.append(["第%d步  idx=%d  %s" % [i + 1, seq[i], col_label], i])
+	var step_opt := _offset_option(steps, int(state["step"]))
+	step_opt.item_selected.connect(func(i: int):
+		state["step"] = i
+		_offset_preview_refresh(wd, state, preview, ui, true))
+	var step_row := _offset_preview_row("攻击步号", step_opt)
+	vb.add_child(step_row)
+	ui["step_row"] = step_row
+
+	var char_spin := _offset_spin(float(state["char_idx"]), 0, 63)
+	char_spin.value_changed.connect(func(v: float):
+		state["char_idx"] = int(v)
+		_offset_preview_refresh(wd, state, preview, ui))
+	var char_row := _offset_preview_row("角色索引", char_spin)
+	vb.add_child(char_row)
+	ui["char_row"] = char_row
+
+	var frame_spin := _offset_spin(float(state["frame"]), 0, 2)
+	frame_spin.value_changed.connect(func(v: float):
+		state["frame"] = int(v)
+		_offset_preview_refresh(wd, state, preview, ui))
+	var frame_row := _offset_preview_row("帧", frame_spin)
+	vb.add_child(frame_row)
+	ui["frame_row"] = frame_row
+
+	var x_spin := _offset_spin(0.0, -512.0, 512.0)
+	var y_spin := _offset_spin(0.0, -512.0, 512.0)
+	x_spin.value_changed.connect(func(_v: float):
+		_offset_commit(wd, state, Vector2(x_spin.value, y_spin.value))
+		_offset_preview_refresh(wd, state, preview, ui))
+	y_spin.value_changed.connect(func(_v: float):
+		_offset_commit(wd, state, Vector2(x_spin.value, y_spin.value))
+		_offset_preview_refresh(wd, state, preview, ui))
+	vb.add_child(_offset_preview_row("偏移 X", x_spin))
+	vb.add_child(_offset_preview_row("偏移 Y", y_spin))
+	ui["x"] = x_spin
+	ui["y"] = y_spin
+
+	var zero := _button("归零", false)
+	zero.pressed.connect(func():
+		_offset_commit(wd, state, Vector2.ZERO)
+		_offset_preview_refresh(wd, state, preview, ui))
+	vb.add_child(zero)
+
+	var save := _button("保存到 .tres", true)
+	save.pressed.connect(func():
+		_save_current(false)
+		(ui["status"] as Label).text = "已保存到 %s" % _selected_path
+		_toast_show("已保存：%s" % _selected_path.get_file(), C_OK))
+	vb.add_child(save)
+
+	var status := _label("", 11, C_MUTED)
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size = Vector2(0, 64)
+	vb.add_child(status)
+	ui["status"] = status
+
+	var hint := _label(
+		"子弹：黄点 = 角色原点 + 方向 × BulletData.spawn_offset + 武器级偏移。\n"
+		+ "武器动作：角色攻击帧 + 武器图（按步号选列）。\n"
+		+ "特效：橙十字 = 可配置偏移；不含 .tscn 内置 position_offset。\n"
+		+ "当前角色还没有条目时会先用 BulletData / override 兜底；拖动即创建条目。",
+		11, C_MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(0, 100)
+	vb.add_child(hint)
+
+	var close := _button("关闭", false)
+	close.position = Vector2(986, 796)
+	close.size = Vector2(116, 32)
+	close.pressed.connect(func():
+		overlay.queue_free()
+		_offset_overlay = null)
+	panel.add_child(close)
+
+	_offset_preview_refresh(wd, state, preview, ui, true)
+
+
+func _index_of_player(players: Array[Dictionary], cid: String) -> int:
+	for i: int in range(players.size()):
+		if str(players[i]["id"]) == cid:
+			return i
+	return 0
 
 
 # ═══════════════════════════════════════

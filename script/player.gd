@@ -998,11 +998,12 @@ func set_weapon_frame(idx: int) -> void:
 	_refresh_sprite()
 
 
-## 设置武器就绪帧（举起序列的最后一帧）
+## 设置武器就绪帧。
+## 索引取 `WeaponData.get_ready_char_index()`：默认 = 举起序列最后一帧；
+## 武器单独配了 `weapon_ready_char_index` 时用它（举起动画末帧只是过渡、站稳换格的武器）。
 func set_weapon_ready_frame() -> void:
 	if _weapon_data:
-		var seq: Array[int] = _weapon_data.get_raise_char_sequence()
-		_current_weapon_char_idx = seq[seq.size() - 1]
+		_current_weapon_char_idx = _weapon_data.get_ready_char_index()
 		_current_weapon_seq_idx = -1
 	_refresh_sprite()
 

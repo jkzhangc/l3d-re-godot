@@ -189,6 +189,20 @@ godot --headless --quit
 3. 中间是 Godot 检查器风格的分组字段，**每个属性名下面显示源码里的 `##` 中文注释**：
    贴图字段直接显示缩略图，`…` 打开**项目图像浏览器**
    （文件夹树 + 缩略图 + 搜索 + 滚轮/按钮缩放预览）；音频/场景/资源字段同样可浏览选择。
+   角色/武器的「状态名 → 行走图」字典（`weapon_walk_textures` / `shove_walk_textures`）
+   点「编辑…」可按行改键、换图、增删，键可从项目里已有的 `weapon_state_name` 下拉选。
+   其它字典（四方向偏移 `bullet_spawn_offsets` / `attack_effect_offsets` /
+   `melee_weapon_sprite_offsets`、`melee_weapon_sprite_seq_cols` 等）同样是行式编辑：
+   值类型按现有条目自动推断（空字典可选），对象值点「编辑…」进入字段弹窗。
+   偏移字典还可以点「预览」或右侧「偏移预览」打开可视化画布：
+   - **子弹偏移**：角色举起帧 + 黄色子弹点（原点 + 方向 × `spawn_offset` + 武器级偏移），
+     可切角色/方向/角色索引/帧，拖动黄点直接改偏移；
+   - **武器动作偏移**：角色攻击帧 + 武器单体动作图，按步号（前摇/挥动/后摇）和帧查看，
+     拖动武器图直接改偏移；
+   - **攻击特效偏移**：橙十字标记特效落点（不含 `.tscn` 内置 `position_offset`）。
+   拖动或右侧 X/Y 数字框修改都会写回字典；`保存到 .tres` / `Ctrl+S` 落盘。
+   武器检查器会在 `weapon_state_name` 下方标出实际状态机路由（`Ranged` / `Melee`）——
+   那一项是 `get_state_node_name()` 的结果，不影响这个字段的取值。
 4. `Ctrl+S` 保存回原 `.tres`；「重新加载」丢弃未保存修改。切换资源时会自动保存当前修改。
 5. 非物品类 `.tres`（TileSet、DropPoolData 等）只读展示，避免误改工程资源。
 

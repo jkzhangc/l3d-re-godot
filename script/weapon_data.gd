@@ -25,7 +25,11 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 
 
 @export_group("武器动画")
-@export var weapon_state_name: String = ""    ## 对应的状态名（如"Pistol"/"Knife"）
+## 外观/被动查询键 —— 不是状态机节点名。
+## 角色行走图字典 CharacterData.weapon_walk_textures / shove_walk_textures 按这个值匹配。
+## 同类武器共用同一个键（如 4 把 Pistol 变种都是 "Pistol"）；外观不同的武器要给不同的值。
+## 状态机路由请用 get_state_node_name()（远程恒 "Ranged" / 近战恒 "Melee"），与本项无关。
+@export var weapon_state_name: String = ""
 @export var weapon_walk_texture: Texture2D    ## 武器举起后的行走图精灵表
 
 ## 武器举起/放下动画：角色索引序列
@@ -33,6 +37,13 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 @export var weapon_raise_char_sequence: Array[int] = [1, 2]
 ## 武器举起/放下动画：每帧持续时间（秒），长度应与 weapon_raise_char_sequence 一致
 @export var weapon_raise_frame_durations: Array[float] = [0.12, 0.12]
+## 举起完成后的「就绪姿态」角色索引（精灵表上的 char_idx，第几组 3 帧姿态）。
+## 站立 = 该格的中间帧；行走 = 在该格的 3 帧间踏步。
+## **-1 = 沿用 weapon_raise_char_sequence 的最后一帧**（旧行为，默认）。
+## 什么时候要单独设：举起动画末帧只是过渡动作，站稳后应换另一格时。
+## ⚠ 索引按**实际使用的行走图**算：角色在 CharacterData.weapon_walk_textures
+## 配了同名武器行走图时用角色的图（各角色格位可能不同），否则用 weapon_walk_texture。
+@export var weapon_ready_char_index: int = -1
 
 
 @export_group("武器类型")
@@ -383,6 +394,19 @@ func get_raise_char_sequence() -> Array[int]:
 	if weapon_raise_char_sequence.size() > 0:
 		return weapon_raise_char_sequence
 	return [1, 2]
+
+
+## 举起完成后的就绪姿态角色索引（站立与行走都用这一格）。
+## `weapon_ready_char_index` >= 0 时直接用它；否则沿用举起序列的最后一帧（旧行为）。
+## 【为什么要单独一格】有些武器举起动画只有 1 帧（如防火斧 [0]），
+## 那一帧是"掏出武器"的过渡动作，站稳后应该换到持武器的姿态格。
+func get_ready_char_index() -> int:
+	if weapon_ready_char_index >= 0:
+		return weapon_ready_char_index
+	var seq: Array[int] = get_raise_char_sequence()
+	if seq.is_empty():
+		return 0
+	return seq[seq.size() - 1]
 
 
 ## 根据朝向获取攻击特效场景
