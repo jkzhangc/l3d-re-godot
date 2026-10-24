@@ -114,13 +114,21 @@ func _draw_grid() -> void:
 		y += step_px
 
 
+## 角色 Sprite2D 的中心（= 角色原点 + SPRITE_Y，player.tscn 里 Sprite2D 的 position）。
+## 武器单体动作图是 `Sprite2D` 的**子节点**，`position` 相对角色中心，
+## 所以预览里武器必须画在「角色中心 + offset」；画在「角色原点 + offset」会差 16px，
+## 这就是之前「游戏内位置和编辑器预览对不上」的根因（2026-10-24 用户反馈）。
+func _body_center() -> Vector2:
+	return _origin + Vector2(0, SPRITE_Y) * zoom
+
+
 func _draw_character() -> void:
 	var tex: Texture2D = _character_texture()
 	if tex == null:
 		return
 	var src: Rect2 = _char_region(tex)
 	var dst_size: Vector2 = Vector2(FRAME_W, FRAME_H) * zoom
-	var center: Vector2 = _origin + Vector2(0, SPRITE_Y * zoom)
+	var center: Vector2 = _body_center()
 	draw_texture_rect_region(tex, Rect2(center - dst_size * 0.5, dst_size), src, Color.WHITE)
 
 
@@ -134,7 +142,7 @@ func _draw_weapon() -> void:
 		col = 1
 	var src := Rect2(col * cell.x, direction * cell.y, cell.x, cell.y)
 	var dst_size: Vector2 = cell * zoom
-	var center: Vector2 = _origin + offset * zoom
+	var center: Vector2 = _body_center() + offset * zoom
 	var rect := Rect2(center - dst_size * 0.5, dst_size)
 	## 专用身体（文件名不含 近战/近接）且没开 force 时，游戏里不会叠动作图：
 	## 这里画半透明提示，方便知道「调了也不会生效」。
@@ -166,7 +174,7 @@ func _draw_marker() -> void:
 			if using_default:
 				_text(p + Vector2(13, 8), "当前用 attack_effect_offset_override", Color(0.75, 0.75, 0.75))
 		MODE_WEAPON:
-			var p: Vector2 = _origin + offset * zoom
+			var p: Vector2 = _body_center() + offset * zoom
 			draw_circle(p, 4.0, Color(0.35, 0.7, 1.0, 0.8))
 			_text(p + Vector2(10, -8), "武器 (%d, %d)" % [roundi(offset.x), roundi(offset.y)],
 				Color(0.55, 0.8, 1.0))
@@ -268,7 +276,7 @@ func _weapon_rect() -> Rect2:
 	var tex: Texture2D = weapon.melee_weapon_sprite
 	var cell: Vector2 = Vector2(float(tex.get_width()) / 3.0, float(tex.get_height()) / 4.0)
 	var dst_size: Vector2 = cell * zoom
-	return Rect2(_origin + offset * zoom - dst_size * 0.5, dst_size)
+	return Rect2(_body_center() + offset * zoom - dst_size * 0.5, dst_size)
 
 
 ## 子弹基础位置 = 实际发射方向（direction_override / angle_offset 已应用） × spawn_offset。
@@ -302,6 +310,8 @@ func _active_point() -> Vector2:
 	match mode:
 		MODE_BULLET:
 			return _bullet_point()
+		MODE_WEAPON:
+			return _body_center() + offset * zoom
 		_:
 			return _origin + offset * zoom
 
@@ -333,7 +343,9 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _drag_to(screen: Vector2) -> void:
-	var world: Vector2 = (screen - _origin) / zoom
+	## 武器动作图的 offset 相对角色中心；子弹/特效相对角色原点（= 脚底）。
+	var anchor: Vector2 = _body_center() if mode == MODE_WEAPON else _origin
+	var world: Vector2 = (screen - anchor) / zoom
 	var value: Vector2 = world
 	if mode == MODE_BULLET:
 		var bd: BulletData = _bullet()
