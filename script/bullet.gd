@@ -370,7 +370,10 @@ func _hit(target: Node2D) -> void:
 	# tank_enemies 组 Boss → 免疫即死（原作：即死系对 Boss 无效）→ 伤害 ×1.5 + 怯み。
 	var hitstun: float = _hitstun_duration
 	if _instant_kill:
-		if damageable.is_in_group("tank_enemies") or bool(damageable.get("instant_kill_immune")):
+		## `get()` 对「没有该字段的自定义可伤害体」返回 null，`bool(null)` 会当场报
+		## `Invalid call. Nonexistent 'bool' constructor`（训练木偶就踩过）→ 用 `== true` 判。
+		var instant_immune: bool = damageable.get("instant_kill_immune") == true
+		if damageable.is_in_group("tank_enemies") or instant_immune:
 			final_damage *= 1.5
 			hitstun = maxf(hitstun, 0.8)
 		else:
@@ -418,9 +421,9 @@ func _hit(target: Node2D) -> void:
 		if _hit_effect_follow and "network_entity_id" in damageable:
 			follow_id = int(damageable.network_entity_id)
 		hit_effect_applied.emit(damageable.global_position, follow_id)
-	# 播放命中音效
+	# 播放命中音效（世界坐标定位：声源=命中点，2026-10-20）
 	if _hit_sound:
-		Global.play_sfx_managed(_hit_sound, get_tree().current_scene)
+		Global.play_sfx_managed(_hit_sound, get_tree().current_scene, true, 1.0, damageable.global_position)
 
 	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(final_damage), str(is_headshot), penetration - _hits + 1])
 
@@ -469,7 +472,9 @@ func _explode() -> void:
 	if _explode_effect_anim:
 		VXAnimSprite.play_scene(_explode_effect_anim, center, get_tree().current_scene)
 	if _explode_sound:
-		Global.play_sfx_managed(_explode_sound, get_tree().current_scene)
+		## 世界坐标定位 + 距离衰减（2026-10-20）：播放器挂场景、声源钉在爆心 ——
+		## 子弹随即 queue_free，不能把播放器作为自己的子节点（否则声音被一起释放）。
+		Global.play_sfx_managed(_explode_sound, get_tree().current_scene, true, 1.0, center)
 	# 联机：把爆心与弹丸标识交给 NetworkWorld 广播（Client 用它播同一套爆炸表现）。
 	exploded.emit(network_entity_id, center)
 
