@@ -2300,6 +2300,12 @@ func _open_generic_dict_dialog(prop: String, dict: Dictionary, ti: Dictionary) -
 	if _generic_dict_overlay != null:
 		return
 	var info: Dictionary = ti.duplicate(true)
+	## 「按步号」偏移表的键是 `角色:步号` 复合串：行里给两个下拉，别让用户手打。
+	## 这样和「预览」里的按步号设置是同一套口径，值也能在同一个弹窗里逐条改。
+	if prop == "melee_weapon_sprite_step_offsets":
+		info["step_key"] = true
+		info["step_count"] = _weapon_step_count()
+		info["char_ids"] = _player_ids_for_step_key()
 	var vp: Vector2 = get_viewport_rect().size
 	var overlay := Control.new()
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2324,7 +2330,9 @@ func _open_generic_dict_dialog(prop: String, dict: Dictionary, ti: Dictionary) -
 	title.size = Vector2(600, 26)
 	panel.add_child(title)
 
-	var key_label := _label("键类型：%s" % ("int" if bool(info.get("key_int", false)) else "String"),
+	var key_label := _label(
+		"键：角色 + 步号" if bool(info.get("step_key", false))
+		else "键类型：%s" % ("int" if bool(info.get("key_int", false)) else "String"),
 		11, C_MUTED)
 	key_label.position = Vector2(18, 44)
 	key_label.size = Vector2(150, 18)
@@ -2359,15 +2367,18 @@ func _open_generic_dict_dialog(prop: String, dict: Dictionary, ti: Dictionary) -
 		panel.add_child(type_btn)
 
 	var hint := _label(
-		"键 / 值类型按现有条目自动推断；新增行会沿用这个类型。\n"
-		+ "Resource 值点「编辑…」改对象字段（如四方向偏移），改的是副本，确定后才写回。",
+		("键 = 角色 + 步号（`角色:步号`）；`*` = 所有角色共用这一步。\n"
+			+ "值点「编辑…」改四方向偏移；没配的步号会回退角色基线 `melee_weapon_sprite_offsets`。")
+		if bool(info.get("step_key", false)) else
+		("键 / 值类型按现有条目自动推断；新增行会沿用这个类型。\n"
+			+ "Resource 值点「编辑…」改对象字段（如四方向偏移），改的是副本，确定后才写回。"),
 		11, C_MUTED)
 	hint.position = Vector2(18, 72)
 	hint.size = Vector2(844, 34)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(hint)
 
-	var head_key := _label("键", 11, C_MUTED)
+	var head_key := _label("角色 / 步号" if bool(info.get("step_key", false)) else "键", 11, C_MUTED)
 	head_key.position = Vector2(24, 116)
 	head_key.size = Vector2(150, 16)
 	panel.add_child(head_key)
@@ -2449,6 +2460,18 @@ func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> 
 	var used: Dictionary = {}
 	for r: Dictionary in rows:
 		used[_generic_row_key(r)] = true
+	if prop == "melee_weapon_sprite_step_offsets":
+		## 先按角色顺序找第一个空位（nobita:0、nobita:1…），最后才给 `*`。
+		for cid: String in _player_ids_for_step_key():
+			for i: int in range(_weapon_step_count()):
+				var k: String = "%s:%d" % [cid, i]
+				if not used.has(k):
+					return k
+		for i: int in range(_weapon_step_count()):
+			var w: String = "*:%d" % i
+			if not used.has(w):
+				return w
+		return ""
 	if key_int:
 		var mx: int = -1
 		for k: Variant in used.keys():
@@ -2458,6 +2481,30 @@ func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> 
 		if not used.has(s):
 			return s
 	return ""
+
+
+## 当前武器有几个攻击步（步号表的下拉范围）。非武器资源回退 3。
+func _weapon_step_count() -> int:
+	if _res is WeaponData:
+		return maxi((_res as WeaponData).get_melee_attack_char_sequence().size(), 1)
+	return 3
+
+
+## 步号表可选的「角色」：项目里所有玩家角色 id（`*` 在 UI 里单独加）。
+func _player_ids_for_step_key() -> Array[String]:
+	var out: Array[String] = []
+	for e: Dictionary in _entries:
+		if str(e.get("kind", "")) != K_PLAYER:
+			continue
+		var cid: String = str(e.get("id", "")).strip_edges()
+		if not cid.is_empty() and not out.has(cid):
+			out.append(cid)
+	out.sort()
+	## のび太 放最前（预览默认角色）：新加步号条目时第一顺位就是 nobita:N。
+	if out.has("nobita"):
+		out.erase("nobita")
+		out.insert(0, "nobita")
+	return out
 
 
 func _dict_key_suggestions(prop: String) -> Array[String]:
@@ -2517,7 +2564,43 @@ func _add_generic_dict_row(list: VBoxContainer, rows: Array[Dictionary],
 	list.add_child(row)
 
 	var key_ctrl: Control = null
-	if bool(info.get("key_int", false)):
+	## 步号表的第二个下拉（步号）；其它字典保持 null。
+	var step_ctrl: OptionButton = null
+	if bool(info.get("step_key", false)):
+		## 角色 + 步号两个下拉 → 组合成 `角色:步号`。
+		## 手打复合键太容易拼错（nobita:1 / nobita1 / 1:nobita），而且看不出有几步。
+		var parts: PackedStringArray = str(key_val).split(":")
+		var cur_char: String = parts[0] if parts.size() > 0 else "*"
+		var cur_step: int = int(parts[1]) if parts.size() > 1 and parts[1].is_valid_int() else 0
+		var chars: Array[String] = ["*"]
+		for cid: String in (info.get("char_ids", []) as Array):
+			if not chars.has(cid):
+				chars.append(cid)
+		var char_opt := OptionButton.new()
+		char_opt.custom_minimum_size = Vector2(132, 30)
+		char_opt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		char_opt.add_theme_font_override("font", _font)
+		char_opt.add_theme_font_size_override("font_size", 12)
+		for i: int in range(chars.size()):
+			char_opt.add_item("*（所有角色）" if chars[i] == "*" else chars[i], i)
+			char_opt.set_item_metadata(i, chars[i])
+			if chars[i] == cur_char:
+				char_opt.select(i)
+		var step_opt := OptionButton.new()
+		step_opt.custom_minimum_size = Vector2(96, 30)
+		step_opt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		step_opt.add_theme_font_override("font", _font)
+		step_opt.add_theme_font_size_override("font_size", 12)
+		var step_count: int = maxi(1, int(info.get("step_count", 3)))
+		for i: int in range(step_count):
+			step_opt.add_item("第%d步" % (i + 1), i)
+			step_opt.set_item_metadata(i, i)
+		step_opt.select(clampi(cur_step, 0, step_count - 1))
+		key_ctrl = char_opt
+		step_ctrl = step_opt
+		row.add_child(char_opt)
+		row.add_child(step_opt)
+	elif bool(info.get("key_int", false)):
 		var ks := SpinBox.new()
 		ks.min_value = -999999
 		ks.max_value = 999999
@@ -2568,6 +2651,8 @@ func _add_generic_dict_row(list: VBoxContainer, rows: Array[Dictionary],
 		row.add_child(key_ctrl)
 
 	var entry: Dictionary = {"root": row, "key": key_ctrl, "kind": kind}
+	if step_ctrl != null:
+		entry["key_step"] = step_ctrl
 	row.add_child(_make_dict_value_control(kind, val, info, entry))
 	rows.append(entry)
 
@@ -2586,6 +2671,10 @@ func _add_generic_dict_row(list: VBoxContainer, rows: Array[Dictionary],
 
 func _generic_row_key(row: Dictionary) -> Variant:
 	var c: Control = row.get("key") as Control
+	if c is OptionButton and row.get("key_step") != null:
+		var step_opt: OptionButton = row.get("key_step") as OptionButton
+		return "%s:%d" % [str((c as OptionButton).get_item_metadata((c as OptionButton).selected)),
+			step_opt.selected]
 	if c is SpinBox:
 		return int((c as SpinBox).value)
 	if c is LineEdit:
@@ -3256,6 +3345,16 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 		drop.disabled = mode != "weapon" or scope != "step" \
 			or not wd.melee_weapon_sprite_step_offsets.has(
 				"%s:%d" % [cid, maxi(0, int(state.get("step", 0)))])
+	if ui.has("step_opt") and mode == "weapon":
+		## 在步号下拉里标出哪些步已经有单独条目（✓），否则用户看不出「按步号」有没有生效。
+		var sop: OptionButton = ui["step_opt"] as OptionButton
+		var bases: Array = ui.get("step_base_labels", [])
+		var step_dict: Dictionary = wd.melee_weapon_sprite_step_offsets
+		for i: int in range(sop.item_count):
+			var base: String = str(bases[i]) if i < bases.size() else sop.get_item_text(i)
+			var has_entry: bool = step_dict.has("%s:%d" % [cid, i]) \
+				or step_dict.has("*:%d" % i)
+			sop.set_item_text(i, base + ("  ✓" if has_entry else ""))
 	if ui.has("char_row"):
 		(ui["char_row"] as Control).visible = mode != "weapon"
 	if ui.has("frame_row"):
@@ -3450,6 +3549,12 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 		var col_label: String = "前摇" if col == 0 else ("挥动" if col == 1 else ("后摇" if col == 2 else "不显示"))
 		steps.append(["第%d步  idx=%d  %s" % [i + 1, seq[i], col_label], i])
 	var step_opt := _offset_option(steps, int(state["step"]))
+	step_opt.tooltip_text = "✓ = 这一步已有单独偏移条目（否则回退角色基线）"
+	var step_bases: Array = []
+	for srow: Array in steps:
+		step_bases.append(str(srow[0]))
+	ui["step_opt"] = step_opt
+	ui["step_base_labels"] = step_bases
 	step_opt.item_selected.connect(func(i: int):
 		state["step"] = i
 		_offset_preview_refresh(wd, state, preview, ui, true))
