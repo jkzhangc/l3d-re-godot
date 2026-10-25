@@ -3763,6 +3763,13 @@ func debug_snapshot() -> Dictionary:
 		"tank_pos_max": tank_spawn_pos_max,
 		"tank_drought": _tank_drought,
 		"prev_map_had_tank": _prev_map_had_tank,
+		## 防守战 Tank 供给（2026-10-25）：现场排查「第二只为什么不来」就看这四项
+		"holdout_tank_enabled": holdout_tank_enabled,
+		"holdout_tank_demand": holdout_tank_demand,
+		"holdout_tank_interval": holdout_tank_demand_interval,
+		"holdout_tank_cooldown": _holdout_tank_cooldown_left,
+		"holdout_tank_first": _holdout_tank_first_left,
+		"holdout_tank_retry": _holdout_tank_retry_left,
 		"item_last": str(item_debug.get("last_drop", "-")),
 		"item_last_age": float(item_debug.get("last_drop_age", 0.0)),
 		"item_check_left": float(item_debug.get("check_left", 0.0)),

@@ -137,6 +137,16 @@ func _format(s: Dictionary) -> String:
 		int(s.get("tank_drought", 0)), _yn(bool(s.get("prev_map_had_tank", false))),
 		_yn(int(s.get("deck_tank_cards", 0)) == 0)])
 
+	## 防守战 Tank 供给（只在开/有需求时显示，平时不占屏）
+	var hd: int = int(s.get("holdout_tank_demand", 0))
+	var h_enabled: bool = bool(s.get("holdout_tank_enabled", false))
+	if hd > 0 or (h_enabled and float(s.get("holdout_tank_cooldown", 0.0)) > 0.0):
+		lines.append("防守战Tank 需求 %d 只  冷却 %4.1fs  首只 %4.1fs  重试 %3.1fs" % [
+			hd, float(s.get("holdout_tank_cooldown", 0.0)),
+			float(s.get("holdout_tank_first", 0.0)), float(s.get("holdout_tank_retry", 0.0))])
+		lines.append("          需求间隔 %.0fs（需求>0 时替代 90~150s 环境冷却）" % float(
+			s.get("holdout_tank_interval", 0.0)))
+
 	lines.append("投放 上次 %.0fs 前 %s   下次检查 %.1fs" % [
 		float(s.get("item_last_age", 0.0)), str(s.get("item_last", "-")),
 		float(s.get("item_check_left", 0.0))])
