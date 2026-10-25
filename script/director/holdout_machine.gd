@@ -666,7 +666,7 @@ func trigger() -> void:
 	# 已移到 `_begin_active()`（防守战正式波次开始）才切。这里只负责"挂起常规编排"。
 	# 防守战 Tank 通道开启：重置首只延迟（防守战里 Tank 是核心压迫源，频率与常规不同）。
 	if not _is_network_client() and director.has_method("notify_holdout_started"):
-		director.notify_holdout_started()
+		director.call("notify_holdout_started", _tank_demand_total())
 	holdout_started.emit(event_name)
 
 
@@ -696,6 +696,15 @@ func complete_external() -> void:
 
 ## 挂击杀钩子：ACTIVE 开始时的存量丧尸 + 之后新刷的（node_added 补连）都算。
 ## 对齐原作 147 语义：组1丧尸逐杀 +1（CE693），杀满 4 只开门。
+## 本场防守战需要玩家杀几只 Tank 才能推进（0 = 不靠 Tank 推进）。
+## 只有 KILL_COUNT + TANK 过滤才成立 —— TIMER / ALL / EXTERNAL 不该让导演进入需求模式，
+## 否则会破坏它们原本的节奏（例如学校 120s 计时战不该被坦克刷屏）。
+func _tank_demand_total() -> int:
+	if end_mode != EndMode.KILL_COUNT or kill_count_filter != KillFilter.TANK:
+		return 0
+	return maxi(kill_target, 0)
+
+
 func _connect_kill_hooks() -> void:
 	_kills = 0
 	for enemy: Node in get_tree().get_nodes_in_group("enemy"):
@@ -737,6 +746,12 @@ func _on_enemy_died(_enemy: Node) -> void:
 	if kill_count_filter == KillFilter.TANK and not _enemy.is_in_group("tank_enemies"):
 		return
 	_kills += 1
+	## 需求驱动 Tank 供给（2026-10-25）：这场防守战靠杀 Tank 推进时，
+	## 把"还剩几只"告诉导演 —— 否则导演按 90~150s 环境冷却放坦克，门可能永远开不了。
+	if end_mode == EndMode.KILL_COUNT and kill_count_filter == KillFilter.TANK:
+		var d: Node = get_node_or_null("/root/Director")
+		if d != null and d.has_method("set_holdout_tank_demand"):
+			d.call("set_holdout_tank_demand", maxi(kill_target - _kills, 0))
 	print("[HoldoutMachine] 击杀计数: %d / %d" % [_kills, kill_target])
 	if _kills >= kill_target:
 		_begin_settle()

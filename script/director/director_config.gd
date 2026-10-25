@@ -55,6 +55,15 @@ class_name DirectorConfig extends Node
 ## 喘息期队伍累计前进这么多像素 → 提前结束喘息（走得快就走得快，对应 L4D Relax 的"走远即结束"）。
 @export var relax_advance: float = 700.0
 
+@export_group("进度（紧张度因子 / Boss 路程闸，2026-10-25）")
+## 启用真实关卡进度估计（0~1）。关掉 = 回到旧行为（进度因子恒定 0.3），仅用于对照/回退。
+## 进度来源优先级：出口节点（SafeDoor/TeleportPoint）的"距离收敛" → 行进里程 / 参考路程。
+## 它同时决定 `tank_spawn_pos_min/max` 这道 Boss 路程闸是否真正生效。
+@export var progress_enabled: bool = true
+## 参考总路程（像素）。**0 = 自动**（进图时按"起点 → 出口"的直线距离 × 1.6 估）。
+## 只在没有出口节点（竞技图/测试图）或想手动校准里程口径时才需要填。
+@export var progress_length_px: float = 0.0
+
 @export_group("L4D — 加压预算（Build 阶段的可消耗总量）")
 ## 每个 Build 阶段发放的普通感染者预算：用完就停手，直到进入下一阶段。
 ## 这就是「消耗型预算」—— 它替换掉旧的「维持目标数量」，是空窗的来源。
@@ -251,6 +260,12 @@ class_name DirectorConfig extends Node
 @export var holdout_tank_cooldown_max: float = 150.0
 ## 防守战期间同屏最多 Tank 数。
 @export var holdout_tank_max_alive: int = 1
+## ★需求模式间隔（2026-10-25）：当防守战**必须靠杀 Tank 才能推进**时
+## （HoldoutMachine 的 `end_mode = KILL_COUNT` + `kill_count_filter = TANK`，如列车台「杀 2 只开门」），
+## 两只 Tank 之间的冷却改用这个短间隔，而不是上面的 90~150s 环境冷却。
+## 原因：那种防守战的 Tank 是**开门条件**，按"可选压力事件"冷却会让门永远开不了
+## （用户实测：打死第一只后等了几分钟，第二只始终不来）。设 0 = 不启用需求模式。
+@export var holdout_tank_demand_interval: float = 15.0
 
 @export_group("L4D — Boss 发牌（Tank / 女巫 / 无事）")
 ## ★第二批（2026-10-24）：L4D 的 Tank 与 Witch **不是"打得惨才出"**，
@@ -273,6 +288,19 @@ class_name DirectorConfig extends Node
 @export var boss_deck_max_witches: int = 1
 ## 女巫资源（留空 = 用内置 tres/specials/ブレアウィッチ.tres）。
 @export var witch_data: SpecialEnemyData = null
+
+@export_group("Boss — Tank 出场路程闸（2026-10-25，对齐 L4D）")
+## Tank 只允许在「已走过路程比例」落在这个窗口内时登场（0~1）。
+## 取值参照 L4D2 `mission.txt` 的 `coop_boss_spawning.spawn_pos_min / spawn_pos_max`
+##（社区默认 0.2~0.8，官方部分地图 0.4~0.8）。默认 0.35~0.85：
+## 开局 1/3 段绝不遇 Tank（用户实测「Tank 出现太早」的直接修复），接近出口也不再放。
+## ⚠ 这套闸依赖 `progress_enabled`：进度关掉（恒定 0.3）时，min 设大于 0.3 会让 Tank 永不出场。
+@export_range(0.0, 0.95, 0.05) var tank_spawn_pos_min: float = 0.35
+## Tank 允许登场的最晚路程比例。超过它就本图放弃 Tank（避免"安全门前糊脸一只"）。
+@export_range(0.05, 1.0, 0.05) var tank_spawn_pos_max: float = 0.85
+## 不允许连续两张地图都出 Tank（L4D：不存在两张图连着出、中间没有间隔）。
+## 关掉 = 上一张图出过 Tank，这张图仍可能出。
+@export var tank_no_repeat_maps: bool = true
 
 @export_group("生成 — 回收（离玩家太远就清除）")
 ## 回收总开关。开启后：存活敌人离玩家超过 recycle_dist 就直接清除（不管它有没有在追玩家）。
@@ -297,6 +325,20 @@ class_name DirectorConfig extends Node
 ## 留空 = 按紧张度决策直接投放固定资源（喷雾/药品/弹药/副武器）。
 ## 池子配置方法见 DropPoolData 的文件头说明。
 @export var drop_pool: DropPoolData = null
+
+@export_group("投放 — 位置与怜悯（2026-10-25）")
+## 「可发现带」上限（像素）：补给优先投在玩家前方这个距离以内。
+## 2× 缩放下半屏宽约 320px —— 投得更远，玩家不会知道那儿有东西。
+@export var item_drop_visible_max: float = 320.0
+## 投放点周围这个半径内有存活敌人就换点（默认 128px，设计文档 §6.2）。
+@export var item_drop_threat_radius: float = 128.0
+## 降级投放（Fail-Safe）的怜悯血线：任一存活玩家 HP 比例低于它并持续
+## `item_fail_safe_low_hp_sec` 秒 → 一次性投「急救喷雾 + 弹药堆 + 投掷品」。设 0 = 关闭。
+@export_range(0.0, 0.6, 0.01) var item_fail_safe_hp_ratio: float = 0.2
+## 低于怜悯血线要持续多少秒才触发（防"擦伤一下就发货"）。
+@export var item_fail_safe_low_hp_sec: float = 30.0
+## 降级投放冷却（秒）。冷却期内即使再次低血也不再投放。
+@export var item_fail_safe_cooldown: float = 180.0
 
 @export_group("投放 — 敌人死亡掉落（2026-10-01：原作式「打完会掉东西」）")
 ## 敌人掉落的**总池**：敌人自身（ZombieVariant / SpecialEnemyData）没配 drop_pool 时回落到这里。

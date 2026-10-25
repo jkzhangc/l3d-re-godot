@@ -99,6 +99,14 @@ var holdout_tank_first_delay: float = 25.0
 var holdout_tank_cooldown_min: float = 45.0
 var holdout_tank_cooldown_max: float = 75.0
 var holdout_tank_max_alive: int = 1
+## ★防守战 Tank「需求数」（2026-10-25）：> 0 表示这场防守战**必须靠杀 Tank 才能推进**
+## （HoldoutMachine 的 KILL_COUNT + KillFilter.TANK，如列车台「杀 2 只开门」）。
+## 此时 Tank 供给改用「需求间隔」而不是环境压力的 90~150s 随机冷却 ——
+## 否则机器规定"杀 2 只"，导演却 2~3 分钟才放一只，玩家会以为门永远开不了。
+var holdout_tank_demand: int = 0
+## 需求模式下的 Tank 间隔（秒，会带 ±20% 抖动）。只在 `holdout_tank_demand > 0` 时生效。
+var holdout_tank_demand_interval: float = 15.0
+var _holdout_tank_retry_left: float = 0.0   ## 生成失败后的短退避（旧实现失败时不设冷却 → 每帧重试刷日志）
 var _tank_cooldown_left: float = 0.0        ## 常规 Tank 冷却
 var _holdout_tank_first_left: float = 0.0   ## 防守战首只 Tank 延迟
 var _holdout_tank_cooldown_left: float = 0.0 ## 防守战 Tank 冷却
@@ -118,6 +126,15 @@ var _boss_trail: float = 0.0             ## 本图累计前进里程（px）
 var _boss_next_anchor: float = INF       ## 下一张牌的里程
 var boss_deck_max_tanks: int = 1        ## 本图 Tank 牌上限（硬上限，防"一图四只"）
 var boss_deck_max_witches: int = 1      ## 本图女巫牌上限
+## ★L4D flow 闸（2026-10-25）：Tank 只允许在「已走过路程比例」的这个窗口内登场。
+## 取值参照 L4D2 mission.txt `coop_boss_spawning.spawn_pos_min/max`（社区默认 0.2~0.8，
+## 官方部分图 0.4~0.8）。这里默认 0.35~0.85：开局 1/3 段绝不遇 Tank，接近出口也不再放。
+var tank_spawn_pos_min: float = 0.35
+var tank_spawn_pos_max: float = 0.85
+## 不允许连续两张图都出 Tank（L4D：不存在"两张图连着出、中间没有间隔"）。
+var tank_no_repeat_maps: bool = true
+var _boss_tank_weight: int = 1          ## 本图牌堆里放几张 Tank 牌（0 = 本图不出 Tank）
+var _prev_map_had_tank: bool = false    ## 上一张「可用图」是否真的出过 Tank（跨图"不连续"判据）
 var _boss_tanks_dealt: int = 0
 var _tank_drought: int = 0        ## 连续几张图没发到 Tank（跨图保底）
 var _deck_initialized: bool = false
@@ -149,6 +166,10 @@ var _phase_cache: StringName = &"cooldown" ## 上一帧的节奏阶段（供区�
 # 子模块
 # ═══════════════════════════════════════
 var intensity_tracker: Node = null
+var progress_tracker: Node = null     ## ProgressTracker 子节点（关卡进度估计，2026-10-25）
+var progress_enabled: bool = true     ## false = 保持旧行为（进度因子恒定 0.3）
+var progress_length_px: float = 0.0   ## 参考总路程（0 = 自动：出口直线 ×1.6）
+var _progress_cache: float = -1.0     ## 上次喂给 IntensityTracker 的值（变化才推送）
 var _enemy_scene: PackedScene = null
 var _spawn_history: Array = []
 var _last_scene: Node = null  ## 检测场景切换，读取 DirectorConfig
@@ -160,9 +181,15 @@ const NIGHT_DEBUG_DEFAULT_DARKNESS := 0.8  ## F8 调试开夜时，若本图未�
 ## F8 = 夜间视界调试开关（2026-09-16 测试用，不写进地图数据）：
 ## 当前图无 NightOverlay → 开夜（浓度取本图 night_darkness，未配则用 0.8）；
 ## 已有 → 关掉恢复白天。换图后按 DirectorConfig 重新生效。
+## F3 = 导演调试面板（2026-10-25，见文件末尾 `debug_snapshot()`；导出包随 debug_enabled 关闭）。
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F8:
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var key := event as InputEventKey
+	if key.keycode == KEY_F8:
 		_toggle_night_debug()
+	elif key.keycode == DEBUG_PANEL_KEY:
+		_toggle_debug_panel()
 
 
 func _toggle_night_debug() -> void:
@@ -234,6 +261,16 @@ func _ready() -> void:
 	if im.has_method("setup"):
 		im.setup(self)
 
+	# ── ProgressTracker（关卡进度估计，2026-10-25）──
+	# 供 ① 紧张度的进度因子 ② Boss 发牌的路程闸（L4D flow）使用。
+	# 必须在 IntensityTracker 之后创建：_ready 末尾要把进度喂给它。
+	var pt_script = load("res://script/director/progress_tracker.gd")
+	var pt := Node.new()
+	pt.name = "ProgressTracker"
+	pt.set_script(pt_script)
+	add_child(pt)
+	progress_tracker = pt
+
 	if pc.has_signal("phase_changed"):
 		pc.phase_changed.connect(_on_phase_changed)
 
@@ -248,10 +285,11 @@ func _ready() -> void:
 	else:
 		printerr("[Director] enemy scene not found: %s" % ENEMY_SCENE_PATH)
 
-	if intensity_tracker and intensity_tracker.has_method("set_progress"):
-		intensity_tracker.set_progress(0.3)
+	## 进度因子初值：不再写死 0.3（2026-10-25）。
+	## 关掉 `progress_enabled` 的图维持旧行为（恒定 0.3），便于对照/回退。
+	_sync_progress_to_intensity(true)
 
-	print("[Director] initialized (Phase 3)")
+	print("[Director] initialized (Phase 4)")
 
 
 func _process(delta: float) -> void:
@@ -551,6 +589,15 @@ func reset_for_title_return() -> void:
 	_last_scene = null
 	# 敌人节点本身随场景释放，这里只清锁定引用，避免跨局指向已释放实例
 	_boss_music_watchlist.clear()
+	## ⑪ 关卡进度与 Boss 干旱计数归零（2026-10-25）：
+	## 干旱保底是"同一战役内跨图"的概念，不该继承到下一个战役 ——
+	## 否则上一局没出 Tank，新战役第一张图就被强行保底（用户实测「第一章必定有 Tank」的成因之一）。
+	_tank_drought = 0
+	_prev_map_had_tank = false
+	_deck_initialized = false
+	if progress_tracker != null and is_instance_valid(progress_tracker):
+		progress_tracker.call("reset_for_scene", null)
+		_sync_progress_to_intensity(true)
 	print("[Director] 回标题收尾：剧本事件/防守战已中止、节奏回 cooldown、狂暴与 BGM 已清")
 
 
@@ -617,6 +664,7 @@ func _reset_live_combat_state() -> void:
 func _on_phase_changed(phase: StringName) -> void:
 	## 节奏阶段切换 → 通知 SpawnManager + 发出信号
 	print("[Director] pacing phase → %s" % phase)
+	debug_event("阶段 → %s" % phase)
 	_music_phase = phase
 	pacing_phase_changed.emit(phase)
 
@@ -1287,6 +1335,8 @@ func spawn_mob_batch(front_count: int, behind_count: int) -> int:
 			continue
 		if spawn_enemy(_add_spawn_scatter(front_pos), decor_layer, -1) != null:
 			spawned += 1
+	if spawned > 0:
+		debug_event("MOB 落地 %d 只（前 %d / 后 %d）" % [spawned, front_count, behind_count])
 	return spawned
 
 
@@ -1344,6 +1394,8 @@ func seed_wanderers(count: int) -> int:
 ## 逐帧位移超过 64px 视为传送/换图（不计入），避免一次切场景就把整段距离攒满。
 func _update_wander_advance(players: Array[Node2D]) -> void:
 	var best: float = _sample_team_advance(players)
+	## 关卡进度（2026-10-25）：与游荡者/Boss 发牌共用同一份位移采样，不重复遍历玩家。
+	_update_progress(players, best)
 	## Boss 发牌按里程推进（与游荡者补层共用同一份位移采样）
 	## ★2026-10-24 用户实测「防守战里刷了女巫 / 打完一只又来一只」：发牌原先不看全局状态，
 	## 防守战、剧本事件、安全屋、非刷怪图里照样按走位里程发牌。必须只在"正常行军"时发。
@@ -1359,6 +1411,19 @@ func _update_wander_advance(players: Array[Node2D]) -> void:
 	if _wander_advance >= wander_seed_step:
 		_wander_advance = 0.0
 		seed_wanderers(Players.scale_spawn_count(wander_seed_refill))
+
+
+## 关卡进度推进（2026-10-25）：交给 ProgressTracker 估计，再把结果推给紧张度。
+## 只走一个入口 —— 换图/伪造进度时都从这里同步，避免"tracker 变了、紧张度没变"。
+func _update_progress(players: Array[Node2D], advance: float) -> void:
+	if progress_tracker == null or not is_instance_valid(progress_tracker):
+		return
+	if not progress_enabled:
+		## 旧行为（恒定 0.3）：只在缓存对不上时补一次，不每帧写。
+		_sync_progress_to_intensity()
+		return
+	progress_tracker.call("update", players, advance)
+	_sync_progress_to_intensity()
 
 
 ## 现在能不能发牌 / 补游荡者：正常行军才算。
@@ -1757,9 +1822,31 @@ func get_intensity() -> float:
 	return 0.0
 
 
+## 当前关卡进度（0~1）。没有 ProgressTracker / 关掉 progress_enabled 时回退旧的 0.3。
+func get_progress() -> float:
+	if not progress_enabled or progress_tracker == null or not is_instance_valid(progress_tracker):
+		return 0.3
+	return float(progress_tracker.call("get_progress"))
+
+
+## 手动设定进度（0~1，负数恢复自动）。剧本事件/调试可用；跨图重置回自动。
 func set_progress(ratio: float) -> void:
+	if progress_tracker != null and is_instance_valid(progress_tracker):
+		progress_tracker.call("set_forced", ratio)
 	if intensity_tracker and intensity_tracker.has_method("set_progress"):
-		intensity_tracker.set_progress(ratio)
+		intensity_tracker.set_progress(get_progress())
+
+
+## 把当前进度推给 IntensityTracker。`force` = 忽略变化阈值（初始化 / 换图时用）。
+## 阈值 0.01：进度是缓变量，每帧都推没有意义（热路径上少一次跨脚本调用）。
+func _sync_progress_to_intensity(force: bool = false) -> void:
+	if intensity_tracker == null or not intensity_tracker.has_method("set_progress"):
+		return
+	var p: float = get_progress()
+	if not force and absf(p - _progress_cache) < 0.01:
+		return
+	_progress_cache = p
+	intensity_tracker.set_progress(p)
 
 
 func set_combat(active: bool) -> void:
@@ -1895,6 +1982,12 @@ func _check_scene_change() -> void:
 	# 场景切换 → 同步清空禁刷怪层缓存（NoSpawnLayer）
 	_no_spawn_layers.clear()
 	_no_spawn_cache_ready = false
+	## ★场景切换 → 关卡进度归零（2026-10-25）：进度是**每张图**的度量，
+	## 跨图继承会让"新图刚进门就 0.9 进度"（Tank 闸门/紧张度全乱）。
+	## 出口节点与起点在 ProgressTracker 第一次 update 时再解析（那时玩家已就位）。
+	if progress_tracker != null and is_instance_valid(progress_tracker):
+		progress_tracker.call("reset_for_scene", scene)
+		_sync_progress_to_intensity(true)
 	## ★场景切换（含**同图传送**，如第三关矿洞钥匙门：目标场景 = 本图自己，同样会建新实例）
 	## → 清掉只指向**旧场景已释放节点**的引用集合（2026-10-12 修「尸潮切图时主机端节点报错」）。
 	## `_horde_locked_enemies` 存的是旧场景敌人节点；旧实例被释放后这些引用**悬垂**，
@@ -2081,6 +2174,15 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		fs.set("l4d_model", cfg.l4d_pacing)
 		fs.set("threat_radius", cfg.threat_radius)
 	_copy_props(cfg, self, ["recycle_enabled", "recycle_interval", "recycle_dist", "recycle_clear_corpses"])
+	## ── 关卡进度（2026-10-25）──
+	progress_enabled = cfg.progress_enabled
+	progress_length_px = maxf(cfg.progress_length_px, 0.0)
+	if progress_tracker != null and is_instance_valid(progress_tracker):
+		progress_tracker.set("enabled", progress_enabled)
+		progress_tracker.set("route_length_override", progress_length_px)
+		## 重新起算：本图配置的参考路程要在"解析出口"之前生效
+		progress_tracker.call("reset_for_scene", get_tree().current_scene if get_tree() else null)
+		_sync_progress_to_intensity(true)
 	_zombie_pool = cfg.zombie_pool if not cfg.zombie_pool.is_empty() else DEFAULT_ZOMBIE_POOL
 	# ── 特感池与节奏：地图不配 special_pool 就完全不刷（向后兼容）──
 	_special_pool = cfg.special_pool
@@ -2107,6 +2209,7 @@ func _apply_config(cfg: DirectorConfig) -> void:
 	holdout_tank_cooldown_min = cfg.holdout_tank_cooldown_min
 	holdout_tank_cooldown_max = cfg.holdout_tank_cooldown_max
 	holdout_tank_max_alive = cfg.holdout_tank_max_alive
+	holdout_tank_demand_interval = maxf(cfg.holdout_tank_demand_interval, 0.0)
 	# 换图重置：常规 Tank 冷却从本关开始时起算；防守战计时在防守战开启时再重置。
 	_tank_cooldown_left = randf_range(tank_cooldown_min, tank_cooldown_max)
 	_holdout_tank_first_left = holdout_tank_first_delay
@@ -2118,11 +2221,22 @@ func _apply_config(cfg: DirectorConfig) -> void:
 	boss_deck_nothing_weight = maxi(cfg.boss_deck_nothing_weight, 1)
 	boss_deck_max_tanks = maxi(cfg.boss_deck_max_tanks, 0)
 	boss_deck_max_witches = maxi(cfg.boss_deck_max_witches, 0)
+	tank_spawn_pos_min = clampf(cfg.tank_spawn_pos_min, 0.0, 0.95)
+	tank_spawn_pos_max = clampf(cfg.tank_spawn_pos_max, tank_spawn_pos_min + 0.05, 1.0)
+	tank_no_repeat_maps = cfg.tank_no_repeat_maps
 	if cfg.witch_data != null:
 		_witch_data = cfg.witch_data
 	elif _witch_data == null and ResourceLoader.exists(DEFAULT_WITCH_PATH):
 		_witch_data = load(DEFAULT_WITCH_PATH) as SpecialEnemyData
 	_reset_boss_deck()
+	## ── 物品投放（2026-10-25）：位置口径与降级投放参数由地图覆盖 ──
+	var im: Node = get_node_or_null("ItemManager")
+	if im:
+		im.set("drop_visible_max", cfg.item_drop_visible_max)
+		im.set("drop_threat_radius", cfg.item_drop_threat_radius)
+		im.set("fail_safe_hp_ratio", cfg.item_fail_safe_hp_ratio)
+		im.set("fail_safe_low_hp_sec", cfg.item_fail_safe_low_hp_sec)
+		im.set("fail_safe_cooldown", cfg.item_fail_safe_cooldown)
 	var sm: Node = get_node_or_null("SpawnManager")
 	if sm:
 		_copy_props(cfg, sm, ["scatter_min", "scatter_max",
@@ -2850,11 +2964,17 @@ func _pick_special_enemy(allow_boss: bool = true) -> SpecialEnemyData:
 ## 147 图防守战里则是核心压迫源（早期就登场，菲纳莱必战）。
 ## 同屏互斥用 tank_max_alive / holdout_tank_max_alive，对应原作「重点敌人互斥」机制。
 ## ═══ Boss 发牌（L4D 第二批，2026-10-24）═══
-## 牌堆 = Tank 1 张 + 女巫 1 张 + 「无事」N 张（默认 2），洗牌后逐张发；
+## 牌堆 = Tank × tank_weight + 女巫 1 张 + 「无事」N 张，洗牌后逐张发；
 ## **不允许连续重复**：洗出来的第一张若与上一张相同，就与后面第一张不同的牌对调。
-## 纯函数、不依赖节点状态 —— 便于用例直接验证。
-static func build_boss_bag(last: int, nothing_weight: int) -> Array[int]:
-	var bag: Array[int] = [0, 1]
+##
+## 【tank_weight（2026-10-25）】L4D 的规则是「本章没遇到 Tank → 后续章概率提高」，
+## 是**概率**提升而不是强制。这里用"牌堆里多放几张 Tank"表达同一件事；
+## 默认 1（与旧行为逐位一致）。上一个可用图刚出过 Tank 时由调用方传 0（不连续两张图都出）。
+static func build_boss_bag(last: int, nothing_weight: int, tank_weight: int = 1) -> Array[int]:
+	var bag: Array[int] = []
+	for _i: int in range(maxi(tank_weight, 0)):
+		bag.append(0)
+	bag.append(1)
 	for _i: int in range(maxi(nothing_weight, 1)):
 		bag.append(2)
 	bag.shuffle()
@@ -2869,16 +2989,26 @@ static func build_boss_bag(last: int, nothing_weight: int) -> Array[int]:
 
 
 ## 重置牌堆（进图 / 换图时调用）。第一张牌的里程 = step × first_ratio，避免刚进图就遇 Tank。
+##
+## ★2026-10-25 按 L4D 重做（用户实测「每次战役第一关必定出 Tank，且出现太早」）：
+## 旧实现有一条"连续 3 张有效图没 Tank → 本图首张强制 Tank，并把首张锚点提前到 0.6×"的保底，
+## 那是"必定出现 + 更早出现"的直接来源。L4D 的官方做法是：
+##   · Tank 只在**已走过路程比例**（flow）落在 `spawn_pos_min~spawn_pos_max` 时登场
+##     （mission.txt 的 coop_boss_spawning，社区默认 0.2~0.8，官方部分图 0.4~0.8）——
+##     所以开局 1/3 段永远不会遇到 Tank；
+##   · 本章没遇到 Tank → **后续章概率提高**（不是强制）；
+##   · 不允许两张图连着出 Tank（"two tanks in a row without a break" 不会发生）。
+## 因此这里：① 删掉强制保底与提前锚点；② 干旱改成"牌堆里多放一张 Tank"；
+## ③ 上一个可用图刚出过 Tank（`_prev_map_had_tank`）→ 本图牌堆里不放 Tank 牌。
 func _reset_boss_deck() -> void:
-	## 干旱保底（2026-10-25 用户需求「玩 3 次至少要有 1 次 Tank」）：
-	## 上一张图没发到 Tank 记一次；连续 2 张图没 Tank → 本图第一张牌直接给 Tank。
+	## 干旱计数：只统计"本来会刷怪"的图（安全屋/非刷怪图也会进 _apply_config，
+	## 若一并计数，两张图就能凑够阈值 → 保底误触发，2026-10-25 用户实测）。
 	if _deck_initialized:
-		## ⚠ 只统计"本来会刷怪"的图（2026-10-25 用户实测「读档后学校内部几秒就来 Tank」）：
-		## 安全屋/非刷怪图也会进 _apply_config，若一并计数，drought 两次就够 → 保底误触发。
 		var tree0: SceneTree = get_tree()
 		var scene0: Node = tree0.current_scene if tree0 != null else null
 		var eligible: bool = scene0 != null and _is_spawn_map() and not _scene_is_safe_room(scene0)
 		if eligible:
+			_prev_map_had_tank = _boss_tanks_dealt > 0
 			if _boss_tanks_dealt == 0:
 				_tank_drought += 1
 			else:
@@ -2891,21 +3021,31 @@ func _reset_boss_deck() -> void:
 	_boss_witches_dealt = 0
 	if not boss_deck_enabled:
 		_boss_next_anchor = INF
+		_boss_tank_weight = 0
 		return
 	var first: float = maxf(boss_deck_step * boss_deck_first_ratio, 400.0)
 	_boss_next_anchor = first
-	if _tank_drought >= 3 and boss_deck_max_tanks > 0 and tank_enabled:
-		_boss_deck = [0]
-		_tank_drought = 0
-		_boss_next_anchor = maxf(first * 0.6, 600.0)
-		print("[Director] Boss 发牌：连续 2 张图没出 Tank → 本图首张牌强制 Tank（保底）")
-	print("[Director] Boss 发牌：每 %.0fpx 一张，首张在 %.0fpx（无事权重 %d）" % [
-		boss_deck_step, first, boss_deck_nothing_weight])
+	## 本图 Tank 牌的张数（0 = 本图不发 Tank 牌）：
+	##   · 关闭 Tank / 名额为 0 → 0；
+	##   · 上一个可用图刚出过 Tank → 0（不连续两张图都出，L4D 同规则）；
+	##   · 连续 ≥2 张图没出 → 2 张（概率提升，但不是强制）。
+	var tank_cards: int = 0
+	if boss_deck_max_tanks > 0 and tank_enabled:
+		if tank_no_repeat_maps and _prev_map_had_tank:
+			print("[Director] Boss 发牌：上一张图刚出过 Tank → 本图不放 Tank 牌（不连续）")
+		else:
+			tank_cards = 1 if _tank_drought < 2 else 2
+			if _tank_drought >= 2:
+				print("[Director] Boss 发牌：连续 %d 张图没出 Tank → 牌堆加一张 Tank 牌（概率提升）" % _tank_drought)
+	_boss_deck = build_boss_bag(-1, boss_deck_nothing_weight, tank_cards)
+	_boss_tank_weight = tank_cards
+	print("[Director] Boss 发牌：每 %.0fpx 一张，首张在 %.0fpx（无事权重 %d / Tank 牌 %d 张）" % [
+		boss_deck_step, first, boss_deck_nothing_weight, tank_cards])
 
 
 func _deal_boss_card() -> void:
 	if _boss_deck.is_empty():
-		_boss_deck = build_boss_bag(_boss_deck_last, boss_deck_nothing_weight)
+		_boss_deck = build_boss_bag(_boss_deck_last, boss_deck_nothing_weight, _boss_tank_weight)
 	if _boss_deck.is_empty():
 		return
 	var card: int = _boss_deck.pop_front()
@@ -2921,6 +3061,22 @@ func _deal_boss_card() -> void:
 
 
 func _deal_tank_card() -> void:
+	## ★L4D flow 闸（2026-10-25 用户实测「Tank 出现太早、太快」）：
+	## L4D 用 `coop_boss_spawning.spawn_pos_min/max` 约束 Tank 的**出场路程比例**，
+	## 即"走到本图 X% 之后才允许，超过 Y% 就本图作罢"。对齐后的行为：
+	##   · 太早 → 牌**留在队首**等下一次锚点（不让 Tank 提前，也不当作无事浪费掉）；
+	##   · 太晚（快到出口/安全门）→ 本图放弃 Tank，避免"安全门前糊脸一只 Tank"。
+	var prog: float = get_progress()
+	if prog < tank_spawn_pos_min:
+		_boss_deck.push_front(0)
+		_boss_next_anchor = _boss_trail + maxf(boss_deck_step * 0.5, 600.0)
+		print("[Director] Boss 发牌：Tank 太早（进度 %.2f < %.2f）→ 推迟到下一锚点（里程 %.0fpx）" % [
+			prog, tank_spawn_pos_min, _boss_next_anchor])
+		return
+	if prog > tank_spawn_pos_max:
+		print("[Director] Boss 发牌：Tank 太晚（进度 %.2f > %.2f）→ 本图放弃 Tank" % [
+			prog, tank_spawn_pos_max])
+		return
 	## ★难度概率（2026-10-25 用户需求「接近 L4D：低难度更少遇 Tank」）：
 	## 用 Players.spawn_scale()（简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25）当难度代理，
 	## 换算成跳过率 ≈ 0.6 / 0.4 / 0.2 / 0.0 —— 普通难度约有 4 成 Tank 牌被当成"无事"。
@@ -2948,6 +3104,7 @@ func _deal_tank_card() -> void:
 	var player: Node2D = pick_spawn_anchor()
 	if player != null and _spawn_tank(_tank_data, player):
 		_boss_tanks_dealt += 1
+		debug_event("★Tank 登场（进度 %.2f / 里程 %.0fpx）" % [prog, _boss_trail])
 		print("[Director] Boss 发牌：★Tank 登场（本图第 %d/%d 只 / 里程 %.0fpx）" % [
 			_boss_tanks_dealt, boss_deck_max_tanks, _boss_trail])
 
@@ -2982,6 +3139,7 @@ func _deal_witch_card() -> void:
 		## 女巫**不**永久豁免回收（2026-10-25）：她走远后应被清掉，
 		## 否则在单场景多楼层地图里会一直留着占地。坦克才豁免（它本来会追人）。
 		_boss_witches_dealt += 1
+		debug_event("女巫放置（进度 %.2f）" % get_progress())
 		print("[Director] Boss 发牌：★女巫放置（本图第 %d/%d 只 / 里程 %.0fpx）" % [
 			_boss_witches_dealt, boss_deck_max_witches, _boss_trail])
 
@@ -3054,14 +3212,39 @@ func _update_holdout_tank(delta: float, player: Node2D) -> void:
 	if _holdout_tank_cooldown_left > 0.0:
 		_holdout_tank_cooldown_left -= delta
 		return
-	if _spawn_tank(_holdout_tank_data, player):
-		_holdout_tank_cooldown_left = randf_range(
-			holdout_tank_cooldown_min, holdout_tank_cooldown_max) / rate
+	## 生成失败后的短退避（2026-10-25）：旧实现失败时不设冷却 → 每帧重试，
+	## 且每次重试都要跑 36 次取点（卡顿 + 日志刷屏）。需求模式下玩家还会误以为导演在努力。
+	if _holdout_tank_retry_left > 0.0:
+		_holdout_tank_retry_left -= delta
+		return
+	## 需求模式（机器要靠杀 Tank 推进）允许"屏内兜底取点"：
+	## 宁可坦克在屏幕边缘出现，也不能让门永远不开。
+	var relaxed: bool = holdout_tank_demand > 0
+	if _spawn_tank(_holdout_tank_data, player, relaxed):
+		_holdout_tank_cooldown_left = _holdout_cooldown_for(rate)
+		return
+	_holdout_tank_retry_left = 2.0
+	if relaxed:
+		print("[Director] 防守战 Tank 生成失败（需求 %d 只）→ 2s 后重试" % holdout_tank_demand)
+
+
+## 防守战 Tank 的下一段冷却。
+## 环境压力模式 = 配置的 90~150s ÷ 难度/人数倍率（原行为）；
+## **需求模式**（`holdout_tank_demand > 0`）= 收紧到 `holdout_tank_demand_interval`（±20% 抖动）——
+## 此时 Tank 是「开门条件」，不是可选的压力事件（L4D 终局也是打完一只顶一只，没有长冷却）。
+func _holdout_cooldown_for(rate: float) -> float:
+	var base: float = randf_range(
+		minf(holdout_tank_cooldown_min, holdout_tank_cooldown_max),
+		maxf(holdout_tank_cooldown_min, holdout_tank_cooldown_max)) / maxf(rate, 0.1)
+	## interval = 0 表示作者主动关掉需求模式（退回环境冷却），不要解释成「立即生成」。
+	if holdout_tank_demand > 0 and holdout_tank_demand_interval > 0.0:
+		base = minf(base, randf_range(holdout_tank_demand_interval * 0.8, holdout_tank_demand_interval))
+	return base
 
 
 ## 生成一只 Tank。与特感共用 spawn_special_enemy（Tank 也是 SpecialEnemyData），
 ## 但额外入 "tank_enemies" 组供 count 用，并广播信号给 HUD（Boss 登场提示）。
-func _spawn_tank(data: SpecialEnemyData, player: Node2D) -> bool:
+func _spawn_tank(data: SpecialEnemyData, player: Node2D, allow_visible_fallback: bool = false) -> bool:
 	var decor_layer: Node = _find_decor_layer()
 	if decor_layer == null:
 		return false
@@ -3072,6 +3255,10 @@ func _spawn_tank(data: SpecialEnemyData, player: Node2D) -> bool:
 		pos = fs.pick_ahead_position(player)
 	if pos == Vector2.ZERO:
 		pos = _find_walkable_near_player(player)
+	## 兜底（仅防守战需求模式传 true）：放开「必须在屏外」——
+	## 终局场地（列车台）可能整张图都在屏内，严格取点会永远失败 → 门永远不开。
+	if pos == Vector2.ZERO and allow_visible_fallback:
+		pos = _find_any_walkable_near(player)
 	if pos == Vector2.ZERO:
 		return false
 	# facing：让 Tank 登场时面朝玩家（压迫感）
@@ -3100,15 +3287,29 @@ func _count_alive_tanks() -> int:
 
 
 ## 防守战开始时调用：重置防守战 Tank 计时（首只延迟重新起算）。
-func notify_holdout_started() -> void:
+## `tank_demand` = 这场防守战需要玩家杀掉几只 Tank 才能推进（0 = 不靠 Tank 推进）。
+## 机器侧（HoldoutMachine）在 KILL_COUNT + KillFilter.TANK 时传 `kill_target`。
+func notify_holdout_started(tank_demand: int = 0) -> void:
 	_holdout_tank_first_left = holdout_tank_first_delay
 	_holdout_tank_cooldown_left = 0.0
+	_holdout_tank_retry_left = 0.0
+	holdout_tank_demand = maxi(tank_demand, 0)
+	if holdout_tank_demand > 0:
+		print("[Director] 防守战 Tank 需求 %d 只 → 冷却改用需求间隔 %.0fs" % [
+			holdout_tank_demand, holdout_tank_demand_interval])
 
 
 ## 防守战结束时调用：清掉冷却，避免残留计时影响下一次防守战。
+## 机器每杀一只 Tank 就更新"还剩几只"（剩 0 = 门开了，导演恢复常规节奏）。
+func set_holdout_tank_demand(count: int) -> void:
+	holdout_tank_demand = maxi(count, 0)
+
+
 func notify_holdout_finished() -> void:
 	_holdout_tank_first_left = holdout_tank_first_delay
 	_holdout_tank_cooldown_left = 0.0
+	_holdout_tank_retry_left = 0.0
+	holdout_tank_demand = 0
 
 
 # ═══════════════════════════════════════
@@ -3304,6 +3505,21 @@ func _debug_spawn() -> void:
 	print("[Director] F2 debug spawn: %d/%d enemies" % [spawned, DEBUG_SPAWN_COUNT])
 
 
+## 兜底取点（只给「防守战必须交付 Tank」用）：不看屏外/前方，只要站得下且没敌人。
+## ⚠ 不要给常规刷怪用 —— 那会让敌人直接出现在玩家脸上。
+func _find_any_walkable_near(player: Node2D, min_dist: float = 180.0,
+		max_dist: float = 420.0) -> Vector2:
+	if player == null or not is_instance_valid(player):
+		return Vector2.ZERO
+	for _i: int in range(48):
+		var ang: float = randf() * TAU
+		var dist: float = randf_range(min_dist, maxf(max_dist, min_dist + 40.0))
+		var pos: Vector2 = player.global_position + Vector2.RIGHT.rotated(ang) * dist
+		if _is_footprint_walkable(pos) and not _is_occupied_by_enemy(pos):
+			return pos
+	return Vector2.ZERO
+
+
 func _find_walkable_near_player(player: Node2D) -> Vector2:
 	## 玩家外围的可行走位置 —— 现在由 FrontSpawner 提供「前方 + 屏外 + 距离带」的取点。
 	## 旧实现是在玩家周围 400~720px 的**任意方向**随机取点，敌人可能直接出现在可视范围内，
@@ -3433,3 +3649,146 @@ func _count_enemies_in_zone(zone: SpawnZone) -> int:
 		if enemy.global_position.distance_to(zone.global_position) <= zone.get_zone_radius():
 			count += 1
 	return count
+
+
+# ═══════════════════════════════════════
+# 调试面板（F3，2026-10-25）
+# ═══════════════════════════════════════
+##
+## 【为什么面板只读、数据由导演侧组装】导演的决策依据散在 5 个子模块里（阶段/紧张度/预算/
+## 名额/牌堆/投放）。面板自己去翻私有字段等于把耦合搬进 UI；`debug_snapshot()` 是唯一取数口，
+## 面板只做排版 —— 将来加字段只改这里。
+
+const DEBUG_PANEL_KEY := KEY_F3
+
+var _debug_panel: Node = null
+var _debug_events: Array[String] = []
+
+
+func _toggle_debug_panel() -> void:
+	if not bool(Global.get("debug_enabled")):
+		return
+	if _debug_panel == null or not is_instance_valid(_debug_panel):
+		var panel: CanvasLayer = CanvasLayer.new()
+		panel.name = "DirectorDebugPanel"
+		panel.set_script(load("res://script/director/director_debug_panel.gd"))
+		panel.call("setup", self)
+		add_child(panel)
+		_debug_panel = panel
+	_debug_panel.call("toggle")
+
+
+## 记一条事件到面板的「最近事件」（环形缓冲 7 条）。
+## 关键决策（阶段切换 / Boss 登场 / 尸潮规模 / 投放）都往这里写一行，
+## 现场复现时不用再去翻刷屏的 print。
+func debug_event(text: String) -> void:
+	var t: float = Time.get_ticks_msec() / 1000.0
+	_debug_events.append("%6.1fs %s" % [t, text])
+	while _debug_events.size() > 7:
+		_debug_events.pop_front()
+
+
+## 面板取数口：把「决策输入 + 已经发生的决定」一次性打包。
+func debug_snapshot() -> Dictionary:
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	var pc: Node = get_node_or_null("PacingController")
+	var sm: Node = get_node_or_null("SpawnManager")
+	var im: Node = get_node_or_null("ItemManager")
+
+	var phase: StringName = &"?"
+	var elapsed: float = 0.0
+	var duration: float = 0.0
+	if pc != null:
+		if pc.has_method("get_phase_name"):
+			phase = pc.call("get_phase_name")
+		elapsed = float(pc.get("phase_elapsed"))
+		duration = float(pc.get("phase_duration"))
+
+	var raw: float = 0.0
+	var combat: bool = false
+	if intensity_tracker != null and is_instance_valid(intensity_tracker):
+		if intensity_tracker.has_method("get_raw_intensity"):
+			raw = float(intensity_tracker.call("get_raw_intensity"))
+		combat = bool(intensity_tracker.get("in_combat"))
+
+	var pt: Dictionary = {}
+	if progress_tracker != null and is_instance_valid(progress_tracker):
+		pt = progress_tracker.call("get_debug")
+
+	var item_debug: Dictionary = {}
+	if im != null and im.has_method("get_debug"):
+		item_debug = im.call("get_debug")
+
+	var budget: int = 0
+	var max_common: int = 40
+	if sm != null:
+		if sm.get("_budget_left") != null:
+			budget = int(sm.get("_budget_left"))
+		if sm.get("max_active_common") != null:
+			max_common = int(sm.get("max_active_common"))
+
+	return {
+		"scene": scene.scene_file_path.get_file() if scene != null else "-",
+		"phase": String(phase),
+		"phase_left": duration - elapsed,
+		"phase_duration": duration,
+		"intensity": get_intensity(),
+		"intensity_raw": raw,
+		"in_combat": combat,
+		"progress": get_progress(),
+		"progress_has_exit": bool(pt.get("has_exit", false)),
+		"progress_exit": str((pt.get("exit", Vector2.ZERO) as Vector2).round()),
+		"trail": float(pt.get("trail", 0.0)),
+		"alive": _count_alive_enemies(),
+		"active_cap": Players.scaled_active_cap(max_common),
+		"threat": count_threat_near_players(),
+		"budget": budget,
+		"specials_alive": _count_alive_specials(),
+		"specials_max": special_max_alive,
+		"specials_first_left": _special_first_delay_left,
+		"specials_cool_left": _special_cooldown_left,
+		"mercy": is_pressure_blocked(),
+		"pressure_blocked": is_pressure_blocked(),
+		"deck_size": _boss_deck.size(),
+		"deck": str(_boss_deck),
+		"deck_tank_cards": _boss_tank_weight,
+		"tanks_dealt": _boss_tanks_dealt,
+		"tanks_max": boss_deck_max_tanks,
+		"witches_dealt": _boss_witches_dealt,
+		"witches_max": boss_deck_max_witches,
+		"boss_trail": _boss_trail,
+		"boss_next_anchor": -1.0 if is_inf(_boss_next_anchor) else _boss_next_anchor,
+		"tank_pos_min": tank_spawn_pos_min,
+		"tank_pos_max": tank_spawn_pos_max,
+		"tank_drought": _tank_drought,
+		"prev_map_had_tank": _prev_map_had_tank,
+		"item_last": str(item_debug.get("last_drop", "-")),
+		"item_last_age": float(item_debug.get("last_drop_age", 0.0)),
+		"item_check_left": float(item_debug.get("check_left", 0.0)),
+		"fail_safe_ready_in": float(item_debug.get("fail_safe_ready_in", 0.0)),
+		"fail_safe_low_hp": float(item_debug.get("fail_safe_low_hp", 0.0)),
+		"fail_safe_downed": bool(item_debug.get("fail_safe_downed", false)),
+		"fail_safe_last": str(item_debug.get("fail_safe_last", "")),
+		"recycle_alive": _recycle_cleared,
+		"recycle_corpse": _recycle_corpses,
+		"boss_music": _boss_music_active,
+		"events": _debug_events.duplicate(),
+	}
+
+
+## 场上存活特感数（不含女巫 —— 她不吃特感名额，见 `_update_specials` 的说明）。
+func _count_alive_specials() -> int:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return 0
+	var n: int = 0
+	for e: Node in tree.get_nodes_in_group("special_enemies"):
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		if e.get("witch_enabled") == true:
+			continue
+		n += 1
+	return n
