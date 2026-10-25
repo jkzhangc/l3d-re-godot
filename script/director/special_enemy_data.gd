@@ -193,20 +193,33 @@ extends Resource
 @export var pounce_sound_pitch: float = 0.0
 
 @export_group("女巫徘徊（ブレアウィッチ）")
-## 是否启用女巫模式：初始进徘徊态（不主动接近/攻击），被刺激后激怒全力追杀。
+## 是否启用女巫模式：初始进徘徊态（不主动接近/攻击），被惊动后全力追杀。
 @export var witch_enabled: bool = false
 ## 徘徊移速（px/s）。女巫平时蹲着哭，移动极慢。
 @export var witch_wander_speed: float = 18.0
-## 刺激半径（px）：玩家进入才开始累积刺激值。
-@export var witch_stim_radius: float = 160.0
-## 刺激累积速度基准（越近越快）。
+## 警戒圈半径（px）：进圈 → 停步、转向玩家、低吼一次（不累积刺激值）。
+@export var witch_alert_radius: float = 200.0
+## 刺激圈半径（px）：只有在这个圈里停留才累积刺激值。
+## ★2026-10-25 由 160 下调到 110：160px 在 2× 缩放下约等于半屏，走廊路过必进圈 → 绕不开。
+@export var witch_stim_radius: float = 110.0
+## 刺激圈边缘的累积速度（每秒）。0.25 ⇒ 圈边约 4 秒才惊动。
+@export var witch_stim_edge_rate: float = 0.25
+## 刺激圈中心的累积速度（每秒）。3.0 ⇒ 圈心约 0.33 秒惊动。
+@export var witch_stim_close_rate: float = 3.0
+## 离开刺激圈后刺激值的回落速度（每秒）。
+@export var witch_stim_decay: float = 0.4
+## 刺激累积速度的整体倍率（保留兼容）。
 @export var witch_stim_speed: float = 1.0
+## 贴脸半径（px）：进入即立刻惊动（等于撞到她）。
+@export var witch_touch_radius: float = 46.0
 ## 激怒后的移速倍率。
 @export var witch_enrage_speed_mult: float = 2.2
 ## 激怒尖叫音效。留空则用 discover_sound。
 @export var witch_scream_sound: AudioStream = null
 ## 激怒尖叫音效音调。0 = 沿用敌人自身 witch_scream_sound_pitch。
 @export var witch_scream_sound_pitch: float = 0.0
+## 警戒低吼音效（进警戒圈时播一次）。留空 = 用 discover_sound 降调。
+@export var witch_alert_sound: AudioStream = null
 
 @export_group("丸呑み（ハンターγ）")
 ## 是否启用丸呑み（零距离必杀）：玩家贴脸时有概率触发「吞入 → 咀嚼 → 吐出即死」。
@@ -435,13 +448,20 @@ func apply_to_enemy(enemy: Node) -> void:
 	# 女巫徘徊（ブレアウィッチ）
 	enemy.witch_enabled = witch_enabled
 	enemy.witch_wander_speed = witch_wander_speed
+	enemy.witch_alert_radius = witch_alert_radius
 	enemy.witch_stim_radius = witch_stim_radius
+	enemy.witch_stim_edge_rate = witch_stim_edge_rate
+	enemy.witch_stim_close_rate = witch_stim_close_rate
+	enemy.witch_stim_decay = witch_stim_decay
 	enemy.witch_stim_speed = witch_stim_speed
+	enemy.witch_touch_radius = witch_touch_radius
 	enemy.witch_enrage_speed_mult = witch_enrage_speed_mult
 	if witch_scream_sound != null:
 		enemy.witch_scream_sound = witch_scream_sound
 	if witch_scream_sound_pitch > 0.0:
 		enemy.witch_scream_sound_pitch = witch_scream_sound_pitch
+	if witch_alert_sound != null:
+		enemy.witch_alert_sound = witch_alert_sound
 	# 攻击挥击音效（空 = 沿用敌人自身 attack_sound）
 	if attack_sound != null:
 		enemy.attack_sound = attack_sound

@@ -228,8 +228,9 @@ func process_update(_delta: float) -> void:
 
 	var enemy: Node2D = character
 	if not enemy.has_valid_player_target():
-		transition_requested.emit("Idle")
-		return
+		if not _reacquire_if_enraged_witch(enemy):
+			transition_requested.emit("Idle")
+			return
 	var player: Node2D = enemy._player_ref
 
 	var fw: Vector2 = enemy.get_facing_vector()
@@ -367,9 +368,10 @@ func physics_update(delta: float) -> void:
 			enemy._debug_path_idx = _path_idx
 
 	if not enemy.has_valid_player_target():
-		character.velocity = Vector2.ZERO
-		transition_requested.emit("Idle")
-		return
+		if not _reacquire_if_enraged_witch(enemy):
+			character.velocity = Vector2.ZERO
+			transition_requested.emit("Idle")
+			return
 	var player: Node2D = enemy._player_ref
 
 	var to_player: Vector2 = player.global_position - enemy.global_position
@@ -1582,3 +1584,19 @@ static func _search_stand(gp: Vector2i, origin: Vector2, mid: Vector2, own: Arra
 			if not _body_blocked_by(gp, origin + c, own):
 				return c
 	return NO_STAND
+
+
+## ── 追丢时的重锁（2026-10-25）──
+## 女巫**一旦被惊动就不会冷静回 Idle**：原作「刺激しなければやり過ごせる」的反面 ——
+## 惊动之后就是追杀到底。旧实现里 Chase 一跟丢就 emit("Idle")，激怒的女巫会重新蹲下哭，
+## 玩家绕个墙角回来发现她"又睡着了"，`witch_enraged` 虽然还是 true 却没人读。
+## 返回 true = 已重新锁到目标，调用方继续追击。
+func _reacquire_if_enraged_witch(enemy: Node2D) -> bool:
+	if enemy.get("witch_enraged") != true:
+		return false
+	var again: Node2D = enemy._find_player_in_scene()
+	if not is_instance_valid(again) or not enemy._is_player_body(again):
+		return false
+	enemy._player_ref = again
+	enemy._player_in_sight = true
+	return true

@@ -156,7 +156,7 @@ tile_set = ExtResource("3_eeamh")
 
 [node name="SafeDoor" parent="UpperLayer" unique_id=1761535125 instance=ExtResource("14_i8sxk")]
 position = Vector2(4720, 704)
-target_scene = "res://scene/maps/夜行猎手-第一关-结束安全屋.tscn"
+target_scene = "uid://cum1s4arw0sbv"
 
 [node name="Camera2D2" type="Camera2D" parent="." unique_id=1160264972]
 zoom = Vector2(2, 2)
@@ -206,7 +206,6 @@ tile_map_data = PackedByteArray("AAC4ABMAAAAAAAAAAAC4ABQAAAAAAAAAAAC4ABUAAAAAAAA
 [node name="BGS" type="AudioStreamPlayer" parent="." unique_id=526404133]
 stream = ExtResource("42_eeamh")
 volume_db = -1.105
-bus = "BGS"
 autoplay = true
 mix_target = 1
 parameters/looping = true

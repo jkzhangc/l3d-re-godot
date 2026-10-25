@@ -55,7 +55,15 @@ func evaluate(players: Array, delta: float) -> float:
 	_raw_intensity = clampf(raw, 0.0, 1.0)
 
 	# 平滑过渡
-	_current_intensity = lerpf(_current_intensity, _raw_intensity, delta * SMOOTH_SPEED)
+	## ★交战保持（L4D 原规则，2026-10-24）：**有感染者正在交战时不向下衰减**。
+	## 原文：Do NOT decay Survivor Intensity if there are Infected actively engaging.
+	## 效果差别很大：本项目的紧张度是「状态快照」（血量/弹药/近距/战斗），
+	## 怪物一被清掉就立刻往下掉 —— 玩家感觉「打得干净反而没有高潮」。
+	## 加上这条之后，最后一支倒下之前温度不会提前回落，峰值才有余韵。
+	var next: float = lerpf(_current_intensity, _raw_intensity, delta * SMOOTH_SPEED)
+	if in_combat and next < _current_intensity:
+		next = _current_intensity
+	_current_intensity = next
 	return _current_intensity
 
 

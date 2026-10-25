@@ -2,11 +2,16 @@
 
 [ext_resource type="TileSet" uid="uid://2vjjecpooryk" path="res://tres/Map0014_lower_tileset.tres" id="1_825j6"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_5n0x4"]
+[ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="4_b637w"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="4_ms75a"]
 [ext_resource type="TileSet" uid="uid://bk28avim0wos2" path="res://tres/Map0014_upper_tileset.tres" id="4_ww022"]
+[ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="5_f2vnr"]
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="5_qupnt"]
+[ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="6_2mcsd"]
 [ext_resource type="AudioStream" uid="uid://c42sv7u6djuot" path="res://music/l3d_start_2.mp3" id="6_m5xis"]
+[ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="7_2mcsd"]
 [ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="7_b637w"]
+[ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="8_1jl68"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="8_f2vnr"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="9_2mcsd"]
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="10_1jl68"]
@@ -30,6 +35,26 @@ position = Vector2(656, 576)
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAJAAkAAAAAAAAAAAAKAAkAAAAAAAAAAAANAAkAAAABAAAAAAAOAAkAAAACAAAAAAAPAAkAAAADAAAAAAAQAAkAAAAEAAAAAAAJAAoAAAAAAAAAAAAKAAoAAAAAAAAAAAALAAoAAAAFAAAAAAAOAAoAAAAGAAAAAAAPAAoAAAAHAAAAAAAQAAoAAAAIAAAAAAARAAoAAAAJAAAAAAARAAsAAAAKAAAAAAALAAwAAAALAAAAAAAPAAwAAAALAAAAAAAJAA0AAAAMAAAAAAAKAA0AAAANAAAAAAALAA0AAAAMAAAAAAAMAA0AAAANAAAAAAANAA0AAAAMAAAAAAAOAA0AAAANAAAAAAAPAA0AAAAMAAAAAAAQAA0AAAANAAAAAAAJAA4AAAAOAAAAAAAKAA4AAAAPAAAAAAALAA4AAAAOAAAAAAAMAA4AAAAPAAAAAAANAA4AAAAOAAAAAAAOAA4AAAAPAAAAAAAPAA4AAAAOAAAAAAAQAA4AAAAPAAAAAAAJAA8AAAAAAAEAAAALAA8AAAAAAAEAAAANAA8AAAAAAAEAAAARABAAAAALAAAAAAA=")
 tile_set = ExtResource("4_ww022")
+
+[node name="MedicalBox" parent="UpperLayer" unique_id=653097691 instance=ExtResource("4_b637w")]
+position = Vector2(432, 368)
+sprite_offset = Vector2(0, -10)
+
+[node name="SavePoint" parent="UpperLayer" unique_id=1088350981 instance=ExtResource("5_f2vnr")]
+position = Vector2(624, 320)
+
+[node name="AmmoSupply" parent="UpperLayer" unique_id=1997091261 instance=ExtResource("6_2mcsd")]
+position = Vector2(472, 496)
+
+[node name="TeleportPoint" type="Node2D" parent="UpperLayer" unique_id=151171567]
+z_index = 1
+position = Vector2(656, 224)
+script = ExtResource("7_2mcsd")
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台外.tscn"
+walk_texture = ExtResource("8_1jl68")
+walk_char_index = 2
+step_frames = Array[int]([1])
+animated = false
 
 [node name="Camera2D2" type="Camera2D" parent="." unique_id=942062782]
 zoom = Vector2(2, 2)

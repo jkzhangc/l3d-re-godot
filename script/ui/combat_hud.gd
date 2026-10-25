@@ -142,6 +142,7 @@ func refresh() -> void:
 	_update_spray()
 	_update_weapons()
 	_update_consumables()
+	_update_remote_bars()
 	_force_refresh = false
 
 
@@ -291,6 +292,120 @@ func _set_item_icon(rect: TextureRect, item: ItemData) -> void:
 	else:
 		rect.texture = null
 		rect.visible = false
+
+
+# ═══════════════════════════════════════════════════════════════
+# 联机队友血条（2026-10-20 用户需求）
+# ═══════════════════════════════════════════════════════════════
+#
+# 需求：多人模式下把「除自己之外」的玩家血条显示在自己血条的下方。
+#
+# 【为什么不是纯代码生成】节点树固定在 combat_hud.tscn 里：
+#   RemotePlayerBars（VBoxContainer）—— 整体位置/行间距在这里拖动调整
+#     └ RemoteBarTemplate（Control，visible=false）—— 单条外观：
+#         HPBar（TextureProgressBar，ＨＰバー+ＨＰメーター，scale=2 整数缩放）
+#         NameLabel（昵称，字号 24=12×2）
+# 运行期只做两件事：按队友人数 duplicate 模板、把 HP 比例与名字填进去。
+# 于是「位置、尺寸、间距、字号」全部是场景里所见即所得的可调属性，代码里没有
+# 任何 new()/add_child 造 UI 的痕迹。
+#
+# 【素材选择】主血条用 `ＨＰバーＴ.png`，那张框上自带 Time/HP/TP 字样，排成多行会与
+# 昵称叠字；队友条因此改用同源的 `ＨＰバー.png`（120×16 纯条，与联机头顶名牌一致），
+# 2x 缩放后 240×32 —— 清晰、不糊、也不抢主血条的视觉重量。
+#
+# 【单机为什么不显示】单机一个实体可编 3 个角色（Q 切换），座位数 > 1 但真人只有 1 个，
+# 直接把座位表当队友会显示「自己的另外两个角色」，因此严格要求联机会话。
+
+@onready var _remote_bars_root: VBoxContainer = $RemotePlayerBars
+@onready var _remote_bar_template: Control = $RemotePlayerBars/RemoteBarTemplate
+
+## 已复用的行（第 i 行对应队友列表第 i 项），以及每行上次应用的 HP 比例（脏检查）。
+var _remote_rows: Array[Control] = []
+var _remote_row_ratios: Array[float] = []
+
+
+## 每帧刷新队友血条（行数变化才增删节点，数值不变则跳过重设）。
+func _update_remote_bars() -> void:
+	if _remote_bars_root == null or _remote_bar_template == null:
+		return
+	var seats: Array[int] = _remote_seat_indices()
+	_ensure_remote_rows(seats.size())
+	for i: int in range(_remote_rows.size()):
+		var row: Control = _remote_rows[i]
+		if i >= seats.size():
+			row.visible = false
+			continue
+		var state: PlayerState = Players.get_seat(seats[i])
+		if state == null:
+			row.visible = false
+			continue
+		row.visible = true
+		_apply_remote_row(i, row, seats[i], state)
+
+
+## 「除自己之外」的座位索引（按座位表顺序，UI 顺序因此稳定不跳）。单机恒为空。
+func _remote_seat_indices() -> Array[int]:
+	var out: Array[int] = []
+	if not Players.is_online_session():
+		return out
+	var my_peer: int = 0
+	if Net != null and Net.has_method("get_my_peer_id"):
+		my_peer = int(Net.get_my_peer_id())
+	for i: int in range(Players.seat_count()):
+		## 双保险：active_seat_index 在座位表重建时可能滞后于 owner_peer_id，
+		## 两个条件任一命中即视为「自己」。
+		if i == Players.active_seat_index:
+			continue
+		var state: PlayerState = Players.get_seat(i)
+		if state == null:
+			continue
+		if my_peer > 0 and state.owner_peer_id == my_peer:
+			continue
+		out.append(i)
+	return out
+
+
+## 按需复制模板补足行数。模板的外观完全来自场景，这里只改名字与可见性。
+func _ensure_remote_rows(count: int) -> void:
+	while _remote_rows.size() < count:
+		var row := _remote_bar_template.duplicate() as Control
+		if row == null:
+			return
+		row.name = "RemoteBar%d" % _remote_rows.size()
+		## duplicate 会原样带上模板的 visible=false（模板必须隐藏，否则容器里多占一行）。
+		row.visible = true
+		_remote_bars_root.add_child(row)
+		_remote_rows.append(row)
+		_remote_row_ratios.append(-1.0)
+
+
+## 填一行：HP 比例 + 昵称 + 归零淡出。
+## 血条是 TextureProgressBar（texture_under=ＨＰバー / texture_progress=ＨＰメーター，
+## 与联机头顶名牌同一套素材），2x 整数缩放由场景里的 HPBar.scale 决定。
+func _apply_remote_row(index: int, row: Control, seat_index: int, state: PlayerState) -> void:
+	var ratio: float = clampf(state.current_hp / maxf(state.get_max_hp(), 1.0), 0.0, 1.0)
+	if absf(ratio - _remote_row_ratios[index]) > 0.001:
+		_remote_row_ratios[index] = ratio
+		var bar := row.get_node_or_null("HPBar") as TextureProgressBar
+		if bar:
+			bar.value = ratio * 100.0
+	var label := row.get_node_or_null("NameLabel") as Label
+	if label:
+		var text: String = _remote_bar_text(seat_index, state)
+		if label.text != text:
+			label.text = text
+	## 血量归零（倒地或真死亡）→ 整行淡出，避免「0 血站着」的误导（与头顶名牌同语义）。
+	row.modulate.a = 1.0 if state.current_hp > 0.0 else 0.45
+
+
+## 行标题：与头顶名牌同格式「2P 昵称」；拿不到昵称时只显示座位号。
+func _remote_bar_text(seat_index: int, state: PlayerState) -> String:
+	var nick: String = ""
+	if state.owner_peer_id > 0 and Net != null and Net.has_method("get_player_name"):
+		nick = String(Net.get_player_name(state.owner_peer_id))
+	if nick.is_empty():
+		return "%dP" % (seat_index + 1)
+	return "%dP %s" % [seat_index + 1, nick]
 
 
 # ═══════════════════════════════════════════════════════════════

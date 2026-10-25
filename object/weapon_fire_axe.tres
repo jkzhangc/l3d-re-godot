@@ -1,17 +1,17 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dbq8ycvwus5u0"]
 
-[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Script" path="res://script/bullet_data.gd" id="2_lklw2"]
-[ext_resource type="Texture2D" path="res://art/WeaponAttack/防火斧/防火斧_attack1.png" id="3"]
-[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
-[ext_resource type="AudioStream" path="res://sound/打撃5.ogg" id="6"]
-[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン消火斧.png" id="6_0cg7j"]
-[ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
-[ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="8"]
-[ext_resource type="Texture2D" path="res://art/Weapon/A武器セット６.png" id="8_0cg7j"]
-[ext_resource type="AudioStream" path="res://sound/チャキッ.ogg" id="8_fmbrv"]
-[ext_resource type="Script" path="res://script/weapon_effect_offsets.gd" id="8_gmy81"]
-[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战3.png" id="10_lklw2"]
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="1_fmbrv"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_lklw2"]
+[ext_resource type="Texture2D" uid="uid://t1tx0fipm331" path="res://art/WeaponAttack/防火斧/防火斧_attack1.png" id="3"]
+[ext_resource type="AudioStream" uid="uid://rag6ydijs0nm" path="res://sound/殴る.ogg" id="5_gmy81"]
+[ext_resource type="Texture2D" uid="uid://rpfoamsj4tvu" path="res://art/Ui/装備アイコン消火斧.png" id="6_0cg7j"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="Texture2D" uid="uid://dx7jfrrb2g6x8" path="res://art/Weapon/A武器セット６.png" id="8_0cg7j"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_fmbrv"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_gmy81"]
+[ext_resource type="Texture2D" uid="uid://nuja0qxsgfs7" path="res://art/Characters/のび太セット近战3.png" id="10_lklw2"]
 
 [sub_resource type="Resource" id="Resource_lgqdu"]
 script = ExtResource("8_gmy81")
@@ -29,6 +29,27 @@ script = ExtResource("8_gmy81")
 [sub_resource type="Resource" id="Resource_5chju"]
 script = ExtResource("8_gmy81")
 
+[sub_resource type="Resource" id="Resource_gmy81"]
+script = ExtResource("8_gmy81")
+down = Vector2(2, 30)
+left = Vector2(-8, 32)
+right = Vector2(8, 32)
+up = Vector2(-4, 26)
+
+[sub_resource type="Resource" id="Resource_yegmb"]
+script = ExtResource("8_gmy81")
+down = Vector2(-2, 28)
+left = Vector2(0, 30)
+right = Vector2(0, 30)
+up = Vector2(4, 32)
+
+[sub_resource type="Resource" id="Resource_jnhta"]
+script = ExtResource("8_gmy81")
+down = Vector2(-2, 28)
+left = Vector2(0, 30)
+right = Vector2(0, 30)
+up = Vector2(4, 32)
+
 [resource]
 script = ExtResource("1")
 attack_power = 55
@@ -40,11 +61,11 @@ weapon_raise_frame_durations = Array[float]([0.12])
 is_ranged = false
 weapon_slot = 1
 critical_rate = 20.0
-attack_sound = ExtResource("5")
+attack_sound = ExtResource("1_fmbrv")
 empty_fire_sound = ExtResource("7")
 raise_sound = ExtResource("7")
 lower_sound = ExtResource("7")
-hit_sound = ExtResource("6")
+hit_sound = ExtResource("5_gmy81")
 gunshot_range = 0.0
 hit_effect_anim = ExtResource("8")
 melee_weapon_sprite = ExtResource("3")
@@ -59,9 +80,14 @@ melee_weapon_sprite_offsets = {
 "shizuka": SubResource("Resource_587vs"),
 "suneo": SubResource("Resource_5chju")
 }
+melee_weapon_sprite_step_offsets = {
+"nobita:0": SubResource("Resource_gmy81"),
+"nobita:1": SubResource("Resource_yegmb"),
+"nobita:2": SubResource("Resource_jnhta")
+}
 attack_char_sequence = Array[int]([3, 4])
 melee_attack_char_sequence = Array[int]([6, 7, 7])
-melee_attack_frame_durations = Array[float]([0.16, 0.16, 0.2])
+melee_attack_frame_durations = Array[float]([0.16, 0.05, 0.2])
 melee_range_size = Vector2(78, 44)
 melee_range_forward_offset = 32.0
 item_id = "fire_axe"

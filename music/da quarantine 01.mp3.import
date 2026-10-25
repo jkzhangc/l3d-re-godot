@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dtwalcs6qeedx"
+path="res://.godot/imported/da quarantine 01.mp3-d69198866b63f788272cbc18b2e9aba4.mp3str"
+
+[deps]
+
+source_file="res://music/da quarantine 01.mp3"
+dest_files=["res://.godot/imported/da quarantine 01.mp3-d69198866b63f788272cbc18b2e9aba4.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

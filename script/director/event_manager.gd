@@ -80,6 +80,12 @@ func update(delta: float, intensity: float, phase: StringName, alive_enemy_count
 		_update_scripted_event(delta, alive_enemy_count)
 		return
 
+	## ★L4D 模型（2026-10-24）：峰值由节奏控制器按紧张度阈值驱动，
+	## 这里不再做第二套「紧张度持续高位 → 强推峰值」——
+	## 否则喘息期可能被 0.65 的阈值强行拉回峰值，"休息"就不成立。
+	if _director.get("l4d_pacing") == true:
+		return
+
 	# ── 自然尸潮：紧张度持续高位 → 触发 Peak ──
 	if intensity >= HORDE_INTENSITY_THRESHOLD:
 		_above_threshold_time += delta

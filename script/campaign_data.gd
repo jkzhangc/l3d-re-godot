@@ -82,14 +82,29 @@ const MAP_SCENE_PATHS: Array[String] = [
 	"res://scene/maps/突袭-第三关-结尾安全屋.tscn",
 	"res://scene/maps/突袭-第四关-实验室走廊.tscn",
 	"res://scene/maps/突袭-第四关-列车台（最终场景）.tscn",
+	## ── 夜行猎手（第二战役，2026-10-25 补登记）──
+	## ⚠ 第三关（电视台外 / 电视台内）**暂不登记**：电视台内只有 GroundLayer/DecorLayer/Player
+	## 七个节点，缺 GameInit / Menu / CombatHUD / 传送点，进去就是死图；电视台外有 GameInit
+	## 但没有出口传送点。等它们做完再补进本表与 `campaign_night_hunter.tres`。
+	"res://scene/maps/夜行猎手-第一关-开头安全屋.tscn",
+	"res://scene/maps/夜行猎手-第一关-R市.tscn",
+	"res://scene/maps/夜行猎手-第一关-结束安全屋.tscn",
+	"res://scene/maps/夜行猎手-第二关-公园入口.tscn",
+	"res://scene/maps/夜行猎手-第二关-公园.tscn",
+	"res://scene/maps/夜行猎手-第二关-结束安全屋.tscn",
 ]
+
+## 战役顺序（2026-10-25）：`_describe_level` 用它给多战役条目排序 + 决定标签是否带战役名。
+## 新增战役必须同时进本表，否则会被归到「其它」。
+const CAMPAIGN_ORDER: Array[String] = ["突袭", "夜行猎手"]
 
 const _CN_NUMBERS: Dictionary = {
 	"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
 }
 ## 关内先后顺序（按"包含"匹配，取最先命中的一条）。安全屋永远在最前/最后。
 const _SUB_ORDER_KEYWORDS: Array[String] = [
-	"开头安全屋", "街道", "门口", "内部", "矿洞", "实验室走廊", "列车台", "结尾安全屋",
+	"开头安全屋", "街道", "门口", "内部", "R市", "公园入口", "公园",
+	"矿洞", "实验室走廊", "电视台外", "电视台内", "列车台", "结尾安全屋", "结束安全屋",
 ]
 
 
@@ -162,24 +177,32 @@ static func _list_scene_paths(map_dir: String, include_dev_maps: bool = false) -
 static func _describe_level(scene_path: String) -> Dictionary:
 	var base: String = scene_path.get_file().get_basename()
 	var parts: PackedStringArray = base.split("-")
-	var is_campaign: bool = parts.size() >= 3 and parts[0] == "突袭"
-	if not is_campaign:
+	## 战役前缀识别改为查表（2026-10-25）：原来写死 `parts[0] == "突袭"`，
+	## 夜行猎手的地图因此全被归成「[其它]」，房间里选章节无法区分两个战役。
+	var prefix: String = parts[0] if parts.size() >= 3 else ""
+	var order: int = CAMPAIGN_ORDER.find(prefix)
+	if order < 0:
 		return {
 			"campaign": "其它",
 			"chapter": 0,
 			"label": "[其它] %s" % base,
 			"scene": scene_path,
-			"sort_key": "1-0-%02d-%s" % [0, base],
+			"sort_key": "1-0-00-00-%s" % base,
 		}
 	var chapter: int = int(_CN_NUMBERS.get(parts[1].replace("第", "").replace("关", ""), 99))
-	var rest: String = base.substr(("突袭-" + parts[1] + "-").length())
+	var rest: String = base.substr((prefix + "-" + parts[1] + "-").length())
 	var sub: int = _sub_order_of(rest)
+	var label: String = "%s · %s" % [parts[1], rest.replace("-", " · ")]
+	if order > 0:
+		## 第一个战役沿用旧标签（"第一关 · 街道"）以免改变既有观感；
+		## 从第二个战役起必须带战役名，否则「第二关 · 结束安全屋」会重名。
+		label = "%s · %s" % [prefix, label]
 	return {
-		"campaign": parts[0],
+		"campaign": prefix,
 		"chapter": chapter,
-		"label": "%s · %s" % [parts[1], rest.replace("-", " · ")],
+		"label": label,
 		"scene": scene_path,
-		"sort_key": "0-%02d-%02d-%s" % [chapter, sub, base],
+		"sort_key": "0-%d-%02d-%02d-%s" % [order, chapter, sub, base],
 	}
 
 

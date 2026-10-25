@@ -99,6 +99,24 @@ func _apply_pending_arrival() -> void:
 		return
 	player.global_position = safe_position
 	print("[GameInit] 已应用入口 ID=%s position=%s" % [arrival_id, player.global_position])
+	## ★诊断（2026-10-24 用户报「传送点的 use_target_arrival_position 好像没生效」）：
+	## GameInit._ready 早于玩家自己的 _ready（见上一条注释）。如果之后有别处
+	## （存档恢复 / PlayerSpawn 归位 / 生成槽）把位置改回去，这里会直接把"被覆盖"写进日志，
+	## 不用再靠猜。正常情况下会打印「落点校验通过」。
+	_verify_arrival_next_frame(player, safe_position, arrival_id)
+
+
+## 下一帧核对落点是否被其它系统覆盖（协程，调用方不需要 await）。
+func _verify_arrival_next_frame(player: CharacterBody2D, expected: Vector2, arrival_id: String) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(player):
+		return
+	var actual: Vector2 = player.global_position
+	if actual.distance_to(expected) > 2.0:
+		push_warning("[GameInit] 落点被覆盖：期望 %s 实际 %s（ID=%s）" % [
+			expected.round(), actual.round(), arrival_id])
+	else:
+		print("[GameInit] 落点校验通过：%s（ID=%s）" % [actual.round(), arrival_id])
 
 
 ## 取本场景**预置**的玩家实体（到达/读档落点要写它的 global_position）。

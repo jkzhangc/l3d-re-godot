@@ -26,11 +26,12 @@ extends RefCounted
 
 ## 治疗品白名单（D2 实测修复）：喷雾/药品此前不在联机同步范围——动态刷出的治疗品
 ## Client 看不见、预摆的 Client 本地私拿（Host 权威域无感知）→ 倒地时无喷雾可用。
+## ⚠ 2026-10-24：`object/item_pills.tres` 已按用户要求删除（原作说明书里没有该物品），
+## 这里仍在 preload 它 → `network_world.gd` 整份编译失败（preload 不存在的资源是硬错误）。
+## 删除「药品」条目；治疗品同步目前只保留喷雾（救急箱等新治疗品按需再加）。
 const NETWORK_SPRAY: ItemData = preload("res://object/item_first_aid_spray.tres")
-const NETWORK_PILLS: ItemData = preload("res://object/item_pills.tres")
 const NETWORK_HEALINGS: Dictionary = {
 	"first_aid_spray": NETWORK_SPRAY,
-	"pills_01": NETWORK_PILLS,
 }
 
 

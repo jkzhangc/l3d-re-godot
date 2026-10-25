@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://7x7ehcwbaf1p" path="res://art/Characters/[2K-VX]-タイラント１.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="3"]
+
 [resource]
 script = ExtResource("1")
 id = &"green_soldier"

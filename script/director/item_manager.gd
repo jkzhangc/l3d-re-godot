@@ -156,8 +156,11 @@ func _resolve_category_resource(category: String, player_pos: Vector2) -> Resour
 	match category:
 		"急救喷雾":
 			return load("res://object/item_first_aid_spray.tres")
-		"药品":
-			return load("res://object/item_pills.tres")
+		## 2026-10-23：原「药品」指向 item_pills.tres，该物品已按用户要求删除
+		## （原作说明书里没有，且 item_type=CONSUMABLE 不占治疗槽，投了也用不上）。
+		## 低血量应急投放改为「救急箱」——item_type=HEALING，能直接进治疗槽生效。
+		"救急箱":
+			return load("res://object/item_aid_box.tres")
 		"弹药堆":
 			# 找当前主武器对应的弹药资源
 			var player: Node2D = _find_player()

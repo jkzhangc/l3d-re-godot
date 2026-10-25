@@ -60,6 +60,33 @@ func get_random_position() -> Vector2:
 		randf_range(-hh, hh)
 	)
 
+
+## ★分散取点（2026-10-24 用户需求「不要都堆在一块，起码整个区域平均分布」）：
+## 在区域里随机采 `samples` 个点，用 `point_ok` 过滤（可行走、未占用等），
+## 再取"离最近一只已有敌人最远"的那个候选（最大最小距离采样，近似蓝噪声分布）。
+## `avoid` = 区域内已有敌人的位置；为空时退化为普通随机点。
+## 找不到合格点返回 Vector2.ZERO —— 调用方应跳过而不是硬塞。
+func pick_spread_position(point_ok: Callable = Callable(), avoid: Array = [],
+		samples: int = 20) -> Vector2:
+	var half: Vector2 = zone_size * 0.5
+	var best: Vector2 = Vector2.ZERO
+	var best_score: float = -INF
+	for _i: int in range(maxi(samples, 4)):
+		var p: Vector2 = global_position + Vector2(
+			randf_range(-half.x, half.x), randf_range(-half.y, half.y))
+		if point_ok.is_valid() and not bool(point_ok.call(p)):
+			continue
+		var nearest: float = INF
+		for a: Variant in avoid:
+			if a is Vector2:
+				nearest = minf(nearest, p.distance_to(a))
+		## 抖动 0~60px：否则每一批都会贴在同一个"最空点"上，反而形成固定堆。
+		var score: float = (9999.0 if nearest == INF else nearest) + randf() * 60.0
+		if score > best_score:
+			best_score = score
+			best = p
+	return best
+
 func get_ambient_interval() -> float:
 	return randf_range(ambient_spawn_interval_min, ambient_spawn_interval_max)
 

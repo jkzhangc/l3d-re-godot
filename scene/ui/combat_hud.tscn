@@ -6,6 +6,8 @@
 [ext_resource type="Texture2D" uid="uid://chm1obiay2ndt" path="res://art/Ui/回復薬×０.png" id="4_q34ws"]
 [ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="5_5nspm"]
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6_aeqfj"]
+[ext_resource type="Texture2D" uid="uid://dhrwaa8eq6kaj" path="res://art/Ui/ＨＰバー.png" id="7_remote"]
+[ext_resource type="Texture2D" uid="uid://bxqo4nx3wkjq6" path="res://art/Ui/ＨＰメーター.png" id="8_remote"]
 
 [sub_resource type="StyleBoxFlat" id="HoldoutPanel"]
 bg_color = Color(0, 0, 0, 0.55)
@@ -181,3 +183,37 @@ theme_override_constants/shadow_offset_y = 2
 theme_override_constants/outline_size = 4
 theme_override_font_sizes/font_size = 36
 text = "守住机器！"
+
+[node name="RemotePlayerBars" type="VBoxContainer" parent="." unique_id=1712000010]
+offset_left = 8.0
+offset_top = 330.0
+offset_right = 468.0
+offset_bottom = 330.0
+mouse_filter = 2
+theme_override_constants/separation = 8
+
+[node name="RemoteBarTemplate" type="Control" parent="RemotePlayerBars" unique_id=1712000011]
+visible = false
+custom_minimum_size = Vector2(240, 32)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="HPBar" type="TextureProgressBar" parent="RemotePlayerBars/RemoteBarTemplate" unique_id=1712000012]
+scale = Vector2(2, 2)
+mouse_filter = 2
+max_value = 100.0
+step = 0.0
+value = 100.0
+texture_under = ExtResource("7_remote")
+texture_progress = ExtResource("8_remote")
+
+[node name="NameLabel" type="Label" parent="RemotePlayerBars/RemoteBarTemplate" unique_id=1712000014]
+offset_left = 248.0
+offset_right = 460.0
+offset_bottom = 32.0
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 24
+text = "2P"
+vertical_alignment = 1

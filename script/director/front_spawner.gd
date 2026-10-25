@@ -37,6 +37,14 @@ extends Node
 @export_group("开关")
 ## 总开关。关闭后本模块完全不介入，回到旧的"按计时散撒"行为。
 @export var enabled: bool = true
+## ★L4D 模型（2026-10-24）：开启后本模块**不再自己补位** —— 它只负责「在哪生成」
+## （pick_ahead_position / pick_behind_position），生成时机与总量交给 SpawnManager 的
+## 消耗型预算。原因：本模块的 update() 本质是「维持数量」的补位器，只要它还在跑，
+## 「击杀 → 腾位 → 立刻补」的水龙头就关不掉，L4D 式的空窗永远做不出来。
+@export var l4d_model: bool = false
+## 「威胁圈」半径（px）：圈内存活敌人（**含已经贴脸的**）都算占名额。
+## 只在 l4d_model 关闭（旧模型）时用于名额判定。
+@export var threat_radius: float = 600.0
 ## 喘息（cooldown）阶段是否暂停补位。（2026-09-17 用户反馈：尸潮结束喘息期完全断供，
 ## 路上一直没丧尸）→ 默认改 false：喘息期按平常节奏（batch 1 / 2s / 附近闸）零星维持。
 @export var pause_in_cooldown: bool = false
@@ -170,6 +178,17 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	var dir: Vector2 = _team_front_dir(anchor)
 	if dir != Vector2.ZERO:
 		_last_dir = dir
+
+	## ★L4D 模型：本模块退化为「取点器」。补位时机/总量由 SpawnManager 的预算决定，
+	## 否则这里的"维持 target_ahead 只"会把空窗全部填满（见 l4d_model 字段注释）。
+	## ⚠ 早退必须放在 `_last_dir` 更新**之后**（2026-10-24 用户实测「进图 10 秒零丧尸」）：
+	## 提前返回会让 `_last_dir` 永远停在初始的 DOWN —— 扇形恒朝下，
+	## 一旦地图向下是墙/出界，`pick_ahead_position` 每帧都返回 ZERO，
+	## 预算一只都花不出去（表现就是"只有特感、没有普通丧尸"，因为特感走另一条取点路径）。
+	if l4d_model:
+		last_reject = "L4D 模型：补位改由 SpawnManager 预算驱动，本模块只提供取点"
+		_timer = 0.0
+		return 0
 
 	var idle: bool = not _any_player_moving(player)
 	if idle and not spawn_when_idle:
@@ -412,19 +431,42 @@ func _count_nearby_all(anchor: Node2D) -> int:
 # 位置选择
 # ═══════════════════════════════════════
 
+## 可行走判定：优先用 Director 的「脚印」版本（四角都不可被墙占），
+## 退化为单点判定。敌人碰撞体约 24x24，单点可走时仍可能半个身子插在墙里。
+func _walkable(pos: Vector2) -> bool:
+	if _director == null:
+		return false
+	if _director.has_method("_is_footprint_walkable"):
+		return bool(_director.call("_is_footprint_walkable", pos))
+	return bool(_director._is_walkable(pos))
+
+
 func pick_ahead_position(player: Node2D) -> Vector2:
 	## 在前方扇区 + 屏幕外 + 距离带 内找一个可行走位置。找不到返回 ZERO。
 	## 优先使用关卡作者摆的刷新点（SpawnPoint / SpawnZone），保持关卡设计意图。
-	var author_pos: Vector2 = _pick_author_point(player)
+	var author_pos: Vector2 = _pick_author_point(player, _last_dir)
 	if author_pos != Vector2.ZERO:
 		return author_pos
+	return _pick_in_dir(player, _last_dir)
 
+
+## ★背后突袭通道（2026-10-24，对应 L4D「75% 的尸潮从队伍后方来」）：
+## 取点规则与前方完全对称，方向取反。有了它才有"回头"的压力与"被包夹"的戏剧性；
+## 旧实现只有前方一条通道，观感就是"从屏幕边上源源不断走进来的传送带"。
+func pick_behind_position(player: Node2D) -> Vector2:
+	var back: Vector2 = -_last_dir
+	var author_pos: Vector2 = _pick_author_point(player, back)
+	if author_pos != Vector2.ZERO:
+		return author_pos
+	return _pick_in_dir(player, back)
+
+
+## 沿给定方向 dir 在「扇区 + 屏幕外 + 距离带」里找一个可行走位置（前后通道共用）。
+func _pick_in_dir(player: Node2D, dir: Vector2) -> Vector2:
 	var view_half: Vector2 = _view_half_extents()
 	var cam_center: Vector2 = _camera_center(player)
 	## 屏外判定用**全体玩家视野矩形的并集**（多人：主机屏外可能正好落在客户端画面里）。
 	var view_rects: Array[Rect2] = _player_view_rects(player)
-	var dir: Vector2 = _last_dir
-	var cos_limit: float = cos(deg_to_rad(front_half_angle))
 
 	## 有效下限 = max(距离带下限, 沿该方向"刚好出屏"的距离)。
 	## 否则采样点里有一半必然被屏外条件否掉，白白浪费迭代（水平方向尤其明显：
@@ -462,6 +504,21 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 		return Vector2.ZERO
 	var eff_min: float = float(span[0])
 	var eff_max: float = maxf(float(span[1]), eff_min)
+	## 先按配置扇区找；狭窄地图（走廊 / 街道）里 ±60° 经常整条都不可行走，
+	## 于是预算一滴都花不出去 → 放宽到 ±90° 再找一次（2026-10-24 用户实测「进图 10 秒零丧尸」）。
+	var hit: Vector2 = _search_in_span(player, dir, view_rects, eff_min, eff_max, front_half_angle)
+	if hit == Vector2.ZERO and front_half_angle < 89.0:
+		var wide: float = minf(90.0, front_half_angle * 1.6)
+		hit = _search_in_span(player, dir, view_rects, eff_min, eff_max, wide)
+		if hit != Vector2.ZERO:
+			last_reject = "常规 ±%.0f° 落空 → 放宽到 ±%.0f° 取点" % [front_half_angle, wide]
+	return hit
+
+
+## 在给定距离区间 + 扇区半角里采样一个"屏外 + 可行走 + 未被占用"的点。
+func _search_in_span(player: Node2D, dir: Vector2, view_rects: Array[Rect2],
+		eff_min: float, eff_max: float, half_angle_deg: float) -> Vector2:
+	var cos_limit: float = cos(deg_to_rad(half_angle_deg))
 	for ring: int in range(ring_count):
 		# 由近到远：近处的点刚好在屏外，敌人更快能咬到玩家
 		var t: float = (float(ring) + 1.0) / float(ring_count)
@@ -469,7 +526,7 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 		for a: int in range(angle_steps):
 			var offset_angle: float = 0.0
 			if angle_steps > 1:
-				offset_angle = lerpf(-front_half_angle, front_half_angle, float(a) / float(angle_steps - 1))
+				offset_angle = lerpf(-half_angle_deg, half_angle_deg, float(a) / float(angle_steps - 1))
 			var cand_dir: Vector2 = dir.rotated(deg_to_rad(offset_angle))
 			var pos: Vector2 = player.global_position + cand_dir * dist
 			pos += Vector2(_rng.randf_range(-12.0, 12.0), _rng.randf_range(-12.0, 12.0))
@@ -477,7 +534,7 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 				continue
 			if cand_dir.dot(dir) < cos_limit:
 				continue
-			if not _director._is_walkable(pos):
+			if not _walkable(pos):
 				continue
 			if _director._is_occupied_by_enemy(pos) or _director._was_recently_used(pos):
 				continue
@@ -485,8 +542,40 @@ func pick_ahead_position(player: Node2D) -> Vector2:
 	return Vector2.ZERO
 
 
-func _pick_author_point(player: Node2D) -> Vector2:
-	## 在作者刷新点里挑一个同时满足"前方 + 屏外 + 距离带"的；没有就返回 ZERO 交给自动取点。
+## ★「区域游荡者」取点（2026-10-24，对应 L4D 的 wanderers）：
+## 整圈 360°、屏外、距离带 [min_d, max_d]。
+##
+## 与 `pick_ahead_position` 的本质区别：**不限定方向**。L4D 的游荡者是预先铺在
+## 一片区域里"徘徊"的，不是排队从正前方走进来的 —— 本项目原来只有前向补位，
+## 加上地图没有任何 SpawnZone/SpawnPoint，结果就是"整条街空无一人"。
+func pick_open_position(player: Node2D, min_d: float = -1.0, max_d: float = -1.0) -> Vector2:
+	if player == null or not is_instance_valid(player):
+		return Vector2.ZERO
+	var lo: float = maxf(min_dist, 300.0) if min_d < 0.0 else maxf(min_d, 160.0)
+	var hi: float = 860.0 if max_d < 0.0 else maxf(max_d, lo + 40.0)
+	var view_rects: Array[Rect2] = _player_view_rects(player)
+	var rings: int = 6
+	var arcs: int = 16
+	for ring: int in range(rings):
+		var t: float = (float(ring) + 1.0) / float(rings)
+		var dist: float = lerpf(lo, hi, t)
+		for a: int in range(arcs):
+			var ang: float = TAU * float(a) / float(arcs) + _rng.randf_range(-0.2, 0.2)
+			var pos: Vector2 = player.global_position + Vector2.RIGHT.rotated(ang) * dist
+			pos += Vector2(_rng.randf_range(-14.0, 14.0), _rng.randf_range(-14.0, 14.0))
+			if _visible_to_any_player(pos, view_rects):
+				continue
+			if not _walkable(pos):
+				continue
+			if _director._is_occupied_by_enemy(pos) or _director._was_recently_used(pos):
+				continue
+			return pos
+	return Vector2.ZERO
+
+
+func _pick_author_point(player: Node2D, dir: Vector2 = Vector2.ZERO) -> Vector2:
+	## 在作者刷新点里挑一个同时满足"扇区 + 屏外 + 距离带"的；没有就返回 ZERO 交给自动取点。
+	## `dir` = 扇区中心方向（ZERO = 用 _last_dir，即前方；背后通道传 -_last_dir）。
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return Vector2.ZERO
@@ -506,7 +595,7 @@ func _pick_author_point(player: Node2D) -> Vector2:
 		if not _author_point_enabled(node):
 			continue
 		var base: Vector2 = _zone_center(node)
-		if not is_in_band(player, base):
+		if not is_in_band(player, base, dir):
 			continue
 		if _visible_to_any_player(base, view_rects):
 			continue
@@ -519,11 +608,11 @@ func _pick_author_point(player: Node2D) -> Vector2:
 	for _attempt: int in range(8):
 		var node: Node2D = usable[_rng.randi_range(0, usable.size() - 1)]
 		var pos: Vector2 = _author_point_position(node)
-		if not is_in_band(player, pos):
+		if not is_in_band(player, pos, dir):
 			continue
 		if _visible_to_any_player(pos, view_rects):
 			continue
-		if not _director._is_walkable(pos):
+		if not _walkable(pos):
 			continue
 		if _director._is_occupied_by_enemy(pos) or _director._was_recently_used(pos):
 			continue
@@ -597,15 +686,16 @@ func is_visible_to_any_player_exact(pos: Vector2) -> bool:
 	return _visible_to_any_player(pos, _player_view_rects(null), 0.0)
 
 
-func is_in_band(player: Node2D, pos: Vector2) -> bool:
-	## 是否落在「前方扇区 + 距离带」里（**不含**屏外判定，供计数与作者点筛选共用）。
+func is_in_band(player: Node2D, pos: Vector2, dir_override: Vector2 = Vector2.ZERO) -> bool:
+	## 是否落在「扇区 + 距离带」里（**不含**屏外判定，供计数与作者点筛选共用）。
+	## `dir_override` = 扇区中心方向（ZERO = 用 `_last_dir`）；背后通道传 -_last_dir。
 	if player == null or not is_instance_valid(player):
 		return false
 	var delta: Vector2 = pos - player.global_position
 	var dist: float = delta.length()
 	if dist < min_dist or dist > max_dist:
 		return false
-	var dir: Vector2 = _last_dir
+	var dir: Vector2 = dir_override if dir_override != Vector2.ZERO else _last_dir
 	if dir == Vector2.ZERO or dist < 0.001:
 		return true
 	return (delta / dist).dot(dir) >= cos(deg_to_rad(front_half_angle))
@@ -625,6 +715,30 @@ func count_ahead(player: Node2D) -> int:
 		if is_in_band(player, e.global_position):
 			count += 1
 	return count
+
+
+## ★「威胁圈」计数（2026-10-24）：距**任一玩家** <= radius 的存活敌人，**含已经贴脸的**。
+## 旧 `count_ahead()` 数的是 360~560px 的环带 —— 敌人一旦冲进 360px（真正威胁你的时候）
+## 就"离开名额"，等于**每只贴脸的敌人都在为下一只腾位**。这是原地打「永远打不完」的直接来源。
+func count_threat(radius: float = -1.0) -> int:
+	var r: float = threat_radius if radius < 0.0 else radius
+	var r2: float = r * r
+	var refs: Array[Node2D] = _spawn_players(null)
+	if refs.is_empty():
+		return 0
+	var n: int = 0
+	for e: Node2D in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		if e.has_method("get_weapon_data"):
+			continue  # 玩家也在 enemy 组里（历史约定）→ 跳过
+		for p: Node2D in refs:
+			if e.global_position.distance_squared_to(p.global_position) <= r2:
+				n += 1
+				break
+	return n
 
 
 func _offscreen_distance(dir: Vector2, view_half: Vector2) -> float:

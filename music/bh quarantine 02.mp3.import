@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://2g8cgf5lac8v"
+path="res://.godot/imported/bh quarantine 02.mp3-a6c2076695ccc4d9cb1dd68e42b66141.mp3str"
+
+[deps]
+
+source_file="res://music/bh quarantine 02.mp3"
+dest_files=["res://.godot/imported/bh quarantine 02.mp3-a6c2076695ccc4d9cb1dd68e42b66141.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

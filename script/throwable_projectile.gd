@@ -52,7 +52,8 @@ static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context
 	proj._setup_sprite()
 	if td.throw_sound:
 		## pitch 来自 ThrowableData.throw_sound_pitch（<=0 = 原调；手雷/炸药/燃烧瓶 tres 定 1.4）
-		Global.play_sfx_managed(td.throw_sound, scene, false, maxf(td.throw_sound_pitch, 0.01))
+		## 世界坐标定位（2026-10-20）：投掷音随距离衰减，声源=投掷起点。
+		Global.play_sfx_managed(td.throw_sound, scene, true, maxf(td.throw_sound_pitch, 0.01), start)
 
 
 func _setup_sprite() -> void:
@@ -93,7 +94,9 @@ func _process(delta: float) -> void:
 
 func _land() -> void:
 	if _td.explode_sound:
-		Global.play_sfx_managed(_td.explode_sound, get_tree().current_scene)
+		## 世界坐标定位（2026-10-20）：爆炸音随距离衰减，声源=落点。
+		## 播放器挂场景而非本节点 —— 投掷物随后释放，挂自身会被一起回收掐断声音。
+		Global.play_sfx_managed(_td.explode_sound, get_tree().current_scene, true, 1.0, global_position)
 	if _td.explode_effect_anim:
 		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, get_tree().current_scene)
 	## ★调试可视化（2026-10-01 用户需求）：把这一炸的实际范围画出来并停留 2 秒。

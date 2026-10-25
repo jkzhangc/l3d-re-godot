@@ -389,19 +389,33 @@ var _spit_cooldown_left: float = 0.0
 
 @export_group("女巫徘徊（ブレアウィッチ）")
 ## 女巫模式总开关。开启后初始状态为 WitchIdle（徘徊，不主动接近/攻击），
-## 被刺激后激怒追杀。仅女巫特感开启。
+## **被惊动**（攻击她 / 贴脸 / 在刺激圈里停留过久）后才全力追杀。仅女巫特感开启。
 @export var witch_enabled: bool = false
 ## 徘徊移速（px/s）。女巫平时"うずくまって泣いている"，移动应极慢。
 @export var witch_wander_speed: float = 18.0
-## 刺激半径（px）：玩家进入此范围开始累积刺激值。范围外不累积。
-@export var witch_stim_radius: float = 160.0
-## 刺激累积速度基准：越近越快（rate = radius / dist）；此值再乘上去。
+## 警戒圈半径（px）：玩家进圈 → 她停止徘徊、转向玩家、低吼一次（= "她注意到你了"）。
+## 这一圈**不累积**刺激值，只是给玩家一个可读的"该绕开了"信号。
+@export var witch_alert_radius: float = 200.0
+## 刺激圈半径（px）：只有在这个圈里停留才累积刺激值，累积满 → 惊叫追杀。
+## ⚠ 旧值 160 配合"越近越快"实测几乎绕不开（2× 缩放下屏幕半宽仅 320px，走廊必进圈）。
+@export var witch_stim_radius: float = 110.0
+## 刺激圈**边缘**的累积速度（每秒）。0.25 ⇒ 站在圈边约 4 秒才惊动。
+@export var witch_stim_edge_rate: float = 0.25
+## 刺激圈**中心**的累积速度（每秒）。3.0 ⇒ 贴到圈心约 0.33 秒惊动。
+@export var witch_stim_close_rate: float = 3.0
+## 离开刺激圈后刺激值的回落速度（每秒）。玩家退开就能"降火"。
+@export var witch_stim_decay: float = 0.4
+## 全局倍率（保留兼容）：最终累积速度 = 曲线速率 × 本值。
 @export var witch_stim_speed: float = 1.0
+## 贴脸半径（px）：进入即**立刻**惊动（原作「近づきすぎたり…怒り」）。相当于撞到她。
+@export var witch_touch_radius: float = 46.0
 ## 激怒后的移速倍率（相对 base 移速）。
 @export var witch_enrage_speed_mult: float = 2.2
 ## 激怒尖叫音效。留空则用 discover_sound。
 @export var witch_scream_sound: AudioStream = null
 @export var witch_scream_sound_pitch: float = 1.0
+## 警戒低吼音效（进警戒圈时播一次）。留空 = 用 discover_sound 降调。
+@export var witch_alert_sound: AudioStream = null
 
 ## 女巫是否已被激怒（激怒不可逆）。由 EnemyWitchIdleState 置位。
 var witch_enraged: bool = false
@@ -678,6 +692,43 @@ func _enter_witch_idle_deferred() -> void:
 	if sm_w and sm_w.has_method("_on_transition_requested") \
 			and sm_w.get("states").has("WitchIdle"):
 		sm_w._on_transition_requested("WitchIdle")
+
+
+## ── 惊动女巫（唯一入口，2026-10-25）──
+## 尖叫 + 加速 + 转入 Chase。三个触发点都必须走这里：
+##   ① 被攻击（take_damage 里接管）② 贴脸（WitchIdle 的 touch 半径）③ 刺激值满（WitchIdle）
+##
+## 为什么必须做成 Enemy 上的公共方法：旧实现把"激怒"整段写在 EnemyWitchIdleState 里，
+## 于是**被子弹打中根本走不到那条路** —— 女巫初始状态是 WitchIdle（不是 Idle），
+## take_damage 的 `current_state == "Idle"` 分支不成立；而子弹自带击退会把她推进
+## Knockback → 结束后回 Chase。结果"被打的女巫"既不尖叫也不加速，看起来就是个普通怪，
+## 玩家也感受不到"别开枪"的代价。原作：「攻撃すると怒り、全力で襲いかかってくる」。
+func startle_witch(reason: String = "") -> bool:
+	if not witch_enabled or witch_enraged or _is_dead:
+		return false
+	witch_enraged = true
+	move_speed *= witch_enrage_speed_mult
+
+	var snd: AudioStream = witch_scream_sound if witch_scream_sound != null else discover_sound
+	var pitch: float = witch_scream_sound_pitch if witch_scream_sound != null else discover_sound_pitch
+	if snd != null:
+		_play_sound(snd, pitch)
+
+	## 锁定最近的存活玩家。近距离惊动时他就是"惊动她的人"；
+	## 远距离狙击有可能锁到别人，但 Chase 每帧都会按可追目标重锁，
+	## 不值得为此引入 peer_id → 节点映射。
+	var target: Node2D = _find_player_in_scene()
+	if is_instance_valid(target) and _is_player_body(target):
+		_player_ref = target
+		_player_in_sight = true
+		update_facing_from_direction(target.global_position - global_position)
+
+	print("[敵人] 女巫被惊动（%s）→ 全力追杀！移速 → %d" % [reason, int(move_speed)])
+	var sm: Node = get_node_or_null("StateMachine")
+	if sm != null and sm.has_method("_on_transition_requested") \
+			and sm.get("states").has("Chase"):
+		sm._on_transition_requested("Chase")
+	return true
 
 
 # ═══════════════════════════════════════
@@ -1511,6 +1562,18 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	if has_hitstun:
 		_hitstun_duration = hitstun_duration
 		_knockback_dir = direction.normalized()  # 仅用于朝向伤害来源
+
+	## ── 女巫：被攻击 = 立刻惊动（2026-10-25）──
+	## 必须放在下面 Idle / Knockback 分支**之前**：女巫的初始状态是 WitchIdle，
+	## `current_state == "Idle"` 不成立；而子弹自带击退，会把她推进 Knockback → 结束后回 Chase，
+	## 全程既不尖叫也不加速 —— 玩家看到的就是"一只会站桩的普通怪"。这里直接接管状态路由。
+	## 代价是女巫不吃击退/硬直：原作里被惊动的女巫本来就不该被打退。
+	if witch_enabled and not witch_enraged:
+		if current_hp <= 0.0:
+			_die(is_headshot)
+			return
+		startle_witch("被攻击")
+		return
 
 	# 如果处于 Idle 状态（未发现玩家）→ 被发现 + 击退/Discover
 	# 注意：Idle 状态下硬直不生效，先进 Discover（"！"发现玩家）

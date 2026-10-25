@@ -5,9 +5,10 @@
 [ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="2_12jfk"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="3_12jfk"]
+[ext_resource type="AudioStream" uid="uid://cuftrogi86cvv" path="res://sound/リロード.ogg" id="3_81ti7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="3_ewivl"]
 [ext_resource type="AudioStream" uid="uid://c3vxqj720m3g4" path="res://sound/ナイフ.ogg" id="3_idirh"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="6_kp675"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="9_mwwrp"]
 [ext_resource type="Texture2D" uid="uid://dmjow6qlmi38s" path="res://art/Ui/装備アイコンナイフ.png" id="icon"]
 [ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="pickup_tex"]
 
@@ -36,5 +37,4 @@ sell_price = 50
 max_stack = 1
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 7
-pickup_direction = 0
 pickup_step_frames = Array[int]([0])

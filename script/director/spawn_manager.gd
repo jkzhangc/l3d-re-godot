@@ -33,6 +33,37 @@ extends Node
 @export var max_active_common: int = 15       ## 同时最多普通感染者
 
 # ═══════════════════════════════════════
+# L4D 模型参数（2026-10-24）
+# ═══════════════════════════════════════
+## ★核心：开启后本模块改用「消耗型预算 + 峰值一次性尸潮 + 喘息低人口」。
+## 与旧模型的根本差别：旧模型的补位是**维持数量**（缺多少补多少，击杀立刻腾位），
+## 因此原地打会稳定成"永远有 N 只"；新模型的预算是**可消耗的**，用完就停手。
+@export var l4d_model: bool = false
+
+@export_group("L4D — 加压预算（BUILD 阶段）")
+@export var build_budget_min: int = 12         ## 每个 Build 阶段发放的预算下限（按难度/人数放大）
+@export var build_budget_max: int = 20         ## 预算上限。用完即停手，直到进入下一阶段
+@export var build_batch_min: int = 2           ## 每批最少几只
+@export var build_batch_max: int = 3           ## 每批最多几只
+@export var build_interval_min: float = 5.0    ## 两批之间最短秒数
+@export var build_interval_max: float = 9.0    ## 两批之间最长秒数
+
+@export_group("L4D — 尸潮（PEAK 入场一次性爆发）")
+@export var mob_size_min: int = 14             ## 尸潮规模下限（按难度/人数放大）
+@export var mob_size_max: int = 22             ## 尸潮规模上限
+## 从**背后**来的比例（L4D 原版 75%）。玩家回头才有压力，才有被包夹的戏剧性。
+@export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
+
+@export_group("L4D — 喘息（COOLDOWN / Relax）")
+## 喘息期维持多少只。0 = 完全不生成（最接近 L4D 的 Relax）。
+@export var relax_target: int = 2
+## 喘息期补位的最短间隔（秒），仅 relax_target > 0 时生效。
+@export var relax_interval: float = 7.0
+## 加压阶段：贴脸敌人达到这个数就不再追加（预算之外的软闸，防"围成一圈"）。
+## 实际值会按难度/人数放大。默认 10：进图预铺的游荡者已占 5~7 只，闸太紧会让预算花不出去。
+@export var build_threat_limit: int = 10
+
+# ═══════════════════════════════════════
 # 运行时
 # ═══════════════════════════════════════
 var enabled: bool = true
@@ -49,6 +80,10 @@ var _horde_spawned: int = 0           ## 本波累计生成数（诊断 / 日志
 var _horde_duration: float = 0.0      ## 本波持续时长（已按 peak_timeout 截断）
 var _horde_time_left: float = 0.0     ## 剩余时长 —— 归零即本波结束
 var _horde_batch_timer: float = 0.0
+
+# ── L4D 模型运行时 ──
+var _budget_left: int = 0        ## 当前 Build 阶段剩余的普通感染者预算（用完即停手）
+var _relax_timer: float = 0.0    ## 喘息期补位计时（仅 relax_target > 0）
 
 # 外部引用（由 director 注入）
 var _director: Node = null
@@ -68,6 +103,11 @@ func update(delta: float, intensity: float, alive_count: int) -> void:
 	if not enabled or not _director:
 		return
 
+	## ★L4D 模型（2026-10-24）：生成时机完全由「预算 + 阶段」决定，不再维持数量。
+	if l4d_model:
+		_update_l4d(delta, intensity, alive_count)
+		return
+
 	match current_phase:
 		&"build":
 			_update_scatter(delta, intensity, alive_count)
@@ -84,6 +124,15 @@ func on_phase_changed(phase: StringName) -> void:
 	current_phase = phase
 	print("[SpawnManager] phase → %s" % phase)
 
+	## ★L4D 模型：阶段语义全变了 ——
+	##   build  = 发预算，缓慢加压（预算用完就静默）
+	##   peak   = **一次性**发尸潮，之后停手（不补怪）
+	##   fade   = 余韵，什么都不生成
+	##   cooldown = 喘息，最多维持 relax_target 只
+	if l4d_model:
+		_on_phase_changed_l4d(phase)
+		return
+
 	match phase:
 		&"build":
 			_horde_active = false
@@ -93,6 +142,120 @@ func on_phase_changed(phase: StringName) -> void:
 			_start_horde()
 		&"cooldown":
 			_horde_active = false
+
+
+func _on_phase_changed_l4d(phase: StringName) -> void:
+	match phase:
+		&"build":
+			_horde_active = false
+			_budget_left = Players.scale_spawn_count(
+				randi_range(build_budget_min, build_budget_max))
+			_scatter_timer = 0.0  # 进入加压阶段的第一批立即生成（不干等）
+			print("[SpawnManager] L4D build: 预算 %d 只" % _budget_left)
+		&"peak":
+			_start_mob()
+		&"fade":
+			_horde_active = false
+		&"cooldown":
+			_horde_active = false
+			_budget_left = 0
+			_relax_timer = relax_interval
+
+
+# ═══════════════════════════════════════
+# L4D 模型 — 每帧驱动
+# ═══════════════════════════════════════
+func _update_l4d(delta: float, intensity: float, alive_count: int) -> void:
+	match current_phase:
+		&"build":
+			_update_build_budget(delta, intensity, alive_count)
+		&"cooldown":
+			_update_relax(delta, alive_count)
+		_:
+			pass  # peak / fade：**不生成**。峰值是"停手段"，让玩家把存量打完。
+
+
+## 加压阶段：从预算里扣，每次 1~2 只、间隔 8~16 秒。
+## 预算耗尽 → 静默（这就是空窗的来源）；进入下一阶段会重新发预算。
+func _update_build_budget(delta: float, intensity: float, alive_count: int) -> void:
+	if _budget_left <= 0:
+		return
+	var active_cap: int = Players.scaled_active_cap(max_active_common)
+	if alive_count >= active_cap:
+		return
+	## 软闸：贴脸敌人已经够多就不再追加（避免围成一圈打不完的体感）
+	var threat: int = _threat_count()
+	if threat >= Players.scale_spawn_count(build_threat_limit):
+		return
+
+	_scatter_timer -= delta
+	if _scatter_timer > 0.0:
+		return
+	_scatter_timer = randf_range(minf(build_interval_min, build_interval_max),
+		maxf(build_interval_min, build_interval_max))
+
+	var count: int = randi_range(mini(build_batch_min, build_batch_max),
+		maxi(build_batch_min, build_batch_max))
+	count = Players.scale_spawn_count(count)
+	count = mini(count, _budget_left)
+	count = mini(count, active_cap - alive_count)
+	if count <= 0:
+		return
+
+	var spawned: int = _spawn_ahead_l4d(count)
+	_budget_left = maxi(_budget_left - spawned, 0)
+	if spawned > 0:
+		print("[SpawnManager] L4D build 批次 %d 只（预算剩 %d）" % [spawned, _budget_left])
+
+
+## 喘息阶段：默认完全不生成（relax_target = 0）。
+## 设成 1~2 可以保留"路上零星还有丧尸"的观感（L4D2 的 Relax 也允许游荡者出现）。
+func _update_relax(delta: float, alive_count: int) -> void:
+	if relax_target <= 0:
+		return
+	_relax_timer -= delta
+	if _relax_timer > 0.0:
+		return
+	_relax_timer = relax_interval
+	var target: int = Players.scale_spawn_count(relax_target)
+	if _threat_count() >= target:
+		return
+	var active_cap: int = Players.scaled_active_cap(max_active_common)
+	if alive_count >= active_cap:
+		return
+	_spawn_ahead_l4d(1)
+
+
+## 只在「前方屏外」补位（走 Director 的取点器，只是不再维持数量）。
+func _spawn_ahead_l4d(count: int) -> int:
+	if _director.has_method("spawn_mob_batch"):
+		return int(_director.call("spawn_mob_batch", count, 0))
+	return 0
+
+
+func _threat_count() -> int:
+	if _director.has_method("count_threat_near_players"):
+		return int(_director.call("count_threat_near_players"))
+	return 0
+
+
+# ═══════════════════════════════════════
+# L4D 模型 — 尸潮（峰值入场，一次性）
+# ═══════════════════════════════════════
+## 进入峰值时一次性发出整波尸潮：一部分从前方、一部分从背后（L4D 是 75% 背后）。
+## 发完就不管了 —— 峰值期间不再补怪，这是「打完就有空窗」的关键。
+func _start_mob() -> void:
+	var size: int = Players.scale_spawn_count(randi_range(
+		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max)))
+	var ratio: float = clampf(mob_behind_ratio, 0.0, 1.0)
+	var behind: int = int(round(float(size) * ratio))
+	var front: int = size - behind
+	_horde_active = true
+	print("[SpawnManager] ★MOB 入场：共 %d 只（前方 %d / 背后 %d / 背后比例 %.0f%%）" % [
+		size, front, behind, ratio * 100.0])
+	if _director.has_method("spawn_mob_batch"):
+		var spawned: int = int(_director.call("spawn_mob_batch", front, behind))
+		print("[SpawnManager] MOB 落地 %d/%d 只（落点不足时宁缺不挤）" % [spawned, size])
 
 
 # ═══════════════════════════════════════
@@ -154,6 +317,11 @@ func _reset_scatter_timer() -> void:
 # 内部 — 尸潮生成
 # ═══════════════════════════════════════
 func _start_horde() -> void:
+	## L4D 模型：峰值不再「维持数量」—— 尸潮在进入峰值那一刻已由 `_start_mob` 一次性发完。
+	## 外部调用（EventManager 的紧张度触发）在 l4d 模型下必须无效，
+	## 否则峰值又会退化成"持续供水口"，空窗就做不出来。
+	if l4d_model:
+		return
 	_horde_active = true
 	## ★2026-09-26 大改（用户实测"尸潮只刷几只、然后前面再也不刷、杀完就结束"）：
 	## 旧实现把 horde_total 当**一次性总额度**：刷满就 _horde_active = false；

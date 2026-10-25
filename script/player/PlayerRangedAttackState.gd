@@ -141,8 +141,6 @@ func _fire_bullet() -> void:
 	if current <= 0:
 		print("[手枪] 弹夹为空！咔嚓——")
 		return
-	get_player_state().set_magazine_ammo(_wd.item_id, current - 1)
-	current = get_player_state().get_magazine_ammo(_wd.item_id)
 	var bullet_count: int = _wd.bullet_list.size()
 	print("[手枪] 发射！弹夹剩余: %d / %d | 子弹数: %d" % [current, _wd.magazine_capacity, bullet_count])
 
@@ -189,6 +187,11 @@ func _fire_bullet() -> void:
 		# 添加到场景树
 		character.get_tree().current_scene.add_child(bullet)
 
+	## ★扣弹放在**子弹全部生成之后**（2026-10-25 修复「被打断时子弹没出但弹药减少」）：
+	## 原来是先扣弹再生成子弹；一旦生成过程中途异常中止（受击硬直/参数为空等），
+	## 弹药已经扣掉、子弹却没有 —— 玩家看到的就是"空扣一发"。
+	## 现在先造子弹，全部落地后才扣弹；中途异常中止就不会损失弹药。
+	get_player_state().set_magazine_ammo(_wd.item_id, current - 1)
 	# 播放开枪音效（只播一次，不是每颗子弹都播）
 	# 播放开枪特效
 	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)

@@ -43,7 +43,8 @@ const AMMO_SUPPLY_SCRIPT := preload("res://script/ammo_supply.gd")
 const Whitelist := preload("res://script/network_whitelist.gd")
 
 const NETWORK_SPRAY: ItemData = Whitelist.NETWORK_SPRAY
-const NETWORK_PILLS: ItemData = Whitelist.NETWORK_PILLS
+## ⚠ 2026-10-24：`NETWORK_PILLS` 随 `object/item_pills.tres` 的删除一并移除
+##（该常量只剩镜像，无其它引用点）。
 const NETWORK_HEALINGS: Dictionary = Whitelist.NETWORK_HEALINGS
 
 const NETWORK_PISTOL: WeaponData = Whitelist.NETWORK_PISTOL
@@ -2111,7 +2112,10 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 			# empty_fire_sound，联机此前静默返回 —— 客户端按开火键毫无反馈。
 			# 与 attack_presentation 同款：Host 本地直接播，Client 走同一 RPC 广播。
 			if wd.empty_fire_sound:
-				Global.play_sfx_managed(wd.empty_fire_sound, node)
+				## 空弹「咔嚓」按开火者节点定位（2026-10-20 距离衰减）：Host 处理的是远端
+				## peer 时该声音应随距离变小；开火者若是 Host 本人则 play_player_sfx 内部
+				## 判定为本机玩家 → 非定位（恒满音量）。
+				Global.play_player_sfx(wd.empty_fire_sound, node)
 				_send_to_ready_clients(&"empty_fire_presentation", [peer_id, wd.item_id])
 			return
 		state.set_magazine_ammo(wd.item_id, current - 1)
@@ -2278,7 +2282,8 @@ func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: i
 	if bd.explode_effect_anim:
 		VXAnimSprite.play_scene(bd.explode_effect_anim, position, scene)
 	if bd.explode_sound:
-		Global.play_sfx_managed(bd.explode_sound, scene)
+		## 世界坐标定位（2026-10-20）：远端队友的爆炸声随距离衰减，声源=爆心。
+		Global.play_sfx_managed(bd.explode_sound, scene, true, 1.0, position)
 	print("[NetworkWorld] CLIENT_BULLET_EXPLODE weapon=%s index=%d pos=(%.0f, %.0f)" % [
 		weapon_id, bullet_index, position.x, position.y])
 
@@ -2312,7 +2317,8 @@ func bullet_hit_effect(position: Vector2, weapon_id: String, bullet_index: int, 
 				offset = target.hurt_effect_offset
 	VXAnimSprite.play_scene(wd.hit_effect_anim, position, scene, 10.0, follow, offset)
 	if wd.hit_sound:
-		Global.play_sfx_managed(wd.hit_sound, scene)
+		## 世界坐标定位（2026-10-20）：远端队友的命中音随距离衰减，声源=命中点。
+		Global.play_sfx_managed(wd.hit_sound, scene, true, 1.0, position)
 	print("[NetworkWorld] CLIENT_BULLET_HIT_EFFECT weapon=%s index=%d follow=%d pos=(%.0f, %.0f)" % [
 		weapon_id, bullet_index, follow_entity_id, position.x, position.y])
 
@@ -3150,7 +3156,8 @@ func empty_fire_presentation(peer_id: int, weapon_id: String) -> void:
 	var node := _player_node(_players[peer_id] as Dictionary)
 	if not is_instance_valid(node):
 		return
-	Global.play_sfx_managed(wd.empty_fire_sound, node)
+	## 该 RPC 只发给开火者本人 → 必然是本地玩家，play_player_sfx 内部判定为非定位。
+	Global.play_player_sfx(wd.empty_fire_sound, node)
 
 
 @rpc("authority", "call_remote", "reliable")

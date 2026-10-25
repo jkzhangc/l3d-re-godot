@@ -82,6 +82,7 @@ var special_cooldown_min: float = 50.0
 var special_cooldown_max: float = 90.0
 var _special_first_delay_left: float = 0.0  ## 第一只特感的登场倒计时（秒）
 var _special_cooldown_left: float = 0.0     ## 特感冷却倒计时（秒）
+var mercy_hp_ratio: float = 0.35      ## 怜悯闸：任一存活玩家 HP 比例低于此值 → 暂停加压
 
 # ── Boss / Tank（タイラント T-002）——由 DirectorConfig 注入 ──
 ## 与特感分开的第二档编排：更低频、更高压、门槛更高。常规与防守战各有独立频率
@@ -101,6 +102,48 @@ var holdout_tank_max_alive: int = 1
 var _tank_cooldown_left: float = 0.0        ## 常规 Tank 冷却
 var _holdout_tank_first_left: float = 0.0   ## 防守战首只 Tank 延迟
 var _holdout_tank_cooldown_left: float = 0.0 ## 防守战 Tank 冷却
+
+# ── Boss 发牌（L4D，2026-10-24 第二批）──
+## 沿"里程"发牌：牌堆 = Tank / 女巫 / 无事，洗牌、不允许连续重复。
+## 与节奏解耦 —— L4D 明确说过：Boss 若受节奏控制，高压时就不会出现，整体节奏反而崩。
+const DEFAULT_WITCH_PATH := "res://tres/specials/ブレアウィッチ.tres"
+var boss_deck_enabled: bool = true
+var boss_deck_step: float = 3200.0
+var boss_deck_first_ratio: float = 1.0
+var boss_deck_nothing_weight: int = 4
+var _witch_data: SpecialEnemyData = null
+var _boss_deck: Array[int] = []          ## 待发的牌：0=Tank 1=女巫 2=无事
+var _boss_deck_last: int = -1            ## 上一张（防连续重复）
+var _boss_trail: float = 0.0             ## 本图累计前进里程（px）
+var _boss_next_anchor: float = INF       ## 下一张牌的里程
+var boss_deck_max_tanks: int = 1        ## 本图 Tank 牌上限（硬上限，防"一图四只"）
+var boss_deck_max_witches: int = 1      ## 本图女巫牌上限
+var _boss_tanks_dealt: int = 0
+var _tank_drought: int = 0        ## 连续几张图没发到 Tank（跨图保底）
+var _deck_initialized: bool = false
+var _boss_witches_dealt: int = 0
+
+# ── L4D 节奏模型（2026-10-24）──
+## 开启后：加压预算 / 峰值一次性尸潮（停手）/ 余韵 / 喘息低人口。
+## 关掉 = 完全回到旧的"维持数量"模型（可 A/B、可整体回退）。
+var l4d_pacing: bool = true
+var relax_advance: float = 700.0            ## 喘息期累计前进多少像素提前结束
+var _relax_anchor: Dictionary = {}          ## tid -> 进喘息时的位置快照
+
+# ── 区域游荡者（wanderers，2026-10-24）──
+## L4D 的 wanderers 是**预先铺在区域里**的：一片区域本来就有丧尸在晃。
+## 本项目地图没有任何 SpawnZone/SpawnPoint（街道图实测 0 个），
+## 所以进图与换区时由导演主动铺一层，替代 L4D 的 Active Area Set 预置。
+var wander_seed_min: int = 6
+var wander_seed_max: int = 9
+var wander_seed_step: float = 900.0        ## 队伍累计前进多少像素算"进入新区域"
+var wander_seed_refill: int = 3            ## 每次换区补几只
+## ★密度自适应（2026-10-24 用户提议）：附近（威胁圈内）希望维持的游荡者总数。
+## 补层时先数一次，**只补差额** —— 已经够就不补、不足才补，不会越补越多。
+var wander_target_near: int = 10
+var _wander_advance: float = 0.0           ## 自上次换区以来的累计净位移
+var _wander_positions: Dictionary = {}     ## tid -> 上一帧位置
+var _phase_cache: StringName = &"cooldown" ## 上一帧的节奏阶段（供区域补齐等早期块使用）
 
 # ═══════════════════════════════════════
 # 子模块
@@ -194,6 +237,12 @@ func _ready() -> void:
 	if pc.has_signal("phase_changed"):
 		pc.phase_changed.connect(_on_phase_changed)
 
+	## ── L4D 模型开关同步（2026-10-24）──
+	## 子模块自身的默认值是 false（方便回归 harness 单独实例化时走旧模型），
+	## 实际运行一律以 Director 的 l4d_pacing 为准；没有 DirectorConfig 的图（安全屋等）
+	## 也必须一致，否则会出现"Director 认为是新模型、生成器还是旧模型"的错配。
+	_apply_l4d_model()
+
 	if ResourceLoader.exists(ENEMY_SCENE_PATH):
 		_enemy_scene = load(ENEMY_SCENE_PATH) as PackedScene
 	else:
@@ -240,6 +289,8 @@ func _process(delta: float) -> void:
 	## ★玩家运动实测（2026-09-26）：必须在 pick_spawn_anchor / fs.update **之前**采样，
 	## 否则本帧的锚点权重与前方方向用的还是上一帧的数据（首帧更是全 0）。
 	sample_player_motion(teammates, delta)
+	## 区域换区计量（L4D 的 Active Area Set 近似）：累计位移够了就补一层游荡者。
+	_update_wander_advance(teammates)
 
 	## ── 刷怪锚点（2026-09-23 多人修复）──
 	## anchor = 本帧**刷怪与区域补齐**的圆心：L4D 式偏好"落单 / 走得远 / 移动中"的玩家。
@@ -256,6 +307,7 @@ func _process(delta: float) -> void:
 	# 从未被调用，坦克死后 BGM 一直播（盖住死亡音效、后续复活/防守阶段也还在响）。
 	# 放在挂起闸门之前：防守战期间（director_suspended）打死的坦克也要正确收音。
 	_update_boss_music()
+	_update_calm_volume()
 
 	# ── spawn_enabled=false / 安全屋黑名单：只关「常规刷怪编排」──
 	# （2026-09-13 列车台回归：此前整段 _process 早退，把防守战刷怪的驱动源
@@ -272,7 +324,12 @@ func _process(delta: float) -> void:
 	# ItemManager 保持运行（补给投放对防守战有益无害）。
 	if not director_suspended and spawn_map:
 		# ── 仅在 SpawnZone 区域内补齐，禁用画面外刷怪，以防“某地满、某地空” ──
-		_update_ambient_zones(delta)
+		## ★L4D 模型（2026-10-24）：区域补齐只在 **BUILD** 阶段跑。
+		## 否则手工摆的 SpawnZone 会变成第二个"供水口"——峰值/喘息期照样往场上补，
+		## 「峰值停手、喘息空窗」立刻失效。旧模型保持原行为（每帧补齐）。
+		## 用上一帧缓存的阶段：本块在 pc.update 之前执行，差一帧对补齐无影响。
+		if not l4d_pacing or _phase_cache == &"build":
+			_update_ambient_zones(delta)
 
 	# ── 紧张度（按全体存活玩家取「最吃紧的那位」，2026-09-24）──
 	var prev_intensity: float = get_intensity()
@@ -300,13 +357,29 @@ func _process(delta: float) -> void:
 	if sm_probe != null and sm_probe.has_method("is_horde_active"):
 		horde_running = bool(sm_probe.call("is_horde_active"))
 	if pc and pc.has_method("update") and spawn_map:
-		pc.update(delta, new_intensity, alive_count, horde_running)
+		## L4D 模型下 FADE 段需要知道"是否还有交战"（等自然收尾）。
+		## `in_combat` 由 IntensityTracker 维护（任一存活玩家 500px 内有敌人）。
+		var engaged: bool = false
+		if intensity_tracker != null and is_instance_valid(intensity_tracker):
+			engaged = bool(intensity_tracker.get("in_combat"))
+		pc.update(delta, new_intensity, alive_count, horde_running, engaged)
 	var current_phase: StringName = &"cooldown"
 	if pc:
-		match pc.current_phase:
-			0: current_phase = &"build"
-			1: current_phase = &"peak"
-			_: current_phase = &"cooldown"
+		## ★必须走 get_phase_name()：2026-10-24 起枚举多了 FADE，
+		## 按序号 match 会把 fade 误判成 cooldown（补位/音乐衔接全错）。
+		if pc.has_method("get_phase_name"):
+			current_phase = pc.call("get_phase_name")
+		else:
+			match pc.current_phase:
+				0: current_phase = &"build"
+				1: current_phase = &"peak"
+				_: current_phase = &"cooldown"
+
+	## 喘息期「走远即结束」（L4D Relax 的提前退出条件）
+	_update_relax_advance(teammates, current_phase)
+	_phase_cache = current_phase
+	## 临峰预告必须在 pc/current_phase 都已求值之后（2026-10-25 修正作用域）
+	_maybe_play_pre_peak_alert(current_phase, pc)
 
 	# ── 事件编排（先于生成调度，剧本事件期间会禁用 SpawnManager）──
 	var em: Node = get_node_or_null("EventManager")
@@ -530,6 +603,11 @@ func _reset_live_combat_state() -> void:
 	stop_boss_music(false)
 	## ⑦ 紧张度归零（残留高紧张度会让 cooldown 走「3 秒提前结束」捷径）
 	_reset_intensity()
+	## ⑦b 喘息期前进量快照（换图后旧 instance_id 全部失效）
+	_relax_anchor.clear()
+	## ⑦c 换区计量（游荡者补层）
+	_wander_advance = 0.0
+	_wander_positions.clear()
 	## ⑧ 前方补位记账（_batch_player_pos 里是旧图玩家的 instance_id）
 	var fs: Node = get_node_or_null("FrontSpawner")
 	if fs and fs.has_method("reset_batch_tracking"):
@@ -539,29 +617,148 @@ func _reset_live_combat_state() -> void:
 func _on_phase_changed(phase: StringName) -> void:
 	## 节奏阶段切换 → 通知 SpawnManager + 发出信号
 	print("[Director] pacing phase → %s" % phase)
+	_music_phase = phase
 	pacing_phase_changed.emit(phase)
 
 	var sm: Node = get_node_or_null("SpawnManager")
 	if sm and sm.has_method("on_phase_changed"):
 		sm.on_phase_changed(phase)
 
-	if phase == &"peak":
+	## 可听化（2026-10-25）：阶段决定音乐 —— 加压/喘息铺底，峰值让位给尸潮曲，余韵回到铺底。
+	if phase == &"build":
+		_play_calm_music()
+	elif phase == &"peak":
+		_stop_calm_music()
 		_horde_rage = true
 		_set_all_enemies_rage(true)   ## 尸潮触发 → 僵尸切换クリムゾンヘッド（狂暴）
 		_lock_all_enemies_for_horde() ## 尸潮触发 → 附近全部丧尸直接追击最近玩家（对齐防守战）
 		_play_horde_music()
-		_play_horde_alert()           ## 尸潮触发 → 一次性预警音效（2026-09-30 用户需求）
+		## 临峰已预告过（5 秒内）就不要再响一次
+		if Time.get_ticks_msec() - _pre_peak_alert_at_msec >= 5000:
+			_play_horde_alert()
 		horde_started.emit()
-	elif phase == &"cooldown":
+	elif phase == &"cooldown" or phase == &"fade":
+		_play_calm_music()
 		_horde_rage = false
-		_set_all_enemies_rage(false)  ## 尸潮结束 → 恢复普通形态
-		_release_horde_locks()        ## 尸潮结束 → 解除目标锁定，恢复普通 AI
+		_set_all_enemies_rage(false)  ## 尸潮结束 / 进入余韵 → 恢复普通形态
+		_release_horde_locks()        ## 解除目标锁定，恢复普通 AI
 		_stop_horde_music()
 		horde_ended.emit()
 
 
 ## ── 尸潮 BGM（DirectorConfig「音乐 — 尸潮」组；默认 = 原作ラッシュ１）──
 var _horde_music_player: AudioStreamPlayer = null
+
+## ── 常态铺底 BGM（Build / Relax，2026-10-25 可听化第一步）──
+## 与尸潮/Boss 曲的区别：它是"低张力的底"，**不随强度变化**；尸潮或 Boss 一响就让位。
+## 只在本机播放（音乐属于个人混音，L4D 也是每人一套），不做联机广播。
+var _calm_music_player: AudioStreamPlayer = null
+var _calm_tween: Tween = null
+## 铺底随紧张度抬升的音量上限（dB）：intensity 0→1 对应 +0→+n dB（2026-10-25 第二步）
+var calm_music_intensity_boost_db: float = 7.0
+var _pre_peak_alert_at_msec: int = -999999   ## 临峰预警音的时间戳（防与峰值同帧重复播）
+
+
+## 铺底默认曲（2026-10-25）：写成运行时路径而不是 @export 默认值 ——
+## 文件缺失时只是"没声音"，不会让整份脚本编译失败。
+const DEFAULT_CALM_MUSIC_BUILD := "res://music/bh quarantine 01.mp3"
+const DEFAULT_CALM_MUSIC_RELAX := "res://music/da quarantine 01.mp3"
+var _music_phase: StringName = &"cooldown"
+
+
+## 取当前阶段该用的铺底曲：配置字段优先 → 内置默认（文件存在才用）→ null。
+func _calm_stream_for_phase(phase: StringName) -> AudioStream:
+	var is_relax: bool = phase == &"cooldown" or phase == &"fade"
+	var cfg_stream: AudioStream = null
+	if current_config != null:
+		cfg_stream = current_config.calm_music_relax if is_relax else current_config.calm_music
+	if cfg_stream != null:
+		return cfg_stream
+	var path: String = DEFAULT_CALM_MUSIC_RELAX if is_relax else DEFAULT_CALM_MUSIC_BUILD
+	if ResourceLoader.exists(path):
+		return load(path) as AudioStream
+	return null
+
+
+func _play_calm_music() -> void:
+	var stream: AudioStream = _calm_stream_for_phase(_music_phase)
+	if stream == null:
+		return
+	if _boss_music_active:
+		return   ## Boss 优先
+	if _horde_music_player != null and _horde_music_player.playing:
+		return   ## 尸潮曲还在响 → 不抢
+	if _calm_music_player == null:
+		_calm_music_player = AudioStreamPlayer.new()
+		_calm_music_player.name = "CalmMusicPlayer"
+		_calm_music_player.bus = &"Music"
+		add_child(_calm_music_player)
+	if _calm_music_player.playing and _calm_music_player.stream == stream:
+		return
+	_calm_music_player.stop()
+	## ★铺底必须是**循环**的（2026-10-25）：L4D 的 calm 是持续底噪，不是一段过场。
+	## MP3/OGG 导入后 `loop` 默认 false → 播完一遍就静音，听起来像"音乐坏了"。
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamWAV:
+		(stream as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	_calm_music_player.stream = stream
+	## 淡入（2026-10-25 用户要求）：从目标音量 -24dB 起 0.8 秒抬到目标，避免硬切的"啪"声。
+	var target_db: float = current_config.calm_music_volume_db if current_config else -14.0
+	_calm_music_player.volume_db = target_db - 24.0
+	_calm_music_player.play()
+	if _calm_tween != null and _calm_tween.is_valid():
+		_calm_tween.kill()
+	_calm_tween = create_tween()
+	_calm_tween.tween_property(_calm_music_player, "volume_db", target_db, 0.8)
+
+
+## 铺底随紧张度抬音量（2026-10-25 第二步）：不是硬切，而是在 base 上做连续偏移。
+## 只在"淡入淡出补间未在跑"时接管音量，避免和 tween 抢同一个属性。
+func _update_calm_volume() -> void:
+	if _calm_music_player == null or not _calm_music_player.playing:
+		return
+	if _calm_tween != null and _calm_tween.is_valid():
+		return
+	var base_db: float = current_config.calm_music_volume_db if current_config else -8.0
+	var boost: float = calm_music_intensity_boost_db * clampf(get_intensity(), 0.0, 1.0)
+	_calm_music_player.volume_db = base_db + boost
+
+
+## 临峰预告（2026-10-25 第二步其二）：BUILD 末段提前约 2 秒给预警音。
+## 原来 `horde_alert_sound` 和峰值**同帧**播，玩家听到"预警"时尸潮已经砸下来了，预告失去意义。
+## 这里在 build 剩余 ≤2 秒时先响一次；峰值分支用时间戳去重，不会连响两次。
+func _maybe_play_pre_peak_alert(phase: StringName, pc: Node) -> void:
+	if phase != &"build" or pc == null:
+		return
+	var dur: float = float(pc.get("phase_duration"))
+	var el: float = float(pc.get("phase_elapsed"))
+	if dur < 8.0:
+		return   ## 太短的 build 来不及形成"预告感"
+	if el < dur - 2.0:
+		return
+	if Time.get_ticks_msec() - _pre_peak_alert_at_msec < 5000:
+		return
+	_pre_peak_alert_at_msec = Time.get_ticks_msec()
+	_play_horde_alert()
+	print("[Director] 临峰预告：约 %.1fs 后进入峰值" % maxf(dur - el, 0.0))
+
+
+func _stop_calm_music() -> void:
+	if _calm_music_player == null:
+		return
+	if not _calm_music_player.playing and not _calm_music_player.stream_paused:
+		return
+	## 淡出 0.5 秒再停（进峰值时不要硬切）
+	if _calm_tween != null and _calm_tween.is_valid():
+		_calm_tween.kill()
+	_calm_tween = create_tween()
+	_calm_tween.tween_property(_calm_music_player, "volume_db",
+		_calm_music_player.volume_db - 30.0, 0.9)
+	_calm_tween.tween_callback(Callable(_calm_music_player, "stop"))
+
 
 func _play_horde_music() -> void:
 	var stream: AudioStream = current_config.horde_music if current_config else null
@@ -1059,6 +1256,178 @@ func spawn_ahead_batch(count: int) -> Array[Node2D]:
 		if enemy:
 			out.append(enemy)
 	return out
+
+
+## ★尸潮入场（L4D 模型，2026-10-24）：一次性把整波敌人放到「前方屏外」与「背后屏外」。
+##
+## 与 `spawn_ahead_batch` 的关键差别：**不过任何数量闸门 / 附近闸 / 带内目标**。
+## 尸潮是「事件」，不是「补位」—— 被闸门掐掉就变成"峰值潮水没来"，玩家只会觉得卡。
+## 落点找不到时宁缺不挤（返回实际落地数，由 SpawnManager 打日志）。
+func spawn_mob_batch(front_count: int, behind_count: int) -> int:
+	var decor_layer: Node = _find_decor_layer()
+	if decor_layer == null:
+		return 0
+	var player: Node2D = pick_spawn_anchor()
+	if player == null:
+		return 0
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs == null:
+		return 0
+	var spawned: int = 0
+	## 先落地"背后"那一批：玩家此刻正朝前看，背后涌来的存在感最强（L4D 的 75%）。
+	for _i: int in range(maxi(behind_count, 0)):
+		var back_pos: Vector2 = fs.pick_behind_position(player)
+		if back_pos == Vector2.ZERO:
+			continue
+		if spawn_enemy(_add_spawn_scatter(back_pos), decor_layer, -1) != null:
+			spawned += 1
+	for _i: int in range(maxi(front_count, 0)):
+		var front_pos: Vector2 = fs.pick_ahead_position(player)
+		if front_pos == Vector2.ZERO:
+			continue
+		if spawn_enemy(_add_spawn_scatter(front_pos), decor_layer, -1) != null:
+			spawned += 1
+	return spawned
+
+
+## 威胁圈内存活敌人数（**含已经贴脸的**）—— 供 SpawnManager 的预算闸门使用。
+## 旧口径只数 360~560px 环带，敌人走近就"离开名额"，是原地打不完的根源之一。
+func count_threat_near_players() -> int:
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs != null and fs.has_method("count_threat"):
+		return int(fs.call("count_threat"))
+	return 0
+
+
+## ★区域游荡者（wanderers）：在玩家四周（屏外、360° 整圈）铺一层徘徊的丧尸。
+##
+## 为什么要这个（2026-10-24 用户实测「进图跑 10 秒一只丧尸都没有」）：
+##   1. 本项目地图**没有任何 SpawnZone / SpawnPoint**（街道图实测 0 个）→ 作者点路径全程失效；
+##   2. 只剩"前方扇区 360~560px"这一条取点路径 → 街道图一拐弯就取不到点，预算花不出去；
+##   3. L4D 的区域本来就是"已经有一群在晃"，不是等你走到才从正前方刷出来。
+## 这三个叠加的结果就是"路上空无一人，只有特感"。本函数补的就是这一层人口。
+func seed_wanderers(count: int) -> int:
+	var decor_layer: Node = _find_decor_layer()
+	if decor_layer == null:
+		return 0
+	## ★密度自适应（2026-10-24 用户提议）：先数威胁圈里已有多少，只补差额。
+	## 效果：某个角落一直空 → 补到目标；某片已经一堆 → 一只都不加。
+	## 这比"固定补 N 只"稳定得多，也不会在窄图里越堆越挤。
+	var target: int = Players.scale_spawn_count(maxi(wander_target_near, 1))
+	var threat: int = count_threat_near_players()
+	var deficit: int = target - threat
+	if deficit <= 0:
+		return 0
+	var want: int = mini(maxi(count, 0), deficit)
+	if want <= 0:
+		return 0
+	var player: Node2D = pick_spawn_anchor()
+	if player == null:
+		return 0
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs == null or not fs.has_method("pick_open_position"):
+		return 0
+	var spawned: int = 0
+	for _i: int in range(want):
+		var pos: Vector2 = fs.call("pick_open_position", player)
+		if pos == Vector2.ZERO:
+			break
+		if spawn_enemy(pos, decor_layer, -1) != null:
+			spawned += 1
+	if spawned > 0:
+		print("[Director] 区域游荡者 +%d（附近 %d/%d ⇒ 目标 %d / 锚点=%s）" % [
+			spawned, threat, threat + spawned, target, player.name])
+	return spawned
+
+
+## 换区补游荡者：按"队伍累计净位移"近似 L4D 的 Active Area Set 换区。
+## 逐帧位移超过 64px 视为传送/换图（不计入），避免一次切场景就把整段距离攒满。
+func _update_wander_advance(players: Array[Node2D]) -> void:
+	var best: float = _sample_team_advance(players)
+	## Boss 发牌按里程推进（与游荡者补层共用同一份位移采样）
+	## ★2026-10-24 用户实测「防守战里刷了女巫 / 打完一只又来一只」：发牌原先不看全局状态，
+	## 防守战、剧本事件、安全屋、非刷怪图里照样按走位里程发牌。必须只在"正常行军"时发。
+	if boss_deck_enabled and best > 0.0 and _can_deal_boss():
+		_boss_trail += best
+		if _boss_trail >= _boss_next_anchor:
+			_boss_next_anchor = _boss_trail + boss_deck_step
+			_deal_boss_card()
+	## 游荡者补层同样只在正常行军时进行（防守战期间补游荡者＝往阵地上堆怪）。
+	if not l4d_pacing or wander_seed_step <= 0.0 or not _can_deal_boss():
+		return
+	_wander_advance += best
+	if _wander_advance >= wander_seed_step:
+		_wander_advance = 0.0
+		seed_wanderers(Players.scale_spawn_count(wander_seed_refill))
+
+
+## 现在能不能发牌 / 补游荡者：正常行军才算。
+## 排除：防守战与剧本事件（director_suspended / EventManager 事件中）、非刷怪图、安全屋。
+func _can_deal_boss() -> bool:
+	if director_suspended:
+		return false
+	var em: Node = get_node_or_null("EventManager")
+	if em != null and em.has_method("is_scripted_event_active") \
+		and bool(em.call("is_scripted_event_active")):
+		return false
+	if not _is_spawn_map():
+		return false
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	if scene != null and _scene_is_safe_room(scene):
+		return false
+	return true
+
+
+## 队伍本帧净位移：取"走得最远那位"，逐帧 >64px 视为传送/换图，不计入。
+func _sample_team_advance(players: Array[Node2D]) -> float:
+	if _wander_positions.size() > 16:
+		_wander_positions.clear()
+	var best: float = 0.0
+	for p: Node2D in players:
+		if not is_instance_valid(p):
+			continue
+		var tid: int = p.get_instance_id()
+		var last: Variant = _wander_positions.get(tid)
+		if last is Vector2:
+			var d: float = p.global_position.distance_to(last)
+			if d > 0.0 and d < 64.0:
+				best = maxf(best, d)
+		_wander_positions[tid] = p.global_position
+	return best
+
+
+## 喘息期「走远即结束」：进喘息那一刻记下每人位置，之后看"走得最远那位"的净位移；
+## 到 `relax_advance` 就提前结束喘息（走得快 = 节奏走得快，不必干等满 cooldown_max）。
+func _update_relax_advance(players: Array[Node2D], phase: StringName) -> void:
+	if not l4d_pacing or phase != &"cooldown":
+		if not _relax_anchor.is_empty():
+			_relax_anchor.clear()
+		return
+	## 快照必须覆盖当前全体玩家：换图 / 复活 / 换人后 instance_id 全变，
+	## 留着旧快照会让 `matched < size` 恒真 → 永远重新计时（走远提前结束失效）。
+	var matched: int = 0
+	for p: Node2D in players:
+		if is_instance_valid(p) and _relax_anchor.has(p.get_instance_id()):
+			matched += 1
+	if matched < players.size() or _relax_anchor.is_empty():
+		_relax_anchor.clear()
+		for p: Node2D in players:
+			if is_instance_valid(p):
+				_relax_anchor[p.get_instance_id()] = p.global_position
+		return
+	var best: float = 0.0
+	for p: Node2D in players:
+		if not is_instance_valid(p):
+			continue
+		var last: Variant = _relax_anchor.get(p.get_instance_id())
+		if last is Vector2:
+			best = maxf(best, p.global_position.distance_to(last))
+	if relax_advance > 0.0 and best >= relax_advance:
+		var pc: Node = get_node_or_null("PacingController")
+		if pc != null and pc.has_method("force_build"):
+			print("[Director] 喘息期已前进 %.0fpx（阈值 %.0f）→ 提前结束喘息" % [best, relax_advance])
+			pc.call("force_build")
 
 
 func spawn_horde(count: int, decor_layer: Node) -> int:
@@ -1583,6 +1952,16 @@ func _check_scene_change() -> void:
 	if _scene_is_safe_room(scene):
 		_reset_live_combat_state()
 		print("[Director] 进入安全屋：本局战斗状态已收尾（尸潮/Boss BGM 停止、节奏回喘息、狂暴与目标锁定解除）")
+	## ★进图先铺一层「区域游荡者」（2026-10-24 用户实测「进图跑 10 秒一只丧尸都没有」）：
+	## 本项目地图没有 SpawnZone/SpawnPoint，且街道/走廊图一拐弯就取不到前方点，
+	## 所以"一片区域里有丧尸在晃"必须由导演主动预置，而不是等玩家走到才从前方刷。
+	## 安全屋 / 不刷怪的图跳过。放在安全屋收尾之后：收尾会把阶段打回喘息，不能被打扰。
+	if l4d_pacing and wander_seed_max > 0 and not _scene_is_safe_room(scene) and _is_spawn_map():
+		_wander_advance = 0.0
+		_wander_positions.clear()
+		var seed_n: int = randi_range(mini(wander_seed_min, wander_seed_max),
+			maxi(wander_seed_min, wander_seed_max))
+		seed_wanderers(Players.scale_spawn_count(seed_n))
 	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
 	## 开场强制回 cooldown 会把"地图开局立即 build（SpawnManager 立刻散兵刷怪）"变成
 	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。
@@ -1596,6 +1975,20 @@ func _check_scene_change() -> void:
 ## ⚠ 只在勾了开关的图上调用：其它图不碰 pacing（换图重置 pacing 是 2026-09-23 的坑）。
 func _apply_immediate_spawn_start() -> void:
 	var pc: Node = get_node_or_null("PacingController")
+	## ★尸潮进行中不要强推 build（2026-10-24 用户实测「传送后尸潮刚结束又立刻来一次」）：
+	## 传送往往发生在尸潮还没打完的时候。此处无条件 force_build 会把 phase 从 peak/fade
+	## 直接拉回 build，而强度仍被残余敌人撑着 → 下一帧就再次越过峰值阈值 →
+	## 再发一次尸潮 + 再响一次预警音。玩家听到的就是「尸潮音乐刚停、预警音又来」。
+	## 只在"干净开局"（不在峰值/余韵、且没有尸潮窗口）时才跳阶段。
+	var sm: Node = get_node_or_null("SpawnManager")
+	var horde_running: bool = sm != null and sm.has_method("is_horde_active") \
+		and bool(sm.call("is_horde_active"))
+	var phase: StringName = &"cooldown"
+	if pc != null and pc.has_method("get_phase_name"):
+		phase = pc.call("get_phase_name")
+	if horde_running or phase == &"peak" or phase == &"fade":
+		print("[Director] 开场立即刷怪跳过：尸潮仍在进行（phase=%s horde=%s）" % [phase, horde_running])
+		return
 	if pc and pc.has_method("force_build"):
 		pc.call("force_build")
 	var fs: Node = get_node_or_null("FrontSpawner")
@@ -1628,13 +2021,42 @@ func _find_director_config(node: Node) -> DirectorConfig:
 	return null
 
 
+## 把 `l4d_pacing` 统一下发给三个与生成相关的子模块（幂等）。
+## 子模块脚本自身的默认值是 false —— 那是给回归 harness 单独实例化时保留旧行为的；
+## 实际运行必须与 Director 一致，否则会出现「节奏按新模型走、生成器还按旧模型补位」的错配。
+func _apply_l4d_model() -> void:
+	for node_name: String in ["PacingController", "SpawnManager", "FrontSpawner"]:
+		var sub: Node = get_node_or_null(node_name)
+		if sub != null:
+			sub.set("l4d_model", l4d_pacing)
+
+
 func _apply_config(cfg: DirectorConfig) -> void:
 	auto_spawn_enabled = cfg.spawn_enabled
 	spawn_min_dist = cfg.spawn_min_dist
 	var pc: Node = get_node_or_null("PacingController")
 	if pc:
 		_copy_props(cfg, pc, ["build_min", "build_max", "peak_timeout",
-			"cooldown_min", "cooldown_max", "peak_intensity_threshold", "cooldown_intensity_threshold"])
+			"cooldown_min", "cooldown_max", "peak_intensity_threshold", "cooldown_intensity_threshold",
+			"peak_sustain", "fade_quiet_sec", "fade_timeout"])
+		## L4D 模型开关：配置里的名字是 l4d_pacing，节奏控制器里叫 l4d_model。
+		pc.set("l4d_model", cfg.l4d_pacing)
+		## ★节奏时长按「地图尺度」打折（2026-10-24）：本作一章几分钟就跑完，
+		## L4D 那套按十几分钟一章标定的秒数直接照搬 → 一张图只够 1~2 个循环。
+		## 只缩这五个时长；peak_sustain / fade_quiet_sec 是体感下限，不缩。
+		var t_scale: float = clampf(cfg.pacing_time_scale, 0.2, 2.0)
+		pc.set("build_min", maxf(3.0, cfg.build_min * t_scale))
+		pc.set("build_max", maxf(4.0, cfg.build_max * t_scale))
+		pc.set("peak_timeout", maxf(5.0, cfg.peak_timeout * t_scale))
+		pc.set("cooldown_min", maxf(1.0, cfg.cooldown_min * t_scale))
+		pc.set("cooldown_max", maxf(2.0, cfg.cooldown_max * t_scale))
+	l4d_pacing = cfg.l4d_pacing
+	relax_advance = cfg.relax_advance
+	wander_seed_min = cfg.wander_seed_min
+	wander_seed_max = cfg.wander_seed_max
+	wander_seed_step = cfg.wander_seed_step
+	wander_seed_refill = cfg.wander_seed_refill
+	wander_target_near = cfg.wander_target_near
 	# FrontSpawner 的参数名与 DirectorConfig 前缀不同（配置里带 front_ 前缀便于在 Inspector 分组），
 	# 因此这里逐项显式映射，不能走 _copy_props 的同名约定。
 	var fs: Node = get_node_or_null("FrontSpawner")
@@ -1655,6 +2077,9 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		fs.set("max_active_common", cfg.max_active_common)
 		fs.set("nearby_gate_count", cfg.nearby_gate_count)
 		fs.set("nearby_gate_radius", cfg.nearby_gate_radius)
+		## L4D 模型：FrontSpawner 退化为「取点器」，不再自己补位（见其 l4d_model 注释）。
+		fs.set("l4d_model", cfg.l4d_pacing)
+		fs.set("threat_radius", cfg.threat_radius)
 	_copy_props(cfg, self, ["recycle_enabled", "recycle_interval", "recycle_dist", "recycle_clear_corpses"])
 	_zombie_pool = cfg.zombie_pool if not cfg.zombie_pool.is_empty() else DEFAULT_ZOMBIE_POOL
 	# ── 特感池与节奏：地图不配 special_pool 就完全不刷（向后兼容）──
@@ -1686,13 +2111,31 @@ func _apply_config(cfg: DirectorConfig) -> void:
 	_tank_cooldown_left = randf_range(tank_cooldown_min, tank_cooldown_max)
 	_holdout_tank_first_left = holdout_tank_first_delay
 	_holdout_tank_cooldown_left = 0.0
+	# ── Boss 发牌（第二批）：本图里程从头算，牌堆重洗 ──
+	boss_deck_enabled = cfg.boss_deck_enabled
+	boss_deck_step = maxf(cfg.boss_deck_step, 300.0)
+	boss_deck_first_ratio = clampf(cfg.boss_deck_first_ratio, 0.3, 1.0)
+	boss_deck_nothing_weight = maxi(cfg.boss_deck_nothing_weight, 1)
+	boss_deck_max_tanks = maxi(cfg.boss_deck_max_tanks, 0)
+	boss_deck_max_witches = maxi(cfg.boss_deck_max_witches, 0)
+	if cfg.witch_data != null:
+		_witch_data = cfg.witch_data
+	elif _witch_data == null and ResourceLoader.exists(DEFAULT_WITCH_PATH):
+		_witch_data = load(DEFAULT_WITCH_PATH) as SpecialEnemyData
+	_reset_boss_deck()
 	var sm: Node = get_node_or_null("SpawnManager")
 	if sm:
 		_copy_props(cfg, sm, ["scatter_min", "scatter_max",
 			"scatter_interval_min", "scatter_interval_max",
 			"horde_total_min", "horde_total_max",
 			"horde_batch_size", "horde_batch_interval",
-			"horde_duration_min", "horde_duration_max", "max_active_common"])
+			"horde_duration_min", "horde_duration_max", "max_active_common",
+			"build_budget_min", "build_budget_max",
+			"build_batch_min", "build_batch_max",
+			"build_interval_min", "build_interval_max",
+			"mob_size_min", "mob_size_max", "mob_behind_ratio",
+			"relax_target", "relax_interval", "build_threat_limit"])
+		sm.set("l4d_model", cfg.l4d_pacing)
 	print("[Director] config applied: spawn=%s cooldown=%.0f-%.0fs" % [cfg.spawn_enabled, cfg.cooldown_min, cfg.cooldown_max])
 
 
@@ -2261,7 +2704,33 @@ func _special_rate_scale() -> float:
 	return maxf(0.5, float(players.call("spawn_scale")))
 
 
+## ★加压闸（2026-10-25 用户定稿）：
+##   · 简单难度**仅单人**：几乎不增压（特感与 Boss 基本不出现；多人不算，避免联机休闲化）。
+##   · A 怜悯（所有难度）：只看玩家状态 —— 任一存活玩家倒地或 HP 比例 < mercy_hp_ratio → 暂停加压。
+func is_pressure_blocked() -> bool:
+	if Players.spawn_player_count() <= 1 and Players.spawn_scale() <= 0.55:
+		return true
+	if mercy_hp_ratio <= 0.0:
+		return false
+	for p: Node2D in spawn_reference_players():
+		if not is_instance_valid(p):
+			continue
+		if p.get("_is_dying") == true:
+			return true
+		var mx: Variant = p.get("max_hp")
+		var cur: Variant = p.get("current_hp")
+		if mx == null or cur == null:
+			continue
+		var m: float = float(mx)
+		if m > 0.0 and float(cur) / m < mercy_hp_ratio:
+			return true
+	return false
+
+
 func _update_specials(delta: float, player: Node2D, current_phase: StringName) -> void:
+	## 简单难度（单人）/ 怜悯期：不加压 —— 不刷特感。
+	if is_pressure_blocked():
+		return
 	## 特感低频高压编排：紧张度门槛 + 随机冷却 + 同屏上限（special_max_alive）。
 	## 池空 = 本关未启用特感，直接待机；尸潮（peak）期间计时冻结，不与尸潮叠加施压。
 	if _special_pool.is_empty():
@@ -2274,11 +2743,20 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 	# 同屏上限（2026-09-16 修复）：此前写死「有任意一只存活特感就不刷」，把地图 Inspector
 	# 配的 special_max_alive=2/3 彻底架空 —— 叠加 Hunter β 正面免疫导致的高存活率，
 	# 表现为「很少有特感出现」（用户实测反馈）。现在按本关卡配置计数放行。
-	var cap: int = maxi(1, int(round(float(special_max_alive) * rate)))
+	## 名额用作者配置值（2026-10-25）：旧式 ×rate 在单人 0.5 时把 2 压成 1，叠加占位就彻底不出特感。
+	var cap: int = maxi(special_max_alive, 1)
 	var alive_specials: int = 0
 	for e: Node2D in get_tree().get_nodes_in_group("special_enemies"):
-		if is_instance_valid(e) and e.get("_is_dying") != true and e.get("_is_dead") != true:
-			alive_specials += 1
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		## ★女巫**不占特感同屏名额**（2026-10-25 用户实测「基本见不到其他特感」）：
+		## 她是守在原地不追人的静态威胁，spawn_special_enemy 也会把她加进 special_enemies。
+		## 算进名额时，一只没被惊动的女巫就能长期占掉一格 → 其他特感被饿死。
+		if e.get("witch_enabled") == true:
+			continue
+		alive_specials += 1
 	if alive_specials >= cap:
 		return
 	# 第一只特感的登场延迟（_apply_config 掷 first_delay_min~max）
@@ -2291,7 +2769,8 @@ func _update_specials(delta: float, player: Node2D, current_phase: StringName) -
 		return
 	# 紧张度门槛：玩家压力不足时特感不登场（特感是压力放大器，不是开场惊喜）。
 	# 门槛按 ÷倍率 放宽：难度/人数越高越容易够到。
-	if get_intensity() < special_intensity_threshold / rate:
+	## 2026-10-25：门槛不再除以难度倍率（单人 0.5 时 0.1/0.5=0.2，平静期强度只有约 0.2 → 特感永远够不到）。
+	if get_intensity() < special_intensity_threshold:
 		return
 
 	var data: SpecialEnemyData = _pick_special_enemy(not _boss_on_field())
@@ -2331,6 +2810,10 @@ func _pick_special_enemy(allow_boss: bool = true) -> SpecialEnemyData:
 		var d: SpecialEnemyData = v as SpecialEnemyData
 		if d == null:
 			continue
+		## 女巫只由 Boss 发牌放置（2026-10-24）：她不是"会追人的特感"，
+		## 混在特感池里会变成"行军/防守战途中突然冒出个女巫"。
+		if d.witch_enabled:
+			continue
 		if not allow_boss and d.boss_tier:
 			continue
 		total += maxf(float(d.weight), 0.0)
@@ -2338,12 +2821,16 @@ func _pick_special_enemy(allow_boss: bool = true) -> SpecialEnemyData:
 		## 兼容旧语义：池里全是 0 权重时取第一个（作者用它做定点测试）；
 		## 但「当前不允许 Boss」时不能把 Boss 条目当兜底 → 直接不刷。
 		if allow_boss:
-			return _special_pool[0] as SpecialEnemyData
+			var first: SpecialEnemyData = _special_pool[0] as SpecialEnemyData
+			if first != null and not first.witch_enabled:
+				return first
 		return null
 	var roll: float = randf() * total
 	for v: Resource in _special_pool:
 		var d: SpecialEnemyData = v as SpecialEnemyData
 		if d == null:
+			continue
+		if d.witch_enabled:
 			continue
 		if not allow_boss and d.boss_tier:
 			continue
@@ -2362,6 +2849,159 @@ func _pick_special_enemy(allow_boss: bool = true) -> SpecialEnemyData:
 ## 两条通道频率独立 —— 对齐原作：普通关卡里 Tank 是可选遭遇（拉什开始后才有机会），
 ## 147 图防守战里则是核心压迫源（早期就登场，菲纳莱必战）。
 ## 同屏互斥用 tank_max_alive / holdout_tank_max_alive，对应原作「重点敌人互斥」机制。
+## ═══ Boss 发牌（L4D 第二批，2026-10-24）═══
+## 牌堆 = Tank 1 张 + 女巫 1 张 + 「无事」N 张（默认 2），洗牌后逐张发；
+## **不允许连续重复**：洗出来的第一张若与上一张相同，就与后面第一张不同的牌对调。
+## 纯函数、不依赖节点状态 —— 便于用例直接验证。
+static func build_boss_bag(last: int, nothing_weight: int) -> Array[int]:
+	var bag: Array[int] = [0, 1]
+	for _i: int in range(maxi(nothing_weight, 1)):
+		bag.append(2)
+	bag.shuffle()
+	if bag.size() > 1 and bag[0] == last:
+		for i: int in range(1, bag.size()):
+			if bag[i] != last:
+				var tmp: int = bag[0]
+				bag[0] = bag[i]
+				bag[i] = tmp
+				break
+	return bag
+
+
+## 重置牌堆（进图 / 换图时调用）。第一张牌的里程 = step × first_ratio，避免刚进图就遇 Tank。
+func _reset_boss_deck() -> void:
+	## 干旱保底（2026-10-25 用户需求「玩 3 次至少要有 1 次 Tank」）：
+	## 上一张图没发到 Tank 记一次；连续 2 张图没 Tank → 本图第一张牌直接给 Tank。
+	if _deck_initialized:
+		## ⚠ 只统计"本来会刷怪"的图（2026-10-25 用户实测「读档后学校内部几秒就来 Tank」）：
+		## 安全屋/非刷怪图也会进 _apply_config，若一并计数，drought 两次就够 → 保底误触发。
+		var tree0: SceneTree = get_tree()
+		var scene0: Node = tree0.current_scene if tree0 != null else null
+		var eligible: bool = scene0 != null and _is_spawn_map() and not _scene_is_safe_room(scene0)
+		if eligible:
+			if _boss_tanks_dealt == 0:
+				_tank_drought += 1
+			else:
+				_tank_drought = 0
+	_deck_initialized = true
+	_boss_deck.clear()
+	_boss_deck_last = -1
+	_boss_trail = 0.0
+	_boss_tanks_dealt = 0
+	_boss_witches_dealt = 0
+	if not boss_deck_enabled:
+		_boss_next_anchor = INF
+		return
+	var first: float = maxf(boss_deck_step * boss_deck_first_ratio, 400.0)
+	_boss_next_anchor = first
+	if _tank_drought >= 3 and boss_deck_max_tanks > 0 and tank_enabled:
+		_boss_deck = [0]
+		_tank_drought = 0
+		_boss_next_anchor = maxf(first * 0.6, 600.0)
+		print("[Director] Boss 发牌：连续 2 张图没出 Tank → 本图首张牌强制 Tank（保底）")
+	print("[Director] Boss 发牌：每 %.0fpx 一张，首张在 %.0fpx（无事权重 %d）" % [
+		boss_deck_step, first, boss_deck_nothing_weight])
+
+
+func _deal_boss_card() -> void:
+	if _boss_deck.is_empty():
+		_boss_deck = build_boss_bag(_boss_deck_last, boss_deck_nothing_weight)
+	if _boss_deck.is_empty():
+		return
+	var card: int = _boss_deck.pop_front()
+	_boss_deck_last = card
+	match card:
+		0:
+			_deal_tank_card()
+		1:
+			_deal_witch_card()
+		_:
+			print("[Director] Boss 发牌：无事（里程 %.0fpx / 牌堆剩 %d 张）" % [
+				_boss_trail, _boss_deck.size()])
+
+
+func _deal_tank_card() -> void:
+	## ★难度概率（2026-10-25 用户需求「接近 L4D：低难度更少遇 Tank」）：
+	## 用 Players.spawn_scale()（简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25）当难度代理，
+	## 换算成跳过率 ≈ 0.6 / 0.4 / 0.2 / 0.0 —— 普通难度约有 4 成 Tank 牌被当成"无事"。
+	## L4D 里 Tank 是低概率事件，不是每张牌都兑现。
+	var diff_scale: float = Players.spawn_scale()
+	var skip_chance: float = clampf(1.0 - 0.8 * diff_scale, 0.0, 0.7)
+	if skip_chance > 0.0 and randf() < skip_chance:
+		print("[Director] Boss 发牌：Tank（难度跳过 %.0f%%，视为无事）" % (skip_chance * 100.0))
+		return
+	## 简单难度（单人）/ 怜悯期：不兑现 Tank 牌（牌已消耗，等同"无事"）。
+	if is_pressure_blocked():
+		print("[Director] Boss 发牌：Tank（简单难度/怜悯期，跳过）")
+		return
+	## 硬上限：一张图最多 N 只（用户实测「一图四只坦克」）。
+	if _boss_tanks_dealt >= boss_deck_max_tanks:
+		print("[Director] Boss 发牌：Tank（本图名额已满 %d/%d，跳过）" % [
+			_boss_tanks_dealt, boss_deck_max_tanks])
+		return
+	if not tank_enabled or _tank_data == null:
+		print("[Director] Boss 发牌：Tank（本图 Tank 已关闭，跳过）")
+		return
+	if _count_alive_tanks() > 0:
+		print("[Director] Boss 发牌：Tank（场上已有 Tank，跳过）")
+		return
+	var player: Node2D = pick_spawn_anchor()
+	if player != null and _spawn_tank(_tank_data, player):
+		_boss_tanks_dealt += 1
+		print("[Director] Boss 发牌：★Tank 登场（本图第 %d/%d 只 / 里程 %.0fpx）" % [
+			_boss_tanks_dealt, boss_deck_max_tanks, _boss_trail])
+
+
+func _deal_witch_card() -> void:
+	## 女巫出现频率下调（2026-10-25 用户反馈偏高）：一半的"女巫牌"直接作废。
+	if randf() < 0.5:
+		print("[Director] Boss 发牌：女巫（概率跳过，视为无事）")
+		return
+	if _boss_witches_dealt >= boss_deck_max_witches:
+		print("[Director] Boss 发牌：女巫（本图名额已满 %d/%d，跳过）" % [
+			_boss_witches_dealt, boss_deck_max_witches])
+		return
+	if _witch_data == null:
+		print("[Director] Boss 发牌：女巫（无资源，跳过）")
+		return
+	## 场上已有女巫就不再放（用户实测「防守战里还刷了女巫」的观感来源之一）。
+	if _count_alive_witches() > 0:
+		print("[Director] Boss 发牌：女巫（场上已有，跳过）")
+		return
+	var decor_layer: Node = _find_decor_layer()
+	var player: Node2D = pick_spawn_anchor()
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if decor_layer == null or player == null or fs == null:
+		return
+	## 女巫放在前方（玩家会先"看到"她，再决定绕还是打）——L4D 的 Witch 就是这样被发现的。
+	var pos: Vector2 = fs.pick_ahead_position(player)
+	if pos == Vector2.ZERO:
+		pos = player.global_position + Vector2.RIGHT.rotated(randf() * TAU) * 520.0
+	var witch: Node2D = spawn_special_enemy(_add_spawn_scatter(pos), _witch_data, decor_layer, -1)
+	if witch != null:
+		## 女巫**不**永久豁免回收（2026-10-25）：她走远后应被清掉，
+		## 否则在单场景多楼层地图里会一直留着占地。坦克才豁免（它本来会追人）。
+		_boss_witches_dealt += 1
+		print("[Director] Boss 发牌：★女巫放置（本图第 %d/%d 只 / 里程 %.0fpx）" % [
+			_boss_witches_dealt, boss_deck_max_witches, _boss_trail])
+
+
+## 场上存活的女巫数（SpecialEnemyData.witch_enabled 标记）。
+func _count_alive_witches() -> int:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return 0
+	var n: int = 0
+	for e: Node2D in tree.get_nodes_in_group("enemy"):
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dead") == true or e.get("_is_dying") == true:
+			continue
+		if e.get("witch_enabled") == true:
+			n += 1
+	return n
+
+
 func _update_tanks(delta: float, player: Node2D, current_phase: StringName, spawn_map: bool = true) -> void:
 	if player == null or not is_instance_valid(player):
 		return
@@ -2376,6 +3016,11 @@ func _update_tanks(delta: float, player: Node2D, current_phase: StringName, spaw
 
 func _update_regular_tank(delta: float, player: Node2D, current_phase: StringName) -> void:
 	if not tank_enabled or _tank_data == null:
+		return
+	## ★Boss 发牌开启时，常规 Tank 的「冷却 + 强度门槛」通道停用（2026-10-24 第二批）：
+	## 发牌才是常规出场的唯一途径。两条通道并存会变成"发牌来一只 + 冷却又塞一只"。
+	## 防守战通道（_update_holdout_tank）不受影响。
+	if boss_deck_enabled:
 		return
 	## ★去掉「peak 期间冻结」（2026-10-13 用户需求：最终章前也该能遇到坦克）。
 	## 旧实现要求 `intensity ≥ tank_intensity_threshold(0.6)` **且** 非 peak，而强度 ≥0.6
@@ -2435,6 +3080,10 @@ func _spawn_tank(data: SpecialEnemyData, player: Node2D) -> bool:
 	if tank == null:
 		return false
 	tank.add_to_group("tank_enemies")
+	## ★坦克不参与「离得太远就回收」（2026-10-24 用户实测「坦克没打死，上二楼一会又出来一只」）：
+	## recycle 会把被甩在身后的坦克清掉 → `_count_alive_tanks()` 归零 → 发牌/冷却立刻再放一只。
+	## 玩家看到的就是"同一只坦克反复出现"。豁免后它留在场上，新坦克被名额挡住。
+	tank.set("recycle_exempt", true)
 	tank_spawned.emit(String(data.id))
 	play_boss_music(tank)
 	print("[Director] ★ Tank 登场: %s at (%d, %d)" % [String(data.id), int(pos.x), int(pos.y)])
@@ -2720,28 +3369,55 @@ func _update_ambient_zones(delta: float) -> void:
 		var shortage: int = maxi(0, target_count - current_count)
 		if shortage <= 0:
 			continue
+		## ★区域已有敌人的位置：交给 pick_spread_position 做"最大最小距离"分散采样，
+		## 避免一口气全堆在区域同一角（用户实测「都堆在一块」）。
+		var avoid: Array = []
+		for enemy: Node2D in tree.get_nodes_in_group("enemy"):
+			if not is_instance_valid(enemy):
+				continue
+			if enemy.get("_is_dying") == true or enemy.get("_is_dead") == true:
+				continue
+			if enemy.global_position.distance_to(zone.global_position) <= zone.get_zone_radius():
+				avoid.append(enemy.global_position)
+		var ok_cb: Callable = Callable(self, "_zone_point_ok").bind(zone)
 		for _i: int in range(shortage):
-			var pos: Vector2 = zone.get_random_position()
-			## 多人（2026-09-23）：距离与屏外判定都必须对**全体玩家**生效 ——
-			## 只看座位 0 会让"客户端在区域旁"的补齐永远不触发，或正好补在另一个玩家眼前。
-			if nearest_player_distance(pos) < zone.ambient_min_player_dist:
-				continue
-			# 必须在屏幕之外：区域是关卡作者摆的"刷在哪里"，但"何时刷"仍要避开玩家视野，
-			# 否则会出现"眼睁睁看着敌人凭空冒出来"（复用 FrontSpawner 的多人屏幕判定）。
-			var fs_node: Node = get_node_or_null("FrontSpawner")
-			if fs_node and fs_node.get("enabled") == true and not fs_node.is_offscreen_for_all(pos):
-				continue
-			if not _is_walkable(pos):
-				continue
-			if _is_occupied_by_enemy(pos) or _was_recently_used(pos):
-				continue
+			var pos: Vector2 = zone.pick_spread_position(ok_cb, avoid)
+			if pos == Vector2.ZERO:
+				break
 			var zone_count_after: int = _count_enemies_in_zone(zone)
 			if zone_count_after >= zone_cap:
 				break
 			var enemy: Node2D = spawn_enemy(pos, decor_layer, _get_spawn_facing(zone))
-			if enemy:
-				continue
-			break
+			if enemy == null:
+				break
+			avoid.append(pos)
+
+
+## 区域落点判定（SpawnZone 用）：脚印可行走 + 屏外 + 离玩家够远 + 未被占用。
+func _zone_point_ok(pos: Vector2, zone: SpawnZone) -> bool:
+	if zone != null and nearest_player_distance(pos) < zone.ambient_min_player_dist:
+		return false
+	# 必须在屏幕之外：区域是作者摆的"刷在哪里"，但"何时刷"仍要避开玩家视野。
+	var fs_node: Node = get_node_or_null("FrontSpawner")
+	if fs_node and fs_node.get("enabled") == true and not fs_node.is_offscreen_for_all(pos):
+		return false
+	if not _is_footprint_walkable(pos):
+		return false
+	if _is_occupied_by_enemy(pos) or _was_recently_used(pos):
+		return false
+	return true
+
+
+## ★落点脚印判定（2026-10-24 用户实测「SpawnZone 覆盖到墙就刷进墙里」）：
+## 单点可走 ≠ 站得下 —— 敌人碰撞体约 24×24，中心正好贴着墙边时身体会有一半插在墙里。
+## 额外检查四角，任一角被墙/家具占住就算不合格。也用于屏外补位与游荡者预铺。
+func _is_footprint_walkable(global_pos: Vector2, half: Vector2 = Vector2(10.0, 10.0)) -> bool:
+	if not _is_walkable(global_pos):
+		return false
+	return (_is_walkable(global_pos + Vector2(-half.x, -half.y))
+		and _is_walkable(global_pos + Vector2(half.x, -half.y))
+		and _is_walkable(global_pos + Vector2(-half.x, half.y))
+		and _is_walkable(global_pos + Vector2(half.x, half.y)))
 
 
 func _count_enemies_in_zone(zone: SpawnZone) -> int:

@@ -32,6 +32,78 @@ class_name DirectorConfig extends Node
 @export var cooldown_max: float = 10.0           ## 喘息阶段最长秒数。超过这个时间自动进入下一轮爬升。设0=喘息结束立刻开始下一轮
 @export var cooldown_intensity_threshold: float = 0.3  ## 提前结束喘息的紧张度触发线。玩家在喘息期主动撞怪→紧张度升高→提前结束喘息进入爬升
 
+@export_group("L4D 节奏模型（2026-10-24）")
+## ★核心开关：开启后改用求生之路式「消耗型预算 + 峰值停手 + 余韵 + 喘息」模型。
+## 关掉 = 完全回到旧三阶段（Build 零星补位 / Peak 持续供怪 / Cooldown 照常补位）。
+## 旧模型的根本问题：补位是「维持数量」，击杀立刻腾出名额 → 原地打永远打不完。
+@export var l4d_pacing: bool = true
+## ★节奏时长缩放（2026-10-24）：本作地图比 L4D 小得多、窄得多 —— 一章跑几分钟就到终点，
+## 而下面 build_min/max、peak_timeout、cooldown_min/max 的秒数是按 L4D「十几分钟一章、
+## 反复起落 4~6 次」标定的。不缩放的话，一张 3 分钟的图只够跑 1~2 个循环，
+## 整局会变成「一次高潮 + 长时间无事」，这跟 L4D 的观感差得最远。
+## 0.55 ≈ 每 60~85 秒一个完整循环 → 3~5 分钟的图能跑到 3~4 个循环。
+## 地图特别短可再降到 0.4；将来若做长图可提到 0.8~1.0。
+@export_range(0.2, 2.0, 0.05) var pacing_time_scale: float = 0.55
+## 峰值最短停留秒数（对应 L4D 的 Sustain Peak）：进峰值后至少撑这么久才允许结束，
+## 保证尸潮有「砸下来」的存在感，不会被一两秒清空就跳过。
+@export var peak_sustain: float = 4.0
+## 余韵（Peak Fade）判定：场上**没有敌人交战**持续这么多秒，才允许进入喘息。
+## 这段时间不生成任何敌人，用来让残余战斗自然打完 —— 这就是「打完还有余韵」。
+@export var fade_quiet_sec: float = 2.5
+## 余韵最长秒数（兜底）：残兵躲在角落时不会让节奏永远卡在 fade。
+@export var fade_timeout: float = 12.0
+## 喘息期队伍累计前进这么多像素 → 提前结束喘息（走得快就走得快，对应 L4D Relax 的"走远即结束"）。
+@export var relax_advance: float = 700.0
+
+@export_group("L4D — 加压预算（Build 阶段的可消耗总量）")
+## 每个 Build 阶段发放的普通感染者预算：用完就停手，直到进入下一阶段。
+## 这就是「消耗型预算」—— 它替换掉旧的「维持目标数量」，是空窗的来源。
+## ⚠ 2026-10-24 用户实测「丧尸实在太少」：本项目地图狭窄紧凑、没有大空地，
+## 与 L4D 的 3D 开阔地图不可比 → 预算按"每 10 秒能看到 2~3 只"重新标定（原 6~12 太低）。
+@export var build_budget_min: int = 12           ## 预算下限（按难度/人数放大后生效）
+@export var build_budget_max: int = 20           ## 预算上限
+@export var build_batch_min: int = 2             ## 每批最少几只
+@export var build_batch_max: int = 3             ## 每批最多几只
+@export var build_interval_min: float = 5.0      ## 两批之间最短秒数
+@export var build_interval_max: float = 9.0      ## 两批之间最长秒数
+
+@export_group("L4D — 尸潮（Peak 入场一次性爆发）")
+## 进入峰值时**一次性**发出的尸潮规模。峰值期间不再补怪（L4D：强度到顶就停手）。
+@export var mob_size_min: int = 14               ## 尸潮规模下限
+@export var mob_size_max: int = 22               ## 尸潮规模上限
+## 尸潮从「背后」来的比例（L4D 原版是 75%）。0 = 全从前方来，1 = 全从背后来。
+@export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
+
+@export_group("L4D — 喘息（Relax 阶段低人口维持）")
+## 喘息期场上维持多少只。**0 = 完全不生成**（最接近 L4D 原版 Relax）。
+## 2026-10-24 用户实测「走两步就穿过去了、一路没怪」→ 默认 2：
+## 保留"路上零星还有丧尸"的观感（L4D2 的 Relax 同样允许游荡者出现）。
+@export var relax_target: int = 2
+## 喘息期补位的最短间隔（秒）。只在 relax_target > 0 时生效。
+@export var relax_interval: float = 7.0
+## 「威胁圈」半径（像素）：这个圈内的存活敌人（**含已经贴脸的**）都算占名额。
+## 旧实现只数 360~560px 环带，敌人走近就"离开名额" → 贴脸的敌人为下一只腾位。
+@export var threat_radius: float = 600.0
+
+@export_group("L4D — 区域游荡者（Wanderers）")
+## ★进入一张地图时，先在玩家四周（屏外、360° 整圈）铺多少只"徘徊的丧尸"。
+## 对应 L4D 的 wanderers：一片区域里本来就有丧尸在晃，而不是等你走过去才从前方刷出来。
+## ⚠ 本项目地图**没有任何 SpawnZone / SpawnPoint**（实测街道图 0 个），
+## 所以这项是"区域里有丧尸"的唯一来源，设 0 = 关闭。
+@export var wander_seed_min: int = 6
+@export var wander_seed_max: int = 9
+## 队伍累计前进这么多像素，就在新区域再补一轮游荡者（模拟 L4D 的 Active Area Set 换区）。
+## 0 = 只在进图时铺一次。
+@export var wander_seed_step: float = 900.0
+## 每次换区补几只（按难度/人数放大）。
+@export var wander_seed_refill: int = 3
+## ★附近希望维持的游荡者总数（威胁圈内）。补层时**只补差额**：够就不补、不足才补。
+## 2026-10-24 用户提议的"根据附近数量增减"即此项。学校/街道某些角落一直空 → 补到目标；
+## 已经一堆 → 一只不加。嫌稀就抬到 12~14，嫌密就降到 6~8。
+@export var wander_target_near: int = 10
+
+## ⚠ **旧模型专用**：`l4d_pacing = true`（默认）时，BUILD 阶段由「加压预算」供货，
+## 本组（散兵）与下面「尸潮」组都走不到。只有关掉 l4d_pacing 做 A/B 时才需要调。
 @export_group("生成 — 散兵（爬升阶段零星敌人）")
 @export var scatter_min: int = 2                 ## 每次生成散兵的最少个数。爬升阶段定时触发，紧张度低时取此值
 @export var scatter_max: int = 5                 ## 每次生成散兵的最多个数。紧张度越高越接近此值
@@ -41,6 +113,7 @@ class_name DirectorConfig extends Node
 @export var scatter_interval_min: float = 4.0   ## 两次散兵生成之间最少隔几秒。设短=敌人连绵不断，设长=玩家有大段空闲
 @export var scatter_interval_max: float = 10.0  ## 两次散兵生成之间最多隔几秒。实际间隔在此范围内随机，避免节奏感太机械
 
+## ⚠ **旧模型专用**：L4D 模型下峰值 = 一次性 `mob_size_*` 后停手，本组不生效。
 @export_group("生成 — 尸潮（Peak 阶段大量敌人）")
 @export var horde_total_min: int = 5            ## 尸潮期间**同时维持**多少只存活（不再是"一共出几个"）。缺多少补多少
 @export var horde_total_max: int = 25            ## 尸潮期间同时维持的存活数上限。地图大可以多设，地图小设少点
@@ -63,9 +136,12 @@ class_name DirectorConfig extends Node
 ## 关掉后回到旧的"定时随机撒点"行为。
 @export var front_spawn_enabled: bool = true
 ## 前方带内维持的目标数量（**平常**阶段）。前方这个范围里已经有这么多活着的敌人时，**一只都不刷**。
-## 2026-09-16 用户反馈「平常刷怪量已经跟尸潮差不多、尸潮不突出」→ 默认 6 → 3。
+## ⚠ **L4D 模型（l4d_pacing = true，默认）下本项不再生效**：FrontSpawner.update() 会直接早退，
+## 它退化成"取点器"，补位时机与总量改由 SpawnManager 的加压预算（build_budget_*）决定。
+## 只有关掉 l4d_pacing 回到旧模型时才会用到。（学校内部图里配的 9 因此目前是空转值。）
 @export var front_target_ahead: int = 6
 ## 【尸潮（peak）阶段】前方带内维持的目标数量 —— 用户要的"附近达到指定数量（如 20）就停止刷怪"。
+## ⚠ 同上：L4D 模型下峰值是「一次性 mob + 停手」，本项不生效。
 @export var front_target_ahead_peak: int = 30
 ## 每次补位最多补几只（平常；不会一次补满，避免瞬间一片）。
 @export var front_batch: int = 1
@@ -96,6 +172,8 @@ class_name DirectorConfig extends Node
 ## 喘息（cooldown）阶段** —— 直接切到 build 并放开前方补位的时间闸门，进图就有敌人；
 ## 之后回到正常节奏（间隔 / 前进距离 / 尸潮照旧生效）。
 ## 默认 true；安全屋 / 不想开局就开打的图，在该图 DirectorConfig 上单独取消勾选即可。
+## ⚠ L4D 模型下若**正在 peak / fade / 尸潮进行中**（例如传送发生在尸潮没打完时），本项会被跳过，
+## 否则「强推 build → 强度仍高 → 立刻又进峰值」= 玩家听到的"音乐刚停、预警音又响"连环尸潮。
 @export var spawn_immediate_on_start: bool = true
 
 @export_group("生成 — 僵尸变体池（ZombieVariant）")
@@ -122,13 +200,16 @@ class_name DirectorConfig extends Node
 @export var special_cooldown_min: float = 12.0
 ## 两只特感之间的最长冷却秒数。
 @export var special_cooldown_max: float = 22.0
-## 同屏最多存活几只特感（含濒死/倒地中的）。默认 1 = 互斥。
+## 同屏最多存活几只特感（含濒死/倒地中的）。默认 2。
 ## ⚠ 2026-09-16 起本值才真正生效：此前 _update_specials 写死「有任意存活特感就不刷」，
 ## 地图 Inspector 配 2/3 全被无视（叠加"打不死的特感长期占位"→ 特感绝迹）。
-## 运行时还会乘 `Players.spawn_scale()` 放宽同屏上限。
+## ⚠ 2026-10-25 起**不再乘 `Players.spawn_scale()`**：单人 0.5 时会把 2 压成 1，
+## 再被一只未惊动的女巫占位就彻底不出特感（用户实测"基本见不到其他特感"）。
+## 现在名额就是作者配置值；难度只影响冷却，不影响名额与门槛。
 @export var special_max_alive: int = 2
 ## 紧张度门槛（0.0~1.0）：低于此值不刷特感。特感是压力放大器，玩家闲逛时不出现。
-## 运行时按 ÷`Players.spawn_scale()` 放宽（难度/人数越高越易够到）。
+## ⚠ 2026-10-25 起**不再除以 `Players.spawn_scale()`**：单人 0.5 时 0.1/0.5=0.2，
+## 而平静期强度本身约 0.2 → 特感永远够不到门槛。现在直接用本值。
 @export var special_intensity_threshold: float = 0.1
 
 @export_group("夜间视界（Night Hunter）")
@@ -162,12 +243,36 @@ class_name DirectorConfig extends Node
 ## 防守战 Tank 资源（留空 = 复用 tank_data）。
 @export var holdout_tank_data: SpecialEnemyData = null
 ## 防守战开始后到第一只 Tank 的延迟（秒）。
-@export var holdout_tank_first_delay: float = 25.0
-## 防守战期间两只 Tank 之间的冷却（秒）。比常规短：防守战节奏更快。
-@export var holdout_tank_cooldown_min: float = 45.0
-@export var holdout_tank_cooldown_max: float = 75.0
+## ★2026-10-24 用户实测「防守战 40 秒就出 Tank，打死又来，一局三四只」→ 25 提到 45。
+@export var holdout_tank_first_delay: float = 45.0
+## 防守战期间两只 Tank 之间的冷却（秒）。
+## ★2026-10-24 同上：45~75 提到 90~150（一场 2~3 分钟的防守战最多 1~2 只）。
+@export var holdout_tank_cooldown_min: float = 90.0
+@export var holdout_tank_cooldown_max: float = 150.0
 ## 防守战期间同屏最多 Tank 数。
 @export var holdout_tank_max_alive: int = 1
+
+@export_group("L4D — Boss 发牌（Tank / 女巫 / 无事）")
+## ★第二批（2026-10-24）：L4D 的 Tank 与 Witch **不是"打得惨才出"**，
+## 而是沿逃生动线每 N 单位排布一张牌，牌堆 = Tank / 女巫 / 无事，洗牌发牌、
+## 不允许连续重复。这样"这局会不会遇到 Tank"才有悬念，而且 Boss 与节奏解耦
+##（高压时也会来，低压时也可能来）—— 旧的"冷却 + 紧张度门槛"是反过来的。
+## 开启后，下方常规 Tank 的冷却通道自动停用（避免双通道叠加）；防守战通道不受影响。
+@export var boss_deck_enabled: bool = true
+## 每隔多少像素发一张牌（按队伍累计前进距离，等效 L4D 的"沿路每 N 单位排布"）。
+## 本作地图紧凑：2200px ≈ 半张街道图，3~5 分钟的图约 2~4 张牌。
+@export var boss_deck_step: float = 3200.0
+## 第一张牌的里程下限（占 step 的比例）。太小 = 刚进图就遇 Tank。
+@export_range(0.3, 1.0, 0.05) var boss_deck_first_ratio: float = 1.0
+## 牌堆里"无事"的张数（默认 2 ⇒ Tank : 女巫 : 无事 = 1 : 1 : 2）。
+@export var boss_deck_nothing_weight: int = 4
+## ★每张图最多发几张 Tank 牌（默认 1）。2026-10-24 用户实测「一张图遇到四只坦克」：
+## 光靠牌堆比例不够，必须硬上限。发完就不再发 Tank 牌（牌照样消耗，只是跳过）。
+@export var boss_deck_max_tanks: int = 1
+## 每张图最多发几张女巫牌（默认 1）。
+@export var boss_deck_max_witches: int = 1
+## 女巫资源（留空 = 用内置 tres/specials/ブレアウィッチ.tres）。
+@export var witch_data: SpecialEnemyData = null
 
 @export_group("生成 — 回收（离玩家太远就清除）")
 ## 回收总开关。开启后：存活敌人离玩家超过 recycle_dist 就直接清除（不管它有没有在追玩家）。
@@ -215,6 +320,15 @@ class_name DirectorConfig extends Node
 ## —— 让玩家在尸潮涌来前听到和防守战一致的预警。留空 = 不播。
 ## 表现层：Host/单机本地播放并经 NetworkWorld 广播，Client 同步播放（各自本地响一次）。
 @export var horde_alert_sound: AudioStream = preload("res://sound/ラッシュ開始.ogg")
+
+@export_group("音乐 — 常态铺底（Build / Relax，可听化）")
+## Build 与 Relax 阶段循环播放的低张力铺底曲。**留空 = 不播**（维持现状：只有尸潮/Boss 音乐）。
+## 与尸潮曲互斥：一进峰值就停；Boss 音乐优先级更高。
+@export var calm_music: AudioStream = null
+## 喘息/余韵阶段专用的铺底（留空 = 沿用 calm_music）。
+## 建议：build 用更"空"的环境层，relax 用安全屋/隔离区那种更舒缓的。
+@export var calm_music_relax: AudioStream = null
+@export_range(-80.0, 12.0, 0.5) var calm_music_volume_db: float = -7.0
 
 @export_group("音乐 — Boss（Tank/T-002 登场 BGM，优先级高于尸潮）")
 ## Boss（tank_enemies 组成员 / BossEncounter 定点遭遇）存活期间播放的 BGM。
