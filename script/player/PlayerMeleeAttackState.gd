@@ -16,12 +16,15 @@ extends State
 
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
+## 调试可视化节点（TAB 开关打开时才创建；见该脚本头部的「为什么单独开节点」）。
+const DebugRegion := preload("res://script/debug_attack_region.gd")
 
 var _wd: WeaponData = null
 var _seq_idx: int = 0
 var _timer: float = 0.0
 var _hit_done: bool = false
 var _hitbox: Area2D = null
+var _debug_region: Node2D = null   ## 攻击区域可视化（仅 debug_visuals 开时非空）
 var _last_backstab: bool = false   ## 本次命中是否走了背刺（供击杀归属：即死击杀成就）
 var _is_headshot: bool = false   ## 本次攻击是否暴击（对所有命中目标生效）
 var _post_attack_active: bool = false  ## 是否正在播放攻击后动画
@@ -49,11 +52,13 @@ func enter() -> void:
 	character.player_in_weapon_state = true
 
 	_set_attack_frame(_seq_idx)
+	_spawn_debug_region()
 
 
 func exit() -> void:
 	character.player_in_weapon_state = false
 	_cleanup_hitbox()
+	_free_debug_region()
 	# 恢复武器就绪外观
 	if _wd:
 		character.set_weapon_ready_frame()
@@ -67,6 +72,9 @@ func process_update(delta: float) -> void:
 	if not _wd:
 		transition_requested.emit("Idle")
 		return
+
+	# 每帧同步调试框（命中帧前是预测虚线，命中帧后吸附到真实判定区）
+	_update_debug_region()
 
 	# --- 等待帧阶段（攻击完成后的冷却） ---
 	if _wait_frames > 0:
@@ -134,6 +142,9 @@ func physics_update(delta: float) -> void:
 	# 近战判定区域存在时检测命中（只检测一次）
 	if _hitbox and not _hit_done:
 		_check_melee_hits()
+
+	# 转向发生在上面 —— 预测框放最后更新，避免比角色朝向晚一帧
+	_update_debug_region()
 
 
 ## 设置攻击帧。**步号必须一并传下去** —— 「武器单体动作图」按
@@ -300,6 +311,43 @@ func _cleanup_hitbox() -> void:
 	if _hitbox:
 		_hitbox.queue_free()
 		_hitbox = null
+
+
+# ═══════════════════════════════════════
+# 攻击区域调试可视化（TAB）
+# ═══════════════════════════════════════
+
+## 进入攻击状态时创建（仅 `Global.debug_visuals` 打开时）。零开销：正常游玩不生成节点。
+func _spawn_debug_region() -> void:
+	if not Global.debug_visuals:
+		return
+	_debug_region = DebugRegion.new()
+	_debug_region.name = "MeleeDebugRegion"
+	character.get_tree().current_scene.add_child(_debug_region)
+	_update_debug_region()
+
+
+## 每帧刷新：命中帧前 = 角色位置 + 朝向 × 前伸偏移 的**预测框**（虚线，跟随转向）；
+## 命中帧后 = 真实 hitbox 的位置（实线，位置已固定，不随角色移动）。
+func _update_debug_region() -> void:
+	if _debug_region == null or not is_instance_valid(_debug_region):
+		return
+	if not _wd:
+		return
+	var size: Vector2 = _wd.melee_range_size
+	var text: String = "近战 %d×%d" % [roundi(size.x), roundi(size.y)]
+	if _hitbox and is_instance_valid(_hitbox):
+		_debug_region.call("update_region", _hitbox.global_position, size, true, text)
+		return
+	var center: Vector2 = character.global_position \
+		+ character.get_facing_vector() * _wd.melee_range_forward_offset
+	_debug_region.call("update_region", center, size, false, text)
+
+
+func _free_debug_region() -> void:
+	if _debug_region and is_instance_valid(_debug_region):
+		_debug_region.queue_free()
+	_debug_region = null
 
 
 func _on_attack_complete() -> void:

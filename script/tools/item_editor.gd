@@ -21,6 +21,7 @@ extends Control
 
 const BROWSER := preload("res://script/tools/asset_browser.gd")
 const OFFSET_PREVIEW := preload("res://script/tools/offset_preview.gd")
+const REGION_PREVIEW := preload("res://script/tools/region_preview.gd")
 
 const MODE_TEXTURE: int = 0
 const MODE_AUDIO: int = 1
@@ -142,6 +143,8 @@ var _generic_dict_overlay: Control = null
 var _resource_overlay: Control = null
 var _offset_overlay: Control = null
 var _offset_preview_btn: Button = null
+var _region_overlay: Control = null
+var _region_preview_btn: Button = null
 var _toast: Label = null
 var _toast_tween: Tween = null
 
@@ -366,6 +369,13 @@ func _build_ui() -> void:
 	_offset_preview_btn.tooltip_text = "可视化调整子弹 / 武器动作 / 特效偏移（仅武器）"
 	_offset_preview_btn.pressed.connect(func(): _open_offset_preview())
 	right.add_child(_offset_preview_btn)
+
+	_region_preview_btn = _button("区域预览", false)
+	_region_preview_btn.position = Vector2(202, 384)
+	_region_preview_btn.size = Vector2(152, 28)
+	_region_preview_btn.tooltip_text = "可视化调整攻击判定区域：近战矩形 / 推击矩形+溅射圈 / 子弹射程（仅武器）"
+	_region_preview_btn.pressed.connect(func(): _open_region_preview())
+	right.add_child(_region_preview_btn)
 
 	_preview_info = _label("", 12, C_MUTED)
 	_preview_info.position = Vector2(14, 420)
@@ -760,6 +770,8 @@ func _select_entry(entry: Dictionary) -> void:
 func _update_header() -> void:
 	if _offset_preview_btn != null:
 		_offset_preview_btn.disabled = not (_res is WeaponData)
+	if _region_preview_btn != null:
+		_region_preview_btn.disabled = not (_res is WeaponData)
 	if _selected_path.is_empty():
 		_path_label.text = ""
 		_dirty_label.text = ""
@@ -1804,6 +1816,10 @@ func _input(event: InputEvent) -> void:
 			if _offset_overlay != null:
 				_offset_overlay.queue_free()
 				_offset_overlay = null
+				get_viewport().set_input_as_handled()
+			elif _region_overlay != null:
+				_region_overlay.queue_free()
+				_region_overlay = null
 				get_viewport().set_input_as_handled()
 			elif _resource_overlay != null:
 				_resource_overlay.queue_free()
@@ -3659,6 +3675,322 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	panel.add_child(close)
 
 	_offset_preview_refresh(wd, state, preview, ui, true)
+
+
+# ═══════════════════════════════════════
+# 攻击区域预览（近战矩形 / 推击矩形+溅射圈 / 子弹射程）
+# ═══════════════════════════════════════
+##
+## 与「偏移预览」的分工：
+##   · 偏移预览 = 点 / 武器图位置（bullet_spawn_offsets、melee_weapon_sprite_offsets…）
+##   · 区域预览 = 判定范围本身（melee_range_size、shove_range_size、bullet_range…）
+## 区域预览里的矩形**画成轴对齐**，因为运行时就是 `RectangleShape2D` + 零旋转。
+
+func _region_mode_label(mode: String) -> String:
+	match mode:
+		"shove": return "推击区域"
+		"bullet": return "子弹射程"
+	return "近战区域"
+
+
+## 这把武器需要预览哪些区域（按实际会用到判定框的状态给）。
+func _region_modes(wd: WeaponData) -> Array[String]:
+	var out: Array[String] = []
+	if not wd.is_ranged:
+		out.append("melee")
+	## 射程 / 速度在 BulletData 上（weapon.bullet_list），没有子弹就没有射程可看
+	if not wd.bullet_list.is_empty():
+		out.append("bullet")
+	## 推击任何武器都能用（空手也能推），所以始终可预览
+	out.append("shove")
+	return out
+
+
+## 模式 → 字段名。没有的键表示该模式不涉及该项。
+## 注意：bullet 模式**不在** WeaponData 上写任何字段（射程/速度属于 BulletData），
+## 所以这里只返回空表，面板上对应行全部隐藏。
+func _region_props(mode: String) -> Dictionary:
+	match mode:
+		"shove":
+			return {
+				"size": "shove_range_size",
+				"forward": "shove_range_forward_offset",
+				"splash": "shove_splash_radius",
+			}
+		"bullet":
+			return {}
+	return {"size": "melee_range_size", "forward": "melee_range_forward_offset"}
+
+
+func _open_region_preview(focus_mode: String = "") -> void:
+	if _region_overlay != null:
+		return
+	if not (_res is WeaponData):
+		_toast_show("区域预览只支持武器资源", C_WARN)
+		return
+	var wd: WeaponData = _res
+	var modes: Array[String] = _region_modes(wd)
+	if modes.is_empty():
+		_toast_show("这把武器没有可预览的攻击区域", C_WARN)
+		return
+	var players: Array[Dictionary] = _player_entries()
+	var cid: String = "nobita"
+	var has_nobita: bool = false
+	for p: Dictionary in players:
+		if str(p["id"]) == "nobita":
+			has_nobita = true
+	if not players.is_empty() and not has_nobita:
+		cid = str(players[0]["id"])
+
+	var mode: String = focus_mode if modes.has(focus_mode) else modes[0]
+	var state: Dictionary = {"mode": mode, "char_id": cid, "direction": 0, "frame": 1,
+		"bullet_index": 0}
+
+	var vp: Vector2 = get_viewport_rect().size
+	var overlay := Control.new()
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(overlay)
+	_region_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.add_theme_stylebox_override("panel", _panel_sb(C_PANEL, C_BORDER, 6))
+	panel.size = Vector2(1120, 840)
+	panel.position = ((vp - panel.size) * 0.5).floor()
+	overlay.add_child(panel)
+
+	var title := _label("区域预览：%s" % wd.item_name, 16, C_TEXT)
+	title.position = Vector2(18, 14)
+	title.size = Vector2(700, 26)
+	panel.add_child(title)
+
+	var sub := _label("矩形 = 运行时真实判定范围（轴对齐）；拖动矩形改「前伸偏移」，数值在右侧或检查器改",
+		11, C_MUTED)
+	sub.position = Vector2(18, 40)
+	sub.size = Vector2(760, 18)
+	panel.add_child(sub)
+
+	var preview: Control = null
+	var ui: Dictionary = {"mode_buttons": {}}
+	var mode_buttons: Dictionary = {}
+	var group := ButtonGroup.new()
+	for i: int in range(modes.size()):
+		var m: String = modes[i]
+		var b := _button(_region_mode_label(m), false)
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = (m == mode)
+		b.position = Vector2(18 + i * 128, 66)
+		b.size = Vector2(120, 30)
+		b.pressed.connect(func():
+			state["mode"] = m
+			_region_preview_refresh(wd, state, preview, ui, true))
+		panel.add_child(b)
+		mode_buttons[m] = b
+	ui["mode_buttons"] = mode_buttons
+
+	preview = REGION_PREVIEW.new()
+	preview.position = Vector2(18, 108)
+	preview.size = Vector2(660, 700)
+	preview.set("font", _font)
+	panel.add_child(preview)
+	preview.connect("forward_edited", func(m: String, v: float):
+		state["mode"] = m
+		_region_set_forward(m, v)
+		_region_preview_refresh(wd, state, preview, ui))
+
+	var vb := VBoxContainer.new()
+	vb.position = Vector2(700, 108)
+	vb.size = Vector2(400, 700)
+	vb.add_theme_constant_override("separation", 10)
+	panel.add_child(vb)
+
+	var char_opt := _offset_option(
+		players.map(func(p: Dictionary): return ["%s (%s)" % [p["name"], p["id"]], p["id"]]),
+		_index_of_player(players, cid))
+	char_opt.item_selected.connect(func(i: int):
+		state["char_id"] = str(char_opt.get_item_metadata(i))
+		_region_preview_refresh(wd, state, preview, ui, true))
+	vb.add_child(_offset_preview_row("角色", char_opt))
+
+	var dir_opt := _offset_option([["下", 0], ["左", 1], ["右", 2], ["上", 3]], 0)
+	dir_opt.item_selected.connect(func(i: int):
+		state["direction"] = i
+		_region_preview_refresh(wd, state, preview, ui, true))
+	vb.add_child(_offset_preview_row("方向", dir_opt))
+
+	## 判定宽（x，横向） / 高（y，纵深）—— 名称写清楚，避免和"前伸"混淆
+	var w_spin := _offset_spin(0.0, 0.0, 512.0)
+	var h_spin := _offset_spin(0.0, 0.0, 512.0)
+	w_spin.value_changed.connect(func(v: float):
+		_region_set_size(str(state["mode"]), v, h_spin.value)
+		_region_preview_refresh(wd, state, preview, ui))
+	h_spin.value_changed.connect(func(v: float):
+		_region_set_size(str(state["mode"]), w_spin.value, v)
+		_region_preview_refresh(wd, state, preview, ui))
+	var w_row := _offset_preview_row("判定宽 x", w_spin)
+	var h_row := _offset_preview_row("纵深高 y", h_spin)
+	vb.add_child(w_row)
+	vb.add_child(h_row)
+	ui["w_row"] = w_row
+	ui["h_row"] = h_row
+	ui["w"] = w_spin
+	ui["h"] = h_spin
+
+	var f_spin := _offset_spin(0.0, 0.0, 512.0)
+	f_spin.value_changed.connect(func(v: float):
+		_region_set_forward(str(state["mode"]), v)
+		_region_preview_refresh(wd, state, preview, ui))
+	var f_row := _offset_preview_row("前伸偏移", f_spin)
+	vb.add_child(f_row)
+	ui["f_row"] = f_row
+	ui["f"] = f_spin
+
+	var s_spin := _offset_spin(0.0, 0.0, 512.0)
+	s_spin.value_changed.connect(func(v: float):
+		_set_prop("shove_splash_radius", v)
+		_region_preview_refresh(wd, state, preview, ui))
+	var s_row := _offset_preview_row("溅射半径", s_spin)
+	vb.add_child(s_row)
+	ui["s_row"] = s_row
+	ui["s"] = s_spin
+
+	var bullets: Array = []
+	for i: int in range(wd.bullet_list.size()):
+		var bd: BulletData = wd.bullet_list[i]
+		var nm: String = bd.resource_path.get_file() if not bd.resource_path.is_empty() else "子弹%d" % (i + 1)
+		bullets.append(["%s（%dpx）" % [nm, roundi(bd.max_range)], i])
+	var bullet_opt := _offset_option(bullets, 0)
+	bullet_opt.item_selected.connect(func(i: int):
+		state["bullet_index"] = i
+		_region_preview_refresh(wd, state, preview, ui))
+	var bullet_row := _offset_preview_row("子弹", bullet_opt)
+	vb.add_child(bullet_row)
+	ui["bullet_row"] = bullet_row
+
+	var save := _button("保存到 .tres", true)
+	save.pressed.connect(func():
+		_save_current(false)
+		(ui["status"] as Label).text = "已保存到 %s" % _selected_path
+		_toast_show("已保存：%s" % _selected_path.get_file(), C_OK))
+	vb.add_child(save)
+
+	var status := _label("", 11, C_MUTED)
+	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status.custom_minimum_size = Vector2(0, 80)
+	vb.add_child(status)
+	ui["status"] = status
+
+	var hint := _label(
+		"近战 / 推击：矩形中心 = 角色原点 + 朝向 × 前伸偏移，\n"
+		+ "　尺寸是轴对齐宽×高（不随朝向旋转，与运行时代码一致）。\n"
+		+ "推击：外圈 = 溅射半径（只卷击退，不造成伤害）。\n"
+		+ "子弹：虚线长度 = BulletData.max_range；起点 = spawn_offset。\n"
+		+ "　射程/速度在子弹资源里改（本窗口只读，避免误改共用子弹）。\n"
+		+ "拖动矩形写回前伸偏移；修改后 Ctrl+S 保存。",
+		11, C_MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(0, 140)
+	vb.add_child(hint)
+
+	var close := _button("关闭", false)
+	close.position = Vector2(986, 796)
+	close.size = Vector2(116, 32)
+	close.pressed.connect(func():
+		overlay.queue_free()
+		_region_overlay = null)
+	panel.add_child(close)
+
+	_region_preview_refresh(wd, state, preview, ui, true)
+
+
+func _region_set_size(mode: String, w: float, h: float) -> void:
+	var prop: String = str(_region_props(mode).get("size", ""))
+	if prop.is_empty():
+		return
+	_set_prop(prop, Vector2(roundf(w), roundf(h)))
+
+
+func _region_set_forward(mode: String, value: float) -> void:
+	var prop: String = str(_region_props(mode).get("forward", ""))
+	if prop.is_empty():
+		return
+	_set_prop(prop, roundf(value))
+
+
+func _region_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control,
+		ui: Dictionary, reset_drag: bool = false) -> void:
+	var mode: String = str(state.get("mode", "melee"))
+	var direction: int = clampi(int(state.get("direction", 0)), 0, 3)
+	var frame: int = clampi(int(state.get("frame", 1)), 0, 2)
+	var bullet_index: int = maxi(0, int(state.get("bullet_index", 0)))
+	var cid: String = str(state.get("char_id", ""))
+	var cd: CharacterData = _character_by_id(cid)
+	preview.call("set_preview", wd, cd, mode, direction, frame, bullet_index)
+	if reset_drag:
+		preview.call("cancel_drag")
+
+	var props: Dictionary = _region_props(mode)
+	var has_size: bool = props.has("size")
+	var has_forward: bool = props.has("forward")
+	## 每行是否可见（按模式）
+	for key: String in ["w_row", "h_row"]:
+		if ui.has(key):
+			(ui[key] as Control).visible = has_size
+	if ui.has("f_row"):
+		(ui["f_row"] as Control).visible = has_forward
+	if ui.has("s_row"):
+		(ui["s_row"] as Control).visible = mode == "shove"
+	if ui.has("bullet_row"):
+		(ui["bullet_row"] as Control).visible = mode == "bullet"
+
+	## 数值回填（no_signal，避免刷新又触发写入）
+	if has_size and ui.has("w") and ui.has("h"):
+		var sz: Vector2 = wd.get(str(props["size"])) as Vector2
+		(ui["w"] as SpinBox).set_value_no_signal(sz.x)
+		(ui["h"] as SpinBox).set_value_no_signal(sz.y)
+	if has_forward and ui.has("f"):
+		(ui["f"] as SpinBox).set_value_no_signal(float(wd.get(str(props["forward"]))))
+	if mode == "shove" and ui.has("s"):
+		(ui["s"] as SpinBox).set_value_no_signal(wd.shove_splash_radius)
+
+	for m: String in (ui.get("mode_buttons", {}) as Dictionary).keys():
+		(ui["mode_buttons"][m] as Button).button_pressed = (m == mode)
+
+	if ui.has("status"):
+		var lines: Array[String] = []
+		lines.append("方向：%s" % ["下", "左", "右", "上"][direction])
+		if has_size:
+			var sz2: Vector2 = wd.get(str(props["size"])) as Vector2
+			var fwd: float = float(wd.get(str(props["forward"])))
+			lines.append("判定 %d×%d · 前伸 %d" % [roundi(sz2.x), roundi(sz2.y), roundi(fwd)])
+			## 最实用的读数：以角色原点为 0，最远打到前方多少、最近从身后多少开始
+			lines.append("覆盖范围：前方 %d px ～ 身后 %d px（相对原点）" % [
+				roundi(fwd + sz2.y * 0.5), roundi(maxf(0.0, sz2.y * 0.5 - fwd))])
+			if mode == "shove":
+				lines.append("溅射半径 %d px（击退衰减：中心 100%% → 边缘 50%%）"
+					% roundi(wd.shove_splash_radius))
+		elif mode == "bullet":
+			var bd: BulletData = null
+			if not wd.bullet_list.is_empty():
+				bd = wd.bullet_list[clampi(bullet_index, 0, wd.bullet_list.size() - 1)]
+			if bd == null:
+				lines.append("⚠ 没有子弹资源：运行时不会发射")
+			else:
+				var bname: String = bd.resource_path.get_file() if not bd.resource_path.is_empty() else "（内嵌）"
+				lines.append("射程 %d px · 速度 %d px/s · 起点偏移 %d px" % [
+					roundi(bd.max_range), roundi(bd.speed), roundi(bd.spawn_offset)])
+				lines.append("子弹资源：%s" % bname)
+				lines.append("改射程/速度：打开该子弹 .tres（本窗口只读）")
+		if _dirty:
+			lines.append("● 未保存（Ctrl+S）")
+		(ui["status"] as Label).text = "\n".join(lines)
 
 
 func _index_of_player(players: Array[Dictionary], cid: String) -> int:

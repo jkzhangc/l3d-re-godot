@@ -16,12 +16,15 @@ extends State
 
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
+## 调试可视化节点（TAB 开关打开时才创建，与近战攻击共用同一套绘制）。
+const DebugRegion := preload("res://script/debug_attack_region.gd")
 
 var _wd: WeaponData = null
 var _seq_idx: int = 0
 var _timer: float = 0.0
 var _hit_done: bool = false
 var _hitbox: Area2D = null
+var _debug_region: Node2D = null   ## 推击区域可视化（仅 debug_visuals 开时非空）
 ## ★推击结束后要回到的状态名（`""` → Idle）；由 Player 层在发起切换前交给本状态。
 ## 见 `Player._return_pose_state` 的说明：不能在这里读 `is_weapon_mode_active()` ——
 ## 上一个状态的 `exit()` 已经调过 `exit_weapon_mode()`，那两个字段早被清空了。
@@ -57,6 +60,7 @@ func enter() -> void:
 	character.on_shove_performed()
 
 	_set_shove_frame(0)
+	_spawn_debug_region()
 
 
 ## 推击结束的唯一出口：回到"进入前的姿态"（举枪就绪 或 空手 Idle）。
@@ -70,6 +74,7 @@ func _finish() -> void:
 func exit() -> void:
 	character.player_in_weapon_state = false
 	_cleanup_hitbox()
+	_free_debug_region()
 	character.exit_shove_mode()
 	# 恢复武器就绪外观
 	if _wd:
@@ -84,6 +89,8 @@ func process_update(delta: float) -> void:
 	if not _wd:
 		transition_requested.emit("Idle")
 		return
+
+	_update_debug_region()
 
 	_timer -= delta
 	if _timer <= 0.0:
@@ -116,6 +123,9 @@ func physics_update(delta: float) -> void:
 	# 推击判定区域存在时检测命中（只检测一次）
 	if _hitbox and not _hit_done:
 		_check_shove_hits()
+
+	# 转向在上方完成 —— 预测框最后更新，避免比角色朝向晚一帧
+	_update_debug_region()
 
 
 func _set_shove_frame(seq_idx: int) -> void:
@@ -254,6 +264,43 @@ func _cleanup_hitbox() -> void:
 	if _hitbox:
 		_hitbox.queue_free()
 		_hitbox = null
+
+
+# ═══════════════════════════════════════
+# 推击区域调试可视化（TAB）
+# ═══════════════════════════════════════
+
+## 进入推击状态时创建（仅 `Global.debug_visuals` 打开时）。正常游玩零开销。
+func _spawn_debug_region() -> void:
+	if not Global.debug_visuals:
+		return
+	_debug_region = DebugRegion.new()
+	_debug_region.name = "ShoveDebugRegion"
+	character.get_tree().current_scene.add_child(_debug_region)
+	_update_debug_region()
+
+
+## 命中帧前 = 预测框（虚线，跟随转向）；命中帧后 = 真实判定区（实线 + 溅射圈）。
+func _update_debug_region() -> void:
+	if _debug_region == null or not is_instance_valid(_debug_region):
+		return
+	if not _wd:
+		return
+	var size: Vector2 = _wd.shove_range_size
+	var splash: float = maxf(_wd.shove_splash_radius, 0.0)
+	var text: String = "推击 %d×%d" % [roundi(size.x), roundi(size.y)]
+	if _hitbox and is_instance_valid(_hitbox):
+		_debug_region.call("update_region", _hitbox.global_position, size, true, text, splash)
+		return
+	var center: Vector2 = character.global_position \
+		+ character.get_facing_vector() * _wd.shove_range_forward_offset
+	_debug_region.call("update_region", center, size, false, text, splash)
+
+
+func _free_debug_region() -> void:
+	if _debug_region and is_instance_valid(_debug_region):
+		_debug_region.queue_free()
+	_debug_region = null
 
 
 func _play_attack_sound(stream: AudioStream) -> void:
