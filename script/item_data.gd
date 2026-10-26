@@ -44,6 +44,12 @@ enum ItemType {
 @export var pickup_step_duration: float = 0.0
 ## 地面是否启用踏步动画
 @export var pickup_animated: bool = true
+## ★拾取方式（2026-10-26 用户需求）：false = 走上去自动拾取（默认）；
+## true = 靠近后**按住功能键(D)** 拾取（进度环 + 头顶 D 键帽提示，同武器替换的键帽）。
+## 治疗品 / 辅助品默认开启，避免"路过顺手捡走"。
+## ⚠ 只对 `healing_pickup.tscn` 这一族掉落物（治疗品/辅助品/投掷物）生效；
+##   武器掉落物走 `weapon_pickup.require_function_key`（它本身是长按替换）。
+@export var pickup_requires_function_key: bool = false
 
 @export_group("使用效果")
 ## 使用时回复的 HP 量（0=不回复）
@@ -74,6 +80,12 @@ enum ItemType {
 @export var use_sound: AudioStream = null
 ## 使用音效音调（<=0 = 原调 1.0）。
 @export_range(0.0, 4.0, 0.1) var use_sound_pitch: float = 1.0
+
+
+## 地面掉落物是否必须「按住功能键(D)」才能拾取（派生数据给 healing_pickup 用）。
+## 治疗品 / 辅助品默认开启（见各自 .tres 的 pickup_requires_function_key）。
+func needs_function_key_pickup() -> bool:
+	return pickup_requires_function_key
 
 
 func get_type_name() -> String:

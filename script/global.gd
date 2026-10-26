@@ -44,6 +44,10 @@ var debug_visuals: bool = false
 ## （真实值在 AudioService）—— 此处不可重复声明。
 var facing_lock_mode: int = 0   ## 固定朝向模式: 0=切换式, 1=按住式
 var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置里可开关，2026-09-14 用户要求默认居中）
+## 物品获取 / 替换的交互方式（2026-10-26 用户需求）：false = **点一下**（默认），true = 按住。
+## 影响三处：武器掉落物拾取与替换（功能键 D）、药品类掉落物拾取（功能键 D）、
+## 已持有投掷物时的替换（确定键）。按住模式沿用 `hold_time`（默认 1.2s）+ 进度环。
+var pickup_hold_mode: bool = false
 
 ## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
 ## 【2026-10-08 拆分】逻辑已抽到 `script/touch_layout_service.gd`（TouchLayoutService），
@@ -1236,6 +1240,7 @@ func _apply_config_file(path: String) -> void:
 		if not sid.is_empty() and not collection_ids.has(sid):
 			collection_ids.append(sid)
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
+	pickup_hold_mode = bool(cfg.get("pickup_hold_mode", pickup_hold_mode))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 	## ★空串视为"未设置"，不覆盖 —— 否则随包的旧 config.json（或手机上的空值）会把
@@ -1265,6 +1270,7 @@ func save_config() -> void:
 		"bgs_volume": bgs_volume,
 		"collection_ids": Array(collection_ids),
 		"facing_lock_mode": facing_lock_mode,
+		"pickup_hold_mode": pickup_hold_mode,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
 		"master_server_url": master_server_url,
@@ -1483,6 +1489,17 @@ func set_bgs_volume(pct: int) -> void:
 func set_facing_lock_mode(mode: int) -> void:
 	facing_lock_mode = clampi(mode, 0, 1)
 	save_config()
+
+
+## 物品获取 / 替换的交互方式（false = 点一下，true = 按住）。持久化到 config.json。
+func set_pickup_hold_mode(on: bool) -> void:
+	pickup_hold_mode = on
+	save_config()
+
+
+## 设置页显示用文本。
+func pickup_hold_label() -> String:
+	return "按住" if pickup_hold_mode else "点击一下"
 
 
 # ═══════════════════════════════════════

@@ -40,6 +40,8 @@ const PICKUP_SCENE := preload("res://object/weapon_pickup.tscn")
 ##   → 落点自动避让，与已有地面掉落物保持 DROP_MIN_GAP 以上。
 const PICKUP_GROUP := &"ground_pickup"          ## 全部地面掉落物（武器/治疗/投掷物）→ 落点避让用
 const WEAPON_PICKUP_GROUP := &"weapon_pickup"   ## 仅武器拾取物 → 最近者仲裁用
+## 交互判定（点击一下 / 按住）的唯一入口，见 script/pickup_interaction.gd。
+const PickupInteraction := preload("res://script/pickup_interaction.gd")
 const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
 ## 落点避墙判据（2026-09-26）：与传送落点 / 多人补位 / 固定刷怪点**共用同一个解析器**
 ## —— 图块碰撞（任一物理层，含 physics_layer_0 角色层）+ 物理探测 + require_tile。
@@ -563,6 +565,12 @@ func _process_hold(delta: float) -> bool:
 	if _downed_player_near():
 		_hold_timer = 0.0
 		return false
+	## 点击模式（默认，2026-10-26）：按一下立刻换/捡，不累积进度、不出进度环。
+	if not PickupInteraction.is_hold_mode():
+		_hold_timer = 0.0
+		if PickupInteraction.tapped_once("功能键"):
+			_do_pickup()
+		return false
 
 	if Input.is_action_pressed("功能键"):
 		_hold_timer += delta
@@ -669,6 +677,12 @@ func _process_network_hold(delta: float) -> bool:
 		return false
 	if _downed_player_near():
 		_hold_timer = 0.0
+		return false
+	## 点击模式（默认，2026-10-26）：按一下就提交请求，不累积进度。
+	if not PickupInteraction.is_hold_mode():
+		_hold_timer = 0.0
+		if PickupInteraction.tapped_once("功能键"):
+			_request_network_pickup()
 		return false
 	if Input.is_action_pressed("功能键"):
 		_hold_timer += delta

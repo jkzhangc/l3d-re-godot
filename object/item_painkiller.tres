@@ -6,7 +6,6 @@
 
 [resource]
 script = ExtResource("1")
-use_flash_color = Color(0.62, 0.92, 1, 1)
 item_id = "painkiller_01"
 item_name = "镇痛剂"
 item_type = 7
@@ -18,4 +17,6 @@ stackable = true
 max_stack = 5
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 6
+pickup_requires_function_key = true
 painkiller_seconds = 15.0
+use_flash_color = Color(0.62, 0.92, 1, 1)

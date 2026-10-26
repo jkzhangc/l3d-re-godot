@@ -33,6 +33,8 @@ const PICKUP_SCENE := preload("res://object/healing_pickup.tscn")
 const PICKUP_DELAY_MSEC: int = 600
 
 const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
+## 交互判定（点击一下 / 按住）的唯一入口，见 script/pickup_interaction.gd。
+const PickupInteraction := preload("res://script/pickup_interaction.gd")
 ## 拾取范围的单一真源（与武器拾取物同规则，2026-09-23 用户：拾取范围调小一些）。
 ## ⚠ tscn 的 Area2D 半径须同为 WEAPON_PICKUP_SCRIPT.PICKUP_RANGE(16)。
 const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
@@ -45,6 +47,8 @@ const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 
 ## 2026-09-13 用户需求：开启后治疗品/辅助品不再触碰自动拾取，
 ## 改为靠近按住功能键(D)拾取（进度环提示）。投掷物替换仍按住确定键（旧机制）。
+## ★2026-10-26：物品数据也可声明（`ItemData.pickup_requires_function_key`），
+## 治疗品/辅助品已在各自 .tres 里打开；本字段保留为**节点级覆盖**（给单个预摆实例用）。
 @export var require_function_key: bool = false
 
 @export_group("Hold Settings")
@@ -81,6 +85,9 @@ var _player_ref: CharacterBody2D = null
 var _hold_timer: float = 0.0
 var _indicator_alpha: float = 0.0
 var _indicator_node: Node2D = null
+## 头顶「D」键帽提示（2026-10-26）：需要按住功能键才能拾取时才显示，样式与武器拾取物同款。
+const HINT_FONT_SIZE: int = 12
+var _keycap_hint: Label = null
 
 ## 在线联机中由 NetworkWorld 分配；0 表示尚未收到 Host 的权威快照。
 var network_pickup_id: int = 0
@@ -154,6 +161,79 @@ func _process(delta: float) -> void:
 	else:
 		holding = _process_pickup(delta)
 	_update_hold_indicator(delta, holding)
+	_update_keycap_hint()
+
+
+## ── 拾取方式（2026-10-26）──
+## 需要按住功能键(D)才拾取：**物品数据开关 ∨ 本节点开关**。
+## 物品级让"药品类一律按 D 捡"跟着物品走（掉落生成点不必逐个配置）；
+## 节点级保留给单个预摆实例覆盖。
+func _need_function_key() -> bool:
+	if item != null and item.needs_function_key_pickup():
+		return true
+	return require_function_key
+
+
+## 头顶键帽：只有"进范围 + 需要按 D"才显示（与 weapon_pickup 的键帽同款外观/层级）。
+## 联机镜像（presentation_only）与「还没拿到 Host 分配 id」的掉落物不显示 —— 那时按 D 也捡不起来。
+func _update_keycap_hint() -> void:
+	var show: bool = _player_in_range and is_instance_valid(_player_ref) and _need_function_key()
+	if show and (network_presentation_only or (_is_online_network_pickup() and network_pickup_id <= 0)):
+		show = false
+	if show:
+		_ensure_keycap_hint()
+		_keycap_hint.visible = true
+	elif _keycap_hint != null and is_instance_valid(_keycap_hint):
+		_keycap_hint.visible = false
+
+
+func _ensure_keycap_hint() -> void:
+	if _keycap_hint != null and is_instance_valid(_keycap_hint):
+		return
+	var g: Node = get_node_or_null("/root/Global")
+	var cap_text: String = str(g.call("key_hint", &"功能键")) if g and g.has_method("key_hint") else "D"
+	var lbl := Label.new()
+	lbl.name = "KeycapHint"
+	lbl.text = cap_text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	## 键帽外观：深底 + 浅描边 + 圆角（与 weapon_pickup 完全一致，避免两种掉落物长得不一样）
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.08, 0.1, 0.85)
+	sb.border_color = Color(0.95, 0.95, 0.9, 0.95)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(2)
+	sb.content_margin_left = 4.0
+	sb.content_margin_right = 4.0
+	sb.content_margin_top = 1.0
+	sb.content_margin_bottom = 1.0
+	lbl.add_theme_stylebox_override("normal", sb)
+	lbl.add_theme_color_override("font_color", Color(1, 1, 1))
+	if g and g.has_method("apply_hint_font"):
+		g.call("apply_hint_font", lbl, HINT_FONT_SIZE)
+	else:
+		lbl.add_theme_font_size_override("font_size", HINT_FONT_SIZE)
+	add_child(lbl)
+	_keycap_hint = lbl
+	_layout_keycap_hint()
+
+
+## 键帽宽度随文字自适应（手机端「功能」比「D」宽），水平居中悬在掉落物上方。
+## 行走图模式精灵为 48×64（原点在脚部）→ -74；退回整图图标时精灵更矮 → -54。
+func _layout_keycap_hint() -> void:
+	if _keycap_hint == null or not is_instance_valid(_keycap_hint):
+		return
+	var g: Node = get_node_or_null("/root/Global")
+	var cap_text: String = _keycap_hint.text
+	var font: Font = g.call("get_ui_font") if g and g.has_method("get_ui_font") else null
+	var text_w: float = font.get_string_size(cap_text, HORIZONTAL_ALIGNMENT_LEFT, -1, HINT_FONT_SIZE).x if font else 12.0
+	var cap_w: float = maxf(22.0, text_w + 10.0)
+	var cap_h: float = 18.0
+	_keycap_hint.size = Vector2(cap_w, cap_h)
+	var y: float = -74.0 if (item != null and item.pickup_texture) else -54.0
+	_keycap_hint.position = Vector2(-cap_w * 0.5, y)
+	## 与武器拾取物同层级：盖住 DecorLayer 图块，但低于黑幕(90)/ED(95)/章节总结(100)
+	_keycap_hint.z_index = 10
 
 
 func _is_online_network_pickup() -> bool:
@@ -177,18 +257,17 @@ func _process_network_pickup(delta: float) -> bool:
 	if not state:
 		return false
 	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
-	if not throwable_replacement and not require_function_key:
+	if not throwable_replacement and not _need_function_key():
 		_request_network_pickup()
 		return false
-	## ★投掷物替换（已持有→换新）也必须走**网络版按住**（2026-10-13 用户实测）：
+	## ★投掷物替换（已持有→换新）与「按 D 拾取」都必须走**网络版按住**（2026-10-13 用户实测）：
 	## 旧实现落到 `_process_hold → _do_pickup()` 的单机本地事务 —— 在 Client 本地域直接
 	## 改 `state.throwable`、本地掉落旧物、本地 `queue_free`，**Host 完全不知情**，
 	## 下一拍 Host 快照（`throwable_id` + `pickup_snapshot`）把状态写回旧值、掉落物重建 →
 	## 表现为「按确定键替换没同步 / 换完又变回去 / 地上掉落物复活」。
 	## 与 weapon_pickup 的网络版按住同款：满进度只提交请求，事务在 Host。
-	if throwable_replacement:
-		return _process_network_hold(delta, true)
-	return _process_hold(delta, false)
+	## （2026-10-26：药品类默认改成按 D 拾取后，这条分支成了常规路径，必须同样只发请求。）
+	return _process_network_hold(delta, throwable_replacement)
 
 
 func _request_network_pickup() -> void:
@@ -211,17 +290,24 @@ func _request_network_pickup() -> void:
 		_network_pickup_request_pending = false
 
 
-## 网络版按住流程（2026-10-13）：交互条件与单机 `_process_hold` 一致，但满进度**只提交
-## 拾取请求**，绝不本地 `_do_pickup()` —— 事务在 Host（与 weapon_pickup 的
-## `_process_network_hold` 同款）。用于「已持有→替换」的分支（默认按确定键）。
+## 网络版按住流程（2026-10-13 / 2026-10-26 扩展）：交互条件与单机 `_process_hold` 一致，
+## 但满进度**只提交拾取请求**，绝不本地 `_do_pickup()` —— 事务在 Host（与 weapon_pickup 的
+## `_process_network_hold` 同款）。
+## `throwable_replacement = true` → 已持有投掷物时按**确定键**替换；
+## `false` → 按**功能键(D)** 拾取（物品数据 `pickup_requires_function_key` 打开的药品类）。
 func _process_network_hold(delta: float, throwable_replacement: bool) -> bool:
 	## 玩家正在武器/投掷物举起/瞄准状态时不触发替换（避免与确定键瞄准冲突）。
-	if not throwable_replacement:
-		return false
-	if _player_ref.get("player_in_weapon_state"):
+	if throwable_replacement and _player_ref.get("player_in_weapon_state"):
 		_hold_timer = 0.0
 		return false
-	if Input.is_action_pressed("确定键"):
+	var action: String = "确定键" if throwable_replacement else "功能键"
+	## 点击模式（默认，2026-10-26）：按一下就提交请求，不累积进度。
+	if not PickupInteraction.is_hold_mode():
+		_hold_timer = 0.0
+		if PickupInteraction.tapped_once(action):
+			_request_network_pickup()
+		return false
+	if Input.is_action_pressed(action):
 		_hold_timer += delta
 		if _hold_timer >= hold_time:
 			_request_network_pickup()
@@ -267,10 +353,10 @@ func _process_pickup(delta: float) -> bool:
 		return false
 
 	# 投掷物且已持有 → 按住确定键替换；其余默认自动拾取，
-	# require_function_key 时改按住功能键(D)（进度环提示，避免路过误拾）
+	# 需要按住功能键(D) 时（物品数据开关 / 节点开关）改走按住流程（进度环提示，避免路过误拾）
 	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
 	if not throwable_replacement:
-		if not require_function_key:
+		if not _need_function_key():
 			_do_pickup()
 			return false
 		return _process_hold(delta, false)
@@ -285,6 +371,12 @@ func _process_pickup(delta: float) -> bool:
 func _process_hold(delta: float, throwable_replacement: bool) -> bool:
 	## 按住进度：投掷物替换用确定键（旧行为），功能键获取用功能键(D)。
 	var action: String = "确定键" if throwable_replacement else "功能键"
+	## 点击模式（默认，2026-10-26）：按一下立刻执行，不累积进度、不出进度环。
+	if not PickupInteraction.is_hold_mode():
+		_hold_timer = 0.0
+		if PickupInteraction.tapped_once(action):
+			_do_pickup()
+		return false
 	if Input.is_action_pressed(action):
 		_hold_timer += delta
 		if _hold_timer >= hold_time:
@@ -389,6 +481,8 @@ func _refresh_sprite() -> void:
 	if item.icon:
 		sprite.texture = item.icon
 		sprite.region_enabled = false
+	## 键帽位置取决于「行走图 / 整图」两种显示（高度不同），换物品时一并重排。
+	_layout_keycap_hint()
 
 
 func _on_body_entered(body: Node2D) -> void:

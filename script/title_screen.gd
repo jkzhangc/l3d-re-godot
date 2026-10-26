@@ -139,7 +139,7 @@ var _settings_bar_fill: Array[ColorRect] = []
 ## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**，
 ##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -148,11 +148,14 @@ func _settings_items() -> Array[String]:
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(520, 336)
 
 
-## 设置窗实际尺寸。移动端多一行「按键布局」→ 加高一点：
-## `_settings_row_step()` 会把行距压到 `avail / 行数`，7 行时压到 ~42px，
-## 和 32px 字号 + 光标框打架（2026-09-30）。
+## 设置窗实际尺寸：**按项数推导高度**（2026-10-26 加「拾取方式」后桌面也是 7 行）。
+## `_settings_row_step()` 会把行距压到 `avail / 行数`，行数多了会压到和 32px 字号 + 光标框打架，
+## 所以每多一行给 48px；6 行及以下沿用旧高度 336。
 func _settings_window_size() -> Vector2:
-	return Vector2(520.0, 392.0 if Global.is_mobile_platform() else 336.0)
+	var rows: int = _settings_items().size()
+	if rows <= 6:
+		return Vector2(520.0, 336.0)
+	return Vector2(520.0, 392.0 + float(rows - 7) * 48.0)
 ## 音量条宽度——背景条与填充条必须同宽（旧版填充刷新写死 80、背景 160，
 ## 填充永远只有背景一半长，2026-09-15 用户截图复现）
 const SETTINGS_BAR_W: float = 160.0
@@ -1511,6 +1514,12 @@ func _build_settings_items() -> void:
 				Global.font_option_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(font_label)
 			_settings_value_labels.append(font_label)
+		elif text == "拾取方式":
+			# 物品获取/替换的交互方式（2026-10-26）：点击一下（默认）/ 按住
+			var pick_label := _make_menu_gradient_label(
+				Global.pickup_hold_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(pick_label)
+			_settings_value_labels.append(pick_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -1585,6 +1594,13 @@ func _handle_settings_input(event: InputEvent) -> void:
 				_refresh_settings_cursor()
 			"界面字体":
 				_cycle_ui_font(1)
+			"拾取方式":
+				Global.set_pickup_hold_mode(not Global.pickup_hold_mode)
+				## 值标签按**项名**定位（不写死序号：移动端多一项「按键布局」）
+				var pick_idx: int = items.find("拾取方式")
+				if pick_idx >= 0 and pick_idx < _settings_value_labels.size() \
+						and _settings_value_labels[pick_idx]:
+					_settings_value_labels[pick_idx].text = Global.pickup_hold_label()
 			"按键布局":
 				_enter_touch_layout_edit()
 			"返回":

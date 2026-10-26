@@ -22,7 +22,7 @@ const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面
 ##   所以 0~2（音量 / 固定朝向）的序号在任何平台上都不变。
 ## 「BGS音量」（2026-10-23）固定为第 3 项：环境音独立音量，与音乐/音效互不干扰。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量", "拾取方式"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -392,6 +392,11 @@ func _build_settings_items() -> void:
 			var mode_label := _make_gl(mode_text, Vector2(BAR_X, pos_y), 24)
 			_menu_panel.add_child(mode_label)
 			_settings_value_labels.append(mode_label)
+		elif text == "拾取方式":
+			# 物品获取/替换的交互方式（2026-10-26）：点击一下（默认）/ 按住
+			var pick_label := _make_gl(Global.pickup_hold_label(), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(pick_label)
+			_settings_value_labels.append(pick_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -460,6 +465,12 @@ func _handle_settings_input(event: InputEvent) -> bool:
 					_settings_value_labels[2].text = "切换式" if new_mode == 0 else "按住式"
 			"按键布局":
 				_enter_touch_layout_edit()
+			"拾取方式":
+				Global.set_pickup_hold_mode(not Global.pickup_hold_mode)
+				var pick_idx: int = items.find("拾取方式")
+				if pick_idx >= 0 and pick_idx < _settings_value_labels.size() \
+						and _settings_value_labels[pick_idx]:
+					_settings_value_labels[pick_idx].text = Global.pickup_hold_label()
 			"返回":
 				_exit_settings()
 		return true

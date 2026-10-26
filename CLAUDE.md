@@ -173,7 +173,14 @@
 
 ### 固定朝向
 
-武器举起/攻击状态下，根据设置模式控制朝向：**切换式**=按取消键锁定/解锁；**按住式**=按住取消键锁定、松开解锁。攻击状态下玩家可移动（velocity 由方向键控制，朝向锁定不变）。
+武器举起/攻击状态下，根据设置模式控制朝向：**切换式**=按取消键锁定/解锁；**按住式**=按住取消键锁定、松开解锁。
+
+### 拾取方式（2026-10-26）
+
+设置里「拾取方式」= **点击一下（默认）** / 按住，落到 `Global.pickup_hold_mode`（持久化 `config.json`）。
+管三处：武器掉落物拾取与替换（功能键 D）、药品类掉落物拾取（功能键 D）、已持有投掷物时的替换（确定键）。
+判定统一在 `script/pickup_interaction.gd`（`is_hold_mode()` / `tapped_once()`）——**点击模式下同一帧只放行一次**，
+否则多个掉落物叠在范围内会"一下捡两件"。按住模式沿用各拾取物的 `hold_time` + 进度环。攻击状态下玩家可移动（velocity 由方向键控制，朝向锁定不变）。
 
 ### 音频
 
@@ -375,6 +382,15 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 **`script/weapon_pickup.gd`** — 地图放置的武器拾取节点。空槽位自动拾取，已有武器按住确定键替换（`hold_time=1.2s` 可配）。拾取范围内禁止攻击。替换时旧武器掉落为 WeaponPickup（弹药一并转移，添加到 GroundLayer）。
 
 **WeaponData 关键字段**：`weapon_slot`（PRIMARY/SECONDARY 枚举）、`is_ranged`、`pickup_texture`（空则回退 `weapon_walk_texture`）、`weapon_attack_walk_texture`（**空 = 攻击时仍用举起图**，取值链见 `get_attack_walk_texture()`：角色攻击图 > 武器攻击图 > 举起图）。
+
+### 物品掉落物（治疗品 / 辅助品 / 投掷物）
+
+**`script/healing_pickup.gd`** — ItemData 家族的通用地面载体（`healing_pickup.tscn`）。
+
+**拾取方式开关**（2026-10-26）：`ItemData.pickup_requires_function_key`（**默认 false = 走上去自动拾取**）。
+打开后改为**靠近按住功能键(D)** 拾取（进度环 + 头顶「D」键帽，样式与武器拾取物同款；手机端文本是「功能」）。治疗品/辅助品四件（`item_first_aid_spray` / `item_aid_box` / `item_painkiller` / `item_adrenaline`）已打开。
+解析口径：`物品开关 ∨ healing_pickup.require_function_key`（节点级仍可单独覆盖）。
+**联机**：Client 的「按 D」与投掷物替换一样只走 `_process_network_hold` → 满进度提交请求，**绝不本地 `_do_pickup()`**。
 
 ### 敌人 A* 寻路
 

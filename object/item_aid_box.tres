@@ -1,9 +1,6 @@
-[gd_resource type="Resource" script_class="ItemData" format=3]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://8mf8cqpqwwr7"]
 
 [ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://bv8py2fch3op4" path="res://art/Ui/装備アイコン救急箱.png" id="1_w7kbw"]
-[ext_resource type="Texture2D" uid="uid://djh03jwcthe8x" path="res://art/misc/!地面掉落物整合.png" id="2_w7kbw"]
-
 [ext_resource type="Texture2D" uid="uid://bv8py2fch3op4" path="res://art/Ui/装備アイコン救急箱.png" id="icon"]
 [ext_resource type="Texture2D" uid="uid://bfit8lpxt1kk1" path="res://art/Weapon/[2K-VX]-A武器セット７.png" id="pickup_tex"]
 
@@ -13,12 +10,12 @@ item_id = "aid_box_01"
 item_name = "救急箱"
 item_type = 6
 description = "原作战地补给。一次性大幅回复 HP。"
-icon = ExtResource("1_w7kbw")
+icon = ExtResource("icon")
 effect_text = "回复 +100 HP"
 sell_price = 50
 max_stack = 1
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 6
-pickup_direction = 0
 pickup_step_frames = Array[int]([2])
+pickup_requires_function_key = true
 hp_restore = 100
