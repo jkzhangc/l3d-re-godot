@@ -270,6 +270,11 @@ var _bullets: Dictionary = {} # bullet_id -> Bullet Node2D
 var _next_bullet_id := 1
 ## 攻击冷却按「玩家 + Host 当前武器」独立记录，避免切换武器后互相影响。
 var _last_attack_msec: Dictionary = {}
+## 每个 attack_key 上一次用的是第几段近战（1/2）。冷却时长按段取（2026-10-26 两连击）。
+var _last_attack_stage: Dictionary = {}
+## 近战连击窗口：peer_id -> {"weapon_id": String, "open_msec": int, "close_msec": int}。
+## 第一击结算后登记；窗口内再收到一次攻击请求 → 允许一次第二击（Host 权威，客户端不许自判）。
+var _host_melee_combo_window: Dictionary = {}
 ## Host 记录会锁定攻击输入的短时战斗动作（目前用于装填，单位为 Time.get_ticks_msec）。
 var _combat_busy_until_msec: Dictionary = {}
 ## peer_id -> {"held": bool, "aiming": bool, "range": int}; Host 是唯一写入者。
@@ -1343,6 +1348,11 @@ func _capture_fire_input() -> void:
 		# Client 只提交攻击意图；位置、朝向、武器、弹药和伤害均由 Host 重建与校验。
 		var now := Time.get_ticks_msec()
 		var interval := _get_attack_cooldown_msec(weapon) if weapon else 100
+		## 两连击：第二击的输入窗口在第一击命中帧就打开，若沿用"整套时长"的门限，
+		## 连按会被本地直接吞掉（请求根本到不了 Host）。窗口内放宽到命中时刻；
+		## Host 侧另有权威窗口校验，多余的请求只会被静默忽略。
+		if weapon and not weapon.is_ranged and weapon.has_melee_attack2():
+			interval = mini(interval, maxi(60, _melee_combo_open_msec(weapon)))
 		if now - _last_client_fire_request_msec < interval:
 			return
 		_last_client_fire_request_msec = now
@@ -1711,6 +1721,7 @@ func _clear_host_combat_state_for_dead_peer(peer_id: int) -> void:
 	_revive_attempts.erase(peer_id)
 	_weapon_transition_state.erase(peer_id)
 	_combat_busy_until_msec.erase(peer_id)
+	_host_melee_combo_window.erase(peer_id)
 	_send_host_facing_lock_state(peer_id)
 
 
@@ -1805,11 +1816,16 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 	print("[NetworkWorld] HOST_THROWABLE peer=%d item=%s" % [peer_id, td.item_id])
 
 
-func _get_attack_cooldown_msec(wd: WeaponData) -> int:
+## 一次攻击的冷却时长（毫秒）。`stage` = 这次用的段数（第二击时长通常不同）。
+func _get_attack_cooldown_msec(wd: WeaponData, stage: int = 1) -> int:
 	var seconds := 0.0
 	if wd.is_ranged:
 		for index: int in range(wd.attack_char_sequence.size()):
 			seconds += wd.get_attack_frame_duration(index)
+	elif stage == 2 and wd.has_melee_attack2():
+		var seq2: Array[int] = wd.get_melee_attack2_char_sequence()
+		for index: int in range(seq2.size()):
+			seconds += wd.get_melee_attack2_frame_duration(index)
 	else:
 		var melee_sequence: Array[int] = wd.get_melee_attack_char_sequence()
 		for index: int in range(melee_sequence.size()):
@@ -2090,11 +2106,15 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	if not wd or not node.is_weapon_mode_active():
 		return
 	var now := Time.get_ticks_msec()
-	var cooldown_msec := _get_attack_cooldown_msec(wd)
+	## ★两连击（2026-10-26）：先看这一击是否落在第一击留下的连击窗口里 —— 是则本次是第二击，
+	## 并绕过普通冷却（窗口本身就是"后摇期间"这一段）。
+	var combo_stage: int = _take_host_melee_combo(peer_id, wd, now)
 	var attack_key := "%d:%s" % [peer_id, wd.item_id]
-	if now - int(_last_attack_msec.get(attack_key, -cooldown_msec)) < cooldown_msec:
+	var cooldown_msec := _get_attack_cooldown_msec(wd, int(_last_attack_stage.get(attack_key, 1)))
+	if combo_stage != 2 and now - int(_last_attack_msec.get(attack_key, -cooldown_msec)) < cooldown_msec:
 		return
 	_last_attack_msec[attack_key] = now
+	_last_attack_stage[attack_key] = combo_stage
 
 	if wd.is_ranged:
 		if wd.magazine_capacity <= 0 or wd.bullet_list.is_empty():
@@ -2121,7 +2141,7 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 		state.set_magazine_ammo(wd.item_id, current - 1)
 		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 		node.play_network_attack_presentation(wd)
-		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, current - 1])
+		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, current - 1, 1])
 		var bullet_index := 0
 		for bd: BulletData in wd.bullet_list:
 			_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
@@ -2132,11 +2152,57 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 		return
 
 	var is_headshot := wd.critical_rate > 0.0 and randf() * 100.0 < wd.critical_rate
-	node.play_network_attack_presentation(wd)
+	node.play_network_attack_presentation(wd, combo_stage)
 	# -1 表示近战无弹夹变化；客户端只播放 Host 确认的表现。
-	_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, -1])
-	_schedule_host_melee_hit(node, wd, is_headshot)
-	print("[NetworkWorld] HOST_MELEE peer=%d weapon=%s" % [peer_id, wd.item_id])
+	_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, -1, combo_stage])
+	_schedule_host_melee_hit(node, wd, is_headshot, combo_stage)
+	if combo_stage == 1:
+		_arm_host_melee_combo(peer_id, wd, now)
+	print("[NetworkWorld] HOST_MELEE peer=%d weapon=%s stage=%d" % [peer_id, wd.item_id, combo_stage])
+
+
+## ── 近战两连击（Host 权威）──
+## 第一击结算后登记一个"连击窗口"：从**命中帧开始**（= 后摇起点）到整套第一击（含攻击后动画）播完。
+## 窗口内再收到一次攻击请求 → 允许一次第二击；窗口只用一次，武器换了立即作废。
+## 全程在 Host 侧判定，客户端只提交"我又按了一下"的意图（见 _capture_fire_input 的放宽门限）。
+func _arm_host_melee_combo(peer_id: int, wd: WeaponData, now_msec: int) -> void:
+	if wd == null or wd.is_ranged or not wd.has_melee_attack2():
+		_host_melee_combo_window.erase(peer_id)
+		return
+	_host_melee_combo_window[peer_id] = {
+		"weapon_id": wd.item_id,
+		"open_msec": now_msec + _melee_combo_open_msec(wd),
+		"close_msec": now_msec + _melee_combo_close_msec(wd),
+	}
+
+
+## 取出本次攻击应使用的段数（1 = 普通攻击，2 = 连击第二击）。命中窗口即消耗掉（一次性）。
+func _take_host_melee_combo(peer_id: int, wd: WeaponData, now_msec: int) -> int:
+	if wd == null or wd.is_ranged or not wd.has_melee_attack2():
+		return 1
+	var c: Dictionary = _host_melee_combo_window.get(peer_id, {})
+	if c.is_empty():
+		return 1
+	if str(c.get("weapon_id", "")) != wd.item_id:
+		_host_melee_combo_window.erase(peer_id)
+		return 1
+	if now_msec < int(c.get("open_msec", 0)):
+		return 1
+	if now_msec > int(c.get("close_msec", 0)):
+		_host_melee_combo_window.erase(peer_id)
+		return 1
+	_host_melee_combo_window.erase(peer_id)
+	return 2
+
+
+## 连击窗口打开时刻（毫秒，从该次攻击开始计）= 命中帧开始。
+func _melee_combo_open_msec(wd: WeaponData) -> int:
+	return int(roundi(wd.get_melee_hit_time(false) * 1000.0))
+
+
+## 连击窗口关闭时刻（毫秒，从该次攻击开始计）= 第一击整套（含攻击后动画）播完。
+func _melee_combo_close_msec(wd: WeaponData) -> int:
+	return int(roundi(wd.get_melee_attack_total_duration(false, true) * 1000.0))
 
 
 ## 近战命中窗（2026-09-23 稳定化）：命中帧只做**一次**物理查询时，两端位置差一两像素、
@@ -2146,40 +2212,46 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 const MELEE_HIT_WINDOW_FRAMES := 4
 
 
-func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> void:
+func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot: bool,
+		stage: int = 1) -> void:
 	# 避免切图释放 NetworkWorld 后，旧协程再访问空的 SceneTree。
 	if not is_inside_tree():
 		return
 	var tree := get_tree()
 	if not tree:
 		return
+	var second: bool = stage == 2 and wd.has_melee_attack2()
+	var sequence: Array[int] = wd.get_melee_attack2_char_sequence() if second else wd.get_melee_attack_char_sequence()
+	var hit_idx: int = wd.get_melee_attack2_hit_idx() if second else wd.melee_hit_at_sequence_idx
 	var delay := 0.0
-	for index: int in range(mini(wd.melee_hit_at_sequence_idx, wd.get_melee_attack_char_sequence().size())):
-		delay += wd.get_melee_attack_frame_duration(index)
+	for index: int in range(mini(hit_idx, sequence.size())):
+		delay += wd.get_melee_attack2_frame_duration(index) if second else wd.get_melee_attack_frame_duration(index)
 	if delay > 0.0:
 		await tree.create_timer(delay).timeout
 	if not (is_inside_tree() and is_instance_valid(node) and node.is_inside_tree()):
 		return
-	var hits := _perform_host_melee_attack(node, wd, is_headshot)
+	var hits := _perform_host_melee_attack(node, wd, is_headshot, second)
 	var extra := 0
 	while hits == 0 and extra < MELEE_HIT_WINDOW_FRAMES:
 		extra += 1
 		await tree.physics_frame
 		if not (is_inside_tree() and is_instance_valid(node) and node.is_inside_tree()):
 			break
-		hits = _perform_host_melee_attack(node, wd, is_headshot)
+		hits = _perform_host_melee_attack(node, wd, is_headshot, second)
 	if hits == 0:
-		print("[NetworkWorld] HOST_MELEE_WHIFF weapon=%s extra_frames=%d" % [wd.item_id, extra])
+		print("[NetworkWorld] HOST_MELEE_WHIFF weapon=%s stage=%d extra_frames=%d" % [wd.item_id, stage, extra])
 
 
 ## 返回本次命中数（0 = 挥空）。调用方据此决定是否在小窗口内重查（见 _schedule_host_melee_hit）。
-func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headshot: bool) -> int:
+func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headshot: bool,
+		second: bool = false) -> int:
 	var hit_count := 0
 	var shape := RectangleShape2D.new()
-	shape.size = wd.melee_range_size
+	shape.size = wd.get_melee_attack2_range_size() if second else wd.melee_range_size
+	var forward: float = wd.get_melee_attack2_range_forward_offset() if second else wd.melee_range_forward_offset
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = shape
-	query.transform = Transform2D(0.0, node.global_position + node.get_facing_vector() * wd.melee_range_forward_offset)
+	query.transform = Transform2D(0.0, node.global_position + node.get_facing_vector() * forward)
 	query.collision_mask = HitResolver.ENEMY_HIT_MASK # 敌人 body (layer 4) + hurtbox (layer 5)
 	query.exclude = [node.get_rid()]
 	query.collide_with_bodies = true
@@ -2201,8 +2273,10 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 			continue
 		hit_enemy_ids[enemy_id] = true
 		var melee_damage: float = wd.get_effective_damage() * (wd.critical_damage if is_headshot else 1.0)
+		if second:
+			melee_damage *= wd.get_melee_attack2_damage_mult()
 		enemy.take_damage(melee_damage, 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.element)
-		print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s" % [enemy.name, int(melee_damage), is_headshot])
+		print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s stage=%d" % [enemy.name, int(melee_damage), is_headshot, 2 if second else 1])
 		hit_count += 1
 	return hit_count
 
@@ -3118,7 +3192,7 @@ func submit_input(direction: Vector2, walking: bool) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) -> void:
+func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, stage: int = 1) -> void:
 	if net.is_host or not _players.has(peer_id):
 		return
 	var entry: Dictionary = _players[peer_id]
@@ -3136,7 +3210,7 @@ func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int) ->
 		return
 	if wd.is_ranged and magazine_ammo >= 0:
 		state.set_magazine_ammo(wd.item_id, magazine_ammo)
-	node.play_network_attack_presentation(wd)
+	node.play_network_attack_presentation(wd, stage)
 	if peer_id == int(net.my_peer_id):
 		_auto_client_fire_confirmed = true
 		_auto_client_attack_weapon_id = wd.item_id

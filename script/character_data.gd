@@ -3,7 +3,7 @@ class_name CharacterData extends Resource
 ## ── 架构定位 ──
 ## 系统：角色数据 ｜ 层：数据（Resource）
 ## 联机：角色表须 Host 校验后广播
-## 职责：角色配置：基础属性与成长率、初始装备、行走/跑步/死亡精灵表、逐武器行走图、武器槽限制、枪口与特效偏移。
+## 职责：角色配置：基础属性与成长率、初始装备、行走/跑步/死亡精灵表、逐武器行走图（举起/攻击）、武器槽限制、枪口与特效偏移。
 ## 依赖：被 Player、CharacterCatalog、玩家状态读取
 
 ## 角色参数数据 — 可在检查器中可视化编辑
@@ -79,6 +79,11 @@ class_name CharacterData extends Resource
 ## 键=weapon_state_name（如 "Pistol"/"Knife"），值=Texture2D
 ## 若某武器的键不存在，渲染时回退到 WeaponData.weapon_walk_texture
 @export var weapon_walk_textures: Dictionary = {}
+## 每个武器状态名 → 该角色在此武器下的**攻击行走图**精灵表
+## 键=weapon_state_name（如 "Pistol"/"Knife"），值=Texture2D
+## 攻击时优先用它 → 回退 WeaponData.weapon_attack_walk_texture → 再回退举起武器行走图。
+## 与 weapon_walk_textures 完全同构，只是只在攻击（含攻击后动画）期间生效。
+@export var weapon_attack_walk_textures: Dictionary = {}
 
 @export_group("投掷物行走图")
 ## 该角色在投掷物举起行走图（ThrowableData.held_walk_texture）中的角色索引
@@ -215,6 +220,15 @@ func get_effective_max_tp() -> int:
 func get_weapon_walk_texture(weapon_state_name: String) -> Texture2D:
 	if weapon_walk_textures.has(weapon_state_name):
 		return weapon_walk_textures[weapon_state_name] as Texture2D
+	return null
+
+
+## 获取该角色在指定武器下的**攻击行走图**（按武器状态名查找）。
+## 返回 null 表示未配置 → 调用方回退 WeaponData.weapon_attack_walk_texture
+## → 再回退举起武器行走图。
+func get_weapon_attack_walk_texture(weapon_state_name: String) -> Texture2D:
+	if weapon_attack_walk_textures.has(weapon_state_name):
+		return weapon_attack_walk_textures[weapon_state_name] as Texture2D
 	return null
 
 

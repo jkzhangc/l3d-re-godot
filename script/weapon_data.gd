@@ -3,7 +3,8 @@ class_name WeaponData extends ItemData
 ## ── 架构定位 ──
 ## 系统：武器数据 ｜ 层：数据（Resource）
 ## 联机：ID/路径白名单，禁止远端传 Resource
-## 职责：武器配置：伤害/射速/射程、主副槽位、开火模式、装填模式、举枪/攻击/装填/后坐力动画序列、枪声惊动范围。
+## 职责：武器配置：伤害/射速/射程、主副槽位、开火模式、装填模式、举枪/攻击/装填/后坐力动画序列、
+##       近战第二击（两连击）、枪声惊动范围。
 ## 依赖：继承 ItemData；被 BulletData 列表与玩家武器状态读取
 
 ## 武器数据 — 继承 ItemData，增加战斗属性和武器动画
@@ -31,6 +32,13 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 ## 状态机路由请用 get_state_node_name()（远程恒 "Ranged" / 近战恒 "Melee"），与本项无关。
 @export var weapon_state_name: String = ""
 @export var weapon_walk_texture: Texture2D    ## 武器举起后的行走图精灵表
+## 武器**攻击时**的行走图精灵表（布局与 weapon_walk_texture 相同：4 方向 × 4 角色格 × 3 帧）。
+## **默认留空 = 攻击时继续用举起武器行走图**（零改动、旧数据完全不受影响）。
+## 配置后：攻击与攻击后动画（`attack_char_sequence` / `melee_attack_char_sequence` /
+## `post_attack_char_sequence` 里的 char_idx）都改在这张图上取；
+## 举起 / 放下 / 装填 / 推击 仍在 weapon_walk_texture 上取。
+## 角色侧 `CharacterData.weapon_attack_walk_textures` 优先于本字段（见 get_attack_walk_texture）。
+@export var weapon_attack_walk_texture: Texture2D = null
 
 ## 武器举起/放下动画：角色索引序列
 ## 举起时正向播放，放下时反向播放
@@ -178,25 +186,36 @@ func is_generic_melee_body(tex: Texture2D) -> bool:
 	return n.contains("近战") or n.contains("近接")
 
 
-## 该武器是否配了单独的动作图。
-func has_melee_weapon_sprite() -> bool:
-	return melee_weapon_sprite != null
+## 该武器是否配了单独的动作图（`second=true` 看第二击那张，空则沿用第一击的）。
+func has_melee_weapon_sprite(second: bool = false) -> bool:
+	return get_melee_weapon_sprite(second) != null
+
+
+## 当前该用哪张动作图：第二击配了专用图就用它，否则一律回退第一击那张。
+func get_melee_weapon_sprite(second: bool = false) -> Texture2D:
+	if second and melee_weapon_sprite_attack2 != null:
+		return melee_weapon_sprite_attack2
+	return melee_weapon_sprite
 
 
 ## 攻击序列步号 → 动作图列号；**-1 = 这一步不显示武器**。
-## `seq_idx` 是 `melee_attack_char_sequence` 的下标（第 1 步 = 0），不是 char_idx ——
+## `seq_idx` 是攻击序列的下标（第 1 步 = 0），不是 char_idx ——
 ## 同一个 char_idx 在序列里出现多次时，按步号才能区分是前摇还是后摇。
-## 见 `melee_weapon_sprite_seq_cols` 的两种模式（显式表 / 按步序自动推）。
-func get_melee_weapon_sprite_col(seq_idx: int) -> int:
-	if melee_weapon_sprite == null or seq_idx < 0:
+## `second=true` 时步号按**第二击序列**算，列号表优先 `melee_weapon_sprite_attack2_seq_cols`
+## （空则沿用第一击的表）。见 `melee_weapon_sprite_seq_cols` 的两种模式（显式表 / 按步序自动推）。
+func get_melee_weapon_sprite_col(seq_idx: int, second: bool = false) -> int:
+	if not has_melee_weapon_sprite(second) or seq_idx < 0:
 		return -1
-	var seq: Array[int] = get_melee_attack_char_sequence()
+	var seq: Array[int] = get_melee_attack2_char_sequence() if second else get_melee_attack_char_sequence()
 	if seq_idx >= seq.size():
 		return -1
-	if not melee_weapon_sprite_seq_cols.is_empty():
-		if not melee_weapon_sprite_seq_cols.has(seq_idx):
+	var cols: Dictionary = melee_weapon_sprite_seq_cols
+	if second and not melee_weapon_sprite_attack2_seq_cols.is_empty():
+		cols = melee_weapon_sprite_attack2_seq_cols
+	if not cols.is_empty():
+		if not cols.has(seq_idx):
 			return -1
-		return clampi(int(melee_weapon_sprite_seq_cols[seq_idx]), 0, 2)
+		return clampi(int(cols[seq_idx]), 0, 2)
 	if seq.size() <= 1:
 		return 1
 	if seq_idx == 0:
@@ -207,20 +226,20 @@ func get_melee_weapon_sprite_col(seq_idx: int) -> int:
 
 
 ## 取某角色在该武器下的动作图偏移（按朝向）。无条目 → Vector2.ZERO。
-## `seq_idx` = `melee_attack_char_sequence` 的下标（第 1 步 = 0）；
-## 传 -1 表示「不看步号」，只取角色基线（旧行为）。
+## `seq_idx` = 攻击序列的下标（第 1 步 = 0）；传 -1 表示「不看步号」，只取角色基线（旧行为）。
+## `second=true` = 第二击（先查第二击步号表，缺条目再回退第一击的）。
 ## 与 `get_attack_effect_offset` 同构，只是没有武器级兜底（画布中心对齐已足够）。
 func get_melee_weapon_sprite_offset(cd: CharacterData, facing: int,
-		seq_idx: int = -1) -> Vector2:
+		seq_idx: int = -1, second: bool = false) -> Vector2:
 	if cd == null:
 		return Vector2.ZERO
-	return get_melee_weapon_sprite_offset_by_key(cd.get_character_key(), facing, seq_idx)
+	return get_melee_weapon_sprite_offset_by_key(cd.get_character_key(), facing, seq_idx, second)
 
 
 ## 同上，但直接给角色键（编辑器用：拿到的是 character_id，不必先实例化 CharacterData）。
 func get_melee_weapon_sprite_offset_by_key(char_key: String, facing: int,
-		seq_idx: int = -1) -> Vector2:
-	var src: Dictionary = resolve_melee_weapon_sprite_offset(char_key, seq_idx)
+		seq_idx: int = -1, second: bool = false) -> Vector2:
+	var src: Dictionary = resolve_melee_weapon_sprite_offset(char_key, seq_idx, second)
 	var offs: WeaponEffectOffsets = src.get("offs") as WeaponEffectOffsets
 	if offs == null:
 		return Vector2.ZERO
@@ -229,27 +248,30 @@ func get_melee_weapon_sprite_offset_by_key(char_key: String, facing: int,
 
 ## 偏移来源：`step`（角色:步号） / `any`（*:步号） / `char`（角色基线） / `none`。
 ## 编辑器用它告诉用户「当前显示的值是从哪一层来的」。
-func get_melee_weapon_sprite_offset_source(char_key: String, seq_idx: int) -> String:
-	return str(resolve_melee_weapon_sprite_offset(char_key, seq_idx).get("source", "none"))
+func get_melee_weapon_sprite_offset_source(char_key: String, seq_idx: int,
+		second: bool = false) -> String:
+	return str(resolve_melee_weapon_sprite_offset(char_key, seq_idx, second).get("source", "none"))
 
 
 ## 解析命中的偏移条目。返回 {offs: WeaponEffectOffsets|null, source: String}。
-func resolve_melee_weapon_sprite_offset(char_key: String, seq_idx: int) -> Dictionary:
+## `second=true` 时优先级：第二击步号表 → 第一击步号表 → 角色基线。
+func resolve_melee_weapon_sprite_offset(char_key: String, seq_idx: int,
+		second: bool = false) -> Dictionary:
 	if char_key.is_empty():
 		return {"offs": null, "source": "none"}
-	if seq_idx >= 0 and not melee_weapon_sprite_step_offsets.is_empty():
+	var step_dicts: Array[Dictionary] = []
+	if second and not melee_weapon_sprite_attack2_step_offsets.is_empty():
+		step_dicts.append(melee_weapon_sprite_attack2_step_offsets)
+	if not melee_weapon_sprite_step_offsets.is_empty():
+		step_dicts.append(melee_weapon_sprite_step_offsets)
+	if seq_idx >= 0:
 		var exact: String = "%s:%d" % [char_key, seq_idx]
-		if melee_weapon_sprite_step_offsets.has(exact):
-			return {
-				"offs": melee_weapon_sprite_step_offsets[exact] as WeaponEffectOffsets,
-				"source": "step",
-			}
 		var wild: String = "*:%d" % seq_idx
-		if melee_weapon_sprite_step_offsets.has(wild):
-			return {
-				"offs": melee_weapon_sprite_step_offsets[wild] as WeaponEffectOffsets,
-				"source": "any",
-			}
+		for d: Dictionary in step_dicts:
+			if d.has(exact):
+				return {"offs": d[exact] as WeaponEffectOffsets, "source": "step"}
+			if d.has(wild):
+				return {"offs": d[wild] as WeaponEffectOffsets, "source": "any"}
 	if melee_weapon_sprite_offsets.has(char_key):
 		return {
 			"offs": melee_weapon_sprite_offsets[char_key] as WeaponEffectOffsets,
@@ -361,6 +383,34 @@ func get_attack_effect_offset(cd: CharacterData, facing: int, fallback: Vector2 
 @export var melee_hit_at_sequence_idx: int = 1  ## 在此序列索引创建近战判定区域
 
 
+@export_group("近战第二击（两连击）")
+## ★**默认关闭**（2026-10-26 用户口径）：不打开就永远是单段攻击，与旧版逐字段等价。
+## 打开后：第一击的**后摇期间**（命中帧之后）再按一次确定键 → 后摇结束立刻接第二击；
+## 没按就只有第一击。第二击打完回到举起就绪（不再接第三击）。
+## 下面每一项都可以独立留空/留默认值 → 回退到上面「近战攻击」那一套。
+@export var melee_attack2_enabled: bool = false
+## 第二击动画：角色索引序列。空 → 回退 melee_attack_char_sequence
+@export var melee_attack2_char_sequence: Array[int] = []
+## 第二击动画每帧持续时间（秒）。空/条目不足 → 回退 melee_attack_frame_durations
+@export var melee_attack2_frame_durations: Array[float] = []
+## 第二击在此序列索引创建判定区域。-1 → 回退 melee_hit_at_sequence_idx
+@export var melee_attack2_hit_at_sequence_idx: int = -1
+## 第二击判定矩形（宽×高）。任一分量 <= 0 → 回退 melee_range_size
+@export var melee_attack2_range_size: Vector2 = Vector2.ZERO
+## 第二击判定前方偏移（像素）。< 0 → 回退 melee_range_forward_offset
+@export var melee_attack2_range_forward_offset: float = -1.0
+## 第二击伤害倍率（乘在第一击伤害公式之后；1.0 = 与第一击相同）
+@export var melee_attack2_damage_mult: float = 1.0
+## 第二击专用的「武器单体动作图」（素材里的 `<武器>_attack2.png`）。
+## 空 → 沿用 melee_weapon_sprite（第一击那张）。
+@export var melee_weapon_sprite_attack2: Texture2D = null
+## 第二击动作图：攻击步号 → 列号。空 → 回退 melee_weapon_sprite_seq_cols
+@export var melee_weapon_sprite_attack2_seq_cols: Dictionary = {}
+## 第二击动作图偏移「按攻击步号」覆盖：键 = `<角色id>:<步号>`，也支持 `*:<步号>`。
+## 空/缺条目 → 回退 melee_weapon_sprite_step_offsets → 再回退 melee_weapon_sprite_offsets。
+@export var melee_weapon_sprite_attack2_step_offsets: Dictionary = {}
+
+
 @export_group("近战推击")
 ## 推击动画：角色索引序列（在推击行走图上的 char_idx）
 @export var shove_char_sequence: Array[int] = [0, 1, 1]
@@ -458,6 +508,24 @@ func get_ready_char_index() -> int:
 	return seq[seq.size() - 1]
 
 
+## ── 武器攻击行走图（2026-10-26）──
+## 攻击时该用哪张行走图：**角色专属攻击图 > 武器攻击图**；都没配 → null。
+## 返回 null 时调用方必须回退「举起武器行走图」（= 旧行为）。
+## 与「举起图」的取值口径同构（角色按 weapon_state_name 查，武器自带兜底），
+## 只是多加了一层 weapon_attack_walk_texture。
+func get_attack_walk_texture(cd: CharacterData) -> Texture2D:
+	if cd != null:
+		var t: Texture2D = cd.get_weapon_attack_walk_texture(weapon_state_name)
+		if t != null:
+			return t
+	return weapon_attack_walk_texture
+
+
+## 是否配了「攻击行走图」（角色侧或武器侧任一）。渲染层据此决定要不要换图。
+func has_attack_walk_texture(cd: CharacterData) -> bool:
+	return get_attack_walk_texture(cd) != null
+
+
 ## 根据朝向获取攻击特效场景
 ## facing: FaceDir 枚举值（DOWN=0, LEFT=1, RIGHT=2, UP=3）
 func get_attack_effect_anim(facing: int) -> PackedScene:
@@ -484,6 +552,81 @@ func get_melee_attack_frame_duration(seq_idx: int) -> float:
 	if melee_attack_frame_durations.size() > seq_idx:
 		return melee_attack_frame_durations[seq_idx]
 	return get_attack_frame_duration(seq_idx)
+
+
+# ═══════════════════════════════════════
+# 近战第二击（两连击）—— 每项都可留空回退第一击
+# ═══════════════════════════════════════
+
+## 第二击是否可用。**唯一开关**：false = 完全是单段攻击（旧行为）。
+func has_melee_attack2() -> bool:
+	return melee_attack2_enabled
+
+
+## 第二击动画角色序列（空 → 回退第一击）
+func get_melee_attack2_char_sequence() -> Array[int]:
+	if melee_attack2_char_sequence.size() > 0:
+		return melee_attack2_char_sequence
+	return get_melee_attack_char_sequence()
+
+
+## 第二击每帧持续时间（条目不足 → 回退第一击的对应帧）
+func get_melee_attack2_frame_duration(seq_idx: int) -> float:
+	if melee_attack2_frame_durations.size() > seq_idx:
+		return melee_attack2_frame_durations[seq_idx]
+	return get_melee_attack_frame_duration(seq_idx)
+
+
+## 第二击的命中步号（-1 = 回退第一击）。越界会钳到序列内，避免「配错索引 = 永不命中」。
+func get_melee_attack2_hit_idx() -> int:
+	var last: int = maxi(get_melee_attack2_char_sequence().size() - 1, 0)
+	var idx: int = melee_attack2_hit_at_sequence_idx
+	if idx < 0:
+		idx = melee_hit_at_sequence_idx
+	return clampi(idx, 0, last)
+
+
+## 第二击判定矩形（任一分量 <= 0 → 回退第一击）
+func get_melee_attack2_range_size() -> Vector2:
+	if melee_attack2_range_size.x > 0.0 and melee_attack2_range_size.y > 0.0:
+		return melee_attack2_range_size
+	return melee_range_size
+
+
+## 第二击判定前伸偏移（< 0 → 回退第一击）
+func get_melee_attack2_range_forward_offset() -> float:
+	if melee_attack2_range_forward_offset >= 0.0:
+		return melee_attack2_range_forward_offset
+	return melee_range_forward_offset
+
+
+## 第二击伤害倍率（< 0 视为 0：允许配成纯击退的 0 伤害，但要防止负伤害回血）
+func get_melee_attack2_damage_mult() -> float:
+	return maxf(0.0, melee_attack2_damage_mult)
+
+
+## 某一段近战的完整时长（秒）：攻击序列 + （可选）攻击后动画。
+## `second` = 第二击；`include_post_attack` 供联机侧计算「连击窗口/冷却」用。
+func get_melee_attack_total_duration(second: bool, include_post_attack: bool = true) -> float:
+	var seq: Array[int] = get_melee_attack2_char_sequence() if second else get_melee_attack_char_sequence()
+	var total: float = 0.0
+	for i: int in range(seq.size()):
+		total += get_melee_attack2_frame_duration(i) if second else get_melee_attack_frame_duration(i)
+	if include_post_attack:
+		var post: Array[int] = get_post_attack_char_sequence()
+		for i: int in range(post.size()):
+			total += get_post_attack_frame_duration(i)
+	return total
+
+
+## 某一段近战「命中帧开始」的时间点（秒，从该段动画起算）。
+func get_melee_hit_time(second: bool) -> float:
+	var seq: Array[int] = get_melee_attack2_char_sequence() if second else get_melee_attack_char_sequence()
+	var hit_idx: int = get_melee_attack2_hit_idx() if second else clampi(melee_hit_at_sequence_idx, 0, maxi(seq.size() - 1, 0))
+	var t: float = 0.0
+	for i: int in range(mini(hit_idx, seq.size())):
+		t += get_melee_attack2_frame_duration(i) if second else get_melee_attack_frame_duration(i)
+	return t
 
 
 ## 获取推击动画的角色序列

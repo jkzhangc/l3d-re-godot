@@ -157,6 +157,15 @@ var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色�
 ## 与 `_current_weapon_char_idx` 分开记：同一个 char_idx 可能在序列里出现多次，
 ## 只有步号才能区分「这是前摇还是后摇」（见 WeaponData.melee_weapon_sprite_seq_cols）。
 var _current_weapon_seq_idx: int = -1
+## ★武器攻击姿态（2026-10-26）：true = 正在播**攻击动画**（含攻击后动画）。
+## 渲染层据此把「举起武器行走图」换成「武器攻击行走图」（WeaponData.weapon_attack_walk_texture
+## / CharacterData.weapon_attack_walk_textures）；两者都没配时取值回退举起图，表现与旧版一致。
+## 由攻击状态 enter 置 true、由 `enter/exit_weapon_mode()` 统一复位（装填/推击/放下都会经过它）。
+var _weapon_attack_pose: bool = false
+## ★当前近战段数（1 = 第一击，2 = 第二击/两连击，2026-10-26）。
+## 「武器单体动作图」据此决定用第一击还是第二击那张（`melee_weapon_sprite_attack2`）。
+## 与 `_weapon_attack_pose` 同源管理：enter/exit_weapon_mode 与状态 exit 都会复位成 1。
+var _melee_attack_stage: int = 1
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
 var _throwable_mode: bool = false           ## 是否处于投掷物举起模式（使用投掷物行走图）
 var _throwable_texture: Texture2D = null    ## 投掷物举起行走图精灵表
@@ -919,6 +928,9 @@ func enter_weapon_mode(wd: WeaponData) -> void:
 	_weapon_data = wd
 	_current_weapon_char_idx = wd.get_raise_char_sequence()[0]
 	_current_weapon_seq_idx = -1
+	## 进入武器模式一律先按「举起外观」渲染；攻击状态在 enter 末尾再打上攻击姿态。
+	_weapon_attack_pose = false
+	_melee_attack_stage = 1
 	if animation_timer:
 		animation_timer.wait_time = _mode_anim_duration(true)
 		animation_timer.start()
@@ -930,6 +942,8 @@ func exit_weapon_mode() -> void:
 	_weapon_data = null
 	_current_weapon_char_idx = 0
 	_current_weapon_seq_idx = -1
+	_weapon_attack_pose = false
+	_melee_attack_stage = 1
 	## ★★ 这里**不再**解除覚醒、也**不再**解除固定朝向（2026-10-03 用户实测两条）。
 	## 【根因】本函数**职责过载**：它同时被「真的放下武器」（`_begin_lower()`）和
 	##   「状态切换」（攻击 / 装弹 / 推击的 `exit()` 都会先退再进武器模式）调用。
@@ -1018,6 +1032,40 @@ func set_attack_char_index(char_idx: int, seq_idx: int = -1) -> void:
 	_refresh_sprite()
 
 
+## ★切换「攻击外观」开关（2026-10-26 用户需求）。
+## true = 本段动画属于攻击（攻击状态 enter 时置上，覆盖攻击序列 + 攻击后动画）；
+## false = 回到举起外观（装填 / 放下 / 待机）。不传就维持原状。
+##
+## 只影响**用哪张贴图**，不动 char_idx / 步号：char_idx 仍由 `set_attack_char_index()` 写入，
+## 攻击序列的编号在「攻击行走图」上取（配了攻击图时）。
+## 复位不必逐个状态写：`enter_weapon_mode()` / `exit_weapon_mode()` 都会把它清成 false，
+## 而每个武器状态（装填/推击/举起）enter 都会调用前者。
+func set_weapon_attack_pose(on: bool) -> void:
+	if _weapon_attack_pose == on:
+		return
+	_weapon_attack_pose = on
+	_refresh_sprite()
+
+
+## 当前是否处于攻击外观（供渲染层/调试判断，不对外改状态）。
+func is_weapon_attack_pose() -> bool:
+	return _weapon_attack_pose
+
+
+## 设置近战段数（1 = 第一击，2 = 第二击）。只有近战攻击状态会调；其它状态复位成 1。
+func set_melee_attack_stage(stage: int) -> void:
+	var v: int = 2 if stage == 2 else 1
+	if _melee_attack_stage == v:
+		return
+	_melee_attack_stage = v
+	_refresh_sprite()
+
+
+## 当前近战段数（供渲染层/调试读取）。
+func get_melee_attack_stage() -> int:
+	return _melee_attack_stage
+
+
 ## 联机举起/放下必须由 Host 确认后播放，过渡期间 NetworkWorld 会锁住其他战斗输入。
 func play_network_weapon_transition(wd: WeaponData, raising: bool) -> void:
 	if not wd:
@@ -1060,14 +1108,19 @@ func _run_network_weapon_transition(token: int, wd: WeaponData, raising: bool) -
 
 ## 联机攻击只负责本地表现；子弹、弹药和伤害均由 NetworkWorld 的 Host 权威处理。
 ## 远程和近战共用此入口，命中时机则按对应 WeaponData 的配置播放效果。
-func play_network_attack_presentation(wd: WeaponData) -> void:
+## `stage`：近战段数（1 = 第一击，2 = 第二击/两连击）。远程传默认 1 即可。
+## ⚠ 段数必须由 Host 给（客户端不能自己判断连击），见 NetworkWorld 的连击窗口。
+func play_network_attack_presentation(wd: WeaponData, stage: int = 1) -> void:
 	if not wd:
 		return
 	_network_attack_token += 1
 	var token := _network_attack_token
 	enter_weapon_mode(wd)
 	player_in_weapon_state = true
-	call_deferred("_run_network_attack_presentation", token, wd)
+	## 联机攻击表现同样吃「武器攻击行走图」（2026-10-26）：单机/联机外观必须一致。
+	set_weapon_attack_pose(true)
+	set_melee_attack_stage(stage)
+	call_deferred("_run_network_attack_presentation", token, wd, stage)
 
 
 ## 保留旧名称，避免外部调用点在逐步迁移期间失效。
@@ -1159,11 +1212,14 @@ func _run_network_reload_presentation(token: int, wd: WeaponData, loaded_count: 
 		player_in_weapon_state = false
 
 
-func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
+func _run_network_attack_presentation(token: int, wd: WeaponData, stage: int = 1) -> void:
 	# 这个协程可能在 await 的下一帧遇到场景切换。不能缓存 SceneTree：节点离树后，
 	# 缓存的 tree 虽非 null，却不能再安全地用于 current_scene / create_timer。
-	var sequence: Array[int] = wd.attack_char_sequence if wd.is_ranged else wd.get_melee_attack_char_sequence()
-	var impact_index := wd.fire_at_sequence_idx if wd.is_ranged else wd.melee_hit_at_sequence_idx
+	var second: bool = (not wd.is_ranged) and stage == 2 and wd.has_melee_attack2()
+	var sequence: Array[int] = wd.attack_char_sequence if wd.is_ranged else (
+		wd.get_melee_attack2_char_sequence() if second else wd.get_melee_attack_char_sequence())
+	var impact_index := wd.fire_at_sequence_idx if wd.is_ranged else (
+		wd.get_melee_attack2_hit_idx() if second else wd.melee_hit_at_sequence_idx)
 	for index: int in range(sequence.size()):
 		if token != _network_attack_token or not is_instance_valid(self) or not is_inside_tree():
 			return
@@ -1185,7 +1241,8 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 				var offset := wd.get_attack_effect_offset(current_character, facing, wd.attack_effect_offset_override)
 				var follow: Node2D = self if wd.attack_effect_follow else null
 				VXAnimSprite.play_scene(effect_scene, global_position, scene, 10.0, follow, offset)
-		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else wd.get_melee_attack_frame_duration(index)
+		var duration := wd.get_attack_frame_duration(index) if wd.is_ranged else (
+			wd.get_melee_attack2_frame_duration(index) if second else wd.get_melee_attack_frame_duration(index))
 		if not is_inside_tree():
 			return
 		var wait_tree := get_tree()
@@ -1213,6 +1270,8 @@ func _run_network_attack_presentation(token: int, wd: WeaponData) -> void:
 				return
 			await post_tree.create_timer(post_duration).timeout
 	if token == _network_attack_token and is_instance_valid(self) and is_inside_tree():
+		set_weapon_attack_pose(false)
+		set_melee_attack_stage(1)
 		set_weapon_ready_frame()
 		player_in_weapon_state = false
 
@@ -1230,10 +1289,20 @@ func get_weapon_data() -> WeaponData:
 ##   · 状态机下次攻击走 `_get_weapon()` → `get_active_weapon()` 拿到 **B**。
 ##   两者错位 → 行走图显示 A 的帧、攻击/枪口效果用 B 的数据，视觉上就是「枪换了但图没对上」。
 ##
-## 【修法】换装完成后由调用方转到这里：仍在武器模式就**按新武器重举一次**（跳过举起动画），
+## 【修法】换装完成后由调用方转到这里：仍在武器模式就**重跑当前武器的举起状态机**
+##   （2026-10-26 用户口径：不是放下再举起，而是让状态机同名重入再走一次 `enter()`），
 ##   不在武器模式则只清快照，让下一次 `enter_weapon_mode()` 正常读新武器。
+##
+## 【为什么不是"直接把表现落到就绪帧"】旧实现只重置 `_weapon_data` + 帧索引，
+##   状态对象自己缓存的 `_wd`（举起序列 / 攻击序列 / 帧时长 / 音效全在它身上）仍是**旧武器**的，
+##   要等下一次状态切换才会重读 —— 表现为"换枪后第一次攻击还是旧枪的数值/步序"。
+##   改走 `StateMachine.request_state()` 后，exit→enter 会把这一切按新武器重建，
+##   顺带播一次新武器的举起动画（与手动举起的手感一致）。
 ## ⚠ 必须整体重置 `_current_weapon_char_idx`（不能只换 `_weapon_data`）：
 ##   索引是按旧武器的 raise 序列取的，沿用会取到新贴图上的越界/错位帧。
+## ⚠ 联机（`network_controlled`）实体不重入状态机：状态机已被 `_disable_network_state_machine()`
+##   停帧，重入后 RAISE 阶段永远不会推进 → 卡在举起首帧。联机仍走旧行为（直接落到就绪帧），
+##   其表现由 NetworkWorld 的下一次攻击/举放表现刷新。
 func rebind_weapon_after_equip(wd: WeaponData) -> void:
 	if _is_dying:
 		return
@@ -1241,7 +1310,16 @@ func rebind_weapon_after_equip(wd: WeaponData) -> void:
 		_weapon_data = wd
 		_current_weapon_char_idx = wd.get_raise_char_sequence()[0]
 		_current_weapon_seq_idx = -1
-		# 跳过举起动画直接落到就绪帧（等价联机侧的 weapon_skip_raise 语义）
+		_weapon_attack_pose = false
+		_melee_attack_stage = 1
+		var sm: Node = get_node_or_null("StateMachine")
+		if not network_controlled and sm != null and sm.has_method("request_state"):
+			## 重入前清掉「跳过举起动画」：我们要的就是**完整重播一次举起**。
+			remove_meta("weapon_skip_raise")
+			sm.call("request_state", wd.get_state_node_name())
+			print("[玩家] 换装后重跑举起状态机: %s → %s" % [wd.item_name, wd.get_state_node_name()])
+			return
+		# 联机 / 状态机缺失：跳过举起动画直接落到就绪帧（等价 weapon_skip_raise 语义）
 		set_weapon_ready_frame()
 		print("[玩家] 换装后重绑武器表现: %s" % wd.item_name)
 		return
@@ -1249,6 +1327,8 @@ func rebind_weapon_after_equip(wd: WeaponData) -> void:
 	_weapon_data = null
 	_current_weapon_char_idx = 0
 	_current_weapon_seq_idx = -1
+	_weapon_attack_pose = false
+	_melee_attack_stage = 1
 	_refresh_sprite()
 
 
@@ -1520,6 +1600,8 @@ func refresh_after_switch() -> void:
 	## 这里走与 `exit_weapon_mode()` 相同的收敛逻辑（幂等），不依赖状态机 exit 链。
 	_current_weapon_char_idx = 0
 	_current_weapon_seq_idx = -1
+	_weapon_attack_pose = false
+	_melee_attack_stage = 1
 	_shove_mode = false
 	_shove_texture = null
 	exit_throwable_mode()

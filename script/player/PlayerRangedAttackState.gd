@@ -50,12 +50,16 @@ func enter() -> void:
 	# 确保武器模式开启（上一个武器状态 exit 时可能关闭了）
 	character.enter_weapon_mode(_wd)
 	character.player_in_weapon_state = true
+	# 攻击外观：配了「武器攻击行走图」就切过去，没配则仍是举起图（2026-10-26）
+	character.set_weapon_attack_pose(true)
 
 	# 设置攻击动画第一帧
 	_set_attack_frame(_seq_idx)
 
 func exit() -> void:
 	character.player_in_weapon_state = false
+	# 先退出攻击外观，再恢复武器就绪外观（否则就绪帧会被画在攻击图上）
+	character.set_weapon_attack_pose(false)
 	# 恢复武器就绪外观（char_idx_2）
 	if _wd:
 		character.set_weapon_ready_frame()

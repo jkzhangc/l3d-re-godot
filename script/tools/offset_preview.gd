@@ -227,6 +227,11 @@ func _font() -> Font:
 func _character_texture() -> Texture2D:
 	if weapon == null:
 		return null
+	## 攻击步号预览必须和游戏内攻击时**同一张图**：配了「武器攻击行走图」就用它，
+	## 否则回退举起图（2026-10-26 与 WeaponData.get_attack_walk_texture 同一取值链）。
+	var atk: Texture2D = weapon.get_attack_walk_texture(character)
+	if atk != null:
+		return atk
 	if character != null:
 		var t: Texture2D = character.get_weapon_walk_texture(weapon.weapon_state_name)
 		if t != null:

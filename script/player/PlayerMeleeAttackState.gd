@@ -13,6 +13,13 @@ extends State
 ## 攻击动画: melee_attack_char_sequence（或回退 attack_char_sequence）
 ## 在 melee_hit_at_sequence_idx 处创建判定区域
 ## 动画结束后切回**近战举起状态**（READY 阶段，跳过举起动画），由 WeaponData.get_state_node_name() 路由
+##
+## 【2026-10-26 两连击】第二击（`WeaponData.melee_attack2_enabled`，**默认关闭**）：
+##   第一击的**后摇期间**（命中帧之后）再按一次确定键 → 记一个缓冲；
+##   第一击整套动画（含攻击后动画）播完时若缓冲仍在 → 原地切到第二击序列继续播，
+##   判定位/伤害改用第二击参数。第二击打完就回就绪，不再接第三击。
+##   缓冲只在「命中帧之后」打开 —— 前摇期间连按不算数（避免一击变两击的误触）。
+##   HOLD 模式不受影响：按住仍是重复第一击（连击需要一次新的按下）。
 
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
@@ -29,6 +36,12 @@ var _last_backstab: bool = false   ## 本次命中是否走了背刺（供击杀
 var _is_headshot: bool = false   ## 本次攻击是否暴击（对所有命中目标生效）
 var _post_attack_active: bool = false  ## 是否正在播放攻击后动画
 var _wait_frames: int = 0              ## 攻击完成后等待帧计数器（fire rate 控制）
+## 当前是第几段近战（1 = 第一击，2 = 第二击）
+var _stage: int = 1
+## 第二击输入是否已缓冲（后摇内按过确定键）
+var _combo_buffered: bool = false
+## 后摇窗口是否已打开（命中帧之后置 true；窗口内按确定键才算连击输入）
+var _combo_window_open: bool = false
 
 
 func enter() -> void:
@@ -37,8 +50,11 @@ func enter() -> void:
 		transition_requested.emit("Idle")
 		return
 
+	_stage = 1
+	_combo_buffered = false
+	_combo_window_open = false
 	_seq_idx = 0
-	_timer = _wd.get_melee_attack_frame_duration(_seq_idx)
+	_timer = _frame_duration(0)
 	_hit_done = false
 	_hitbox = null
 	_post_attack_active = false
@@ -50,6 +66,9 @@ func enter() -> void:
 	# 确保武器模式开启（上一个武器状态 exit 时可能关闭了）
 	character.enter_weapon_mode(_wd)
 	character.player_in_weapon_state = true
+	# 攻击外观：配了「武器攻击行走图」就切过去，没配则仍是举起图（2026-10-26）
+	character.set_weapon_attack_pose(true)
+	character.set_melee_attack_stage(_stage)
 
 	_set_attack_frame(_seq_idx)
 	_spawn_debug_region()
@@ -59,6 +78,9 @@ func exit() -> void:
 	character.player_in_weapon_state = false
 	_cleanup_hitbox()
 	_free_debug_region()
+	# 先退出攻击外观，再恢复武器就绪外观（否则就绪帧会被画在攻击图上）
+	character.set_weapon_attack_pose(false)
+	character.set_melee_attack_stage(1)
 	# 恢复武器就绪外观
 	if _wd:
 		character.set_weapon_ready_frame()
@@ -75,6 +97,9 @@ func process_update(delta: float) -> void:
 
 	# 每帧同步调试框（命中帧前是预测虚线，命中帧后吸附到真实判定区）
 	_update_debug_region()
+
+	# 连击输入：只在第一击的后摇窗口里登记（见 _poll_combo_input）
+	_poll_combo_input()
 
 	# --- 等待帧阶段（攻击完成后的冷却） ---
 	if _wait_frames > 0:
@@ -99,7 +124,7 @@ func process_update(delta: float) -> void:
 			return
 
 		_seq_idx += 1
-		if _seq_idx >= _wd.get_melee_attack_char_sequence().size():
+		if _seq_idx >= _current_sequence().size():
 			# 攻击动画结束 → 检查是否有攻击后动画（かいりき 被动：近战无硬直）
 			var post_seq: Array[int] = _wd.get_post_attack_char_sequence()
 			if post_seq.size() > 0 and not character.skip_post_attack(_wd.weapon_state_name):
@@ -113,11 +138,14 @@ func process_update(delta: float) -> void:
 				_on_attack_complete()
 			return
 
-		_timer = _wd.get_melee_attack_frame_duration(_seq_idx)
+		_timer = _frame_duration(_seq_idx)
 		_set_attack_frame(_seq_idx)
+		# 过了命中帧 → 打开连击输入窗口（"后摇"从此开始）
+		if _seq_idx >= _hit_idx():
+			_combo_window_open = true
 
 		# 在命中索引发射判定区域
-		if not _hit_done and _seq_idx == _wd.melee_hit_at_sequence_idx:
+		if not _hit_done and _seq_idx == _hit_idx():
 			_create_melee_hitbox()
 			# 播放攻击特效
 			var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
@@ -147,11 +175,88 @@ func physics_update(delta: float) -> void:
 	_update_debug_region()
 
 
+## ── 分段取值（第一击 / 第二击）──
+## 这五个函数是**唯一**的分段口径：动画序列、帧时长、命中步号、判定框、前伸偏移。
+## `_stage == 1` 时全部等价于旧代码的直读字段，因此没配第二击的武器零行为变化。
+func _current_sequence() -> Array[int]:
+	if _stage == 2:
+		return _wd.get_melee_attack2_char_sequence()
+	return _wd.get_melee_attack_char_sequence()
+
+
+func _frame_duration(seq_idx: int) -> float:
+	if _stage == 2:
+		return _wd.get_melee_attack2_frame_duration(seq_idx)
+	return _wd.get_melee_attack_frame_duration(seq_idx)
+
+
+func _hit_idx() -> int:
+	if _stage == 2:
+		return _wd.get_melee_attack2_hit_idx()
+	## 第一击保持原值（不做钳制）：旧数据若把命中帧配到序列外，旧版就是"永不命中"，
+	## 这里不改它的语义。
+	return _wd.melee_hit_at_sequence_idx
+
+
+func _range_size() -> Vector2:
+	if _stage == 2:
+		return _wd.get_melee_attack2_range_size()
+	return _wd.melee_range_size
+
+
+func _range_forward() -> float:
+	if _stage == 2:
+		return _wd.get_melee_attack2_range_forward_offset()
+	return _wd.melee_range_forward_offset
+
+
+## 第二击伤害倍率（第一击恒 1.0）。
+func _stage_damage_mult() -> float:
+	if _stage == 2:
+		return _wd.get_melee_attack2_damage_mult()
+	return 1.0
+
+
+## 连击输入登记：第一击**命中帧之后**（后摇窗口）按一次确定键 → 记缓冲。
+## 前摇期间按不算（防误触把一击变两击）；HOLD 模式按住不算（需要一次新的按下）。
+func _poll_combo_input() -> void:
+	if _stage != 1 or _combo_buffered or not _combo_window_open:
+		return
+	if _wait_frames > 0:
+		## 攻击完成后的等待帧（post_press_wait_frames）不算"后摇"：那一轮已经结算完了，
+		## 此时按键只当作下一次普通攻击的输入，不做连击缓冲。
+		return
+	if _wd == null or not _wd.has_melee_attack2():
+		return
+	if Input.is_action_just_pressed("确定键"):
+		_combo_buffered = true
+		print("[近战] 连击输入已登记（%s）" % _wd.item_name)
+
+
+## 切到第二击：原地换序列，不重进状态（保持武器模式/朝向/连击手感连续）。
+func _start_second_attack() -> void:
+	_stage = 2
+	_combo_buffered = false
+	_combo_window_open = false
+	_seq_idx = 0
+	_timer = _frame_duration(0)
+	_hit_done = false
+	_cleanup_hitbox()
+	_post_attack_active = false
+	_wait_frames = 0
+	# 第二击独立掷骰（与第一击不共享暴击结果）
+	_is_headshot = _roll_critical()
+	character.set_melee_attack_stage(_stage)
+	_set_attack_frame(_seq_idx)
+	print("[近战] 第二击开始（%s）" % _wd.item_name)
+
+
 ## 设置攻击帧。**步号必须一并传下去** —— 「武器单体动作图」按
 ## `WeaponData.melee_weapon_sprite_seq_cols` 用步号选列（前摇/挥动/后摇），
 ## 只传 char_idx 无法区分同一姿态在序列里的不同位置。
 func _set_attack_frame(seq_idx: int) -> void:
-	var char_idx: int = _wd.get_melee_attack_char_sequence()[seq_idx]
+	var sequence: Array[int] = _current_sequence()
+	var char_idx: int = sequence[clampi(seq_idx, 0, sequence.size() - 1)]
 	character.set_attack_char_index(char_idx, seq_idx)
 
 
@@ -177,7 +282,7 @@ func _create_melee_hitbox() -> void:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var rect: RectangleShape2D = RectangleShape2D.new()
-	rect.size = _wd.melee_range_size
+	rect.size = _range_size()
 	shape.shape = rect
 	shape.position = Vector2.ZERO
 	_hitbox.add_child(shape)
@@ -187,12 +292,12 @@ func _create_melee_hitbox() -> void:
 	_hitbox.global_position = character.global_position + offset
 
 	character.get_tree().current_scene.add_child(_hitbox)
-	print("[小刀] 近战判定区域已创建 | 偏移=%s | 大小=%s" % [offset, _wd.melee_range_size])
+	print("[小刀] 近战判定区域已创建 | 段=%d | 偏移=%s | 大小=%s" % [_stage, offset, _range_size()])
 
 
 func _get_melee_offset() -> Vector2:
 	var fv: Vector2 = character.get_facing_vector()
-	return fv * _wd.melee_range_forward_offset
+	return fv * _range_forward()
 
 
 func _check_melee_hits() -> void:
@@ -202,8 +307,9 @@ func _check_melee_hits() -> void:
 	var bodies: Array[Node2D] = _hitbox.get_overlapping_bodies()
 	var areas: Array[Area2D] = _hitbox.get_overlapping_areas()
 
-	## 暴击时伤害按武器倍率放大（数值与黄色伤害数字一致）
+	## 暴击时伤害按武器倍率放大（数值与黄色伤害数字一致）；第二击再乘自己的伤害倍率。
 	var damage: float = _wd.get_effective_damage() * (_wd.critical_damage if _is_headshot else 1.0)
+	damage *= _stage_damage_mult()
 	# アドレナリン（原作 強化アイテム）：15 秒内出伤 ×2
 	damage *= character.get_attack_damage_mult()
 	var hit_any: bool = false
@@ -334,13 +440,15 @@ func _update_debug_region() -> void:
 		return
 	if not _wd:
 		return
-	var size: Vector2 = _wd.melee_range_size
+	var size: Vector2 = _range_size()
 	var text: String = "近战 %d×%d" % [roundi(size.x), roundi(size.y)]
+	if _stage == 2:
+		text = "近战② %d×%d" % [roundi(size.x), roundi(size.y)]
 	if _hitbox and is_instance_valid(_hitbox):
 		_debug_region.call("update_region", _hitbox.global_position, size, true, text)
 		return
 	var center: Vector2 = character.global_position \
-		+ character.get_facing_vector() * _wd.melee_range_forward_offset
+		+ character.get_facing_vector() * _range_forward()
 	_debug_region.call("update_region", center, size, false, text)
 
 
@@ -352,7 +460,11 @@ func _free_debug_region() -> void:
 
 func _on_attack_complete() -> void:
 	## 攻击动画（含攻击后动画）全部播完。
-	## 根据 fire_mode 和 post_press_wait_frames 决定等待/连发/切回就绪。
+	## ① 第一击且有连击缓冲 → 直接接第二击（不经过等待/连发逻辑）；
+	## ② 否则按 fire_mode 和 post_press_wait_frames 决定等待/连发/切回就绪。
+	if _stage == 1 and _combo_buffered and _wd.has_melee_attack2():
+		_start_second_attack()
+		return
 	if _wd.post_press_wait_frames > 0:
 		_wait_frames = _wd.post_press_wait_frames
 	elif _try_continue_attack():
@@ -362,17 +474,21 @@ func _on_attack_complete() -> void:
 
 
 func _try_continue_attack() -> bool:
-	## HOLD 模式下按住确定键 → 重新开始一轮攻击。
+	## HOLD 模式下按住确定键 → 重新开始一轮攻击（**从第一击开始**）。
 	## 返回 true 表示已重新开始攻击。
 	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
 		# 重新开始攻击
+		_stage = 1
+		_combo_buffered = false
+		_combo_window_open = false
 		_seq_idx = 0
-		_timer = _wd.get_melee_attack_frame_duration(_seq_idx)
+		_timer = _frame_duration(_seq_idx)
 		_hit_done = false
 		_cleanup_hitbox()
 		_post_attack_active = false
 		# 重新掷骰暴击
 		_is_headshot = _roll_critical()
+		character.set_melee_attack_stage(_stage)
 		_set_attack_frame(_seq_idx)
 		return true
 	return false

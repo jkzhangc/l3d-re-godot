@@ -287,6 +287,7 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 | 切换管理器 | ✅ | Q 循环 + Ctrl+1/2/3 直选 + 0.5s 冷却 |
 | 队友精灵 | ✅ | TeammateStandin（Node2D+Sprite2D），挂在 DecorLayer |
 | 武器行走图 | ✅ | `CharacterData.weapon_walk_textures`，回退 WeaponData 兜底 |
+| 武器攻击行走图 | ✅ | 攻击期间 `CharacterData.weapon_attack_walk_textures` → `WeaponData.weapon_attack_walk_texture` → 回退举起图（默认全空 = 旧行为） |
 | 武器限制 | ✅ | `allowed_primary/secondary_weapons`（item_id 白名单） |
 | 死亡切换 | ✅ | HP=0 自动切存活队员，全灭才走死亡流程 |
 
@@ -353,6 +354,10 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 **枪声惊敌**：`WeaponData.gunshot_range`（默认 500px），开火时范围内 Idle 敌人自动进入 Discover 状态。0=静音武器。
 
+**近战两连击**（2026-10-26，**默认关闭**）：`melee_attack2_enabled=true` 后，第一击**后摇期间**（命中帧之后）再按一次确定键 → 后摇结束立刻接第二击。第二击是**平行一整套**参数，任一项留空即回退第一击：
+`melee_attack2_char_sequence` / `melee_attack2_frame_durations` / `melee_attack2_hit_at_sequence_idx`（-1=回退）/ `melee_attack2_range_size`（分量≤0=回退）/ `melee_attack2_range_forward_offset`（<0=回退）/ `melee_attack2_damage_mult` / `melee_weapon_sprite_attack2`（空=沿用第一击动作图）/ `melee_weapon_sprite_attack2_seq_cols` / `melee_weapon_sprite_attack2_step_offsets`。
+单机走 `PlayerMeleeAttackState` 的 `_stage`（不新开状态节点）；联机由 Host 判定段数并经 `attack_presentation` 的 `stage` 广播 —— **客户端不许自判连击**。段数经 `Player.set_melee_attack_stage()` 传给渲染层，武器单体动作图据此换图。
+
 ### 敌人攻击与击退/硬直
 
 敌人攻击使用两个独立矩形：**触发矩形**（`attack_range`+`attack_range_forward_offset`，追击→攻击检测）和**命中矩形**（`attack_hit_range`+`attack_hit_forward_offset`，攻击动画中伤害判定）。统一投影法判定（`_is_target_in_hit_rect()`）。
@@ -365,7 +370,7 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 **`script/weapon_pickup.gd`** — 地图放置的武器拾取节点。空槽位自动拾取，已有武器按住确定键替换（`hold_time=1.2s` 可配）。拾取范围内禁止攻击。替换时旧武器掉落为 WeaponPickup（弹药一并转移，添加到 GroundLayer）。
 
-**WeaponData 关键字段**：`weapon_slot`（PRIMARY/SECONDARY 枚举）、`is_ranged`、`pickup_texture`（空则回退 `weapon_walk_texture`）。
+**WeaponData 关键字段**：`weapon_slot`（PRIMARY/SECONDARY 枚举）、`is_ranged`、`pickup_texture`（空则回退 `weapon_walk_texture`）、`weapon_attack_walk_texture`（**空 = 攻击时仍用举起图**，取值链见 `get_attack_walk_texture()`：角色攻击图 > 武器攻击图 > 举起图）。
 
 ### 敌人 A* 寻路
 

@@ -583,7 +583,7 @@ func _parse_tres_header(path: String) -> Dictionary:
 	e["icon_index"] = icon_index
 	e["icon_cols"] = icon_cols
 	e["icon_rows"] = icon_rows
-	## 武器状态名：贴图字典（weapon_walk_textures / shove_walk_textures）的键建议用
+	## 武器状态名：贴图字典（weapon_walk_textures / weapon_attack_walk_textures / shove_walk_textures）的键建议用
 	e["state"] = weapon_state
 	return e
 
@@ -1446,8 +1446,8 @@ func _build_array_editor(prop: String, info: Dictionary, arr: Array) -> Control:
 
 
 func _build_dict_editor(prop: String, dict: Dictionary) -> Control:
-	## 角色 / 武器的「状态名 → 贴图」字典（weapon_walk_textures / shove_walk_textures）
-	## 不能走 JSON：值是 Texture2D。给一套行式编辑器（键 + 缩略图 + 选图）。
+	## 角色 / 武器的「状态名 → 贴图」字典（weapon_walk_textures / weapon_attack_walk_textures /
+	## shove_walk_textures）不能走 JSON：值是 Texture2D。给一套行式编辑器（键 + 缩略图 + 选图）。
 	if _dict_is_texture_dict(prop, dict):
 		return _build_texture_dict_editor(prop, dict)
 	## 标量 / Resource（如四方向偏移 WeaponEffectOffsets）也走行式编辑，
@@ -1472,10 +1472,11 @@ func _build_dict_editor(prop: String, dict: Dictionary) -> Control:
 
 
 ## 值全是 Texture2D 的字典（或空字典但字段名是 *walk_textures）。
-## 空字典无法从值判断类型，所以对这两个已知字段按名字认定，否则空字典仍走 JSON。
+## 空字典无法从值判断类型，所以对这几个已知字段按名字认定，否则空字典仍走 JSON。
 func _dict_is_texture_dict(prop: String, dict: Dictionary) -> bool:
 	if dict.is_empty():
-		return prop == "weapon_walk_textures" or prop == "shove_walk_textures"
+		return prop == "weapon_walk_textures" or prop == "shove_walk_textures" \
+			or prop == "weapon_attack_walk_textures"
 	for v: Variant in dict.values():
 		if not (v is Texture2D):
 			return false
@@ -1492,12 +1493,12 @@ func _dict_type_info(prop: String, dict: Dictionary) -> Dictionary:
 	}
 	if dict.is_empty():
 		match prop:
-			"melee_weapon_sprite_seq_cols":
+			"melee_weapon_sprite_seq_cols", "melee_weapon_sprite_attack2_seq_cols":
 				return {
 					"kind": DV_INT, "label": "int（帧列号）",
 					"key_int": true, "res_script": null, "flexible": false,
 				}
-			"melee_weapon_sprite_offsets", "melee_weapon_sprite_step_offsets", "bullet_spawn_offsets", "attack_effect_offsets":
+			"melee_weapon_sprite_offsets", "melee_weapon_sprite_step_offsets", "melee_weapon_sprite_attack2_step_offsets", "bullet_spawn_offsets", "attack_effect_offsets":
 				return {
 					"kind": DV_RESOURCE, "label": "WeaponEffectOffsets",
 					"key_int": false,
@@ -2122,9 +2123,12 @@ func _open_texture_dict_dialog(prop: String, dict: Dictionary) -> void:
 	title.size = Vector2(600, 26)
 	panel.add_child(title)
 
+	var what: String = "攻击行走图" if prop == "weapon_attack_walk_textures" else "行走图"
+	var fallback_line: String = "未配置的键回退到武器自带的 weapon_walk_texture。"
+	if prop == "weapon_attack_walk_textures":
+		fallback_line = "未配置的键回退 weapon_attack_walk_texture → 再回退举起图（默认＝举起图）。"
 	var hint := _label(
-		"键 = weapon_state_name；值 = 该武器状态下的行走图。\n"
-		+ "未配置的键回退到武器自带的 weapon_walk_texture。",
+		"键 = weapon_state_name；值 = 该武器状态下的%s。\n%s" % [what, fallback_line],
 		11, C_MUTED)
 	hint.position = Vector2(18, 40)
 	hint.size = Vector2(744, 34)
@@ -2318,9 +2322,10 @@ func _open_generic_dict_dialog(prop: String, dict: Dictionary, ti: Dictionary) -
 	var info: Dictionary = ti.duplicate(true)
 	## 「按步号」偏移表的键是 `角色:步号` 复合串：行里给两个下拉，别让用户手打。
 	## 这样和「预览」里的按步号设置是同一套口径，值也能在同一个弹窗里逐条改。
-	if prop == "melee_weapon_sprite_step_offsets":
+	## 第二击的步号表（2026-10-26）同样处理 —— 步号范围取第二击自己的序列长度。
+	if _is_step_offset_prop(prop):
 		info["step_key"] = true
-		info["step_count"] = _weapon_step_count()
+		info["step_count"] = _weapon_step_count(prop)
 		info["char_ids"] = _player_ids_for_step_key()
 	var vp: Vector2 = get_viewport_rect().size
 	var overlay := Control.new()
@@ -2476,14 +2481,14 @@ func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> 
 	var used: Dictionary = {}
 	for r: Dictionary in rows:
 		used[_generic_row_key(r)] = true
-	if prop == "melee_weapon_sprite_step_offsets":
+	if _is_step_offset_prop(prop):
 		## 先按角色顺序找第一个空位（nobita:0、nobita:1…），最后才给 `*`。
 		for cid: String in _player_ids_for_step_key():
-			for i: int in range(_weapon_step_count()):
+			for i: int in range(_weapon_step_count(prop)):
 				var k: String = "%s:%d" % [cid, i]
 				if not used.has(k):
 					return k
-		for i: int in range(_weapon_step_count()):
+		for i: int in range(_weapon_step_count(prop)):
 			var w: String = "*:%d" % i
 			if not used.has(w):
 				return w
@@ -2500,10 +2505,20 @@ func _next_generic_key(prop: String, rows: Array[Dictionary], key_int: bool) -> 
 
 
 ## 当前武器有几个攻击步（步号表的下拉范围）。非武器资源回退 3。
-func _weapon_step_count() -> int:
+## `prop` 传第二击的步号表时用第二击序列算（两段步数常常不同）。
+func _weapon_step_count(prop: String = "") -> int:
 	if _res is WeaponData:
-		return maxi((_res as WeaponData).get_melee_attack_char_sequence().size(), 1)
+		var wd := _res as WeaponData
+		if prop == "melee_weapon_sprite_attack2_step_offsets":
+			return maxi(wd.get_melee_attack2_char_sequence().size(), 1)
+		return maxi(wd.get_melee_attack_char_sequence().size(), 1)
 	return 3
+
+
+## 是否是「按步号」的偏移表（第一击 / 第二击两套，结构相同）。
+func _is_step_offset_prop(prop: String) -> bool:
+	return prop == "melee_weapon_sprite_step_offsets" \
+		or prop == "melee_weapon_sprite_attack2_step_offsets"
 
 
 ## 步号表可选的「角色」：项目里所有玩家角色 id（`*` 在 UI 里单独加）。
@@ -2526,11 +2541,8 @@ func _player_ids_for_step_key() -> Array[String]:
 func _dict_key_suggestions(prop: String) -> Array[String]:
 	var out: Array[String] = []
 	## 动作图「按步号」偏移表：键是 `角色:步号` 复合串，先给 `*:步号` 再给每个角色。
-	if prop == "melee_weapon_sprite_step_offsets":
-		var steps: int = 3
-		if _res is WeaponData:
-			var seq: Array[int] = (_res as WeaponData).get_melee_attack_char_sequence()
-			steps = maxi(seq.size(), 1)
+	if _is_step_offset_prop(prop):
+		var steps: int = _weapon_step_count(prop)
 		for i: int in range(steps):
 			out.append("*:%d" % i)
 		for e: Dictionary in _entries:
@@ -3167,7 +3179,7 @@ func _offset_modes(wd: WeaponData) -> Array[String]:
 	var out: Array[String] = []
 	if not wd.bullet_list.is_empty():
 		out.append("bullet")
-	if wd.melee_weapon_sprite != null:
+	if wd.has_melee_weapon_sprite(false) or wd.melee_weapon_sprite_attack2 != null:
 		out.append("weapon")
 	if wd.attack_effect_anim_down != null or wd.attack_effect_anim_left != null \
 			or wd.attack_effect_anim_right != null or wd.attack_effect_anim_up != null:

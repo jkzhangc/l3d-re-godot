@@ -3,7 +3,7 @@ extends RefCounted
 ## ── 架构定位 ──
 ## 系统：玩家精灵渲染 ｜ 层：服务类（RefCounted，由 player 持有）
 ## 联机：表现层（远端实体也走本服务刷新行走/武器/落地帧），与权威解耦
-## 职责：按当前模式（普通/武器/推击/投掷物）刷新 sprite 的贴图与 region_rect；
+## 职责：按当前模式（普通/武器/攻击/推击/投掷物）刷新 sprite 的贴图与 region_rect；
 ##       计算当前移动档的动画帧时长。
 ## 依赖：player 实体（读 @export 外观字段、模式状态、sprite 节点）
 ##
@@ -77,7 +77,7 @@ func _refresh_character_sprite() -> void:
 		if _p._shove_mode and _p._shove_texture:
 			sprite.texture = _p._shove_texture
 		else:
-			var tex: Texture2D = _weapon_body_texture(_p._weapon_data)
+			var tex: Texture2D = _current_weapon_body_texture(_p._weapon_data)
 			if not tex:
 				return
 			sprite.texture = tex
@@ -122,20 +122,21 @@ func _refresh_weapon_overlay() -> void:
 	if ws == null:
 		return
 	var wd: WeaponData = _p._weapon_data
+	var second: bool = int(_p._melee_attack_stage) == 2
 	if _p._is_dying or _p._throwable_mode or _p._shove_mode \
-			or not _p._weapon_mode or wd == null or not wd.has_melee_weapon_sprite():
+			or not _p._weapon_mode or wd == null or not wd.has_melee_weapon_sprite(second):
 		ws.visible = false
 		return
-	var col: int = wd.get_melee_weapon_sprite_col(_p._current_weapon_seq_idx)
+	var col: int = wd.get_melee_weapon_sprite_col(_p._current_weapon_seq_idx, second)
 	if col < 0:
 		ws.visible = false
 		return
 	## 只有「通用近战身体」（行走图文件名带 近战/近接）才默认叠；
 	## 专用身体的攻击帧自带武器，叠上去会变两把（`melee_weapon_sprite_force` 可强制）。
-	if not wd.melee_weapon_sprite_force and not wd.is_generic_melee_body(_weapon_body_texture(wd)):
+	if not wd.melee_weapon_sprite_force and not wd.is_generic_melee_body(_current_weapon_body_texture(wd)):
 		ws.visible = false
 		return
-	var tex: Texture2D = wd.melee_weapon_sprite
+	var tex: Texture2D = wd.get_melee_weapon_sprite(second)
 	var cell_w: int = int(tex.get_width() / 3)
 	var cell_h: int = int(tex.get_height() / 4)
 	if cell_w <= 0 or cell_h <= 0:
@@ -145,8 +146,9 @@ func _refresh_weapon_overlay() -> void:
 	ws.region_rect = Rect2(col * cell_w, DIR_ROWS[_p._facing] * cell_h, cell_w, cell_h)
 	## 偏移按「角色 × 步号 × 朝向」取：前摇/挥动/后摇的武器位置不一样，
 	## 同一个偏移会让某一帧错位（2026-10-23 用户口径）。
+	## 第二击先查自己的步号表，缺条目再回退第一击的表（2026-10-26）。
 	ws.position = wd.get_melee_weapon_sprite_offset(
-		_p.current_character, _p._facing, _p._current_weapon_seq_idx)
+		_p.current_character, _p._facing, _p._current_weapon_seq_idx, second)
 	## 朝上时人物背对镜头 → 武器画到身后；其余方向画在身前。
 	ws.z_index = -1 if (wd.melee_weapon_sprite_behind_on_up and _p._facing == 3) else 1
 	ws.visible = true
@@ -163,3 +165,23 @@ func _weapon_body_texture(wd: WeaponData) -> Texture2D:
 		if tex:
 			return tex
 	return wd.weapon_walk_texture
+
+
+## ── 武器攻击行走图（2026-10-26）──
+## 攻击期间该用哪张图：角色专属攻击图 > 武器攻击图 > **回退举起武器行走图**。
+## 最后那层回退是"零改动"的关键：没配攻击图的武器/角色，取值与旧版完全一致。
+func _weapon_attack_body_texture(wd: WeaponData) -> Texture2D:
+	if wd == null:
+		return null
+	var tex: Texture2D = wd.get_attack_walk_texture(_p.current_character)
+	if tex:
+		return tex
+	return _weapon_body_texture(wd)
+
+
+## 角色本体**当前实际显示**的武器行走图：攻击姿态用攻击图，其余用举起图。
+## 所有"要不要叠武器动作图"之类的判断都走这里，避免判定口径与显示口径走岔。
+func _current_weapon_body_texture(wd: WeaponData) -> Texture2D:
+	if _p._weapon_attack_pose:
+		return _weapon_attack_body_texture(wd)
+	return _weapon_body_texture(wd)
