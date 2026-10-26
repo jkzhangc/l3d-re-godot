@@ -10,7 +10,7 @@ extends CanvasLayer
 ## 暂停策略：打开时暂停游戏（存档点交互期间不该被丧尸打断），关闭时恢复。
 ##
 ## ★2026-10-04 版式重做（用户实机反馈 + 原作视频参考）：窗口改用 `art/System/Window *`
-##   （与角色选择 / 安全屋台词同一套皮肤），字号 24 → 36，窗口置于左上角（原作同款），
+##   （与角色选择 / 安全屋台词同一套皮肤），字号 24 → 36，窗口居中（2026-10-26 由左上角改居中，用户实测偏左上），
 ##   光标套白框。旧版是纯色块 + 24 号字，用户报「界面有点小」。
 
 signal closed
@@ -160,7 +160,12 @@ func _show_state(s: int) -> void:
 func _layout() -> void:
 	var n: int = _items.size()
 	var win_h: float = LIST_TOP + n * (ITEM_H + ITEM_GAP) + FOOT_H
-	var pos := Vector2(MARGIN, MARGIN)
+	## 2026-10-26 用户实测：原先固定在左上角（照原作排版），实际观感偏左上。
+	## 改为按视口居中；视口过小时回落到 MARGIN 边距，避免窗口贴边或出屏。
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var pos := Vector2(
+		maxf(MARGIN, floorf((vp.x - WIN_W) * 0.5)),
+		maxf(MARGIN, floorf((vp.y - win_h) * 0.5)))
 
 	if _bg != null:
 		_bg.position = pos

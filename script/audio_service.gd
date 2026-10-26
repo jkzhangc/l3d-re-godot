@@ -156,6 +156,12 @@ func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = fals
 		player = p2d
 	else:
 		player = AudioStreamPlayer.new()
+	## ★暂停不冻一次性音效（2026-10-26 用户实测）：AudioStreamPlayer 的混音由节点内部处理驱动，
+	## 节点一旦随 `get_tree().paused` 停帧，声卡就取不到数据 —— 症状是
+	## 「存档窗口的光标/确认音要等关掉窗口才响」「最终章开门音等到制作人员名单才响」。
+	## SFX / UI / 拾取 / 世界音都是一次性提示音，必须与暂停无关：显式 ALWAYS。
+	## （长音频走各自的音乐播放器，不走这里 —— 暂停时该停仍旧停。）
+	player.process_mode = Node.PROCESS_MODE_ALWAYS
 	player.stream = stream
 	player.bus = "SFX"
 	player.autoplay = true
