@@ -210,6 +210,12 @@ func _range_forward() -> float:
 	return _wd.melee_range_forward_offset
 
 
+## 实际用于碰撞盒/调试框的尺寸：按**当前朝向**取（左右时宽高对调 = 矩形随方向转 90°）。
+## 与 `_range_size()` 的区别：后者是数据里的正放尺寸（下/上的口径）。
+func _hitbox_size() -> Vector2:
+	return _wd.get_melee_range_size_for_facing(int(character.facing), _stage == 2)
+
+
 ## 第二击伤害倍率（第一击恒 1.0）。
 func _stage_damage_mult() -> float:
 	if _stage == 2:
@@ -282,7 +288,7 @@ func _create_melee_hitbox() -> void:
 
 	var shape: CollisionShape2D = CollisionShape2D.new()
 	var rect: RectangleShape2D = RectangleShape2D.new()
-	rect.size = _range_size()
+	rect.size = _hitbox_size()
 	shape.shape = rect
 	shape.position = Vector2.ZERO
 	_hitbox.add_child(shape)
@@ -292,7 +298,7 @@ func _create_melee_hitbox() -> void:
 	_hitbox.global_position = character.global_position + offset
 
 	character.get_tree().current_scene.add_child(_hitbox)
-	print("[小刀] 近战判定区域已创建 | 段=%d | 偏移=%s | 大小=%s" % [_stage, offset, _range_size()])
+	print("[小刀] 近战判定区域已创建 | 段=%d | 偏移=%s | 大小=%s" % [_stage, offset, _hitbox_size()])
 
 
 func _get_melee_offset() -> Vector2:
@@ -440,7 +446,7 @@ func _update_debug_region() -> void:
 		return
 	if not _wd:
 		return
-	var size: Vector2 = _range_size()
+	var size: Vector2 = _hitbox_size()
 	var text: String = "近战 %d×%d" % [roundi(size.x), roundi(size.y)]
 	if _stage == 2:
 		text = "近战② %d×%d" % [roundi(size.x), roundi(size.y)]

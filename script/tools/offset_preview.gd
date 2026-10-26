@@ -28,6 +28,8 @@ var character_id: String = ""
 var mode: String = MODE_BULLET
 var direction: int = 0
 var step: int = 0
+## true = 正在预览**第二击（两连击）**的动作图与偏移（2026-10-26）
+var second: bool = false
 var char_idx: int = 0
 var frame: int = 1
 var bullet_index: int = 0
@@ -55,13 +57,15 @@ func _ready() -> void:
 
 func set_preview(p_weapon: WeaponData, p_character: CharacterData, p_mode: String,
 		p_direction: int, p_step: int, p_char_idx: int, p_frame: int,
-		p_bullet_index: int, p_offset: Vector2, p_using_default: bool) -> void:
+		p_bullet_index: int, p_offset: Vector2, p_using_default: bool,
+		p_second: bool = false) -> void:
 	weapon = p_weapon
 	character = p_character
 	character_id = p_character.get_character_key() if p_character else ""
 	mode = p_mode
 	direction = clampi(p_direction, 0, 3)
 	step = p_step
+	second = p_second
 	char_idx = maxi(0, p_char_idx)
 	frame = clampi(p_frame, 0, 2)
 	bullet_index = maxi(0, p_bullet_index)
@@ -133,11 +137,13 @@ func _draw_character() -> void:
 
 
 func _draw_weapon() -> void:
-	var tex: Texture2D = weapon.melee_weapon_sprite
+	## 第二击配了专用动作图（`melee_weapon_sprite_attack2`）就画它，否则回退第一击那张
+	## —— 与游戏内 `WeaponData.get_melee_weapon_sprite(second)` 同一取值链。
+	var tex: Texture2D = weapon.get_melee_weapon_sprite(second)
 	if tex == null:
 		return
 	var cell: Vector2 = Vector2(float(tex.get_width()) / 3.0, float(tex.get_height()) / 4.0)
-	var col: int = weapon.get_melee_weapon_sprite_col(step)
+	var col: int = weapon.get_melee_weapon_sprite_col(step, second)
 	if col < 0:
 		col = 1
 	var src := Rect2(col * cell.x, direction * cell.y, cell.x, cell.y)
@@ -197,11 +203,17 @@ func _draw_info() -> void:
 	lines.append("角色：%s   方向：%s" % [character_id if not character_id.is_empty() else "（未设置）",
 		_dir_label()])
 	if mode == MODE_WEAPON:
-		var seq: Array[int] = weapon.get_melee_attack_char_sequence()
+		var seq: Array[int] = weapon.get_melee_attack2_char_sequence() if second \
+			else weapon.get_melee_attack_char_sequence()
 		var ci: int = seq[clampi(step, 0, seq.size() - 1)] if not seq.is_empty() else char_idx
-		var col: int = weapon.get_melee_weapon_sprite_col(step)
-		lines.append("步号：%d / %d   char_idx=%d   帧=%d   武器列=%s" % [
+		var col: int = weapon.get_melee_weapon_sprite_col(step, second)
+		lines.append("段：%s   步号：%d / %d   char_idx=%d   帧=%d   武器列=%s" % [
+			"第二击" if second else "第一击",
 			step + 1, seq.size(), ci, frame, str(col) if col >= 0 else "本步不显示"])
+		if second and weapon.melee_weapon_sprite_attack2 == null:
+			lines.append("⚠ 没配 melee_weapon_sprite_attack2 → 暂时沿用第一击的图")
+		if weapon.melee_weapon_sprite == null and weapon.melee_weapon_sprite_attack2 == null:
+			lines.append("⚠ 这把武器两张动作图都没配（melee_weapon_sprite / _attack2）")
 		if not _weapon_overlay_active():
 			lines.append("⚠ 专用身体自带武器：游戏内不叠动作图（可开 melee_weapon_sprite_force）")
 	else:

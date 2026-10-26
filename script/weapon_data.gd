@@ -381,6 +381,12 @@ func get_attack_effect_offset(cd: CharacterData, facing: int, fallback: Vector2 
 @export var melee_range_size: Vector2 = Vector2(48, 32)  ## 近战判定矩形（宽×高）
 @export var melee_range_forward_offset: float = 24.0      ## 以角色方向为准的前方偏移量
 @export var melee_hit_at_sequence_idx: int = 1  ## 在此序列索引创建近战判定区域
+## 判定矩形是否**随朝向旋转**（2026-10-26 用户需求，**默认开启**）。
+## 开：`melee_range_size` 按「宽 = 侧向、高 = 纵深」解释，面朝左/右时宽高对调
+##     （等价于矩形旋转 90°，与敌人攻击矩形 `_is_target_in_hit_rect` 的投影口径一致）；
+## 关：矩形恒为轴对齐的正放尺寸（旧行为 —— 左右挥击时判定仍是横向长条，与挥击方向不符）。
+## 第一击与第二击共用本开关，第二击只是尺寸来源不同（`melee_attack2_range_size`）。
+@export var melee_range_follow_facing: bool = true
 
 
 @export_group("近战第二击（两连击）")
@@ -598,6 +604,18 @@ func get_melee_attack2_range_forward_offset() -> float:
 	if melee_attack2_range_forward_offset >= 0.0:
 		return melee_attack2_range_forward_offset
 	return melee_range_forward_offset
+
+
+## ── 判定矩形随朝向旋转（2026-10-26）──
+## 按朝向取近战判定框尺寸（宽×高）。`facing` 用 FaceDir：0=下 1=左 2=右 3=上。
+## 开启 `melee_range_follow_facing` 时，左/右把宽高对调 —— 等价于把矩形旋转 90°，
+## 也就是「矩形也跟着挥击方向转向」。上下不需要转（本来就是正放）。
+## ⚠ 物理查询 / 调试框 / 编辑器区域预览都必须走本函数，否则显示与实判会不一致。
+func get_melee_range_size_for_facing(facing: int, second: bool = false) -> Vector2:
+	var s: Vector2 = get_melee_attack2_range_size() if second else melee_range_size
+	if melee_range_follow_facing and (facing == 1 or facing == 2):
+		return Vector2(s.y, s.x)
+	return s
 
 
 ## 第二击伤害倍率（< 0 视为 0：允许配成纯击退的 0 伤害，但要防止负伤害回血）

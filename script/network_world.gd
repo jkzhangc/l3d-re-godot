@@ -2247,7 +2247,9 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 		second: bool = false) -> int:
 	var hit_count := 0
 	var shape := RectangleShape2D.new()
-	shape.size = wd.get_melee_attack2_range_size() if second else wd.melee_range_size
+	## 判定矩形随朝向旋转（2026-10-26）：左右挥击时宽高对调，与单机
+	## `PlayerMeleeAttackState._hitbox_size()` 同一入口，两端实判必须一致。
+	shape.size = wd.get_melee_range_size_for_facing(node.facing, second)
 	var forward: float = wd.get_melee_attack2_range_forward_offset() if second else wd.melee_range_forward_offset
 	var query := PhysicsShapeQueryParameters2D.new()
 	query.shape = shape

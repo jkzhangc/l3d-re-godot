@@ -3168,6 +3168,13 @@ func _offset_prop(mode: String) -> String:
 	return "bullet_spawn_offsets"
 
 
+## 「按步号」偏移表：第一击 / 第二击各一张（2026-10-26）。
+## ⚠ 第二击的空表会回退第一击的表（取值在 WeaponData 里做），但**写入**必须落到第二击自己的表，
+## 否则调第二击的偏移会把第一击改掉。
+func _offset_step_prop(second: bool) -> String:
+	return "melee_weapon_sprite_attack2_step_offsets" if second else "melee_weapon_sprite_step_offsets"
+
+
 func _offset_mode_label(mode: String) -> String:
 	match mode:
 		"weapon": return "武器动作"
@@ -3237,9 +3244,10 @@ func _set_offset_field(res: Resource, direction: int, value: Vector2) -> void:
 ## 武器动作模式按 `scope` 决定看哪一层：
 ##   scope = "step"（默认）→ 本步专用 → 所有角色本步 → 角色基线 → 零；
 ##   scope = "char"        → 只看角色基线（旧行为，所有步共用）。
+## `second = true` 时「本步专用」查的是第二击的步号表（缺条目再回退第一击的表）。
 ## 这样「显示的值」永远等于「拖动会写进去的那一层」，不会出现拖了却没反应。
 func _offset_effective(wd: WeaponData, mode: String, cid: String, direction: int,
-		bullet_index: int, step: int = -1, scope: String = "step") -> Dictionary:
+		bullet_index: int, step: int = -1, scope: String = "step", second: bool = false) -> Dictionary:
 	if mode == "weapon":
 		if scope == "char":
 			var base: Resource = wd.melee_weapon_sprite_offsets.get(cid) as Resource
@@ -3249,8 +3257,8 @@ func _offset_effective(wd: WeaponData, mode: String, cid: String, direction: int
 				"source": "char" if base != null else "none",
 				"res": base,
 			}
-		var source: String = wd.get_melee_weapon_sprite_offset_source(cid, step)
-		var value: Vector2 = wd.get_melee_weapon_sprite_offset_by_key(cid, direction, step)
+		var source: String = wd.get_melee_weapon_sprite_offset_source(cid, step, second)
+		var value: Vector2 = wd.get_melee_weapon_sprite_offset_by_key(cid, direction, step, second)
 		return {"value": value, "using_default": source == "none", "source": source, "res": null}
 	var dict: Dictionary = wd.get(_offset_prop(mode))
 	var res: Resource = dict.get(cid) as Resource
@@ -3277,7 +3285,7 @@ func _offset_commit(wd: WeaponData, state: Dictionary, value: Vector2) -> void:
 	var key: String = cid
 	## 武器动作：默认写「角色:步号」这一层；关掉「按步号」才写回角色基线。
 	if mode == "weapon" and str(state.get("scope", "step")) == "step":
-		prop = "melee_weapon_sprite_step_offsets"
+		prop = _offset_step_prop(bool(state.get("second", false)))
 		key = "%s:%d" % [cid, maxi(0, int(state.get("step", 0)))]
 	var dict: Dictionary = wd.get(prop)
 	var res: Resource = dict.get(key) as Resource
@@ -3297,12 +3305,13 @@ func _offset_drop_step(wd: WeaponData, state: Dictionary) -> bool:
 	if cid.is_empty():
 		return false
 	var key: String = "%s:%d" % [cid, maxi(0, int(state.get("step", 0)))]
-	var dict: Dictionary = wd.get("melee_weapon_sprite_step_offsets")
+	var step_prop: String = _offset_step_prop(bool(state.get("second", false)))
+	var dict: Dictionary = wd.get(step_prop)
 	if not dict.has(key):
 		return false
 	dict.erase(key)
-	wd.set("melee_weapon_sprite_step_offsets", dict)
-	_set_prop("melee_weapon_sprite_step_offsets", dict)
+	wd.set(step_prop, dict)
+	_set_prop(step_prop, dict)
 	return true
 
 
@@ -3345,19 +3354,27 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 	var mode: String = str(state.get("mode", "bullet"))
 	var cid: String = str(state.get("char_id", ""))
 	var direction: int = clampi(int(state.get("direction", 0)), 0, 3)
-	var step: int = maxi(0, int(state.get("step", 0)))
+	## 第二击只在「武器动作」模式且武器确实开了第二击时生效（2026-10-26）
+	var second: bool = mode == "weapon" and bool(state.get("second", false)) and wd.has_melee_attack2()
+	if mode == "weapon" and wd.has_melee_attack2():
+		state["second"] = second
+	elif mode == "weapon":
+		state["second"] = false
+	var seq: Array[int] = wd.get_melee_attack2_char_sequence() if second else wd.get_melee_attack_char_sequence()
+	var step_cap: int = maxi(seq.size() - 1, 0)
+	state["step"] = clampi(int(state.get("step", 0)), 0, step_cap)
+	var step: int = int(state["step"])
 	var bullet_index: int = maxi(0, int(state.get("bullet_index", 0)))
 	if mode == "weapon":
-		var seq: Array[int] = wd.get_melee_attack_char_sequence()
 		if not seq.is_empty():
 			state["char_idx"] = seq[clampi(step, 0, seq.size() - 1)]
 	var char_idx: int = maxi(0, int(state.get("char_idx", wd.get_ready_char_index())))
 	var frame: int = clampi(int(state.get("frame", 1)), 0, 2)
 	var cd: CharacterData = _character_by_id(cid)
 	var scope: String = str(state.get("scope", "step"))
-	var eff: Dictionary = _offset_effective(wd, mode, cid, direction, bullet_index, step, scope)
+	var eff: Dictionary = _offset_effective(wd, mode, cid, direction, bullet_index, step, scope, second)
 	preview.call("set_preview", wd, cd, mode, direction, step, char_idx, frame,
-		bullet_index, eff["value"], eff["using_default"])
+		bullet_index, eff["value"], eff["using_default"], second)
 	if reset_drag:
 		preview.call("cancel_drag")
 
@@ -3367,22 +3384,34 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 		(ui["step_row"] as Control).visible = mode == "weapon"
 	if ui.has("scope_row"):
 		(ui["scope_row"] as Control).visible = mode == "weapon"
+	if ui.has("second_row"):
+		(ui["second_row"] as Control).visible = mode == "weapon"
+	if ui.has("second_check"):
+		var sc: CheckBox = ui["second_check"] as CheckBox
+		sc.set_pressed_no_signal(second)
+		sc.disabled = not wd.has_melee_attack2()
+		sc.tooltip_text = "开：预览/编辑第二击（两连击）的动作图与偏移\n" \
+			+ ("武器已开启第二击（melee_attack2_enabled）" if wd.has_melee_attack2()
+				else "当前武器没开第二击 → 先在「近战第二击（两连击）」组里勾上 melee_attack2_enabled")
 	if ui.has("drop_step"):
 		var drop: Button = ui["drop_step"] as Button
+		var step_dict_drop: Dictionary = wd.get(_offset_step_prop(second))
 		drop.visible = mode == "weapon"
 		drop.disabled = mode != "weapon" or scope != "step" \
-			or not wd.melee_weapon_sprite_step_offsets.has(
-				"%s:%d" % [cid, maxi(0, int(state.get("step", 0)))])
+			or not step_dict_drop.has("%s:%d" % [cid, step])
 	if ui.has("step_opt") and mode == "weapon":
-		## 在步号下拉里标出哪些步已经有单独条目（✓），否则用户看不出「按步号」有没有生效。
+		## 步号下拉按当前段数重建（第二击序列长度常与第一击不同），并标出已有单独条目的步（✓）。
 		var sop: OptionButton = ui["step_opt"] as OptionButton
-		var bases: Array = ui.get("step_base_labels", [])
-		var step_dict: Dictionary = wd.melee_weapon_sprite_step_offsets
-		for i: int in range(sop.item_count):
-			var base: String = str(bases[i]) if i < bases.size() else sop.get_item_text(i)
-			var has_entry: bool = step_dict.has("%s:%d" % [cid, i]) \
-				or step_dict.has("*:%d" % i)
-			sop.set_item_text(i, base + ("  ✓" if has_entry else ""))
+		var step_dict: Dictionary = wd.get(_offset_step_prop(second))
+		sop.clear()
+		for i: int in range(seq.size()):
+			var col: int = wd.get_melee_weapon_sprite_col(i, second)
+			var col_label: String = "前摇" if col == 0 else ("挥动" if col == 1 else ("后摇" if col == 2 else "不显示"))
+			var has_entry: bool = step_dict.has("%s:%d" % [cid, i]) or step_dict.has("*:%d" % i)
+			sop.add_item("第%d步  idx=%d  %s%s" % [i + 1, seq[i], col_label, "  ✓" if has_entry else ""], i)
+		## `select()` 不会触发 item_selected，安全。
+		if sop.item_count > 0:
+			sop.select(clampi(step, 0, sop.item_count - 1))
 	if ui.has("char_row"):
 		(ui["char_row"] as Control).visible = mode != "weapon"
 	if ui.has("frame_row"):
@@ -3419,7 +3448,7 @@ func _offset_preview_refresh(wd: WeaponData, state: Dictionary, preview: Control
 		var extra: String = (" · " + bullet_name) if not bullet_name.is_empty() else ""
 		var step_note := ""
 		if mode == "weapon":
-			step_note = " · 第%d步" % (step + 1)
+			step_note = "%s · 第%d步" % ["第二击" if second else "第一击", step + 1]
 		var dirty_note: String = " · 未保存（Ctrl+S）" if _dirty else ""
 		(ui["status"] as Label).text = "%s%s%s · %s · %s%s\n偏移 (%d, %d) · %s%s" % [
 			_offset_mode_label(mode), extra, step_note, cid, dir_label, dirty_note,
@@ -3443,10 +3472,14 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 		return
 
 	var focus_mode: String = ""
+	var focus_second: bool = false
 	match focus_prop:
 		"bullet_spawn_offsets": focus_mode = "bullet"
 		"melee_weapon_sprite_offsets": focus_mode = "weapon"
 		"melee_weapon_sprite_step_offsets": focus_mode = "weapon"
+		"melee_weapon_sprite_attack2_step_offsets":
+			focus_mode = "weapon"
+			focus_second = true
 		"attack_effect_offsets": focus_mode = "effect"
 	var mode: String = focus_mode if modes.has(focus_mode) else modes[0]
 	var cid: String = "nobita"
@@ -3467,6 +3500,8 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 		"frame": 1,
 		## 武器动作默认按步号分开写；关掉才是「所有步共用角色基线」的旧行为。
 		"scope": "step",
+		## 第二击（两连击）：从第二击的偏移表点「预览」时直接落到第二击。
+		"second": focus_second,
 	}
 
 	var vp: Vector2 = get_viewport_rect().size
@@ -3570,25 +3605,37 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	vb.add_child(bullet_row)
 	ui["bullet_row"] = bullet_row
 
-	var steps: Array = []
-	var seq: Array[int] = wd.get_melee_attack_char_sequence()
-	for i: int in range(seq.size()):
-		var col: int = wd.get_melee_weapon_sprite_col(i)
-		var col_label: String = "前摇" if col == 0 else ("挥动" if col == 1 else ("后摇" if col == 2 else "不显示"))
-		steps.append(["第%d步  idx=%d  %s" % [i + 1, seq[i], col_label], i])
-	var step_opt := _offset_option(steps, int(state["step"]))
+	## 攻击段：第一击 / 第二击（两连击）。条目在 _offset_preview_refresh 里按当前段的序列重建，
+	## 所以这里只建一个空下拉 + 连接信号。
+	var step_opt := OptionButton.new()
+	step_opt.add_theme_font_override("font", _font)
+	step_opt.add_theme_font_size_override("font_size", 12)
 	step_opt.tooltip_text = "✓ = 这一步已有单独偏移条目（否则回退角色基线）"
-	var step_bases: Array = []
-	for srow: Array in steps:
-		step_bases.append(str(srow[0]))
-	ui["step_opt"] = step_opt
-	ui["step_base_labels"] = step_bases
 	step_opt.item_selected.connect(func(i: int):
 		state["step"] = i
 		_offset_preview_refresh(wd, state, preview, ui, true))
+	ui["step_opt"] = step_opt
 	var step_row := _offset_preview_row("攻击步号", step_opt)
 	vb.add_child(step_row)
 	ui["step_row"] = step_row
+
+	## 第二击开关（2026-10-26）：只在武器动作模式显示；武器没开两连击时置灰并说明去哪开。
+	var second_box := HBoxContainer.new()
+	second_box.add_theme_constant_override("separation", 8)
+	var second_label := _label("第二击素材", 12, C_MUTED)
+	second_label.custom_minimum_size = Vector2(92, 0)
+	second_box.add_child(second_label)
+	var second_check := CheckBox.new()
+	second_check.button_pressed = false
+	second_check.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	second_check.toggled.connect(func(on: bool):
+		state["second"] = on
+		state["step"] = 0
+		_offset_preview_refresh(wd, state, preview, ui, true))
+	second_box.add_child(second_check)
+	vb.add_child(second_box)
+	ui["second_row"] = second_box
+	ui["second_check"] = second_check
 
 	## 「按步号分别设置」：默认开。关掉 = 写回角色基线（所有步共用，旧行为）。
 	var scope_box := HBoxContainer.new()
@@ -3670,12 +3717,13 @@ func _open_offset_preview(focus_prop: String = "") -> void:
 	var hint := _label(
 		"武器动作：每一步各有一条偏移 → 键 `角色:步号`（如 nobita:1），\n"
 		+ "　`*:步号` 可让所有角色共用；都没有才回退角色基线。\n"
+		+ "　「第二击素材」勾上 = 预览/编辑第二击（melee_weapon_sprite_attack2 + 它自己的步号表）。\n"
 		+ "子弹：黄点 = 角色原点 + 方向 × BulletData.spawn_offset + 武器级偏移。\n"
 		+ "特效：橙十字 = 可配置偏移；不含 .tscn 内置 position_offset。\n"
 		+ "拖动即写入当前层；Ctrl+S 保存到 .tres。",
 		11, C_MUTED)
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	hint.custom_minimum_size = Vector2(0, 100)
+	hint.custom_minimum_size = Vector2(0, 118)
 	vb.add_child(hint)
 
 	var close := _button("关闭", false)

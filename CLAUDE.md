@@ -358,6 +358,10 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 `melee_attack2_char_sequence` / `melee_attack2_frame_durations` / `melee_attack2_hit_at_sequence_idx`（-1=回退）/ `melee_attack2_range_size`（分量≤0=回退）/ `melee_attack2_range_forward_offset`（<0=回退）/ `melee_attack2_damage_mult` / `melee_weapon_sprite_attack2`（空=沿用第一击动作图）/ `melee_weapon_sprite_attack2_seq_cols` / `melee_weapon_sprite_attack2_step_offsets`。
 单机走 `PlayerMeleeAttackState` 的 `_stage`（不新开状态节点）；联机由 Host 判定段数并经 `attack_presentation` 的 `stage` 广播 —— **客户端不许自判连击**。段数经 `Player.set_melee_attack_stage()` 传给渲染层，武器单体动作图据此换图。
 
+> 物品编辑器的「偏移预览」有**「第二击素材」勾选**（2026-10-26）：勾上后步号下拉按第二击序列重建、预览画 `melee_weapon_sprite_attack2`、拖动写入 `melee_weapon_sprite_attack2_step_offsets`（不会污染第一击的步号表）。从该字典行的「预览」按钮进入时自动勾上。武器没开 `melee_attack2_enabled` 时该勾选置灰并提示去哪开。
+
+**近战判定矩形随朝向**（2026-10-26，**默认开启**）：`melee_range_follow_facing=true` 时 `melee_range_size` 按「宽 = 侧向、高 = 纵深」解释，面朝左/右把宽高对调（= 矩形转 90°，与敌人 `_is_target_in_hit_rect` 的投影口径一致）；关掉 = 轴对齐正放（旧行为）。唯一入口 `WeaponData.get_melee_range_size_for_facing(facing, second)` —— 单机 hitbox/调试框、Host 物理查询、编辑器区域预览都必须走它，否则显示与实判会走岔。`shove_range_size`（推击）不受影响。
+
 ### 敌人攻击与击退/硬直
 
 敌人攻击使用两个独立矩形：**触发矩形**（`attack_range`+`attack_range_forward_offset`，追击→攻击检测）和**命中矩形**（`attack_hit_range`+`attack_hit_forward_offset`，攻击动画中伤害判定）。统一投影法判定（`_is_target_in_hit_rect()`）。

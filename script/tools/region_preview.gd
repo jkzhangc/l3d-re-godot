@@ -6,10 +6,11 @@ extends Control
 ## 职责：把武器的「攻击区域」画出来 —— 近战判定矩形 / 推击判定矩形 + 溅射圈 / 子弹射程线。
 ## 依赖：WeaponData 字段、CharacterData 行走图（角色身体，仅供比例参照）
 ##
-## 【为什么这里必须画轴对齐矩形】运行时的近战/推击判定是
-## `RectangleShape2D` + 零旋转（见 `PlayerMeleeAttackState._create_melee_hitbox`），
-## 世界里就是正放的矩形，`melee_range_size.x` = 横向、`.y` = 纵向。
-## 画成旋转矩形会让人误判"左右砍得比上下砍得远"，进而配错数值。
+## 【关于方向（2026-10-26 更新）】近战判定仍是 `RectangleShape2D` + **零旋转**节点，
+## 但尺寸走 `WeaponData.get_melee_range_size_for_facing()`：开启 `melee_range_follow_facing`
+## （默认开）时，面朝左/右把「宽×高」对调 —— 等价于矩形随挥击方向转 90°。
+## 所以这里画**轴对齐矩形 + 该朝向的尺寸**：与运行时实判逐像素一致（90° 的旋转 = 交换宽高）。
+## 只画 4 个正方向，不做任意角度旋转，避免让人误判"斜着砍更远"。
 ## （敌人攻击是投影法 + 朝向旋转，属于另一套，见 EnemyAttackState。）
 ##
 ## 拖动矩形 = 改「前伸偏移」（沿朝向轴的投影），只负责画与发信号，
@@ -85,7 +86,7 @@ func _draw() -> void:
 	_draw_character()
 	match mode:
 		MODE_MELEE:
-			_draw_rect_region(weapon.melee_range_size, weapon.melee_range_forward_offset,
+			_draw_rect_region(weapon.get_melee_range_size_for_facing(direction), weapon.melee_range_forward_offset,
 				C_MELEE, "近战", false, 0.0)
 		MODE_SHOVE:
 			_draw_rect_region(weapon.shove_range_size, weapon.shove_range_forward_offset,
@@ -250,7 +251,8 @@ func _region_rect() -> Rect2:
 	match mode:
 		MODE_MELEE:
 			var c: Vector2 = _origin + _dir_vec() * weapon.melee_range_forward_offset * zoom
-			return Rect2(c - weapon.melee_range_size * 0.5 * zoom, weapon.melee_range_size * zoom)
+			var ms: Vector2 = weapon.get_melee_range_size_for_facing(direction)
+			return Rect2(c - ms * 0.5 * zoom, ms * zoom)
 		MODE_SHOVE:
 			var c2: Vector2 = _origin + _dir_vec() * weapon.shove_range_forward_offset * zoom
 			return Rect2(c2 - weapon.shove_range_size * 0.5 * zoom, weapon.shove_range_size * zoom)
