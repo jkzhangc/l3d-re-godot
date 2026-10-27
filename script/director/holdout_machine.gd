@@ -163,6 +163,12 @@ enum KillFilter { ALL = 0, TANK = 1 }
 ##    `abort()`（全灭冻结 / 换图中止）不播 —— 那不是"打完"。
 ## ⚠ 留空 = 不播；一场防守战最多响一次（`_play_finish_sound_once` 幂等）。
 @export var finish_sound: AudioStream = preload("res://sound/カギ開け.ogg")
+## ★防守战结束时**播放场景里的音频节点**（2026-10-27 用户需求）。
+## 填场景中已摆好的 `AudioStreamPlayer` / `AudioStreamPlayer2D` 的路径：
+## 依次按 **相对本机器** → **相对场景根** → **末级节点名全场景搜** 解析（同完成事件的节点路径）。
+## ⚠ 与上面的 `finish_sound` 是**两条独立通道**：这条用于需要独立音量 / 总线 / 循环设置的
+##   现成音频节点；两者可以同时配。一场只播一次（与 `finish_sound` 同一个幂等闸）。
+@export var finish_audio_node_path: NodePath
 
 # ═══════════════════════════════════════
 # 配置 — 终章 ED（战役最终防守战专用，2026-09-13）
@@ -247,6 +253,9 @@ var _tree_hooked: bool = false      ## 是否已挂 SceneTree.node_added（补�
 ## 结束音效是否已播（一场防守战只响一次）—— Host 的 `_finish_holdout` 与客户端的
 ## `apply_remote_completion` 都可能到达，中途加入补发也会重放完成广播，必须幂等。
 var _finish_sound_played: bool = false
+## `holdout_finished` 是否已发（2026-10-27）：Host 的 `_finish_holdout` 与客户端的
+## `apply_remote_completion` 都可能到达（含本地回环），信号必须只发一次。
+var _finished_emitted: bool = false
 ## Client 侧镜像的防守战进行态（2026-10-13）：客户端 `_active` 恒为 false（启动权在
 ## Host），但 label 需据此显示「防守中…」—— 否则站在机器旁永远显示「启动机器」（未启动态）。
 var _remote_active: bool = false
@@ -435,6 +444,14 @@ func start_from_peer() -> void:
 func start_ending_from_peer() -> void:
 	if _is_network_client():
 		return  ## 只认 Host 端；客户端再怎么被调也不本地起 ED
+	_start_ending()
+
+
+## 场景里独立摆放的结局触发器（`script/director/finale_trigger.gd`）用它起 ED。
+## 与「防守完成后再与本机交互」走**同一条路径**：联机 Client 会转成向 Host 请求，
+## Host 广播给全体 —— 两端时序不分叉。本方法不做 `ending_enabled` 门槛判断：
+## 摆下触发器的作者意图已经足够明确。
+func start_finale_ending() -> void:
 	_start_ending()
 
 
@@ -698,6 +715,7 @@ func trigger() -> void:
 	_phase_total = prepare_duration
 	_local_hud_shown = false
 	_finish_sound_played = false  ## 新一场防守战：结束音效重新武装
+	_finished_emitted = false     ## 新一场：holdout_finished 重新武装
 	# 本次防守战实例令牌：Client 用它校验收到的包是否来自当前场景的这场战斗，
 	# 丢弃旧场景残留的过期 RPC，避免在新场景里弹出幽灵 HUD。
 	_net_token = randi_range(1, 1000000)
@@ -953,7 +971,7 @@ func _finish_holdout() -> void:
 	# 完成事件（隐藏节点/传送点/回调）仅在权威端执行一次
 	if not _is_network_client():
 		_run_completion_events()
-		holdout_finished.emit(event_name)
+		_emit_finished_once()
 		_broadcast_completion()  # Client 也执行节点显隐（传送点仅 Host 创建）
 
 
@@ -965,15 +983,45 @@ func _finish_holdout() -> void:
 ## 三条到达路径都要靠它去重：① 权威端 `_finish_holdout()`
 ## ② 客户端 `apply_remote_completion()`（Host 广播）③ 中途加入补发完成广播。
 ## 与 `ending_sound`（终章 ED 黑屏演出时响）**互不相干**，别把两者合并。
+## ★2026-10-27：这里同时负责「播放场景里的音频节点」（`finish_audio_node_path`），
+##   两条通道共用同一个幂等闸 —— 客户端也能听到（与外观/节点显隐同源）。
 func _play_finish_sound_once() -> void:
 	if _finish_sound_played:
 		return
 	_finish_sound_played = true
+	_play_finish_audio_node()
 	if not finish_sound:
 		return
 	## 走 Global 的托管播放器（与 prepare_sound / alert_sound / ending_sound 同一入口，
 	## 受全局音效音量与并发上限管理），不另建 AudioStreamPlayer。
 	Global.play_sfx_managed(finish_sound, get_tree().current_scene)
+
+
+## 播放「场景里的音频节点」（2026-10-27 用户需求）：与 `finish_sound` 各自独立，可同时配。
+## 路径解析走 `_resolve_node`（相对本机器 → 相对场景根 → 末级名字全场景搜）。
+func _play_finish_audio_node() -> void:
+	if finish_audio_node_path.is_empty():
+		return
+	var node: Node = _resolve_node(finish_audio_node_path)
+	if node == null:
+		print("[HoldoutMachine] 结束音频节点找不到: %s" % str(finish_audio_node_path))
+		return
+	if node is AudioStreamPlayer:
+		(node as AudioStreamPlayer).play()
+	elif node is AudioStreamPlayer2D:
+		(node as AudioStreamPlayer2D).play()
+	else:
+		print("[HoldoutMachine] 结束音频节点 %s 不是 AudioStreamPlayer(2D)，已跳过" % node.name)
+
+
+## `holdout_finished` 的**唯一发射口**（2026-10-27）：
+## 两端各发一次 —— Host 走 `_finish_holdout`，Client 走 `apply_remote_completion`。
+## 场景物件（如 MoveNode）靠它做本地表现；本地回环可能两条路径都到 → 本闸去重。
+func _emit_finished_once() -> void:
+	if _finished_emitted:
+		return
+	_finished_emitted = true
+	holdout_finished.emit(event_name)
 
 
 func is_active() -> bool:
@@ -1264,6 +1312,9 @@ func apply_remote_completion(token: int) -> void:
 	## ⚠ 幂等：Host 若因本地回环也走到这里，`_finish_holdout` 已经响过 → 不叠响。
 	_play_finish_sound_once()
 	_run_completion_events()
+	## ★两端同源（2026-10-27）：Client 也要发 holdout_finished —— 场景物件（移动节点等）
+	## 靠它做本地表现；没有这条，多人下只有 Host 那边的物件会动。
+	_emit_finished_once()
 	print("[HoldoutMachine] 完成事件已在本端执行（client=%s token=%d）" % [
 		str(_is_network_client()), token])
 
@@ -1431,6 +1482,10 @@ func _create_one_teleport_point(cfg: HoldoutTeleportConfig, index: int) -> void:
 	tp.interact_range = cfg.interact_range
 	tp.capture_checkpoint = cfg.capture_checkpoint
 	tp.animated = cfg.animated
+	## 朝向动画（2026-10-27）：与机器自身 / TeleportPoint 的「朝向动画」组同口径。
+	tp.facing_frames = cfg.facing_frames
+	tp.facing_duration = cfg.facing_duration
+	tp.facing_animated = cfg.facing_animated
 
 	# 位置：优先用 marker 节点，其次用相对机器的偏移
 	var marker: Node = _resolve_node(cfg.marker_path)

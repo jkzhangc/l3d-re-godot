@@ -38,6 +38,12 @@ class_name HoldoutTeleportConfig extends Resource
 @export_range(0, 3, 1) var walk_direction: int = 2
 @export var animated: bool = true
 
+## 朝向动画（2026-10-27 与 TeleportPoint 的「朝向动画」组同口径）：
+## 循环的是朝向而不是踏步帧，与 `animated` **各自独立计时**。默认关 = 固定用 walk_direction。
+@export var facing_frames: Array[int] = [0]
+@export_range(0.02, 5.0, 0.01) var facing_duration: float = 0.25
+@export var facing_animated: bool = false
+
 # ═══════════════════════════════════════
 # 交互
 # ═══════════════════════════════════════
