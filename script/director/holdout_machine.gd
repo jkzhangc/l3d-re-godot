@@ -572,6 +572,22 @@ func _ending_pending() -> bool:
 	return ending_enabled and not _ending_started
 
 
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事（供存档点让路，见 interact_priority.gd）。
+## 三种不占用功能键的情形：
+##   ① 防守战进行中（`_active` / 客户端镜像 `_remote_active`）—— 按键不做事；
+##   ② `auto_start_on_approach` —— 靠近自动启动，本来就不读按键；
+##   ③ 已完成的 one_shot 且无终章待触发 —— `_can_interact` 已为 false。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	if _active or _remote_active:
+		return false
+	if auto_start_on_approach:
+		return false
+	return _can_interact
+
+
 func _update_label() -> void:
 	var label: Label = get_node_or_null("HintLabel") as Label
 	if not label:

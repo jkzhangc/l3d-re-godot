@@ -169,6 +169,16 @@ func _label_text() -> String:
 	return "治疗自己" if multiplayer_mode else "治疗全体角色"
 
 
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事（供存档点让路，见 interact_priority.gd）。
+## 与 `_process` 的触发条件完全一致：玩家在范围内且**本人还没用过**这只箱子。
+## 用过之后 `_can_interact` 变 false → 存档点恢复可触发。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	return _can_interact
+
+
 ## 本人是否已用过这只箱子。
 func _used_by_me() -> bool:
 	if not multiplayer_mode:

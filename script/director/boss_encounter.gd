@@ -134,6 +134,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		trigger()
 
 
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事（供存档点让路，见 interact_priority.gd）。
+## 与 `_unhandled_input` 的守卫同口径：按键模式 + 玩家在范围内 + 尚未触发（one_shot）。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	if trigger_mode != 1:
+		return false
+	if _triggered and one_shot:
+		return false
+	return _player_near
+
+
 func _draw() -> void:
 	if not show_debug_rect:
 		return

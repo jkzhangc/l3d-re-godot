@@ -22,6 +22,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 
 const SAVE_POINT_MENU := preload("res://script/ui/save_point_menu.gd")
+## 交互输入仲裁（2026-10-27 用户需求：存档触发优先级最低）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 
 const PLAYER_RESCAN_INTERVAL: float = 0.5  ## 玩家缺席时的降频重扫间隔（秒）
 
@@ -135,9 +137,13 @@ func _process(delta: float) -> void:
 	## ★项目铁律：互动键走 `_process` **轮询**（`_unhandled_input` 会被别的节点 consume
 	## → 静默失效；medical_box / holdout_machine 同款）。打开菜单即暂停 → 本函数随之停，
 	## 天然防同帧双触发。
+	## ★存档优先级最低（2026-10-27 用户需求）：掉落物 / 医疗箱 / 弹药补给 / 防守战机器 /
+	## Boss 遭遇与存档点贴在一起时，同一次按键要归**它们**；只有它们此刻都触发不了，
+	## 存档点才响应（判据见 script/interact_priority.gd，各交互节点实现 can_use_function_key）。
 	if _can_interact and _menu == null and not get_tree().paused:
 		if Input.is_action_just_pressed("功能键"):
-			_open_menu()
+			if not INTERACT_PRIORITY.has_priority_interaction(get_tree(), self):
+				_open_menu()
 
 
 # ═══════════════════════════════════════

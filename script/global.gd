@@ -1142,6 +1142,24 @@ func consume_pending_checkpoint_capture() -> bool:
 	return v
 
 
+## ── 读档时抑制章节总结（2026-10-27 用户需求）──
+## 读档会重新进入存档所在的场景；若该场景是**结尾安全屋**，场景里预置的 ChapterSummary
+## 会按 `auto_show` 再弹一次「章节完成」—— 但玩家并没有刚打完这一章，重复弹出只是噪音。
+## 记录「本次读档的目标场景路径」，由 ChapterSummary._ready 消费；路径不符则直接丢弃，
+## 避免一次失败/中断的读档把抑制状态泄漏到之后正常进入的图。
+var _pending_summary_suppress_scene: String = ""
+
+func suppress_chapter_summary_on_scene(scene_path: String) -> void:
+	_pending_summary_suppress_scene = scene_path
+
+
+## ChapterSummary 调用：本次进入该场景是否应跳过自动弹出。命中一次即消费。
+func consume_chapter_summary_suppression(scene_path: String) -> bool:
+	var pending: String = _pending_summary_suppress_scene
+	_pending_summary_suppress_scene = ""
+	return not pending.is_empty() and pending == scene_path
+
+
 ## 读取指定槽位并切入其记录的场景（玩家落回存档点坐标）。返回 false = 失败。
 ## 供标题画面「继续游戏」调用。
 func load_from_slot(slot_index: int) -> bool:
@@ -1165,14 +1183,20 @@ func load_from_slot(slot_index: int) -> bool:
 
 	var spawn: Variant = sm.spawn_position_of(data)
 	set_pending_arrival(scene_path, "", spawn)
+	## ★读档不再重复弹章节总结（2026-10-27 用户需求）：只对这一张「读档目标图」生效，
+	## ChapterSummary._ready 消费后立即清除。
+	suppress_chapter_summary_on_scene(scene_path)
 
 	var tree: SceneTree = get_tree()
 	if tree == null:
+		suppress_chapter_summary_on_scene("")
 		return false
 	print("[Global] 读档进入: %s (槽位 %d)" % [scene_path, slot_index])
 	var err: Error = tree.change_scene_to_file(scene_path)
 	if err != OK:
 		printerr("[Global] 读档切场景失败: %s (err=%d)" % [scene_path, err])
+		## 切图失败 → 清掉抑制标记，避免之后正常进入同一张图时被误抑制。
+		suppress_chapter_summary_on_scene("")
 		return false
 	return true
 

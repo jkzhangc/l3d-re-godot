@@ -82,11 +82,32 @@ func _ready() -> void:
 			chapter_title = raw_cfg.chapter_title
 		else:
 			chapter_title = chapter_title_fallback
+	## ★读档后不再重复弹章节总结（2026-10-27 用户需求）：读档会重新进入存档所在场景，
+	## 结尾安全屋里预置的本节点原本会再弹一次「章节完成」—— 玩家并没有刚打完这一章。
+	## 判据由 Global 在 load_from_slot 时记录（只对那一张目标图生效，消费即清）。
+	if auto_show and _is_suppressed_by_load():
+		auto_show = false
+		print("[ChapterSummary] 读档进入，跳过自动弹出章节总结")
 	_build_ui()
 	if auto_show:
 		show_summary()
 	else:
 		visible = false
+
+
+## 本次进入是否由「读档」触发、且目标就是本图（见 Global.load_from_slot /
+## consume_chapter_summary_suppression）。无 Global 或场景路径未知时按「不抑制」处理。
+func _is_suppressed_by_load() -> bool:
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return false
+	var scene_path: String = tree.current_scene.scene_file_path
+	if scene_path.is_empty():
+		return false
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("consume_chapter_summary_suppression"):
+		return false
+	return bool(g.call("consume_chapter_summary_suppression", scene_path))
 
 
 func show_summary() -> void:

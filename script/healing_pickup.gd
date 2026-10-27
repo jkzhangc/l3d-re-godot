@@ -174,6 +174,42 @@ func _need_function_key() -> bool:
 	return require_function_key
 
 
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事。存档点据此让路（见
+## script/interact_priority.gd：存档优先级最低）。
+## 只有「需要按 D 拾取」的路径才占用该键：
+##   · 触碰即自动拾取的物品不占用 → 不挡存档；
+##   · 已持有投掷物时替换走**确定键**（见 `_process_pickup` / `_process_network_hold`）→ 不挡存档。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	if not _player_in_range or not is_instance_valid(_player_ref) or item == null:
+		return false
+	if network_presentation_only:
+		return false
+	if _is_online_network_pickup() and network_pickup_id <= 0:
+		return false
+	## 与 `_process_pickup` 同口径：刚掉落的短冷却期内按 D 也不生效。
+	if Time.get_ticks_msec() - _spawn_msec < PICKUP_DELAY_MSEC:
+		return false
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	if state != null and item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null:
+		return false
+	## 喷雾类已满 → `_do_pickup` 会把它留在地上（返回 false），按 D 等于白按 → 不挡存档。
+	if item.item_type == ItemData.ItemType.HEALING and _healing_storage_full(state):
+		return false
+	return _need_function_key()
+
+
+## 喷雾存量是否已满（与 `_do_pickup` 的收纳判据同源：单机共用池 / 联机按座位）。
+func _healing_storage_full(state: PlayerState) -> bool:
+	if Players.using_shared_spray_pool():
+		return Players.team_spray_count >= Players.spray_capacity_total()
+	if state == null:
+		return false
+	return state.healing_item_count >= Players.spray_per_seat_cap()
+
+
 ## 头顶键帽：只有"进范围 + 需要按 D"才显示（与 weapon_pickup 的键帽同款外观/层级）。
 ## 联机镜像（presentation_only）与「还没拿到 Host 分配 id」的掉落物不显示 —— 那时按 D 也捡不起来。
 func _update_keycap_hint() -> void:
@@ -438,6 +474,7 @@ func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 	drop.item = old
 	## 落点与武器掉落统一（2026-09-23）：沿朝向推远 + 与已有掉落物避让 —— 否则旧投掷物
 	## 掉在脚下会被自己的自动拾取立刻捡回（同「丢下的武器又被捡回」问题）。
+	## ★同理（2026-10-27 用户定稿）：这类「替换掉落」不避玩家；避玩家只约束敌人掉落/导演投放。
 	drop.position = WEAPON_PICKUP_SCRIPT.find_free_drop_position(
 		get_tree(), WEAPON_PICKUP_SCRIPT.drop_landing_position(body))
 	var parent: Node = get_parent()

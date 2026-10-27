@@ -174,6 +174,21 @@ func can_player_use(player: Node2D) -> bool:
 	return state != null and state.current_hp > 0.0 and needs_refill(state)
 
 
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事（供存档点让路，见 interact_priority.gd）。
+## 与 `_process` 的触发条件同源：联机专属箱在单机不响应；暂停时不响应；
+## 玩家在范围内且**确实缺备弹**才算占用此键（弹药已满时按键无收益 → 不挡存档）。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	if multiplayer_only and not _online():
+		return false
+	var tree: SceneTree = get_tree()
+	if tree != null and tree.paused:
+		return false
+	return can_player_use(Players.get_local_entity())
+
+
 ## 同弹种的两把枪共用一个库存：目标取较大的配置值，不能叠加或每次越补越多。
 func _reserve_targets(state: PlayerState) -> Dictionary:
 	var targets: Dictionary = {}

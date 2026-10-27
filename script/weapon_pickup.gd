@@ -229,6 +229,10 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 			state.consume_ammo_item(wd.ammo_item_id, reserve)
 	## 落点：沿玩家朝向推远 DROP_PUSH_DISTANCE（2026-09-23 用户：丢下的武器要离玩家
 	## 远一些，避免刚脱手就被自己的自动拾取捡回），再做与已有掉落物的间距避让。
+	## ★不避玩家（2026-10-27 用户定稿）：换枪后的旧武器允许落在玩家附近/脚下 ——
+	## 「避玩家」只约束**敌人掉落 / 导演投放**（见 director/loot_dropper.gd 的 free_spot）。
+	## 这里也不该改成"正好落在玩家坐标"：DROP_PUSH_DISTANCE 的存在是为了让
+	## 「全部丢弃」后空槽不会立刻把刚丢下的武器自动捡回来。
 	var base: Vector2 = drop_landing_position(player)
 	pickup.position = find_free_drop_position(tree, base)
 	var parent: Node = null
@@ -724,6 +728,26 @@ func disable_network_pickup() -> void:
 func _can_hold_pickup() -> bool:
 	## 玩家在范围内即可拾取（不再限制武器举起/攻击状态）
 	return _player_ref != null
+
+
+## ── 交互输入仲裁（2026-10-27 用户需求）──
+## 语义：此刻按「功能键」，本节点会不会真的做事。存档点据此让路（见
+## script/interact_priority.gd：存档优先级最低）。判据与 `_process_hold` 的守卫同口径：
+## 玩家在范围内 + 角色能用 + 同点堆叠仲裁胜出 + 不在倒地队友救援之下。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	if _is_online_network_pickup() and (network_pickup_id <= 0 or network_presentation_only):
+		return false
+	if not _player_in_range or not is_instance_valid(_player_ref) or weapon_data == null:
+		return false
+	if not _player_can_use():
+		return false
+	if not _is_nearest_weapon_pickup():
+		return false
+	if _downed_player_near():
+		return false
+	return true
 
 
 func _update_hold_indicator(delta: float, is_holding: bool) -> void:
