@@ -40,6 +40,17 @@ const DIRECTIONS: int = 4
 @export_range(0.02, 2.0, 0.01) var step_duration: float = 0.25
 @export var animated: bool = true
 
+## ── 朝向动画（2026-10-27 用户需求）──
+## 与踏步动画同款，只是循环的是**朝向**而不是踏步帧；两者**各自独立计时**，
+## 同时开 = 一边踏步一边转朝向。默认关 → 固定用 `walk_direction`，老地图零变化。
+@export_group("朝向动画")
+## 朝向帧序列（0=下 1=左 2=右 3=上），按顺序循环。
+@export var facing_frames: Array[int] = [0]
+## 每档朝向持续秒数。
+@export_range(0.02, 5.0, 0.01) var facing_duration: float = 0.25
+## 是否播放朝向动画。关掉 = 固定用 `walk_direction`。
+@export var facing_animated: bool = false
+
 @export_group("交互")
 @export var interact_label: String = "补充弹药"
 @export_range(24.0, 200.0, 4.0) var interact_range: float = 56.0
@@ -59,6 +70,8 @@ const DIRECTIONS: int = 4
 
 var _step_index: int = 0
 var _step_timer: float = 0.0
+var _facing_index: int = 0
+var _facing_timer: float = 0.0
 var _can_interact: bool = false
 
 
@@ -137,8 +150,15 @@ func _refresh_sprite() -> void:
 	var char_row: int = char_idx / CHARS_PER_ROW
 	sprite.region_rect = Rect2(
 		char_col * FRAME_W * 3 + frame * FRAME_W,
-		char_row * FRAME_H * DIRECTIONS + clampi(walk_direction, 0, 3) * FRAME_H,
+		char_row * FRAME_H * DIRECTIONS + _current_facing() * FRAME_H,
 		FRAME_W, FRAME_H)
+
+
+## 当前应显示的朝向：朝向动画开着取序列里的值，否则用 walk_direction。
+func _current_facing() -> int:
+	if not facing_animated or facing_frames.is_empty():
+		return clampi(walk_direction, 0, 3)
+	return clampi(facing_frames[_facing_index % facing_frames.size()], 0, 3)
 
 
 func _process(delta: float) -> void:
@@ -147,6 +167,13 @@ func _process(delta: float) -> void:
 		if _step_timer >= maxf(step_duration, 0.02):
 			_step_timer = fmod(_step_timer, maxf(step_duration, 0.02))
 			_step_index = (_step_index + 1) % maxi(1, step_frames.size())
+			_refresh_sprite()
+	# 朝向动画（与踏步**各自独立计时**）
+	if facing_animated and facing_frames.size() > 1:
+		_facing_timer += delta
+		if _facing_timer >= maxf(facing_duration, 0.02):
+			_facing_timer = fmod(_facing_timer, maxf(facing_duration, 0.02))
+			_facing_index = (_facing_index + 1) % facing_frames.size()
 			_refresh_sprite()
 	if Engine.is_editor_hint():
 		return

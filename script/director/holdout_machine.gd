@@ -74,6 +74,17 @@ signal holdout_finished(event_name: String)
 @export_range(0.02, 5.0, 0.01) var step_duration: float = 0.25
 @export var animated: bool = false                        ## 是否播放踏步动画
 
+## ── 朝向动画（2026-10-27 用户需求）──
+## 与踏步动画同款，只是循环的是**朝向**而不是踏步帧；两者**各自独立计时**，
+## 同时开 = 一边踏步一边转朝向。默认关 → 固定用 `walk_direction`，老地图零变化。
+@export_group("朝向动画")
+## 朝向帧序列（0=下 1=左 2=右 3=上），按顺序循环。
+@export var facing_frames: Array[int] = [0]
+## 每档朝向持续秒数。
+@export_range(0.02, 5.0, 0.01) var facing_duration: float = 0.25
+## 是否播放朝向动画。关掉 = 固定用 `walk_direction`。
+@export var facing_animated: bool = false
+
 # ═══════════════════════════════════════
 # 配置 — 交互
 # ═══════════════════════════════════════
@@ -218,6 +229,8 @@ var _ending_local_started: bool = false   ## 本端是否已经真正起了 ED �
 var _can_interact: bool = false
 var _step_index: int = 0
 var _step_timer: float = 0.0
+var _facing_index: int = 0
+var _facing_timer: float = 0.0
 ## 阶段机运行时
 var _phase: int = Phase.IDLE
 var _phase_timer: float = 0.0
@@ -261,11 +274,12 @@ func _ready() -> void:
 	_refresh_sprite()
 	_update_label()
 
-	if Engine.is_editor_hint():
-		# 编辑器预览：仅刷新行走图，不跑游戏逻辑（无 Players / Director）
-		return
-
 	_step_timer = step_duration
+	_facing_timer = facing_duration
+
+	if Engine.is_editor_hint():
+		# 编辑器预览：只跑行走图刷新 / 踏步 / 朝向动画，不跑游戏逻辑（无 Players / Director）
+		return
 
 	# Boss BGM 优先（2026-09-14）：Boss 登场时防守战 BGM 挂起（stream_paused，
 	# 不丢播放进度），Boss 全灭 Director 会广播 false → 恢复播放。
@@ -305,7 +319,18 @@ func _sync_holdout_music_gate() -> void:
 
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
-		# 编辑器里持续根据导出项刷新行走图（贴图/角色索引/朝向/偏移变化即可见）
+		# 编辑器里持续根据导出项刷新行走图（贴图/角色索引/朝向/偏移变化即可见），
+		# 并播放踏步 / 朝向动画 —— 摆点即可确认动效（同 teleport_point / save_point）。
+		if animated and step_frames.size() > 1:
+			_step_timer -= delta
+			if _step_timer <= 0.0:
+				_step_timer += maxf(step_duration, 0.02)
+				_step_index = (_step_index + 1) % step_frames.size()
+		if facing_animated and facing_frames.size() > 1:
+			_facing_timer -= delta
+			if _facing_timer <= 0.0:
+				_facing_timer += maxf(facing_duration, 0.02)
+				_facing_index = (_facing_index + 1) % facing_frames.size()
 		_refresh_sprite()
 		return
 
@@ -322,6 +347,14 @@ func _process(delta: float) -> void:
 		if _step_timer <= 0.0:
 			_step_timer += maxf(step_duration, 0.02)
 			_step_index = (_step_index + 1) % step_frames.size()
+			_refresh_sprite()
+
+	# 朝向动画（与踏步**各自独立计时**：两个都开 = 边走边转）
+	if facing_animated and facing_frames.size() > 1:
+		_facing_timer -= delta
+		if _facing_timer <= 0.0:
+			_facing_timer += maxf(facing_duration, 0.02)
+			_facing_index = (_facing_index + 1) % facing_frames.size()
 			_refresh_sprite()
 
 	_check_player_proximity()
@@ -534,8 +567,16 @@ func _refresh_sprite() -> void:
 	var char_col: int = walk_char_index % CHARS_PER_ROW
 	var char_row: int = walk_char_index / CHARS_PER_ROW
 	var x: int = char_col * FRAME_W * 3 + frame_index * FRAME_W
-	var y: int = char_row * FRAME_H * DIRECTIONS + walk_direction * FRAME_H
+	var y: int = char_row * FRAME_H * DIRECTIONS + _current_facing() * FRAME_H
 	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+
+
+## 当前应显示的朝向：朝向动画开着取序列里的值，否则用 walk_direction。
+## 序列为空也回退 walk_direction（作者删空数组不该让精灵跳到第 0 行）。
+func _current_facing() -> int:
+	if not facing_animated or facing_frames.is_empty():
+		return clampi(walk_direction, 0, 3)
+	return clampi(facing_frames[_facing_index % facing_frames.size()], 0, 3)
 
 
 # ═══════════════════════════════════════

@@ -19,10 +19,19 @@ class_name HintMarker extends Node2D
 ##   外观固定按 VX Ace 行走图布局取帧（4 方向 × 3 帧 / 角色格），
 ##   不接任意单图 —— 这是用户 2026-10-19 的明确要求。
 ##
+## 【碰撞（2026-10-27 用户需求）】
+##   **默认关闭**（用户拍板）；勾上「碰撞 → 启用碰撞」后生成 32×32 实体碰撞盒，
+##   与医疗箱 / 存档点 / 防守战机器同口径：StaticBody2D + `collision_layer=33`
+##   （图块层 + 第 6 层「子弹阻挡」）+ `mask=0` —— 玩家 mask=11、敌人 mask=15
+##   都含图块层，因此会被挡下。大小 / 位置用 collision_size / collision_offset。
+##   ★节点不可见（自身或父级 visible=false）时一律不产生阻挡 ——
+##     隐藏的提示纸不该变成隐形墙（例：第一关-结束安全屋的「提示纸」就是隐藏的）。
+##
 ## 【怎么用】
 ##   ① 在场景里加一个 Node2D（或直接实例化 `object/hint_marker.tscn`）；
 ##   ② Inspector 里填 `hint_text`，把行走图拖进 `walk_texture`；
-##   ③ 需要的话调 `walk_char_index` / `facing` / `stand_frame` / `trigger_range`。
+##   ③ 需要的话调 `walk_char_index` / `facing` / `stand_frame` / `trigger_range`；
+##   ④ 「碰撞」组默认不挡人：路牌 / 告示牌 / 关着的门这类实体要挡人才勾上。
 ##   编辑器里能直接看到站位与（可选的）文字预览，运行时靠近才显示。
 
 ## 行走图规格：每角色格 = 4 方向 × 3 帧，一行 4 个角色格。
@@ -33,6 +42,13 @@ const LABEL_HEIGHT: float = 24.0
 ## 项目铁律：提示字号 12 的整倍（与医疗箱/补给/防守战机器同口径）。
 const FONT_STEP: int = 12
 const FONT_DEFAULT: int = 12
+
+## ── 实体碰撞 ──
+## 与 `medical_box` / `save_point` / `holdout_machine` 同款：StaticBody2D + 矩形，
+## `collision_layer=33`（图块层 + 第 6 层「子弹阻挡」）、`mask=0`。
+const COLLISION_NODE: String = "Collision"
+const COLLISION_SHAPE_NODE: String = "Shape"
+const COLLISION_LAYER: int = 33
 
 @export_group("提示文字")
 ## 靠近时显示的文字；留空 = 本节点只显示行走图。
@@ -61,6 +77,15 @@ const FONT_DEFAULT: int = 12
 @export var frame_size: Vector2i = Vector2i(48, 64)
 @export var sprite_modulate: Color = Color.WHITE
 
+@export_group("碰撞")
+## 是否生成实体碰撞盒。**默认关** = 纯提示（玩家 / 敌人可以从它身上走过去）；
+## 路牌 / 告示牌 / 关着的门这类实体要挡人时勾上。
+@export var collision_enabled: bool = false
+## 碰撞盒尺寸（px）。默认 32×32 = 一格，与医疗箱 / 存档点 / 防守战机器同口径。
+@export var collision_size: Vector2 = Vector2(32, 32)
+## 碰撞盒相对节点原点的偏移（行走图脚底对齐 / 只挡下半身时用）。
+@export var collision_offset: Vector2 = Vector2.ZERO
+
 @export_group("编辑器")
 ## 编辑器里是否预览提示文字（默认关：防止提示挡住地图）。
 @export var preview_in_editor: bool = false
@@ -71,12 +96,14 @@ var _label: Label = null
 
 func _ready() -> void:
 	_ensure_children()
+	_ensure_collision()
 	_refresh_visuals()
 	set_process(true)
 
 
 func _process(_delta: float) -> void:
 	_ensure_children()
+	_ensure_collision()
 	_refresh_visuals()
 	if Engine.is_editor_hint():
 		## 编辑器里只看作者开关，不做距离判定（没有玩家实体）。
@@ -125,6 +152,39 @@ func _ensure_children() -> void:
 		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_label.hide()
 		add_child(_label)
+
+
+## 实体碰撞（可选）。幂等：节点已存在（预置或上一帧建的）时只改参数，不重建。
+## 层 / 掩码**无条件**写死（同医疗箱）：作者在 Inspector 里改过也拉回统一口径，
+## 否则会出现「这个标记能穿、那个不能穿」。
+## ★`collision_enabled=false` 或节点不可见 → `collision_layer=0`（谁都检测不到它），
+##   用改层而不是 free/disabled：@tool 下勾回去当帧即恢复，不留重建时机问题。
+func _ensure_collision() -> void:
+	var body: StaticBody2D = get_node_or_null(COLLISION_NODE) as StaticBody2D
+	if body == null:
+		body = StaticBody2D.new()
+		body.name = COLLISION_NODE
+		add_child(body)
+
+	var active: bool = collision_enabled and is_visible_in_tree()
+	body.collision_layer = COLLISION_LAYER if active else 0
+	body.collision_mask = 0
+
+	var shape_node: CollisionShape2D = body.get_node_or_null(COLLISION_SHAPE_NODE) as CollisionShape2D
+	if shape_node == null:
+		shape_node = CollisionShape2D.new()
+		shape_node.name = COLLISION_SHAPE_NODE
+		body.add_child(shape_node)
+
+	## 形状由脚本创建 → 每个实例天然各持一份，两个标记用不同尺寸互不影响
+	## （若改成在 .tscn 里预置 SubResource，必须带 `resource_local_to_scene = true`，
+	##  否则同场景的多个实例共享同一个矩形，尺寸会互相覆盖）。
+	var rect: RectangleShape2D = shape_node.shape as RectangleShape2D
+	if rect == null:
+		rect = RectangleShape2D.new()
+		shape_node.shape = rect
+	rect.size = Vector2(maxf(collision_size.x, 1.0), maxf(collision_size.y, 1.0))
+	shape_node.position = collision_offset
 
 
 func _refresh_visuals() -> void:

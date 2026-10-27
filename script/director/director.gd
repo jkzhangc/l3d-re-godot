@@ -1615,34 +1615,47 @@ const ENTRY_PERFORMER := preload("res://script/director/enemy_entry_performance.
 
 
 ## 给刚生成的敌人挂上出生演出：冻结 AI → 跳/落到落点 → 落地僵直 → 交还。
-## 落点必须**站得住**（SpawnSpotResolver 二次校验）：找不到空地就整段跳过，
-## 敌人退回"直接出现在刷怪点"的旧行为 —— 宁可不演出，也不要落进墙里。
-func _play_entry_performance(enemy: Node2D, entry: Variant, probe_node: Node2D) -> void:
+## `landing` 由 `_resolve_entry_landing` **事先**解析并传入 —— 与「起点免障碍」共用同一份
+## 判据，杜绝"起点放行了、演出却因落点站不住而跳过 → 敌人被留在墙里"。
+## `landing` 不是 Vector2 = 没有配置 / 落点站不住 → 整段跳过，敌人退回旧行为。
+func _play_entry_performance(enemy: Node2D, cfg: Dictionary, landing: Variant) -> void:
 	if enemy == null or not is_instance_valid(enemy):
 		return
-	var cfg: Dictionary = _holdout_entry_performance(entry)
 	if cfg.is_empty():
 		return
-	var landing: Variant = cfg.get("to", Vector2.ZERO)
 	if not (landing is Vector2):
-		return
-	var target: Vector2 = Vector2.ZERO
-	if probe_node != null:
-		var found: Variant = SPOT_RESOLVER.find_near(
-			probe_node, landing as Vector2, ENEMY_SPOT_PROBE_RADIUS,
-			Callable(self, "is_holdout_spot_ok"))
-		if found is Vector2:
-			target = found as Vector2
-	if target == Vector2.ZERO:
-		print("[Director] 出生演出落点 (%d,%d) 找不到可站空位 → 跳过演出"
-			% [int((landing as Vector2).x), int((landing as Vector2).y)])
+		var raw: Variant = cfg.get("to", Vector2.ZERO)
+		if raw is Vector2:
+			print("[Director] 出生演出落点 (%d,%d) 找不到可站空位 → 跳过演出"
+				% [int((raw as Vector2).x), int((raw as Vector2).y)])
 		return
 	var play_cfg: Dictionary = cfg.duplicate()
-	play_cfg["to"] = target
+	play_cfg["to"] = landing as Vector2
 	var performer: Node = ENTRY_PERFORMER.new()
 	performer.name = "EntryPerformance"
 	performer.configure(play_cfg)
 	enemy.add_child(performer)
+
+
+## 出生演出的**落点**二次可站校验（判据与固定点刷怪同款：
+## 图块碰撞 + 物理探测 1|4|8 + `is_holdout_spot_ok`）。返回 null = 没有配置 / 找不到空位。
+func _resolve_entry_landing(cfg: Dictionary, probe_node: Node2D) -> Variant:
+	if cfg.is_empty() or probe_node == null:
+		return null
+	var landing: Variant = cfg.get("to", null)
+	if not (landing is Vector2):
+		return null
+	return SPOT_RESOLVER.find_near(
+		probe_node, landing as Vector2, ENEMY_SPOT_PROBE_RADIUS,
+		Callable(self, "is_holdout_spot_ok"))
+
+
+## 「点位带出生演出 + 落点站得住」→ 允许**忽略起点障碍**（2026-10-27 用户需求）。
+## 语义：演出本身就是"从别处跳/落过来"，起点只决定起飞位置，不需要站得住 ——
+## 敌人可以从墙里、屋顶上、围栏内侧起跳，落地时已经在空地上。
+## ★落点不可用必须返回 false：否则起点免检 + 演出被跳过 = 敌人留在墙里 (dead end)。
+static func entry_ignores_origin_obstacle(cfg: Dictionary, landing: Variant) -> bool:
+	return not cfg.is_empty() and landing is Vector2
 
 
 ## 防守战**固定刷怪点**批（2026-09-26 用户需求）：把 count 只敌人**轮转均分**到 positions 上。
@@ -1653,6 +1666,12 @@ func _play_entry_performance(enemy: Node2D, entry: Variant, probe_node: Node2D) 
 ##    ③`_is_walkable` 的地图范围闸与作者禁刷层），挪到最近的可站空位。
 ##   连空位都找不到的那一只**退回屏幕外刷法**（宁可不从作者点出，也不能出现在墙里），
 ##   并打一条告警，方便作者照着修点位。
+##
+## ★2026-10-27 用户需求：**点位带出生演出时，起点不查障碍** ——
+##   演出是"从别处跳/落过来"，起点只是起飞位置，压墙 / 屋顶 / 围栏上都允许，
+##   敌人会直接表演出来并落到（已单独校验过可站的）落点。
+##   前提 = 落点站得住；落点不可用则退回上面那条老路径（先挪空位再刷），
+##   绝不允许"起点免检但演出被跳过"把敌人留在墙里。
 ##
 ## 倍率：调用方（EventManager）传入的 count 已在按真人数放大之后，因此天然继承倍率。
 func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node,
@@ -1667,6 +1686,7 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 	var fs: Node = get_node_or_null("FrontSpawner")
 	var fell_back: int = 0
 	var blocked_swapped: int = 0
+	var origin_ignored: int = 0
 	for i: int in range(count):
 		var entry: Variant = points[assignment[i]]
 		var point: Vector2 = _holdout_entry_pos(entry)
@@ -1682,26 +1702,34 @@ func spawn_horde_nodes_at_positions(points: Array, count: int, decor_layer: Node
 			var swapped: Array[Node2D] = spawn_horde_nodes(1, decor_layer)
 			spawned_nodes.append_array(swapped)
 			continue
-		var pos: Vector2 = Vector2.ZERO
-		if probe_node != null:
-			var found: Variant = SPOT_RESOLVER.find_near(
+		## 出生演出配置与落点先解析（`null` 落点 = 没有配置 / 落点站不住）。
+		var entry_cfg: Dictionary = _holdout_entry_performance(entry)
+		var landing: Variant = _resolve_entry_landing(entry_cfg, probe_node)
+		var pos_v: Variant = null
+		if entry_ignores_origin_obstacle(entry_cfg, landing):
+			## ★起点免障碍：直接用作者摆的坐标（可能压在墙/屋顶上），演出会把它带走。
+			pos_v = point
+			origin_ignored += 1
+		elif probe_node != null:
+			pos_v = SPOT_RESOLVER.find_near(
 				probe_node, point, ENEMY_SPOT_PROBE_RADIUS,
 				Callable(self, "is_holdout_spot_ok"))
-			if found is Vector2:
-				pos = found as Vector2
-		if pos == Vector2.ZERO:
+		if not (pos_v is Vector2):
 			var fallback: Array[Node2D] = spawn_horde_nodes(1, decor_layer)
 			fell_back += fallback.size()
 			spawned_nodes.append_array(fallback)
 			continue
-		var enemy: Node2D = spawn_enemy(pos, decor_layer, -1)
+		var enemy: Node2D = spawn_enemy(pos_v as Vector2, decor_layer, -1)
 		if enemy != null:
 			spawned_nodes.append(enemy)
 			## 出生演出（2026-10-22）：配置挂在刷怪点上，逐只播放；不配就完全不影响。
-			_play_entry_performance(enemy, entry, probe_node)
+			_play_entry_performance(enemy, entry_cfg, landing)
 	if blocked_swapped > 0:
 		print("[Director] 固定刷怪点 %d 只被「玩家画面/近旁」暂时屏蔽 → 改走屏幕外刷法（本批 %d 只，点位 %d 个）"
 			% [blocked_swapped, count, point_count])
+	if origin_ignored > 0:
+		print("[Director] 固定刷怪点 %d 只带出生演出 → 起点忽略障碍，从作者点位直接起跳/坠落"
+			% origin_ignored)
 	if fell_back > 0:
 		push_warning("[Director] 固定刷怪点有 %d 只找不到空位，已退回屏幕外刷法（%d 个点位，请检查是否压墙/被占）"
 			% [fell_back, point_count])
