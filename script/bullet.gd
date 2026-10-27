@@ -479,7 +479,8 @@ func _explode() -> void:
 	exploded.emit(network_entity_id, center)
 
 	var applied_force: float = _knockback_force if _knockback_force > 0.0 else 300.0
-	for e: Node in get_tree().get_nodes_in_group("enemy"):
+	## 目标组 = 真敌人 + 训练木偶（木偶不在 "enemy" 组，见 HitResolver.DAMAGE_TARGET_GROUPS）。
+	for e: Node in HitResolver.damage_targets(get_tree()):
 		if e is not Node2D or not is_instance_valid(e):
 			continue
 		var enemy := e as Node2D

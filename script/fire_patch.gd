@@ -271,7 +271,14 @@ func _burn() -> void:
 	if not _authoritative or not HitResolver.is_damage_authority():
 		return
 	var radius_px: float = _radius * 32.0 + 16.0
-	for group: StringName in ([&"enemy", &"player"] if _damage_players else [&"enemy"]):
+	# 目标组 = 真敌人 + 训练木偶（木偶**不在** "enemy" 组，见 HitResolver.DAMAGE_TARGET_GROUPS）；
+	# `_damage_players` 时再带上玩家。
+	var groups: Array[StringName] = []
+	for target_group: StringName in HitResolver.DAMAGE_TARGET_GROUPS:
+		groups.append(target_group)
+	if _damage_players:
+		groups.append(&"player")
+	for group: StringName in groups:
 		for n: Node in get_tree().get_nodes_in_group(group):
 			if n is Node2D and (n as Node2D).global_position.distance_to(global_position) <= radius_px:
 				if (n as Node2D).has_method("take_damage"):

@@ -34,4 +34,4 @@ effect_text = "火焰灼烧"
 sell_price = 60
 pickup_texture = ExtResource("2_q0fks")
 pickup_char_idx = 2
-pickup_direction = 0
+pickup_requires_function_key = true

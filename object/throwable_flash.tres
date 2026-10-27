@@ -2,7 +2,6 @@
 
 [ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://cds8bj0opy6r" path="res://art/Ui/装備アイコン手榴弾(閃光).png" id="2"]
-[ext_resource type="Texture2D" uid="uid://6vwx76hk1ub3" path="res://art/Weapon/A武器セット.png" id="2_4iaia"]
 [ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="2_butmx"]
 [ext_resource type="Texture2D" uid="uid://cnn1rpqt41nlw" path="res://art/Barrages/手榴弾PIC.png" id="3_pamkk"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_58x6b"]
@@ -28,5 +27,5 @@ effect_text = "强光致盲"
 sell_price = 40
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 4
-pickup_direction = 0
 pickup_step_frames = Array[int]([1])
+pickup_requires_function_key = true

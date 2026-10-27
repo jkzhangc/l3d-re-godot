@@ -149,7 +149,8 @@ func _apply_direct_hit(target: Node2D, from: Vector2, to: Vector2) -> void:
 func _nearest_enemy_on_segment(from: Vector2, to: Vector2) -> Node2D:
 	var best: Node2D = null
 	var best_d: float = INF
-	for n: Node in get_tree().get_nodes_in_group("enemy"):
+	## 目标组走 HitResolver.damage_targets：真敌人 + 训练木偶（木偶不在 "enemy" 组里）。
+	for n: Node in HitResolver.damage_targets(get_tree()):
 		if not (n is Node2D) or not is_instance_valid(n):
 			continue
 		## `enemy` 组历史上也包含玩家（见 item_manager 的注释）→ 必须排除；
@@ -248,7 +249,8 @@ func _screen_white_flash(duration: float) -> void:
 
 func _explode() -> void:
 	var radius_px: float = _td.explosion_radius * TILE_SIZE + 16.0
-	for e: Node in get_tree().get_nodes_in_group("enemy"):
+	## 目标组 = 真敌人 + 训练木偶（见 HitResolver.DAMAGE_TARGET_GROUPS）。
+	for e: Node in HitResolver.damage_targets(get_tree()):
 		if e is Node2D and (e as Node2D).global_position.distance_to(global_position) <= radius_px:
 			if (e as Node2D).has_method("take_damage"):
 				var dir: Vector2 = (e as Node2D).global_position - global_position

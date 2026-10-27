@@ -30,6 +30,26 @@ const PLAYER_HIT_MASK: int = 1 << 2  ## = 4
 const FRIENDLY_FIRE_MIN_DAMAGE: float = 1.0
 const FRIENDLY_FIRE_MAX_DAMAGE: float = 2.0
 
+## ── 可受伤的"敌人侧"目标组（2026-10-27）──
+## `enemy` = 真敌人；`training_dummy` = 训练木偶。
+## ⚠ 木偶**故意不进 `enemy` 组**：一旦进去，导演的威胁统计 / 刷怪名额 / 联机快照 /
+##   敌人互相推挤都会把它当成真敌人。但投掷物爆炸、飞刀直击、火海 tick 这些都是
+##   "按组遍历结算"，只查 `enemy` 就会漏掉木偶（用户实测：投掷物打不动木偶）。
+## → 凡是这类按组结算的入口统一走 `damage_targets()`。
+const DAMAGE_TARGET_GROUPS: Array[StringName] = [&"enemy", &"training_dummy"]
+
+
+## 收集一轮 AoE / 直击要结算的目标（真敌人 + 训练木偶，去重保序）。
+static func damage_targets(tree: SceneTree) -> Array[Node]:
+	var out: Array[Node] = []
+	if tree == null:
+		return out
+	for group: StringName in DAMAGE_TARGET_GROUPS:
+		for node: Node in tree.get_nodes_in_group(group):
+			if not out.has(node):
+				out.append(node)
+	return out
+
 
 ## 返回当前是否为联机房间。单机不启用友伤规则，保持原有伤害语义。
 static func is_online_session() -> bool:

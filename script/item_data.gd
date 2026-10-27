@@ -46,7 +46,7 @@ enum ItemType {
 @export var pickup_animated: bool = true
 ## ★拾取方式（2026-10-26 用户需求）：false = 走上去自动拾取（默认）；
 ## true = 靠近后**按住功能键(D)** 拾取（进度环 + 头顶 D 键帽提示，同武器替换的键帽）。
-## 治疗品 / 辅助品默认开启，避免"路过顺手捡走"。
+## 治疗品 / 辅助品 / **投掷物**默认开启，避免"路过顺手捡走"（投掷物 2026-10-27 补齐）。
 ## ⚠ 只对 `healing_pickup.tscn` 这一族掉落物（治疗品/辅助品/投掷物）生效；
 ##   武器掉落物走 `weapon_pickup.require_function_key`（它本身是长按替换）。
 @export var pickup_requires_function_key: bool = false
