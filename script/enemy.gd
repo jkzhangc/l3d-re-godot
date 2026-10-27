@@ -1478,6 +1478,11 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 氷：冻结中受 1.5 倍（"一击粉碎"的数值化）
 	if _frozen_time > 0.0:
 		damage *= FROZEN_DMG_MULT
+	## ★氷 = 真冻结（2026-10-27 修复）：液体窒素这类**爆炸型**投掷物必带击退，而下面
+	## `has_hitstun` 的条件是"**没有**击退" → 2.5s 冻结硬直从来没生效过（实测只剩蓝色染色
+	## 与 1.5 倍易伤，敌人 0.3s 击退后照常行动）。这里给氷开"冻结优先"通道：
+	## 清掉击退位移、改走原地 Hitstun，并允许从 Idle / Discover / Attack 打断。
+	var ice_freeze: bool = false
 	# 雷=感电 / 氷=冻结：并入硬直（Hitstun 状态即"原地冻结、攻击不能"）
 	match element:
 		WeaponData.Element.LIGHTNING:
@@ -1486,6 +1491,9 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				_electro_time = ELECTRO_TIME
 		WeaponData.Element.ICE:
 			if not resist_ice:
+				ice_freeze = true
+				knockback_force = 0.0
+				knockback_stun = 0.0
 				hitstun_duration = maxf(hitstun_duration, FREEZE_TIME)
 				_frozen_time = FREEZE_TIME
 		WeaponData.Element.FIRE:
@@ -1587,7 +1595,10 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 			return
 
 		if sm:
-			if has_knockback and sm.get_node_or_null("Knockback"):
+			if ice_freeze and sm.get_node_or_null("Hitstun"):
+				# 冻结优先：未发现的敌人也直接冻住（不播"！"→Discover 的解锁流程）
+				sm._on_transition_requested("Hitstun")
+			elif has_knockback and sm.get_node_or_null("Knockback"):
 				sm._on_transition_requested("Knockback")
 			else:
 				sm._on_transition_requested("Discover")
@@ -1608,7 +1619,7 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				sm._on_transition_requested("Knockback")
 			else:
 				print("[敵人] StateMachine 中未找到 Knockback 状态节点")
-		elif has_hitstun and current_state == "Chase":
+		elif has_hitstun and (current_state == "Chase" or (ice_freeze and not current_state in blocked_states)):
 			if sm.get_node_or_null("Hitstun"):
 				sm._on_transition_requested("Hitstun")
 			else:

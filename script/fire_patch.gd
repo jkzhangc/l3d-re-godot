@@ -11,6 +11,8 @@ class_name FirePatch extends Node2D
 ## 燃烧区域 — 在半径内填充多个火精灵（VX Ace 行走图），周期性灼烧敌人
 
 const FIRE_TEXTURE_PATH := "res://art/misc/天罰キャラチップ.png"
+## 酸池着色器表现（element=ACID 时替换火苗精灵，见 _build_acid_pool）。
+const ACID_POOL_VISUAL := preload("res://script/fx/acid_pool_visual.gd")
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
@@ -56,6 +58,8 @@ var _source_owner: Node = null
 var _source_is_player_origin: bool = true
 ## 每次 tick 施加的属性（2026-10-27）：FIRE = 燃烧瓶（点燃），ACID = 酸瓶（只掉血、不点燃）。
 var _element: int = WeaponData.Element.FIRE
+## 酸池的可视节点（挂在 GroundLayer 下，不是本节点的子节点 —— 见 _build_acid_pool）。
+var _acid_visual: Node2D = null
 ## 夜间视界光源参数（ThrowableData 注入；默认 = 本文件常量）
 var _night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX
 var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
@@ -102,6 +106,15 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 
 
 func _build_fire() -> void:
+	## ★酸液地面（2026-10-27 用户需求）：酸瓶没有酸池美术素材 → 不铺火苗，
+	## 改用着色器画一滩强酸（见 script/fx/acid_pool_visual.gd）。
+	## 伤害/生命周期/夜间光源/发光粒子与燃烧瓶完全共用，只有"长什么样"不同。
+	if _element == WeaponData.Element.ACID:
+		_build_acid_pool()
+		_setup_ambient_sound()
+		_setup_embers()
+		_setup_night_light()
+		return
 	var tex: Texture2D = load(FIRE_TEXTURE_PATH)
 	if not tex:
 		printerr("[FirePatch] 火精灵表加载失败: %s" % FIRE_TEXTURE_PATH)
@@ -122,6 +135,34 @@ func _build_fire() -> void:
 	_setup_ambient_sound()
 	_setup_embers()
 	_setup_night_light()
+
+
+## 酸池：着色器液面挂在 **GroundLayer**（而不是本节点）——
+## 本节点在场景根下、火苗用 z=4 盖住一切；液面必须相反：压在角色(z=1)之下、
+## 地面图块之上。GroundLayer 没有 y_sort，子节点 z=0 正好是这个层级。
+func _build_acid_pool() -> void:
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	var host: Node = scene.find_child("GroundLayer", true, false)
+	if host == null:
+		host = scene
+	var vis := Node2D.new()
+	vis.name = "AcidPoolSurface"
+	vis.set_script(ACID_POOL_VISUAL)
+	vis.call("setup", float(_radius) * 32.0 + 16.0)
+	vis.z_index = 0
+	host.add_child(vis)
+	vis.global_position = global_position
+	_acid_visual = vis
+
+
+## 酸液面是**另一个父节点**下的节点，本节点被回收时必须一并清掉，否则会留下
+## 一滩永远不消失的酸（直到换图）。
+func _exit_tree() -> void:
+	if _acid_visual != null and is_instance_valid(_acid_visual):
+		_acid_visual.queue_free()
+	_acid_visual = null
 
 
 ## 火星：从火海里往上飘的余烬（纯表现，各端各自播）。
