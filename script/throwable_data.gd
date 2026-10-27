@@ -26,6 +26,18 @@ class_name ThrowableData extends ItemData
 ## 飞行旋转速度（弧度/秒，0=不旋转）
 @export var spin_speed: float = 12.0
 
+@export_group("直击（飞刀 / 无爆炸投掷物）")
+## 飞行途中的直击判定半径（像素，0 = 关闭）。
+## >0 时本投掷物不再只是"落到终点才结算"：沿途碰到的**第一个敌人**直接吃 `damage`，
+## 命中即落地消失（`direct_hit_pierce=true` 则贯穿继续飞）。
+## ★飞刀这类"直线投掷"必须同时把 `arc_height` 设为 0，否则仍是抛物线。
+@export var direct_hit_radius: float = 0.0
+## true = 贯穿：每个敌人只吃一次伤害，投掷物继续飞到终点（飞刀默认 false = 单体）。
+@export var direct_hit_pierce: bool = false
+## true = 直线类投掷物撞到**有物理层的图块**就地落下（不穿墙）。
+## 仅对 `direct_hit_radius > 0` 生效；手雷/燃烧瓶是抛物线，本来就该越过矮墙落到落点。
+@export var direct_hit_stop_on_wall: bool = true
+
 @export_group("爆炸（手雷）")
 @export var explosion_radius: int = 0       ## 爆炸半径（格，0=不爆炸）
 @export var damage: float = 50.0            ## 伤害（爆炸瞬间 / 火焰灼烧）

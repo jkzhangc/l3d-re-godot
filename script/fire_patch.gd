@@ -54,6 +54,8 @@ var _authoritative: bool = true
 var _damage_players: bool = true
 var _source_owner: Node = null
 var _source_is_player_origin: bool = true
+## 每次 tick 施加的属性（2026-10-27）：FIRE = 燃烧瓶（点燃），ACID = 酸瓶（只掉血、不点燃）。
+var _element: int = WeaponData.Element.FIRE
 ## 夜间视界光源参数（ThrowableData 注入；默认 = 本文件常量）
 var _night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX
 var _night_light_intensity: float = NIGHT_LIGHT_INTENSITY
@@ -71,7 +73,9 @@ const HitResolver := preload("res://script/hit_resolver.gd")
 
 ## shadow: 角色投影参数（可省略）。键：scale / range / opacity ——
 ##   参数太多，这里用字典而不是继续加位置参数（见 ThrowableData.fire_shadow_*）。
-static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY, night_light_color: Color = FIRE_LIGHT_COLOR, night_light_flicker: float = FIRE_LIGHT_FLICKER, ember_amount: int = FIRE_EMBER_AMOUNT, shadow: Dictionary = {}) -> void:
+## element: 每次 tick 施加的属性（2026-10-27）。默认 FIRE 保持燃烧瓶既有行为；
+##   酸瓶这类"火海只是持续伤害地面"的投掷物传 ACID，就不会把敌人点燃。
+static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tick_interval: float, char_idx: int, ambient_sound: AudioStream, parent: Node, authoritative: bool = true, damage_players: bool = true, source_owner: Node = null, source_is_player_origin: bool = false, night_light_extra_px: float = NIGHT_LIGHT_EXTRA_PX, night_light_intensity: float = NIGHT_LIGHT_INTENSITY, night_light_color: Color = FIRE_LIGHT_COLOR, night_light_flicker: float = FIRE_LIGHT_FLICKER, ember_amount: int = FIRE_EMBER_AMOUNT, shadow: Dictionary = {}, element: int = WeaponData.Element.FIRE) -> void:
 	var patch := FirePatch.new()
 	patch._radius = radius
 	patch._duration = duration
@@ -83,6 +87,7 @@ static func spawn(pos: Vector2, radius: int, duration: float, damage: float, tic
 	patch._damage_players = damage_players
 	patch._source_owner = source_owner
 	patch._source_is_player_origin = HitResolver.is_player(source_owner) if is_instance_valid(source_owner) else source_is_player_origin
+	patch._element = element
 	patch._night_light_extra_px = night_light_extra_px
 	patch._night_light_intensity = night_light_intensity
 	patch._night_light_color = night_light_color
@@ -232,6 +237,6 @@ func _burn() -> void:
 					# source_id=0 跳过源头去重，保证持续灼烧按 tick 间隔生效。
 					# 玩家来源火海统一经过 Player.take_damage，关闭时不扣 HP/不点燃。
 					if (n as Node2D).is_in_group("player"):
-						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE, false, _source_owner, _source_is_player_origin)
+						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, _element, false, _source_owner, _source_is_player_origin)
 					else:
-						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.FIRE)
+						(n as Node2D).take_damage(_damage, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, _element)

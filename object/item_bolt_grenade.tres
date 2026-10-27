@@ -15,6 +15,7 @@ projectile_texture = ExtResource("3_pamkk")
 arc_height = 64.0
 explosion_radius = 1
 damage = 180.0
+element = 2
 explode_effect_anim = ExtResource("1_rtgqi")
 throw_sound = ExtResource("7_58x6b")
 throw_sound_pitch = 1.4

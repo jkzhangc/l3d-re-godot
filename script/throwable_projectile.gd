@@ -14,6 +14,8 @@ const TILE_SIZE: int = 32
 ## ⚠ 投掷物爆炸走**本文件**，枪械爆炸走 `bullet.gd` —— 两条独立路径，两边都要接，
 ## 否则"调试环只对手雷不显示"或反之。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+## 直线类投掷物（飞刀）的撞墙判据：与传送落点/刷怪点共用同一套图块碰撞解析。
+const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 
 var _td: ThrowableData = null
 var _start: Vector2 = Vector2.ZERO
@@ -29,6 +31,10 @@ var _source_owner: Node = null
 ## 只有确认来源是玩家时才置 true；未知/敌人来源一律 false，避免把敌方火海误判成友伤。
 var _source_is_player_origin: bool = false
 var _explosion_applied: bool = false
+## 直击类（飞刀）：已命中的敌人 instance_id → 贯穿时不重复结算。
+var _hit_ids: Dictionary = {}
+## `_land()` 只允许执行一次（直击提前落地后，同帧不再跑终点分支）。
+var _landed: bool = false
 const HitResolver := preload("res://script/hit_resolver.gd")
 
 
@@ -75,8 +81,11 @@ func _setup_sprite() -> void:
 
 
 func _process(delta: float) -> void:
+	if _landed:
+		return
 	_t += delta
 	var k: float = clampf(_t / FLY_DURATION, 0.0, 1.0)
+	var from: Vector2 = global_position
 	global_position = _start.lerp(_end, k)
 	# 抛物线：屏幕空间高度弧线（起点/终点为 0，中点最高）
 	if _sprite:
@@ -88,11 +97,100 @@ func _process(delta: float) -> void:
 			var hf: float = clampf(1.0 - height / (_arc_height + 1.0), 0.4, 1.0)
 			_shadow.scale = Vector2(hf, hf * 0.5)
 			_shadow.modulate.a = 0.35 * hf
+	## ★直击类（飞刀，2026-10-27）：沿途命中 / 撞墙即停。
+	## 判定在**所有端**都跑 —— Host/单机结算伤害，Client 只靠它停在同一个位置。
+	if _td != null and _td.direct_hit_radius > 0.0:
+		if _direct_hit_step(from, global_position):
+			return
 	if k >= 1.0:
 		_land()
 
 
+# ═══════════════════════════════════════
+# 直击（飞刀 / direct_hit_radius > 0 的投掷物）
+# ═══════════════════════════════════════
+
+## 一帧的直击判定。返回 true = 本次已经落地（调用方不要再跑终点落地）。
+## 抛物线类（手雷/燃烧瓶）`direct_hit_radius = 0`，根本不会进这里。
+func _direct_hit_step(from: Vector2, to: Vector2) -> bool:
+	if _td.direct_hit_stop_on_wall and _crosses_wall(from, to):
+		global_position = from
+		_land()
+		return true
+	var hit: Node2D = _nearest_enemy_on_segment(from, to)
+	while hit != null:
+		_hit_ids[hit.get_instance_id()] = true
+		if _authoritative:
+			_apply_direct_hit(hit, from, to)
+		if not _td.direct_hit_pierce:
+			## 单体：停在命中的敌人身上（视觉上也"扎进去"），随后消失。
+			global_position = hit.global_position
+			_land()
+			return true
+		hit = _nearest_enemy_on_segment(from, to)
+	return false
+
+
+## 命中伤害：与爆炸同源（`damage` / `element`），但**不是爆炸** ——
+## 末位 source_is_explosive=false，不会打断 Tank 的霸体、也不触发爆炸类特效。
+func _apply_direct_hit(target: Node2D, from: Vector2, to: Vector2) -> void:
+	if not target.has_method("take_damage"):
+		return
+	var dir: Vector2 = to - from
+	if dir.length_squared() < 0.0001:
+		dir = Vector2.DOWN
+	target.call("take_damage", _td.damage, 120.0, dir.normalized(), false, 0.2, 0.1,
+		get_instance_id(), _td.element, false)
+
+
+## 线段的圆判定：返回**离起点最近**的未命中敌人（贯穿时逐个消费）。
+## 用线段而不是点：最高速（8 格 / 0.5s ≈ 512px/s）每帧位移约 8.5px，点判定在
+## 低帧率下会漏掉擦身而过的敌人。
+func _nearest_enemy_on_segment(from: Vector2, to: Vector2) -> Node2D:
+	var best: Node2D = null
+	var best_d: float = INF
+	for n: Node in get_tree().get_nodes_in_group("enemy"):
+		if not (n is Node2D) or not is_instance_valid(n):
+			continue
+		## `enemy` 组历史上也包含玩家（见 item_manager 的注释）→ 必须排除；
+		## `is_removed` 覆盖 `_is_dead` / `_is_dying`（尸体与濒死都不该再吃直击）。
+		if HitResolver.is_player(n) or HitResolver.is_removed(n):
+			continue
+		var e: Node2D = n as Node2D
+		if _hit_ids.has(e.get_instance_id()):
+			continue
+		var closest: Vector2 = Geometry2D.get_closest_point_to_segment(e.global_position, from, to)
+		if closest.distance_to(e.global_position) > _td.direct_hit_radius:
+			continue
+		var d: float = from.distance_to(closest)
+		if d < best_d:
+			best = e
+			best_d = d
+	return best
+
+
+## 撞墙：只查**图块碰撞**（房间墙/家具都由图块表达；节点式门另有自己的碰撞，不在此列）。
+## 逐 8px 采样 —— 飞行每帧位移 ≤ ~9px，不会跨过一整格(32px)漏判。
+func _crosses_wall(from: Vector2, to: Vector2) -> bool:
+	var anchor: Node2D = get_tree().current_scene as Node2D
+	if anchor == null or not is_instance_valid(anchor):
+		return false
+	var distance: float = from.distance_to(to)
+	if distance < 0.01:
+		return false
+	var steps: int = maxi(1, int(ceil(distance / 8.0)))
+	for i: int in range(1, steps + 1):
+		var p: Vector2 = from.lerp(to, float(i) / float(steps))
+		if SPOT_RESOLVER.is_tile_blocked(anchor, p):
+			return true
+	return false
+
+
+
 func _land() -> void:
+	if _landed:
+		return
+	_landed = true
 	if _td.explode_sound:
 		## 世界坐标定位（2026-10-20）：爆炸音随距离衰减，声源=落点。
 		## 播放器挂场景而非本节点 —— 投掷物随后释放，挂自身会被一起回收掐断声音。
@@ -109,8 +207,11 @@ func _land() -> void:
 	if _authoritative and _td.flash_radius > 0:
 		_apply_flash()
 	if _td.fire_radius > 0:
+		## ★灼烧属性跟随投掷物（2026-10-27）：此前 FirePatch 写死 FIRE，酸瓶的火海也会把敌人点燃。
+		## element=0（旧数据未配属性）回退 FIRE，保持燃烧瓶既有表现。
+		var fire_element: int = _td.element if _td.element != WeaponData.Element.NONE else WeaponData.Element.FIRE
 		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity, _td.fire_light_color, _td.fire_light_flicker, _td.fire_ember_amount,
-			{"scale": _td.fire_shadow_scale, "range": _td.fire_shadow_range, "opacity": _td.fire_shadow_opacity})
+			{"scale": _td.fire_shadow_scale, "range": _td.fire_shadow_range, "opacity": _td.fire_shadow_opacity}, fire_element)
 	queue_free()
 
 
