@@ -28,6 +28,10 @@ extends "res://script/director/move_node.gd"
 ## 固定信号：任何一次翻转都会发（带状态），与命名信号并存。
 signal switched(is_on: bool)
 
+## 双状态动画开关的三态（对应 Inspector 下拉：沿用基类 / 开启 / 关闭）。
+## 用三态而不是 bool：bool 无法表达「这个状态不覆盖，沿用基类」。
+enum AnimOverride { INHERIT = 0, ENABLED = 1, DISABLED = 2 }
+
 ## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
@@ -57,6 +61,36 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 @export var on_char_index: int = -1
 ## 开状态的朝向（-1 = 沿用基类 walk_direction）。
 @export var on_direction: int = -1
+
+# ═══════════════════════════════════════
+# 配置 — 双状态动画（2026-10-28 用户需求）
+# ═══════════════════════════════════════
+## 每个状态可以单独覆盖踏步 / 朝向动画：沿用基类（默认）、强制开、强制关；
+## 帧序列留空 = 沿用基类的 step_frames / facing_frames，时长 <=0 = 沿用基类。
+## ⚠ 只在基类 `use_walk_sprite = true` 时生效（非行走图模式本来就不取帧动画）。
+@export_group("状态 A（关）· 动画")
+@export_enum("沿用基类", "开启", "关闭") var off_step_animated: int = AnimOverride.INHERIT
+## 关状态的踏步帧序列（空 = 沿用基类）。
+@export var off_step_frames: Array[int] = []
+## 关状态的踏步间隔秒数（<=0 = 沿用基类）。
+@export_range(-1.0, 5.0, 0.01) var off_step_duration: float = -1.0
+@export_enum("沿用基类", "开启", "关闭") var off_facing_animated: int = AnimOverride.INHERIT
+## 关状态的朝向帧序列（0=下 1=左 2=右 3=上；空 = 沿用基类）。
+@export var off_facing_frames: Array[int] = []
+## 关状态的朝向切换间隔秒数（<=0 = 沿用基类）。
+@export_range(-1.0, 5.0, 0.01) var off_facing_duration: float = -1.0
+
+@export_group("状态 B（开）· 动画")
+@export_enum("沿用基类", "开启", "关闭") var on_step_animated: int = AnimOverride.INHERIT
+## 开状态的踏步帧序列（空 = 沿用基类）。
+@export var on_step_frames: Array[int] = []
+## 开状态的踏步间隔秒数（<=0 = 沿用基类）。
+@export_range(-1.0, 5.0, 0.01) var on_step_duration: float = -1.0
+@export_enum("沿用基类", "开启", "关闭") var on_facing_animated: int = AnimOverride.INHERIT
+## 开状态的朝向帧序列（0=下 1=左 2=右 3=上；空 = 沿用基类）。
+@export var on_facing_frames: Array[int] = []
+## 开状态的朝向切换间隔秒数（<=0 = 沿用基类）。
+@export_range(-1.0, 5.0, 0.01) var on_facing_duration: float = -1.0
 
 @export_group("状态位移")
 ## 关状态相对**摆放位置**的终点偏移（ZERO = 原地不动，只换图/发信号）。
@@ -88,10 +122,26 @@ var _can_interact: bool = false
 var _label: Label = null
 var _key_hint: String = "功能键"
 
+## ── 基类原值快照（2026-10-28）──
+## 状态覆盖项留空（-1 / null / 空数组）时必须能**回到基类值**。
+## 旧实现只在「有覆盖」时赋值 → 关状态没配 off_* 就永远停在开状态的 char/direction，
+## 表现就是「开了开关就关不回去」（用户实测）。
+var _base_texture: Texture2D = null
+var _base_char_index: int = 0
+var _base_direction: int = 0
+var _base_animated: bool = true
+var _base_step_frames: Array[int] = []
+var _base_step_duration: float = 0.25
+var _base_facing_animated: bool = false
+var _base_facing_frames: Array[int] = []
+var _base_facing_duration: float = 0.25
+
 
 func _ready() -> void:
 	_home = position
 	_is_on = start_on
+	## ★必须早于任何 `_apply_state_appearance()`：那一步会把状态覆盖写进基类字段。
+	_capture_base_state()
 	super._ready()
 	_ensure_label()
 	_ensure_user_signals()
@@ -101,6 +151,19 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	add_to_group("interactive_switch")
+
+
+## 记录基类原值（贴图 / 角色格 / 朝向 / 四条动画参数），供「该状态没配覆盖」时回退。
+func _capture_base_state() -> void:
+	_base_texture = texture
+	_base_char_index = walk_char_index
+	_base_direction = walk_direction
+	_base_animated = animated
+	_base_step_frames = step_frames.duplicate()
+	_base_step_duration = step_duration
+	_base_facing_animated = facing_animated
+	_base_facing_frames = facing_frames.duplicate()
+	_base_facing_duration = facing_duration
 
 
 func _process(delta: float) -> void:
@@ -198,16 +261,43 @@ func _state_duration() -> float:
 
 
 func _apply_state_appearance() -> void:
+	## 有覆盖就用覆盖；**没覆盖必须回退基类原值** —— 旧实现只是「不赋值」，
+	## 结果切到开状态后，关状态没配 off_char_index / off_direction 就永远回不去，
+	## 表现即「开了开关就关不了」（2026-10-28 用户实测）。
 	var tex: Texture2D = on_texture if _is_on else off_texture
-	if tex != null:
-		texture = tex   ## setter 内部会 _refresh_sprite
+	texture = tex if tex != null else _base_texture
 	var idx: int = on_char_index if _is_on else off_char_index
-	if idx >= 0:
-		walk_char_index = idx
+	walk_char_index = idx if idx >= 0 else _base_char_index
 	var dir: int = on_direction if _is_on else off_direction
-	if dir >= 0:
-		walk_direction = dir
+	walk_direction = dir if dir >= 0 else _base_direction
+	_apply_state_animation()
 	_refresh_sprite()
+
+
+## 双状态动画（2026-10-28 用户需求）：踏步 / 朝向各自「三态开关 + 帧序列 + 间隔」。
+## 空序列 / 非正时长 = 沿用基类；切换后重置相位，避免沿用上一状态的下标。
+func _apply_state_animation() -> void:
+	var step_mode: int = on_step_animated if _is_on else off_step_animated
+	animated = _base_animated if step_mode == AnimOverride.INHERIT \
+			else (step_mode == AnimOverride.ENABLED)
+	var step_seq: Array[int] = on_step_frames if _is_on else off_step_frames
+	step_frames = step_seq.duplicate() if not step_seq.is_empty() else _base_step_frames.duplicate()
+	var step_dur: float = on_step_duration if _is_on else off_step_duration
+	step_duration = step_dur if step_dur > 0.0 else _base_step_duration
+
+	var face_mode: int = on_facing_animated if _is_on else off_facing_animated
+	facing_animated = _base_facing_animated if face_mode == AnimOverride.INHERIT \
+			else (face_mode == AnimOverride.ENABLED)
+	var face_seq: Array[int] = on_facing_frames if _is_on else off_facing_frames
+	facing_frames = face_seq.duplicate() if not face_seq.is_empty() else _base_facing_frames.duplicate()
+	var face_dur: float = on_facing_duration if _is_on else off_facing_duration
+	facing_duration = face_dur if face_dur > 0.0 else _base_facing_duration
+
+	## 重置相位与计时：序列可能变短（旧下标会越界），也会让切换瞬间"跳一帧"。
+	_step_index = 0
+	_facing_index = 0
+	_step_timer = step_duration
+	_facing_timer = facing_duration
 
 
 ## 命名信号：名字作者可改，所以运行时 add_user_signal 注册（已存在则跳过）。

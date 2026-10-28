@@ -349,12 +349,39 @@ func _refresh_builtin(delta: float, zoom: float) -> void:
 		var world_radius: float = maxf(rec.radius / zoom, 8.0)
 		l.texture_scale = 2.0 * world_radius / float(LIGHT_TEX_SIZE)
 		l.color = rec.color
-		l.energy = maxf(rec.intensity * rec.value * mult, 0.0)
+		## 亮度还要乘光源（含父链）的透明度：SignalVisibilityNode 的淡出是 modulate:a → 0，
+		## 不跟着衰减就会「贴图慢慢暗、灯一直亮到最后一帧突然灭」。
+		l.energy = maxf(rec.intensity * rec.value * mult, 0.0) * _source_alpha(rec)
 		l.shadow_enabled = rec.occlude
 		l.shadow_filter = shadow_filter_quality
 		l.shadow_filter_smooth = shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
-		l.visible = l.energy > 0.001
+		## ★光源节点被隐藏（含父链）时不能发光（2026-10-28 用户实测「一开始隐藏的灯还亮着」）：
+		## PointLight2D 是本层自己建的子节点，**不随光源节点显隐**，只能在这里判定。
+		l.visible = _source_visible(rec) and l.energy > 0.001
 	_records = live
+
+
+## 光源节点的可见性（含整条父链）。SignalVisibilityNode 这类包装层隐藏时，
+## 子层的 LightEmitter 仍然在树里、仍然注册着 —— 必须显式否决它的光照。
+func _source_visible(rec: LightRecord) -> bool:
+	if not is_instance_valid(rec.source):
+		return false
+	if rec.source is CanvasItem:
+		return (rec.source as CanvasItem).is_visible_in_tree()
+	return true
+
+
+## 光源（含父链）的累计不透明度。包装层做淡出时（modulate:a → 0），灯光要同步变暗；
+## CanvasItem 的 modulate 是逐级相乘的，但没有"取累计值"的 API，只能自己往上走。
+func _source_alpha(rec: LightRecord) -> float:
+	var node: Node = rec.source
+	var a: float = 1.0
+	while node != null:
+		if node is CanvasItem:
+			var ci := node as CanvasItem
+			a *= ci.modulate.a * ci.self_modulate.a
+		node = node.get_parent()
+	return clampf(a, 0.0, 1.0)
 
 
 ## 按记录懒创建 PointLight2D（第一次 register 或从白天切夜时）。
@@ -434,7 +461,8 @@ func _update_character_shadows(zoom: float) -> void:
 			var best_dist: float = 0.0
 			var best_rec: LightRecord = null
 			for rec: LightRecord in _records:
-				if rec.intensity <= 0.0 or not rec.cast_shadow or not is_instance_valid(rec.source):
+				## 隐藏的光源不投影（否则灯关了角色还拖着影子）。
+				if rec.intensity <= 0.0 or not rec.cast_shadow or not _source_visible(rec):
 					continue
 				var wr: float = rec.radius / zoom
 				var to_caster: Vector2 = node.global_position - rec.source.global_position

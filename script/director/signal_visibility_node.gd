@@ -114,6 +114,12 @@ func is_shown() -> bool:
 func set_shown(shown: bool, animate: bool = true) -> void:
 	if _shown == shown and visible == shown:
 		return
+	## ★淡入必须从「完全隐藏」的 alpha 重新起算（2026-10-28 用户实测「淡入是直接显示」）：
+	## 初始 `_apply_instant(false)` 与 `_finish_fade_out()` 都会把 alpha 复位成 1.0，
+	## 旧实现又直接 tween 到 1.0 → 实际是 1.0→1.0，一帧就到位。
+	## 只有「切换前已经不可见」才归零；淡出中途反悔（visible 仍为 true）则从当前 alpha 继续淡入，
+	## 否则会先闪黑一下再变亮。
+	var was_hidden: bool = not visible
 	_shown = shown
 	_apply_collision(shown)
 	if not animate or fade_seconds <= 0.0 or Engine.is_editor_hint():
@@ -124,6 +130,8 @@ func set_shown(shown: bool, animate: bool = true) -> void:
 	_tween = create_tween()
 	if shown:
 		visible = true
+		if was_hidden:
+			modulate.a = 0.0
 		_tween.tween_property(self, "modulate:a", 1.0, fade_seconds)
 	else:
 		_tween.tween_property(self, "modulate:a", 0.0, fade_seconds)
