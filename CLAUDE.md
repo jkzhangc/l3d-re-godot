@@ -392,11 +392,12 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 解析口径：`物品开关 ∨ healing_pickup.require_function_key`（节点级仍可单独覆盖）。
 **联机**：Client 的「按 D」与投掷物替换一样只走 `_process_network_hold` → 满进度提交请求，**绝不本地 `_do_pickup()`**。
 
-**拾取即用开关**（2026-10-28）：`ItemData.use_on_pickup`（**默认 false**，派生 `uses_on_pickup()`）。
-打开后捡起瞬间把效果结算在拾取者身上（统一走 `player.apply_item_effects()`：HP/TP/強化/全屏闪烁/音效，与按键使用同一套；看护被动同步生效），**不进治疗品/辅助品槽位**。
+**拾取即用开关**（2026-10-28）：`ItemData.use_on_pickup`（**默认 false**，派生 `uses_on_pickup()`）。打开后捡起瞬间把效果结算在拾取者身上（统一走 `player.apply_item_effects()`：HP/TP/強化/全屏闪烁/音效，与按键使用同一套；看护被动同步生效），**不进治疗品/辅助品槽位**。
 拾取者对应数值已满（HP 满 / TP 满）→ 视为无法使用，**物品留在地上不消耗**（该情形 `can_use_function_key()` 返回 false，存档点照常可触发）。联机 Host 代远程玩家结算（`_try_host_pickup` → `_do_pickup`），客户端只等快照回灌。
 已开启：`item_greenherbs.tres`（绿色草药）、`item_mineralwater.tres`（矿泉水）——对应原作「不能携带」。
 ⚠ 只对 `healing_pickup` 这一族生效；建议与 `pickup_requires_function_key` 同时打开，否则触碰即自动吃掉。
+
+**恢复全员**（2026-10-28）：`ItemData.restore_all_party`（默认 false）。单人 → `hp_restore` / `tp_restore` 作用于**全体角色**（`player._apply_item_effects_to_party`）；联机 → **全员各 +1 支急救喷雾**（Host 权威 `_grant_spray_to_all_seats`，按座位上限 3 收口，已持其它治疗品的座位跳过）。自己满血但队里有人没满时仍允许使用（`player._can_use_party_heal_now` / `network_world._any_seat_hurt`）。
 
 ### 敌人 A* 寻路
 
@@ -407,6 +408,11 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 ### 战斗 HUD
 
 **`script/ui/hud.gd`** — CanvasLayer：HP 血条（`ＨＰバー.png` + `ＨＰメーター.png`，<30% 变红）+ HP 数值标签 + 5 槽位栏（主/副武器 + 治疗/辅助品 + 投掷品预留）。可见性和布局参数全部 `@export`。
+
+**右下角操作提示**（2026-10-28）：`combat_hud.tscn` 的 `ActionHints`（PanelContainer → Margin → VBox → Row1..8，每行 = `Key` 键帽 + `Text` 说明，字号 36 = 弹药数字同款）是**可视化节点**，样式直接在编辑器改；`combat_hud.gd::_collect_action_hints()` 只按本地玩家状态挑行（最多 8 行，超出丢弃尾部）：
+- 未举枪：`1/2` 举起对应武器、`C` SA 技能（只在该角色有 `command_trigger="SA键"` 的技能时）、`S` 推击、`3` 治疗品 / `4` 辅助品 / `5` 投掷物（仅持有）、`Q` 切换角色（单人且队伍 >1）。
+- 举枪中：`Shift/1` 放下、`Z` 攻击、`A` 装填（仅弹匣未满）、`X` 固定朝向 / 解除固定、`C` SA、`空格` 觉醒（仅 `character.awaken_type != "none"`；觉醒只能在举枪态发动，地面不提示）、`S` 推击。
+- 移动端用 `Global.has_key_hint()` 过滤不存在的键；倒地/无玩家整块隐藏；**总开关 `Global.show_action_hints`**（设置 → 智能提示，PC 默认开、手机默认关，持久化到 config.json）。
 
 ### 伤害数字
 

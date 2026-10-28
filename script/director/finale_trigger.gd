@@ -131,7 +131,8 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if Engine.is_editor_hint() or _triggered:
 		return
-	if not _can_trigger:
+	## 隐藏时不能互动（2026-10-28 用户实测：被隐藏的触发器仍能按确定键起 ED）。
+	if not is_visible_in_tree() or not _can_trigger:
 		return
 	if event.is_action_pressed("确定键"):
 		## 与传送点 / 安全门一致：UI 先消费按键，不会隔着菜单误触发。
@@ -295,6 +296,11 @@ func _current_facing() -> int:
 
 
 func _check_player_proximity() -> void:
+	## ★隐藏（含父链隐藏）时一律不可触发（2026-10-28 用户实测「隐藏的 FinaleTrigger 还能互动」）。
+	## 旧实现只算距离，`visible=false` 的节点照样 `_can_trigger=true`，按确定键就起 ED。
+	if not is_visible_in_tree():
+		_can_trigger = false
+		return
 	var player: Node2D = _local_player()
 	if player == null or not is_instance_valid(player):
 		_can_trigger = false

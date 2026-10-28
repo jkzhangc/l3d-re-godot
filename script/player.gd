@@ -1814,7 +1814,8 @@ func use_healing_item() -> bool:
 	## ★满血时既不能用、也不扣数量（2026-09-30 用户实测：满血还能用，且数量会减少）。
 	## 放在最前面 = 单机 / 联机 Host / 联机 Client 提交前 都被拦下；
 	## Host 结算远程请求时在 network_world 里另有同样一道闸门。
-	if current_hp >= max_hp:
+	## ★「恢复全员」道具例外（2026-10-28）：自己满血但队友没满时仍可用。
+	if current_hp >= max_hp and not _can_use_party_heal_now():
 		return false
 	if _submit_network_healing_use():
 		return true
@@ -1830,6 +1831,23 @@ func use_healing_item() -> bool:
 		## 成就「ダメ。ゼッタイ。」：使用治疗品次数
 		ACHIEVEMENTS.on_heal_item(state.seat_index)
 	return true
+
+
+## 当前待用的治疗品是否「恢复全员」且队里确实有人没满 —— 决定满血时能否使用
+##（restore_all_party 的道具是给队伍用的，自己满血不该白拦）。
+func _can_use_party_heal_now() -> bool:
+	var candidate: ItemData = null
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state != null and state.healing_item_count > 0:
+		candidate = state.healing_item
+	if candidate == null and Players.using_shared_spray_pool() and Players.team_spray_count > 0:
+		candidate = Players.team_spray_item
+	if candidate == null or not candidate.restore_all_party:
+		return false
+	for s: PlayerState in Players.seats:
+		if s != null and s.current_hp < s.get_max_hp():
+			return true
+	return false
 
 
 ## 联机 Client 的喷雾使用提交。返回 true = 已转交 Host（本机不结算）。
@@ -1873,9 +1891,28 @@ func use_support_item() -> bool:
 
 
 ## 将物品效果施加到本玩家实体，避免 Global 持有“本地玩家”假设。
+## ★「恢复全员」（2026-10-28）：单人 / 联机 Host 走两条不同分支 ——
+##   单人：把同一份效果逐个结算给全体在场角色；
+##   联机：改成「全员各获得一支急救喷雾」（只 Host 改座位账本，Client 等快照回灌）。
 func apply_item_effects(item: ItemData) -> void:
 	if not item:
 		return
+	if item.restore_all_party:
+		if Players.is_online_session():
+			_grant_spray_to_all_seats()
+		else:
+			_apply_item_effects_to_party(item)
+		_play_item_use_feedback(item)
+		return
+	_apply_item_effects_single(item)
+	## 使用表现（2026-10-23）：治疗品与辅助品走同一个入口 → 同一套全屏闪烁 + 音效，
+	## 颜色/时长/音效都在 ItemData「使用表现」组里逐物品配。
+	_play_item_use_feedback(item)
+
+
+## 单个目标的物品效果（HP / TP / 強化），**不含**表现与看护被动。
+## 提成独立方法是为了「恢复全员」能对每个角色复用同一份结算。
+func _apply_item_effects_single(item: ItemData) -> void:
 	if item.hp_restore > 0:
 		heal(item.hp_restore)
 	if item.tp_restore > 0:
@@ -1889,9 +1926,44 @@ func apply_item_effects(item: ItemData) -> void:
 	if item.adrenaline_seconds > 0.0:
 		_adrenaline_until_msec = maxi(_adrenaline_until_msec, now + int(item.adrenaline_seconds * 1000.0))
 		print("[玩家] アドレナリン：%.0f 秒内攻击力 ×2" % item.adrenaline_seconds)
-	## 使用表现（2026-10-23）：治疗品与辅助品走同一个入口 → 同一套全屏闪烁 + 音效，
-	## 颜色/时长/音效都在 ItemData「使用表现」组里逐物品配。
-	_play_item_use_feedback(item)
+
+
+## 单人「恢复全员」：先结算自己，再逐个结算其他在场角色（同一个 ItemData）。
+func _apply_item_effects_to_party(item: ItemData) -> void:
+	_apply_item_effects_single(item)
+	for other: Node2D in Players.all_entities(false):
+		if other == self or not is_instance_valid(other):
+			continue
+		if other.has_method("_apply_item_effects_single"):
+			other.call("_apply_item_effects_single", item)
+	print("[物品] 恢复全员：%s 已结算给全体角色" % item.item_name)
+
+
+## 联机「恢复全员」= 每个座位 +1 支急救喷雾。
+## ⚠ 只有 Host 有权改座位账本；Client 的这条路径不会被执行（它只提交请求），
+##   数量由 Host 的高频快照（healing_id / healing_count）回灌。
+## ⚠ 座位已持有**别的**治疗品时不覆盖（那会吞掉玩家的物品），只跳过并打日志。
+func _grant_spray_to_all_seats() -> void:
+	var net: Node = get_node_or_null("/root/Net")
+	if net == null or not bool(net.get("is_host")):
+		return
+	var spray: ItemData = SPRAY_ITEM
+	if spray == null:
+		return
+	var cap: int = Players.spray_per_seat_cap()
+	var granted: int = 0
+	for s: PlayerState in Players.seats:
+		if s == null:
+			continue
+		if s.healing_item != null and s.healing_item.item_id != spray.item_id:
+			print("[物品] 恢复全员：座位 %d 持有其它治疗品，跳过" % s.seat_index)
+			continue
+		if s.healing_item_count >= cap:
+			continue
+		s.healing_item = spray
+		s.healing_item_count += 1
+		granted += 1
+	print("[物品] 恢复全员：%d 个座位各获得 1 支急救喷雾" % granted)
 
 
 ## 使用消耗品的视觉/听觉反馈。**只在本机操控的玩家身上播**：
@@ -2233,3 +2305,5 @@ func _setup_weapon_sprite() -> void:
 ## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
 ## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
 const ACHIEVEMENTS := preload("res://script/achievements.gd")
+## 「恢复全员」在联机下落成「全员各获得一支急救喷雾」—— 就是这条固定资源。
+const SPRAY_ITEM := preload("res://object/item_first_aid_spray.tres")

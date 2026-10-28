@@ -17,6 +17,29 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="HintsPanel"]
+bg_color = Color(0, 0, 0, 0.45)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="HintsKey"]
+content_margin_left = 10.0
+content_margin_top = 2.0
+content_margin_right = 10.0
+content_margin_bottom = 2.0
+bg_color = Color(0.08, 0.08, 0.1, 0.9)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.95, 0.95, 0.9, 0.9)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [node name="CombatHUD" type="CanvasLayer" unique_id=410597860]
 script = ExtResource("1_708nl")
 
@@ -186,9 +209,9 @@ text = "守住机器！"
 
 [node name="RemotePlayerBars" type="VBoxContainer" parent="." unique_id=1712000010]
 offset_left = 8.0
-offset_top = 330.0
+offset_top = 256.0
 offset_right = 468.0
-offset_bottom = 330.0
+offset_bottom = 256.0
 mouse_filter = 2
 theme_override_constants/separation = 8
 
@@ -199,15 +222,16 @@ layout_mode = 2
 mouse_filter = 2
 
 [node name="HPBar" type="TextureProgressBar" parent="RemotePlayerBars/RemoteBarTemplate" unique_id=1712000012]
+layout_mode = 0
 scale = Vector2(2, 2)
 mouse_filter = 2
-max_value = 100.0
 step = 0.0
 value = 100.0
 texture_under = ExtResource("7_remote")
 texture_progress = ExtResource("8_remote")
 
 [node name="NameLabel" type="Label" parent="RemotePlayerBars/RemoteBarTemplate" unique_id=1712000014]
+layout_mode = 0
 offset_left = 248.0
 offset_right = 460.0
 offset_bottom = 32.0
@@ -216,4 +240,240 @@ theme_override_constants/shadow_offset_x = 2
 theme_override_constants/shadow_offset_y = 2
 theme_override_font_sizes/font_size = 24
 text = "2P"
+vertical_alignment = 1
+
+[node name="ActionHints" type="PanelContainer" parent="."]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -24.0
+offset_top = -24.0
+offset_right = -24.0
+offset_bottom = -24.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("HintsPanel")
+
+[node name="Margin" type="MarginContainer" parent="ActionHints"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="ActionHints/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+alignment = 2
+
+[node name="Row1" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "1"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "举起主武器"
+vertical_alignment = 1
+
+[node name="Row2" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "Z"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "攻击"
+vertical_alignment = 1
+
+[node name="Row3" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row3"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "X"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row3"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "固定朝向"
+vertical_alignment = 1
+
+[node name="Row4" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row4"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "A"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row4"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "装填"
+vertical_alignment = 1
+
+[node name="Row5" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row5"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "A"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row5"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "装填"
+vertical_alignment = 1
+
+[node name="Row6" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row6"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "A"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row6"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "装填"
+vertical_alignment = 1
+
+[node name="Row7" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row7"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "A"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row7"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "装填"
+vertical_alignment = 1
+
+[node name="Row8" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 2
+
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row8"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("HintsKey")
+text = "A"
+vertical_alignment = 1
+
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row8"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
+theme_override_constants/shadow_offset_x = 2
+theme_override_constants/shadow_offset_y = 2
+theme_override_font_sizes/font_size = 36
+text = "装填"
 vertical_alignment = 1

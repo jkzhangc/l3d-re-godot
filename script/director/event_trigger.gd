@@ -115,6 +115,9 @@ func _draw() -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if _triggered and one_shot:
 		return
+	## 隐藏（含父链隐藏）时不可触发 —— 与 FinaleTrigger 同一条规则（2026-10-28）。
+	if not is_visible_in_tree():
+		return
 	if not body is CharacterBody2D:
 		return
 	if not body.has_method("get_weapon_data"):

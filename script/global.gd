@@ -49,6 +49,12 @@ var menu_item_centered: bool = true  ## 标题菜单文字居中排列（设置�
 ## 已持有投掷物时的替换（确定键）。按住模式沿用 `hold_time`（默认 1.2s）+ 进度环。
 var pickup_hold_mode: bool = false
 
+## ── 智能按键提示（2026-10-28 用户需求）──
+## 右下角「按 1 举枪 / Shift 放下 / Z 攻击 …」提示块是否显示。
+## 默认：PC = 开；手机 = 关（屏幕小，且触摸层本身就把按键摆出来了）。
+## config.json 里**没有**该键时按平台取默认；玩家在设置里改过就以配置为准。
+var show_action_hints: bool = true
+
 ## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
 ## 【2026-10-08 拆分】逻辑已抽到 `script/touch_layout_service.gd`（TouchLayoutService），
 ## 这里只保留**同名转发门面 + 属性代理** → 外部（menu_controller / title_screen /
@@ -1265,6 +1271,7 @@ func _apply_config_file(path: String) -> void:
 			collection_ids.append(sid)
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	pickup_hold_mode = bool(cfg.get("pickup_hold_mode", pickup_hold_mode))
+	show_action_hints = bool(cfg.get("show_action_hints", not is_mobile_platform()))
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 	## ★空串视为"未设置"，不覆盖 —— 否则随包的旧 config.json（或手机上的空值）会把
@@ -1295,6 +1302,7 @@ func save_config() -> void:
 		"collection_ids": Array(collection_ids),
 		"facing_lock_mode": facing_lock_mode,
 		"pickup_hold_mode": pickup_hold_mode,
+		"show_action_hints": show_action_hints,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
 		"master_server_url": master_server_url,
@@ -1524,6 +1532,17 @@ func set_pickup_hold_mode(on: bool) -> void:
 ## 设置页显示用文本。
 func pickup_hold_label() -> String:
 	return "按住" if pickup_hold_mode else "点击一下"
+
+
+## 右下角智能按键提示开关（持久化到 config.json）。
+func set_show_action_hints(on: bool) -> void:
+	show_action_hints = on
+	save_config()
+
+
+## 设置页显示用文本。
+func action_hints_label() -> String:
+	return "显示" if show_action_hints else "隐藏"
 
 
 # ═══════════════════════════════════════

@@ -61,6 +61,11 @@ enum ItemType {
 @export var use_on_pickup: bool = false
 ## 使用时回复的 HP 量（0=不回复）
 @export var hp_restore: int = 0
+## ★恢复全员（2026-10-28 用户需求）：
+## · 单人（含本地多角色）→ 该物品的 hp_restore / tp_restore **作用于全体角色**；
+## · 联机 → 改成**全员各获得一支急救喷雾**（Host 权威结算，按每座位上限 3 收口）。
+## 判定入口在 `player.apply_item_effects()`；自己满血但队友没满时也允许使用。
+@export var restore_all_party: bool = false
 ## 使用时回复的 TP 量（0=不回复）
 @export var tp_restore: int = 0
 ## 鎮痛剤（原作 強化アイテム）：持续秒数内受到的伤害归零。0 = 无此效果。

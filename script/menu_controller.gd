@@ -22,7 +22,7 @@ const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面
 ##   所以 0~2（音量 / 固定朝向）的序号在任何平台上都不变。
 ## 「BGS音量」（2026-10-23）固定为第 3 项：环境音独立音量，与音乐/音效互不干扰。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量", "拾取方式"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量", "拾取方式", "智能提示"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -30,6 +30,14 @@ func _settings_items() -> Array[String]:
 
 ## 设置子页窗口尺寸（进设置放大居中、退出还原；同标题画面 SETTINGS_WINDOW_SIZE 思路）
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(480, 280)
+
+
+## 按当前项数算高度：手机端比 PC 多一行「按键布局」，再加上「智能提示」后 8 行会顶出 280。
+## 7 行时算出来 ≤ 280 → 沿用原尺寸，PC 观感不变。
+func _settings_window_size() -> Vector2:
+	var rows: int = _settings_items().size()
+	var content_h: float = settings_item_start_y + float(maxi(rows - 1, 0)) * menu_item_step + 24.0 + 16.0
+	return Vector2(SETTINGS_WINDOW_SIZE.x, maxf(SETTINGS_WINDOW_SIZE.y, content_h))
 ## 音量条几何（GradientLabel 24px 下「  音乐音量」宽约 120px）
 const BAR_X: float = 190.0
 const BAR_W: float = 160.0
@@ -324,7 +332,7 @@ func _apply_window_size(s: Vector2) -> void:
 func _enter_settings() -> void:
 	_in_settings = true
 	_settings_cursor_idx = 0
-	_apply_window_size(SETTINGS_WINDOW_SIZE)
+	_apply_window_size(_settings_window_size())
 	# 隐藏主菜单项与标题
 	for lbl in _item_labels:
 		lbl.hide()
@@ -397,6 +405,11 @@ func _build_settings_items() -> void:
 			var pick_label := _make_gl(Global.pickup_hold_label(), Vector2(BAR_X, pos_y), 24)
 			_menu_panel.add_child(pick_label)
 			_settings_value_labels.append(pick_label)
+		elif text == "智能提示":
+			# 右下角操作提示开关（2026-10-28）：显示 / 隐藏
+			var hint_label := _make_gl(Global.action_hints_label(), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(hint_label)
+			_settings_value_labels.append(hint_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -471,6 +484,12 @@ func _handle_settings_input(event: InputEvent) -> bool:
 				if pick_idx >= 0 and pick_idx < _settings_value_labels.size() \
 						and _settings_value_labels[pick_idx]:
 					_settings_value_labels[pick_idx].text = Global.pickup_hold_label()
+			"智能提示":
+				Global.set_show_action_hints(not Global.show_action_hints)
+				var hint_idx: int = items.find("智能提示")
+				if hint_idx >= 0 and hint_idx < _settings_value_labels.size() \
+						and _settings_value_labels[hint_idx]:
+					_settings_value_labels[hint_idx].text = Global.action_hints_label()
 			"返回":
 				_exit_settings()
 		return true

@@ -4317,7 +4317,10 @@ func _try_host_use_healing(peer_id: int) -> void:
 		return
 	## ★满血拒绝（2026-09-30 用户实测：满血还能用且扣数量）：与 player.gd::use_healing_item
 	## 是同一道闸门 —— 那边拦本机操作，这里拦远程 Client 提交上来的请求。
-	if float(node.get("current_hp")) >= float(node.get("max_hp")):
+	## ★「恢复全员」道具例外（2026-10-28）：自己满血但队里有人没满时仍允许。
+	var candidate: ItemData = state.healing_item
+	var party_wide: bool = candidate != null and candidate.restore_all_party and _any_seat_hurt()
+	if float(node.get("current_hp")) >= float(node.get("max_hp")) and not party_wide:
 		return
 	var used: ItemData = Players.consume_spray_for(state)
 	if not used:
@@ -4337,6 +4340,14 @@ func _try_host_use_healing(peer_id: int) -> void:
 	_send_pickup_snapshot_to_ready_clients()
 	print("[NetworkWorld] HOST_HEALING_USE peer=%d item=%s left=%d hp=%.0f" % [
 		peer_id, used.item_id, state.healing_item_count, node.current_hp])
+
+
+## 是否存在没满血的座位（「恢复全员」道具的满血闸门要用）。
+func _any_seat_hurt() -> bool:
+	for s: PlayerState in Players.seats:
+		if s != null and s.current_hp < s.get_max_hp():
+			return true
+	return false
 
 
 ## 联机滞后补偿（09-22 实测）：客户端本地预测位置领先 Host 权威模拟约 速度×RTT

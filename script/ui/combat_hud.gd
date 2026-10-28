@@ -85,6 +85,7 @@ func _ready() -> void:
 		_holdout_root.visible = false
 	_configure_tp_label()
 	_apply_ammo_font()
+	_cache_action_hint_rows()
 	## 字体切换时重建弹药标签字体（本 HUD 的标签带 ∞ 兜底链，不能走整树字体重套）
 	if Global.has_signal("font_changed") and not Global.font_changed.is_connected(_on_global_font_changed):
 		Global.font_changed.connect(_on_global_font_changed)
@@ -98,17 +99,34 @@ func _apply_ammo_font() -> void:
 	var base := Global.get_ui_font() if Global.has_method("get_ui_font") else null
 	if base == null:
 		return
+	var ammo_font := _make_crisp_copy(base, true)
+	## 描边一律关掉：像素字体加描边等于在字形周围再糊一圈（用户报的就是"周围有像素点"）。
+	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
+		_apply_font_override(label, ammo_font)
+	## 右下角操作提示也是 36px（12 的 3 倍），同样要「像素字体应有的样子」：
+	## 2026-10-28 用户实测 C / S 曾显示成其它字形（数字）—— 与弹药数字当初「边缘零散白点」
+	## 是同一类 36px 栅格化问题（共用字体 oversampling 跟随视口 + 分数缩放）。
+	## ⚠ 这里**不带 ∞ 兜底链**：提示文字用不到 ∞，而 DotGothic16 的行高更大，
+	## 带上会让每行高出 ~17px（面板整体变高一大截）。
+	_crisp_ui_font = _make_crisp_copy(base, false)
+	_apply_crisp_font_to_rows()
+
+
+## 构造一份「像素字体应有的样子」的副本：关抗锯齿 / 次像素定位 / 钉 1:1 栅格化。
+## with_ammo_fallback=true 时追加 ∞ 的 DotGothic16 兜底（仅弹药数字需要）。
+func _make_crisp_copy(base: Font, with_ammo_fallback: bool) -> FontFile:
 	var out := base.duplicate() as FontFile
 	if out == null:
-		return
-	var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
-	if fallback:
-		## fallback（DotGothic16）同样要关抗锯齿 + 次像素定位 + 钉 1:1 栅格化：
-		## 否则 ∞ 这类走兜底的字形照样会在 36px 下渗出零散白点（2026-09-30 用户实测）。
-		fallback.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-		fallback.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-		fallback.oversampling = 1.0
-		out.fallbacks = [fallback]
+		return null
+	if with_ammo_fallback:
+		var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
+		if fallback:
+			## fallback 同样要关抗锯齿 + 次像素定位 + 钉 1:1 栅格化：
+			## 否则 ∞ 这类走兜底的字形照样会在 36px 下渗出零散白点（2026-09-30 用户实测）。
+			fallback.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+			fallback.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+			fallback.oversampling = 1.0
+			out.fallbacks = [fallback]
 	## duplicate() 出来的副本也要显式关一遍（基字体已在 Global.load_ui_font 里关过，
 	## 但这里再做一次可保证「本标签的字体链」整体干净）。
 	## ⚠ `oversampling` 是手机端残留白点的关键项：移动端是分数缩放，留 0（跟随视口）
@@ -116,14 +134,27 @@ func _apply_ammo_font() -> void:
 	out.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	out.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 	out.oversampling = 1.0
-	## 描边一律关掉：像素字体加描边等于在字形周围再糊一圈（用户报的就是"周围有像素点"）。
-	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
-		if label:
-			## 标记为「自定义字体」：Global 的整树字体重套会跳过它们，
-			## 由本文件自己在 font_changed 时重建（否则会丢掉 ∞ 的 fallbacks 链）。
-			label.set_meta(&"ui_font_custom", true)
-			label.add_theme_font_override("font", out)
-			label.add_theme_constant_override("outline_size", 0)
+	return out
+
+
+## 把字体套到 Label 上，并标记 `ui_font_custom`：Global 的整树字体重套会跳过它，
+## 由本文件在 font_changed 时重建（否则会丢掉兜底链，或把字体换回共用实例）。
+func _apply_font_override(label: Label, font: FontFile) -> void:
+	if label == null or font == null:
+		return
+	label.set_meta(&"ui_font_custom", true)
+	label.add_theme_font_override("font", font)
+	label.add_theme_constant_override("outline_size", 0)
+
+
+func _apply_crisp_font(label: Label) -> void:
+	_apply_font_override(label, _crisp_ui_font)
+
+
+func _apply_crisp_font_to_rows() -> void:
+	for row: Array in _hint_rows:
+		_apply_crisp_font(row[0])
+		_apply_crisp_font(row[1])
 
 
 ## 字体切换：重建弹药标签字体（基字体换成新选项，∞ 兜底链保持不变）。
@@ -143,6 +174,7 @@ func refresh() -> void:
 	_update_weapons()
 	_update_consumables()
 	_update_remote_bars()
+	_update_action_hints()
 	_force_refresh = false
 
 
@@ -572,6 +604,214 @@ func _format_holdout_time(seconds: float) -> String:
 	if holdout_show_minutes:
 		return "%d:%02d" % [total_sec / 60, total_sec % 60]
 	return str(total_sec)
+
+
+# ═══════════════════════════════════════
+# 右下角操作提示（2026-10-28 用户需求）
+# ═══════════════════════════════════════
+#
+# 场景里是**可视化节点**（`combat_hud.tscn` 的 ActionHints → Margin → VBox → Row1..4），
+# 每行 = Key（键帽底 Label）+ Text（说明 Label），样式/字号都在编辑器里直接改。
+# 脚本只负责「按当前状态挑哪几行、填什么字」：
+#   · 未举枪：提示 1 / 2 举起对应武器（没有的槽位不提示）；
+#   · 举枪中：Shift/1 放下武器、Z 攻击、（弹匣未满时）A 装填、X 固定朝向 / 解除固定。
+# 最多 4 行，超出的按优先级丢弃；一行都没有时整块隐藏。
+
+## 字号与弹药数字一致（36 = 12 的整倍，项目 UI 铁律）。
+const ACTION_HINT_FONT_SIZE: int = 36
+
+@onready var _action_hints: PanelContainer = $ActionHints
+@onready var _action_hint_vbox: VBoxContainer = $ActionHints/Margin/VBox
+
+## [[KeyLabel, TextLabel], ...]，按场景里的行顺序缓存。
+var _hint_rows: Array = []
+## 36px 提示统一使用的「锐利字体副本」（AA/次像素关、oversampling=1，见 _apply_ammo_font）。
+var _crisp_ui_font: FontFile = null
+
+
+func _cache_action_hint_rows() -> void:
+	_hint_rows.clear()
+	if not is_instance_valid(_action_hint_vbox):
+		return
+	for row: Node in _action_hint_vbox.get_children():
+		var key_label := row.get_node_or_null("Key") as Label
+		var text_label := row.get_node_or_null("Text") as Label
+		if key_label == null or text_label == null:
+			continue
+		## 字体跟随「设置 → 界面字体」（与其它 HUD 文字同源）。
+		Global.apply_hint_font(key_label, ACTION_HINT_FONT_SIZE)
+		Global.apply_hint_font(text_label, ACTION_HINT_FONT_SIZE)
+		## 再套 36px 锐利副本（见 _apply_ammo_font 末尾的说明）。
+		_apply_crisp_font(key_label)
+		_apply_crisp_font(text_label)
+		_hint_rows.append([key_label, text_label])
+
+
+func _update_action_hints() -> void:
+	if not is_instance_valid(_action_hints):
+		return
+	var hints: Array = _collect_action_hints()
+	var shown_count: int = mini(hints.size(), _hint_rows.size())
+	for i: int in _hint_rows.size():
+		var row: Array = _hint_rows[i]
+		var key_label: Label = row[0]
+		var text_label: Label = row[1]
+		var use_row: bool = i < shown_count
+		key_label.visible = use_row
+		text_label.visible = use_row
+		## 行容器也要一起隐藏：只隐藏 Label 的话 VBox 仍会为这一行留出 separation 间距，
+		## 只剩 1 条提示时面板会莫名高出一截。
+		var row_box: Control = key_label.get_parent() as Control
+		if row_box != null:
+			row_box.visible = use_row
+		if use_row:
+			key_label.text = str(hints[i][0])
+			text_label.text = str(hints[i][1])
+	_action_hints.visible = shown_count > 0
+
+
+## 按本地玩家此刻的状态生成 [[按键文本, 说明], ...]。
+## 顺序 = 优先级，超出 8 行的尾部会被丢弃（`_update_action_hints` 只填前 N 行）。
+func _collect_action_hints() -> Array:
+	var out: Array = []
+	if not Global.show_action_hints:
+		return out
+	var player: Node2D = Players.get_local_entity()
+	if player == null or not is_instance_valid(player):
+		return out
+	## 倒地 / 死亡时不提示（站着尸体还教玩家"按 1 举枪"没有意义）。
+	if player.get("_is_dying") == true:
+		return out
+	var state: PlayerState = Players.get_state_for_entity(player)
+	if state != null and state.current_hp <= 0.0:
+		return out
+	var in_weapon: bool = player.get("player_in_weapon_state") == true
+	var locked: bool = player.has_method("is_facing_locked") and bool(player.call("is_facing_locked"))
+	if in_weapon:
+		var down_key: String = _action_key_text(&"举起放下武器键")
+		## 放下键跟着「举的是哪把」走：举主武器 → Shift / 1，举副武器 → Shift / 2。
+		## 拿不到槽位（早期帧）时只显示 Shift，不猜。
+		var slot: String = _active_weapon_slot(state)
+		var slot_key: String = ""
+		if slot == "secondary":
+			slot_key = _action_key_text(&"副武器键")
+		elif slot == "primary":
+			slot_key = _action_key_text(&"主武器键")
+		var combined: String = down_key if slot_key.is_empty() else "%s / %s" % [down_key, slot_key]
+		if not combined.is_empty():
+			out.append([combined, "放下武器"])
+		_push_hint(out, &"确定键", "攻击")
+		if _active_weapon_needs_reload(state):
+			_push_hint(out, &"装填键", "装填")
+		_push_hint(out, &"取消键", "解除固定朝向" if locked else "固定朝向")
+		_push_skill_hints(out, state, true)
+		_push_hint(out, &"推击键", "推击")
+		return out
+	## ── 未举枪（地面态）：能做的都在这里 ──
+	var slot: String = _preferred_weapon_slot(state)
+	if slot == "secondary":
+		_push_hint(out, &"副武器键", "举起副武器")
+	elif slot == "primary":
+		_push_hint(out, &"主武器键", "举起主武器")
+	## 觉醒只能在举枪（構え）中发动 → 地面态不传它。
+	_push_skill_hints(out, state, false)
+	_push_hint(out, &"推击键", "推击")
+	_push_consumable_hints(out, state)
+	if _can_switch_character():
+		_push_hint(out, &"切换角色键", "切换角色")
+	return out
+
+
+## SA 技能（有才提示）+（可选）觉醒技能。
+## ⚠ 觉醒只在举枪态可发动（`PlayerRangedState` 读觉醒键），地面态不要提示。
+func _push_skill_hints(out: Array, state: PlayerState, include_awaken: bool) -> void:
+	var character: CharacterData = state.character if state != null else null
+	if character == null:
+		return
+	var sa_skill: SkillData = _find_sa_skill(character)
+	if sa_skill != null:
+		var skill_name: String = sa_skill.skill_name.strip_edges()
+		var sa_text: String = ("SA · %s" % skill_name) if not skill_name.is_empty() else "SA 技能"
+		_push_hint(out, &"SA键", sa_text)
+	if include_awaken and String(character.awaken_type) != "none":
+		_push_hint(out, &"覚醒键", "觉醒技能")
+
+
+## 角色技能表里 command_trigger = "SA键" 的那一条（没有则 null）。
+func _find_sa_skill(character: CharacterData) -> SkillData:
+	for skill: SkillData in character.skills:
+		if skill != null and String(skill.command_trigger).strip_edges() == "SA键":
+			return skill
+	return null
+
+
+## 治疗品 / 辅助品 / 投掷物：只在**持有**时提示，标出剩余数量。
+func _push_consumable_hints(out: Array, state: PlayerState) -> void:
+	if state == null:
+		return
+	if state.healing_item != null and state.healing_item_count > 0:
+		_push_hint(out, &"治疗品键", "治疗品 ×%d" % state.healing_item_count)
+	if state.support_item != null:
+		_push_hint(out, &"辅助品键", "辅助品")
+	if state.throwable != null and state.throwable_count > 0:
+		_push_hint(out, &"投掷物键", "投掷物 ×%d" % state.throwable_count)
+
+
+## 单人 + 队伍里不止一个角色时才能换人（联机的「座位」是别的玩家，不能切）。
+func _can_switch_character() -> bool:
+	if Players.is_online_session():
+		return false
+	return Players.seat_count() > 1
+
+
+func _push_hint(out: Array, action: StringName, text: String) -> void:
+	var key: String = _action_key_text(action)
+	if key.is_empty():
+		return
+	out.append([key, text])
+
+
+## 平台感知的按键文本；移动端没有对应按钮的动作返回 ""（整行不显示）。
+func _action_key_text(action: StringName) -> String:
+	if Global.has_method("has_key_hint") and not bool(Global.call("has_key_hint", action)):
+		return ""
+	return String(Global.key_hint(action))
+
+
+## 优先提示哪一个武器槽：主武器优先，没有再提示副武器。
+func _preferred_weapon_slot(state: PlayerState) -> String:
+	if state == null:
+		return ""
+	if state.get_equipped_weapon("primary") != null:
+		return "primary"
+	if state.get_equipped_weapon("secondary") != null:
+		return "secondary"
+	return ""
+
+
+## 当前举着的武器槽（"primary" / "secondary"）；取不到返回 ""。
+## 「放下武器」那行用它对键位：举副武器时提示「Shift / 1」是错的，应为 2。
+func _active_weapon_slot(state: PlayerState) -> String:
+	if state == null:
+		return ""
+	var slot: String = String(state.active_weapon_slot)
+	if slot == "primary" or slot == "secondary":
+		return slot
+	var weapon: WeaponData = state.get_active_weapon()
+	return weapon.get_slot_key() if weapon != null else ""
+
+
+## 当前武器是否远程且弹匣未满（满了就不提示装填）。
+func _active_weapon_needs_reload(state: PlayerState) -> bool:
+	if state == null:
+		return false
+	var weapon: WeaponData = state.get_active_weapon()
+	if weapon == null or not weapon.is_ranged:
+		return false
+	var capacity: int = weapon.magazine_capacity
+	if capacity <= 0:
+		return false
+	return state.get_magazine_ammo(weapon.item_id) < capacity
 
 
 # ── 静态查找 ─────────────────────────────────────────────

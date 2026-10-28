@@ -114,6 +114,18 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 @export_range(8.0, 512.0, 1.0) var interact_range: float = 56.0
 
 # ═══════════════════════════════════════
+# 配置 — 联动（2026-10-28 用户需求）
+# ═══════════════════════════════════════
+@export_group("联动")
+## 绑定的其他开关（路径：先按**相对本节点**找，找不到再按**相对场景根**找）。
+## 本开关状态变化时同步给它们：一个开 → 另一个也开；一个关 → 另一个也关。
+## · 双向联动**只在一侧填**就够（传播只走一跳，被联动方不会再传回来）；
+## · 两侧都填也不会死循环（同一跳内的二次传播被 `_link_depth` 挡掉）；
+## · 同步会走对方的完整 `set_on()`，因此对方的外观/位移/命名信号/`switched` 都会照常触发。
+## ⚠ 初始状态不自动同步：两个开关的 `start_on` 请配成一致。
+@export var linked_switches: Array[NodePath] = []
+
+# ═══════════════════════════════════════
 # 运行时
 # ═══════════════════════════════════════
 var _is_on: bool = false
@@ -223,8 +235,8 @@ func is_on() -> bool:
 	return _is_on
 
 
-## 切到指定状态：换外观 → 移动到该状态终点 → 发命名信号 → `switched` → `on_state_changed`。
-## `animate=false` 时直接落位（读档 / 初始化用）。
+## 切到指定状态：换外观 → 移动到该状态终点 → 发命名信号 → `switched` → `on_state_changed`
+## → 同步给 `linked_switches`。`animate=false` 时直接落位（读档 / 初始化用）。
 func set_on(value: bool, animate: bool = true) -> void:
 	_is_on = value
 	_apply_state_appearance()
@@ -237,6 +249,42 @@ func set_on(value: bool, animate: bool = true) -> void:
 	switched.emit(_is_on)
 	on_state_changed(_is_on)
 	_update_label()
+	_propagate_links(value, animate)
+
+
+## 联动传播深度（静态）：>0 说明本次状态变化是被别的开关联动过来的 → 不再往下传，
+## 这样 A↔B 互绑也不会 A→B→A 无限来回。代价是**只传播一跳**：
+## 三个以上串联请把每个开关的 `linked_switches` 都直接填全。
+static var _link_depth: int = 0
+
+
+## 把本次状态同步给绑定的开关（走对方的完整 `set_on`，对方的信号/动画照常触发）。
+func _propagate_links(value: bool, animate: bool) -> void:
+	if _link_depth > 0 or linked_switches.is_empty():
+		return
+	_link_depth += 1
+	for path: NodePath in linked_switches:
+		var other: Node = _resolve_linked_switch(path)
+		if other == null or other == self:
+			continue
+		if other.has_method("set_on"):
+			other.call("set_on", value, animate)
+		else:
+			push_warning("[InteractiveSwitch] %s 的联动目标 %s 不是开关" % [name, str(path)])
+	_link_depth -= 1
+
+
+## 联动路径解析：先相对本节点，再相对场景根（与 HoldoutMachine 的节点路径同口径）。
+func _resolve_linked_switch(path: NodePath) -> Node:
+	if path.is_empty():
+		return null
+	var node: Node = get_node_or_null(path)
+	if node != null:
+		return node
+	var tree: SceneTree = get_tree()
+	if tree != null and tree.current_scene != null:
+		return tree.current_scene.get_node_or_null(path)
+	return null
 
 
 ## ★自定义接口：状态变化后调用。派生脚本重写它即可挂演出 / 音效 / 开门等，
