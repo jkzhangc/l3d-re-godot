@@ -24,6 +24,8 @@ extends Node2D
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 
 const COLLISION_NODE: String = "Collision"
@@ -122,11 +124,8 @@ func _refresh_sprite() -> void:
 	sprite.position = sprite_offset
 	sprite.region_enabled = true
 	var frame: int = 1  # 站立帧
-	var char_col: int = box_char_idx % CHARS_PER_ROW
-	var char_row: int = box_char_idx / CHARS_PER_ROW
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + box_direction * FRAME_H
-	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	sprite.region_rect = WALK.region_rect(sprite.texture, box_char_idx, box_direction, frame)
 
 
 func _process(_delta: float) -> void:

@@ -35,6 +35,8 @@ const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 
 # ═══════════════════════════════════════
 # 配置
@@ -305,11 +307,9 @@ func _refresh_fuse_sprite() -> void:
 	_fuse_sprite.texture = place_walk_texture
 	_fuse_sprite.region_enabled = true
 	var frame: int = clampi(place_step_frames[_step_index], 0, 2) if _step_index < place_step_frames.size() else 0
-	var char_col: int = place_char_index % CHARS_PER_ROW
-	var char_row: int = place_char_index / CHARS_PER_ROW
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + place_direction * FRAME_H
-	_fuse_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	_fuse_sprite.region_rect = WALK.region_rect(place_walk_texture, place_char_index,
+		place_direction, frame)
 
 
 func _hide_fuse_sprite() -> void:

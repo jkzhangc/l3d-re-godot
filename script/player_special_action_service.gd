@@ -55,6 +55,8 @@ const MOTION_BUFFER_MAX: int = 8
 const ACHIEVEMENTS := preload("res://script/achievements.gd")
 ## 精灵帧常量真源（见切动画切帧用；player.gd 的 FRAME_W 等是它的转发别名）。
 const Sprite := preload("res://script/player_sprite_renderer.gd")
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 
 ## 宿主 player 实体。
 var _p: Node = null
@@ -490,15 +492,11 @@ func _play_mukiri_anim() -> void:
 	_p._mukiri_anim_busy = true
 	for i: int in seq.size():
 		var char_idx: int = seq[i]
-		var char_col: int = char_idx % Sprite.CHARS_PER_ROW
-		var char_row: int = char_idx / Sprite.CHARS_PER_ROW
-		var dir_row: int = Sprite.DIR_ROWS[_p._facing]
 		_p.sprite.texture = tex
 		_p.sprite.region_enabled = true
-		_p.sprite.region_rect = Rect2(
-			char_col * (Sprite.FRAME_W * 3) + Sprite.STAND_FRAME * Sprite.FRAME_W,
-			char_row * (Sprite.FRAME_H * Sprite.DIRECTIONS) + dir_row * Sprite.FRAME_H,
-			Sprite.FRAME_W, Sprite.FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		_p.sprite.region_rect = WALK.region_rect(tex, char_idx,
+			Sprite.DIR_ROWS[_p._facing], Sprite.STAND_FRAME)
 		var fd: float = durations[i] if i < durations.size() else 0.08
 		var tree := _p.get_tree()
 		if not tree:

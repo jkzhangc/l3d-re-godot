@@ -21,6 +21,8 @@ extends RefCounted
 const FRAME_W: int = 48   ## 576 / 12
 const FRAME_H: int = 64   ## 512 / 8
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
@@ -63,12 +65,8 @@ func _refresh_character_sprite() -> void:
 		sprite.texture = _p._throwable_texture
 		var char_idx: int = _p._throwable_char_idx
 		var frame: int = STAND_FRAME if not _p._moving else WALK_SEQUENCE[_p._anim_step]
-		var char_col: int = char_idx % CHARS_PER_ROW
-		var char_row: int = char_idx / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_p._facing]
-		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		sprite.region_rect = WALK.region_rect(sprite.texture, char_idx, DIR_ROWS[_p._facing], frame)
 		return
 
 	# 武器模式下使用武器纹理和角色索引
@@ -83,14 +81,8 @@ func _refresh_character_sprite() -> void:
 			sprite.texture = tex
 		var char_idx: int = _p._current_weapon_char_idx
 		var frame: int = STAND_FRAME if not _p._moving else WALK_SEQUENCE[_p._anim_step]
-
-		var char_col: int = char_idx % CHARS_PER_ROW
-		var char_row: int = char_idx / CHARS_PER_ROW
-		var dir_row: int = DIR_ROWS[_p._facing]
-
-		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		sprite.region_rect = WALK.region_rect(sprite.texture, char_idx, DIR_ROWS[_p._facing], frame)
 		return
 
 	# 普通模式
@@ -102,14 +94,8 @@ func _refresh_character_sprite() -> void:
 	var char_idx: int = _p.run_char_index if use_run_tex else _p.walk_char_index
 	var frame: int = STAND_FRAME if not _p._moving else WALK_SEQUENCE[_p._anim_step]
 
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[_p._facing]
-
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-
-	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	sprite.region_rect = WALK.region_rect(sprite.texture, char_idx, DIR_ROWS[_p._facing], frame)
 
 
 ## ── 武器单体动作图（2026-10-23）──

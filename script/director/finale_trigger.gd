@@ -26,6 +26,8 @@ const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 
 ## 与医疗箱 / 存档点 / 传送点同款：图块层 + 第 6 层「子弹阻挡」。
 const COLLISION_NODE: String = "Collision"
@@ -275,12 +277,8 @@ func _refresh_sprite() -> void:
 		return
 	s.region_enabled = true
 	var frame: int = clampi(step_frames[_step_index], 0, 2) if _step_index < step_frames.size() else 0
-	var char_col: int = walk_char_index % CHARS_PER_ROW
-	var char_row: int = walk_char_index / CHARS_PER_ROW
-	s.region_rect = Rect2(
-		char_col * (FRAME_W * 3) + frame * FRAME_W,
-		char_row * (FRAME_H * DIRECTIONS) + _current_facing() * FRAME_H,
-		FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	s.region_rect = WALK.region_rect(walk_texture, walk_char_index, _current_facing(), frame)
 
 
 ## 当前应显示的朝向：朝向动画开着取序列里的值，否则用 walk_direction。

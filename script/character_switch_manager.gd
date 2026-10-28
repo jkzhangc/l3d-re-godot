@@ -31,6 +31,8 @@ var _team_size: int = 0
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 const STAND_FRAME: int = 1
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
@@ -138,12 +140,8 @@ func _apply_standin_appearance(standin: Node2D, st: PlayerState) -> void:
 	sprite.region_enabled = true
 	var facing: int = st.facing
 	var char_idx: int = cd.walk_char_index
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[facing]
-	var x: int = char_col * (FRAME_W * 3) + STAND_FRAME * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + dir_row * FRAME_H
-	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	sprite.region_rect = WALK.region_rect(cd.walk_texture, char_idx, DIR_ROWS[facing], STAND_FRAME)
 
 
 func _remove_teammate_standin(index: int) -> void:

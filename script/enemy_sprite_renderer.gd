@@ -19,6 +19,8 @@ extends RefCounted
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
@@ -61,6 +63,11 @@ func push_action_texture(tex: Texture2D, char_idx: int = 0) -> void:
 		_e._frame_h_prev = _e.sprite_frame_h
 	_e._action_texture_stack.append(tex)
 	_e.walk_texture = tex
+	## `$` 单角色表：帧尺寸由图本身决定，**不能**走下面"沿用行走表尺寸"的启发式
+	##（否则 192×128 的 $ 行走表会把普通动作表也按 192×128 切）。
+	if WALK.is_single_char(tex):
+		_e.sprite_frame_w = 0
+		_e.sprite_frame_h = 0
 	var cached: Variant = _e._frame_size_by_texture.get(tex)
 	var tex_w: int = tex.get_width()
 	var tex_h: int = tex.get_height()
@@ -174,15 +181,14 @@ func refresh_sprite_with_index(char_idx: int) -> void:
 
 
 func draw_sprite_rect(char_idx: int, frame: int) -> void:
-	var fw: int = _e.sprite_frame_w if _e.sprite_frame_w > 0 else FRAME_W
-	var fh: int = _e.sprite_frame_h if _e.sprite_frame_h > 0 else FRAME_H
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var dir_row: int = DIR_ROWS[_e._facing]
-	var x: int = char_col * (fw * 3) + frame * fw
-	var y: int = char_row * (fh * DIRECTIONS) + dir_row * fh
-	_e.sprite.region_rect = Rect2(x, y, fw, fh)
-	_apply_water_split(x, y, fw, fh)
+	var fallback_w: int = _e.sprite_frame_w if _e.sprite_frame_w > 0 else FRAME_W
+	var fallback_h: int = _e.sprite_frame_h if _e.sprite_frame_h > 0 else FRAME_H
+	var tex: Texture2D = _e.sprite.texture if _e.sprite != null else _e.walk_texture
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	var rect: Rect2 = WALK.region_rect(tex, char_idx, DIR_ROWS[_e._facing], frame,
+		Vector2i(fallback_w, fallback_h))
+	_e.sprite.region_rect = rect
+	_apply_water_split(int(rect.position.x), int(rect.position.y), int(rect.size.x), int(rect.size.y))
 
 
 ## 水面行走（ハンターγ，2026-10-22）：站在水面时把「没入水中的下半身」拆出来，
@@ -240,6 +246,14 @@ func _apply_water_split(x: int, y: int, fw: int, fh: int) -> void:
 ## 见 push_action_texture()。
 func sync_frame_size_to_texture() -> void:
 	if not _e.walk_texture:
+		return
+	## 单角色表（`$` 前缀）：帧尺寸由图本身决定（图/3×4），不参与「按 4 列推断」——
+	## 否则 144×256 的 `$` 表会被猜成 12×32。见 vx_walk_sheet.gd。
+	if WALK.is_single_char(_e.walk_texture):
+		var single: Vector2i = WALK.frame_size(_e.walk_texture)
+		_e.sprite_frame_w = single.x
+		_e.sprite_frame_h = single.y
+		apply_sprite_anchor()
 		return
 	var tex_w: int = int(_e.walk_texture.get_width())
 	var tex_h: int = int(_e.walk_texture.get_height())

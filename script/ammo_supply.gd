@@ -12,6 +12,8 @@ const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 
 @export_group("出现条件")
 ## 勾选后单机移除整个节点（包括碰撞），联机保留；编辑器始终可见。
@@ -145,13 +147,9 @@ func _refresh_sprite() -> void:
 	if not step_frames.is_empty():
 		var index := posmod(_step_index, step_frames.size()) if animated else 0
 		frame = clampi(step_frames[index], 0, 2)
-	var char_idx := clampi(walk_char_index, 0, 7)
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	sprite.region_rect = Rect2(
-		char_col * FRAME_W * 3 + frame * FRAME_W,
-		char_row * FRAME_H * DIRECTIONS + _current_facing() * FRAME_H,
-		FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	sprite.region_rect = WALK.region_rect(walk_texture, walk_char_index,
+		_current_facing(), frame)
 
 
 ## 当前应显示的朝向：朝向动画开着取序列里的值，否则用 walk_direction。

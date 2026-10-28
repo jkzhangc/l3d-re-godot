@@ -25,6 +25,8 @@ extends Node2D
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 
 ## 拾取物模板场景（投掷物替换时掉落旧投掷物用）
@@ -504,14 +506,11 @@ func _refresh_sprite() -> void:
 		else:
 			frame = frames[0] if frames.size() > 0 else 1
 
-		var char_col: int = item.pickup_char_idx % CHARS_PER_ROW
-		var char_row: int = item.pickup_char_idx / CHARS_PER_ROW
-		var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-		var y: int = char_row * (FRAME_H * DIRECTIONS) + item.pickup_direction * FRAME_H
-
 		sprite.texture = item.pickup_texture
 		sprite.region_enabled = true
-		sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		sprite.region_rect = WALK.region_rect(sprite.texture, item.pickup_char_idx,
+			item.pickup_direction, frame)
 		return
 
 	# 回退：整图显示 icon

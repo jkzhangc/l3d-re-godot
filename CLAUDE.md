@@ -431,6 +431,8 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 **角色精灵格式**：标准角色 = 4 方向（下左右上）× 3 帧，文件内 4 列×2 行（共 8 角色）；文件名加 `!` 前缀 = 取消 4 像素偏移 + 草丛半透明（门/宝箱等物件）；加 `$` 前缀 = 单角色文件（宽 1/3、高 1/4）。
 
+> **前缀解析的唯一入口**：`script/vx_walk_sheet.gd`（`is_single_char` / `frame_size` / `region_rect`）。**所有渲染行走图的地方都必须走它**，不要再自己写 `char_idx % 4` + `48×64` —— 否则 `$` 素材（如 `$ヘリコプター.png`、`!$T-002タイラント01.png`）会按 12 列切，整张表错位。`!$` 可以叠加；`!` 本身不影响布局（本项目不渲染那 4px 上移）。`CanvasTexture`（`NormalMaps.canvas()` 的包装层）会被自动剥开再判文件名。
+
 **A4 墙壁自动图块 → Godot Bitmask**：A4 每组 autotile 不是固定 8×3，**实际分组取决于素材排列**（如 `TileA4-Tw.png` 实测 8×5=40 tile/组，共 6 组）。Godot 中用 **TileSet Terrain + 3×3 Bitmask** 实现等价效果。参考文件（`art/Tilesets/`）：`TileA4-Tw_bitmask速查表.txt` + 3 张标注图。bitmask 速查（每组行 0~2）：
 
 ```

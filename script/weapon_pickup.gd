@@ -24,6 +24,8 @@ extends Node2D
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
@@ -947,9 +949,5 @@ func _refresh_sprite() -> void:
 	else:
 		frame = pickup_step_frames[0] if pickup_step_frames.size() > 0 else 1
 
-	var char_col: int = pickup_char_idx % CHARS_PER_ROW
-	var char_row: int = pickup_char_idx / CHARS_PER_ROW
-
-	var x: int = char_col * (FRAME_W * 3) + frame * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + pickup_direction * FRAME_H
-	sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	sprite.region_rect = WALK.region_rect(sprite.texture, pickup_char_idx, pickup_direction, frame)

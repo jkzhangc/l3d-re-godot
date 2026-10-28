@@ -79,6 +79,8 @@ const DamageNumber := preload("res://script/damage_number.gd")
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRS: int = 4
 
 @onready var _label: Label = get_node_or_null("StatsLabel")
@@ -320,13 +322,14 @@ func _apply_body() -> void:
 	_sprite.region_enabled = true
 	var tex_w: int = _sprite.texture.get_width()
 	var tex_h: int = _sprite.texture.get_height()
-	var col: int = clampi(body_char_index, 0, CHARS_PER_ROW - 1)
-	var row: int = maxi(0, body_char_index / CHARS_PER_ROW)
 	var frame: int = clampi(body_frame, 0, 2)
 	var dir: int = clampi(body_direction, 0, DIRS - 1)
-	var x: int = clampi(col * FRAME_W * 3 + frame * FRAME_W, 0, maxi(0, tex_w - FRAME_W))
-	var y: int = clampi(row * FRAME_H * DIRS + dir * FRAME_H, 0, maxi(0, tex_h - FRAME_H))
-	_sprite.region_rect = Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	var rect: Rect2 = WALK.region_rect(_sprite.texture, body_char_index, dir, frame)
+	## 仍夹到贴图内（作者乱填索引 / 单角色表帧尺寸更大时都需要）
+	rect.position.x = clampf(rect.position.x, 0.0, maxf(0.0, float(tex_w) - rect.size.x))
+	rect.position.y = clampf(rect.position.y, 0.0, maxf(0.0, float(tex_h) - rect.size.y))
+	_sprite.region_rect = rect
 	queue_redraw()
 
 

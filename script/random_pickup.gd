@@ -17,6 +17,8 @@ const ITEM_PICKUP_SCENE := preload("res://object/healing_pickup.tscn")
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
 
 @export var pool: DropPoolData:
@@ -183,28 +185,25 @@ func _editor_preview() -> void:
 		if wd.pickup_texture:
 			sprite.texture = wd.pickup_texture
 			sprite.region_enabled = true
-			sprite.region_rect = _walk_frame_rect(wd.pickup_char_idx, wd.pickup_direction)
+			sprite.region_rect = _walk_frame_rect(wd.pickup_texture, wd.pickup_char_idx, wd.pickup_direction)
 		elif wd.weapon_walk_texture:
 			var seq: Array[int] = wd.get_raise_char_sequence()
 			var char_idx: int = seq[0] if seq.size() > 0 else 0
 			sprite.texture = wd.weapon_walk_texture
 			sprite.region_enabled = true
-			sprite.region_rect = _walk_frame_rect(char_idx, 0)
+			sprite.region_rect = _walk_frame_rect(wd.weapon_walk_texture, char_idx, 0)
 	elif first is ItemData:
 		var it := first as ItemData
 		if it.pickup_texture:
 			sprite.texture = it.pickup_texture
 			sprite.region_enabled = true
-			sprite.region_rect = _walk_frame_rect(it.pickup_char_idx, it.pickup_direction)
+			sprite.region_rect = _walk_frame_rect(it.pickup_texture, it.pickup_char_idx, it.pickup_direction)
 		elif it.icon:
 			sprite.texture = it.icon
 			sprite.region_enabled = false
 
 
-## VX Ace 行走图 48x64 裁帧（与 weapon_pickup/healing_pickup 同一寻址规则）
-func _walk_frame_rect(char_idx: int, direction: int) -> Rect2:
-	var char_col: int = char_idx % CHARS_PER_ROW
-	var char_row: int = char_idx / CHARS_PER_ROW
-	var x: int = char_col * (FRAME_W * 3) + 1 * FRAME_W
-	var y: int = char_row * (FRAME_H * DIRECTIONS) + clampi(direction, 0, DIRECTIONS - 1) * FRAME_H
-	return Rect2(x, y, FRAME_W, FRAME_H)
+## VX Ace 行走图裁帧（与 weapon_pickup/healing_pickup 同一寻址规则）。
+## `texture` 参与判据：文件名带 `$` 前缀 = 单角色表（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd。
+func _walk_frame_rect(texture: Texture2D, char_idx: int, direction: int) -> Rect2:
+	return WALK.region_rect(texture, char_idx, direction, 1)

@@ -25,6 +25,8 @@ const MODE_BULLET := "bullet"
 const FRAME_W: int = 48
 const FRAME_H: int = 64
 const CHARS_PER_ROW: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRS: int = 4
 ## 角色 Sprite2D 在 player.tscn 里的 position = (0, -16)
 const SPRITE_Y: float = -16.0
@@ -224,13 +226,11 @@ func _character_texture() -> Texture2D:
 
 func _char_region(tex: Texture2D) -> Rect2:
 	var char_idx: int = weapon.get_ready_char_index()
-	var col: int = char_idx % CHARS_PER_ROW
-	var row: int = char_idx / CHARS_PER_ROW
-	var x: int = col * FRAME_W * 3 + frame * FRAME_W
-	var y: int = row * FRAME_H * DIRS + direction * FRAME_H
-	x = clampi(x, 0, maxi(0, tex.get_width() - FRAME_W))
-	y = clampi(y, 0, maxi(0, tex.get_height() - FRAME_H))
-	return Rect2(x, y, FRAME_W, FRAME_H)
+	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+	var rect: Rect2 = WALK.region_rect(tex, char_idx, direction, frame)
+	rect.position.x = clampf(rect.position.x, 0.0, maxf(0.0, float(tex.get_width()) - rect.size.x))
+	rect.position.y = clampf(rect.position.y, 0.0, maxf(0.0, float(tex.get_height()) - rect.size.y))
+	return rect
 
 
 func _bullet() -> BulletData:

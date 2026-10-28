@@ -19,6 +19,8 @@ extends RefCounted
 ##
 ## 【帧常量真源】切躺地帧用到的 FRAME_W 等改从 player_sprite_renderer.gd 引用。
 const Sprite := preload("res://script/player_sprite_renderer.gd")
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 ## 武器拾取物脚本（静态工具：drop_weapon_for_player / mark_auto_picked）。
 const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
 
@@ -94,10 +96,9 @@ func _apply_network_death_state() -> void:
 	var tex: Texture2D = _p.death_texture if _p.death_texture else _p.walk_texture
 	if tex:
 		_p.sprite.texture = tex
-		var char_col: int = _p.death_char_index % Sprite.CHARS_PER_ROW
-		var char_row: int = _p.death_char_index / Sprite.CHARS_PER_ROW
-		var dir_row: int = Sprite.DIR_ROWS[_p._facing]
-		_p.sprite.region_rect = Rect2(char_col * (Sprite.FRAME_W * 3) + Sprite.STAND_FRAME * Sprite.FRAME_W, char_row * (Sprite.FRAME_H * Sprite.DIRECTIONS) + dir_row * Sprite.FRAME_H, Sprite.FRAME_W, Sprite.FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		_p.sprite.region_rect = WALK.region_rect(tex, _p.death_char_index,
+			Sprite.DIR_ROWS[_p._facing], Sprite.STAND_FRAME)
 	var cs: CollisionShape2D = _p.get_node_or_null("CollisionShape2D")
 	if cs:
 		cs.set_deferred("disabled", true)
@@ -199,12 +200,9 @@ func _die() -> void:
 	var tex: Texture2D = _p.death_texture if _p.death_texture else _p.walk_texture
 	if tex:
 		_p.sprite.texture = tex
-		var char_col: int = _p.death_char_index % Sprite.CHARS_PER_ROW
-		var char_row: int = _p.death_char_index / Sprite.CHARS_PER_ROW
-		var dir_row: int = Sprite.DIR_ROWS[_p._facing]
-		var x: int = char_col * (Sprite.FRAME_W * 3) + Sprite.STAND_FRAME * Sprite.FRAME_W
-		var y: int = char_row * (Sprite.FRAME_H * Sprite.DIRECTIONS) + dir_row * Sprite.FRAME_H
-		_p.sprite.region_rect = Rect2(x, y, Sprite.FRAME_W, Sprite.FRAME_H)
+		## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
+		_p.sprite.region_rect = WALK.region_rect(tex, _p.death_char_index,
+			Sprite.DIR_ROWS[_p._facing], Sprite.STAND_FRAME)
 
 	# 禁用碰撞
 	var cs: CollisionShape2D = _p.get_node_or_null("CollisionShape2D")

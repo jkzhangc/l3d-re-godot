@@ -37,6 +37,8 @@ class_name HintMarker extends Node2D
 ## 行走图规格：每角色格 = 4 方向 × 3 帧，一行 4 个角色格。
 const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
+## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
+const WALK := preload("res://script/vx_walk_sheet.gd")
 const LABEL_WIDTH: float = 360.0
 const LABEL_HEIGHT: float = 24.0
 ## 项目铁律：提示字号 12 的整倍（与医疗箱/补给/防守战机器同口径）。
@@ -74,6 +76,7 @@ const COLLISION_LAYER: int = 33
 ## 角色相对节点原点的偏移（脚底对齐/放大素材时用）。
 @export var sprite_offset: Vector2 = Vector2.ZERO
 ## 单帧尺寸（px）。标准 48×64；放大素材（如 96×96）按实际填。
+## ⚠ 文件名带 `$` 前缀（单角色表）时**本项被忽略**，帧尺寸由图本身推导（图/3×4）。
 @export var frame_size: Vector2i = Vector2i(48, 64)
 @export var sprite_modulate: Color = Color.WHITE
 
@@ -195,13 +198,9 @@ func _refresh_visuals() -> void:
 		_sprite.visible = walk_texture != null
 		if walk_texture != null:
 			_sprite.region_enabled = true
-			var fw: int = maxi(frame_size.x, 1)
-			var fh: int = maxi(frame_size.y, 1)
-			var col: int = walk_char_index % CHARS_PER_ROW
-			var row: int = walk_char_index / CHARS_PER_ROW
-			var x: int = col * (fw * 3) + clampi(stand_frame, 0, 2) * fw
-			var y: int = row * (fh * DIRECTIONS) + clampi(facing, 0, 3) * fh
-			_sprite.region_rect = Rect2(x, y, fw, fh)
+			## `frame_size` 只是**兜底**：文件名带 `$` 时帧尺寸由图本身推导（图/3×4）。
+			_sprite.region_rect = WALK.region_rect(walk_texture, walk_char_index,
+				facing, stand_frame, frame_size)
 	if _label == null:
 		return
 	_label.text = hint_text
