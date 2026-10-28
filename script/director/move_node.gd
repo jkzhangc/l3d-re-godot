@@ -286,17 +286,19 @@ func target_local_position() -> Vector2:
 	return position + target_offset
 
 
-func _start_move() -> void:
+## `duration_override` > 0 时用它代替本节点的 `duration`（子类按状态给不同时长用，如开关）。
+func _start_move(duration_override: float = -1.0) -> void:
 	_moving = true
 	move_started.emit()
 	if _tween != null and _tween.is_valid():
 		_tween.kill()
+	var use_duration: float = duration_override if duration_override > 0.0 else duration
 	_tween = create_tween()
 	_tween.set_trans(transition)
 	_tween.set_ease(ease_type)
 	if start_delay > 0.0:
 		_tween.tween_interval(start_delay)
-	_tween.tween_property(self, "position", target_local_position(), maxf(duration, 0.01))
+	_tween.tween_property(self, "position", target_local_position(), maxf(use_duration, 0.01))
 	var cb: Callable = _on_move_done
 	_tween.finished.connect(cb)
 
