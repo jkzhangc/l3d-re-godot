@@ -6,7 +6,7 @@ extends "res://script/director/move_node.gd"
 ## 系统：关卡机关（开关 / 拉杆 / 电闸）｜ 层：玩法（Node2D，继承 MoveNode）
 ## 联机：**各端本地表现** —— 信号由各端自己发（互动方是本机玩家），无 RPC、无同步
 ## 职责：在 MoveNode 的基础上加「可互动 + 双状态开关」：
-##       玩家按确定键 → 状态翻转 → ①换行走图 ②按状态移动到各自终点 ③发**该状态的命名信号**
+##       玩家按功能键 → 状态翻转 → ①换行走图 ②按状态移动到各自终点 ③发**该状态的命名信号**
 ##       → 监听方（灯光 / 门 / 演出）各自动作。
 ## 依赖：MoveNode（移动 / 外观 / 碰撞 / 外部信号接线）、Global（提示字体）、Players
 
@@ -83,6 +83,7 @@ var _is_on: bool = false
 var _home: Vector2 = Vector2.ZERO
 var _can_interact: bool = false
 var _label: Label = null
+var _key_hint: String = "功能键"
 
 
 func _ready() -> void:
@@ -105,17 +106,21 @@ func _process(delta: float) -> void:
 		return
 	_check_player_proximity()
 	_update_label()
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if Engine.is_editor_hint():
-		return
-	if not _can_interact or not is_visible_in_tree():
-		return
-	if event.is_action_pressed("确定键"):
-		## 与传送点 / 安全门 / 结局触发器一致：UI 先消费按键，不隔着菜单误触发。
-		get_viewport().set_input_as_handled()
+	## 功能键走**轮询**而不是 _unhandled_input：事件路径依赖"没人先 consume"，
+	## 任何一处 consume 都会让它静默失效（2026-10-02 用户实测「互动不了」的根因），
+	## 与医疗箱 / 弹药堆 / 防守机器同一口径。
+	if _can_interact and Input.is_action_just_pressed("功能键"):
 		interact()
+
+
+## ── 交互输入仲裁（2026-10-27）──
+## 语义：此刻按「功能键」，本节点会不会真的做事（详见 `interact_priority.gd`）。
+## 必须与 `interact()` 的门禁**完全一致**：不可见 / 玩家不在范围内都要返回 false，
+## 否则隐形的开关会把功能键从存档点手里抢走。
+func can_use_function_key() -> bool:
+	if Engine.is_editor_hint():
+		return false
+	return _can_interact and is_visible_in_tree()
 
 
 ## 开关默认**不接外部信号**（主入口是玩家互动）；要接就把基类的 trigger_source_path 填上。
@@ -135,7 +140,7 @@ func trigger() -> void:
 # 状态
 # ═══════════════════════════════════════
 
-## 玩家按下确定键（也会检查距离 / 可见性）。
+## 玩家状态下按功能键（也会检查距离 / 可见性）。
 func interact() -> void:
 	if not is_visible_in_tree():
 		return
@@ -245,6 +250,8 @@ func _ensure_label() -> void:
 			g.apply_hint_font(_label, 12)
 		if g.has_method("apply_text_shadow"):
 			g.apply_text_shadow(_label)
+		if g.has_method("key_hint"):
+			_key_hint = String(g.call("key_hint", &"功能键"))
 
 
 func _update_label() -> void:
@@ -258,6 +265,7 @@ func _update_label() -> void:
 	var text: String = interact_label
 	if _is_on and not interact_label_on.strip_edges().is_empty():
 		text = interact_label_on
+	text = "%s  [%s]" % [text, _key_hint]
 	if _label.text != text:
 		_label.text = text
 
