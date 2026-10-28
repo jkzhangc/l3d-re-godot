@@ -17,6 +17,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 @export_file("*.tscn") var target_scene: String = ""
 ## walk_* 三个导出带 setter：Inspector 里改贴图/索引/朝向即时刷预览，无需重开场景
@@ -60,6 +62,8 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 
 var _player_ref: Node2D = null
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 var _transitioning: bool = false
 var _step_index: int = 0
 var _step_timer: float = 0.0
@@ -134,7 +138,9 @@ func _ensure_children() -> void:
 		sprite.centered = true
 		add_child(sprite)
 
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -143,6 +149,7 @@ func _ensure_children() -> void:
 		label.size = Vector2(288, 24)
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		add_child(label)
+	_hint_label = label
 	## 字体 / 颜色 / 阴影**无条件套**（2026-09-26 用户实测「安全门提示文字没同步全局
 	## 字体、也没有阴影」）：safe_door.tscn 里**预置了 HintLabel 节点**，而旧实现把这三行
 	## 写在 `if not label` 里 → 预置节点永远拿不到样式（与机器 HintLabel 是同一个坑，
@@ -150,6 +157,8 @@ func _ensure_children() -> void:
 	Global.apply_hint_font(label, 12)  ## 12 号（2026-10-03 用户：24 太大，与机器一起调回）
 	label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.32))
 	Global.apply_text_shadow(label)  ## 阴影参数统一走 Global（原来是写死的 2,2 黑影）
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 
 func _refresh_sprite() -> void:
@@ -194,8 +203,8 @@ func _check_player_proximity() -> void:
 
 
 func _update_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 	if _is_online_session() and _network_total_count > 0:
 		label.text = "%s  [%s]  (%d/%d 已到门)" % [

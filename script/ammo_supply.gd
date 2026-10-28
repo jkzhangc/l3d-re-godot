@@ -14,6 +14,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 @export_group("出现条件")
 ## 勾选后单机移除整个节点（包括碰撞），联机保留；编辑器始终可见。
@@ -75,6 +77,8 @@ var _step_timer: float = 0.0
 var _facing_index: int = 0
 var _facing_timer: float = 0.0
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 
 
 func _ready() -> void:
@@ -95,11 +99,14 @@ func _ensure_children() -> void:
 		sprite = Sprite2D.new()
 		sprite.name = "Sprite2D"
 		add_child(sprite)
-	var label := get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
 		add_child(label)
+	_hint_label = label
 	label.position = Vector2(-180, -70)
 	label.size = Vector2(360, 24)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -112,6 +119,8 @@ func _ensure_children() -> void:
 			g.apply_hint_font(label, 12)
 			g.apply_text_shadow(label)
 		label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 
 func _ensure_collision() -> void:
@@ -180,8 +189,8 @@ func _process(delta: float) -> void:
 	var player: Node2D = Players.get_local_entity()
 	var eligible := can_player_use(player)
 	_can_interact = eligible
-	var label := get_node_or_null("HintLabel") as Label
-	if label:
+	var label: Label = _hint_label
+	if label and is_instance_valid(label):
 		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
 		label.visible = eligible
 	if eligible and Input.is_action_just_pressed("功能键") and not get_tree().paused:

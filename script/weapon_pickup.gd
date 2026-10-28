@@ -27,6 +27,8 @@ const CHARS_PER_ROW: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
 const DIRECTIONS: int = 4
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 enum FaceDir { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 }
 
 ## 武器拾取物模板场景（用于掉落生成）
@@ -467,6 +469,9 @@ func _ensure_keycap_hint() -> void:
 	## 黑幕(90)/ED(95)/章节总结(100) 之下（2026-09-17 用户反馈：被上层图块盖住）
 	lbl.z_index = 10
 	_keycap_hint = lbl
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89）—— 彻底摆脱图块/角色遮挡，
+	## 且不吃夜图 CanvasModulate 的暗度（旧 z_index=10 只能盖住图块，盖不住角色）。
+	HINT_LAYER.attach(lbl, Vector2(-cap_w * 0.5, -74))
 
 
 func _update_keycap_hint() -> void:

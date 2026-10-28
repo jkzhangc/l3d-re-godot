@@ -30,6 +30,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 # ═══════════════════════════════════════
 # 配置
@@ -98,6 +100,8 @@ var _step_timer: float = 0.0
 var _facing_index: int = 0
 var _facing_timer: float = 0.0
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 var _player_ref: CharacterBody2D = null
 
 
@@ -260,8 +264,8 @@ func host_commit_pickup(state: PlayerState) -> void:
 	if sprite:
 		sprite.visible = false
 	_toast_timer = 2.5
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if label:
+	var label: Label = _hint_label
+	if label and is_instance_valid(label):
 		label.text = pickup_hint
 		label.show()
 	_can_interact = false
@@ -286,7 +290,9 @@ func _ensure_children() -> void:
 		s.name = "Sprite2D"
 		s.centered = true
 		add_child(s)
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -296,6 +302,7 @@ func _ensure_children() -> void:
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()
 		add_child(label)
+	_hint_label = label
 	## ★字体 / 阴影**无条件套**（不能写在上面的 `if not label` 里）：一旦
 	## `item_pickup_point.tscn` 预置了 HintLabel，写在新建分支内的样式会静默失效
 	## （阴影消失 + 字体不跟随「设置 → 界面字体」）。同 holdout_machine / safe_door /
@@ -305,6 +312,8 @@ func _ensure_children() -> void:
 		## 12 号（2026-10-03 用户：与防守战机器一起把靠近提示统一调回 12）
 		g.apply_hint_font(label, 12)
 		g.apply_text_shadow(label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 
 func _refresh_sprite() -> void:
@@ -332,8 +341,8 @@ func _current_facing() -> int:
 
 
 func _update_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 	if _can_interact:
 		label.text = "%s [确定]" % interact_label

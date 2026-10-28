@@ -37,6 +37,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 # ═══════════════════════════════════════
 # 配置
@@ -410,8 +412,12 @@ func _update_hint() -> void:
 	Global.apply_hint_font(_hint_label, 12)
 	if _hint_label.text != text:
 		_hint_label.text = text
-	_hint_label.position = Vector2(-160.0, -64.0)
+	var hint_pos := Vector2(-160.0, -64.0)
+	_hint_label.position = hint_pos
 	_hint_label.visible = true
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	## 每次显示都传一次偏移：本函数会重排位置，attach 自带幂等闸，重复调用只更新偏移。
+	HINT_LAYER.attach(_hint_label, hint_pos)
 
 
 func _hide_hint() -> void:

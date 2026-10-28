@@ -39,6 +39,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 const LABEL_WIDTH: float = 360.0
 const LABEL_HEIGHT: float = 24.0
 ## 项目铁律：提示字号 12 的整倍（与医疗箱/补给/防守战机器同口径）。
@@ -205,7 +207,8 @@ func _refresh_visuals() -> void:
 		return
 	_label.text = hint_text
 	## Label 的 position 是左上角 → 由「中心偏移」换算，保证文字以节点为中心。
-	_label.position = hint_offset - Vector2(LABEL_WIDTH, LABEL_HEIGHT) * 0.5
+	var label_pos: Vector2 = hint_offset - Vector2(LABEL_WIDTH, LABEL_HEIGHT) * 0.5
+	_label.position = label_pos
 	_label.add_theme_color_override("font_color", hint_color)
 	## ★字体 / 阴影每次刷新都套（医疗箱 2026-10-03 踩过的坑：写在"新建节点"分支里
 	## 会让预置节点拿不到样式；本节点虽然自己建子节点，但保持同一规则更稳）。
@@ -213,6 +216,9 @@ func _refresh_visuals() -> void:
 	if g:
 		g.apply_hint_font(_label, _normalized_font_size())
 		g.apply_text_shadow(_label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89）这个独立 canvas —— 不被角色/上层图块遮挡，
+	## 也不吃夜图 CanvasModulate 的暗度。编辑器里 attach 会自动跳过。
+	HINT_LAYER.attach(_label, label_pos)
 
 
 func _normalized_font_size() -> int:

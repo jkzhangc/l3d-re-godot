@@ -26,6 +26,8 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 const SAVE_POINT_MENU := preload("res://script/ui/save_point_menu.gd")
 ## 交互输入仲裁（2026-10-27 用户需求：存档触发优先级最低）。
 const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 const PLAYER_RESCAN_INTERVAL: float = 0.5  ## 玩家缺席时的降频重扫间隔（秒）
 
@@ -88,6 +90,8 @@ const COLLISION_SIZE: Vector2 = Vector2(32, 32)
 # 运行时
 # ═══════════════════════════════════════
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 var _step_index: int = 0
 var _step_timer: float = 0.0
 var _facing_index: int = 0
@@ -191,7 +195,9 @@ func _ensure_children() -> void:
 		s.centered = true
 		add_child(s)
 
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -204,6 +210,7 @@ func _ensure_children() -> void:
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()
 		add_child(label)
+	_hint_label = label
 
 	## ★阴影/字体套用**不能**写在「新建分支」里（项目第三次踩坑铁律）：
 	## 无论 HintLabel 是预置还是新建，这里都要（幂等地）套一遍。
@@ -213,6 +220,8 @@ func _ensure_children() -> void:
 			g.apply_hint_font(label, 12)
 		if g.has_method("apply_text_shadow"):
 			g.apply_text_shadow(label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 
 ## 实体碰撞（与 medical_box / holdout_machine 同款）。幂等：`save_point.tscn` 已预置
@@ -296,8 +305,8 @@ func _check_player_proximity() -> void:
 
 
 func _update_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 	if _can_interact:
 		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
@@ -329,8 +338,8 @@ func _open_menu() -> void:
 	_menu.connect("closed", _on_menu_closed)
 	add_child(_menu)
 	## 打开瞬间清提示（菜单会铺遮罩，提示不必再留）
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if label:
+	var label: Label = _hint_label
+	if label and is_instance_valid(label):
 		label.hide()
 
 

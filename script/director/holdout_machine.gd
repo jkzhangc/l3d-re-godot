@@ -35,6 +35,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 ## 机器碰撞体（32×32 正方形，居中于节点原点）
 const COLLISION_NODE: String = "Collision"
@@ -156,7 +158,11 @@ enum KillFilter { ALL = 0, TANK = 1 }
 # ═══════════════════════════════════════
 @export_group("音效")
 @export var prepare_sound: AudioStream                    ## 预备音效：PREPARE 阶段开始时播放（留空=不播）
-@export var alert_sound: AudioStream                      ## 特殊预警音效：ACTIVE 正式开始时播放（留空=不播）
+@export var alert_sound: AudioStream                      ## 特殊预警音效：ACTIVE 正式开始前播（留空=不播）
+## ★预警提前量（秒，2026-10-28 用户需求）：alert_sound 不再等 ACTIVE 才响，
+## 改为 PREPARE 倒计时剩余 <= 本值时播放（默认 2 秒 → 玩家提前两秒听到"要来了"）。
+## 0 = 仍在 ACTIVE 开始时播；prepare_duration 比本值还短时，PREPARE 一开始就响。
+@export_range(0.0, 10.0, 0.1) var alert_lead_time: float = 2.0
 ## ★防守战**正常打完**的结束音效（2026-09-30 用户需求）。默认 = `カギ開け`（开锁声），
 ## 对应原作「防守战结束 → 开门放行」的听感。
 ## ⚠ 与「终章 ED」的 `ending_sound` **不是同一个东西**：`ending_sound` 是防
@@ -208,6 +214,11 @@ enum KillFilter { ALL = 0, TANK = 1 }
 @export_group("完成事件 · 节点显隐")
 @export var hide_node_paths: Array[NodePath] = []         ## 倒计时结束后隐藏这些节点（如挡路的门/墙）
 @export var show_node_paths: Array[NodePath] = []         ## 倒计时结束后显示这些节点
+## 隐藏延迟（秒，2026-10-28 用户需求）：防守战结束 → 等这么久再隐藏。0 = 立即（旧行为）。
+## 用子 Timer 计时：机器随场景释放时计时一并作废，不会回调到已释放的节点。
+@export_range(0.0, 30.0, 0.1) var hide_delay_seconds: float = 0.0
+## 显示延迟（秒）：防守战结束 → 等这么久再显示。0 = 立即。
+@export_range(0.0, 30.0, 0.1) var show_delay_seconds: float = 0.0
 @export var disable_collision_on_hidden: bool = true      ## 隐藏节点时同步禁用其碰撞体（否则看不见但还挡路）
 @export var hide_self_on_complete: bool = false           ## 完成后隐藏机器自身
 
@@ -235,6 +246,8 @@ var _completed: bool = false        ## 是否已完成
 var _ending_started: bool = false   ## 终章 ED 流程是否已触发（终章配置时，完成后再交互 = 进 ED）
 var _ending_local_started: bool = false   ## 本端是否已经真正起了 ED 演出（联机 Client 由广播触发）
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 var _step_index: int = 0
 var _step_timer: float = 0.0
 var _facing_index: int = 0
@@ -258,6 +271,12 @@ var _finish_sound_played: bool = false
 ## `holdout_finished` 是否已发（2026-10-27）：Host 的 `_finish_holdout` 与客户端的
 ## `apply_remote_completion` 都可能到达（含本地回环），信号必须只发一次。
 var _finished_emitted: bool = false
+## alert_sound 是否已播（2026-10-28）：PREPARE 末尾提前播一次，ACTIVE 分支只做兜底。
+var _alert_played: bool = false
+## 开打前导演系统本来是不是「关的」（2026-10-28 用户需求）：本图不自动生成
+## （DirectorConfig.spawn_enabled=false）或已被别的系统挂起。打完不把它打开 ——
+## 否则节奏恢复后又开始刷怪，出现「防守战结束了还有怪」。
+var _director_off_before: bool = false
 ## Client 侧镜像的防守战进行态（2026-10-13）：客户端 `_active` 恒为 false（启动权在
 ## Host），但 label 需据此显示「防守中…」—— 否则站在机器旁永远显示「启动机器」（未启动态）。
 var _remote_active: bool = false
@@ -460,8 +479,8 @@ func start_finale_ending() -> void:
 ## Client 收到 Host 的「终章 ED 启动」广播：重放同一段本地演出
 ##（黑屏淡出 → 章节结算 → ED BGM + 角色结局话语 → 滚动名单）。
 func apply_remote_ending(fade_seconds_value: float) -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if label:
+	var label: Label = _hint_label
+	if label and is_instance_valid(label):
 		label.hide()
 	_begin_ending(fade_seconds_value)
 
@@ -512,7 +531,9 @@ func _ensure_children() -> void:
 		sprite.position = sprite_offset
 		add_child(sprite)
 
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	var label_created: bool = false
 	if not label:
 		label = Label.new()
@@ -542,6 +563,9 @@ func _ensure_children() -> void:
 
 	if label_created:
 		add_child(label)
+	_hint_label = label
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 	# ── 32×32 碰撞体：机器是实体，玩家/敌人不能穿过去 ──
 	# 正常由 object/holdout_machine.tscn 预制体提供；这里是给旧实例的兜底，
@@ -647,8 +671,8 @@ func can_use_function_key() -> bool:
 
 
 func _update_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 
 	## ★`_remote_active` 供 Client 用（客户端 `_active` 恒 false，进行态经广播镜像）。
@@ -681,6 +705,18 @@ func _update_label() -> void:
 # ═══════════════════════════════════════
 # 启动 / 结束
 # ═══════════════════════════════════════
+
+## 导演系统此刻是不是「关的」（2026-10-28 用户需求）。
+## 两种含义都算：
+##   ① 本图不自动生成 —— `auto_spawn_enabled=false`（DirectorConfig.spawn_enabled 未勾）；
+##   ② 已被别的系统挂起 —— `director_suspended=true`（走计数，另一方仍持有）。
+## 只在 `trigger()` 里取一次快照，用于决定打完要不要把它恢复成「开」。
+func _director_is_off(director: Node) -> bool:
+	if director == null:
+		return false
+	if director.get("auto_spawn_enabled") == false:
+		return true
+	return bool(director.get("director_suspended"))
 
 ## 手动启动防守战（也可由其它脚本/事件直接调用）。
 ## 联机：Client 靠近按功能键 → 本方法转交 Host 权威启动（2026-10-12 用户需求：
@@ -716,6 +752,9 @@ func trigger() -> void:
 	_local_hud_shown = false
 	_finish_sound_played = false  ## 新一场防守战：结束音效重新武装
 	_finished_emitted = false     ## 新一场：holdout_finished 重新武装
+	_alert_played = false         ## 新一场：预警音效重新武装
+	## ★必须在下面 set_director_suspended(true) **之前**取快照，否则读到的永远是自己挂起的 true。
+	_director_off_before = _director_is_off(director)
 	# 本次防守战实例令牌：Client 用它校验收到的包是否来自当前场景的这场战斗，
 	# 丢弃旧场景残留的过期 RPC，避免在新场景里弹出幽灵 HUD。
 	_net_token = randi_range(1, 1000000)
@@ -852,8 +891,9 @@ func abort() -> void:
 	var director: Node = get_node_or_null("/root/Director")
 	if director and director.has_method("abort_scripted_event"):
 		director.abort_scripted_event()
-	if not _is_network_client() and director and director.has_method("set_director_suspended"):
-		director.set_director_suspended(false)  ## 恢复常规导演编排
+	if not _is_network_client() and director and director.has_method("set_director_suspended") \
+			and not _director_off_before:
+		director.set_director_suspended(false)  ## 恢复常规导演编排（开打前就是关的则保持关闭）
 	if not _is_network_client() and director and director.has_method("set_holdout_rage"):
 		director.set_holdout_rage(false)  ## 防守战丧尸恢复普通形态
 	if not _is_network_client() and director and director.has_method("notify_holdout_finished"):
@@ -875,6 +915,10 @@ func _tick_countdown(delta: float) -> void:
 	match _phase:
 		Phase.PREPARE:
 			_phase_timer -= delta
+			## ★预警提前（2026-10-28 用户需求）：倒计时进入最后 alert_lead_time 秒就响，
+			## 不再等 ACTIVE 才播。`_play_alert_sound_once` 自带幂等闸，每场只响一次。
+			if not _alert_played and _phase_timer <= alert_lead_time:
+				_play_alert_sound_once()
 			if _phase_timer <= 0.0:
 				_begin_active()
 		Phase.ACTIVE:
@@ -904,9 +948,8 @@ func _begin_active() -> void:
 	# BGM 从「正式开始」才播（2026-09-13 用户反馈：预备阶段不播）。
 	# 原先在 _start_holdout（PREPARE）就播，导致倒计时 3 秒里 BGM 先响。
 	_play_holdout_music()
-	# 特殊预警音效（用户 2026-09-13 新增）：正式开始时响。
-	if alert_sound:
-		Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+	# 特殊预警音效（用户 2026-09-13 新增）：兜底入口 —— 正常已经在 PREPARE 末尾提前响过。
+	_play_alert_sound_once()
 	# 正式启动剧本事件：由 EventManager 按尸潮节奏刷怪（Host 权威）
 	var director: Node = get_node_or_null("/root/Director")
 	if director and director.has_method("start_scripted_event"):
@@ -925,19 +968,41 @@ func _begin_active() -> void:
 		_broadcast_state(Phase.ACTIVE, 0.0, 0.0, true)
 
 
+## 预警音效的唯一播放口（2026-10-28）：Host 在 PREPARE 剩余 <= alert_lead_time 时调用，
+## ACTIVE 开始时再调一次做兜底（prepare_duration=0 / 包丢失等），由 `_alert_played` 去重。
+func _play_alert_sound_once() -> void:
+	if _alert_played:
+		return
+	_alert_played = true
+	if alert_sound and not _is_network_client():
+		Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+
+
 func _begin_settle() -> void:
-	## 结算时长为 0（2026-09-15 默认）：跳过 SETTLE 展示直接完成，开门/传送点不再等几秒
+	## ★停刷怪必须在 settle 提前返回**之前**（2026-10-28 修复）：`settle_duration` 默认 0
+	## （2026-09-15 用户要求去掉结束延迟）→ 旧实现直接 return 到 `_finish_holdout()`，
+	## 下面那段 `abort_scripted_event()` 永远执行不到 → EventManager 的剧本事件（防守战波次）
+	## 会一直刷到 `event_duration` 才停，表现就是「防守战都结束了还在出怪」。
+	## 杀怪式 / 永续型没有倒计时，`event_duration` 与真实结束时刻更是完全脱钩。
+	_stop_scripted_event()
+	## 结算时长为 0：跳过 SETTLE 展示直接完成，开门/传送点不再等几秒
 	if settle_duration <= 0.0:
 		_finish_holdout()
 		return
 	_phase = Phase.SETTLE
 	_phase_timer = settle_duration
 	_phase_total = settle_duration
-	# 停止刷怪，恢复常规导演节奏（防守战刷出的丧尸本就是普通 AI，无需解锁）
+	_broadcast_state(Phase.SETTLE, _phase_timer, _phase_total, true)
+
+
+## 中止防守战波次（幂等，仅权威端）。EventManager 的剧本事件一停就不会再往场上刷丧尸；
+## 已锁定的存量丧尸由 EventManager 解除追击（继续以普通 AI 存在，不强制清场）。
+func _stop_scripted_event() -> void:
+	if _is_network_client():
+		return
 	var director: Node = get_node_or_null("/root/Director")
 	if director and director.has_method("abort_scripted_event"):
-		director.abort_scripted_event()
-	_broadcast_state(Phase.SETTLE, _phase_timer, _phase_total, true)
+		director.call("abort_scripted_event")
 
 
 func _finish_holdout() -> void:
@@ -946,6 +1011,8 @@ func _finish_holdout() -> void:
 	_phase = Phase.IDLE
 	_local_hud_shown = false
 	_disconnect_kill_hooks()
+	## 兜底：`on_event_completed()` 直接调本函数时不经过 `_begin_settle`，也要停刷怪。
+	_stop_scripted_event()
 	_drive_local_hud(Phase.IDLE, 0.0, 0.0)
 	_broadcast_state(Phase.IDLE, 0.0, 0.0, true)  # 通知所有 Client 隐藏 HUD
 	_stop_holdout_music()
@@ -962,6 +1029,13 @@ func _finish_holdout() -> void:
 				## 导演不再往场上刷敌人（消除"防守战都结束了还在刷"）。挂起计数会在换图时由
 				## Director._check_scene_change 自动复位，不会污染下一张图。
 				print("[HoldoutMachine] 防守战结束：保持导演挂起，不再恢复常规刷怪")
+			elif _director_off_before:
+				## ★2026-10-28 用户需求：开打前导演系统本来就是「关」的（本图 spawn_enabled=false
+				## 或已被别的系统挂起）→ 打完**保持关着**。这里不调用 set_director_suspended(false)：
+				## 那会把节奏控制器解冻并重掷 cooldown，紧接着又按常规节奏刷怪 ——
+				## 正是「防守战结束了，还有怪」的来源之一。
+				## 挂起计数同样由 Director._check_scene_change 在换图时复位。
+				print("[HoldoutMachine] 防守战结束：开打前导演系统就是关的 → 保持关闭")
 			else:
 				director.set_director_suspended(false)
 		if director and director.has_method("set_holdout_rage"):
@@ -1248,6 +1322,12 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 		_remote_prepare_played = true
 		if prepare_sound:
 			Global.play_sfx_managed(prepare_sound, get_tree().current_scene)
+	## ★预警提前（2026-10-28）：与 Host 同口径 —— PREPARE 剩余 <= alert_lead_time 就响。
+	## 周期包 500ms 一次，2 秒窗口内必然落到一个包；ACTIVE 分支保留为兜底。
+	if phase == Phase.PREPARE and not _remote_alert_played and remaining <= alert_lead_time:
+		_remote_alert_played = true
+		if alert_sound:
+			Global.play_sfx_managed(alert_sound, get_tree().current_scene)
 	if phase == Phase.ACTIVE and not _remote_alert_played:
 		_remote_alert_played = true
 		if alert_sound:
@@ -1348,21 +1428,9 @@ func _find_network_world() -> Node:
 # ═══════════════════════════════════════
 
 func _run_completion_events() -> void:
-	for path: NodePath in hide_node_paths:
-		var node: Node = _resolve_node(path)
-		if node:
-			_set_node_shown(node, false)
-			print("[HoldoutMachine] 完成事件：隐藏节点 %s" % node.name)
-		elif not path.is_empty():
-			push_warning("[HoldoutMachine] 完成事件找不到要隐藏的节点: %s" % path)
-
-	for path: NodePath in show_node_paths:
-		var node: Node = _resolve_node(path)
-		if node:
-			_set_node_shown(node, true)
-			print("[HoldoutMachine] 完成事件：显示节点 %s" % node.name)
-		elif not path.is_empty():
-			push_warning("[HoldoutMachine] 完成事件找不到要显示的节点: %s" % path)
+	## 显隐节点支持延迟（2026-10-28 用户需求）：0 = 当帧执行（旧行为）。
+	_schedule_visibility(hide_node_paths, false, hide_delay_seconds, "隐藏")
+	_schedule_visibility(show_node_paths, true, show_delay_seconds, "显示")
 
 	# 传送点仅在权威端（单机或 Host）创建；Client 没有节点复制框架，
 	# 若也创建会产生重复实例，因此客户端跳过（节点显隐/回调仍会在 Client 上同步执行）。
@@ -1380,6 +1448,36 @@ func _run_completion_events() -> void:
 
 	if hide_self_on_complete:
 		_set_node_shown(self, false)
+
+
+## 按延迟调度一组节点的显隐。延迟 0 → 当帧执行；> 0 → 挂一次性 Timer 子节点。
+## 用子 Timer 而不是 SceneTree.create_timer：机器随场景释放时计时一并消失，
+## 不会在已释放的节点上回调。
+func _schedule_visibility(paths: Array[NodePath], shown: bool, delay: float, verb: String) -> void:
+	if paths.is_empty():
+		return
+	if delay <= 0.0:
+		_apply_visibility(paths, shown, verb)
+		return
+	var t := Timer.new()
+	t.name = "VisibilityTimer_%d" % int(Time.get_ticks_msec())
+	t.one_shot = true
+	t.wait_time = delay
+	add_child(t)
+	t.timeout.connect(_apply_visibility.bind(paths, shown, verb))
+	t.timeout.connect(t.queue_free)
+	t.start()
+
+
+## 真正执行显隐（延迟到点 / 无延迟时直接调用）。
+func _apply_visibility(paths: Array[NodePath], shown: bool, verb: String) -> void:
+	for path: NodePath in paths:
+		var node: Node = _resolve_node(path)
+		if node:
+			_set_node_shown(node, shown)
+			print("[HoldoutMachine] 完成事件：%s节点 %s" % [verb, node.name])
+		elif not path.is_empty():
+			push_warning("[HoldoutMachine] 完成事件找不到要%s的节点: %s" % [verb, path])
 
 
 ## 三级解析，尽量让 Inspector 里填的路径都能命中：

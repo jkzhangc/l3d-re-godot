@@ -28,6 +28,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 ## 与医疗箱 / 存档点 / 传送点同款：图块层 + 第 6 层「子弹阻挡」。
 const COLLISION_NODE: String = "Collision"
@@ -216,7 +218,9 @@ func _ensure_children() -> void:
 		add_child(s)
 	_sprite = s
 
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if label == null:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -235,6 +239,8 @@ func _ensure_children() -> void:
 			g.apply_hint_font(_label, 12)
 		if g.has_method("apply_text_shadow"):
 			g.apply_text_shadow(_label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(_label)
 
 
 ## 实体碰撞（与医疗箱 / 存档点 / HintMarker 同款）。幂等：预置节点只改参数不重建。

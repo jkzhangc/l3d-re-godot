@@ -15,6 +15,8 @@ extends Node2D
 
 const BAR_TEXTURE := preload("res://art/Ui/ＨＰバー.png")
 const METER_TEXTURE := preload("res://art/Ui/ＨＰメーター.png")
+## 提示文字层（layer=89）：不被角色/图块遮挡、不吃夜图暗度，见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 ## 玩家精灵帧为 48×64、原点在脚底（Sprite2D 位于 y=-16），头顶约在 y=-48。
 const BAR_OFFSET := Vector2(-32.0, -56.0)
@@ -39,6 +41,9 @@ func _ready() -> void:
 	_hp_bar.scale = Vector2(0.5, 0.5)
 	_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_hp_bar)
+	## ★名牌整体走提示层（2026-10-28 用户需求）：血条与文字一起搬，
+	## 否则"文字在顶层、血条被角色挡住"会看起来更怪。
+	HINT_LAYER.attach(_hp_bar, BAR_OFFSET)
 
 	_label = Label.new()
 	_label.position = LABEL_OFFSET
@@ -54,6 +59,8 @@ func _ready() -> void:
 		g.apply_text_shadow(_label)
 	_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_label)
+	## 昵称同样走提示层（与血条同一个 canvas，层级一致）。
+	HINT_LAYER.attach(_label, LABEL_OFFSET)
 	_apply_label_text()
 
 

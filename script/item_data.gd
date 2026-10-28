@@ -52,6 +52,13 @@ enum ItemType {
 @export var pickup_requires_function_key: bool = false
 
 @export_group("使用效果")
+## ★拾取即用（2026-10-28 用户需求）：true = 捡到瞬间就把效果结算在拾取者身上，
+## **不进入治疗品/辅助品槽位**（对应原作「不能携带」的グリーンハーブ / ミネラルウォーター）。
+## 结算走 `player.apply_item_effects()` —— 与按键使用同一套 HP/TP/強化/闪烁/音效。
+## 拾取者对应数值已满（HP 满 / TP 满）时视为无法使用 → **物品留在地上不消耗**。
+## ⚠ 只对 `healing_pickup.tscn` 这一族掉落物生效（武器/投掷物忽略本开关）。
+## ⚠ 建议与 `pickup_requires_function_key` 一起打开，否则触碰即自动吃掉。
+@export var use_on_pickup: bool = false
 ## 使用时回复的 HP 量（0=不回复）
 @export var hp_restore: int = 0
 ## 使用时回复的 TP 量（0=不回复）
@@ -86,6 +93,11 @@ enum ItemType {
 ## 治疗品 / 辅助品默认开启（见各自 .tres 的 pickup_requires_function_key）。
 func needs_function_key_pickup() -> bool:
 	return pickup_requires_function_key
+
+
+## 是否「拾取即用」（捡到就结算效果、不进背包）。见 use_on_pickup。
+func uses_on_pickup() -> bool:
+	return use_on_pickup
 
 
 func get_type_name() -> String:

@@ -46,6 +46,11 @@ signal event_completed(event_name: String)
 # ═══════════════════════════════════════
 var _triggered: bool = false
 var _is_active: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后 `has_node` 查不到。
+var _hint_label: Label = null
+
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 # ═══════════════════════════════════════
 # 生命周期
@@ -60,7 +65,9 @@ func _ready() -> void:
 		event_name = name if not name.is_empty() else "UnnamedEvent"
 
 	# 创建提示标签（编辑器中可见）
-	if not has_node("HintLabel"):
+	if _hint_label == null or not is_instance_valid(_hint_label):
+		_hint_label = get_node_or_null("HintLabel") as Label
+	if _hint_label == null:
 		var label := Label.new()
 		label.name = "HintLabel"
 		label.text = event_name
@@ -74,6 +81,7 @@ func _ready() -> void:
 		label.size = Vector2(120, 20)
 		label.modulate = Color(1, 1, 1, 0.6)
 		add_child(label)
+		_hint_label = label
 		## 全局阴影参数；编辑器进程里没有 autoload，判空再套。
 		## ⚠ 本块由 `if not has_node(...)` 把关、只在缺节点时跑一次 —— 若将来
 		## `event_trigger.tscn` 预置了 HintLabel，这里两段样式都会静默失效，
@@ -81,6 +89,8 @@ func _ready() -> void:
 		var g: Node = get_node_or_null("/root/Global")
 		if g:
 			g.apply_text_shadow(label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(_hint_label)
 
 
 func _draw() -> void:

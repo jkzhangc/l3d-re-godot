@@ -35,6 +35,10 @@ const PICKUP_SCENE := preload("res://object/healing_pickup.tscn")
 const PICKUP_DELAY_MSEC: int = 600
 
 const INDICATOR_SCRIPT := preload("res://script/hold_indicator.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+## 成就记账（拾取即用按「使用治疗品」同口径计入，与 player.gd / network_world.gd 一致）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
 ## 交互判定（点击一下 / 按住）的唯一入口，见 script/pickup_interaction.gd。
 const PickupInteraction := preload("res://script/pickup_interaction.gd")
 ## 拾取范围的单一真源（与武器拾取物同规则，2026-09-23 用户：拾取范围调小一些）。
@@ -197,6 +201,10 @@ func can_use_function_key() -> bool:
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if state != null and item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null:
 		return false
+	## 拾取即用的物品（草药/矿泉水）：拾取者数值已满 → `_do_pickup` 会把它留在地上，
+	## 按 D 等于白按 → 不挡存档（与下面喷雾满仓同一条口径）。
+	if item.uses_on_pickup():
+		return _need_function_key() and state != null and _can_use_immediately(state)
 	## 喷雾类已满 → `_do_pickup` 会把它留在地上（返回 false），按 D 等于白按 → 不挡存档。
 	if item.item_type == ItemData.ItemType.HEALING and _healing_storage_full(state):
 		return false
@@ -269,9 +277,13 @@ func _layout_keycap_hint() -> void:
 	var cap_h: float = 18.0
 	_keycap_hint.size = Vector2(cap_w, cap_h)
 	var y: float = -74.0 if (item != null and item.pickup_texture) else -54.0
-	_keycap_hint.position = Vector2(-cap_w * 0.5, y)
+	var hint_pos := Vector2(-cap_w * 0.5, y)
+	_keycap_hint.position = hint_pos
 	## 与武器拾取物同层级：盖住 DecorLayer 图块，但低于黑幕(90)/ED(95)/章节总结(100)
 	_keycap_hint.z_index = 10
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89）—— 键帽不再被角色/图块遮挡，
+	## 也不吃夜图 CanvasModulate 的暗度。按文字宽度重排后要重新同步偏移。
+	HINT_LAYER.attach(_keycap_hint, hint_pos)
 
 
 func _is_online_network_pickup() -> bool:
@@ -434,6 +446,11 @@ func _do_pickup() -> bool:
 	if not state:
 		return false
 
+	# ★拾取即用（2026-10-28）：草药/矿泉水这类「不能携带」的物品 → 当场结算效果，不进背包。
+	## 放在投掷物替换与治疗品收纳之前：不占槽位、也不触发旧投掷物掉落。
+	if item.uses_on_pickup():
+		return _do_pickup_use_immediately(state)
+
 	# 投掷物单槽位：已持有则先掉落旧的（同副武器替换逻辑）
 	if item.item_type == ItemData.ItemType.THROWABLE and state.throwable:
 		_drop_old_throwable(_player_ref, state)
@@ -465,6 +482,56 @@ func _do_pickup() -> bool:
 		Global.mark_map_pickup_consumed(map_source_key)
 	queue_free()
 	return true
+
+
+## ── 拾取即用事务（2026-10-28）──
+## 效果直接结算在拾取者身上，掉落物消失、**不进治疗品/辅助品槽位**。
+## 拾取者对应数值已满 → 视为无法使用，物品留在地上（返回 false，联机 Host 不回执）。
+## 复用 `player.apply_item_effects()`：与按键使用同一套 HP/TP/強化/全屏闪烁/音效。
+## 联机 Host 代远程玩家结算时，它内部只对「本机操控者」播表现 → 不会闪 Host 自己的屏，
+## 真实数值写进权威 PlayerState，随后由快照回灌 Client。
+## 拾取音效由使用表现（ItemData.use_sound）承担，不再叠一层 pickup_sound。
+## 看护被动 / 章节统计 / 成就与按键使用治疗品同口径（见下方实现）。
+func _do_pickup_use_immediately(state: PlayerState) -> bool:
+	if not _can_use_immediately(state):
+		print("[拾取] %s：当前数值已满，留在地上" % item.item_name)
+		return false
+	if not is_instance_valid(_player_ref) or not _player_ref.has_method("apply_item_effects"):
+		return false
+	_player_ref.call("apply_item_effects", item)
+	## 看护（静香被动）与手动使用同口径：使用治疗品 → 全队同时回复相同 HP。
+	if _player_ref.has_method("apply_nursing_passive"):
+		_player_ref.call("apply_nursing_passive", item)
+	## 章节统计 / 成就：与按键使用治疗品完全同口径（仅 HEALING 类计入）。
+	## 联机 Host 代远程玩家结算时写的是该玩家座位，规则同 network_world 的 Host 路径。
+	if item.item_type == ItemData.ItemType.HEALING:
+		var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+		if chapter_stats and chapter_stats.has_method("record_healing_item"):
+			chapter_stats.record_healing_item(state.seat_index)
+			ACHIEVEMENTS.on_heal_item(state.seat_index)
+	## 收藏馆：拿到即解锁（不进背包，但物品确实被获取过，口径同 2026-10-23 定稿）。
+	state.mark_acquired(item)
+	## ★地图预摆补给：拾取成功即标记该点已消耗（同常规拾取分支）。
+	if not map_source_key.is_empty():
+		Global.mark_map_pickup_consumed(map_source_key)
+	print("[拾取] %s：拾取即用（不进背包）" % item.item_name)
+	queue_free()
+	return true
+
+
+## 拾取即用会不会产生实际效果：只要有一种效果在当前数值下不是空转，就允许消耗。
+## · 回复类：对应数值未满才有效（满 HP 吃草药 = 白吃 → 留在地上给需要的人）；
+## · 強化类（鎮痛剤 / アドレナリン）：没有满值概念，总能施加。
+func _can_use_immediately(state: PlayerState) -> bool:
+	if item == null or state == null:
+		return false
+	if item.hp_restore > 0 and state.current_hp < state.get_max_hp():
+		return true
+	if item.tp_restore > 0 and state.current_tp < state.get_max_tp():
+		return true
+	if item.painkiller_seconds > 0.0 or item.adrenaline_seconds > 0.0:
+		return true
+	return false
 
 
 func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:

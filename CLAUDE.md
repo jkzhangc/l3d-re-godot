@@ -392,6 +392,12 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 解析口径：`物品开关 ∨ healing_pickup.require_function_key`（节点级仍可单独覆盖）。
 **联机**：Client 的「按 D」与投掷物替换一样只走 `_process_network_hold` → 满进度提交请求，**绝不本地 `_do_pickup()`**。
 
+**拾取即用开关**（2026-10-28）：`ItemData.use_on_pickup`（**默认 false**，派生 `uses_on_pickup()`）。
+打开后捡起瞬间把效果结算在拾取者身上（统一走 `player.apply_item_effects()`：HP/TP/強化/全屏闪烁/音效，与按键使用同一套；看护被动同步生效），**不进治疗品/辅助品槽位**。
+拾取者对应数值已满（HP 满 / TP 满）→ 视为无法使用，**物品留在地上不消耗**（该情形 `can_use_function_key()` 返回 false，存档点照常可触发）。联机 Host 代远程玩家结算（`_try_host_pickup` → `_do_pickup`），客户端只等快照回灌。
+已开启：`item_greenherbs.tres`（绿色草药）、`item_mineralwater.tres`（矿泉水）——对应原作「不能携带」。
+⚠ 只对 `healing_pickup` 这一族生效；建议与 `pickup_requires_function_key` 同时打开，否则触碰即自动吃掉。
+
 ### 敌人 A* 寻路
 
 **`script/enemy/EnemyChaseState.gd`** — 基于 TileMapLayer 格子的 A*（32×32 格子，四方向邻居，曼哈顿距离，最大 2000 迭代）。地图缓存为 `static var`，全图只查一次。层识别按节点名：含 `"upper"/"decor"` → 查碰撞多边形；含 `"wall"` → 始终阻挡；含 `"ground"/"floor"` → 可行走。实体障碍（敌人互绕）每帧实时检测。降级模式：连续失败 2 次→直接追击+滑墙。
@@ -405,6 +411,15 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 ### 伤害数字
 
 **`DamageNumber`**（`script/damage_number.gd`）— `DamageNumber.spawn(global_position, damage, get_tree().current_scene)`。使用 GradientLabel + 9 种缓动。所有参数 `@export`（`font_size=32`、`rise_distance=20`、`duration=1.0`、`color_index=1` 等）。
+
+### 世界提示文字（HintTextLayer）
+
+**`script/ui/hint_text_layer.gd`**（2026-10-28）— 所有**世界内提示画布项**（各交互节点的 `HintLabel`、拾取键帽 `KeycapHint`、联机名牌的昵称 + 血条）统一走 `HINT_LAYER.attach(item, [偏移])`：
+搬进 `layer = 89` 的独立 CanvasLayer，每帧按「锚点 `global_position` + 偏移」换算屏幕坐标（`process_priority = 1000`，保证在本帧最后写，压过锚点自己的 `position` 赋值）。
+两个问题一次解决：① 不再参与 Node2D 的 z 排序 → 不被角色 / 上层图块（`z_index=1`）遮挡；② 独立 canvas → **不吃夜图 `CanvasModulate` 的暗度**（同一 canvas 内的 CanvasItem 无法豁免）。
+层号取 **89**：压过调试跳转(85) / 道具使用闪烁(88)，又被黑幕(90) / ED(95) / 章节总结(100) 盖住 —— 提示是常驻的，不能压在结算页上。
+约定：`attach` 幂等（已挂只更新偏移）；锚点隐藏 → `self_modulate.a = 0` 代偿；锚点释放 → 提示自动销毁；编辑器内自动跳过。
+⚠ 搬走后 `get_node_or_null("HintLabel")` 失效 → **调用方必须缓存引用**（已改：medical_box / ammo_supply / save_point / holdout_machine / item_pickup_point / safe_door / teleport_point / event_trigger / finale_trigger）。新增提示文字时照此办理。
 
 ### 相机跟随
 

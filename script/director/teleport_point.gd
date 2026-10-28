@@ -25,6 +25,8 @@ const CHARS_PER_ROW: int = 4
 const DIRECTIONS: int = 4
 ## 行走图文件名特殊前缀（`$` = 单角色表）解析，见 script/vx_walk_sheet.gd
 const WALK := preload("res://script/vx_walk_sheet.gd")
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 
 const PLAYER_RESCAN_INTERVAL: float = 0.5  ## 玩家缺席时的降频重扫间隔（秒）
 
@@ -143,6 +145,8 @@ var _step_timer: float = 0.0
 var _facing_index: int = 0
 var _facing_timer: float = 0.0
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
+var _hint_label: Label = null
 var _transitioning: bool = false   ## 传送已发起（防同帧/切图空窗期重复触发）
 var _player_search_cd: float = 0.0 ## 玩家缺席时的降频重扫倒计时
 var _touch_grace_left: float = 0.0 ## 触碰迟钝期剩余（秒）；>0 时不响应触碰
@@ -265,7 +269,9 @@ func _ensure_children() -> void:
 		add_child(s)
 
 	# ── 确保 HintLabel 子节点存在 ──
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -280,11 +286,14 @@ func _ensure_children() -> void:
 		label.modulate = Color(1, 1, 1, 0.9)
 		label.hide()
 		add_child(label)
+	_hint_label = label
 
 	## 阴影统一走全局参数；运行时路径（编辑器分支不执行，编辑器进程没有 autoload）
 	var g: Node = get_node_or_null("/root/Global")
 	if g:
 		g.apply_text_shadow(label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(label)
 
 	## ── 触碰触发区 + 实体阻挡体（2026-10-22 新增；都按参数自建，旧地图无需手工加节点）──
 	_refresh_interaction_nodes()
@@ -499,8 +508,8 @@ func _check_player_proximity() -> void:
 
 
 func _update_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 	if _can_interact:
 		if _is_locked():

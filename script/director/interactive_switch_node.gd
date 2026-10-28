@@ -28,6 +28,9 @@ extends "res://script/director/move_node.gd"
 ## 固定信号：任何一次翻转都会发（带状态），与命名信号并存。
 signal switched(is_on: bool)
 
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+
 # ═══════════════════════════════════════
 # 配置 — 开关
 # ═══════════════════════════════════════
@@ -252,6 +255,8 @@ func _ensure_label() -> void:
 			g.apply_text_shadow(_label)
 		if g.has_method("key_hint"):
 			_key_hint = String(g.call("key_hint", &"功能键"))
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(_label)
 
 
 func _update_label() -> void:

@@ -31,6 +31,8 @@ const DIRECTIONS: int = 4
 const COLLISION_NODE: String = "Collision"
 const COLLISION_SHAPE_NODE: String = "Shape"
 const COLLISION_SIZE: int = 32
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 ## 已用玩家的箱子不透明度（"你已用过"的视觉提示）。
 const USED_ALPHA: float = 0.45
 ## 治疗绿闪颜色（沿用旧实现的过曝绿）。
@@ -50,6 +52,9 @@ const HEAL_FLASH_COLOR: Color = Color(1.6, 2.0, 1.6, 1.0)
 @export var heal_sound: AudioStream = preload("res://sound/回復1.ogg")  ## 治疗音效（留空=不播）
 
 var _can_interact: bool = false
+## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后
+## `get_node_or_null("HintLabel")` 就查不到了，必须自己持引用。
+var _hint_label: Label = null
 var _used: bool = false                       ## 单机：一次性
 var _used_peers: Dictionary = {}              ## 联机：peer_id → true（Host 权威，Client 由广播覆盖）
 ## 本场景是否是联机会话（_ready 时取一次）。场景加载后会话类型不会再变，
@@ -89,7 +94,9 @@ func _ensure_collision() -> void:
 
 
 func _ensure_label() -> void:
-	var label: Label = get_node_or_null("HintLabel") as Label
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
+		label = get_node_or_null("HintLabel") as Label
 	if not label:
 		label = Label.new()
 		label.name = "HintLabel"
@@ -100,6 +107,7 @@ func _ensure_label() -> void:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		label.hide()
 		add_child(label)
+	_hint_label = label
 	## ★字体 / 颜色 / 阴影**每次调用都套**（2026-10-03 用户实测「医疗箱的文字没阴影了」）：
 	## `object/medical_box.tscn` **预置了 HintLabel 节点**，而旧实现把这三行写在
 	## `if not label` 分支内 → 预置节点永远拿不到样式：**没有阴影、字体也不跟随
@@ -114,6 +122,8 @@ func _ensure_label() -> void:
 		g.apply_hint_font(label, 12)
 		label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
 		g.apply_text_shadow(label)
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89）这个独立 canvas（不被角色/图块遮挡、不吃暗度）。
+	HINT_LAYER.attach(label)
 
 
 func _refresh_sprite() -> void:
@@ -154,8 +164,8 @@ func _check_player_proximity() -> void:
 		and is_instance_valid(candidate)
 		and candidate.global_position.distance_to(global_position) <= interact_range
 	)
-	var label: Label = get_node_or_null("HintLabel") as Label
-	if not label:
+	var label: Label = _hint_label
+	if label == null or not is_instance_valid(label):
 		return
 	## 联机也走同一条提示 —— 旧版写「（需主机操作）」是错的（每人各自可用）。
 	label.text = "%s  [功能键]" % _label_text()
@@ -279,8 +289,8 @@ func _refresh_used_visual() -> void:
 	sprite.modulate = Color(1.0, 1.0, 1.0, USED_ALPHA) if used else Color.WHITE
 	## 变暗后连提示都不该再出现（提示由 _check_player_proximity 每帧重算，这里只兜底一帧）。
 	if used:
-		var label: Label = get_node_or_null("HintLabel") as Label
-		if label:
+		var label: Label = _hint_label
+		if label and is_instance_valid(label):
 			label.visible = false
 	queue_redraw()
 

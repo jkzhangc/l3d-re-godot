@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://bp5anfnuq7bsf"]
+
+[ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="1_2nbfo"]
+[ext_resource type="Texture2D" uid="uid://cfvffaje821bg" path="res://art/Characters/金貨とか.png" id="2_2nbfo"]
+[ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="3_6nh47"]
+
+[resource]
+script = ExtResource("3_6nh47")
+item_id = "mineralwater_01"
+item_name = "矿泉水"
+item_type = 7
+description = "原作 ミネラルウォーター 回复200点TP。因为不能携带，所以让TP少的角色上去捡吧。"
+icon = ExtResource("1_2nbfo")
+effect_text = "回复200点TP。"
+sell_price = 80
+stackable = true
+max_stack = 5
+pickup_texture = ExtResource("2_2nbfo")
+pickup_char_idx = 5
+pickup_requires_function_key = true
+use_on_pickup = true
+tp_restore = 200
+use_flash_color = Color(0.25, 1, 0.296875, 1)

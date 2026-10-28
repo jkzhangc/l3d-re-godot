@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://dtkxc77hr0mmr"]
+
+[ext_resource type="Texture2D" uid="uid://joehtx1ybmtr" path="res://art/Ui/装備アイコングリーンハーブ.png" id="1_bwit1"]
+[ext_resource type="Texture2D" uid="uid://b03tvwwyemq4h" path="res://art/Weapon/[2K-VX]-A武器セット１１.png" id="2_bwit1"]
+[ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="3_6nh47"]
+
+[resource]
+script = ExtResource("3_6nh47")
+item_id = "greenherbs_01"
+item_name = "绿色草药"
+item_type = 7
+description = "原作 グリーンハーブ 恢复50点HP。因为不能携带，所以让HP少的角色上去捡吧。"
+icon = ExtResource("1_bwit1")
+effect_text = "恢复50点HP"
+sell_price = 80
+stackable = true
+max_stack = 10
+pickup_texture = ExtResource("2_bwit1")
+pickup_requires_function_key = true
+use_on_pickup = true
+hp_restore = 50
+use_flash_color = Color(0.25, 1, 0.296875, 1)

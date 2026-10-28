@@ -79,6 +79,9 @@ var _hint_label: Label = null
 # 生命周期
 # ═══════════════════════════════════════
 
+## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
+const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+
 func _ready() -> void:
 	if encounter_name.is_empty():
 		encounter_name = name if not name.is_empty() else "BossEncounter"
@@ -346,6 +349,8 @@ func _ensure_hint_label() -> void:
 			g.apply_text_shadow(_hint_label)
 	_hint_label.text = hint_message if not hint_message.is_empty() else encounter_name
 	_hint_label.visible = trigger_mode != 2 and not hint_message.is_empty()
+	## ★提示文字层（2026-10-28）：搬到提示层（layer=89；不被角色/图块遮挡、不吃夜图暗度）。
+	HINT_LAYER.attach(_hint_label)
 
 
 func _update_hint_visibility() -> void:
