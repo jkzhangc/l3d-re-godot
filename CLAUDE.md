@@ -415,7 +415,7 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 ### 世界提示文字（HintTextLayer）
 
 **`script/ui/hint_text_layer.gd`**（2026-10-28）— 所有**世界内提示画布项**（各交互节点的 `HintLabel`、拾取键帽 `KeycapHint`、联机名牌的昵称 + 血条）统一走 `HINT_LAYER.attach(item, [偏移])`：
-搬进 `layer = 89` 的独立 CanvasLayer，每帧按「锚点 `global_position` + 偏移」换算屏幕坐标（`process_priority = 1000`，保证在本帧最后写，压过锚点自己的 `position` 赋值）。
+搬进 `layer = 89` 的独立 CanvasLayer，每帧按「锚点 `global_position` + 偏移」换算屏幕坐标，**并按相机 zoom 同步缩放**（位置由 `canvas_transform` 折算，字号/尺寸再乘 `zoom`，否则 zoom=2 时文字会相对世界变小、居中偏移错位），`process_priority = 1000` 保证在本帧最后写，压过锚点自己的 `position` 赋值。
 两个问题一次解决：① 不再参与 Node2D 的 z 排序 → 不被角色 / 上层图块（`z_index=1`）遮挡；② 独立 canvas → **不吃夜图 `CanvasModulate` 的暗度**（同一 canvas 内的 CanvasItem 无法豁免）。
 层号取 **89**：压过调试跳转(85) / 道具使用闪烁(88)，又被黑幕(90) / ED(95) / 章节总结(100) 盖住 —— 提示是常驻的，不能压在结算页上。
 约定：`attach` 幂等（已挂只更新偏移）；锚点隐藏 → `self_modulate.a = 0` 代偿；锚点释放 → 提示自动销毁；编辑器内自动跳过。

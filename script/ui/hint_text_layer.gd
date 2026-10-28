@@ -6,7 +6,8 @@ extends CanvasLayer
 ## 职责：把世界里的提示 Label 搬进独立 canvas ——
 ##   ① 不再参与 Node2D 的 z 排序 → 不会被角色、上层图块（z_index=1）盖住；
 ##   ② 不处于夜图 CanvasModulate 所在的 canvas → 不被「暗度」压暗；
-##   ③ 每帧把「锚点世界坐标 + 本地偏移」换算成屏幕坐标，跟随镜头/缩放。
+##   ③ 每帧把「锚点世界坐标 + 本地偏移」换算成屏幕坐标，并**按相机 zoom 同步缩放**，
+##      观感与搬层前（世界内 Node2D 文字）完全一致 —— 镜头拉远字变小、拉近字变大。
 ## 依赖：无（各交互节点主动 attach）
 ##
 ## 【为什么必须是 CanvasLayer】
@@ -34,7 +35,7 @@ const GROUP: StringName = &"hint_text_layer"
 
 static var _instance: Variant = null
 
-## item(CanvasItem：Label / 血条 Control 等) → {"anchor": Node2D, "offset": Vector2}
+## item(CanvasItem：Label / 血条 Control 等) → {"anchor": Node2D, "offset": Vector2, "base_scale": Vector2}
 var _items: Dictionary = {}
 
 
@@ -61,10 +62,13 @@ static func attach(item: CanvasItem, offset_override: Variant = null) -> void:
 		return
 	var current := item.get("position") as Vector2
 	var offset: Vector2 = (offset_override as Vector2) if offset_override is Vector2 else current
+	## 记录「作者想要的缩放」（名牌血条是 0.5），之后每帧乘相机 zoom —— 不能直接覆盖，
+	## 否则缩放一开血条会跳回 1.0。
+	var base_scale := item.get("scale") as Vector2
 	if parent != null:
 		parent.remove_child(item)
 	overlay.add_child(item)
-	overlay._items[item] = {"anchor": anchor, "offset": offset}
+	overlay._items[item] = {"anchor": anchor, "offset": offset, "base_scale": base_scale}
 	item.self_modulate = Color(1, 1, 1, 1)
 
 
@@ -113,6 +117,9 @@ func _process(_delta: float) -> void:
 	if vp == null:
 		return
 	var xform: Transform2D = vp.get_canvas_transform()
+	## 相机 zoom：位置已经由 canvas_transform 折算过，但 Label/Control 的**字号与尺寸**
+	## 不参与那个变换 —— 必须自己乘一遍，否则镜头拉近时文字相对世界变小、居中偏移也会错。
+	var zoom: float = maxf(xform.get_scale().x, 0.001)
 	## 倒序遍历，安全删除失效条目。
 	var entries: Array = _items.keys()
 	for i: int in range(entries.size() - 1, -1, -1):
@@ -134,8 +141,9 @@ func _process(_delta: float) -> void:
 			canvas_item.self_modulate.a = 0.0
 			continue
 		var world: Vector2 = node.global_position + (entry.get("offset") as Vector2)
-		## Label / Control 都有 position，但 CanvasItem 基类没有 → 走动态 set。
+		## Label / Control 都有 position / scale，但 CanvasItem 基类没有 → 走动态 set。
 		canvas_item.set("position", xform * world)
+		canvas_item.set("scale", (entry.get("base_scale") as Vector2) * zoom)
 		## 父链被隐藏时画布项不会跟着隐藏（已不在原父级下）→ 用 self_modulate 的 alpha 代偿。
 		## 用 self_modulate 而不是 modulate：调用方可能自己设了 modulate（如 boss_encounter 的 0.85）。
 		canvas_item.self_modulate.a = 1.0 if node.is_visible_in_tree() else 0.0
