@@ -3132,25 +3132,27 @@ func enemy_action_presentation(entity_id: int, tex_key: String, char_idx: int, a
 ## Host：Director 尸潮/Boss BGM 真正起停时调用（A6 导演 BGM）。单机/Client 调用
 ## 为 no-op。只传 music key（"horde"/"boss"）+ 起停标志；AudioStream 由 Client 从
 ## 本地 Director.current_config 解析（场景切换钩子对所有 peer 生效），资源不经网络传输。
-func announce_director_music(music_key: String, active: bool) -> void:
+## `track_index`：尸潮随机池的下标（2026-10-29）。抽签只在 Host 做一次，Client 按同一
+## 下标在本地池里取同一首；-1 = 没启用随机 / 单曲，Client 照旧解析 horde_music。
+func announce_director_music(music_key: String, active: bool, track_index: int = -1) -> void:
 	if not net.is_host:
 		return
-	_send_to_ready_clients(&"director_music_presentation", [music_key, active])
+	_send_to_ready_clients(&"director_music_presentation", [music_key, active, track_index])
 
 
 ## Client：驱动本机 Director 起停对应 BGM（音源/音量本地解析，boss_music_changed
 ## 信号一并维护 → Client 的 HoldoutMachine 挂起/恢复防守战 BGM 照常联动）。
 @rpc("authority", "call_remote", "reliable")
-func director_music_presentation(music_key: String, active: bool) -> void:
+func director_music_presentation(music_key: String, active: bool, track_index: int = -1) -> void:
 	if net.is_host or _scene_transitioning:
 		return
 	var director: Node = get_node_or_null("/root/Director")
 	if director == null or not director.has_method("apply_network_music"):
 		return
-	director.call("apply_network_music", music_key, active)
+	director.call("apply_network_music", music_key, active, track_index)
 	if _is_auto_network_feature_test():
 		_auto_client_director_music += 1
-	print("[NetworkWorld] CLIENT_DIRECTOR_MUSIC key=%s active=%s" % [music_key, active])
+	print("[NetworkWorld] CLIENT_DIRECTOR_MUSIC key=%s active=%s track=%d" % [music_key, active, track_index])
 
 
 ## Host：每帧检查是否有敌人刚刚进入死亡，并用可靠 RPC 广播死亡表现。

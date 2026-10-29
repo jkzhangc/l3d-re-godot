@@ -33,6 +33,11 @@ const SHADOW_SMOOTH: float = 3.0
 ## 角色帧高 64px 时取 32~64 比较自然；值越大光越"平"，越小越贴地容易过曝。
 const LIGHT_HEIGHT: float = 48.0
 
+## 淡入淡出时灯光池的收缩比例（2026-10-29）：alpha=1 → 原半径；alpha=0 → (1-本值) 倍半径。
+## 只缩半径、中心亮度仍由 alpha 决定。纯亮度衰减会在暗场里留下一个「又大又暗」的圆盘，
+## 肉眼读作「灯还没关」，尾巴很长（用户实测反馈）。0 = 关闭（只变暗不收缩）。
+const FADE_RADIUS_SHRINK: float = 0.4
+
 ## glow_strength 的基准值。旧管线里 0.5 是"原工程强度"，现在把它当灯光亮度倍率，
 ## 除以基准后 0.5 → ×1.0，这样 FirePatch / LightLab 现有的 0.5 调用点行为不变。
 const GLOW_BASE: float = 0.5
@@ -117,6 +122,9 @@ class LightRecord:
 	var step_left: float = 0.0
 	var phase: float = 0.0
 	var value: float = 1.0
+	## 本帧光源（含整条父链）的累计不透明度，0~1。由 `_refresh_builtin` 每帧写一次，
+	## 灯光亮度、光池半径、角色拖影都读它 —— 保证三者用的是**同一个 alpha**，不会互相差帧。
+	var alpha: float = 1.0
 	## 离地高度（px）。>0 时法线贴图才参与光照；0 = 完全忽略法线。
 	var light_height: float = LIGHT_HEIGHT
 	## 本盏灯的渲染对象
@@ -198,6 +206,10 @@ var _flash_strength: float = 0.0
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	## ★必须比 SignalVisibilityNode 这类"淡入淡出包装层"晚跑：那些节点在自己的 `_process`
+	## 里把 `modulate.a` 推到当前帧的值，本节点随后读它同步灯光 → 灯和贴图同一帧变。
+	## 默认同为 0 时只能靠树序，脆；显式抬高优先级才稳（2026-10-29）。
+	process_priority = 100
 	_build()
 	set_darkness(darkness)
 	set_glow_strength(glow_strength)
@@ -346,12 +358,18 @@ func _refresh_builtin(delta: float, zoom: float) -> void:
 		if l == null or not is_instance_valid(l):
 			continue
 		l.global_position = rec.source.global_position
+		## 本帧的累计不透明度：一次算好，灯光 / 光池半径 / 拖影共用（见 LightRecord.alpha）
+		var sa: float = _source_alpha(rec)
+		rec.alpha = sa
 		var world_radius: float = maxf(rec.radius / zoom, 8.0)
-		l.texture_scale = 2.0 * world_radius / float(LIGHT_TEX_SIZE)
+		## 淡出时让光池一起收拢（FADE_RADIUS_SHRINK）：只缩半径，中心亮度仍由 alpha 决定。
+		## 纯亮度衰减会留下一个「又大又暗」的圆盘，肉眼读作「灯还没关」，尾巴很长。
+		var pool: float = lerpf(1.0 - FADE_RADIUS_SHRINK, 1.0, sa)
+		l.texture_scale = 2.0 * world_radius * pool / float(LIGHT_TEX_SIZE)
 		l.color = rec.color
 		## 亮度还要乘光源（含父链）的透明度：SignalVisibilityNode 的淡出是 modulate:a → 0，
 		## 不跟着衰减就会「贴图慢慢暗、灯一直亮到最后一帧突然灭」。
-		l.energy = maxf(rec.intensity * rec.value * mult, 0.0) * _source_alpha(rec)
+		l.energy = maxf(rec.intensity * rec.value * mult, 0.0) * sa
 		l.shadow_enabled = rec.occlude
 		l.shadow_filter = shadow_filter_quality
 		l.shadow_filter_smooth = shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
@@ -470,7 +488,8 @@ func _update_character_shadows(zoom: float) -> void:
 				if d > wr * 1.05 or d < 0.001:
 					continue
 				var closeness: float = 1.0 - d / (wr * 1.05)
-				var strength: float = closeness * rec.intensity * rec.value
+				## 乘 alpha：正在淡出的灯不该继续"抢"角色的投影（否则影子会跟错灯、也不跟着变暗）
+				var strength: float = closeness * rec.intensity * rec.value * rec.alpha
 				if strength > best:
 					best = strength
 					best_dist = d
@@ -617,7 +636,7 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	# 所以它的 visible=false 看不出来。旧实现留了 0.35 的下限，走到边界会"啪"地消失。
 	# 再乘灯的当前亮度：火焰熄灭时灯是渐暗的，影子要跟着一起淡掉，不能等灯被移除才消失。
 	var alpha: float = rec.shadow_opacity * smoothstep(0.0, 1.0, fade) \
-			* clampf(rec.intensity * rec.value, 0.0, 1.0)
+			* clampf(rec.intensity * rec.value, 0.0, 1.0) * rec.alpha
 	if alpha <= 0.004:
 		_hide_shadow(node)
 		return

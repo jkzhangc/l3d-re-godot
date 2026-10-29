@@ -705,6 +705,23 @@ func _on_phase_changed(phase: StringName) -> void:
 
 ## ── 尸潮 BGM（DirectorConfig「音乐 — 尸潮」组；默认 = 原作ラッシュ１）──
 var _horde_music_player: AudioStreamPlayer = null
+## 本次播放实际用到的池内下标（-1 = 走的单曲）。
+## 曲目本身来自 `Global.horde_music_track`（一局固定一首），这里存的是「按当前图的池
+## 取模之后」的真实下标 —— 广播给 Client 的也是它。
+var _horde_track_index: int = -1
+## 内置默认随机池（2026-10-29 用户需求：原作尸潮音乐是随机的）。
+## 写成**路径**而不是 preload：6 首 mp3 合计约 10MB，preload 会在脚本加载时就全部驻留内存；
+## 这里只在抽到某一首时才 load，且用 `_default_horde_cache` 缓存，不重复解码。
+## 池子的优先级：DirectorConfig.horde_music_pool（非空）→ 本默认池 → horde_music 单曲。
+const DEFAULT_HORDE_POOL: Array[String] = [
+	"res://music/ラッシュ１.mp3",
+	"res://music/ラッシュ２.mp3",
+	"res://music/ラッシュ３.mp3",
+	"res://music/ラッシュ４.mp3",
+	"res://music/ラッシュ５.mp3",
+	"res://music/ラッシュ６.mp3",
+]
+static var _default_horde_cache: Dictionary = {}
 
 ## ── 常态铺底 BGM（Build / Relax，2026-10-25 可听化第一步）──
 ## 与尸潮/Boss 曲的区别：它是"低张力的底"，**不随强度变化**；尸潮或 Boss 一响就让位。
@@ -817,12 +834,80 @@ func _stop_calm_music() -> void:
 	_calm_tween.tween_callback(Callable(_calm_music_player, "stop"))
 
 
-func _play_horde_music() -> void:
-	var stream: AudioStream = current_config.horde_music if current_config else null
-	if not stream:
+## 解析本次可用的随机池：配置池（非空）→ 内置默认池（按需 load）→ 空（= 走单曲）。
+func _horde_pool() -> Array[AudioStream]:
+	var out: Array[AudioStream] = []
+	if current_config != null:
+		for s: AudioStream in current_config.horde_music_pool:
+			if s != null:
+				out.append(s)
+	if not out.is_empty():
+		return out
+	for path: String in DEFAULT_HORDE_POOL:
+		var hit: Variant = _default_horde_cache.get(path)
+		if hit is AudioStream:
+			out.append(hit as AudioStream)
+			continue
+		if not ResourceLoader.exists(path):
+			continue   ## 缺文件只是少一首，不让整局没声音
+		var st: AudioStream = load(path) as AudioStream
+		if st == null:
+			continue
+		_default_horde_cache[path] = st
+		out.append(st)
+	return out
+
+
+## 本局曲目的抽签入口（Global.init_new_game / 读旧档缺键时调用）。
+## 那时还没进图、拿不到 DirectorConfig 的自定义池，所以按**内置默认池**的大小抽；
+## 播放时用 `% 池大小` 取，任何一张图把池改小了也不会越界。
+func roll_new_run_horde_track() -> void:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("roll_horde_music_track"):
 		return
+	g.call("roll_horde_music_track", maxi(DEFAULT_HORDE_POOL.size(), 1))
+
+
+## 本局固定曲目在池里的下标（Global 存的是"整局一首"）。
+## 旧存档/极端情况下还没抽 → 当场补抽一次，保证开局就定下来。
+func _run_horde_track() -> int:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null:
+		return -1
+	var idx: int = int(g.get("horde_music_track"))
+	if idx < 0:
+		roll_new_run_horde_track()
+		idx = int(g.get("horde_music_track"))
+	return idx
+
+
+## track_index >= 0：联机时 Host 定的曲目（Client 照播，保证两端同曲）。
+## resume = true：Boss 打完后接回尸潮 —— 曲目本来就是全局固定的，这里只为日志区分。
+## ★2026-10-29 改版：曲目**一局一首**（Global.horde_music_track，开局抽一次），
+## 不再是每次进峰值重抽；同一局里所有尸潮都是同一首。
+func _play_horde_music(track_index: int = -1, resume: bool = false) -> void:
 	if _boss_music_active:
 		return  ## Boss BGM 优先级更高：Boss 存活期间尸潮不抢 BGM（Boss 灭后自动接回）
+	var cfg: DirectorConfig = current_config
+	# 关闭随机 = 不建池，直接走旧路径（cfg.horde_music）
+	var pool: Array[AudioStream] = []
+	if cfg == null or cfg.horde_music_randomize:
+		pool = _horde_pool()
+
+	var stream: AudioStream = null
+	if not pool.is_empty():
+		var idx: int = track_index
+		if idx < 0:
+			idx = _run_horde_track()
+		if idx >= 0:
+			_horde_track_index = idx % pool.size()
+			stream = pool[_horde_track_index]
+	if stream == null:
+		_horde_track_index = -1
+		if cfg != null:
+			stream = cfg.horde_music   ## 随机关 / 池为空 → 旧行为：单曲
+	if not stream:
+		return
 	if not _horde_music_player:
 		_horde_music_player = AudioStreamPlayer.new()
 		_horde_music_player.name = "HordeMusicPlayer"
@@ -832,8 +917,12 @@ func _play_horde_music() -> void:
 	_horde_music_player.stream = stream
 	_horde_music_player.volume_db = current_config.horde_music_volume_db if current_config else 0.0
 	_horde_music_player.play()
-	_announce_music("horde", true)
-	print("[Director] 尸潮 BGM 开始")
+	_announce_music("horde", true, _horde_track_index)
+	if _horde_track_index >= 0:
+		print("[Director] 尸潮 BGM 开始（本局固定 #%d/%d%s）" % [
+			_horde_track_index + 1, pool.size(), "，Boss 后接回" if resume else ""])
+	else:
+		print("[Director] 尸潮 BGM 开始")
 
 func _stop_horde_music() -> void:
 	if _horde_music_player == null:
@@ -939,7 +1028,8 @@ func stop_boss_music(resume_horde: bool = false) -> void:
 	if resume_horde:
 		var pc: Node = get_node_or_null("PacingController")
 		if pc and pc.get("current_phase") == 1:  # 1 = peak
-			_play_horde_music()
+			## resume：沿用本轮尸潮已经抽到的曲目，避免 Boss 一死就换歌
+			_play_horde_music(-1, true)
 
 
 ## ── 联机：BGM 事件转发（A6，2026-09-18）──
@@ -947,7 +1037,9 @@ func stop_boss_music(resume_horde: bool = false) -> void:
 ## 发生处经 NetworkWorld 广播 music key（"horde"/"boss"），音源由 Client 从
 ## 本地 current_config 解析（场景切换钩子对所有 peer 生效 → Client 也有值），
 ## 资源不经网络传输（白名单铁律）。
-func _announce_music(music_key: String, active: bool) -> void:
+## `track_index`（2026-10-29）：尸潮改随机池后，**抽签结果必须由 Host 决定并广播** ——
+## 两端各自随机就会各播各的。Client 拿下标到本地池里取同一首；-1 = 没随机（单曲）。
+func _announce_music(music_key: String, active: bool, track_index: int = -1) -> void:
 	# Client 不会走到这里（_process 早退），此闸兜底防御 + 避免表现回环二次广播。
 	if _is_network_client_session():
 		return
@@ -959,18 +1051,18 @@ func _announce_music(music_key: String, active: bool) -> void:
 		return
 	var world: Node = scene.find_child("NetworkWorld", true, false)
 	if world and world.has_method("announce_director_music"):
-		world.call("announce_director_music", music_key, active)
+		world.call("announce_director_music", music_key, active, track_index)
 
 
 ## Client 收到 NetworkWorld 的 BGM 事件后调用：复用既有起停函数——音源/音量
 ## 从本地 current_config 解析，_boss_music_active 状态与 boss_music_changed
 ## 信号一并维护（Client 的 HoldoutMachine 靠该信号挂起/恢复防守战 BGM）。
 ## reliable RPC 保序：Host 的 boss=false → horde=true 序列在 Client 以同序重放。
-func apply_network_music(music_key: String, active: bool) -> void:
+func apply_network_music(music_key: String, active: bool, track_index: int = -1) -> void:
 	match music_key:
 		"horde":
 			if active:
-				_play_horde_music()
+				_play_horde_music(track_index)
 			else:
 				_stop_horde_music()
 		"horde_alert":

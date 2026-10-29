@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>乱码还原器 · Shift-JIS / GBK / UTF-8</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2b303b;
+    --fg:#e6e9ef; --muted:#98a0ae; --accent:#6ea8fe; --ok:#4ade80; --warn:#fbbf24;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:14px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Yu Gothic","Microsoft YaHei",sans-serif;
+    padding:28px 20px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  h1{font-size:20px;margin:0 0 6px;font-weight:650;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 22px}
+  .sub code{background:var(--panel2);padding:1px 6px;border-radius:5px;color:#cbd5e1}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+  button,select,label.chk{
+    background:var(--panel2); color:var(--fg); border:1px solid var(--line);
+    border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer;
+  }
+  button:hover,select:hover{border-color:#3b4250}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0b1020;font-weight:600}
+  button.primary:hover{filter:brightness(1.08)}
+  label.chk{display:inline-flex;gap:7px;align-items:center;user-select:none}
+  label.chk input{accent-color:var(--accent)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:900px){.grid{grid-template-columns:1fr}}
+  .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .pane h2{
+    margin:0;padding:10px 14px;font-size:12px;font-weight:600;letter-spacing:.8px;
+    color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  textarea{
+    width:100%;min-height:230px;resize:vertical;border:0;outline:none;background:transparent;
+    color:var(--fg);padding:14px;font:14px/1.75 ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  .meta{padding:8px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+  .meta b{color:var(--ok);font-weight:600}
+  .cands{margin-top:18px}
+  .cands h3{font-size:12px;color:var(--muted);letter-spacing:.8px;margin:0 0 8px;text-transform:uppercase}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font-weight:500;font-size:12px}
+  td.mono{font-family:ui-monospace,Consolas,monospace}
+  tr.pick td{background:rgba(110,168,254,.10)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;border:1px solid var(--line);
+        font-size:11px;color:var(--muted);margin-right:6px}
+  .pill.ok{color:#0b1020;background:var(--ok);border-color:var(--ok);font-weight:600}
+  .hint{margin-top:16px;color:var(--muted);font-size:12.5px;line-height:1.9}
+  .hint b{color:var(--fg);font-weight:600}
+  .err{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>乱码还原器</h1>
+  <p class="sub">
+    把「字节被当成别的编码读」造成的乱码还原成正确日文。例如
+    <code>5昩娫偩偗傑偭偰傗傞</code> → <code>5秒間だけまってやる</code>
+    （Shift-JIS 的字节被当成 GBK 读了）。
+  </p>
+
+  <div class="bar">
+    <select id="pair" title="固定编码链；自动 = 每条逐一把所有链试一遍">
+      <option value="auto">自动检测</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="perline" checked> 逐行还原</label>
+    <button class="primary" id="run">还原</button>
+    <button id="demo">示例</button>
+    <button id="copy">复制结果</button>
+    <button id="swap" title="把结果放回输入，继续还原（多重乱码）">结果→输入</button>
+  </div>
+
+  <div class="grid">
+    <section class="pane">
+      <h2>乱码输入 <span class="pill" id="inlen">0 字符</span></h2>
+      <textarea id="input" spellcheck="false" placeholder="粘贴乱码文本，支持整段/整行。"></textarea>
+      <div class="meta" id="inmeta">自动检测会把每条文本在全部编码链上试一遍，取「最像日文」的结果。</div>
+    </section>
+    <section class="pane">
+      <h2>还原结果 <span class="pill" id="chain">—</span></h2>
+      <textarea id="output" spellcheck="false" readonly placeholder="结果会出现在这里"></textarea>
+      <div class="meta" id="outmeta">—</div>
+    </section>
+  </div>
+
+  <div class="cands">
+    <h3>候选链（按可信度排序，点击行可套用）</h3>
+    <table>
+      <thead><tr><th style="width:210px">编码链</th><th style="width:70px">得分</th><th>结果预览</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="3" style="color:#6b7280">—</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="hint">
+    <b>原理</b>：乱码不是文字坏了，而是「一串字节被错的编码解码」。所以还原 = 用错误编码把字符<b>编码回字节</b>，再用正确编码<b>解码</b>。
+    日文原作（如 RPG Maker 2003 的 <code>RPG_RT.ldb</code>）用 Shift-JIS 存文本，被中文版工具按 GBK 打开就会变成
+    <code>昩娫</code>/<code>偩偗</code> 这种字形。<br>
+    <b>常见对应</b>：<code>GBK → Shift-JIS</code>（SJIS 被当 GBK 读，本页示例）、
+    <code>Shift-JIS → UTF-8</code>（UTF-8 被当 SJIS 读，出现「譁」「縺」）、
+    <code>UTF-8 → Shift-JIS</code>（SJIS 被当 UTF-8 读，通常已丢字，只能尽量救）。<br>
+    <b>注意</b>：已经出现 <code>�</code>（替换符）的文本是不可逆的 —— 那说明解码时字节已经丢了。
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ───────────────────────── 编码表 ───────────────────────── */
+
+// 用 TextDecoder 反推「字符 → 字节」表：能解出单个字符的双字节组合即可逆。
+// 只建一次，按需懒加载。
+const TABLE_SPECS = {
+  "shift_jis": {
+    label: "Shift-JIS",
+    leads: [[0x81, 0x9f], [0xe0, 0xfc]],
+    trails: [[0x40, 0x7e], [0x80, 0xfc]],
+    singles: [[0xa1, 0xdf]],
+    ascii: true
+  },
+  "gbk": {
+    label: "GBK",
+    leads: [[0x81, 0xfe]],
+    trails: [[0x40, 0x7e], [0x80, 0xfe]],
+    singles: [],
+    ascii: true
+  },
+  "big5": {
+    label: "Big5",
+    leads: [[0x81, 0xfe]],
+    trails: [[0x40, 0x7e], [0xa1, 0xfe]],
+    singles: [],
+    ascii: true
+  },
+  "euc-jp": {
+    label: "EUC-JP",
+    leads: [[0xa1, 0xfe]],
+    trails: [[0xa1, 0xfe]],
+    singles: [],
+    ascii: true
+  },
+  "windows-1252": {
+    label: "CP1252",
+    leads: [],
+    trails: [],
+    singles: [[0x20, 0x7e], [0xa0, 0xff]],
+    ascii: true
+  }
+};
+
+const _tables = Object.create(null);
+
+function tableFor(key) {
+  if (_tables[key]) return _tables[key];
+  const spec = TABLE_SPECS[key];
+  const map = new Map();
+  let td;
+  try { td = new TextDecoder(key, { fatal: true }); } catch (e) { td = new TextDecoder(key); }
+  const put = (ch, bytes) => {
+    if (!ch || ch.length !== 1 || ch === "\uFFFD") return;
+    if (!map.has(ch)) map.set(ch, bytes);
+  };
+  if (spec.ascii) for (let i = 0x20; i <= 0x7e; i++) put(String.fromCharCode(i), [i]);
+  for (const [a, b] of spec.singles)
+    for (let i = a; i <= b; i++) put(safeDecode(td, [i]), [i]);
+  for (const [la, lb] of spec.leads)
+    for (let l = la; l <= lb; l++)
+      for (const [ta, tb] of spec.trails)
+        for (let t = ta; t <= tb; t++) put(safeDecode(td, [l, t]), [l, t]);
+  _tables[key] = map;
+  return map;
+}
+
+function safeDecode(td, bytes) {
+  try { return td.decode(new Uint8Array(bytes)); } catch (e) { return null; }
+}
+
+/** 文本 → 字节；有字符不在该编码里就返回 null（说明这条链不成立）。 */
+function encodeWith(key, text) {
+  if (key === "utf-8") return new TextEncoder().encode(text);
+  const map = tableFor(key);
+  const out = new Uint8Array(text.length * 2);
+  let n = 0;
+  for (const ch of text) {
+    const b = map.get(ch);
+    if (!b) return null;
+    for (const x of b) out[n++] = x;
+  }
+  return out.subarray(0, n);
+}
+
+function decodeWith(key, bytes) {
+  let td;
+  try { td = new TextDecoder(key, { fatal: true }); } catch (e) { return null; }
+  try { return td.decode(bytes); } catch (e) { return null; }
+}
+
+/* ───────────────────────── 评分 ───────────────────────── */
+
+// 越像「正常日文」分越高：假名权重最高，替换符/非 JIS 汉字重罚。
+// 关键判据：**能不能用 Shift-JIS 编码**。日文常用字几乎都在 JIS X 0208 里，
+// 而 GBK 乱码字（昩 / 娫）不在 —— 这一条比"看起来像汉字"可靠得多。
+function isJis(ch) {
+  return encodeWith("shift_jis", ch) !== null;
+}
+
+function scoreText(text) {
+  if (!text) return -1e9;
+  let s = 0, n = 0, kana = 0;
+  for (const ch of text) {
+    const c = ch.codePointAt(0);
+    n++;
+    if (c === 0xfffd) { s -= 40; continue; }
+    if (c < 0x20 && c !== 0x09) { s -= 20; continue; }
+    if (c >= 0x3041 && c <= 0x309f) { s += 6; kana++; }        // 平假名
+    else if (c >= 0x30a1 && c <= 0x30fa) { s += 5; kana++; }   // 片假名
+    else if (c >= 0x4e00 && c <= 0x9fff) { s += isJis(ch) ? 2.6 : -2.5; }  // 汉字：JIS 内才算日文
+    else if (c >= 0x3000 && c <= 0x303f) { s += 1.5; }         // 日文标点
+    else if (c >= 0xff01 && c <= 0xff60) { s += 1.2; }         // 全角
+    else if (c < 0x80) { s += 1.0; }                            // ASCII
+    else if (c >= 0xe000 && c <= 0xf8ff) { s -= 8; }            // 私用区
+    else { s += isJis(ch) ? 1.2 : -1.5; }
+  }
+  // 假名占比是「这确实是日文」的最强信号
+  return s / n + (kana > 0 ? 0.9 : 0) + Math.min(kana, 6) * 0.25;
+}
+
+/* ───────────────────────── 还原管线 ───────────────────────── */
+
+// 顺序有意义：前面的更常见，同分时优先。
+const PAIRS = [
+  ["gbk", "shift_jis"],            // SJIS 被当 GBK 读（本页示例）
+  ["shift_jis", "utf-8"],          // UTF-8 被当 SJIS 读
+  ["gbk", "utf-8"],                // UTF-8 被当 GBK 读（中文场景）
+  ["shift_jis", "gbk"],            // 反向：GBK 被当 SJIS
+  ["big5", "utf-8"],
+  ["euc-jp", "utf-8"],
+  ["windows-1252", "utf-8"],
+  ["utf-8", "shift_jis"],          // SJIS 被当 UTF-8（通常已丢字）
+  ["utf-8", "gbk"]
+];
+
+const PAIR_LABEL = {
+  "gbk>shift_jis": "GBK → Shift-JIS",
+  "shift_jis>utf-8": "Shift-JIS → UTF-8",
+  "gbk>utf-8": "GBK → UTF-8",
+  "shift_jis>gbk": "Shift-JIS → GBK",
+  "big5>utf-8": "Big5 → UTF-8",
+  "euc-jp>utf-8": "EUC-JP → UTF-8",
+  "windows-1252>utf-8": "CP1252 → UTF-8",
+  "utf-8>shift_jis": "UTF-8 → Shift-JIS",
+  "utf-8>gbk": "UTF-8 → GBK"
+};
+
+function tryPair(from, to, text) {
+  const bytes = encodeWith(from, text);
+  if (!bytes) return null;
+  const out = decodeWith(to, bytes);
+  if (out == null) return null;
+  if (out === text) return null;
+  return out;
+}
+
+/** 对一段文本跑全部编码链，返回按分数降序的候选。 */
+function candidates(text, restrict) {
+  const list = [];
+  const pairs = restrict ? PAIRS.filter(p => p[0] === restrict[0] && p[1] === restrict[1]) : PAIRS;
+  for (const [from, to] of pairs) {
+    const out = tryPair(from, to, text);
+    if (out == null) continue;
+    list.push({ key: from + ">" + to, label: PAIR_LABEL[from + ">" + to] || (from + " → " + to), text: out, score: scoreText(out) });
+  }
+  list.sort((a, b) => b.score - a.score);
+  return list;
+}
+
+/** 单行还原：分数明显高于原文才替换，避免把正常文本改坏。 */
+function restoreLine(line, restrict) {
+  const base = scoreText(line);
+  // 输入里已经有替换符 = 解码时字节就丢了，任何"还原"都是编造，直接判不可逆。
+  if (line.indexOf("\uFFFD") >= 0) {
+    return { text: line, chain: "（含替换符 · 不可逆）", score: base, cands: [], lossy: true };
+  }
+  const cands = candidates(line, restrict);
+  const best = cands[0];
+  if (!best) return { text: line, chain: "（无需还原）", score: base, cands: [] };
+  if (best.score <= base + 0.35) return { text: line, chain: "（无需还原）", score: base, cands };
+  return { text: best.text, chain: best.label, score: best.score, cands };
+}
+
+/** 整段：逐行还原（每行独立选链，正常行保持原样）。 */
+function restoreBlock(text, restrict, perLine) {
+  if (!text) return { text: "", chains: [], detail: [] };
+  if (!perLine) {
+    const r = restoreLine(text, restrict);
+    return { text: r.text, chains: [r.chain], detail: [r] };
+  }
+  const lines = text.split(/\r?\n/);
+  const used = new Map();
+  const detail = [];
+  const out = lines.map(line => {
+    if (!line.trim()) { detail.push(null); return line; }
+    const r = restoreLine(line, restrict);
+    used.set(r.chain, (used.get(r.chain) || 0) + 1);
+    detail.push(r);
+    return r.text;
+  });
+  return { text: out.join("\n"), chains: [...used.keys()], detail };
+}
+
+/* ───────────────────────── 页面 ───────────────────────── */
+
+function initUI() {
+  const $ = id => document.getElementById(id);
+  const inp = $("input"), outp = $("output"), rows = $("rows");
+  const pairSel = $("pair"), perline = $("perline"), chainPill = $("chain"), outmeta = $("outmeta");
+
+  for (const [from, to] of PAIRS) {
+    const o = document.createElement("option");
+    o.value = from + ">" + to;
+    o.textContent = PAIR_LABEL[from + ">" + to] || (from + " → " + to);
+    pairSel.appendChild(o);
+  }
+
+  function restrictOf() {
+    const v = pairSel.value;
+    if (v === "auto") return null;
+    const [f, t] = v.split(">");
+    return [f, t];
+  }
+
+  let timer = 0;
+  function render() {
+    const raw = inp.value;
+    $("inlen").textContent = raw.length + " 字符";
+    const restrict = restrictOf();
+    const res = restoreBlock(raw, restrict, perline.checked);
+    outp.value = res.text;
+    if (res.chains.length === 0) {
+      chainPill.textContent = "—";
+      outmeta.textContent = raw ? "没有找到可还原的编码链（可能已经是正确文本，或乱码已丢字节）。" : "—";
+    } else if (res.chains.length === 1) {
+      chainPill.textContent = res.chains[0];
+      outmeta.innerHTML = "使用链路：<b>" + escapeHtml(res.chains[0]) + "</b>";
+    } else {
+      chainPill.textContent = "混合";
+      outmeta.innerHTML = "逐行选链：<b>" + escapeHtml(res.chains.slice(0, 6).join(" / ")) + "</b>";
+    }
+
+    // 候选表：单行用该行候选；多行取第一条非空行
+    const firstLine = raw.split(/\r?\n/).find(l => l.trim()) || "";
+    const cands = firstLine ? candidates(firstLine, restrict) : [];
+    rows.innerHTML = "";
+    if (!cands.length) {
+      rows.innerHTML = '<tr><td colspan="3" style="color:#6b7280">—</td></tr>';
+      return;
+    }
+    for (const c of cands.slice(0, 8)) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td class="mono">' + escapeHtml(c.label) + '</td>' +
+        '<td class="mono">' + c.score.toFixed(2) + '</td>' +
+        '<td class="mono">' + escapeHtml(c.text.slice(0, 160)) + '</td>';
+      tr.onclick = () => {
+        inp.value = c.text;
+        render();
+      };
+      rows.appendChild(tr);
+    }
+  }
+
+  function schedule() { clearTimeout(timer); timer = setTimeout(render, 120); }
+
+  inp.addEventListener("input", schedule);
+  pairSel.addEventListener("change", render);
+  perline.addEventListener("change", render);
+  $("run").onclick = render;
+  $("demo").onclick = () => {
+    inp.value = "5昩娫偩偗傑偭偰傗傞\n僎乕儉僆乕僶乕偟偨傜傑偨傗傞\n\n拞僨乕僞傪撉傒崬傫偱傞";
+    render();
+  };
+  $("copy").onclick = async () => {
+    try { await navigator.clipboard.writeText(outp.value); $("copy").textContent = "已复制"; }
+    catch (e) { outp.select(); document.execCommand("copy"); }
+    setTimeout(() => $("copy").textContent = "复制结果", 1200);
+  };
+  $("swap").onclick = () => { inp.value = outp.value; render(); };
+
+  render();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initUI);
+  else initUI();
+}
+
+/* 供 Node 侧测试用（浏览器里没有 module 也不影响） */
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { restoreLine, restoreBlock, candidates, scoreText, encodeWith, decodeWith };
+}
+</script>
+</body>
+</html>

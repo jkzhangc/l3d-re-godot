@@ -122,6 +122,9 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 		"map_pickup_rolls": Global.map_pickup_rolls.duplicate(),
 		# ★已看过的安全屋台词 key（2026-10-05）：读档后已看过的不再重放。
 		"seen_safehouse_dialogues": Global.seen_safehouse_dialogues.duplicate(),
+		# ★本局尸潮曲目（2026-10-29）：一局固定一首，必须跟着存档走 ——
+		#   否则读档后同一局会换成另一首，玩家听感上像"随机坏了"。
+		"horde_music_track": Global.horde_music_track,
 		# 槽位列表预览用的轻量数据（避免开菜单时逐槽加载 CharacterData 卡顿）
 		"preview": _build_preview(),
 		"timestamp": Time.get_datetime_string_from_system(),
@@ -275,6 +278,13 @@ static func load_slot(idx: int) -> Dictionary:
 	if not saved_rolls.is_empty():
 		for k: Variant in saved_rolls:
 			Global.map_pickup_rolls[str(k)] = str(saved_rolls[k])
+	# ★本局尸潮曲目（2026-10-29）：新档带着走；**旧档没有这个键 → -1 → 当场补抽一首**，
+	# 之后这张档再存就会带上，读档不再变。抽签入口在 Director（它持有随机池）。
+	Global.horde_music_track = int(data.get("horde_music_track", -1))
+	if Global.horde_music_track < 0:
+		var director: Node = Global.get_node_or_null("/root/Director")
+		if director != null and director.has_method("roll_new_run_horde_track"):
+			director.call("roll_new_run_horde_track")
 	var campaign_path: String = data.get("selected_campaign", "")
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData

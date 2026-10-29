@@ -668,6 +668,9 @@ func _reset_session_state() -> void:
 	map_pickup_rolls.clear()
 	corpse_list.clear()
 	gold = 0
+	## 本局尸潮曲目失效：下一局开局会重新抽（`_last_run_horde_track` 不清，
+	## 用来避免连续两局同一首）。
+	horde_music_track = -1
 	print("[Global] 会话状态已清空（座位表 / checkpoint / 任务旗标 / 金币）")
 
 
@@ -979,6 +982,35 @@ func get_map_pickup_roll(key: String) -> String:
 func set_map_pickup_roll(key: String, item_id: String) -> void:
 	if key != "" and not item_id.is_empty():
 		map_pickup_rolls[key] = item_id
+
+
+# ═══════════════════════════════════════
+# 本局尸潮曲目（一局一首，2026-10-29 用户需求）
+# ═══════════════════════════════════════
+## 本局尸潮 BGM 的曲目下标，**一局只抽一次**（不再是每次尸潮重抽）。
+## -1 = 还没抽：回标题后 / 旧存档里没有该键。
+## 存的是「池内下标」，播放时按 `% 池大小` 取 —— 某张图把随机池改小了也不会越界。
+## 随槽位持久化：读档继续同一局时用的是同一首；旧档没有这个键 → 当场补抽。
+var horde_music_track: int = -1
+## 上一局抽到的曲目：只在本进程内保留（不进存档、`_reset_session_state` 也不清），
+## 用来保证「连续两局不会撞到同一首」。小概率重复对玩家来说就等于没随机。
+var _last_run_horde_track: int = -1
+
+
+## 抽一次本局尸潮曲目。只该在「开新局 / 读旧档缺这个键」时调。
+## 池大小由 Director 传进来（Global 不持有随机池）。
+func roll_horde_music_track(pool_size: int) -> int:
+	if pool_size <= 0:
+		horde_music_track = -1
+		return -1
+	var idx: int = randi_range(0, pool_size - 1)
+	## 和上一局撞了就顺移一格：仍是均匀分布（每首 1/N），只是把"刚听过的那首"换掉
+	if pool_size > 1 and idx == _last_run_horde_track:
+		idx = (idx + randi_range(1, pool_size - 1)) % pool_size
+	horde_music_track = idx
+	_last_run_horde_track = idx
+	print("[Global] 本局尸潮曲目抽签 → #%d/%d" % [idx + 1, pool_size])
+	return idx
 
 
 ## 全队投掷物槽里是否还有「能炸墙的爆炸物」（explosion_radius>0 且叠数>0）。
@@ -1635,6 +1667,11 @@ func init_new_game() -> void:
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("reset_campaign"):
 		chapter_stats.reset_campaign()
+	## 本局尸潮曲目：**开局抽一次**（一局固定一首，见 `horde_music_track`）。
+	## 池子归 Director 管（它会按 DirectorConfig 解析），所以抽签入口也在它那儿。
+	var director: Node = get_node_or_null("/root/Director")
+	if director != null and director.has_method("roll_new_run_horde_track"):
+		director.call("roll_new_run_horde_track")
 	print("[Global] 新游戏初始化完成 座位=%d %s" % [
 		Players.seat_count(), Players.get_active_state().describe(),
 	])

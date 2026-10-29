@@ -371,8 +371,18 @@ class_name DirectorConfig extends Node
 
 @export_group("音乐 — 尸潮（Peak 阶段 BGM）")
 ## 尸潮期间播放的 BGM，尸潮结束自动停止。默认 = 原作ラッシュ１（与防守战同曲）。
+## ⚠ 开启 `horde_music_randomize` 后本字段只在「随机池为空」时兜底。
 @export var horde_music: AudioStream = preload("res://music/ラッシュ１.mp3")
 @export_range(-80.0, 12.0, 0.5) var horde_music_volume_db: float = 0.0
+## 是否随机播放尸潮音乐（2026-10-29 用户需求：原作就是随机的）。
+## 开启（默认）→ **每局开局抽一次**，整局所有尸潮都用同一首（池内等概率）；
+## 关闭 → 完全回到旧行为，只播 `horde_music`。
+@export var horde_music_randomize: bool = true
+## 尸潮随机池（等概率）。**留空 = 用内置默认池**（music/ラッシュ１〜６，见
+## `Director.DEFAULT_HORDE_POOL`）—— 这样不开任何配置就有随机效果，又不必把
+## 6 首 mp3 全 preload 进内存（只在抽到时才 load）。
+## 想按关卡限定曲目就在这里拖 AudioStream 进来（非空时**完全取代**默认池）。
+@export var horde_music_pool: Array[AudioStream] = []
 
 @export_group("音效 — 尸潮预警（Peak 开始的一次性提示音）")
 ## 尸潮（Peak）**开始的那一刻**播放一次的音效（2026-09-30 用户需求）。

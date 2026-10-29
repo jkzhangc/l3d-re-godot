@@ -38,17 +38,42 @@ extends Node2D
 @export var disable_collision_on_hide: bool = true
 
 var _shown: bool = false
-var _tween: Tween = null
+## 当前视觉透明度（`modulate.a` 的权威副本）。
+## ★为什么自己算而不是 `create_tween()`（2026-10-29）：Tween 的推进发生在节点 `_process`
+## **之后**，而 NightOverlay 在同一帧的 `_process` 里读 `modulate.a` 来同步灯光亮度 ——
+## 读到的是上一帧的值，表现为「灯比贴图慢一帧」。改成手写过渡后，alpha 在同一帧写、
+## 同一帧被读（NightOverlay.process_priority = 100 保证它在本节点之后跑）。
+var _alpha: float = 1.0
+var _fade_from: float = 1.0
+var _fade_to: float = 1.0
+var _fade_time: float = 0.0
+var _fading: bool = false
 
 
 func _ready() -> void:
 	_shown = not start_hidden
 	_apply_instant(_shown)
 	_apply_collision(_shown)
+	set_process(false)   ## 只有过渡期间才需要逐帧推进
 	if Engine.is_editor_hint():
 		return
 	## 开关的命名信号是运行时 add_user_signal 注册的 → 必须等它的 _ready 跑完再连。
 	call_deferred("_connect_signals")
+
+
+## 过渡推进：线性插值 alpha（0 → 1 或 1 → 0），到终点后停掉 _process。
+func _process(delta: float) -> void:
+	if not _fading or Engine.is_editor_hint():
+		return
+	_fade_time += delta
+	var dur: float = maxf(fade_seconds, 0.0001)
+	var u: float = clampf(_fade_time / dur, 0.0, 1.0)
+	_set_alpha(lerpf(_fade_from, _fade_to, u))
+	if u >= 1.0:
+		_fading = false
+		set_process(false)
+		if not _shown and _fade_to <= 0.0:
+			_finish_fade_out()
 
 
 ## 延迟接线：解析信号源 → 连 show / hide 两个命名信号。
@@ -112,31 +137,28 @@ func is_shown() -> bool:
 
 ## 外部（代码 / 其他信号）也能直接控制。
 func set_shown(shown: bool, animate: bool = true) -> void:
-	if _shown == shown and visible == shown:
+	var target: float = 1.0 if shown else 0.0
+	## 已经在目标状态、或已经在往同一目标过渡 → 不重启（连续信号不会把过渡拖长）。
+	if _shown == shown and ((_fading and is_equal_approx(_fade_to, target)) \
+			or (not _fading and visible == shown)):
 		return
 	## ★淡入必须从「完全隐藏」的 alpha 重新起算（2026-10-28 用户实测「淡入是直接显示」）：
 	## 初始 `_apply_instant(false)` 与 `_finish_fade_out()` 都会把 alpha 复位成 1.0，
-	## 旧实现又直接 tween 到 1.0 → 实际是 1.0→1.0，一帧就到位。
+	## 旧实现又直接过渡到 1.0 → 实际是 1.0→1.0，一帧就到位。
 	## 只有「切换前已经不可见」才归零；淡出中途反悔（visible 仍为 true）则从当前 alpha 继续淡入，
 	## 否则会先闪黑一下再变亮。
 	var was_hidden: bool = not visible
 	_shown = shown
 	_apply_collision(shown)
 	if not animate or fade_seconds <= 0.0 or Engine.is_editor_hint():
+		_stop_fade()
 		_apply_instant(shown)
 		return
-	if _tween != null and _tween.is_valid():
-		_tween.kill()
-	_tween = create_tween()
 	if shown:
 		visible = true
 		if was_hidden:
-			modulate.a = 0.0
-		_tween.tween_property(self, "modulate:a", 1.0, fade_seconds)
-	else:
-		_tween.tween_property(self, "modulate:a", 0.0, fade_seconds)
-		var cb: Callable = _finish_fade_out
-		_tween.finished.connect(cb)
+			_set_alpha(0.0)
+	_start_fade(target)
 
 
 func _on_show_signal() -> void:
@@ -149,14 +171,33 @@ func _on_hide_signal() -> void:
 
 func _apply_instant(shown: bool) -> void:
 	visible = shown
-	modulate.a = 1.0
+	_set_alpha(1.0)
+
+
+func _start_fade(target: float) -> void:
+	_fade_from = _alpha
+	_fade_to = target
+	_fade_time = 0.0
+	_fading = true
+	set_process(true)
+
+
+func _stop_fade() -> void:
+	_fading = false
+	set_process(false)
+
+
+## 唯一的 alpha 写入口：内部副本与 modulate 始终一致。
+func _set_alpha(v: float) -> void:
+	_alpha = clampf(v, 0.0, 1.0)
+	modulate.a = _alpha
 
 
 func _finish_fade_out() -> void:
 	if _shown:
 		return
 	visible = false
-	modulate.a = 1.0   ## 复位，下次显示从头淡入
+	_set_alpha(1.0)   ## 复位，下次显示从头淡入
 
 
 ## 隐藏时关掉整棵子树的碰撞（只动 disabled，不改层 / process_mode）。

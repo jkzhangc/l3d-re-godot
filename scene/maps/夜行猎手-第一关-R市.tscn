@@ -109,7 +109,7 @@ position = Vector2(625, 6562)
 [node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_mk0gx")]
 
 [node name="Torch" type="Node2D" parent="DecorLayer" unique_id=1606626114]
-position = Vector2(560, 6640)
+position = Vector2(560, 6656)
 script = ExtResource("3_6cmbv")
 radius = 172.0
 light_color = Color(1, 0.94195384, 0.7655037, 1)
