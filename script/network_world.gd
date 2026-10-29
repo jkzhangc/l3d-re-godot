@@ -3055,27 +3055,52 @@ func enemy_acid_spit_presentation(entity_id: int, spawn_pos: Vector2, dir: Vecto
 ## witch_scream/frontal_block）后调用（A3 音效事件化）。单机/Client 调用为 no-op。
 ## 只传 entity_id + 音效 key + pitch；AudioStream 由 Client 从本地 enemy 节点
 ## 同名字段解析（A1/A5 注入 + tscn 默认值保证有值），资源不经网络传输。
-func announce_enemy_sfx(enemy: Node2D, sfx_key: String, pitch: float) -> void:
+func announce_enemy_sfx(enemy: Node2D, sfx_key: String, pitch: float, pool_index: int = -1) -> void:
 	if not net.is_host:
 		return
 	var entity_id: int = enemy.network_entity_id
 	if entity_id <= 0:
 		return
-	_send_to_ready_clients(&"enemy_sfx_presentation", [entity_id, sfx_key, pitch])
+	_send_to_ready_clients(&"enemy_sfx_presentation", [entity_id, sfx_key, pitch, pool_index])
 
 
 ## Client：按音效 key 走 enemy.play_network_sfx 本地播放（key→字段映射在 enemy 侧）。
+## pool_index >= 0 = Host 从随机池抽中的下标，Client 播同一条。
 @rpc("authority", "call_remote", "reliable")
-func enemy_sfx_presentation(entity_id: int, sfx_key: String, pitch: float) -> void:
+func enemy_sfx_presentation(entity_id: int, sfx_key: String, pitch: float, pool_index: int = -1) -> void:
 	if net.is_host or _scene_transitioning:
 		return
 	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
 	if not is_instance_valid(enemy):
 		return
-	enemy.play_network_sfx(sfx_key, pitch)
+	enemy.play_network_sfx(sfx_key, pitch, pool_index)
 	if _is_auto_network_feature_test():
 		_auto_client_enemy_sfx += 1
-	print("[NetworkWorld] CLIENT_ENEMY_SFX entity=%d key=%s pitch=%.2f" % [entity_id, sfx_key, pitch])
+	print("[NetworkWorld] CLIENT_ENEMY_SFX entity=%d key=%s pitch=%.2f pool=%d"
+		% [entity_id, sfx_key, pitch, pool_index])
+
+
+## Host：舌头攻击表现广播（2026-10-29）。只传朝向 —— 帧序列/特效场景/锚点由
+## Client 从本地 enemy 节点（特殊敌人数据注入）解析，资源不经网络。
+func announce_enemy_tongue(enemy: Node2D, facing: int) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = enemy.network_entity_id
+	if entity_id <= 0:
+		return
+	_send_to_ready_clients(&"enemy_tongue_presentation", [entity_id, facing])
+
+
+## Client：隐藏本体 + 播「舌头 + 本体新动作」特效，结束后恢复。
+@rpc("authority", "call_remote", "reliable")
+func enemy_tongue_presentation(entity_id: int, facing: int) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if not is_instance_valid(enemy):
+		return
+	enemy.play_network_tongue_presentation(facing)
+	print("[NetworkWorld] CLIENT_ENEMY_TONGUE entity=%d facing=%d" % [entity_id, facing])
 
 
 ## Host：动作表切换转发（A4，enemy.push_action_texture/restore_walk_texture 挂出）。

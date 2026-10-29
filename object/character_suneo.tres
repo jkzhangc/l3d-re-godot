@@ -24,6 +24,7 @@
 script = ExtResource("1")
 character_name = "スネ夫"
 character_id = "suneo"
+backpack_count = 2
 max_hp = 180
 max_mp = 40
 base_attack = 13

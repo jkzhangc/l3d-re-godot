@@ -84,9 +84,10 @@ class_name DirectorConfig extends Node
 @export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
 
 @export_group("L4D — 喘息（Relax 阶段低人口维持）")
-## 喘息期场上维持多少只。**0 = 完全不生成**（最接近 L4D 原版 Relax）。
+## 喘息期维持多少只。**0 = 完全不生成**（最接近 L4D 原版 Relax）。
 ## 2026-10-24 用户实测「走两步就穿过去了、一路没怪」→ 默认 2：
 ## 保留"路上零星还有丧尸"的观感（L4D2 的 Relax 同样允许游荡者出现）。
+## ⚠ 2026-10-29 起：补怪总开关打开后，本项被 `offscreen_refill_min/max` 取代（这里不再生效）。
 @export var relax_target: int = 2
 ## 喘息期补位的最短间隔（秒）。只在 relax_target > 0 时生效。
 @export var relax_interval: float = 7.0
@@ -97,8 +98,7 @@ class_name DirectorConfig extends Node
 @export_group("L4D — 区域游荡者（Wanderers）")
 ## ★进入一张地图时，先在玩家四周（屏外、360° 整圈）铺多少只"徘徊的丧尸"。
 ## 对应 L4D 的 wanderers：一片区域里本来就有丧尸在晃，而不是等你走过去才从前方刷出来。
-## ⚠ 本项目地图**没有任何 SpawnZone / SpawnPoint**（实测街道图 0 个），
-## 所以这项是"区域里有丧尸"的唯一来源，设 0 = 关闭。
+## ⚠ 2026-10-29 起受 `offscreen_refill_enabled` 总开关约束：总开关关闭（默认）时本组不生效。
 @export var wander_seed_min: int = 6
 @export var wander_seed_max: int = 9
 ## 队伍累计前进这么多像素，就在新区域再补一轮游荡者（模拟 L4D 的 Active Area Set 换区）。
@@ -137,6 +137,22 @@ class_name DirectorConfig extends Node
 @export var nearby_gate_count: int = 10
 ## 附近闸判定半径（px，以玩家为圆心）。
 @export var nearby_gate_radius: float = 600.0
+
+@export_group("生成 — 画面外补怪（总开关，2026-10-29）")
+## ★是否允许导演在玩家**画面之外**持续补怪。**默认关闭**（用户 2026-10-29：
+## 「补得怪有点频繁跟多了，不补怪纯靠生成区域应该还可以」）。
+## 关闭后停掉的全部是"持续供水"：进图/换区游荡者、L4D 加压预算批次、喘息期补位、
+## 旧模型的散兵与前方屏外补位。**尸潮事件、特感、Boss、作者摆的 SpawnZone 不受影响**。
+## ⚠ 目前只有 `突袭-第一关-街道` / `突袭-第二关-学校内部` 摆了 SpawnZone；
+##   没有 SpawnZone 的图（含整套夜行猎手）关掉后路上只剩尸潮/特感/Boss —— 属预期行为。
+@export var offscreen_refill_enabled: bool = false
+## 附近补怪人数**下限**：威胁圈（`threat_radius`，默认 600px）内活着的敌人跌到它以下才开补。
+## 0 = 不补（等价于关闭总开关）。仅在 `offscreen_refill_enabled = true` 时生效。
+@export var offscreen_refill_min: int = 4
+## 附近补怪人数**上限**：开补后一直补到它才停手（迟滞带）——
+## 中间区间既不会"杀一只补一只"，也不会补到一半就撒手。尸潮/事件推高到上限以上则保持停手，
+## 直到回落到下限以下才恢复。
+@export var offscreen_refill_max: int = 10
 
 @export_group("生成 — 前方屏外定点刷怪（FrontSpawner）")
 ## 是否启用"前方屏外定点刷怪"。这是当前默认的补怪方式：
@@ -183,6 +199,8 @@ class_name DirectorConfig extends Node
 ## 默认 true；安全屋 / 不想开局就开打的图，在该图 DirectorConfig 上单独取消勾选即可。
 ## ⚠ L4D 模型下若**正在 peak / fade / 尸潮进行中**（例如传送发生在尸潮没打完时），本项会被跳过，
 ## 否则「强推 build → 强度仍高 → 立刻又进峰值」= 玩家听到的"音乐刚停、预警音又响"连环尸潮。
+## ⚠ 2026-10-29 起 `offscreen_refill_enabled=false`（默认）时本项**没有实际效果** ——
+## 补货通道已关，只会让节奏提前进 build，路上不会因此多出敌人。
 @export var spawn_immediate_on_start: bool = true
 
 @export_group("生成 — 僵尸变体池（ZombieVariant）")

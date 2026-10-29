@@ -22,6 +22,7 @@
 script = ExtResource("1")
 character_name = "静香"
 character_id = "shizuka"
+is_female = true
 max_hp = 180
 max_mp = 30
 tp_regen_interval = 4.0

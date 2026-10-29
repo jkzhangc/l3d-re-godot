@@ -21,7 +21,7 @@ const COLOR_SHEET_UID := "uid://b0colwtfjbllj"
 @export var window_size: Vector2 = Vector2(960, 840)
 @export var scroll_speed: float = 420.0        ## ↑↓ 按住时的滚动速度（px/s）
 @export var section_gap: float = 18.0          ## 段落标题上方的额外间距
-@export var keycap_min_size: Vector2 = Vector2(40, 28)
+@export var keycap_min_size: Vector2 = Vector2(44, 32)
 
 var _content: Control = null
 var _scroll_y: float = 0.0
@@ -43,7 +43,7 @@ var _is_mobile: bool = false
 const MOBILE_KEY_ALIAS: Dictionary = {
 	"Z": "攻击", "X": "取消", "Esc": "取消", "P": "菜单", "D": "功能",
 	"A": "装填", "S": "推击", "C": "SA", "E": "丢弃", "Q": "切人",
-	"1": "武器", "2": "副武器", "3": "治疗", "4": "辅助", "5": "投掷",
+	"1": "第1格", "2": "第2格", "3": "治疗", "4": "辅助", "5": "投掷",
 	## 2026-09-30：触摸层补齐了这三个按钮，手机端也有对应键帽名了
 	"Ctrl": "慢走", "Shift": "举枪", "空格": "觉醒",
 	## 方向键：手机上就是摇杆（菜单里也用摇杆上下选择）
@@ -143,7 +143,7 @@ func _build_window() -> void:
 	# 底部提示（文案按平台取：手机用摇杆 / 取消按钮的说法）
 	var hint_text: String = "摇杆 滚动    %s 返回" % Global.key_hint(&"取消键") if _is_mobile \
 		else "↑↓ 滚动    Z / Esc 返回"
-	var hint := _make_label(hint_text, 16, _text_color_index, _text_color_row, true)
+	var hint := _make_label(hint_text, 20, _text_color_index, _text_color_row, true)
 	hint.position = Vector2(24, window_size.y - 36)
 	win.add_child(hint)
 
@@ -181,7 +181,7 @@ func _parse_and_build(path: String) -> void:
 			continue
 		if line.begins_with("【"):
 			_content.add_child(_make_spacer(section_gap))
-			var head := _make_label(line, 20, _accent_color_index, _accent_color_row, true)
+			var head := _make_label(line, 24, _accent_color_index, _accent_color_row, true)
 			_content.add_child(head)
 		elif line.begins_with("["):
 			var close := line.find("]")
@@ -222,7 +222,7 @@ func _make_spacer(h: float) -> Control:
 
 ## 普通文本行：显式宽度 + 自动换行（VBox 依实际高度堆叠，不再手算行数）。
 func _make_plain_label(text: String, width: float) -> Label:
-	var lbl := _make_label(text, 16, _text_color_index, _text_color_row, false)
+	var lbl := _make_label(text, 24, _text_color_index, _text_color_row, false)
 	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl.custom_minimum_size = Vector2(maxf(width - 8.0, 100.0), 0)
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -270,7 +270,7 @@ func _build_keycap_row(key_text: String, desc: String) -> HBoxContainer:
 		row.add_child(_make_keycap(n))
 
 	if not desc.is_empty():
-		var lbl := _make_label(desc, 16, _text_color_index, _text_color_row, false)
+		var lbl := _make_label(desc, 24, _text_color_index, _text_color_row, false)
 		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -294,7 +294,7 @@ func _make_keycap(cap_text: String) -> Control:
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	if _font:
 		lbl.add_theme_font_override("font", _font)
-	lbl.add_theme_font_size_override("font_size", 16)  ## ark-16 基底整倍渲染
+	lbl.add_theme_font_size_override("font_size", 20)  ## 键帽文字略小于正文
 	lbl.add_theme_color_override("font_color", Color(0.92, 0.92, 0.98))
 	cap.add_child(lbl)
 

@@ -24,6 +24,37 @@ const CAMPAIGN_RESOURCE_PATHS: Array[String] = [
 ]
 
 
+## 场景路径 → 所属战役 id（"assault" / "night_hunter"）。找不到 = 空。
+## 终章结算用：多人「选章节」/ 调试跳关不经过 campaign_select，
+## `Global.selected_campaign` 可能是空的或上一局的，不能作为唯一依据。
+static func campaign_id_for_scene(scene_path: String) -> String:
+	if scene_path.is_empty():
+		return ""
+	var file_name: String = scene_path.get_file()
+	for p: String in CAMPAIGN_RESOURCE_PATHS:
+		if not ResourceLoader.exists(p):
+			continue
+		var res: Resource = load(p)
+		if not (res is CampaignData):
+			continue
+		var cd: CampaignData = res as CampaignData
+		if scene_path in cd.level_scenes:
+			return cd.campaign_id
+	## 第二道：按文件名前缀认（本工程地图命名约定「战役名-第N关-…」）。
+	## 第一战役的 level_scenes 只登记到学校内部，矿洞 / 实验室 / 列车台不在表里 ——
+	## 终章在列车台，只靠 level_scenes 会认不出来。
+	for p: String in CAMPAIGN_RESOURCE_PATHS:
+		if not ResourceLoader.exists(p):
+			continue
+		var res2: Resource = load(p)
+		if not (res2 is CampaignData):
+			continue
+		var cd2: CampaignData = res2 as CampaignData
+		if not cd2.campaign_name.is_empty() and file_name.begins_with(cd2.campaign_name + "-"):
+			return cd2.campaign_id
+	return ""
+
+
 ## 返回 [{campaign, chapter, label, scene}, ...]（按战役→关卡顺序）。
 static func collect_chapter_entries() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

@@ -7,7 +7,7 @@
   "tile_size": 32,
   "lower_atlas": "Map0016_lower_tiles.png",
   "lower_atlas_columns": 16,
-  "lower_atlas_rows": 10,
+  "lower_atlas_rows": 12,
   "lower_tiles": {
     "D:4550": [
       0,
@@ -633,17 +633,113 @@
       11,
       9
     ],
-    "A:2000": [
+    "A:2034": [
       12,
       9
     ],
-    "A:2000#1": [
+    "A:2034#1": [
       13,
       9
     ],
-    "A:2000#2": [
+    "A:2034#2": [
       14,
       9
+    ],
+    "A:2020": [
+      0,
+      10
+    ],
+    "A:2020#1": [
+      1,
+      10
+    ],
+    "A:2020#2": [
+      2,
+      10
+    ],
+    "A:2036": [
+      3,
+      10
+    ],
+    "A:2036#1": [
+      4,
+      10
+    ],
+    "A:2036#2": [
+      5,
+      10
+    ],
+    "A:2016": [
+      6,
+      10
+    ],
+    "A:2016#1": [
+      7,
+      10
+    ],
+    "A:2016#2": [
+      8,
+      10
+    ],
+    "A:2000": [
+      9,
+      10
+    ],
+    "A:2000#1": [
+      10,
+      10
+    ],
+    "A:2000#2": [
+      11,
+      10
+    ],
+    "A:2024": [
+      12,
+      10
+    ],
+    "A:2024#1": [
+      13,
+      10
+    ],
+    "A:2024#2": [
+      14,
+      10
+    ],
+    "A:2040": [
+      0,
+      11
+    ],
+    "A:2040#1": [
+      1,
+      11
+    ],
+    "A:2040#2": [
+      2,
+      11
+    ],
+    "A:2028": [
+      3,
+      11
+    ],
+    "A:2028#1": [
+      4,
+      11
+    ],
+    "A:2028#2": [
+      5,
+      11
+    ],
+    "A:2038": [
+      6,
+      11
+    ],
+    "A:2038#1": [
+      7,
+      11
+    ],
+    "A:2038#2": [
+      8,
+      11
     ]
   },
   "upper_atlas": "Map0016_upper_tiles.png",
@@ -24441,7 +24537,7 @@
       "x": 43,
       "y": 29,
       "lower_id": 2034,
-      "lower_key": null,
+      "lower_key": "A:2034",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24449,7 +24545,7 @@
       "x": 44,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24457,7 +24553,7 @@
       "x": 45,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24465,7 +24561,7 @@
       "x": 46,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24473,7 +24569,7 @@
       "x": 47,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24481,7 +24577,7 @@
       "x": 48,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24489,7 +24585,7 @@
       "x": 49,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24497,7 +24593,7 @@
       "x": 50,
       "y": 29,
       "lower_id": 2020,
-      "lower_key": null,
+      "lower_key": "A:2020",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -24505,7 +24601,7 @@
       "x": 51,
       "y": 29,
       "lower_id": 2036,
-      "lower_key": null,
+      "lower_key": "A:2036",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -25241,7 +25337,7 @@
       "x": 43,
       "y": 30,
       "lower_id": 2016,
-      "lower_key": null,
+      "lower_key": "A:2016",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -25305,7 +25401,7 @@
       "x": 51,
       "y": 30,
       "lower_id": 2024,
-      "lower_key": null,
+      "lower_key": "A:2024",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -26041,7 +26137,7 @@
       "x": 43,
       "y": 31,
       "lower_id": 2016,
-      "lower_key": null,
+      "lower_key": "A:2016",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -26105,7 +26201,7 @@
       "x": 51,
       "y": 31,
       "lower_id": 2024,
-      "lower_key": null,
+      "lower_key": "A:2024",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -26841,7 +26937,7 @@
       "x": 43,
       "y": 32,
       "lower_id": 2016,
-      "lower_key": null,
+      "lower_key": "A:2016",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -26905,7 +27001,7 @@
       "x": 51,
       "y": 32,
       "lower_id": 2024,
-      "lower_key": null,
+      "lower_key": "A:2024",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27641,7 +27737,7 @@
       "x": 43,
       "y": 33,
       "lower_id": 2040,
-      "lower_key": null,
+      "lower_key": "A:2040",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27649,7 +27745,7 @@
       "x": 44,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27657,7 +27753,7 @@
       "x": 45,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27665,7 +27761,7 @@
       "x": 46,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27673,7 +27769,7 @@
       "x": 47,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27681,7 +27777,7 @@
       "x": 48,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27689,7 +27785,7 @@
       "x": 49,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27697,7 +27793,7 @@
       "x": 50,
       "y": 33,
       "lower_id": 2028,
-      "lower_key": null,
+      "lower_key": "A:2028",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -27705,7 +27801,7 @@
       "x": 51,
       "y": 33,
       "lower_id": 2038,
-      "lower_key": null,
+      "lower_key": "A:2038",
       "upper_id": 10143,
       "upper_key": "F:143"
     },
@@ -200895,16 +200991,27 @@
     }
   ],
   "mapping": {
+    "0..2999": "water autotile (Block A/B): block*1000 + b_subtile*50 + a_subtile, 4 quadrants from A rows 0..3 / B rows 4..7",
+    "3000..3149": "Block C animated decoration (whirlpool etc.), 4 frames at chipset cols 3..5 rows 4..7",
     "4000+50*g+v": "D baked quadrants",
     "5000+n": "E ordinary lower",
     "10000+n": "F ordinary upper; 10000 transparent",
-    "A:<id>": "Block A animated water; frames share the row, frame files carry the #<index> suffix"
+    "A:<id>": "Block A/B water; frames share the row, frame files carry the #<index> suffix",
+    "C:<id>": "Block C 4-frame animation; same #<index> suffix"
   },
   "animation": {
     "lower": {
-      "A:2000": 3
+      "A:2034": 3,
+      "A:2020": 3,
+      "A:2036": 3,
+      "A:2016": 3,
+      "A:2000": 3,
+      "A:2024": 3,
+      "A:2040": 3,
+      "A:2028": 3,
+      "A:2038": 3
     },
     "duration": 0.3,
-    "note": "frame 0 的格位即 lower_tiles 里的坐标，右侧连续 3-1 格为其余帧"
+    "note": "frame 0 的格位即 lower_tiles 里的坐标，右侧连续格为其余帧（水面 3 帧 / Block C 4 帧）"
   }
 }

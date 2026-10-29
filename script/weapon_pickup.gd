@@ -493,7 +493,7 @@ func _process_local_pickup(delta: float) -> bool:
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if not state:
 		return false
-	var slot: String = weapon_data.get_slot_key()
+	var slot: String = state.resolve_weapon_slot(weapon_data)
 	var current: WeaponData = state.get_equipped_weapon(slot)
 
 	# 该槽位为空 → 默认自动拾取；require_function_key 时同样走按住流程
@@ -622,7 +622,7 @@ func _process_network_pickup(delta: float) -> bool:
 		_hold_timer = 0.0
 		return false
 	var state: PlayerState = Players.get_state_for_entity(local_player)
-	var current: WeaponData = state.get_equipped_weapon(weapon_data.get_slot_key()) if state else null
+	var current: WeaponData = state.get_equipped_weapon(state.resolve_weapon_slot(weapon_data)) if state else null
 	# 空槽 + 未要求功能键 → 直接请求；其余按住流程
 	if current == null and not require_function_key:
 		## 堆叠仲裁同样作用于联机请求：只让最近的一个发请求，且一次靠近只自动要一件。
@@ -813,7 +813,7 @@ func _do_pickup() -> void:
 		_hold_timer = 0.0
 		return
 
-	var slot: String = weapon_data.get_slot_key()
+	var slot: String = state.resolve_weapon_slot(weapon_data)
 	var old: WeaponData = state.get_equipped_weapon(slot)
 
 	if old:

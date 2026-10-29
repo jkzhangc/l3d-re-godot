@@ -14,6 +14,12 @@ class_name CharacterData extends Resource
 ## 稳定数据键（如 "nobita"）。武器侧的「按角色子弹发射点偏移」等按角色配置的数据用它做键；
 ## 留空则回退 tres 文件名（character_nobita.tres → nobita）。
 @export var character_id: String = ""
+## 女性角色标记。成就「三流色情片」（ハンターγ 丸呑み 女性）靠它判定 ——
+## 不要用名字字符串猜：将来加 聖奈 / 咲夜 等角色时在这里勾上即可。
+@export var is_female: bool = false
+## 背包数量（2026-10-29）：普通角色 1 个；スネ夫 = 2（被动「バックパック」）。
+## 每个背包提供「左起第 1 格 / 第 2 格」两个武器格；切换背包 = 交换两套武器。
+@export_range(1, 2, 1) var backpack_count: int = 1
 ## 初始等级
 @export var level: int = 1
 ## 最大 HP

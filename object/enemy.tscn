@@ -17,6 +17,7 @@
 [ext_resource type="Script" path="res://script/enemy/EnemyWitchIdleState.gd" id="15"]
 [ext_resource type="Script" path="res://script/enemy/EnemySwallowState.gd" id="16"]
 [ext_resource type="Script" path="res://script/enemy/EnemySpitState.gd" id="17"]
+[ext_resource type="Script" uid="uid://b77evuk8xokj3" path="res://script/enemy/EnemyTongueState.gd" id="18"]
 
 [sub_resource type="RectangleShape2D" id="enemy_shape"]
 size = Vector2(20, 28)
@@ -42,6 +43,10 @@ death_sound = ExtResource("4_jpigs")
 attack_sound = ExtResource("5_vunvt")
 discover_sound = ExtResource("6_jpigs")
 attack_effect_anim = ExtResource("7_p667r")
+discover_sound_pool = Array[AudioStream]([ExtResource("6_jpigs"), ExtResource("4_jpigs"), ExtResource("3_vfd3m")])
+hurt_sound_pool = Array[AudioStream]([ExtResource("3_vfd3m"), ExtResource("5_vunvt"), ExtResource("6_jpigs")])
+attack_sound_pool = Array[AudioStream]([ExtResource("5_vunvt"), ExtResource("3_vfd3m")])
+death_sound_pool = Array[AudioStream]([ExtResource("4_jpigs"), ExtResource("3_vfd3m")])
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=797700597]
 position = Vector2(0, -16)
@@ -111,6 +116,9 @@ script = ExtResource("16")
 
 [node name="Spit" type="Node" parent="StateMachine" unique_id=999000009]
 script = ExtResource("17")
+
+[node name="Tongue" type="Node" parent="StateMachine" unique_id=999000010]
+script = ExtResource("18")
 
 [connection signal="body_entered" from="VisionArea" to="." method="_on_vision_area_body_entered"]
 [connection signal="body_exited" from="VisionArea" to="." method="_on_vision_area_body_exited"]

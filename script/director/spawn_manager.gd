@@ -33,6 +33,20 @@ extends Node
 @export var max_active_common: int = 15       ## 同时最多普通感染者
 
 # ═══════════════════════════════════════
+# 画面外补怪总开关（2026-10-29 用户需求）
+# ═══════════════════════════════════════
+## ★关闭（默认）→ build 预算批次与喘息补位**一律不发货**，路上只剩作者 SpawnZone 与
+## 尸潮/特感/Boss 事件。打开 → 按下面的人数区间在「前方屏外」补位：
+## 威胁圈内**跌到下限**才开补，**补到上限**才停手（迟滞带：中间区间不补也不停，避免"杀一只补一只"）。
+## ⚠ 打开后，本文件的 `build_threat_limit` 与 `relax_target` 不再是补怪闸门（被本区间取代）。
+@export var offscreen_refill_enabled: bool = false
+@export var offscreen_refill_min: int = 4
+@export var offscreen_refill_max: int = 10
+
+## 迟滞带闩锁：true = 本轮"开补"尚未补到上限。
+var _refill_latch: bool = false
+
+# ═══════════════════════════════════════
 # L4D 模型参数（2026-10-24）
 # ═══════════════════════════════════════
 ## ★核心：开启后本模块改用「消耗型预算 + 峰值一次性尸潮 + 喘息低人口」。
@@ -101,6 +115,15 @@ func setup(director_node: Node) -> void:
 # ═══════════════════════════════════════
 func update(delta: float, intensity: float, alive_count: int) -> void:
 	if not enabled or not _director:
+		return
+
+	## ★画面外补怪总开关（2026-10-29）：关闭时**不发货**，但不冻结尸潮窗口记账 ——
+	## 旧模型的 `_horde_active` 由窗口倒计时收尾，冻住会让峰值误以为尸潮永不结束。
+	if not offscreen_refill_enabled:
+		if not l4d_model and _horde_active:
+			_horde_time_left -= delta
+			if _horde_time_left <= 0.0:
+				_horde_active = false
 		return
 
 	## ★L4D 模型（2026-10-24）：生成时机完全由「预算 + 阶段」决定，不再维持数量。
@@ -177,15 +200,22 @@ func _update_l4d(delta: float, intensity: float, alive_count: int) -> void:
 
 ## 加压阶段：从预算里扣，每次 1~2 只、间隔 8~16 秒。
 ## 预算耗尽 → 静默（这就是空窗的来源）；进入下一阶段会重新发预算。
+## ★2026-10-29：补怪窗口由 `offscreen_refill_min/max` 决定 —— 只有威胁圈降到下限以下
+## 才开补，一次最多补到上限（迟滞带，替代旧的 build_threat_limit 软闸）。
 func _update_build_budget(delta: float, intensity: float, alive_count: int) -> void:
 	if _budget_left <= 0:
 		return
 	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		return
-	## 软闸：贴脸敌人已经够多就不再追加（避免围成一圈打不完的体感）
+	## 补怪上下限（附近威胁圈内人口）
+	var floor_n: int = _refill_floor()
+	var ceiling_n: int = _refill_ceiling()
+	if floor_n <= 0:
+		return
 	var threat: int = _threat_count()
-	if threat >= Players.scale_spawn_count(build_threat_limit):
+	## 迟滞带：低于下限才开补；开补后一直补到上限才停手。
+	if not _refill_allowed(threat, floor_n, ceiling_n):
 		return
 
 	_scatter_timer -= delta
@@ -199,31 +229,65 @@ func _update_build_budget(delta: float, intensity: float, alive_count: int) -> v
 	count = Players.scale_spawn_count(count)
 	count = mini(count, _budget_left)
 	count = mini(count, active_cap - alive_count)
+	count = mini(count, ceiling_n - threat)
 	if count <= 0:
 		return
 
 	var spawned: int = _spawn_ahead_l4d(count)
 	_budget_left = maxi(_budget_left - spawned, 0)
 	if spawned > 0:
-		print("[SpawnManager] L4D build 批次 %d 只（预算剩 %d）" % [spawned, _budget_left])
+		print("[SpawnManager] L4D build 批次 %d 只（预算剩 %d / 附近 %d→%d）"
+			% [spawned, _budget_left, threat, threat + spawned])
+	if threat + spawned >= ceiling_n:
+		_refill_latch = false
 
 
-## 喘息阶段：默认完全不生成（relax_target = 0）。
-## 设成 1~2 可以保留"路上零星还有丧尸"的观感（L4D2 的 Relax 也允许游荡者出现）。
+## 喘息阶段：**只在补怪开关打开时**维持 `offscreen_refill_min` 的下限。
+## 旧 `relax_target` 是"维持多少只"；现在统一由上下限接管（见 offscreen_refill_* 注释）。
 func _update_relax(delta: float, alive_count: int) -> void:
-	if relax_target <= 0:
+	var floor_n: int = _refill_floor()
+	var ceiling_n: int = _refill_ceiling()
+	if floor_n <= 0:
 		return
 	_relax_timer -= delta
 	if _relax_timer > 0.0:
 		return
 	_relax_timer = relax_interval
-	var target: int = Players.scale_spawn_count(relax_target)
-	if _threat_count() >= target:
+	var threat: int = _threat_count()
+	if not _refill_allowed(threat, floor_n, ceiling_n):
 		return
 	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		return
-	_spawn_ahead_l4d(1)
+	var spawned: int = _spawn_ahead_l4d(1)
+	if spawned > 0 and threat + spawned >= ceiling_n:
+		_refill_latch = false
+
+
+## 补怪人数下限 / 上限（按人数与难度放大，和全项目刷怪倍率同一口径）。
+func _refill_floor() -> int:
+	return Players.scale_spawn_count(maxi(0, offscreen_refill_min))
+
+
+func _refill_ceiling() -> int:
+	return maxi(_refill_floor(), Players.scale_spawn_count(maxi(0, offscreen_refill_max)))
+
+
+## 迟滞带判定（上下限的真正入口）：
+##   ① 已到上限 → 关闩（本轮补位结束）
+##   ② 跌到下限或以下 → 开闩（下一批可以补）
+##   ③ 中间区间 → 保持上一状态（开着就一直补到上限，关着就不补）
+## 这样「补怪上下限」才都起作用：只写下限会变成"补一只就停"，只写上限会变成"永远在补"。
+func _refill_allowed(threat: int, floor_n: int, ceiling_n: int) -> bool:
+	if ceiling_n <= 0:
+		_refill_latch = false
+		return false
+	if threat >= ceiling_n:
+		_refill_latch = false
+		return false
+	if threat <= floor_n:
+		_refill_latch = true
+	return _refill_latch
 
 
 ## 只在「前方屏外」补位（走 Director 的取点器，只是不再维持数量）。

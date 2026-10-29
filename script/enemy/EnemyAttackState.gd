@@ -63,7 +63,7 @@ func enter() -> void:
 	# 攻击音效在挥击动作「开始」时播放，而不是命中那一刻 ——
 	# 用户 2026-09-12 反馈：贴在命中帧会让声音滞后于视觉动作，听感像是"打中了才吼"。
 	# 前摇起手同时出声，玩家才能靠听觉预判攻击（尤其背后遇袭时）。
-	enemy._play_sound(enemy.attack_sound, enemy.attack_sound_pitch)
+	enemy._play_pool(enemy.attack_sound_pool, enemy.attack_sound, enemy.attack_sound_pitch)
 
 	# 若判定帧就是第一帧 → 立即命中
 	if _seq_idx == enemy.hit_at_sequence_idx:
@@ -178,7 +178,7 @@ func _do_attack_hit() -> void:
 				var hp_after: float = float(player.get("current_hp")) if player.get("current_hp") != null else -1.0
 				if hp_before >= 0.0 and hp_after >= 0.0 and hp_after < hp_before:
 					# 击中目标音效（2026-09-15 用户需求）：与喷血同条件，实际掉血才响
-					enemy._play_sound(enemy.hit_target_sound, enemy.hit_target_sound_pitch)
+					enemy._play_pool(enemy.hit_target_sound_pool, enemy.hit_target_sound, enemy.hit_target_sound_pitch)
 					if enemy.attack_effect_anim:
 						var efollow: Node2D = player if enemy.attack_effect_follow else null
 						VXAnimSprite.play_scene(enemy.attack_effect_anim, player.global_position, enemy.get_tree().current_scene, 10.0, efollow, enemy.attack_effect_offset_override)

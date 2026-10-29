@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://css1x54ms08ca"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://mc8nxvk7coa8"]
 
 [ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_0clvs"]
 [ext_resource type="PackedScene" uid="uid://dj5fqkmk5oxqx" path="res://anim/anim_effect_步枪攻击下.tscn" id="1_onao4"]
@@ -12,7 +12,7 @@
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="8_0clvs"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_o8qhj"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
-[ext_resource type="Texture2D" uid="uid://drq65x6hjqrsp" path="res://art/Weapon/A武器セット３.png" id="12_p5ubh"]
+[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="12_p5ubh"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_p5ubh"]
 [ext_resource type="Texture2D" uid="uid://1olunt4udqhd" path="res://art/Ui/装備アイコンサブマシンガン３.png" id="icon"]
 
@@ -87,5 +87,5 @@ icon = ExtResource("icon")
 sell_price = 100
 max_stack = 1
 pickup_texture = ExtResource("12_p5ubh")
-pickup_char_idx = 5
+pickup_char_idx = 1
 pickup_step_frames = Array[int]([2])

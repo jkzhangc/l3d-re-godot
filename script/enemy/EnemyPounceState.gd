@@ -26,6 +26,11 @@ var _phase: int = Phase.WINDUP
 var _timer: float = 0.0
 var _dash_dir: Vector2 = Vector2.ZERO
 var _hit_done: bool = false
+## 冲刺距离制（2026-10-29）：累计已移动像素 / 目标距离 / 安全时限 / 动画计时。
+var _dash_traveled: float = 0.0
+var _dash_target_dist: float = 0.0
+var _dash_max_seconds: float = 0.0
+var _dash_elapsed: float = 0.0
 
 
 func enter() -> void:
@@ -62,9 +67,9 @@ func enter() -> void:
 		enemy.push_action_texture(enemy.attack_texture, enemy.attack_char_sequence[0])
 	# 起跳音效（扑咬的"吼"）
 	if enemy.pounce_sound:
-		enemy._play_sound(enemy.pounce_sound, enemy.pounce_sound_pitch)
+		enemy._play_pool(enemy.pounce_sound_pool, enemy.pounce_sound, enemy.pounce_sound_pitch)
 	else:
-		enemy._play_sound(enemy.attack_sound, enemy.attack_sound_pitch)
+		enemy._play_pool(enemy.attack_sound_pool, enemy.attack_sound, enemy.attack_sound_pitch)
 
 	if _timer <= 0.0:
 		_start_dash(enemy)
@@ -94,7 +99,7 @@ func process_update(delta: float) -> void:
 				_start_dash(enemy)
 
 		Phase.DASH:
-			_timer -= delta
+			_dash_elapsed += delta
 			# 冲刺期间目标失效 → 中止，直接进后摇
 			if not enemy.has_valid_player_target():
 				_enter_recover(enemy)
@@ -102,8 +107,6 @@ func process_update(delta: float) -> void:
 			var player: Node2D = enemy._player_ref
 			# 吸附追击：冲刺途中每帧把 _dash_dir 朝玩家方向插值，
 			# 让「すばやい動きで接近」表现为锁定扑咬而非纯直线扑空。
-			# 位移（移速×倍率×时长）通常小于触发带宽，纯直线几乎必然落空，
-			# 因此这里必须允许转向（用户 2026-09-12 决定采用吸附方案）。
 			var turn: float = clampf(enemy.pounce_homing_turn_rate, 0.0, 1.0)
 			if turn > 0.0:
 				var to_p: Vector2 = (player.global_position - enemy.global_position).normalized()
@@ -117,9 +120,9 @@ func process_update(delta: float) -> void:
 			if _hit_done:
 				_enter_recover(enemy)
 				return
-			# 冲刺末帧的宽容判定：到达终点时若已贴到 hit_radius × tolerance 内，
-			# 视作接触命中。否则中距起跳（位移不足以跑完全程）会长期空扑。
-			if _timer <= 0.0:
+			# ── 冲刺结束：按**已移动像素**判定（2026-10-29 用户需求），
+			# 安全时限兜底防"顶墙原地跑到天荒地老"。
+			if _dash_traveled >= _dash_target_dist or _dash_elapsed >= _dash_max_seconds:
 				if not _hit_done:
 					var tol: float = maxf(1.0, enemy.pounce_hit_tolerance)
 					if player.global_position.distance_to(enemy.global_position) <= enemy.pounce_hit_radius * tol:
@@ -128,12 +131,17 @@ func process_update(delta: float) -> void:
 				_enter_recover(enemy)
 				return
 			# 扑咬帧动画：锁定型已在 _start_dash 设好并全程保持（无需每帧刷新）；
-			# 非锁定型（ハンター/ハンターβ）按冲刺进度推进，最后一帧收尾。
+			# 非锁定型按 `pounce_dash_frame_seconds` 逐帧推进（2026-10-29：可配置每帧时长）。
 			if not enemy.pounce_hold_frame_during_dash:
 				var seq: Array = enemy.attack_char_sequence
 				if seq.size() > 0:
-					var t: float = 1.0 - clampf(_timer / maxf(0.001, enemy.pounce_dash_seconds), 0.0, 1.0)
-					var idx: int = clampi(int(t * float(seq.size())), 0, seq.size() - 1)
+					var frame_sec: float = enemy.pounce_dash_frame_seconds
+					var fi: int
+					if frame_sec > 0.0:
+						fi = int(_dash_elapsed / frame_sec)
+					else:
+						fi = int(_dash_elapsed / maxf(0.001, _dash_max_seconds) * float(seq.size()))
+					var idx: int = clampi(fi, 0, seq.size() - 1)
 					enemy.set_attack_char_index(seq[idx])
 
 		Phase.RECOVER:
@@ -142,7 +150,7 @@ func process_update(delta: float) -> void:
 				transition_requested.emit("Chase")
 
 
-func physics_update(_delta: float) -> void:
+func physics_update(delta: float) -> void:
 	var enemy: Node2D = character
 	if _phase != Phase.DASH:
 		character.velocity = Vector2.ZERO
@@ -155,12 +163,24 @@ func physics_update(_delta: float) -> void:
 	var dash_speed: float = enemy.pounce_dash_speed if enemy.pounce_dash_speed > 0.0 \
 			else enemy.move_speed * enemy.pounce_speed_mult
 	character.velocity = _dash_dir * dash_speed
+	var before: Vector2 = enemy.global_position
 	character.move_with_corner_assist()
+	## 只累计**沿冲刺方向**的位移（2026-10-29）：贴墙滑动/被挤开的横向位移不算距离，
+	## 否则顶着墙也能"跑满"配置距离。
+	_dash_traveled += maxf(0.0, (enemy.global_position - before).dot(_dash_dir))
 
 
 func _start_dash(enemy: Node2D) -> void:
 	_phase = Phase.DASH
-	_timer = maxf(0.05, enemy.pounce_dash_seconds)
+	var dash_speed: float = enemy.pounce_dash_speed if enemy.pounce_dash_speed > 0.0 \
+			else enemy.move_speed * enemy.pounce_speed_mult
+	## 距离制（2026-10-29）：目标 = 配置像素；<=0 回退旧的时间口径。
+	_dash_target_dist = enemy.pounce_dash_distance if enemy.pounce_dash_distance > 0.0 \
+			else maxf(1.0, dash_speed * maxf(0.05, enemy.pounce_dash_seconds))
+	## 安全时限：按理论时长 ×1.6，顶墙/被挡住时不会无限冲刺。
+	_dash_max_seconds = maxf(0.1, _dash_target_dist / maxf(1.0, dash_speed) * 1.6)
+	_dash_traveled = 0.0
+	_dash_elapsed = 0.0
 	# 冲刺中允许再次朝向修正一次（玩家在蓄力期间移动的情况）
 	if enemy.has_valid_player_target():
 		var p: Node2D = enemy._player_ref

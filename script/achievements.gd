@@ -14,16 +14,34 @@ const SAVE_PATH := "user://achievements.json"
 ## 实际使用的存档路径。默认即 SAVE_PATH；**可覆盖**（隔离测试 / 将来多存档位都靠它）。
 static var save_path: String = SAVE_PATH
 
-## ── 首批成就目录（2026-10-02 与用户确认：只做第一章可判定的子集）──
-## 原作 26 个里有 12 个依赖第二/三战役与 Realism 模式，等那些内容做出来再补。
-## kind 说明：clear_campaign=通关战役 / solo_clear=单人通关 / no_damage_clear=无伤通关 /
-##   speed_clear=限时通关 / 其余为计数型（target = 目标次数）。
-## ★2026-10-03 用户要求删除「不存档通关」（id=no_save）——本项目**目前没有手动存档功能**，
-##   判定依据（`SaveManager.save_game()` 的调用）在实际游玩中根本不会触发，成就等于白送。
-##   连同 `_session_saved` / `on_save_used()` 一并移除；将来若做了手动存档再按原作补回。
+## ── 成就目录 ──
+## 首批（2026-10-02）只做第一章可判定的子集；**2026-10-29 用户要求补全第二战役 + 不存档通关**。
+## 原作 26 个里仍未做的：第三战役 Dead Island（未实装）、Realism 模式 3 条、Boss 狩猎 4 条、
+##   「暴君十必杀」「三人抱燃料罐」「不放下拾取物」等章节专属条件 —— 缺对应系统/数据，不先挂空条目。
+## kind 说明：clear_campaign*=通关战役 / solo_clear=单人通关 / no_damage_clear=无伤通关 /
+##   speed_clear=限时通关 / no_save_clear=不存档通关 / gentleman_clear=不惊动女巫通关 /
+##   其余为计数型（target = 目标次数）。
+## ★2026-10-03 曾删除「不存档通关」（当时没有手动存档，判定永不触发）；
+##   2026-10-29 手动存档（20 槽 `user://saves/`）已实装 → 按原作恢复，钩子见 `SaveManager`。
 const CATALOG: Array[Dictionary] = [
+	## ── 通关型（全队，座位 -1）──
 	{"id": "clear_attack", "name": "明天仍在等着我们", "desc": "通关第一战役（突袭）",
 		"kind": "clear_campaign", "target": 1},
+	{"id": "clear_night_hunter", "name": "太勉强了吧", "desc": "通关第二战役（夜行猎手）",
+		"kind": "clear_campaign_night_hunter", "target": 1},
+	{"id": "left_1_dead", "name": "Left 1 Dead", "desc": "单人通关一次战役",
+		"kind": "solo_clear", "target": 1},
+	{"id": "untouchable", "name": "不可触碰", "desc": "全程无伤通关一次战役",
+		"kind": "no_damage_clear", "target": 1},
+	{"id": "speedrun", "name": "西伯利亚超特急", "desc": "10 分钟内通关一次战役",
+		"kind": "speed_clear", "target": 1, "limit_seconds": 600},
+	{"id": "gentleman", "name": "绅士", "desc": "全程不惊动女巫通关一次战役",
+		"kind": "gentleman_clear", "target": 1},
+	{"id": "dark_finale", "name": "我们是暗夜族", "desc": "夜行猎手终章不打开照明通关",
+		"kind": "dark_finale_clear", "target": 1},
+	{"id": "no_save", "name": "人生只有一次", "desc": "全程不存档通关一次战役",
+		"kind": "no_save_clear", "target": 1},
+	## ── 计数型（按座位归属）──
 	{"id": "instakill_100", "name": "毫不留情", "desc": "用即死攻击击杀 100 体",
 		"kind": "instant_kill", "target": 100},
 	{"id": "backstab_100", "name": "必杀专家", "desc": "发动必杀（背刺）100 次",
@@ -34,12 +52,8 @@ const CATALOG: Array[Dictionary] = [
 		"kind": "heal_item", "target": 10},
 	{"id": "kill_1000", "name": "大量杀戮纪行", "desc": "单次游玩击杀 1000 体",
 		"kind": "kill", "target": 1000},
-	{"id": "left_1_dead", "name": "Left 1 Dead", "desc": "单人通关一次战役",
-		"kind": "solo_clear", "target": 1},
-	{"id": "untouchable", "name": "不可触碰", "desc": "全程无伤通关一次战役",
-		"kind": "no_damage_clear", "target": 1},
-	{"id": "speedrun", "name": "西伯利亚超特急", "desc": "10 分钟内通关一次战役",
-		"kind": "speed_clear", "target": 1, "limit_seconds": 600},
+	{"id": "swallow_female", "name": "三流色情片", "desc": "猎人γ 吞下女性角色",
+		"kind": "swallow_female", "target": 1},
 ]
 const TEAM_SEAT: int = -1
 
@@ -54,6 +68,9 @@ static var _loaded: bool = false
 ## 单次游玩统计（begin_campaign 时重置）
 static var _session_kills: Dictionary = {}      ## 座位 → 本局击杀
 static var _session_damaged: bool = false       ## 本局是否受过伤（无伤成就）
+static var _session_saved: bool = false         ## 本局是否用过存档（保存或读档 → 不存档成就不给）
+static var _session_witch_startled: bool = false ## 本局是否惊动过女巫（绅士成就）
+static var _session_lights_used: bool = false   ## 本局是否开过照明（暗夜族成就）
 static var _session_start_msec: int = 0
 
 
@@ -80,7 +97,7 @@ static func desc_of(id: String) -> String:
 ## 该成就是否「全队型」（通关/无伤/速通等）—— UI 上单独归类。
 static func is_team_achievement(id: String) -> bool:
 	var kind: String = str(catalog_entry(id).get("kind", ""))
-	return kind.ends_with("_clear")
+	return kind.ends_with("_clear") or kind.begins_with("clear_campaign")
 
 
 static func progress_of(seat: int, id: String) -> int:
@@ -116,6 +133,9 @@ static func begin_campaign() -> void:
 	load_progress()
 	_session_kills.clear()
 	_session_damaged = false
+	_session_saved = false
+	_session_witch_startled = false
+	_session_lights_used = false
 	_session_start_msec = Time.get_ticks_msec()
 	_pending.clear()
 	print("[成就] 本局开始（已解锁 %d/%d）" % [unlocked_count(), CATALOG.size()])
@@ -149,23 +169,62 @@ static func on_player_damaged() -> void:
 	_session_damaged = true
 
 
+## 本局用过存档（保存或读档成功时由 SaveManager 调用）。
+## 原作「人生プレイ」= 战役内不存档通关；**读过档也算用档** —— 否则读一个中段档再通关白送成就。
+static func on_save_used() -> void:
+	_session_saved = true
+
+
+## 惊动女巫。原作「ジェントルマン」= 不刺激女巫通关（攻击 / 接近都算）。
+## 两个调用点：Enemy.startle_witch（贴脸 / 刺激值满 / 普通受击）与 take_damage 的
+## 「一击打死女巫」早退分支（不走 startle_witch，也必须记上）。
+static func on_witch_startled() -> void:
+	_session_witch_startled = true
+
+
+## 打开过照明（InteractiveSwitchNode.is_light_switch 的开关被拨到「开」时调用）。
+## 原作「オレたちクラヤミ族」= 夜行猎手终章不打开照明存活下来。
+static func on_lights_used() -> void:
+	_session_lights_used = true
+
+
+## ハンターγ 丸呑み命中女性角色（原作「三流ポルノ」）。按被吞玩家的座位归属。
+static func on_female_swallowed(seat: int) -> void:
+	_add(seat, "swallow_female", 1)
+
+
 ## 战役通关结算（CampaignEnding.start 调用）。
 ## `seat_count` = 本局实际参战人数（1 = 单人）。
-static func finish_campaign(seat_count: int) -> void:
+## `campaign_id` = 当前战役 id（"assault" / "night_hunter"）—— 战役专属通关成就靠它区分。
+static func finish_campaign(seat_count: int, campaign_id: String = "") -> void:
 	var elapsed: float = float(Time.get_ticks_msec() - _session_start_msec) / 1000.0
-	_add(TEAM_SEAT, "clear_campaign", 1)
+	## 战役专属：第一战役只认 assault；campaign_id 为空（旧调用/测试）时按旧行为给第一战役。
+	if campaign_id.is_empty() or campaign_id == "assault":
+		_add(TEAM_SEAT, "clear_campaign", 1)
+	if campaign_id == "night_hunter":
+		_add(TEAM_SEAT, "clear_campaign_night_hunter", 1)
 	if seat_count <= 1:
 		_add(TEAM_SEAT, "solo_clear", 1)
 	if not _session_damaged:
 		_add(TEAM_SEAT, "no_damage_clear", 1)
+	## 不存档通关：本局从未保存/读取过存档。
+	if not _session_saved:
+		_add(TEAM_SEAT, "no_save_clear", 1)
+	## 绅士：全程没有惊动过女巫（攻击 / 接近刺激都走 startle_witch）。
+	if not _session_witch_startled:
+		_add(TEAM_SEAT, "gentleman_clear", 1)
+	## 暗夜族：第二战役终章全程没打开照明。
+	if campaign_id == "night_hunter" and not _session_lights_used:
+		_add(TEAM_SEAT, "dark_finale_clear", 1)
 	## 速通：目标值是「限时秒数」而不是解锁阈值 → 达标时直接把进度写成 1（=达成）。
 	## 早期写成 `_add(..., 0)` 是错的：amount=0 不涨进度、永远够不到 target。
 	var limit: float = float(catalog_entry("speedrun").get("limit_seconds", 600.0))
 	if elapsed <= limit:
 		_progress[_key(TEAM_SEAT, "speedrun")] = 1
 		_check_unlock(TEAM_SEAT, "speedrun")
-	print("[成就] 通关结算：用时 %.0fs  受伤=%s  人数=%d"
-		% [elapsed, str(_session_damaged), seat_count])
+	print("[成就] 通关结算：战役=%s 用时 %.0fs  受伤=%s  存档=%s  惊动女巫=%s  人数=%d"
+		% [campaign_id if not campaign_id.is_empty() else "（未知）", elapsed,
+			str(_session_damaged), str(_session_saved), str(_session_witch_startled), seat_count])
 	save_progress()
 
 
@@ -227,6 +286,9 @@ static func reset_all_progress() -> void:
 	_pending = []
 	_session_kills.clear()
 	_session_damaged = false
+	_session_saved = false
+	_session_witch_startled = false
+	_session_lights_used = false
 
 
 ## 强制重新从磁盘读取（正常启动只读一次，这是给测试/切换存档位用的显式入口）。

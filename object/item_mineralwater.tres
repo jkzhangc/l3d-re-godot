@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://bp5anfnuq7bsf"]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://bqfbe6u03oqts"]
 
 [ext_resource type="Texture2D" uid="uid://r68xfrrhjnpb" path="res://art/Ui/装備アイコン.png" id="1_2nbfo"]
 [ext_resource type="Texture2D" uid="uid://cfvffaje821bg" path="res://art/Characters/金貨とか.png" id="2_2nbfo"]
@@ -13,7 +13,6 @@ description = "原作 ミネラルウォーター 回复200点TP。因为不能�
 icon = ExtResource("1_2nbfo")
 effect_text = "回复200点TP。"
 sell_price = 80
-stackable = true
 max_stack = 5
 pickup_texture = ExtResource("2_2nbfo")
 pickup_char_idx = 5

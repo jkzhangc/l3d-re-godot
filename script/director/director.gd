@@ -162,6 +162,13 @@ var _wander_advance: float = 0.0           ## 自上次换区以来的累计净�
 var _wander_positions: Dictionary = {}     ## tid -> 上一帧位置
 var _phase_cache: StringName = &"cooldown" ## 上一帧的节奏阶段（供区域补齐等早期块使用）
 
+# ── 画面外补怪总开关（2026-10-29 用户需求）──
+## 默认关闭：不再在玩家视野外"维持人口"，只保留作者 SpawnZone + 尸潮/特感/Boss 事件。
+## 打开后由 SpawnManager 按下面的人数区间补位（见 DirectorConfig 同名分组）。
+var offscreen_refill_enabled: bool = false
+var offscreen_refill_min: int = 4
+var offscreen_refill_max: int = 10
+
 # ═══════════════════════════════════════
 # 子模块
 # ═══════════════════════════════════════
@@ -431,7 +438,9 @@ func _process(delta: float) -> void:
 			sm.update(delta, new_intensity, alive_count)
 
 		var fs: Node = get_node_or_null("FrontSpawner")
-		if fs and fs.has_method("update"):
+		## 画面外补怪关闭时，FrontSpawner 只保留"取点器"职责（尸潮/事件批仍要用它算落点），
+		## 不再自己补位。旧模型（l4d_pacing=false）的补位入口就是这里。
+		if fs and fs.has_method("update") and offscreen_refill_enabled:
 			fs.update(delta, anchor, alive_count, current_phase)
 
 		# ── 特感编排：与常规刷怪同一闸门（防守战挂起期间冻结）──
@@ -1357,6 +1366,9 @@ func count_threat_near_players() -> int:
 ##   3. L4D 的区域本来就是"已经有一群在晃"，不是等你走到才从正前方刷出来。
 ## 这三个叠加的结果就是"路上空无一人，只有特感"。本函数补的就是这一层人口。
 func seed_wanderers(count: int) -> int:
+	## 总开关关闭 → 一只都不铺（否则"进图先铺 6~9 只"仍是画面外补怪）。
+	if not offscreen_refill_enabled:
+		return 0
 	var decor_layer: Node = _find_decor_layer()
 	if decor_layer == null:
 		return 0
@@ -1405,6 +1417,8 @@ func _update_wander_advance(players: Array[Node2D]) -> void:
 			_boss_next_anchor = _boss_trail + boss_deck_step
 			_deal_boss_card()
 	## 游荡者补层同样只在正常行军时进行（防守战期间补游荡者＝往阵地上堆怪）。
+	if not offscreen_refill_enabled:
+		return
 	if not l4d_pacing or wander_seed_step <= 0.0 or not _can_deal_boss():
 		return
 	_wander_advance += best
@@ -2077,7 +2091,8 @@ func _check_scene_change() -> void:
 	## 本项目地图没有 SpawnZone/SpawnPoint，且街道/走廊图一拐弯就取不到前方点，
 	## 所以"一片区域里有丧尸在晃"必须由导演主动预置，而不是等玩家走到才从前方刷。
 	## 安全屋 / 不刷怪的图跳过。放在安全屋收尾之后：收尾会把阶段打回喘息，不能被打扰。
-	if l4d_pacing and wander_seed_max > 0 and not _scene_is_safe_room(scene) and _is_spawn_map():
+	if offscreen_refill_enabled and l4d_pacing and wander_seed_max > 0 \
+			and not _scene_is_safe_room(scene) and _is_spawn_map():
 		_wander_advance = 0.0
 		_wander_positions.clear()
 		var seed_n: int = randi_range(mini(wander_seed_min, wander_seed_max),
@@ -2173,6 +2188,16 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		pc.set("cooldown_max", maxf(2.0, cfg.cooldown_max * t_scale))
 	l4d_pacing = cfg.l4d_pacing
 	relax_advance = cfg.relax_advance
+	## 画面外补怪总开关（2026-10-29）：本节点与 SpawnManager 各持一份 ——
+	## Director 用它决定是否驱动 FrontSpawner/游荡者，SpawnManager 用它决定预算/喘息是否发货。
+	offscreen_refill_enabled = cfg.offscreen_refill_enabled
+	offscreen_refill_min = maxi(0, cfg.offscreen_refill_min)
+	offscreen_refill_max = maxi(offscreen_refill_min, cfg.offscreen_refill_max)
+	var sm_gate: Node = get_node_or_null("SpawnManager")
+	if sm_gate != null:
+		sm_gate.set("offscreen_refill_enabled", offscreen_refill_enabled)
+		sm_gate.set("offscreen_refill_min", offscreen_refill_min)
+		sm_gate.set("offscreen_refill_max", offscreen_refill_max)
 	wander_seed_min = cfg.wander_seed_min
 	wander_seed_max = cfg.wander_seed_max
 	wander_seed_step = cfg.wander_seed_step

@@ -116,11 +116,14 @@ func _random_wander(enemy: Node2D) -> void:
 ## 警戒低吼：这是"可以绕开"的唯一听觉提示。
 ## 没有它，玩家只能靠"突然被追"来发现她的存在 —— 那就变成纯惩罚而不是决策。
 func _warn_once(enemy: Node2D) -> void:
-	var snd: AudioStream = enemy.witch_alert_sound
+	## 2026-10-29：警戒低吼优先走随机池；池空才回退单条 / 发现音。
+	var snd: AudioStream = enemy._pick_pool_stream(enemy.witch_alert_sound_pool)
 	var pitch: float = 0.8
 	if snd == null:
-		snd = enemy.discover_sound
-		pitch = enemy.discover_sound_pitch * 0.8
+		snd = enemy.witch_alert_sound
+	if snd == null:
+		snd = enemy.get_discover_sound()
+		pitch = enemy.get_discover_pitch() * 0.8
 	if snd != null:
 		enemy._play_sound(snd, pitch)
 	print("[敵人] 女巫抬头（警戒）：玩家进入 %.0fpx 警戒圈，仍在刺激圈外" % enemy.witch_alert_radius)

@@ -71,6 +71,17 @@ extends Resource
 ## 击中目标音效（攻击命中玩家且实际掉血时播放）。留空则沿用敌人自身 hit_target_sound。
 @export var hit_target_sound: AudioStream = null
 
+@export_group("音效 — 随机池（等概率，2026-10-29）")
+## 每个槽可挂多条候选：**非空时等概率抽一条**，空则用上面的单条 / 敌人自身默认。
+@export var discover_sound_pool: Array[AudioStream] = []
+@export var hurt_sound_pool: Array[AudioStream] = []
+@export var attack_sound_pool: Array[AudioStream] = []
+@export var death_sound_pool: Array[AudioStream] = []
+@export var headshot_sound_pool: Array[AudioStream] = []
+@export var headshot_fall_sound_pool: Array[AudioStream] = []
+@export var hit_target_sound_pool: Array[AudioStream] = []
+@export var rage_discover_sound_pool: Array[AudioStream] = []
+
 # ── 音效音调（2026-09-15）：每个音效可独立设置；0 = 沿用敌人自身默认音调 ──
 ## 发现玩家音效音调（0 = 沿用敌人默认）
 @export var discover_sound_pitch: float = 0.0
@@ -131,19 +142,35 @@ func apply_to_enemy(enemy: Node) -> void:
 		enemy.max_hp = max_hp
 	if discover_sound != null:
 		enemy.discover_sound = discover_sound
+		## 单条覆盖时清空敌人自带池：否则会继承 enemy.tscn 的男僵尸池，
+		## 女性变体（女性ゾンビ等）就会被男声池覆盖掉专属女声。
+		if discover_sound_pool.is_empty():
+			enemy.discover_sound_pool.clear()
 	if hurt_sound != null:
 		enemy.hurt_sound = hurt_sound
+		if hurt_sound_pool.is_empty():
+			enemy.hurt_sound_pool.clear()
 	if attack_sound != null:
 		enemy.attack_sound = attack_sound
+		if attack_sound_pool.is_empty():
+			enemy.attack_sound_pool.clear()
 	# 死亡系音效（2026-09-14 补）：留空沿用 enemy.tscn 默认
 	if death_sound != null:
 		enemy.death_sound = death_sound
+		if death_sound_pool.is_empty():
+			enemy.death_sound_pool.clear()
 	if headshot_sound != null:
 		enemy.headshot_sound = headshot_sound
+		if headshot_sound_pool.is_empty():
+			enemy.headshot_sound_pool.clear()
 	if headshot_fall_sound != null:
 		enemy.headshot_fall_sound = headshot_fall_sound
+		if headshot_fall_sound_pool.is_empty():
+			enemy.headshot_fall_sound_pool.clear()
 	if hit_target_sound != null:
 		enemy.hit_target_sound = hit_target_sound
+		if hit_target_sound_pool.is_empty():
+			enemy.hit_target_sound_pool.clear()
 	# 音效音调（2026-09-15 每音效可设音调）：0 = 沿用敌人自身默认
 	if discover_sound_pitch > 0.0:
 		enemy.discover_sound_pitch = discover_sound_pitch
@@ -165,6 +192,23 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.variant_rage_move_speed = rage_move_speed
 	enemy.variant_rage_attack_damage = rage_attack_damage
 	enemy.variant_rage_discover_sound = rage_discover_sound
+	## 音效随机池（非空才覆盖；空 = 沿用敌人自身池）
+	if not discover_sound_pool.is_empty():
+		enemy.discover_sound_pool = discover_sound_pool
+	if not hurt_sound_pool.is_empty():
+		enemy.hurt_sound_pool = hurt_sound_pool
+	if not attack_sound_pool.is_empty():
+		enemy.attack_sound_pool = attack_sound_pool
+	if not death_sound_pool.is_empty():
+		enemy.death_sound_pool = death_sound_pool
+	if not headshot_sound_pool.is_empty():
+		enemy.headshot_sound_pool = headshot_sound_pool
+	if not headshot_fall_sound_pool.is_empty():
+		enemy.headshot_fall_sound_pool = headshot_fall_sound_pool
+	if not hit_target_sound_pool.is_empty():
+		enemy.hit_target_sound_pool = hit_target_sound_pool
+	if not rage_discover_sound_pool.is_empty():
+		enemy.variant_rage_discover_sound_pool = rage_discover_sound_pool
 	enemy.variant_rage_exhaust_seconds = rage_exhaust_seconds
 	enemy.variant_rage_exhaust_down_seconds = rage_exhaust_down_seconds
 	# 数值扩展（2026-09-14 补差异化）：0 / 零值 = 沿用 enemy.gd 默认

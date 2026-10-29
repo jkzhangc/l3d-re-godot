@@ -1,10 +1,10 @@
 [gd_resource type="Resource" script_class="CampaignData" format=3 uid="uid://bnhcamp2k7xs"]
 
-[ext_resource type="Script" path="res://script/campaign_data.gd" id="1"]
+[ext_resource type="Script" uid="uid://o6wfa4x0wg7a" path="res://script/campaign_data.gd" id="1"]
 
 [resource]
 script = ExtResource("1")
 campaign_id = "night_hunter"
 campaign_name = "夜行猎手"
-description = "第二战役（Night Hunter）。从突袭战役逃出的幸存者抵达 R 市，追踪直升机的轰鸣寻找生机。夜幕笼罩的市街与公园——ハンター種出現率更高，視界も悪い。ブレアウィッチとハンターγを見落とすな。"
-level_scenes = Array[String](["res://scene/maps/夜行猎手-第一关-开头安全屋.tscn", "res://scene/maps/夜行猎手-第一关-R市.tscn", "res://scene/maps/夜行猎手-第一关-结束安全屋.tscn", "res://scene/maps/夜行猎手-第二关-公园入口.tscn", "res://scene/maps/夜行猎手-第二关-公园.tscn", "res://scene/maps/夜行猎手-第二关-结束安全屋.tscn"])
+description = "夜行猎手（Night Hunter）。从突袭战役逃出的幸存者抵达 R 市，追踪直升机的轰鸣寻找生机。夜幕笼罩的市街与公园——猎杀者种类出现率更高，视野也更差。别错过布莱尔女巫和猎杀者γ。"
+level_scenes = Array[String](["res://scene/maps/夜行猎手-第一关-开头安全屋.tscn", "res://scene/maps/夜行猎手-第一关-R市.tscn", "res://scene/maps/夜行猎手-第一关-结束安全屋.tscn", "res://scene/maps/夜行猎手-第二关-公园入口.tscn", "res://scene/maps/夜行猎手-第二关-公园.tscn", "res://scene/maps/夜行猎手-第二关-结束安全屋.tscn", "res://scene/maps/夜行猎手-第三关-电视台外.tscn", "res://scene/maps/夜行猎手-第三关-电视台内-一楼.tscn", "res://scene/maps/夜行猎手-第三关-电视台内-二楼.tscn", "res://scene/maps/夜行猎手-第三关-结束安全屋.tscn", "res://scene/maps/夜行猎手-第四关-公司楼顶.tscn"])

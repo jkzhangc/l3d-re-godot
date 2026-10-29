@@ -146,6 +146,22 @@ extends Resource
 ## 死亡音效音调。0 = 沿用敌人自身 death_sound_pitch（2026-09-15 特感 tres 可配）。
 @export var death_sound_pitch: float = 0.0
 
+@export_group("音效 — 随机池（等概率，2026-10-29）")
+## 每个槽可挂多条候选：**非空时等概率抽一条**，空则用上面的单条。
+## 与单条字段并存（旧 tres 不填 = 行为不变）。联机时 Host 抽中的下标会随 RPC 转发。
+@export var discover_sound_pool: Array[AudioStream] = []
+@export var hurt_sound_pool: Array[AudioStream] = []
+@export var attack_sound_pool: Array[AudioStream] = []
+@export var hit_target_sound_pool: Array[AudioStream] = []
+@export var death_sound_pool: Array[AudioStream] = []
+@export var pounce_sound_pool: Array[AudioStream] = []
+@export var spit_sound_pool: Array[AudioStream] = []
+@export var witch_scream_sound_pool: Array[AudioStream] = []
+@export var witch_alert_sound_pool: Array[AudioStream] = []
+@export var water_enter_sound_pool: Array[AudioStream] = []
+@export var water_exit_sound_pool: Array[AudioStream] = []
+@export var tongue_sound_pool: Array[AudioStream] = []
+
 @export_group("正面抗性")
 ## 正面扇区内受到的伤害倍率：1.0 = 无减免（默认）。
 ## Hunter β 的「正面枪击完全回避」= 0.0；Tyrant 的硬抗 = 用 frontal_normalize 代替。
@@ -163,11 +179,54 @@ extends Resource
 ## 触发首狩り的最小距离（px）：更近则直接走普通 Attack。
 @export var pounce_trigger_min_dist: float = 110.0
 ## 触发首狩り的最大距离（px）：更远则继续正常追击。
-@export var pounce_trigger_max_dist: float = 340.0
+## 2026-10-29 用户要求「默认触发距离改短」：340 → 260（2× 缩放下约 2/3 屏）。
+@export var pounce_trigger_max_dist: float = 260.0
 ## 蓄力时长（秒）：给玩家反应窗口。
 @export var pounce_windup_seconds: float = 0.28
-## 冲刺时长（秒）。
+## 冲刺时长（秒）。⚠ 2026-10-29 起仅在 `pounce_dash_distance <= 0` 时作为旧口径兜底。
 @export var pounce_dash_seconds: float = 0.42
+## ★冲刺距离（px，2026-10-29 用户需求）：按「向前移动多少像素」结束冲刺，
+## 不再用时间决定距离。<=0 = 回退旧的 `pounce_dash_seconds × 速度` 口径。
+@export var pounce_dash_distance: float = 220.0
+## ★冲刺动作每帧时长（秒，2026-10-29）：冲刺期间攻击序列按此速度逐帧推进；
+## <=0 = 把序列均摊到整个冲刺时长（旧表现）。
+@export var pounce_dash_frame_seconds: float = 0.1
+## ★扑击前「前方挡路」判定半径（px，2026-10-29）：冲刺方向前方这个半径内
+## 若有**其它敌人**，本次不扑（避免穿过同伴/被卡住）。0 = 关闭判定。
+@export var pounce_block_radius: float = 26.0
+
+@export_group("舌头攻击（バイオゲラス，2026-10-29）")
+## 是否启用舌头攻击：中距离停步 → 蓄力 → 播放「舌头 + 本体新动作」特效 → 前方矩形判定。
+@export var tongue_enabled: bool = false
+## 触发距离带（px）：太近先走普通攻击，太远继续追击。
+@export var tongue_trigger_min_dist: float = 100.0
+@export var tongue_trigger_max_dist: float = 300.0
+## 蓄力时长（秒）：本体摆新动作、给玩家反应窗口。
+@export var tongue_windup_seconds: float = 0.35
+## 吐舌后摇（秒）。
+@export var tongue_recover_seconds: float = 0.7
+## 舌头攻击冷却（秒）：从后摇结束起算。
+@export var tongue_cooldown_seconds: float = 3.0
+## 舌头命中伤害（会乘难度倍率）。
+@export var tongue_damage: float = 30.0
+## 命中判定矩形：前方长度 × 横向宽度（px）。
+@export var tongue_hit_range: Vector2 = Vector2(220, 56)
+## 蓄力时本体使用的攻击表角色格（默认 0）。
+@export var tongue_body_frame: int = 0
+## 舌头特效场景（左右下方向）。留空 = 不播特效。
+@export var tongue_effect: PackedScene = null
+## 向上方向的舌头特效场景（5×5 表与横向不同）。
+@export var tongue_effect_up: PackedScene = null
+## 四个朝向的动画帧序列（对应 `art/Animations/バイオゲラス攻撃アニメ*.png` 的 5×5 格）。
+@export var tongue_frames_right: Array[int] = [4, 5, 6, 7]
+@export var tongue_frames_left: Array[int] = [10, 13, 14, 17, 18]
+@export var tongue_frames_down: Array[int] = [20, 21, 22, 23, 24]
+@export var tongue_frames_up: Array[int] = [8, 12, 13, 15, 17, 19]
+## 舌头特效每帧时长（秒）。
+@export var tongue_effect_frame_seconds: float = 0.09
+## 舌头攻击音效 / 音调。
+@export var tongue_sound: AudioStream = null
+@export var tongue_sound_pitch: float = 1.0
 ## 冲刺速度倍率（相对 move_speed）。
 @export var pounce_speed_mult: float = 1.8
 ## 突进绝对速度（2026-09-15）：>0 直接用作冲刺速度（忽略 move_speed×mult）。ハンター=400。
@@ -398,6 +457,57 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.pounce_trigger_max_dist = pounce_trigger_max_dist
 	enemy.pounce_windup_seconds = pounce_windup_seconds
 	enemy.pounce_dash_seconds = pounce_dash_seconds
+	enemy.pounce_dash_distance = pounce_dash_distance
+	enemy.pounce_dash_frame_seconds = pounce_dash_frame_seconds
+	enemy.pounce_block_radius = pounce_block_radius
+	# 舌头攻击（バイオゲラス）
+	enemy.tongue_enabled = tongue_enabled
+	enemy.tongue_trigger_min_dist = tongue_trigger_min_dist
+	enemy.tongue_trigger_max_dist = tongue_trigger_max_dist
+	enemy.tongue_windup_seconds = tongue_windup_seconds
+	enemy.tongue_recover_seconds = tongue_recover_seconds
+	enemy.tongue_cooldown_seconds = tongue_cooldown_seconds
+	enemy.tongue_damage = tongue_damage
+	enemy.tongue_hit_range = tongue_hit_range
+	enemy.tongue_body_frame = tongue_body_frame
+	enemy.tongue_effect = tongue_effect
+	enemy.tongue_effect_up = tongue_effect_up
+	enemy.tongue_frames_right = tongue_frames_right
+	enemy.tongue_frames_left = tongue_frames_left
+	enemy.tongue_frames_down = tongue_frames_down
+	enemy.tongue_frames_up = tongue_frames_up
+	enemy.tongue_effect_frame_seconds = tongue_effect_frame_seconds
+	if tongue_sound != null:
+		enemy.tongue_sound = tongue_sound
+		if tongue_sound_pool.is_empty():
+			enemy.tongue_sound_pool.clear()
+	if tongue_sound_pitch > 0.0:
+		enemy.tongue_sound_pitch = tongue_sound_pitch
+	# 音效随机池（非空才覆盖；空 = 沿用敌人自身池）
+	if not discover_sound_pool.is_empty():
+		enemy.discover_sound_pool = discover_sound_pool
+	if not hurt_sound_pool.is_empty():
+		enemy.hurt_sound_pool = hurt_sound_pool
+	if not attack_sound_pool.is_empty():
+		enemy.attack_sound_pool = attack_sound_pool
+	if not hit_target_sound_pool.is_empty():
+		enemy.hit_target_sound_pool = hit_target_sound_pool
+	if not death_sound_pool.is_empty():
+		enemy.death_sound_pool = death_sound_pool
+	if not pounce_sound_pool.is_empty():
+		enemy.pounce_sound_pool = pounce_sound_pool
+	if not spit_sound_pool.is_empty():
+		enemy.spit_sound_pool = spit_sound_pool
+	if not witch_scream_sound_pool.is_empty():
+		enemy.witch_scream_sound_pool = witch_scream_sound_pool
+	if not witch_alert_sound_pool.is_empty():
+		enemy.witch_alert_sound_pool = witch_alert_sound_pool
+	if not water_enter_sound_pool.is_empty():
+		enemy.water_enter_sound_pool = water_enter_sound_pool
+	if not water_exit_sound_pool.is_empty():
+		enemy.water_exit_sound_pool = water_exit_sound_pool
+	if not tongue_sound_pool.is_empty():
+		enemy.tongue_sound_pool = tongue_sound_pool
 	enemy.pounce_speed_mult = pounce_speed_mult
 	enemy.pounce_dash_speed = pounce_dash_speed
 	enemy.pounce_hit_radius = pounce_hit_radius
@@ -412,7 +522,11 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.water_submerge_ratio = water_submerge_ratio
 	enemy.water_submerge_alpha = water_submerge_alpha
 	enemy.water_enter_sound = water_enter_sound
+	if water_enter_sound_pool.is_empty():
+		enemy.water_enter_sound_pool.clear()
 	enemy.water_exit_sound = water_exit_sound
+	if water_exit_sound_pool.is_empty():
+		enemy.water_exit_sound_pool.clear()
 	# 特感专属攻击动画帧序列（空 = 沿用丧尸默认帧）
 	if attack_char_sequence.size() > 0:
 		enemy.attack_char_sequence = attack_char_sequence
@@ -458,23 +572,33 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.witch_enrage_speed_mult = witch_enrage_speed_mult
 	if witch_scream_sound != null:
 		enemy.witch_scream_sound = witch_scream_sound
+		if witch_scream_sound_pool.is_empty():
+			enemy.witch_scream_sound_pool.clear()
 	if witch_scream_sound_pitch > 0.0:
 		enemy.witch_scream_sound_pitch = witch_scream_sound_pitch
 	if witch_alert_sound != null:
 		enemy.witch_alert_sound = witch_alert_sound
+		if witch_alert_sound_pool.is_empty():
+			enemy.witch_alert_sound_pool.clear()
 	# 攻击挥击音效（空 = 沿用敌人自身 attack_sound）
 	if attack_sound != null:
 		enemy.attack_sound = attack_sound
+		if attack_sound_pool.is_empty():
+			enemy.attack_sound_pool.clear()
 	if attack_sound_pitch > 0.0:
 		enemy.attack_sound_pitch = attack_sound_pitch
 	# 击中目标音效（空 = 沿用敌人自身 hit_target_sound）
 	if hit_target_sound != null:
 		enemy.hit_target_sound = hit_target_sound
+		if hit_target_sound_pool.is_empty():
+			enemy.hit_target_sound_pool.clear()
 	if hit_target_sound_pitch > 0.0:
 		enemy.hit_target_sound_pitch = hit_target_sound_pitch
 	# 死亡音效（空 = 沿用敌人自身 death_sound）
 	if death_sound != null:
 		enemy.death_sound = death_sound
+		if death_sound_pool.is_empty():
+			enemy.death_sound_pool.clear()
 	if death_sound_pitch > 0.0:
 		enemy.death_sound_pitch = death_sound_pitch
 	# 気まぐれ撤离（ティンダロス）：AI 字段，Client 不跑状态机 → 注入也无副作用
@@ -487,6 +611,8 @@ func apply_to_enemy(enemy: Node) -> void:
 	# 首狩り起跳/突进音效（空 = 沿用敌人自身 pounce_sound，再回退 attack_sound）
 	if pounce_sound != null:
 		enemy.pounce_sound = pounce_sound
+		if pounce_sound_pool.is_empty():
+			enemy.pounce_sound_pool.clear()
 	if pounce_sound_pitch > 0.0:
 		enemy.pounce_sound_pitch = pounce_sound_pitch
 	# 丸呑み（ハンターγ）
@@ -504,9 +630,13 @@ func apply_to_enemy(enemy: Node) -> void:
 		enemy.swallow_texture = swallow_texture
 	if discover_sound != null:
 		enemy.discover_sound = discover_sound
+		if discover_sound_pool.is_empty():
+			enemy.discover_sound_pool.clear()
 	if discover_sound_pitch > 0.0:
 		enemy.discover_sound_pitch = discover_sound_pitch
 	if hurt_sound != null:
 		enemy.hurt_sound = hurt_sound
+		if hurt_sound_pool.is_empty():
+			enemy.hurt_sound_pool.clear()
 	if hurt_sound_pitch > 0.0:
 		enemy.hurt_sound_pitch = hurt_sound_pitch

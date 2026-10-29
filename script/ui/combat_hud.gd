@@ -72,6 +72,8 @@ var _last_secondary_ammo_text: String = AMMO_TEXT_UNSET
 var _last_throwable_item: ItemData = null
 var _last_throwable_count: int = -1
 var _last_support_item: ItemData = null
+## 背包指示（仅小夫显示「背包 1/2」；普通角色隐藏）。
+var _backpack_label: Label = null
 ## 首次刷新强制应用：场景里的图标节点预置了占位纹理（非空），若首帧缓存恰为 null 且当前值
 ## 也是 null，脏检查会判定"未变"而跳过 → 占位图残留（显示 bug）。首刷绕过所有脏检查。
 var _force_refresh: bool = true
@@ -85,6 +87,7 @@ func _ready() -> void:
 		_holdout_root.visible = false
 	_configure_tp_label()
 	_apply_ammo_font()
+	_ensure_backpack_label()
 	_cache_action_hint_rows()
 	## 字体切换时重建弹药标签字体（本 HUD 的标签带 ∞ 兜底链，不能走整树字体重套）
 	if Global.has_signal("font_changed") and not Global.font_changed.is_connected(_on_global_font_changed):
@@ -255,6 +258,40 @@ func _update_weapons() -> void:
 			secondary_icon.visible = false
 	_update_ammo_label(primary_ammo_label, primary, state, true)
 	_update_ammo_label(secondary_ammo_label, secondary, state, false)
+	_update_backpack_label(state)
+
+
+## 小夫的第二背包指示（2026-10-29）。普通角色完全不显示，避免多出一个无意义标签。
+func _ensure_backpack_label() -> void:
+	if _backpack_label != null:
+		return
+	_backpack_label = Label.new()
+	_backpack_label.name = "BackpackLabel"
+	_backpack_label.position = Vector2(760, 28)
+	_backpack_label.size = Vector2(160, 36)
+	_backpack_label.z_index = 3
+	_backpack_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_backpack_label.add_theme_font_size_override("font_size", 24)
+	_backpack_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.55))
+	_backpack_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 1))
+	_backpack_label.add_theme_constant_override("shadow_offset_x", 2)
+	_backpack_label.add_theme_constant_override("shadow_offset_y", 2)
+	if _crisp_ui_font != null:
+		_backpack_label.add_theme_font_override("font", _crisp_ui_font)
+	_backpack_label.visible = false
+	add_child(_backpack_label)
+
+
+func _update_backpack_label(state: PlayerState) -> void:
+	if _backpack_label == null:
+		return
+	## 联机 Client 的 backpack_index 不在快照里（只同步当前背包的两把武器），
+	## 显示「背包 1/2」可能与 Host 实际不符 → 只在单机 / Host 显示。
+	var online: bool = Net != null and Net.has_method("has_network") and bool(Net.has_network())
+	var show: bool = state != null and state.has_second_backpack() and (not online or Net.is_host)
+	_backpack_label.visible = show
+	if show:
+		_backpack_label.text = "背包 %d/2" % (state.backpack_index + 1)
 
 
 ## 武器图标上的「弹夹/备弹」显示；近战等无弹夹武器（magazine_capacity=0）隐藏。
@@ -701,7 +738,7 @@ func _collect_action_hints() -> Array:
 		return out
 	if in_weapon:
 		var down_key: String = _action_key_text(&"举起放下武器键")
-		## 放下键跟着「举的是哪把」走：举主武器 → Shift / 1，举副武器 → Shift / 2。
+		## 放下键跟着「举的是哪格」走：第 1 格 → Shift / 1，第 2 格 → Shift / 2。
 		## 拿不到槽位（早期帧）时只显示 Shift，不猜。
 		var slot: String = _active_weapon_slot(state)
 		var slot_key: String = ""
@@ -722,9 +759,9 @@ func _collect_action_hints() -> Array:
 	## ── 未举枪（地面态）：能做的都在这里 ──
 	var slot: String = _preferred_weapon_slot(state)
 	if slot == "secondary":
-		_push_hint(out, &"副武器键", "举起副武器")
+		_push_hint(out, &"副武器键", "举起第 2 格武器")
 	elif slot == "primary":
-		_push_hint(out, &"主武器键", "举起主武器")
+		_push_hint(out, &"主武器键", "举起第 1 格武器")
 	## 觉醒只能在举枪（構え）中发动 → 地面态不传它。
 	_push_skill_hints(out, state, false)
 	_push_hint(out, &"推击键", "推击")

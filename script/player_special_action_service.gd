@@ -137,8 +137,23 @@ func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 			# 静香「しゃがみ回避」：基础无敌 duration 秒；按住 SA 键持续蹲（急速耗 TP）
 			_start_crouch_dodge(skill)
 		SkillData.SkillType.SA_BACKPACK:
-			# スネ夫「バックパック」：背包系统未实装，占位
-			print("[SA] バックパック：背包系统未实装（占位）")
+			# スネ夫「バックパック」（2026-10-29 实装）：被动多一个背包，SA 切换当前背包。
+			# 每个背包两个武器格；消耗品/投掷物是随身腰包，不随背包切换。
+			var bp_state: PlayerState = Players.get_state_for_entity(_p)
+			if bp_state == null or not bp_state.has_second_backpack():
+				print("[SA] バックパック：当前角色没有第二背包")
+			else:
+				var was_holding: bool = _p.is_weapon_mode_active()
+				if bp_state.switch_backpack():
+					var new_weapon: WeaponData = bp_state.get_active_weapon()
+					if was_holding:
+						if new_weapon != null:
+							_p.rebind_weapon_after_equip(new_weapon)
+						else:
+							_p.exit_weapon_mode()
+					print("[SA] バックパック：切换到背包 %d（%s）" % [
+						bp_state.backpack_index + 1,
+						new_weapon.item_name if new_weapon else "空手"])
 		_:
 			print("[技能] %s：无绑定效果（GENERIC 占位）" % skill.skill_name)
 	# 联机（C2）：Host 侧结算完成后广播表现（Client 解析本地同名技能：

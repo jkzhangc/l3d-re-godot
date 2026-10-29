@@ -34,6 +34,8 @@ enum AnimOverride { INHERIT = 0, ENABLED = 1, DISABLED = 2 }
 
 ## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+## 成就系统入口（preload 常量而不是 class_name：本项目 class_name 不进全局类缓存）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
 
 # ═══════════════════════════════════════
 # 配置 — 开关
@@ -112,6 +114,12 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 @export var interact_label_on: String = ""
 ## 交互距离（px）。
 @export_range(8.0, 512.0, 1.0) var interact_range: float = 56.0
+
+@export_group("照明开关（成就判定）")
+## 本开关是否算「照明」。玩家把它拨到「开」时记一次 `Achievements.on_lights_used()`，
+## 用于原作成就「我们是暗夜族」（夜行猎手终章全程不打开照明）。
+## ⚠ 只对**拨到开**记一次；关掉再开也只记同一局（幂等）。默认 false，不影响其它机关。
+@export var is_light_switch: bool = false
 
 # ═══════════════════════════════════════
 # 配置 — 联动（2026-10-28 用户需求）
@@ -239,6 +247,9 @@ func is_on() -> bool:
 ## → 同步给 `linked_switches`。`animate=false` 时直接落位（读档 / 初始化用）。
 func set_on(value: bool, animate: bool = true) -> void:
 	_is_on = value
+	## 成就「我们是暗夜族」：照明开关被拨到「开」就记一笔（关掉不会清除本局记录）。
+	if _is_on and is_light_switch:
+		ACHIEVEMENTS.on_lights_used()
 	_apply_state_appearance()
 	if animate:
 		_start_move(_state_duration())

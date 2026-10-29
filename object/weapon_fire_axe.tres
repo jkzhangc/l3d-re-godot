@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dbq8ycvwus5u0"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://1kco17h3mitp"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="1_fmbrv"]
@@ -28,6 +28,27 @@ script = ExtResource("8_gmy81")
 
 [sub_resource type="Resource" id="Resource_5chju"]
 script = ExtResource("8_gmy81")
+
+[sub_resource type="Resource" id="Resource_gobim"]
+script = ExtResource("8_gmy81")
+down = Vector2(2, 28)
+left = Vector2(-8, 30)
+right = Vector2(8, 30)
+up = Vector2(-4, 26)
+
+[sub_resource type="Resource" id="Resource_nmhwc"]
+script = ExtResource("8_gmy81")
+down = Vector2(-2, 26)
+left = Vector2(0, 28)
+right = Vector2(0, 28)
+up = Vector2(4, 30)
+
+[sub_resource type="Resource" id="Resource_7edgm"]
+script = ExtResource("8_gmy81")
+down = Vector2(-2, 26)
+left = Vector2(0, 28)
+right = Vector2(0, 28)
+up = Vector2(4, 30)
 
 [sub_resource type="Resource" id="Resource_gmy81"]
 script = ExtResource("8_gmy81")
@@ -81,6 +102,9 @@ melee_weapon_sprite_offsets = {
 "suneo": SubResource("Resource_5chju")
 }
 melee_weapon_sprite_step_offsets = {
+"bigg:0": SubResource("Resource_gobim"),
+"bigg:1": SubResource("Resource_nmhwc"),
+"bigg:2": SubResource("Resource_7edgm"),
 "nobita:0": SubResource("Resource_gmy81"),
 "nobita:1": SubResource("Resource_yegmb"),
 "nobita:2": SubResource("Resource_jnhta")

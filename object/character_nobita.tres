@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://28lg1sihaayy"]
+[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://blrhmbkq42534"]
 
 [ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://dsmgfx2at3vf6" path="res://art/Characters/のび太セット.png" id="1_8a3k1"]
@@ -11,11 +11,14 @@
 [ext_resource type="Resource" path="res://object/skill_test.tres" id="7_skill"]
 [ext_resource type="Resource" path="res://object/skill_sa_kankaku.tres" id="9_skill"]
 [ext_resource type="AudioStream" uid="uid://drnowuxstl1o1" path="res://sound/(効果音)打撃1.ogg" id="10_counter"]
+[ext_resource type="Texture2D" uid="uid://dit06cxwuy6mn" path="res://art/Characters/のび太セット近战.png" id="17_gbxpp"]
+[ext_resource type="Texture2D" uid="uid://dwyjyjwk0ve33" path="res://art/Characters/のび太セット近接武器２.png" id="20_iva5t"]
 [ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="20_knife"]
 [ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="21_mag"]
 [ext_resource type="Texture2D" uid="uid://r04meep8xkd2" path="res://art/Characters/のび太セットフライパン.png" id="22_fp"]
 [ext_resource type="Texture2D" uid="uid://ivldoltn11wm" path="res://art/Characters/のび太セットボウガン.png" id="23_bg"]
 [ext_resource type="Texture2D" uid="uid://cqmnwxbhnmwut" path="res://art/Characters/のび太セット近接武器.png" id="23_nq468"]
+[ext_resource type="Texture2D" uid="uid://bslp7hqoi2wwy" path="res://art/Characters/のび太セット近战5.png" id="24_1esmk"]
 [ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="24_ar"]
 [ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="25_sg"]
 [ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="26_smg"]
@@ -44,21 +47,25 @@ weapon_walk_textures = {
 "FireAxe": ExtResource("23_nq468"),
 "Frypan": ExtResource("22_fp"),
 "Knife": ExtResource("20_knife"),
-"Knuckles": ExtResource("31_melee"),
+"Knuckles": ExtResource("17_gbxpp"),
 "Launcher": ExtResource("27_gl"),
 "Magnum": ExtResource("21_mag"),
 "Melee": ExtResource("31_melee"),
 "Melee_LR": ExtResource("23_nq468"),
-"Pipe": ExtResource("31_melee"),
+"Pipe": ExtResource("20_iva5t"),
 "Pistol": ExtResource("1_8a3k1"),
 "RLauncher": ExtResource("28_rpg"),
 "Rifle": ExtResource("24_ar"),
 "Shotgun": ExtResource("25_sg"),
-"Shovel": ExtResource("31_melee"),
-"Sledgehammer": ExtResource("31_melee"),
+"Shovel": ExtResource("24_1esmk"),
+"Sledgehammer": ExtResource("23_nq468"),
 "Smg": ExtResource("26_smg"),
 "Sniper": ExtResource("29_snp"),
 "Uchigatana": ExtResource("31_melee")
+}
+weapon_attack_walk_textures = {
+"Pipe": ExtResource("23_nq468"),
+"Shovel": ExtResource("23_nq468")
 }
 allowed_primary_weapons = Array[String](["sniper_01", "rifle_01", "shotgun_01", "smg_01", "launcher_01", "rocket_01", "launcher_acid_01", "launcher_ice_01", "launcher_thunder_01", "bowgun_01", "rifle_02", "rifle_03", "shotgun_02", "shotgun_03", "smg_02", "smg_03", "sniper_02", "sniper_03", "launcher_02", "rocket_02", "rocket_03", "mg_01", "at_rifle_01"])
 allowed_secondary_weapons = Array[String](["pistol_01", "knife_01", "magnum_01", "frypan_01", "pistol_02", "pistol_03", "pistol_04", "magnum_02", "magnum_03", "fire_axe", "sledgehammer", "shovel", "pipe", "combat_knife", "uchigatana", "knuckles"])

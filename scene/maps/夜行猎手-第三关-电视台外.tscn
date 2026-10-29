@@ -2,18 +2,26 @@
 
 [ext_resource type="TileSet" uid="uid://dwbd4brbkyfs6" path="res://tres/Map0015_lower_tileset.tres" id="1_70hjg"]
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_7mi4f"]
+[ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="3_mju30"]
 [ext_resource type="TileSet" uid="uid://dkdowmqknxpee" path="res://tres/Map0015_upper_tileset.tres" id="3_qi5ou"]
+[ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="4_011wa"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="4_dptmn"]
+[ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="5_a55ch"]
 [ext_resource type="Script" uid="uid://b8udnx3eyss6u" path="res://script/night_overlay.gd" id="5_e5mq0"]
 [ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="6_fvr6c"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="7_pjeid"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="8_msxwj"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="9_21l25"]
+[ext_resource type="Resource" uid="uid://xi0k4nuyj31j" path="res://object/weapon_combat_knife.tres" id="9_cn2cj"]
 [ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="10_1xumd"]
+[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="10_rrxwh"]
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="11_vaka2"]
+[ext_resource type="Resource" uid="uid://lu2vkf4nagjj" path="res://object/weapon_pipe.tres" id="11_ve673"]
 [ext_resource type="Resource" uid="uid://bjsfi6r2o0ulo" path="res://tres/zombies/男性ゾンビ.tres" id="12_c73fe"]
 [ext_resource type="Resource" uid="uid://ycwi6hulksfl" path="res://tres/zombies/学生ゾンビ.tres" id="13_ocmhn"]
+[ext_resource type="Resource" uid="uid://htaax3n8fscn" path="res://object/weapon_uchigatana.tres" id="14_4fc05"]
 [ext_resource type="Resource" uid="uid://cf1ay21u0ekph" path="res://tres/zombies/女子学生ゾンビ.tres" id="14_dboia"]
+[ext_resource type="Resource" uid="uid://bbf6nlf1av85w" path="res://object/weapon_sledgehammer.tres" id="15_dub8j"]
 [ext_resource type="Resource" path="res://tres/zombies/職員ゾンビ.tres" id="15_o8nhu"]
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="16_oi3kc"]
 [ext_resource type="Resource" uid="uid://dfqkujph8xko0" path="res://tres/specials/ハンター.tres" id="17_68km2"]
@@ -41,6 +49,24 @@
 [ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="39_gn3qb"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="40_0dw8e"]
 
+[sub_resource type="Resource" id="Resource_hg6c6"]
+script = ExtResource("38_melup")
+items = Array[Resource]([ExtResource("9_cn2cj"), ExtResource("14_4fc05"), null])
+weights = Array[float]([0.3, 0.3, 0.3])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_asx8q"]
+script = ExtResource("38_melup")
+items = Array[Resource]([ExtResource("27_ex2fi"), ExtResource("10_rrxwh"), null])
+weights = Array[float]([0.3, 0.3, 0.3])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
+[sub_resource type="Resource" id="Resource_g244e"]
+script = ExtResource("38_melup")
+items = Array[Resource]([ExtResource("15_dub8j"), ExtResource("11_ve673"), null])
+weights = Array[float]([0.3, 0.3, 0.3])
+metadata/_custom_type_script = "uid://bt25yy0w1k47q"
+
 [sub_resource type="Resource" id="Resource_se8v2"]
 script = ExtResource("38_melup")
 items = Array[Resource]([ExtResource("22_b47ug"), ExtResource("23_4c40e"), ExtResource("24_vjeka"), ExtResource("25_xkc03"), ExtResource("26_ul0f3"), ExtResource("27_ex2fi"), ExtResource("28_0k4rf"), ExtResource("29_g81cv"), ExtResource("30_70ckt"), ExtResource("31_vyehq"), ExtResource("32_ct32p"), ExtResource("33_jsaew"), ExtResource("34_weitt"), ExtResource("35_b1ber"), ExtResource("36_1hqnt"), ExtResource("37_o80ww")])
@@ -61,10 +87,39 @@ position = Vector2(1744, 1200)
 
 [node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_7mi4f")]
 
+[node name="TeleportPoint2" type="Node2D" parent="DecorLayer" unique_id=1225456893]
+position = Vector2(784, 872)
+script = ExtResource("3_mju30")
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台内.tscn"
+walk_texture = ExtResource("4_011wa")
+walk_char_index = 6
+walk_direction = 3
+
+[node name="TeleportPoint3" type="Node2D" parent="DecorLayer" unique_id=1755103037]
+position = Vector2(816, 872)
+script = ExtResource("3_mju30")
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台内.tscn"
+walk_texture = ExtResource("4_011wa")
+walk_char_index = 6
+walk_direction = 3
+
+[node name="小刀跟打刀" parent="DecorLayer" unique_id=1863981552 instance=ExtResource("5_a55ch")]
+position = Vector2(272, 736)
+pool = SubResource("Resource_hg6c6")
+
+[node name="投掷物类" parent="DecorLayer" unique_id=143079140 instance=ExtResource("5_a55ch")]
+position = Vector2(432, 1192)
+pool = SubResource("Resource_asx8q")
+
+[node name="近战类" parent="DecorLayer" unique_id=790311539 instance=ExtResource("5_a55ch")]
+position = Vector2(1232, 744)
+pool = SubResource("Resource_g244e")
+
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=590295387]
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAQAAoAAAAAAAAAAAARAAoAAAABAAAAAAAUAAoAAAAAAAAAAAAVAAoAAAABAAAAAAAYAAoAAAAAAAAAAAAZAAoAAAABAAAAAAAcAAoAAAAAAAAAAAAdAAoAAAABAAAAAAAgAAoAAAAAAAAAAAAhAAoAAAABAAAAAAAQAAsAAAACAAAAAAARAAsAAAADAAAAAAAUAAsAAAACAAAAAAAVAAsAAAADAAAAAAAYAAsAAAACAAAAAAAZAAsAAAADAAAAAAAcAAsAAAACAAAAAAAdAAsAAAADAAAAAAAgAAsAAAACAAAAAAAhAAsAAAADAAAAAAAQAA4AAAAAAAAAAAARAA4AAAABAAAAAAAUAA4AAAAAAAAAAAAVAA4AAAABAAAAAAAYAA4AAAAAAAAAAAAZAA4AAAABAAAAAAAcAA4AAAAAAAAAAAAdAA4AAAABAAAAAAAgAA4AAAAAAAAAAAAhAA4AAAABAAAAAAAQAA8AAAACAAAAAAARAA8AAAADAAAAAAAUAA8AAAACAAAAAAAVAA8AAAADAAAAAAAYAA8AAAACAAAAAAAZAA8AAAADAAAAAAAcAA8AAAACAAAAAAAdAA8AAAADAAAAAAAgAA8AAAACAAAAAAAhAA8AAAADAAAAAAAQABIAAAAAAAAAAAARABIAAAABAAAAAAAUABIAAAAAAAAAAAAVABIAAAABAAAAAAAYABIAAAAAAAAAAAAZABIAAAABAAAAAAAcABIAAAAAAAAAAAAdABIAAAABAAAAAAAgABIAAAAAAAAAAAAhABIAAAABAAAAAAAHABMAAAAEAAAAAAAIABMAAAAEAAAAAAAJABMAAAAEAAAAAAAKABMAAAAEAAAAAAALABMAAAAEAAAAAAAMABMAAAAEAAAAAAANABMAAAAEAAAAAAAOABMAAAAEAAAAAAAQABMAAAACAAAAAAARABMAAAADAAAAAAAUABMAAAACAAAAAAAVABMAAAADAAAAAAAYABMAAAACAAAAAAAZABMAAAADAAAAAAAcABMAAAACAAAAAAAdABMAAAADAAAAAAAgABMAAAACAAAAAAAhABMAAAADAAAAAAAjABMAAAAEAAAAAAAkABMAAAAEAAAAAAAlABMAAAAEAAAAAAAmABMAAAAEAAAAAAAnABMAAAAEAAAAAAAoABMAAAAEAAAAAAApABMAAAAEAAAAAAAHABQAAAAFAAAAAAApABQAAAAGAAAAAAAHABUAAAAFAAAAAAApABUAAAAGAAAAAAAHABYAAAAFAAAAAAAQABYAAAAAAAAAAAARABYAAAABAAAAAAAUABYAAAAAAAAAAAAVABYAAAABAAAAAAAYABYAAAAAAAAAAAAZABYAAAABAAAAAAAcABYAAAAAAAAAAAAdABYAAAABAAAAAAAgABYAAAAAAAAAAAAhABYAAAABAAAAAAApABYAAAAGAAAAAAAHABcAAAAFAAAAAAAQABcAAAACAAAAAAARABcAAAADAAAAAAAUABcAAAACAAAAAAAVABcAAAADAAAAAAAYABcAAAACAAAAAAAZABcAAAADAAAAAAAcABcAAAACAAAAAAAdABcAAAADAAAAAAAgABcAAAACAAAAAAAhABcAAAADAAAAAAApABcAAAAGAAAAAAAHABgAAAAFAAAAAAAJABgAAAAHAAAAAAAKABgAAAAIAAAAAAAMABgAAAAHAAAAAAANABgAAAAIAAAAAAAkABgAAAAJAAAAAAAlABgAAAAKAAAAAAAnABgAAAAJAAAAAAAoABgAAAAKAAAAAAApABgAAAAGAAAAAAAHABkAAAAFAAAAAAAJABkAAAALAAAAAAAKABkAAAAMAAAAAAAMABkAAAALAAAAAAANABkAAAAMAAAAAAAYABkAAAANAAAAAAAZABkAAAANAAAAAAAkABkAAAAOAAAAAAAlABkAAAAPAAAAAAAnABkAAAAOAAAAAAAoABkAAAAPAAAAAAApABkAAAAGAAAAAAAHABoAAAAFAAAAAAAYABoAAAAAAAEAAAAZABoAAAAAAAEAAAApABoAAAAGAAAAAAAHABsAAAAFAAAAAAApABsAAAAGAAAAAAAHABwAAAAFAAAAAAAJABwAAAAJAAAAAAAKABwAAAAKAAAAAAApABwAAAAGAAAAAAAHAB0AAAAFAAAAAAAJAB0AAAAOAAAAAAAKAB0AAAAPAAAAAAApAB0AAAAGAAAAAAAHAB4AAAAFAAAAAAApAB4AAAAGAAAAAAAsAB4AAAABAAEAAAAvAB4AAAABAAEAAAAyAB4AAAABAAEAAAA1AB4AAAABAAEAAAAHAB8AAAACAAEAAAAIAB8AAAAEAAAAAAAJAB8AAAAEAAAAAAAKAB8AAAAEAAAAAAALAB8AAAAEAAAA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")
 tile_set = ExtResource("3_qi5ou")
+occlusion_enabled = false
 
 [node name="Camera2D2" type="Camera2D" parent="." unique_id=1695993925]
 zoom = Vector2(2, 2)

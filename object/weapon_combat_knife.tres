@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cllxefu0aqrri"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://xi0k4nuyj31j"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="2"]
@@ -10,6 +10,7 @@
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_17khu"]
+[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="8_qrx06"]
 
 [resource]
 script = ExtResource("1")
@@ -43,3 +44,5 @@ description = "军用战斗刀。比小刀沉一点、伤害高一档，出手�
 icon = ExtResource("4")
 sell_price = 120
 max_stack = 1
+pickup_texture = ExtResource("8_qrx06")
+pickup_char_idx = 7

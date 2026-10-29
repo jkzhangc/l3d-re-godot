@@ -99,9 +99,22 @@ func _ready() -> void:
 
 ## 由 HoldoutMachine 调用：开始终章流程。
 func start() -> void:
-	## 成就：战役通关结算（通关 / 单人 / 无伤 / 不存档 / 速通）——
+	## 成就：战役通关结算（通关 / 单人 / 无伤 / 不存档 / 速通 / 战役专属）——
 	## 必须在这里做，而不是弹窗那一步：弹窗之前玩家可能按跳过，结算不能丢。
-	ACHIEVEMENTS.finish_campaign(Players.all_entities(true).size())
+	## 战役 id 决定「太勉强了吧」（第二战役）这类专属成就是否给。
+	## 优先按**当前场景**反查（选章节 / 调试跳关不经过 campaign_select，selected_campaign 可能是旧值）；
+	## 查不到再退回 Global.selected_campaign。
+	var campaign_id: String = ""
+	var tree: SceneTree = get_tree()
+	if tree != null and tree.current_scene != null:
+		campaign_id = CampaignData.campaign_id_for_scene(tree.current_scene.scene_file_path)
+	if campaign_id.is_empty():
+		var g: Node = get_node_or_null("/root/Global")
+		if g != null:
+			var cd: Variant = g.get("selected_campaign")
+			if cd is CampaignData:
+				campaign_id = str((cd as CampaignData).campaign_id)
+	ACHIEVEMENTS.finish_campaign(Players.all_entities(true).size(), campaign_id)
 	# 黑幕淡出前先清场：触发 ED 前残留的伤害数字飘字（layer 100 > 黑幕 90）会
 	# 压在黑幕和总结页上直到切场景——直接全清。
 	DamageNumber.clear_all()

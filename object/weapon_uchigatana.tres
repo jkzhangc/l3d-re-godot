@@ -1,24 +1,63 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://brj1qyq53qv5c"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://htaax3n8fscn"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="1_qqwny"]
 [ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="2"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_qqwny"]
 [ext_resource type="Texture2D" uid="uid://c0hrd5hio2mqi" path="res://art/WeaponAttack/打刀/打刀_attack1.png" id="3"]
 [ext_resource type="Texture2D" uid="uid://bp72d5nhrf4go" path="res://art/Ui/装備アイコン打刀.png" id="4"]
-[ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
 [ext_resource type="AudioStream" uid="uid://cq8l1xcyq0g13" path="res://sound/打撃5.ogg" id="6"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_vlnu6"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_ysum3"]
+[ext_resource type="Texture2D" uid="uid://tbcifsi5nk4r" path="res://art/Weapon/A武器セット５.png" id="9_ysum3"]
+
+[sub_resource type="Resource" id="Resource_vlnu6"]
+script = ExtResource("8_ysum3")
+down = Vector2(22, 44)
+left = Vector2(-24, 43)
+right = Vector2(23, 40)
+
+[sub_resource type="Resource" id="Resource_ysum3"]
+script = ExtResource("8_ysum3")
+down = Vector2(-18, 23)
+
+[sub_resource type="Resource" id="Resource_u3eqk"]
+script = ExtResource("8_ysum3")
+down = Vector2(-18, 23)
+
+[sub_resource type="Resource" id="Resource_6enr3"]
+script = ExtResource("8_ysum3")
+down = Vector2(0, 32)
+left = Vector2(-4, 33)
+right = Vector2(4, 33)
+up = Vector2(-2, 34)
+
+[sub_resource type="Resource" id="Resource_xil3c"]
+script = ExtResource("8_ysum3")
+down = Vector2(-4, 30)
+left = Vector2(0, 33)
+right = Vector2(0, 33)
+up = Vector2(0, 34)
+
+[sub_resource type="Resource" id="Resource_gsgw5"]
+script = ExtResource("8_ysum3")
+down = Vector2(-4, 30)
+left = Vector2(0, 33)
+right = Vector2(0, 33)
+up = Vector2(0, 34)
 
 [resource]
 script = ExtResource("1")
 attack_power = 50
 weapon_state_name = "Uchigatana"
 weapon_walk_texture = ExtResource("2")
+weapon_raise_char_sequence = Array[int]([0])
+weapon_raise_frame_durations = Array[float]([0.12])
 is_ranged = false
 weapon_slot = 1
-attack_sound = ExtResource("5")
+attack_sound = ExtResource("1_qqwny")
 empty_fire_sound = ExtResource("7")
 raise_sound = ExtResource("7")
 lower_sound = ExtResource("7")
@@ -28,13 +67,24 @@ melee_weapon_sprite = ExtResource("3")
 melee_weapon_sprite_seq_cols = {
 0: 0,
 1: 1,
-2: 1,
-3: 2
+2: 2
+}
+melee_weapon_sprite_step_offsets = {
+"nobita:0": SubResource("Resource_6enr3"),
+"nobita:1": SubResource("Resource_xil3c"),
+"nobita:2": SubResource("Resource_gsgw5")
 }
 attack_char_sequence = Array[int]([3, 4, 5, 2])
-melee_attack_char_sequence = Array[int]([3, 4, 5, 2])
-melee_attack_frame_durations = Array[float]([0.1, 0.1, 0.2, 0.1])
+melee_attack_char_sequence = Array[int]([4, 5, 5])
+melee_attack_frame_durations = Array[float]([0.1, 0.06, 0.18])
 melee_range_size = Vector2(76, 36)
+melee_attack2_char_sequence = Array[int]([6, 7, 7])
+melee_attack2_frame_durations = Array[float]([0.1, 0.06, 0.18])
+melee_weapon_sprite_attack2_step_offsets = {
+"nobita:0": SubResource("Resource_vlnu6"),
+"nobita:1": SubResource("Resource_ysum3"),
+"nobita:2": SubResource("Resource_u3eqk")
+}
 item_id = "uchigatana"
 item_name = "打刀"
 item_type = 3
@@ -42,3 +92,5 @@ description = "刃口完好的日本刀。挥速快、会心高，两连击能�
 icon = ExtResource("4")
 sell_price = 280
 max_stack = 1
+pickup_texture = ExtResource("9_ysum3")
+pickup_char_idx = 3

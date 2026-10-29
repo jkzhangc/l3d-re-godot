@@ -14,10 +14,10 @@
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="7_meh4g"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_n6iv6"]
 [ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="8_585ik"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="8_l8yke"]
+[ext_resource type="Resource" path="res://object/item_first_aid_spray.tres" id="8_l8yke"]
 [ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="9_8to2r"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="9_lc7ol"]
-[ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="10_847u6"]
+[ext_resource type="Resource" uid="uid://b2dwgd3813nqv" path="res://object/weapon_knife.tres" id="10_847u6"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="10_lc7ol"]
 [ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="10_us48l"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="11_548yc"]
@@ -26,62 +26,55 @@
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="11_n6iv6"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="12_d45xp"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="13_ijbw6"]
-[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="14_l2ift"]
+[ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="14_l2ift"]
 [ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="15_oprsx"]
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="16_mfjch"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="17_s2v06"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="18_xcdn1"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="23_847u6"]
 [ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="24_548yc"]
+[ext_resource type="Resource" uid="uid://xi0k4nuyj31j" path="res://object/weapon_combat_knife.tres" id="60"]
+[ext_resource type="Resource" uid="uid://b7bgo1y5jxegx" path="res://object/weapon_knuckles.tres" id="61"]
+[ext_resource type="Resource" uid="uid://lu2vkf4nagjj" path="res://object/weapon_pipe.tres" id="62"]
+[ext_resource type="Resource" uid="uid://cymq4ft84h6th" path="res://object/weapon_shovel.tres" id="63"]
+[ext_resource type="Resource" uid="uid://1kco17h3mitp" path="res://object/weapon_fire_axe.tres" id="64"]
+[ext_resource type="Resource" uid="uid://htaax3n8fscn" path="res://object/weapon_uchigatana.tres" id="65"]
+[ext_resource type="Resource" uid="uid://bbf6nlf1av85w" path="res://object/weapon_sledgehammer.tres" id="66"]
+[ext_resource type="Resource" uid="uid://ctqod5yy31y7j" path="res://object/item_painkiller.tres" id="cw1"]
+[ext_resource type="Resource" uid="uid://u0luef5osvt4" path="res://object/item_adrenaline.tres" id="cw2"]
+[ext_resource type="Resource" uid="uid://bip17yw6uvt73" path="res://object/item_acid_bottle.tres" id="cw3"]
+[ext_resource type="Resource" uid="uid://c0aukikk6ru08" path="res://object/item_bolt_grenade.tres" id="cw4"]
+[ext_resource type="Resource" uid="uid://bgdxoiog7xa8f" path="res://object/item_nitrogen.tres" id="cw5"]
+[ext_resource type="Resource" uid="uid://c05b7iuwbt8ov" path="res://object/item_throwing_knife.tres" id="cw6"]
+[ext_resource type="Resource" uid="uid://8mf8cqpqwwr7" path="res://object/item_aid_box.tres" id="cw7"]
+[ext_resource type="Resource" uid="uid://ca12vm5oxp7k1" path="res://object/throwable_dynamite.tres" id="cw9"]
+[ext_resource type="Resource" uid="uid://bbflshgr4n2x" path="res://object/throwable_flash.tres" id="cw10"]
+[ext_resource type="Resource" uid="uid://b7glacid5x2m" path="res://object/weapon_launcher_acid.tres" id="cw11"]
+[ext_resource type="Resource" uid="uid://b4glice3nx8q" path="res://object/weapon_launcher_ice.tres" id="cw12"]
+[ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="cw13"]
+[ext_resource type="Resource" uid="uid://500yougot5hs" path="res://object/weapon_pistol_02.tres" id="nw9"]
+[ext_resource type="Resource" uid="uid://cxbosoyktjdyd" path="res://object/weapon_pistol_03.tres" id="nw10"]
+[ext_resource type="Resource" uid="uid://dcfsh5kehl30v" path="res://object/weapon_pistol_04.tres" id="nw11"]
+[ext_resource type="Resource" uid="uid://bekfaufypr6w2" path="res://object/weapon_smg_02.tres" id="nw12"]
+[ext_resource type="Resource" uid="uid://eoolxq3n7bow" path="res://object/weapon_smg_03.tres" id="nw13"]
+[ext_resource type="Resource" uid="uid://cn484em6ad0d6" path="res://object/weapon_rifle_02.tres" id="nw14"]
+[ext_resource type="Resource" uid="uid://qcuih26d3jjr" path="res://object/weapon_rifle_03.tres" id="nw15"]
+[ext_resource type="Resource" uid="uid://bc7lqtpcp7jg3" path="res://object/weapon_shotgun_02.tres" id="nw17"]
+[ext_resource type="Resource" uid="uid://jm88weoi4nm4" path="res://object/weapon_shotgun_03.tres" id="nw18"]
+[ext_resource type="Resource" uid="uid://batrt4qlu61is" path="res://object/weapon_sniper_02.tres" id="nw19"]
+[ext_resource type="Resource" uid="uid://ckqf4k1fb4ylo" path="res://object/weapon_sniper_03.tres" id="nw20"]
+[ext_resource type="Resource" uid="uid://dod06q085yx4p" path="res://object/weapon_magnum_02.tres" id="nw22"]
+[ext_resource type="Resource" uid="uid://cleyg8ps6s7nk" path="res://object/weapon_magnum_03.tres" id="nw23"]
+[ext_resource type="Resource" uid="uid://c2qpmrtyim1ik" path="res://object/weapon_launcher_02.tres" id="nw24"]
+[ext_resource type="Resource" uid="uid://c8wad2y7x0axn" path="res://object/weapon_rocket_02.tres" id="nw25"]
+[ext_resource type="Resource" uid="uid://bxdfrkdx1cpw5" path="res://object/weapon_rocket_03.tres" id="nw26"]
+[ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
+[ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
 
-[ext_resource type="Resource" path="res://object/item_painkiller.tres" id="nw1"]
-[ext_resource type="Resource" path="res://object/item_adrenaline.tres" id="nw2"]
-[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="nw3"]
-[ext_resource type="Resource" path="res://object/item_bolt_grenade.tres" id="nw4"]
-[ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="nw5"]
-[ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="nw6"]
-[ext_resource type="Resource" path="res://object/item_aid_box.tres" id="nw7"]
-[ext_resource type="Resource" path="res://object/weapon_pistol_02.tres" id="nw9"]
-[ext_resource type="Resource" path="res://object/weapon_pistol_03.tres" id="nw10"]
-[ext_resource type="Resource" path="res://object/weapon_pistol_04.tres" id="nw11"]
-[ext_resource type="Resource" path="res://object/weapon_smg_02.tres" id="nw12"]
-[ext_resource type="Resource" path="res://object/weapon_smg_03.tres" id="nw13"]
-[ext_resource type="Resource" path="res://object/weapon_rifle_02.tres" id="nw14"]
-[ext_resource type="Resource" path="res://object/weapon_rifle_03.tres" id="nw15"]
-[ext_resource type="Resource" path="res://object/weapon_mg_01.tres" id="nw16"]
-[ext_resource type="Resource" path="res://object/weapon_shotgun_02.tres" id="nw17"]
-[ext_resource type="Resource" path="res://object/weapon_shotgun_03.tres" id="nw18"]
-[ext_resource type="Resource" path="res://object/weapon_sniper_02.tres" id="nw19"]
-[ext_resource type="Resource" path="res://object/weapon_sniper_03.tres" id="nw20"]
-[ext_resource type="Resource" path="res://object/weapon_at_rifle_01.tres" id="nw21"]
-[ext_resource type="Resource" path="res://object/weapon_magnum_02.tres" id="nw22"]
-[ext_resource type="Resource" path="res://object/weapon_magnum_03.tres" id="nw23"]
-[ext_resource type="Resource" path="res://object/weapon_launcher_02.tres" id="nw24"]
-[ext_resource type="Resource" path="res://object/weapon_rocket_02.tres" id="nw25"]
-[ext_resource type="Resource" path="res://object/weapon_rocket_03.tres" id="nw26"]
-[ext_resource type="Resource" path="res://object/item_painkiller.tres" id="cw1"]
-[ext_resource type="Resource" path="res://object/item_adrenaline.tres" id="cw2"]
-[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="cw3"]
-[ext_resource type="Resource" path="res://object/item_bolt_grenade.tres" id="cw4"]
-[ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="cw5"]
-[ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="cw6"]
-[ext_resource type="Resource" path="res://object/item_aid_box.tres" id="cw7"]
-[ext_resource type="Resource" path="res://object/throwable_dynamite.tres" id="cw9"]
-[ext_resource type="Resource" path="res://object/throwable_flash.tres" id="cw10"]
-[ext_resource type="Resource" path="res://object/weapon_launcher_acid.tres" id="cw11"]
-[ext_resource type="Resource" path="res://object/weapon_launcher_ice.tres" id="cw12"]
-[ext_resource type="Resource" path="res://object/weapon_launcher_thunder.tres" id="cw13"]
-[ext_resource type="Resource" path="res://object/weapon_combat_knife.tres" id="60"]
-[ext_resource type="Resource" path="res://object/weapon_knuckles.tres" id="61"]
-[ext_resource type="Resource" path="res://object/weapon_pipe.tres" id="62"]
-[ext_resource type="Resource" path="res://object/weapon_shovel.tres" id="63"]
-[ext_resource type="Resource" path="res://object/weapon_fire_axe.tres" id="64"]
-[ext_resource type="Resource" path="res://object/weapon_uchigatana.tres" id="65"]
-[ext_resource type="Resource" path="res://object/weapon_sledgehammer.tres" id="66"]
 [sub_resource type="Resource" id="Resource_tgboo"]
 script = ExtResource("7_n6iv6")
-items = Array[Resource]([ExtResource("5_xcdn1"), ExtResource("6_h8n3k"), ExtResource("cw9"), ExtResource("cw10"), ExtResource("nw3"), ExtResource("nw4"), ExtResource("nw5"), ExtResource("nw6")])
-weights = Array[float]([0.50, 0.50, 0.47, 0.47, 0.50, 0.50, 0.40, 0.40])
+items = Array[Resource]([ExtResource("5_xcdn1"), ExtResource("6_h8n3k"), ExtResource("cw9"), ExtResource("cw10"), ExtResource("cw3"), ExtResource("cw4"), ExtResource("cw5"), ExtResource("cw6")])
+weights = Array[float]([0.5, 0.5, 0.47, 0.47, 0.5, 0.5, 0.4, 0.4])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_t6fpg"]
@@ -93,62 +86,62 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 [sub_resource type="Resource" id="Resource_rkbvx"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("10_847u6"), ExtResource("10_lc7ol"), ExtResource("11_847u6"), ExtResource("60"), ExtResource("61"), ExtResource("62"), ExtResource("63"), ExtResource("64"), ExtResource("65"), ExtResource("66")])
-weights = Array[float]([1.00, 1.00, 1.00, 0.10, 0.10, 0.08, 0.06, 0.05, 0.05, 0.03])
+weights = Array[float]([1.0, 1.0, 1.0, 0.1, 0.1, 0.08, 0.06, 0.05, 0.05, 0.03])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_id55e"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("11_548yc"), ExtResource("nw24"), ExtResource("cw11"), ExtResource("cw12"), ExtResource("cw13"), ExtResource("11_n6iv6")])
+weights = Array[float]([1.0, 0.04, 0.14, 0.14, 0.14, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
-weights = Array[float]([1.00, 0.04, 0.14, 0.14, 0.14, 1.00])
 
 [sub_resource type="Resource" id="Resource_ipgx1"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("12_d45xp"), ExtResource("nw9"), ExtResource("nw10"), ExtResource("nw11")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_hjcr1"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("13_ijbw6"), ExtResource("nw17"), ExtResource("nw18")])
-weights = Array[float]([1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_s84fe"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("14_l2ift"), ExtResource("nw12"), ExtResource("nw13")])
-weights = Array[float]([1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_uwnwf"]
 script = ExtResource("7_n6iv6")
-items = Array[Resource]([ExtResource("8_l8yke"), ExtResource("nw7"), ExtResource("nw1"), ExtResource("nw2")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00])
+items = Array[Resource]([ExtResource("8_l8yke"), ExtResource("cw1"), ExtResource("cw2"), ExtResource("herb1029"), ExtResource("water1029")])
+weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_nv1cj"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("15_oprsx"), ExtResource("nw22"), ExtResource("nw23")])
-weights = Array[float]([1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_t577n"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("9_lc7ol"), ExtResource("nw19"), ExtResource("nw20")])
-weights = Array[float]([1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_sybr4"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("17_s2v06"), ExtResource("nw14"), ExtResource("nw15")])
-weights = Array[float]([1.00, 1.00, 1.00])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_h8n3k"]
 script = ExtResource("7_n6iv6")
 items = Array[Resource]([ExtResource("18_xcdn1"), ExtResource("nw25"), ExtResource("nw26")])
+weights = Array[float]([1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
-weights = Array[float]([1.00, 1.00, 1.00])
 
 [sub_resource type="Resource" id="Resource_548yc"]
 script = ExtResource("7_n6iv6")
@@ -158,8 +151,8 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_d45xp"]
 script = ExtResource("7_n6iv6")
-items = Array[Resource]([ExtResource("8_l8yke"), ExtResource("nw7"), ExtResource("nw1"), ExtResource("nw2")])
-weights = Array[float]([1.00, 1.00, 1.00, 1.00])
+items = Array[Resource]([ExtResource("8_l8yke"), ExtResource("cw1"), ExtResource("cw2"), ExtResource("herb1029"), ExtResource("water1029")])
+weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0145" type="Node2D" unique_id=1030818130]
@@ -260,6 +253,7 @@ multiplayer_only = true
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAHAAMAAAAAAAAAAAAHAAQAAAABAAAAAAA=")
 tile_set = ExtResource("3_0j83v")
+occlusion_enabled = false
 
 [node name="SavePoint" parent="UpperLayer" unique_id=1088350981 instance=ExtResource("23_847u6")]
 position = Vector2(368, 128)
@@ -284,7 +278,6 @@ arrival_music = ExtResource("8_585ik")
 [node name="Menu" parent="." unique_id=1248163084 instance=ExtResource("9_8to2r")]
 
 [node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("10_us48l")]
-visible = false
 
 [node name="ChapterSummary" parent="." unique_id=1332314321 instance=ExtResource("11_guqpu")]
 chapter_title = "第三章 · 矿洞"

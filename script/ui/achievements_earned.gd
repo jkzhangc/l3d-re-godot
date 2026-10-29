@@ -14,7 +14,12 @@ signal finished
 ## 停留时长（秒）——用户要求 3 秒
 const HOLD_SECONDS: float = 3.0
 const PANEL_W: float = 640.0
-const PANEL_H: float = 360.0
+## 面板基准高度（条目少时维持原观感）；条目多时按实际条数长高，见 `_build()`。
+const PANEL_H_BASE: float = 360.0
+## 每条占两行（名称 + 说明），行距 62px。
+const ENTRY_H: float = 62.0
+## 上限 = 960 画布留上下各 30px；超出的条目截断（一次通关理论上最多 7 条，正常够用）。
+const PANEL_H_MAX: float = 900.0
 const FONT_TITLE: int = 24
 const FONT_BODY: int = 24
 
@@ -72,6 +77,12 @@ static func has_content() -> bool:
 
 func _build() -> void:
 	var pending: Array = ACHIEVEMENTS.take_pending()
+	## 面板随条数长高（2026-10-29）：旧的固定 360 只放得下 3 条，
+	## 一次通关同时解锁「通关+单人+无伤+不存档+绅士」时会被静默截断。
+	## 3 条以内维持原高 360；每多 1 条加 62；上限 900（960 画布）。
+	var panel_h: float = clampf(
+		PANEL_H_BASE + maxf(0.0, float(pending.size()) - 3.0) * ENTRY_H,
+		PANEL_H_BASE, PANEL_H_MAX)
 
 	## 半透明黑幕（压在 ED 黑幕之上；原 ED 黑幕此时已是全黑，这里只做视觉分层）
 	var dim := ColorRect.new()
@@ -82,7 +93,7 @@ func _build() -> void:
 
 	var panel := ColorRect.new()
 	panel.color = Color(0.10, 0.09, 0.08, 0.96)
-	panel.size = Vector2(PANEL_W, PANEL_H)
+	panel.size = Vector2(PANEL_W, panel_h)
 	panel.position = ((get_viewport_rect().size - panel.size) * 0.5).floor()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(panel)
@@ -117,8 +128,8 @@ func _build() -> void:
 	## 逐条列出（每条两行：名称+归属 / 说明）
 	var y: float = 76.0
 	for rec: Dictionary in pending:
-		if y > PANEL_H - 70.0:
-			break                       ## 面板放不下就截断（首批最多 10 条，正常够用）
+		if y > panel_h - 70.0:
+			break                       ## 面板放不下就截断（一次通关最多 7 条，正常够用）
 		var id: String = str(rec.get("id", ""))
 		var seat: int = int(rec.get("seat", ACHIEVEMENTS.TEAM_SEAT))
 		var who: String = "全队" if seat == ACHIEVEMENTS.TEAM_SEAT else "%dP" % (seat + 1)
@@ -133,10 +144,10 @@ func _build() -> void:
 		desc_label.size = Vector2(PANEL_W - 64, 30)
 		desc_label.modulate = Color(0.72, 0.70, 0.64)
 		panel.add_child(desc_label)
-		y += 62.0
+		y += ENTRY_H
 
 	var footer := _make_label("3 秒后继续…", FONT_BODY)
-	footer.position = Vector2(0, PANEL_H - 44)
+	footer.position = Vector2(0, panel_h - 44)
 	footer.size = Vector2(PANEL_W, 30)
 	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	footer.modulate = Color(0.80, 0.78, 0.72)

@@ -107,7 +107,7 @@ func _fire_acid(enemy: Node2D) -> void:
 	enemy.set_attack_char_index(_seq[fire_idx])
 	# 出酸瞬间播放吐酸音效（与酸弹同帧）
 	if enemy.spit_sound:
-		enemy._play_sound(enemy.spit_sound, enemy.spit_sound_pitch)
+		enemy._play_pool(enemy.spit_sound_pool, enemy.spit_sound, enemy.spit_sound_pitch)
 
 	# 发射方向取「发射瞬间玩家位置」——蓄力期间玩家可以走位躲弹
 	var dir: Vector2 = enemy.get_facing_vector()

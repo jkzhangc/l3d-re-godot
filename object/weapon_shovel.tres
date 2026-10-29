@@ -1,7 +1,6 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bn23qhfyaic1b"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cymq4ft84h6th"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="2"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_h8xsc"]
 [ext_resource type="Texture2D" uid="uid://bx8l62wuvrc5c" path="res://art/WeaponAttack/シャベル/シャベル_attack1.png" id="3"]
 [ext_resource type="Texture2D" uid="uid://mhwrtft38fo1" path="res://art/Ui/装備アイコンシャベル.png" id="4"]
@@ -9,14 +8,61 @@
 [ext_resource type="AudioStream" uid="uid://cq8l1xcyq0g13" path="res://sound/打撃5.ogg" id="6"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_4nfha"]
+[ext_resource type="Texture2D" uid="uid://dqj56lownjv2x" path="res://art/Weapon/A武器セット７.png" id="8_6it81"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_ge1yo"]
+[ext_resource type="Texture2D" uid="uid://bslp7hqoi2wwy" path="res://art/Characters/のび太セット近战5.png" id="12_6it81"]
+
+[sub_resource type="Resource" id="Resource_gmq18"]
+script = ExtResource("8_4nfha")
+down = Vector2(2, 28)
+left = Vector2(-8, 30)
+right = Vector2(8, 30)
+up = Vector2(-4, 26)
+
+[sub_resource type="Resource" id="Resource_02447"]
+script = ExtResource("8_4nfha")
+down = Vector2(-2, 26)
+left = Vector2(0, 28)
+right = Vector2(0, 28)
+up = Vector2(4, 30)
+
+[sub_resource type="Resource" id="Resource_m2424"]
+script = ExtResource("8_4nfha")
+down = Vector2(-2, 26)
+left = Vector2(0, 28)
+right = Vector2(0, 28)
+up = Vector2(4, 30)
+
+[sub_resource type="Resource" id="Resource_af3yk"]
+script = ExtResource("8_4nfha")
+down = Vector2(2, 30)
+left = Vector2(-8, 32)
+right = Vector2(8, 32)
+up = Vector2(-4, 26)
+
+[sub_resource type="Resource" id="Resource_swtjs"]
+script = ExtResource("8_4nfha")
+down = Vector2(-2, 28)
+left = Vector2(0, 30)
+right = Vector2(0, 30)
+up = Vector2(4, 32)
+
+[sub_resource type="Resource" id="Resource_a08f4"]
+script = ExtResource("8_4nfha")
+down = Vector2(-2, 28)
+left = Vector2(0, 30)
+right = Vector2(0, 30)
+up = Vector2(4, 32)
 
 [resource]
 script = ExtResource("1")
 attack_power = 45
 attack_speed = 0.75
 weapon_state_name = "Shovel"
-weapon_walk_texture = ExtResource("2")
+weapon_walk_texture = ExtResource("12_6it81")
+weapon_raise_char_sequence = Array[int]([1])
+weapon_raise_frame_durations = Array[float]([0.12])
 is_ranged = false
 weapon_slot = 1
 attack_sound = ExtResource("5")
@@ -24,15 +70,25 @@ empty_fire_sound = ExtResource("7")
 raise_sound = ExtResource("7")
 lower_sound = ExtResource("7")
 hit_sound = ExtResource("6")
+gunshot_range = 0.0
 hit_effect_anim = ExtResource("8")
 melee_weapon_sprite = ExtResource("3")
 melee_weapon_sprite_seq_cols = {
 0: 0,
-1: 1
+1: 1,
+2: 2
+}
+melee_weapon_sprite_step_offsets = {
+"bigg:0": SubResource("Resource_gmq18"),
+"bigg:1": SubResource("Resource_02447"),
+"bigg:2": SubResource("Resource_m2424"),
+"nobita:0": SubResource("Resource_af3yk"),
+"nobita:1": SubResource("Resource_swtjs"),
+"nobita:2": SubResource("Resource_a08f4")
 }
 attack_char_sequence = Array[int]([3, 4])
-melee_attack_char_sequence = Array[int]([3, 4])
-melee_attack_frame_durations = Array[float]([0.16, 0.2])
+melee_attack_char_sequence = Array[int]([6, 7, 7])
+melee_attack_frame_durations = Array[float]([0.16, 0.1, 0.2])
 melee_range_size = Vector2(74, 40)
 item_id = "shovel"
 item_name = "铁锹"
@@ -41,3 +97,5 @@ description = "挖工事用的铁锹。刃口磨过，劈砍比想象中利；�
 icon = ExtResource("4")
 sell_price = 150
 max_stack = 1
+pickup_texture = ExtResource("8_6it81")
+pickup_char_idx = 5

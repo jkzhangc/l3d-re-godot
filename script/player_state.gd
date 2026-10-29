@@ -36,8 +36,14 @@ var current_tp: int = 0
 # 装备与弹药
 # ═══════════════════════════════════════
 ## 装备槽只保存 ItemData/WeaponData 资源引用；序列化时应转换为稳定 item_id，再由本地目录解析。
-## primary 通常为主武器，secondary 为手枪/近战；active_weapon_slot 决定当前攻击状态读哪一槽。
+## primary/secondary = **当前背包**的左起第 1/2 格；两个键名保留是为了不破坏既有存档、
+## 联机快照与状态机路由（它们只认这两个键）。
 var equipment: Dictionary = {"primary": null, "secondary": null}
+## 第二个背包（仅スネ夫：CharacterData.backpack_count >= 2）。
+## 切换背包 = 交换 equipment 与 equipment_alt；消耗品/投掷物不随背包切换（随身腰包）。
+var equipment_alt: Dictionary = {"primary": null, "secondary": null}
+## 0 = 背包 1；1 = 背包 2。
+var backpack_index: int = 0
 var active_weapon_slot: String = "primary"
 var weapon_magazines: Dictionary = {}   ## item_id → 弹夹内余弹
 ## item_id → 当前耐久（仅 max_durability>0 的近战武器记录；原作"削り"削减用）
@@ -79,6 +85,8 @@ var owner_peer_id: int = 0   ## 0 = 本地/无主
 func _init() -> void:
 	# 显式初始化容器 —— 沿用项目既有防御约定（防 Godot 4 类级默认值跨实例共享）
 	equipment = {"primary": null, "secondary": null}
+	equipment_alt = {"primary": null, "secondary": null}
+	backpack_index = 0
 	weapon_magazines = {}
 	inventory = []
 
@@ -100,6 +108,9 @@ func init_from_character(cd: CharacterData, source_path: String = "") -> void:
 		return
 	current_hp = float(cd.get_effective_max_hp())
 	current_tp = cd.get_effective_max_tp()
+	## 第二背包（スネ夫）从背包 1 开始；重开/换角色时清空。
+	equipment_alt = {"primary": null, "secondary": null}
+	backpack_index = 0
 	# 初始武器：角色资源可配 initial_weapon，未配置时统一给手枪 ——
 	# 单机与联机共用本入口，保证每个角色出场都有一把可举起的武器（满弹匣）。
 	# 入槽按 WeaponData.weapon_slot 走（现有手枪/小刀都是 secondary 副武器），
@@ -175,6 +186,47 @@ func get_active_weapon() -> WeaponData:
 
 func get_equipped_weapon(slot: String) -> WeaponData:
 	return equipment.get(slot) as WeaponData
+
+
+## 当前角色是否有第二个背包（スネ夫被动「バックパック」）。
+func has_second_backpack() -> bool:
+	return character != null and character.backpack_count >= 2
+
+
+## 切换背包（仅第二背包角色）。返回是否真的切换。
+## 交换 equipment / equipment_alt 的**引用**即可 —— 所有既有读取点只认 equipment，
+## 不需要改状态机、HUD、联机快照的字段名。
+## 切到空背包时 active_weapon_slot 自动落到另一个有武器的格子；两个都空则保持。
+func switch_backpack() -> bool:
+	if not has_second_backpack():
+		return false
+	var tmp: Dictionary = equipment
+	equipment = equipment_alt
+	equipment_alt = tmp
+	backpack_index = 1 - backpack_index
+	if equipment.get(active_weapon_slot) == null:
+		var other: String = "secondary" if active_weapon_slot == "primary" else "primary"
+		if equipment.get(other) != null:
+			active_weapon_slot = other
+	print("[PlayerState] 切换到背包 %d（左1=%s / 左2=%s）" % [
+		backpack_index + 1,
+		(equipment.get("primary") as WeaponData).item_name if equipment.get("primary") else "空",
+		(equipment.get("secondary") as WeaponData).item_name if equipment.get("secondary") else "空"])
+	return true
+
+
+## 拾取武器时决定放进哪个格子：优先武器数据原本的槽位；被占则找另一个空格；
+## 两格都满则替换当前举着的格子。这样任何武器都能进左起第 1/2 格（2026-10-29 用户需求）。
+func resolve_weapon_slot(wd: WeaponData) -> String:
+	if wd == null:
+		return active_weapon_slot
+	var preferred: String = wd.get_slot_key()
+	if equipment.get(preferred) == null:
+		return preferred
+	var other: String = "secondary" if preferred == "primary" else "primary"
+	if equipment.get(other) == null:
+		return other
+	return active_weapon_slot if equipment.has(active_weapon_slot) else preferred
 
 
 func equip_weapon_in_slot(wd: WeaponData, slot: String) -> void:
@@ -450,6 +502,8 @@ func clone() -> PlayerState:
 	c.current_hp = current_hp
 	c.current_tp = current_tp
 	c.equipment = equipment.duplicate()
+	c.equipment_alt = equipment_alt.duplicate()
+	c.backpack_index = backpack_index
 	c.active_weapon_slot = active_weapon_slot
 	c.weapon_magazines = weapon_magazines.duplicate()
 	c.weapon_durability = weapon_durability.duplicate()
@@ -486,6 +540,8 @@ func to_dict() -> Dictionary:
 			inv.append(ItemCodec.to_dict(it))
 	var primary: ItemData = equipment.get("primary") as ItemData
 	var secondary: ItemData = equipment.get("secondary") as ItemData
+	var alt_primary: ItemData = equipment_alt.get("primary") as ItemData
+	var alt_secondary: ItemData = equipment_alt.get("secondary") as ItemData
 	return {
 		"character_path": character_path,
 		"current_hp": current_hp,
@@ -494,6 +550,12 @@ func to_dict() -> Dictionary:
 			"primary": ItemCodec.to_dict(primary) if primary else {},
 			"secondary": ItemCodec.to_dict(secondary) if secondary else {},
 		},
+		## 第二背包（2026-10-29）：旧存档没有这两项 → 默认空包 / 背包 1。
+		"equipment_alt": {
+			"primary": ItemCodec.to_dict(alt_primary) if alt_primary else {},
+			"secondary": ItemCodec.to_dict(alt_secondary) if alt_secondary else {},
+		},
+		"backpack_index": backpack_index,
 		"active_weapon_slot": active_weapon_slot,
 		"weapon_magazines": weapon_magazines.duplicate(),
 		"weapon_durability": weapon_durability.duplicate(),
@@ -534,6 +596,14 @@ func from_dict(d: Dictionary) -> void:
 		var sd: Dictionary = eq.get(slot, {})
 		if not sd.is_empty():
 			equipment[slot] = ItemCodec.from_dict(sd)
+
+	var eq_alt: Dictionary = d.get("equipment_alt", {})
+	equipment_alt = {"primary": null, "secondary": null}
+	for slot: String in ["primary", "secondary"]:
+		var sd: Dictionary = eq_alt.get(slot, {})
+		if not sd.is_empty():
+			equipment_alt[slot] = ItemCodec.from_dict(sd)
+	backpack_index = clampi(int(d.get("backpack_index", 0)), 0, 1)
 
 	active_weapon_slot = d.get("active_weapon_slot", "primary")
 	if active_weapon_slot not in equipment:

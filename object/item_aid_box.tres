@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://8mf8cqpqwwr7"]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://dvsecs3l1tglc"]
 
 [ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://bv8py2fch3op4" path="res://art/Ui/装備アイコン救急箱.png" id="icon"]
@@ -9,13 +9,16 @@ script = ExtResource("1")
 item_id = "aid_box_01"
 item_name = "救急箱"
 item_type = 6
-description = "原作战地补给。一次性大幅回复 HP。"
+description = "原作战地补给。一次性大幅回复 HP。
+单人：全体回复100HP；多人：全员给一个急救喷雾"
 icon = ExtResource("icon")
 effect_text = "回复 +100 HP"
 sell_price = 50
 max_stack = 1
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 6
-pickup_step_frames = Array[int]([2])
+pickup_step_frames = Array[int]([0, 0, 0])
 pickup_requires_function_key = true
+use_on_pickup = true
 hp_restore = 100
+restore_all_party = true

@@ -5,7 +5,7 @@
 [ext_resource type="TileSet" uid="uid://8nwdn5vscw8s" path="res://tres/Map0010_upper_tileset.tres" id="3_gmpc6"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="3_q6d4i"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="4_kflpu"]
-[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="4_tvsaf"]
+[ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="4_tvsaf"]
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="5_eg8b7"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="5_wpoj5"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="6_2d7i0"]
@@ -20,8 +20,8 @@
 [ext_resource type="PackedScene" path="res://scene/fx/screen_tone.tscn" id="10_tvsaf"]
 [ext_resource type="PackedScene" path="res://scene/ui/chapter_summary.tscn" id="11_eg8b7"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="11_u3uc7"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="12_i8nmy"]
-[ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="13_gm1ku"]
+[ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="12_i8nmy"]
+[ext_resource type="Resource" uid="uid://b2dwgd3813nqv" path="res://object/weapon_knife.tres" id="13_gm1ku"]
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="13_wbwrc"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="14_a1hri"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="14_al86a"]
@@ -31,21 +31,21 @@
 [ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="17_j78qc"]
 [ext_resource type="PackedScene" path="res://object/hint_marker.tscn" id="22_x6hbe"]
 [ext_resource type="Texture2D" uid="uid://b3sdt4n13m63q" path="res://art/Characters/張り紙.png" id="23_3ujpc"]
-[ext_resource type="Resource" uid="uid://cllxefu0aqrri" path="res://object/weapon_combat_knife.tres" id="60"]
-[ext_resource type="Resource" uid="uid://bj4j4lbbeva15" path="res://object/weapon_knuckles.tres" id="61"]
-[ext_resource type="Resource" uid="uid://dp61eegl071tg" path="res://object/weapon_pipe.tres" id="62"]
-[ext_resource type="Resource" uid="uid://bn23qhfyaic1b" path="res://object/weapon_shovel.tres" id="63"]
-[ext_resource type="Resource" uid="uid://ci8dakti32sy2" path="res://object/weapon_fire_axe.tres" id="64"]
-[ext_resource type="Resource" uid="uid://brj1qyq53qv5c" path="res://object/weapon_uchigatana.tres" id="65"]
-[ext_resource type="Resource" uid="uid://b7he1kpye3cy0" path="res://object/weapon_sledgehammer.tres" id="66"]
-[ext_resource type="Resource" uid="uid://ctqod5yy31y7j" path="res://object/item_painkiller.tres" id="cw1"]
-[ext_resource type="Resource" path="res://object/item_adrenaline.tres" id="cw2"]
-[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="cw3"]
-[ext_resource type="Resource" path="res://object/item_bolt_grenade.tres" id="cw4"]
-[ext_resource type="Resource" path="res://object/item_nitrogen.tres" id="cw5"]
-[ext_resource type="Resource" path="res://object/item_throwing_knife.tres" id="cw6"]
-[ext_resource type="Resource" path="res://object/item_aid_box.tres" id="cw7"]
-[ext_resource type="Resource" uid="uid://bfl8jvx71xj0g" path="res://object/weapon_smg_02.tres" id="cw9"]
+[ext_resource type="Resource" uid="uid://xi0k4nuyj31j" path="res://object/weapon_combat_knife.tres" id="60"]
+[ext_resource type="Resource" uid="uid://b7bgo1y5jxegx" path="res://object/weapon_knuckles.tres" id="61"]
+[ext_resource type="Resource" uid="uid://lu2vkf4nagjj" path="res://object/weapon_pipe.tres" id="62"]
+[ext_resource type="Resource" uid="uid://cymq4ft84h6th" path="res://object/weapon_shovel.tres" id="63"]
+[ext_resource type="Resource" uid="uid://1kco17h3mitp" path="res://object/weapon_fire_axe.tres" id="64"]
+[ext_resource type="Resource" uid="uid://htaax3n8fscn" path="res://object/weapon_uchigatana.tres" id="65"]
+[ext_resource type="Resource" uid="uid://bbf6nlf1av85w" path="res://object/weapon_sledgehammer.tres" id="66"]
+[ext_resource type="Resource" uid="uid://dnis6jovgvl42" path="res://object/item_painkiller.tres" id="cw1"]
+[ext_resource type="Resource" uid="uid://dwpujg63smy5e" path="res://object/item_adrenaline.tres" id="cw2"]
+[ext_resource type="Resource" uid="uid://bip17yw6uvt73" path="res://object/item_acid_bottle.tres" id="cw3"]
+[ext_resource type="Resource" uid="uid://c0aukikk6ru08" path="res://object/item_bolt_grenade.tres" id="cw4"]
+[ext_resource type="Resource" uid="uid://bgdxoiog7xa8f" path="res://object/item_nitrogen.tres" id="cw5"]
+[ext_resource type="Resource" uid="uid://c05b7iuwbt8ov" path="res://object/item_throwing_knife.tres" id="cw6"]
+[ext_resource type="Resource" uid="uid://dvsecs3l1tglc" path="res://object/item_aid_box.tres" id="cw7"]
+[ext_resource type="Resource" uid="uid://bekfaufypr6w2" path="res://object/weapon_smg_02.tres" id="cw9"]
 [ext_resource type="Resource" uid="uid://eoolxq3n7bow" path="res://object/weapon_smg_03.tres" id="cw10"]
 [ext_resource type="Resource" uid="uid://cn484em6ad0d6" path="res://object/weapon_rifle_02.tres" id="cw11"]
 [ext_resource type="Resource" uid="uid://qcuih26d3jjr" path="res://object/weapon_rifle_03.tres" id="cw12"]
@@ -58,6 +58,8 @@
 [ext_resource type="Resource" uid="uid://dcfsh5kehl30v" path="res://object/weapon_pistol_04.tres" id="cw19"]
 [ext_resource type="Resource" uid="uid://bc7lqtpcp7jg3" path="res://object/weapon_shotgun_02.tres" id="sw1"]
 [ext_resource type="Resource" uid="uid://jm88weoi4nm4" path="res://object/weapon_shotgun_03.tres" id="sw2"]
+[ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
+[ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
 
 [sub_resource type="Resource" id="Resource_b6yju"]
 script = ExtResource("5_wpoj5")
@@ -121,14 +123,14 @@ metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_a1hri"]
 script = ExtResource("5_wpoj5")
-items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
-weights = Array[float]([1.0, 1.0, 1.0, 1.0])
+items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw1"), ExtResource("cw2"), ExtResource("herb1029"), ExtResource("water1029")])
+weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [sub_resource type="Resource" id="Resource_j78qc"]
 script = ExtResource("5_wpoj5")
-items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw7"), ExtResource("cw1"), ExtResource("cw2")])
-weights = Array[float]([1.0, 1.0, 1.0, 1.0])
+items = Array[Resource]([ExtResource("12_i8nmy"), ExtResource("cw1"), ExtResource("cw2"), ExtResource("herb1029"), ExtResource("water1029")])
+weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0010" type="Node2D" unique_id=1160034262]
@@ -209,6 +211,7 @@ multiplayer_only = true
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAASAAUAAAAAAAAAAAATAAUAAAABAAAAAAASAAYAAAACAAAAAAATAAYAAAADAAAAAAASAAcAAAAEAAAAAAATAAcAAAAFAAAAAAAKAAgAAAAGAAAAAAAOAAgAAAAGAAAAAAAGAAkAAAAHAAAAAAAHAAkAAAAHAAAAAAAIAAkAAAAHAAAAAAAJAAkAAAAHAAAAAAAKAAkAAAAHAAAAAAALAAkAAAAHAAAAAAAMAAkAAAAHAAAAAAANAAkAAAAHAAAAAAAOAAkAAAAHAAAAAAAPAAkAAAAHAAAAAAAQAAkAAAAHAAAAAAARAAkAAAAIAAAAAAAGAAoAAAAJAAAAAAAHAAoAAAAJAAAAAAAIAAoAAAAJAAAAAAAJAAoAAAAJAAAAAAAKAAoAAAAJAAAAAAALAAoAAAAJAAAAAAAMAAoAAAAJAAAAAAANAAoAAAAJAAAAAAAOAAoAAAAJAAAAAAAPAAoAAAAJAAAAAAAQAAoAAAAJAAAAAAARAAoAAAAKAAAAAAAGAAwAAAALAAAAAAAHAAwAAAAMAAAAAAAJAAwAAAAMAAAAAAATAAwAAAALAAAAAAAGAA0AAAANAAAAAAAHAA0AAAAOAAAAAAAIAA0AAAAPAAAAAAAJAA0AAAAAAAEAAAAQAA0AAAABAAEAAAARAA0AAAAHAAAAAAASAA0AAAAIAAAAAAATAA0AAAANAAAAAAAGAA4AAAACAAEAAAAKAA4AAAAMAAAAAAAPAA4AAAAMAAAAAAAQAA4AAAADAAEAAAARAA4AAAAJAAAAAAASAA4AAAAKAAAAAAATAA4AAAACAAEAAAARAA8AAAAMAAAAAAAHABAAAAAMAAAAAAAJABAAAAAMAAAAAAAGABEAAAALAAAAAAAHABEAAAAOAAAAAAAIABEAAAAPAAAAAAAJABEAAAAAAAEAAAAQABEAAAABAAEAAAARABEAAAAHAAAAAAASABEAAAAIAAAAAAATABEAAAALAAAAAAAGABIAAAANAAAAAAAKABIAAAAMAAAAAAAPABIAAAAMAAAAAAAQABIAAAADAAEAAAARABIAAAAJAAAAAAASABIAAAAKAAAAAAATABIAAAANAAAAAAAGABMAAAACAAEAAAARABMAAAAMAAAAAAATABMAAAACAAEAAAAHABQAAAAMAAAAAAAJABQAAAAMAAAAAAA=")
 tile_set = ExtResource("3_gmpc6")
+occlusion_enabled = false
 
 [node name="MedicalBox" parent="UpperLayer" unique_id=1622844820 instance=ExtResource("13_wbwrc")]
 position = Vector2(208, 688)

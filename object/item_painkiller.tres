@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://ctqod5yy31y7j"]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://dnis6jovgvl42"]
 
 [ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://678r0gyqt7ua" path="res://art/Ui/装備アイコン鎮痛剤.png" id="icon"]
@@ -13,7 +13,6 @@ description = "原作 強化アイテム/鎮痛剤。短时间内完全免疫伤
 icon = ExtResource("icon")
 effect_text = "15 秒内受到的伤害为 0"
 sell_price = 80
-stackable = true
 max_stack = 5
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 6

@@ -309,7 +309,7 @@ theme_override_styles/normal = SubResource("SB_blue")
 theme_override_styles/hover = SubResource("SB_pressed")
 theme_override_styles/pressed = SubResource("SB_pressed")
 theme_override_styles/focus = SubResource("SB_pressed")
-text = "武器"
+text = "第1格"
 script = ExtResource("3_btn")
 action = &"主武器键"
 
@@ -385,7 +385,7 @@ theme_override_styles/normal = SubResource("SB_blue")
 theme_override_styles/hover = SubResource("SB_pressed")
 theme_override_styles/pressed = SubResource("SB_pressed")
 theme_override_styles/focus = SubResource("SB_pressed")
-text = "副武器"
+text = "第2格"
 script = ExtResource("3_btn")
 action = &"副武器键"
 

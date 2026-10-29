@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://dtkxc77hr0mmr"]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://d2732xipnwe11"]
 
 [ext_resource type="Texture2D" uid="uid://joehtx1ybmtr" path="res://art/Ui/装備アイコングリーンハーブ.png" id="1_bwit1"]
 [ext_resource type="Texture2D" uid="uid://b03tvwwyemq4h" path="res://art/Weapon/[2K-VX]-A武器セット１１.png" id="2_bwit1"]
@@ -13,7 +13,6 @@ description = "原作 グリーンハーブ 恢复50点HP。因为不能携带�
 icon = ExtResource("1_bwit1")
 effect_text = "恢复50点HP"
 sell_price = 80
-stackable = true
 max_stack = 10
 pickup_texture = ExtResource("2_bwit1")
 pickup_requires_function_key = true

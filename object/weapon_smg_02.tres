@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bfl8jvx71xj0g"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bekfaufypr6w2"]
 
 [ext_resource type="AudioStream" uid="uid://dkj1wiet7irkf" path="res://sound/csol-m4a1_shoot1.ogg" id="1_0clvs"]
 [ext_resource type="PackedScene" uid="uid://dj5fqkmk5oxqx" path="res://anim/anim_effect_步枪攻击下.tscn" id="1_onao4"]

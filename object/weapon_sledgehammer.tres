@@ -1,22 +1,68 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://b7he1kpye3cy0"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bbf6nlf1av85w"]
 
 [ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="2"]
 [ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_oe700"]
 [ext_resource type="Texture2D" uid="uid://xmui45v8dtcc" path="res://art/WeaponAttack/スレッジハンマー/スレッジハンマー_attack1.png" id="3"]
-[ext_resource type="Texture2D" uid="uid://d37fqqw4pbib" path="res://art/Ui/装備アイコン処刑者の大斧.png" id="4"]
 [ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
 [ext_resource type="AudioStream" uid="uid://cq8l1xcyq0g13" path="res://sound/打撃5.ogg" id="6"]
+[ext_resource type="Texture2D" uid="uid://1de8pcadlj1b" path="res://art/Ui/装備アイコンスレッジハンマー.png" id="6_oe700"]
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_cwjfx"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_kquoi"]
+[ext_resource type="Texture2D" uid="uid://dqj56lownjv2x" path="res://art/Weapon/A武器セット７.png" id="9_cwjfx"]
+[ext_resource type="Texture2D" uid="uid://cqmnwxbhnmwut" path="res://art/Characters/のび太セット近接武器.png" id="10_oe700"]
+
+[sub_resource type="Resource" id="Resource_kquoi"]
+script = ExtResource("8_cwjfx")
+down = Vector2(-2, 28)
+left = Vector2(-4, 30)
+right = Vector2(4, 30)
+up = Vector2(0, 28)
+
+[sub_resource type="Resource" id="Resource_cwjfx"]
+script = ExtResource("8_cwjfx")
+down = Vector2(2, 28)
+left = Vector2(0, 28)
+right = Vector2(2, 28)
+up = Vector2(-2, 34)
+
+[sub_resource type="Resource" id="Resource_tl6ae"]
+script = ExtResource("8_cwjfx")
+down = Vector2(2, 28)
+left = Vector2(0, 28)
+right = Vector2(2, 28)
+up = Vector2(-2, 34)
+
+[sub_resource type="Resource" id="Resource_0w26n"]
+script = ExtResource("8_cwjfx")
+down = Vector2(-2, 30)
+left = Vector2(-4, 32)
+right = Vector2(4, 32)
+up = Vector2(0, 26)
+
+[sub_resource type="Resource" id="Resource_k4yya"]
+script = ExtResource("8_cwjfx")
+down = Vector2(2, 30)
+left = Vector2(0, 30)
+right = Vector2(2, 30)
+up = Vector2(-2, 36)
+
+[sub_resource type="Resource" id="Resource_fluqn"]
+script = ExtResource("8_cwjfx")
+down = Vector2(2, 30)
+left = Vector2(0, 30)
+right = Vector2(2, 30)
+up = Vector2(-2, 36)
 
 [resource]
 script = ExtResource("1")
 attack_power = 65
 attack_speed = 0.55
 weapon_state_name = "Sledgehammer"
-weapon_walk_texture = ExtResource("2")
+weapon_walk_texture = ExtResource("10_oe700")
+weapon_raise_char_sequence = Array[int]([1])
+weapon_raise_frame_durations = Array[float]([0.12])
 is_ranged = false
 weapon_slot = 1
 attack_sound = ExtResource("5")
@@ -28,16 +74,26 @@ hit_effect_anim = ExtResource("8")
 melee_weapon_sprite = ExtResource("3")
 melee_weapon_sprite_seq_cols = {
 0: 0,
-1: 1
+1: 1,
+2: 2
+}
+melee_weapon_sprite_step_offsets = {
+"bigg:0": SubResource("Resource_kquoi"),
+"bigg:1": SubResource("Resource_cwjfx"),
+"bigg:2": SubResource("Resource_tl6ae"),
+"nobita:0": SubResource("Resource_0w26n"),
+"nobita:1": SubResource("Resource_k4yya"),
+"nobita:2": SubResource("Resource_fluqn")
 }
 attack_char_sequence = Array[int]([3, 4])
-melee_attack_char_sequence = Array[int]([3, 4])
-melee_attack_frame_durations = Array[float]([0.16, 0.2])
-melee_range_size = Vector2(86, 48)
+melee_attack_char_sequence = Array[int]([6, 7, 7])
+melee_attack_frame_durations = Array[float]([0.16, 0.1, 0.3])
+melee_range_size = Vector2(48, 86)
 item_id = "sledgehammer"
 item_name = "大锤"
 item_type = 3
 description = "工事用的大锤。伤害是近战里最高的一档，但抡起来几乎挪不动脚。"
-icon = ExtResource("4")
+icon = ExtResource("6_oe700")
 sell_price = 300
 max_stack = 1
+pickup_texture = ExtResource("9_cwjfx")

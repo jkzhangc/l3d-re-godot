@@ -1,8 +1,8 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://cxk83cdcfdw58"]
 
-[ext_resource type="Script" path="res://script/tools/item_editor.gd" id="1"]
+[ext_resource type="Script" uid="uid://b32yywwtt8ck2" path="res://script/tools/item_editor.gd" id="1"]
 
-[node name="ItemEditor" type="Control"]
+[node name="ItemEditor" type="Control" unique_id=1161939821]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -11,14 +11,13 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="EditorHint" type="Label" parent="."]
+[node name="EditorHint" type="Label" parent="." unique_id=542203208]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-mouse_filter = 2
 theme_override_font_sizes/font_size = 24
 text = "物品可视化编辑器
 

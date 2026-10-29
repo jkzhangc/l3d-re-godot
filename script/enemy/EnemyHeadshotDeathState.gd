@@ -72,7 +72,7 @@ func process_update(_delta: float) -> void:
 				enemy._refresh_sprite_with_index(enemy.headshot_char_index_2)
 			# （特感已在 enter() 切到死亡表终帧，这里无需再换）
 			# 播放倒地音效
-			enemy._play_sound(enemy.headshot_fall_sound, enemy.headshot_fall_sound_pitch)
+			enemy._play_pool(enemy.headshot_fall_sound_pool, enemy.headshot_fall_sound, enemy.headshot_fall_sound_pitch)
 			# 注册到全局尸体列表
 			enemy._register_corpse()
 			# 动画完成，现在可以安全关闭 StateMachine

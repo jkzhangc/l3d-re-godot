@@ -250,6 +250,12 @@ func process_update(_delta: float) -> void:
 		transition_requested.emit("Attack")
 		return
 
+	# ── 舌头攻击（バイオゲラス）：中距离停步吐舌 ──
+	# 放在首狩り之前：舌头是固定射程的远程手段，能吐到就优先吐（否则会被首狩り抢走全部中距离）。
+	if _can_tongue(enemy, player):
+		transition_requested.emit("Tongue")
+		return
+
 	# ── 首狩り（ハンター 系）：中距离锁定 → 突进扑咬 ──
 	# 判定放在普通攻击之后：能直接咬到就不必起跳（避免"近距离还做突进"的滑稽表现）。
 	# 距离带由 pounce_trigger_min/max_dist 控制，冷却由 enemy._pounce_cooldown_left 控制。
@@ -304,6 +310,19 @@ func _diag_swallow_blocked(enemy: Node2D, d: float, close: bool, reason: String)
 		% [d, enemy.swallow_trigger_range, reason, state_name])
 
 
+## 舌头攻击触发条件：距离带内 + 冷却已过 + 状态机里有 Tongue 节点。
+func _can_tongue(enemy: Node2D, player: Node2D) -> bool:
+	if not enemy.tongue_enabled:
+		return false
+	if enemy._tongue_cooldown_left > 0.0:
+		return false
+	var sm: Node = enemy.get_node_or_null("StateMachine")
+	if sm == null or sm.get_node_or_null("Tongue") == null:
+		return false
+	var d: float = player.global_position.distance_to(enemy.global_position)
+	return d >= enemy.tongue_trigger_min_dist and d <= enemy.tongue_trigger_max_dist
+
+
 func _can_pounce(enemy: Node2D, player: Node2D) -> bool:
 	if not enemy.pounce_enabled:
 		return false
@@ -314,7 +333,60 @@ func _can_pounce(enemy: Node2D, player: Node2D) -> bool:
 	if sm == null or sm.get_node_or_null("Pounce") == null:
 		return false
 	var d: float = player.global_position.distance_to(enemy.global_position)
-	return d >= enemy.pounce_trigger_min_dist and d <= enemy.pounce_trigger_max_dist
+	if d < enemy.pounce_trigger_min_dist or d > enemy.pounce_trigger_max_dist:
+		return false
+	## ★扑击前「前方挡路」判定（2026-10-29 用户需求）：冲刺方向前方半径内若有其它敌人，
+	## 本次不扑（宁可继续走路，也不要穿过同伴/被挤住原地空冲）。
+	return not _pounce_blocked(enemy, player)
+
+
+## 前方是否有敌人挡路。只看**其它存活敌人**（按用户要求，不含墙）。
+## 判定形状 = 以冲刺方向为轴、半径 `pounce_block_radius` 的走廊，长度取冲刺距离与目标距离的较小值。
+func _pounce_blocked(enemy: Node2D, player: Node2D) -> bool:
+	var radius: float = enemy.pounce_block_radius
+	if radius <= 0.0:
+		return false
+	var to_p: Vector2 = player.global_position - enemy.global_position
+	var dist: float = to_p.length()
+	if dist <= 1.0:
+		return false
+	var dir: Vector2 = to_p / dist
+	var reach: float = enemy.pounce_dash_distance if enemy.pounce_dash_distance > 0.0 \
+			else enemy.pounce_trigger_max_dist
+	reach = minf(dist, maxf(1.0, reach))
+	for other: Node in enemy.get_tree().get_nodes_in_group("enemy"):
+		if other == enemy or not is_instance_valid(other):
+			continue
+		if other.get("_is_dead") == true or other.get("_is_dying") == true:
+			continue
+		var rel: Vector2 = (other as Node2D).global_position - enemy.global_position
+		var forward: float = rel.dot(dir)
+		# 就在脚下/身后不算挡路；超出冲刺走廊也不算
+		if forward <= radius or forward > reach + radius:
+			continue
+		if absf(rel.cross(dir)) <= radius:
+			return true
+	## 墙体/障碍：沿冲刺方向点采样（与吐酸出口同 mask：1=世界墙、32=道具碰撞）。
+	## 只判敌人在用户看来不够 —— 顶着墙起跳会原地滑完整个冲刺距离。
+	if _pounce_wall_blocked(enemy, dir, reach):
+		return true
+	return false
+
+
+## 冲刺走廊是否撞墙/撞障碍（点采样，步长 16px；mask 1|32 与吐酸生成点同口径）。
+func _pounce_wall_blocked(enemy: Node2D, dir: Vector2, reach: float) -> bool:
+	var space: PhysicsDirectSpaceState2D = enemy.get_world_2d().direct_space_state
+	if space == null:
+		return false
+	var q := PhysicsPointQueryParameters2D.new()
+	q.collision_mask = 1 | 32
+	var d: float = 20.0
+	while d <= reach:
+		q.position = enemy.global_position + dir * d
+		if not space.intersect_point(q).is_empty():
+			return true
+		d += 16.0
+	return false
 
 
 ## 远程吐酸（ブレインディモス）触发条件：距离带内 + 冷却已过 + 状态机有 Spit 节点

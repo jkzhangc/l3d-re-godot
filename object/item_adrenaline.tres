@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://u0luef5osvt4"]
+[gd_resource type="Resource" script_class="ItemData" format=3 uid="uid://dwpujg63smy5e"]
 
 [ext_resource type="Script" uid="uid://c6r8jca1g5fqo" path="res://script/item_data.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://35wtgkdklaur" path="res://art/Ui/装備アイコンアドレナリン.png" id="icon"]
@@ -12,7 +12,6 @@ item_type = 7
 description = "原作 強化アイテム/アドレナリン。短时间内攻击力翻倍；即死类攻击不会因此变得更"
 icon = ExtResource("icon")
 sell_price = 120
-stackable = true
 max_stack = 5
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 7

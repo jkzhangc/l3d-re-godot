@@ -69,7 +69,7 @@ func enter() -> void:
 		enemy.set_attack_char_index(_seq_at(0))
 
 	# 起手音效
-	enemy._play_sound(enemy.attack_sound, enemy.attack_sound_pitch)
+	enemy._play_pool(enemy.attack_sound_pool, enemy.attack_sound, enemy.attack_sound_pitch)
 
 	# 准备帧 → 短暂前摇（给玩家一个"要被吞了"的视觉预警）
 	_timer = 0.18
@@ -178,6 +178,7 @@ func _resolve_bite(enemy: Node2D) -> void:
 	_bit = true
 	print("[敵人] 丸呑み！玩家被吞入（距离 %.0f，概率 %.2f）"
 		% [_victim.global_position.distance_to(enemy.global_position), enemy.swallow_chance])
+	_report_female_swallow(_victim)
 	_hide_victim()
 	_phase = Phase.CHEW
 	_chew_count = 0
@@ -230,6 +231,23 @@ func _enter_recover(enemy: Node2D) -> void:
 	_phase = Phase.RECOVER
 	_set_frame(0)
 	_timer = maxf(0.0, enemy.swallow_recover_seconds)
+
+
+## 成就「三流色情片」：ハンターγ 丸呑み命中女性角色（原作 26 条之一）。
+## 归属到**被吞玩家的座位**；敌我双方都在 Host 侧结算，联机时客户端不跑本状态。
+func _report_female_swallow(victim: Node2D) -> void:
+	if victim == null or not is_instance_valid(victim):
+		return
+	var st: PlayerState = Players.get_state_for_entity(victim)
+	if st == null or st.character == null:
+		return
+	if bool(st.character.get("is_female")):
+		ACHIEVEMENTS.on_female_swallowed(st.seat_index)
+
+
+## 成就系统入口（**preload 常量而不是 class_name**：本项目 class_name 不进全局类缓存，
+## 跨文件按名字引用会在 headless / 导出时报 Parse Error —— 见 MEMORY「class_name 不跨文件」）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
 
 
 # ═══════════════════════════════════════

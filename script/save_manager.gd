@@ -23,6 +23,8 @@ const SAVE_DIR: String = "user://saves/"
 const SAVE_VERSION: int = 2
 ## 存档槽位数量（用户 2026-10-03 定稿：16 → 能多就 20）。
 const SLOT_COUNT: int = 20
+## 成就系统入口（「人生只有一次」= 全程不存档通关，判定钩子就在本文件）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
 
 
 # ═══════════════════════════════════════
@@ -152,6 +154,8 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 			% [idx, bak_path(idx)])
 		return false
 	print("[存档] 已保存槽位 %d: %s | 座位=%d" % [idx, slot_path(idx), seat_dicts.size()])
+	## 成就「人生只有一次」：本次战役只要保存过一次，通关时就不给。
+	ACHIEVEMENTS.on_save_used()
 	return true
 
 
@@ -278,6 +282,8 @@ static func load_slot(idx: int) -> Dictionary:
 
 	print("[存档] 已加载槽位 %d: %s (time=%s, v%d)" % [idx, slot_path(idx), data.get("timestamp", "?"), version])
 	print("[存档] 恢复完成 | 座位=%d %s" % [Players.seat_count(), Players.get_active_state().describe()])
+	## 成就「人生只有一次」：读档同样算"用过存档" —— 读一个中段档再通关不该白送成就。
+	ACHIEVEMENTS.on_save_used()
 	return data
 
 

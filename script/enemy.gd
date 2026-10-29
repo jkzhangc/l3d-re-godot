@@ -42,6 +42,10 @@ const DAMAGE_SOURCE_COOLDOWN_MSEC: int = 1000  ## 同一伤害源对当前敌人
 ## ★敌人死亡掉落（2026-10-01 用户需求：原作里敌人死后会掉药品/武器）。
 ## 只由单机 / Host 权威侧调用；掉落物落进 ground_pickup 组，由 NetworkWorld 收编后同步给 Client。
 const LOOT_DROPPER := preload("res://script/director/loot_dropper.gd")
+## 成就系统入口（preload 常量而不是 class_name：本项目 class_name 不进全局类缓存）。
+const ACHIEVEMENTS := preload("res://script/achievements.gd")
+## 特效动画播放器（舌头攻击 Client 表现用）。
+const VX_ANIM := preload("res://script/vx_anim_sprite.gd")
 ## 精灵渲染服务（2026-10-08 拆分：渲染逻辑抽到 enemy_sprite_renderer.gd，本文件保留转发门面）。
 ## ⚠ 用 preload 常量而非 class_name（见 MEMORY「class_name 不跨文件」）。
 const SpriteRenderer := preload("res://script/enemy_sprite_renderer.gd")
@@ -179,6 +183,8 @@ var variant_rage_texture: Texture2D = null
 var variant_rage_move_speed: float = 0.0        ## 狂暴移动速度（0 = 沿用当前值不变）
 var variant_rage_attack_damage: float = 0.0     ## 狂暴攻击伤害（0 = 沿用当前值不变）
 var variant_rage_discover_sound: AudioStream = null  ## 狂暴状态下的发现/吼叫音效
+## 狂暴发现音效随机池（ZombieVariant 注入；非空时等概率抽一条）。
+var variant_rage_discover_sound_pool: Array[AudioStream] = []
 var variant_rage_discover_pitch: float = 1.0         ## 狂暴吼叫音调（ZombieVariant 注入，0/1=原调）
 ## 狂暴力竭阈值（秒）：狂暴态累计**移动**达到该值 → 力竭倒地（EnemyExhaustedState）。
 ## 原作说明书（enemy.html クリムゾンヘッド条）：「中身はエキストラ（一般人）であるため
@@ -304,17 +310,44 @@ var _electro_time: float = 0.0
 @export var attack_sound_pitch: float = 1.0
 @export var discover_sound_pitch: float = 1.0
 
+## ── 音效随机池（2026-10-29 用户需求）──
+## 每个音效槽都可以再挂一组候选：**非空时等概率抽一条**，空则用上面的单条。
+## 与单条字段并存（向后兼容）：旧 .tres 不填池子 = 行为不变。
+@export_group("音效 — 随机池（等概率）")
+@export var discover_sound_pool: Array[AudioStream] = []
+@export var hurt_sound_pool: Array[AudioStream] = []
+@export var attack_sound_pool: Array[AudioStream] = []
+@export var hit_target_sound_pool: Array[AudioStream] = []
+@export var death_sound_pool: Array[AudioStream] = []
+@export var headshot_sound_pool: Array[AudioStream] = []
+@export var headshot_fall_sound_pool: Array[AudioStream] = []
+@export var frontal_block_sound_pool: Array[AudioStream] = []
+@export var pounce_sound_pool: Array[AudioStream] = []
+@export var spit_sound_pool: Array[AudioStream] = []
+@export var witch_scream_sound_pool: Array[AudioStream] = []
+@export var witch_alert_sound_pool: Array[AudioStream] = []
+@export var water_enter_sound_pool: Array[AudioStream] = []
+@export var water_exit_sound_pool: Array[AudioStream] = []
+@export var tongue_sound_pool: Array[AudioStream] = []
+
 @export_group("首狩り突进（ハンター 系）")
 ## 首狩り（クビカリ）突进总开关。仅ハンター 系特感开启；普通僵尸保持 false。
 @export var pounce_enabled: bool = false
 ## 触发首狩り的最小距离（px）：比这更近就直接走普通 Attack（近距离不必起跳）。
 @export var pounce_trigger_min_dist: float = 110.0
 ## 触发首狩り的最大距离（px）：比这更远够不着，继续正常追击。
-@export var pounce_trigger_max_dist: float = 340.0
+## 2026-10-29 用户要求「默认触发距离改短」：340 → 260。
+@export var pounce_trigger_max_dist: float = 260.0
 ## 蓄力（预备）时长（秒）：给玩家反应窗口，避免"无预警瞬移"。
 @export var pounce_windup_seconds: float = 0.28
-## 冲刺持续时长（秒）。
+## 冲刺持续时长（秒）。⚠ 2026-10-29 起仅在 `pounce_dash_distance <= 0` 时兜底。
 @export var pounce_dash_seconds: float = 0.42
+## ★冲刺距离（px，2026-10-29）：按向前移动的像素数结束冲刺（旧口径是按时间）。
+@export var pounce_dash_distance: float = 220.0
+## ★冲刺动作每帧时长（秒，2026-10-29）：<=0 = 均摊到整个冲刺时长。
+@export var pounce_dash_frame_seconds: float = 0.1
+## ★扑击前前方挡路判定半径（px，2026-10-29）：前方这个半径内有其它敌人就不扑。0 = 关闭。
+@export var pounce_block_radius: float = 26.0
 ## 冲刺速度倍率（相对 move_speed）。1.8 ≈ 冲刺感明显但仍可被预判。
 @export var pounce_speed_mult: float = 1.8
 ## 突进绝对速度（2026-09-15）：>0 时直接用作冲刺速度，忽略 move_speed×pounce_speed_mult。
@@ -381,6 +414,118 @@ var _pounce_cooldown_left: float = 0.0
 
 # ── 吐酸运行时 ──
 var _spit_cooldown_left: float = 0.0
+
+@export_group("舌头攻击（バイオゲラス，2026-10-29）")
+## 中距离停步 → 蓄力 → 播放「舌头 + 本体新动作」特效 → 前方矩形判定 → 后摇。
+@export var tongue_enabled: bool = false
+## 触发距离带（px）。
+@export var tongue_trigger_min_dist: float = 100.0
+@export var tongue_trigger_max_dist: float = 300.0
+## 蓄力 / 后摇 / 冷却（秒）。
+@export var tongue_windup_seconds: float = 0.35
+@export var tongue_recover_seconds: float = 0.7
+@export var tongue_cooldown_seconds: float = 3.0
+## 舌头伤害（会乘难度倍率）。
+@export var tongue_damage: float = 30.0
+## 命中矩形：前方长度 × 横向宽度（px）。
+@export var tongue_hit_range: Vector2 = Vector2(220, 56)
+## 蓄力本体帧（攻击表角色格）。
+@export var tongue_body_frame: int = 0
+## 舌头特效场景（左右下 / 上）。
+@export var tongue_effect: PackedScene = null
+@export var tongue_effect_up: PackedScene = null
+## 四朝向帧序列（5×5 动画表）。
+@export var tongue_frames_right: Array[int] = [4, 5, 6, 7]
+@export var tongue_frames_left: Array[int] = [10, 13, 14, 17, 18]
+@export var tongue_frames_down: Array[int] = [20, 21, 22, 23, 24]
+@export var tongue_frames_up: Array[int] = [8, 12, 13, 15, 17, 19]
+## 特效每帧秒数。
+@export var tongue_effect_frame_seconds: float = 0.09
+## 音效 / 音调。
+@export var tongue_sound: AudioStream = null
+@export var tongue_sound_pitch: float = 1.0
+## 冷却剩余（EnemyTongueState 收尾置位，_process 递减）。
+var _tongue_cooldown_left: float = 0.0
+## Client 舌头表现进行中（防重入）。
+var _tongue_net_playing: bool = false
+
+
+## 舌头帧序列（Host 状态机与 Client 表现共用，保证两端同一套帧）。
+func tongue_frames_for_facing(facing: int) -> Array[int]:
+	match facing:
+		1:
+			return tongue_frames_left
+		3:
+			return tongue_frames_up
+		0:
+			return tongue_frames_down
+		_:
+			return tongue_frames_right
+
+
+## 舌头特效锚点（按素材实测；Host/Client 共用）。
+func tongue_effect_offset_for_facing(facing: int) -> Vector2:
+	match facing:
+		0:   # 下（身体在格顶，舌头向下伸）
+			return Vector2(8.0, 34.0)
+		1:   # 左
+			return Vector2(-10.0, -74.0)
+		3:   # 上
+			return Vector2(0.0, -82.0)
+		_:   # 右
+			return Vector2(10.0, -74.0)
+
+
+func tongue_effect_scene_for_facing(facing: int) -> PackedScene:
+	return tongue_effect_up if facing == 3 else tongue_effect
+
+
+## Host：舌头攻击表现广播（Client 播同一套帧/锚点，伤害仍 Host 权威）。
+func announce_tongue(facing: int) -> void:
+	if not Net.is_host or network_entity_id <= 0:
+		return
+	var tree := get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld")
+	if world != null and world.has_method("announce_enemy_tongue"):
+		world.call("announce_enemy_tongue", self, facing)
+
+
+## Client 表现接口（NetworkWorld.enemy_tongue_presentation 调用）：
+## 隐藏本体 → 在敌人位置播「舌头 + 本体」特效 → 结束后恢复。
+func play_network_tongue_presentation(facing: int) -> void:
+	if _tongue_net_playing or _is_dead:
+		return
+	var seq: Array[int] = tongue_frames_for_facing(facing)
+	var packed: PackedScene = tongue_effect_scene_for_facing(facing)
+	if packed == null or seq.is_empty():
+		return
+	_tongue_net_playing = true
+	var frame_sec: float = maxf(0.03, tongue_effect_frame_seconds)
+	var anim: Node2D = VX_ANIM.from_scene(packed)
+	var played: bool = false
+	if anim != null:
+		anim.set("frame_sequence", seq)
+		anim.set("fps", 1.0 / frame_sec)
+		anim.set("auto_free", true)
+		anim.set("position_offset", tongue_effect_offset_for_facing(facing))
+		anim.set("follow_target", self)
+		anim.set("follow_enabled", true)
+		anim.global_position = global_position
+		var parent: Node = get_tree().current_scene if get_tree() != null else get_parent()
+		if parent != null:
+			parent.add_child(anim)
+			played = true
+		else:
+			anim.queue_free()
+	if played and sprite != null:
+		sprite.visible = false
+	await get_tree().create_timer(float(seq.size()) * frame_sec + 0.05).timeout
+	if is_instance_valid(self):
+		if sprite != null:
+			sprite.visible = true
+		_tongue_net_playing = false
 
 @export_group("即死耐性")
 ## 集中射撃（覚醒）即死弹免疫：true = 走 Boss 同款结算（伤害 ×1.5 + 0.8s 怯み，不死）。
@@ -707,9 +852,13 @@ func startle_witch(reason: String = "") -> bool:
 	if not witch_enabled or witch_enraged or _is_dead:
 		return false
 	witch_enraged = true
+	## 成就「绅士」：本局只要惊动过一只女巫，通关时就不给（攻击 / 贴脸 / 刺激值满都走这里）。
+	ACHIEVEMENTS.on_witch_startled()
 	move_speed *= witch_enrage_speed_mult
 
-	var snd: AudioStream = witch_scream_sound if witch_scream_sound != null else discover_sound
+	var snd: AudioStream = _pick_pool_stream(witch_scream_sound_pool)
+	if snd == null:
+		snd = witch_scream_sound if witch_scream_sound != null else discover_sound
 	var pitch: float = witch_scream_sound_pitch if witch_scream_sound != null else discover_sound_pitch
 	if snd != null:
 		_play_sound(snd, pitch)
@@ -818,6 +967,8 @@ func _process(delta: float) -> void:
 	# 吐酸冷却（ブレインディモス）：两次吐酸之间的最短间隔
 	if _spit_cooldown_left > 0.0:
 		_spit_cooldown_left = maxf(0.0, _spit_cooldown_left - delta)
+	if _tongue_cooldown_left > 0.0:
+		_tongue_cooldown_left = maxf(0.0, _tongue_cooldown_left - delta)
 
 	# 丸呑み冷却（ハンターγ）：两次零距离必杀之间的最短间隔
 	if _swallow_cooldown_left > 0.0:
@@ -853,7 +1004,9 @@ func _update_water_state() -> void:
 		return
 	_water_submerged = wet
 	## 水陆切换音效（踩水/上岸）
-	var stream: AudioStream = water_enter_sound if wet else water_exit_sound
+	var stream: AudioStream = _pick_pool_stream(water_enter_sound_pool if wet else water_exit_sound_pool)
+	if stream == null:
+		stream = water_enter_sound if wet else water_exit_sound
 	if stream != null:
 		var g: Node = get_node_or_null("/root/Global")
 		if g and g.has_method("play_sfx_managed"):
@@ -925,7 +1078,7 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		var tree := get_tree()
 		if tree and tree.current_scene:
 			DamageNumber.spawn(global_position + hurt_effect_offset, damage, tree.current_scene)
-		_play_sound(hurt_sound, hurt_sound_pitch)
+		_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	_network_headshot_death = is_headshot
 	## 尸体位置冻结（2026-09-24 用户实测「客户端丧尸变成尸体后位置有时会变一下」）：
@@ -1095,9 +1248,14 @@ func _play_network_death_sfx_once(is_headshot: bool) -> void:
 ## （想要更狠的爆头反馈，在敌人 Inspector 里给 `headshot_sound` 指定专属音即可，
 ## 例如 `sound/グシャア.ogg`，无需改代码。）
 func _death_stream(is_headshot: bool) -> AudioStream:
-	if is_headshot and headshot_sound != null:
-		return headshot_sound
-	return death_sound
+	if is_headshot:
+		var hs: AudioStream = _pick_pool_stream(headshot_sound_pool)
+		if hs != null:
+			return hs
+		if headshot_sound != null:
+			return headshot_sound
+	var ds: AudioStream = _pick_pool_stream(death_sound_pool)
+	return ds if ds != null else death_sound
 
 
 func _schedule_network_headshot_fall() -> void:
@@ -1110,7 +1268,7 @@ func _schedule_network_headshot_fall() -> void:
 	await tree.create_timer(headshot_pause_frames / 60.0).timeout
 	if is_inside_tree() and _is_dead:
 		_refresh_sprite_with_index(headshot_char_index_2)
-		_play_sound(headshot_fall_sound, headshot_fall_sound_pitch)
+		_play_pool(headshot_fall_sound_pool, headshot_fall_sound, headshot_fall_sound_pitch)
 
 
 func get_network_facing() -> int:
@@ -1295,6 +1453,13 @@ func get_spit_damage() -> float:
 	return spit_damage * Global.difficulty_enemy_damage()
 
 
+## 舌头攻击最终伤害 = tongue_damage × 难度 enemy_damage 倍率（与吐酸同规则）。
+func get_tongue_damage() -> float:
+	if network_presentation_only:
+		return tongue_damage
+	return tongue_damage * Global.difficulty_enemy_damage()
+
+
 ## 近战/突进/吐酸等敌人攻击的 source_id：实例 ID + 递增序列。
 ## （2026-09-17 女巫"隔下掉血"修复）玩家受击侧有 1s 源头去重，而近战每次挥击都传同一个
 ## 实例 ID → 攻击周期 <1s 的敌人（女巫/丧尸）第二爪必撞冷却窗被吞，第三爪放行，
@@ -1430,7 +1595,7 @@ func _apply_frontal_resist(damage: float, direction: Vector2) -> float:
 		if damage <= 0.0:
 			## 完全回避（Hunter β 正面 120°）：加足反馈 —— 弹开音效 + 「無効」飘字。
 			## 2026-09-16 用户实测反馈：只有闪白时玩家以为"打不死/枪坏了"。
-			_play_sound(frontal_block_sound, frontal_block_sound_pitch)
+			_play_pool(frontal_block_sound_pool, frontal_block_sound, frontal_block_sound_pitch)
 			var tree := get_tree()
 			if tree and tree.current_scene:
 				DamageNumber.spawn(global_position + hurt_effect_offset, 0.0,
@@ -1546,7 +1711,7 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 
 	# 播放受伤音效（0 伤害不播放）
 	if damage > 0.0:
-		_play_sound(hurt_sound, hurt_sound_pitch)
+		_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 
 	## ★Tank（暴君）抗打断（2026-09-27 用户定稿）：只有**爆炸家族**（RPG/榴弹/弩等，即
 	## bullet 的 explosion_radius > 0）能击退或打出硬直；手枪/步枪/冲锋枪/霰弹/马格南/
@@ -1577,6 +1742,9 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	## 全程既不尖叫也不加速 —— 玩家看到的就是"一只会站桩的普通怪"。这里直接接管状态路由。
 	## 代价是女巫不吃击退/硬直：原作里被惊动的女巫本来就不该被打退。
 	if witch_enabled and not witch_enraged:
+		## 成就「绅士」：**打到就算刺激**，哪怕这一击直接打死她（下面会走 _die 早退，
+		## 不会经过 startle_witch，所以钩子必须在这之前）。重复调用是幂等的。
+		ACHIEVEMENTS.on_witch_startled()
 		if current_hp <= 0.0:
 			_die(is_headshot)
 			return
@@ -1637,14 +1805,14 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 		var dmg_color := BACKSTAB_DMG_COLOR if backstab \
 			else (Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE)
 		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, dmg_color)
-	_play_sound(hurt_sound, hurt_sound_pitch)
+	_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 
 
 ## Client 表现接口（NetworkWorld.enemy_block_presentation 调用）：重放正面抗性的
 ## 「弹开」表现 —— 金色偏白闪 + 弹开音效 + 「無効」飘字。只做表现，不动 HP。
 func play_network_block_presentation(impact_position: Vector2 = global_position) -> void:
 	_play_hit_feedback(Color(1.0, 0.95, 0.6, 1.0), 0.08)
-	_play_sound(frontal_block_sound, frontal_block_sound_pitch)
+	_play_pool(frontal_block_sound_pool, frontal_block_sound, frontal_block_sound_pitch)
 	var tree := get_tree()
 	if tree and tree.current_scene:
 		DamageNumber.spawn(impact_position, 0.0, tree.current_scene, 0,
@@ -1774,7 +1942,7 @@ func _become_corpse(is_headshot: bool) -> void:
 			_register_corpse()
 			return
 		_refresh_sprite_with_index(headshot_char_index_1)
-		_play_sound(headshot_fall_sound, headshot_fall_sound_pitch)
+		_play_pool(headshot_fall_sound_pool, headshot_fall_sound, headshot_fall_sound_pitch)
 		var delay_timer: Timer = Timer.new()
 		delay_timer.wait_time = headshot_pause_frames / 60.0
 		delay_timer.one_shot = true
@@ -2257,6 +2425,19 @@ func _current_anim_frame_duration() -> float:
 	return clampf(d, 0.05, 0.5)
 
 
+## 从随机池等概率抽一条；空池返回 null。
+func _pick_pool_stream(pool: Array[AudioStream]) -> AudioStream:
+	if pool.is_empty():
+		return null
+	return pool[randi() % pool.size()]
+
+
+## 播放「随机池优先」音效：池非空等概率抽一条，否则用单条 fallback。
+func _play_pool(pool: Array[AudioStream], fallback: AudioStream, pitch: float = 1.0) -> void:
+	var stream: AudioStream = _pick_pool_stream(pool)
+	_play_sound(stream if stream != null else fallback, pitch)
+
+
 func _play_sound(stream: AudioStream, pitch: float = 1.0) -> void:
 	if not stream:
 		return
@@ -2281,15 +2462,32 @@ const NETWORK_SFX_FIELDS: Dictionary = {
 	"frontal_block": "frontal_block_sound",
 }
 
+## 随机池字段（2026-10-29）：与 NETWORK_SFX_FIELDS 同 key。
+## Host 从池里抽中第 N 条时，把 N 一并转发，Client 播同一条（资源仍不经网络）。
+const SOUND_POOL_FIELDS: Dictionary = {
+	"attack": "attack_sound_pool",
+	"discover": "discover_sound_pool",
+	"rage_discover": "variant_rage_discover_sound_pool",
+	"witch_scream": "witch_scream_sound_pool",
+	"frontal_block": "frontal_block_sound_pool",
+}
+
 
 ## 反查 stream 对应的转发 key（表外音效返回 ""，不转发）。
 ## 发现音的动态回退天然兼容：rage 时播 variant_rage_discover_sound 命中
 ## rage_discover；rage 音为空回退 discover_sound 命中 discover——两端同字段取值。
-func _sfx_key_for(stream: AudioStream) -> String:
+## ★2026-10-29：随机池成员也能反查 —— 先查单条字段（index=-1），再查各池（index>=0）。
+func _sfx_ref_for(stream: AudioStream) -> Dictionary:
 	for sfx_key: String in NETWORK_SFX_FIELDS:
 		if get(NETWORK_SFX_FIELDS[sfx_key]) == stream:
-			return sfx_key
-	return ""
+			return {"key": sfx_key, "index": -1}
+	for sfx_key: String in SOUND_POOL_FIELDS:
+		var pool: Variant = get(SOUND_POOL_FIELDS[sfx_key])
+		if pool is Array:
+			var idx: int = (pool as Array).find(stream)
+			if idx >= 0:
+				return {"key": sfx_key, "index": idx}
+	return {}
 
 
 ## ── A4 动作表事件化（视觉预警：攻击/突进/丸呑み张嘴的独立动作表不跨端，Client
@@ -2344,24 +2542,36 @@ func apply_network_action_texture(tex_key: String, char_idx: int, active: bool) 
 func _announce_network_sfx(stream: AudioStream, pitch: float) -> void:
 	if not Net.is_host or network_entity_id <= 0:
 		return
-	var sfx_key := _sfx_key_for(stream)
+	var ref: Dictionary = _sfx_ref_for(stream)
+	if ref.is_empty():
+		return
+	var sfx_key: String = str(ref.get("key", ""))
 	if sfx_key == "":
 		return
 	var tree := get_tree()
 	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld") \
 			if tree != null and tree.current_scene != null else null
 	if world != null and world.has_method("announce_enemy_sfx"):
-		world.call("announce_enemy_sfx", self, sfx_key, pitch)
+		world.call("announce_enemy_sfx", self, sfx_key, pitch, int(ref.get("index", -1)))
 
 
 ## Client 表现接口（NetworkWorld.enemy_sfx_presentation 调用）：
 ## 按 key 从本地节点字段取 stream 播放。直接走 play_sfx_managed，
 ## 不经 _play_sound（避免再进转发判定）。
-func play_network_sfx(sfx_key: String, pitch: float) -> void:
-	var field: String = NETWORK_SFX_FIELDS.get(sfx_key, "")
-	if field == "":
-		return
-	var stream: AudioStream = get(field)
+## `pool_index >= 0` = Host 抽中的池下标，Client 播同一条（保证两端同声）。
+func play_network_sfx(sfx_key: String, pitch: float, pool_index: int = -1) -> void:
+	var stream: AudioStream = null
+	if pool_index >= 0:
+		var pool_field: String = SOUND_POOL_FIELDS.get(sfx_key, "")
+		if pool_field != "":
+			var pool: Variant = get(pool_field)
+			if pool is Array and pool_index < (pool as Array).size():
+				stream = (pool as Array)[pool_index]
+	if stream == null:
+		var field: String = NETWORK_SFX_FIELDS.get(sfx_key, "")
+		if field == "":
+			return
+		stream = get(field)
 	if stream == null:
 		return
 	Global.play_sfx_managed(stream, self, true, pitch)
@@ -2399,8 +2609,8 @@ func set_rage(on: bool) -> void:
 			move_speed = variant_rage_move_speed
 		if variant_rage_attack_damage > 0.0:
 			attack_damage = variant_rage_attack_damage
-		if variant_rage_discover_sound != null:
-			_play_sound(variant_rage_discover_sound,
+		if variant_rage_discover_sound != null or not variant_rage_discover_sound_pool.is_empty():
+			_play_pool(variant_rage_discover_sound_pool, variant_rage_discover_sound,
 				variant_rage_discover_pitch if variant_rage_discover_pitch > 0.0 else 1.0)  ## 狂暴化瞬间的吼叫
 		# 力竭阈值重置并加 ±20% 抖动：同批狂暴的丧尸不会整整齐齐一起倒
 		_rage_move_accum = 0.0
@@ -2439,14 +2649,22 @@ func is_rage() -> bool:
 
 func get_discover_sound() -> AudioStream:
 	## 发现玩家的音效：狂暴状态下用狂暴叫声（クリム_叫び），否则普通ゾンビ声。
-	if _rage and variant_rage_discover_sound != null:
-		return variant_rage_discover_sound
+	## 2026-10-29：每个槽优先从随机池等概率抽一条。
+	if _rage:
+		var rs: AudioStream = _pick_pool_stream(variant_rage_discover_sound_pool)
+		if rs != null:
+			return rs
+		if variant_rage_discover_sound != null:
+			return variant_rage_discover_sound
+	var ds: AudioStream = _pick_pool_stream(discover_sound_pool)
+	if ds != null:
+		return ds
 	return discover_sound
 
 
 func get_discover_pitch() -> float:
 	## 与 get_discover_sound 配套：狂暴叫声用狂暴音调，否则普通发现音调。
-	if _rage and variant_rage_discover_sound != null:
+	if _rage and (variant_rage_discover_sound != null or not variant_rage_discover_sound_pool.is_empty()):
 		return variant_rage_discover_pitch if variant_rage_discover_pitch > 0.0 else 1.0
 	return discover_sound_pitch
 
