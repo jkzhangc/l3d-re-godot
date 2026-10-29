@@ -20,8 +20,16 @@ class_name DirectorConfig extends Node
 @export var chapter_title: String = ""
 
 @export_group("节奏 — Build-up（压力爬升）")
-@export var build_min: float = 36.0              ## 压力爬升阶段最短持续秒数。这个阶段每15~30s生成1~3个散兵，给玩家"敌人越来越多"的感觉
-@export var build_max: float = 108.0             ## 压力爬升阶段最长持续秒数。超过这个时间自动进入尸潮，即使玩家状态很好
+## ⚠ 2026-10-29 起这两个字段**不再生效**：Build 时长改由「尸潮间隔（难度表 /
+## `horde_interval_override_*`）」反推。保留字段只为旧场景不报错，请勿再调。
+@export var build_min: float = 36.0              ## [已停用] 旧：压力爬升阶段最短秒数
+@export var build_max: float = 108.0             ## [已停用] 旧：压力爬升阶段最长秒数
+## ★尸潮间隔覆盖（2026-10-29）：两次「峰值开始」之间的目标秒数。
+## **0 = 用难度表**（简单 240~360 / 普通 180~300 / 困难 180~240 / 最高 165~190）；
+## 两个值都 > 0 时由本图决定。Director 会自动扣掉峰值时长与喘息，换算成 Build 时长，
+## 所以这里填的是「玩家实际感到的间隔」，不是 Build 本身的长度。
+@export var horde_interval_override_min: float = 0.0
+@export var horde_interval_override_max: float = 0.0
 
 @export_group("节奏 — Peak（尸潮爆发）")
 @export var peak_timeout: float = 60.0           ## 尸潮最多持续秒数。超时后即使还有活着的敌人也强制结束，防止玩家卡关
@@ -55,6 +63,20 @@ class_name DirectorConfig extends Node
 ## 喘息期队伍累计前进这么多像素 → 提前结束喘息（走得快就走得快，对应 L4D Relax 的"走远即结束"）。
 @export var relax_advance: float = 700.0
 
+@export_group("节奏 — 智能尸潮（2026-10-29 用户设计）")
+## 开启后 BUILD **不再按固定时长**结束，而是「玩家连续无交战达到阈值」才开尸潮。
+## 阈值 = clamp(基础 + 本章击杀数 × 每杀秒数, 下限, 上限) —— 杀得越多，下一波来得越晚。
+## 关掉 = 回到难度间隔表（`horde_interval_*`）的定时节奏。
+@export var smart_horde_enabled: bool = true
+## 0 杀时的无交战阈值（秒）。默认 120 = 两分钟没交战就来一波。
+@export var smart_horde_base_sec: float = 120.0
+## 每击杀增加的秒数（默认 2：60 杀 → 4 分钟，120 杀 → 封顶 6 分钟）。
+@export var smart_horde_per_kill_sec: float = 2.0
+## 阈值下限（秒）：两波尸潮之间的硬间隔，配置再低也不会低于它。
+@export var smart_horde_min_sec: float = 30.0
+## 阈值上限（秒）：再怎么杀也不会超过 6 分钟才来。
+@export var smart_horde_max_sec: float = 360.0
+
 @export_group("进度（紧张度因子 / Boss 路程闸，2026-10-25）")
 ## 启用真实关卡进度估计（0~1）。关掉 = 回到旧行为（进度因子恒定 0.3），仅用于对照/回退。
 ## 进度来源优先级：出口节点（SafeDoor/TeleportPoint）的"距离收敛" → 行进里程 / 参考路程。
@@ -69,17 +91,17 @@ class_name DirectorConfig extends Node
 ## 这就是「消耗型预算」—— 它替换掉旧的「维持目标数量」，是空窗的来源。
 ## ⚠ 2026-10-24 用户实测「丧尸实在太少」：本项目地图狭窄紧凑、没有大空地，
 ## 与 L4D 的 3D 开阔地图不可比 → 预算按"每 10 秒能看到 2~3 只"重新标定（原 6~12 太低）。
-@export var build_budget_min: int = 12           ## 预算下限（按难度/人数放大后生效）
-@export var build_budget_max: int = 20           ## 预算上限
-@export var build_batch_min: int = 2             ## 每批最少几只
-@export var build_batch_max: int = 3             ## 每批最多几只
+@export var build_budget_min: int = 7            ## 预算下限（按人数放大；2026-10-29 全体 ×0.6）
+@export var build_budget_max: int = 12           ## 预算上限（×0.6）
+@export var build_batch_min: int = 1             ## 每批最少几只（×0.6）
+@export var build_batch_max: int = 2             ## 每批最多几只（×0.6）
 @export var build_interval_min: float = 5.0      ## 两批之间最短秒数
 @export var build_interval_max: float = 9.0      ## 两批之间最长秒数
 
 @export_group("L4D — 尸潮（Peak 入场一次性爆发）")
 ## 进入峰值时**一次性**发出的尸潮规模。峰值期间不再补怪（L4D：强度到顶就停手）。
-@export var mob_size_min: int = 14               ## 尸潮规模下限
-@export var mob_size_max: int = 22               ## 尸潮规模上限
+@export var mob_size_min: int = 8                ## 尸潮规模下限（×0.6）
+@export var mob_size_max: int = 13               ## 尸潮规模上限（×0.6）
 ## 尸潮从「背后」来的比例（L4D 原版是 75%）。0 = 全从前方来，1 = 全从背后来。
 @export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
 
@@ -99,17 +121,17 @@ class_name DirectorConfig extends Node
 ## ★进入一张地图时，先在玩家四周（屏外、360° 整圈）铺多少只"徘徊的丧尸"。
 ## 对应 L4D 的 wanderers：一片区域里本来就有丧尸在晃，而不是等你走过去才从前方刷出来。
 ## ⚠ 2026-10-29 起受 `offscreen_refill_enabled` 总开关约束：总开关关闭（默认）时本组不生效。
-@export var wander_seed_min: int = 6
-@export var wander_seed_max: int = 9
+@export var wander_seed_min: int = 4
+@export var wander_seed_max: int = 5
 ## 队伍累计前进这么多像素，就在新区域再补一轮游荡者（模拟 L4D 的 Active Area Set 换区）。
 ## 0 = 只在进图时铺一次。
 @export var wander_seed_step: float = 900.0
 ## 每次换区补几只（按难度/人数放大）。
-@export var wander_seed_refill: int = 3
+@export var wander_seed_refill: int = 2
 ## ★附近希望维持的游荡者总数（威胁圈内）。补层时**只补差额**：够就不补、不足才补。
 ## 2026-10-24 用户提议的"根据附近数量增减"即此项。学校/街道某些角落一直空 → 补到目标；
 ## 已经一堆 → 一只不加。嫌稀就抬到 12~14，嫌密就降到 6~8。
-@export var wander_target_near: int = 10
+@export var wander_target_near: int = 6
 
 ## ⚠ **旧模型专用**：`l4d_pacing = true`（默认）时，BUILD 阶段由「加压预算」供货，
 ## 本组（散兵）与下面「尸潮」组都走不到。只有关掉 l4d_pacing 做 A/B 时才需要调。
@@ -124,9 +146,9 @@ class_name DirectorConfig extends Node
 
 ## ⚠ **旧模型专用**：L4D 模型下峰值 = 一次性 `mob_size_*` 后停手，本组不生效。
 @export_group("生成 — 尸潮（Peak 阶段大量敌人）")
-@export var horde_total_min: int = 5            ## 尸潮期间**同时维持**多少只存活（不再是"一共出几个"）。缺多少补多少
-@export var horde_total_max: int = 25            ## 尸潮期间同时维持的存活数上限。地图大可以多设，地图小设少点
-@export var horde_batch_size: int = 8            ## 尸潮每批同时生成几个。不会一次性刷出全部，而是分批来，模拟"从四面八方涌来"的感觉（2026-09-17：5→8）
+@export var horde_total_min: int = 3            ## 尸潮期间**同时维持**多少只存活（×0.6；缺多少补多少）
+@export var horde_total_max: int = 15            ## 尸潮期间同时维持的存活数上限（×0.6）
+@export var horde_batch_size: int = 5            ## 尸潮每批同时生成几个（×0.6；仍分批涌来）
 @export var horde_batch_interval: float = 5.0    ## 尸潮批次之间的基础间隔秒数。设短=连续涌出，设长=一波一波有节奏（2026-09-17：3→5，慢刷）
 @export var horde_duration_min: float = 25.0  ## 一波尸潮持续多久（秒）下限。尸潮结束条件 = 这个窗口走完；期间「缺多少补多少」，被击杀 / 被远处回收都会腾出名额继续补
 @export var horde_duration_max: float = 40.0  ## 一波尸潮持续多久（秒）上限。实际值在此范围内随机，并被 peak_timeout 截断（尸潮不会比峰值阶段更长）
@@ -139,20 +161,18 @@ class_name DirectorConfig extends Node
 @export var nearby_gate_radius: float = 600.0
 
 @export_group("生成 — 画面外补怪（总开关，2026-10-29）")
-## ★是否允许导演在玩家**画面之外**持续补怪。**默认关闭**（用户 2026-10-29：
-## 「补得怪有点频繁跟多了，不补怪纯靠生成区域应该还可以」）。
+## ★是否允许导演在玩家**画面之外**持续补怪。**默认开启**（2026-10-29 晚间用户改为默认开：
+## 第二战役已补齐刷怪点，不开就只有尸潮/特感/作者点，路上会空）。
 ## 关闭后停掉的全部是"持续供水"：进图/换区游荡者、L4D 加压预算批次、喘息期补位、
-## 旧模型的散兵与前方屏外补位。**尸潮事件、特感、Boss、作者摆的 SpawnZone 不受影响**。
-## ⚠ 目前只有 `突袭-第一关-街道` / `突袭-第二关-学校内部` 摆了 SpawnZone；
-##   没有 SpawnZone 的图（含整套夜行猎手）关掉后路上只剩尸潮/特感/Boss —— 属预期行为。
-@export var offscreen_refill_enabled: bool = false
+## 旧模型的散兵与前方屏外补位。**尸潮事件、特感、Boss 不受影响**。
+@export var offscreen_refill_enabled: bool = true
 ## 附近补怪人数**下限**：威胁圈（`threat_radius`，默认 600px）内活着的敌人跌到它以下才开补。
 ## 0 = 不补（等价于关闭总开关）。仅在 `offscreen_refill_enabled = true` 时生效。
-@export var offscreen_refill_min: int = 4
+@export var offscreen_refill_min: int = 2
 ## 附近补怪人数**上限**：开补后一直补到它才停手（迟滞带）——
 ## 中间区间既不会"杀一只补一只"，也不会补到一半就撒手。尸潮/事件推高到上限以上则保持停手，
 ## 直到回落到下限以下才恢复。
-@export var offscreen_refill_max: int = 10
+@export var offscreen_refill_max: int = 6
 
 @export_group("生成 — 前方屏外定点刷怪（FrontSpawner）")
 ## 是否启用"前方屏外定点刷怪"。这是当前默认的补怪方式：

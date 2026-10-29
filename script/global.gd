@@ -437,11 +437,22 @@ const ANIM_BASE_FRAME_DURATION: float = 0.18
 # ═══════════════════════════════════════
 var selected_campaign: CampaignData = null
 var selected_difficulty: int = 0  ## 0=Easy, 1=Normal, 2=Hard, 3=Expert
+## 难度倍率表（2026-10-29 晚 用户二次定稿）。
+##   enemy_hp / enemy_damage —— 敌人血量 / 对玩家伤害（比例回到原档）
+##   director_intensity      —— 紧张度换算（高难度更快攒压力 → 特感更早出现）
+##   spawn_scale             —— **尸潮相关**的刷怪量（多人只按人数；单人再乘难度）
+##   active_cap              —— 同屏存活上限（给高难度更大的尸潮留余量）
+##   horde_interval_*        —— 关掉智能尸潮时的回退间隔
+## ⚠ 「正常补怪」（游荡者 / 加压预算 / 喘息补位）**不吃难度**，见 Players.ambient_spawn_scale()。
 var difficulty_multipliers: Dictionary = {
-	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6, "spawn_scale": 0.5},
-	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0, "spawn_scale": 0.75},
-	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5, "spawn_scale": 1.0},
-	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0, "spawn_scale": 1.25},
+	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6, "spawn_scale": 0.5,
+		"active_cap": 0.8, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0, "spawn_scale": 0.75,
+		"active_cap": 1.0, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5, "spawn_scale": 1.0,
+		"active_cap": 1.15, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0, "spawn_scale": 1.25,
+		"active_cap": 1.3, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
 }
 
 
@@ -475,6 +486,22 @@ func difficulty_director_intensity() -> float:
 ## 否则 4 人 + 最高难度会叠成 2.0×1.25 = 2.5×，多人平衡会跟着变。
 func difficulty_spawn_scale() -> float:
 	return difficulty_mult("spawn_scale")
+
+
+## ── 同屏存活上限的难度倍率（2026-10-29 晚恢复）──
+## 它只是"天花板"，不主动生成：高难度尸潮更大时需要更多余量，低难度也自然更稀。
+func difficulty_active_cap() -> float:
+	return difficulty_mult("active_cap")
+
+
+## ── 尸潮间隔（秒）：两次「峰值开始」之间的目标间隔 ──
+## ⚠ **智能尸潮（无交战计时）默认接管**，本表只在关掉智能尸潮时生效（各难度统一 180~300s）。
+func difficulty_horde_interval() -> Vector2:
+	var lo: float = difficulty_mult("horde_interval_min")
+	var hi: float = difficulty_mult("horde_interval_max")
+	if lo <= 0.0 or hi <= 0.0:
+		return Vector2(180.0, 300.0)
+	return Vector2(minf(lo, hi), maxf(lo, hi))
 
 # ═══════════════════════════════════════
 # 尸体管理

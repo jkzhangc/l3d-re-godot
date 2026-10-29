@@ -220,6 +220,10 @@ func spawn_player_count() -> int:
 ## 当前刷怪倍率 = 「按真人数的倍率」×「单人难度倍率」。
 ## ★单人难度（2026-10-01 用户拍板）：简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25，
 ## **只在单人生效** —— 多人局照旧只按人数（4 人 + 最高难度不要叠成 2.5×）。
+## ── 尸潮刷怪倍率（**吃难度**）──
+## 2026-10-29 晚 用户二次定稿：「数量还是跟难度改变，比例和之前一样；正常补怪各难度一样，
+## 尸潮补怪不是」。所以：**尸潮相关**（入场规模 / 峰值维持数 / 每批补给）走这里 = 人数表 × 难度；
+## **常态补怪**（游荡者 / 加压预算 / 喘息补位）走 `ambient_spawn_scale()`，不吃难度。
 func spawn_scale() -> float:
 	var n: int = spawn_player_count()
 	var idx: int = mini(n, SPAWN_SCALE_TABLE.size()) - 1
@@ -229,13 +233,27 @@ func spawn_scale() -> float:
 	return base
 
 
-## 单人难度倍率。取不到 Global（harness / 无 autoload 的裸实例）时按 1.0 处理 ——
+## 单人难度倍率。取不到 Global（harness / 无 autoload 的裸实例）时按 1.0 ——
 ## 用例里的裸注册表不该因为"当前选的难度"而抖。
 func _difficulty_spawn_scale() -> float:
 	var g: Node = get_node_or_null("/root/Global")
 	if g == null or not g.has_method("difficulty_spawn_scale"):
 		return 1.0
 	return maxf(0.0, float(g.call("difficulty_spawn_scale")))
+
+
+## ── 常态补怪倍率（**不吃难度**，只按人数）──
+## 走路时遇到的零星丧尸 / 进图游荡者 / 加压预算批次 —— 各难度完全一致。
+func ambient_spawn_scale() -> float:
+	var n: int = spawn_player_count()
+	var idx: int = mini(n, SPAWN_SCALE_TABLE.size()) - 1
+	return SPAWN_SCALE_TABLE[maxi(idx, 0)]
+
+
+func scale_ambient_count(base: int, minimum: int = 1) -> int:
+	if base <= 0:
+		return base
+	return maxi(minimum, int(round(float(base) * ambient_spawn_scale())))
 
 
 ## 把基准刷怪数量按人数放大。
@@ -264,7 +282,21 @@ func scaled_active_cap(base: int) -> int:
 	if base <= 0:
 		return base
 	var extra: int = maxi(spawn_player_count() - 1, 0)
-	return base + ACTIVE_CAP_PER_EXTRA_PLAYER * extra
+	var cap: int = base + ACTIVE_CAP_PER_EXTRA_PLAYER * extra
+	## ★难度也参与（2026-10-29 用户要求「区域数量也按难度的比例」）：
+	## 刷怪**数量**早就按难度缩放，上限却一直只有人数口径 → 简单难度也会堆到同样多。
+	## 只在单人生效；多人依旧纯人数（否则 4 人 × 最高难度会叠乘成 2.0×1.3）。
+	if spawn_player_count() <= 1:
+		cap = int(round(float(cap) * _difficulty_active_cap()))
+	return maxi(cap, 1)
+
+
+## 难度 → 同屏上限倍率。取不到 Global 时按 1.0（裸注册表用例不受难度影响）。
+func _difficulty_active_cap() -> float:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("difficulty_active_cap"):
+		return 1.0
+	return maxf(0.1, float(g.call("difficulty_active_cap")))
 
 
 # ═══════════════════════════════════════

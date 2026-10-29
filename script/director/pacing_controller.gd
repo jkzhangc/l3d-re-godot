@@ -33,12 +33,32 @@ enum Phase { BUILD, PEAK, COOLDOWN, FADE }
 @export var cooldown_max: float = 10.0     ## Cooldown 最长时长（秒）
 @export var variation: float = 0.2         ## 时长随机偏移（±比例）
 @export var peak_intensity_threshold: float = 0.7   ## 紧张度 > 此值提前进入 Peak
+## 强度最多能把 Build 提前多少（0.85 = 只允许在 Build 进度 85% 之后由强度触发）。
+## ★2026-10-29：没有这道闸时，一进图开打二三十秒强度就到阈值 → 尸潮间隔完全由战斗决定，
+## 难度表里的「普通 3~5 分钟」根本落不了地（用户实测「尸潮太快」）。
+@export_range(0.1, 1.0, 0.05) var peak_trigger_after_ratio: float = 0.85
 @export var cooldown_intensity_threshold: float = 0.3  ## 紧张度 > 此值提前结束 Cooldown
+
+# ── 智能尸潮（2026-10-29 用户设计）──
+## 开启后 BUILD 不再按固定时长结束，而是「玩家连续**无交战**达到阈值」才开尸潮。
+## 阈值 = clamp(base + 本章击杀数 × per_kill, min, max)：杀得越多，需要安静越久。
+## 关掉 = 回到「难度间隔表 / build_min~max」的定时节奏。
+@export var smart_horde: bool = false
+@export var smart_base_sec: float = 120.0      ## 0 杀时的无交战阈值（默认 2 分钟）
+@export var smart_per_kill_sec: float = 2.0    ## 每击杀 +2s（用户 2026-10-29 定）
+@export var smart_min_sec: float = 30.0        ## 阈值下限（两波之间的硬间隔）
+@export var smart_max_sec: float = 360.0       ## 阈值上限（6 分钟）
+
+## 本章累计击杀（Director 每 0.5s 从 ChapterStats 喂进来；换图由 ChapterStats 归零）
+var _horde_kills: int = 0
+## 连续无交战秒数：只在 BUILD 段累计，进峰值清零
+var _quiet_sec: float = 0.0
 
 # ── L4D 模型（2026-10-24）──
 ## 开启后：峰值为「停手段」（不再持续供怪），峰值结束先进 FADE 余韵，再进 COOLDOWN 喘息。
 @export var l4d_model: bool = true
-## 峰值最短停留（Sustain Peak）：进峰值后至少撑这么久才允许结束。
+## 峰值最短停留 = 峰值时长的**下限**。
+## ⚠ 2026-10-29 起峰值改为「按时间结束」，本值不再参与结束判定，只兜底不让峰值短于它。
 @export var peak_sustain: float = 4.0
 ## 余韵判定：持续「无交战」这么多秒 → 进喘息。
 @export var fade_quiet_sec: float = 2.5
@@ -63,11 +83,12 @@ var _peak_armed: bool = true
 # ═══════════════════════════════════════
 # 每帧由 director 调用
 # ═══════════════════════════════════════
-## `horde_active`：旧模型下 = 尸潮窗口是否仍在维持数量（见下面 PEAK 分支）。
+## `horde_active`：旧模型下 = 尸潮窗口是否仍在维持数量（**已不参与结束判定**，
+## 2026-10-29 起峰值一律按时间结束，保留参数是为了不破坏外部调用签名）。
 ## `engaged`：**L4D 模型专用** —— 当前是否有敌人在交战（Director 每帧传入
 ## `IntensityTracker.in_combat`）。FADE 段必须等到「无交战」才算自然收尾。
 func update(delta: float, intensity: float, alive_enemy_count: int,
-		horde_active: bool = false, engaged: bool = false) -> void:
+		_horde_active: bool = false, engaged: bool = false) -> void:
 	if paused or not enabled:
 		return
 
@@ -80,30 +101,30 @@ func update(delta: float, intensity: float, alive_enemy_count: int,
 
 	match current_phase:
 		Phase.BUILD:
-			if phase_elapsed >= phase_duration:
+			if smart_horde:
+				## 智能尸潮：不看固定时长、也不看强度峰值，只看「连续无交战」。
+				if engaged:
+					_quiet_sec = 0.0
+				else:
+					_quiet_sec += delta
+				if _quiet_sec >= smart_threshold():
+					should_transition = true
+			elif phase_elapsed >= phase_duration:
 				should_transition = true
-			elif intensity > peak_intensity_threshold and _peak_armed:
+			elif intensity > peak_intensity_threshold and _peak_armed \
+					and phase_elapsed >= phase_duration * peak_trigger_after_ratio:
+				## 强度触发只在 Build 的**后段**生效：间隔由难度表给出的时长兜底，
+				## 战斗再激烈也最多把它提前 (1-ratio) —— 否则"越会打，尸潮越密"。
 				should_transition = true
 
 		Phase.PEAK:
-			if l4d_model:
-				## ★L4D 模型（2026-10-24）：峰值是「停手段」。
-				## 进入峰值时尸潮已经一次性发出去了，这里只负责判定何时收尾：
-				##   · 至少撑够 peak_sustain（Sustain Peak，保证"砸下来"的存在感）；
-				##   · 场上清空 → 进余韵；
-				##   · 或者超时 → 进余韵（防止残兵卡住节奏）。
-				## 旧模型的 `horde_active` 在这里**故意不看** —— 峰值不再维持数量。
-				if phase_elapsed >= peak_sustain:
-					if alive_enemy_count <= 0:
-						should_transition = true
-					elif phase_elapsed >= peak_timeout:
-						should_transition = true
-			else:
-				## 旧模型：尸潮窗口（SpawnManager 正在维持数量）内**不**因"一时清空"提前结束。
-				if alive_enemy_count <= 0 and phase_elapsed > 3.0 and not horde_active:
-					should_transition = true
-				elif phase_elapsed >= peak_timeout:
-					should_transition = true
+			## ★2026-10-29 用户定稿：峰值**按时间结束**，不再看场上是否清空。
+			## 旧语义（"清空才进余韵"）等于用**击杀速度**当结束条件：玩家越猛尸潮越短、
+			## 下一波越早，节奏完全被击杀速度带走。现在 peak 时长 = phase_duration
+			## （peak_timeout，按难度/配置），到点就收尾；残兵交给 FADE 段等它清完
+			##（旧模型没有 FADE，直接进喘息）。尸潮窗口内的补怪由 SpawnManager 负责。
+			if phase_elapsed >= phase_duration:
+				should_transition = true
 
 		Phase.FADE:
 			## 余韵段（L4D Peak Fade）：不生成任何敌人，等战斗自然收尾。
@@ -158,6 +179,27 @@ func get_phase_name() -> StringName:
 	return _phase_name(current_phase)
 
 
+## ── 智能尸潮：击杀喂入 / 阈值查询（2026-10-29）──
+## Director 每 0.5s 把「本章新增击杀」喂进来（来源 ChapterStats.get_totals().kills）。
+func note_kills(count: int) -> void:
+	_horde_kills += maxi(count, 0)
+
+
+## 当前需要的「无交战秒数」。杀得越多越久，夹在 [min, max] 里。
+func smart_threshold() -> float:
+	return clampf(smart_base_sec + float(_horde_kills) * smart_per_kill_sec,
+			smart_min_sec, smart_max_sec)
+
+
+## 诊断用：当前累计击杀 / 已安静多久。
+func smart_debug() -> Dictionary:
+	return {
+		"kills": _horde_kills,
+		"quiet": _quiet_sec,
+		"threshold": smart_threshold(),
+	}
+
+
 # ═══════════════════════════════════════
 # 内部 — 阶段推进
 # ═══════════════════════════════════════
@@ -174,13 +216,20 @@ func _set_phase(new_phase: Phase) -> void:
 	current_phase = new_phase
 	phase_elapsed = 0.0
 	_fade_quiet = 0.0
+	## 进峰值 / 进加压都重新开始累计「无交战」（上一段的安静时间不该算进下一段）
+	if new_phase == Phase.BUILD or new_phase == Phase.PEAK:
+		_quiet_sec = 0.0
 	## 进峰值即"解除武装"：下一次强度触发必须先让强度掉回阈值 80% 以下。
 	if new_phase == Phase.PEAK:
 		_peak_armed = false
 	phase_duration = _rand_duration(new_phase)
 
 	var phase_name: StringName = _phase_name(new_phase)
-	print("[Pacing] → %s (duration=%.1fs)" % [phase_name, phase_duration])
+	if new_phase == Phase.BUILD and smart_horde:
+		print("[Pacing] → build（智能尸潮：需连续无交战 %.0fs，本章击杀 %d）"
+			% [smart_threshold(), _horde_kills])
+	else:
+		print("[Pacing] → %s (duration=%.1fs)" % [phase_name, phase_duration])
 	phase_changed.emit(phase_name)
 
 
@@ -189,7 +238,7 @@ func _rand_duration(phase: Phase) -> float:
 	var base_max: float
 	match phase:
 		Phase.BUILD:     base_min = build_min; base_max = build_max
-		Phase.PEAK:      return peak_timeout
+		Phase.PEAK:      return maxf(peak_timeout, peak_sustain)
 		Phase.FADE:      return fade_timeout
 		Phase.COOLDOWN:  base_min = cooldown_min; base_max = cooldown_max
 

@@ -24,9 +24,9 @@ extends Node
 ## ★2026-09-26 语义变更：尸潮从「一次性总额度」改为「持续窗口内维持的同时存活数」。
 ## 旧语义下额度刷完即 _horde_active=false，而 peak 阶段本管理器只跑尸潮、**不跑散兵**
 ## → 峰值剩余时间完全零刷怪（用户实测：尸潮只出几只 → 空场 → 杀完即结束）。
-@export var horde_total_min: int = 10         ## 尸潮期间**同时维持**的存活数下限（地图原有覆盖值继续生效）
-@export var horde_total_max: int = 30         ## 尸潮期间同时维持的存活数上限
-@export var horde_batch_size: int = 8         ## 每次补充的上限：缺多少补多少，不会一次刷满
+@export var horde_total_min: int = 3          ## 尸潮期间**同时维持**的存活数下限（由 DirectorConfig 覆盖）
+@export var horde_total_max: int = 15         ## 尸潮期间同时维持的存活数上限
+@export var horde_batch_size: int = 5         ## 每次补充的上限：缺多少补多少，不会一次刷满
 @export var horde_batch_interval: float = 5.0 ## 补充批次的基础间隔（秒）
 @export var horde_duration_min: float = 25.0  ## 尸潮持续时长下限（秒）—— 结束条件从"额度刷完"改为"窗口走完"
 @export var horde_duration_max: float = 40.0  ## 尸潮持续时长上限（秒）；会被 peak_timeout 截断
@@ -49,7 +49,7 @@ var _refill_latch: bool = false
 # ═══════════════════════════════════════
 # L4D 模型参数（2026-10-24）
 # ═══════════════════════════════════════
-## ★核心：开启后本模块改用「消耗型预算 + 峰值一次性尸潮 + 喘息低人口」。
+## ★核心：开启后本模块改用「消耗型预算 + 峰值尸潮窗口（按时间结束、期间补怪）+ 喘息低人口」。
 ## 与旧模型的根本差别：旧模型的补位是**维持数量**（缺多少补多少，击杀立刻腾位），
 ## 因此原地打会稳定成"永远有 N 只"；新模型的预算是**可消耗的**，用完就停手。
 @export var l4d_model: bool = false
@@ -62,7 +62,7 @@ var _refill_latch: bool = false
 @export var build_interval_min: float = 5.0    ## 两批之间最短秒数
 @export var build_interval_max: float = 9.0    ## 两批之间最长秒数
 
-@export_group("L4D — 尸潮（PEAK 入场一次性爆发）")
+@export_group("L4D — 尸潮（PEAK 入场爆发 + 整段补怪）")
 @export var mob_size_min: int = 14             ## 尸潮规模下限（按难度/人数放大）
 @export var mob_size_max: int = 22             ## 尸潮规模上限
 ## 从**背后**来的比例（L4D 原版 75%）。玩家回头才有压力，才有被包夹的戏剧性。
@@ -117,16 +117,22 @@ func update(delta: float, intensity: float, alive_count: int) -> void:
 	if not enabled or not _director:
 		return
 
-	## ★画面外补怪总开关（2026-10-29）：关闭时**不发货**，但不冻结尸潮窗口记账 ——
-	## 旧模型的 `_horde_active` 由窗口倒计时收尾，冻住会让峰值误以为尸潮永不结束。
+	## ★尸潮窗口（2026-10-29 用户定稿）：峰值期间**按时间维持人数**，两个模型共用，
+	## 且**不受「画面外补怪」总开关影响** —— 那个开关管的是路上零散的补位；
+	## 尸潮是事件本身，关掉补怪开关也要有完整的一波（缺多少补多少，直到峰值结束）。
+	if current_phase == &"peak" and _horde_active:
+		_update_horde(delta, alive_count)
+	elif not l4d_model and _horde_active:
+		## 非峰值阶段的窗口倒计时（正常不会出现，防御性保留）
+		_horde_time_left -= delta
+		if _horde_time_left <= 0.0:
+			_horde_active = false
+
 	if not offscreen_refill_enabled:
-		if not l4d_model and _horde_active:
-			_horde_time_left -= delta
-			if _horde_time_left <= 0.0:
-				_horde_active = false
 		return
 
-	## ★L4D 模型（2026-10-24）：生成时机完全由「预算 + 阶段」决定，不再维持数量。
+	## ★L4D 模型（2026-10-24）：生成时机完全由「预算 + 阶段」决定。
+	## peak 已在上面的尸潮窗口处理过，这里只负责 build 预算与 cooldown 喘息。
 	if l4d_model:
 		_update_l4d(delta, intensity, alive_count)
 		return
@@ -135,7 +141,7 @@ func update(delta: float, intensity: float, alive_count: int) -> void:
 		&"build":
 			_update_scatter(delta, intensity, alive_count)
 		&"peak":
-			_update_horde(delta, alive_count)
+			pass   # 尸潮窗口已在上方推进
 		&"cooldown":
 			pass  # 不主动生成
 
@@ -147,9 +153,9 @@ func on_phase_changed(phase: StringName) -> void:
 	current_phase = phase
 	print("[SpawnManager] phase → %s" % phase)
 
-	## ★L4D 模型：阶段语义全变了 ——
+	## ★L4D 模型的阶段语义 ——
 	##   build  = 发预算，缓慢加压（预算用完就静默）
-	##   peak   = **一次性**发尸潮，之后停手（不补怪）
+	##   peak   = 入场发一波 + **整段持续补怪**（2026-10-29 改：按时间结束，见 _start_mob）
 	##   fade   = 余韵，什么都不生成
 	##   cooldown = 喘息，最多维持 relax_target 只
 	if l4d_model:
@@ -171,12 +177,13 @@ func _on_phase_changed_l4d(phase: StringName) -> void:
 	match phase:
 		&"build":
 			_horde_active = false
-			_budget_left = Players.scale_spawn_count(
+			## 常态补怪：**不吃难度**（2026-10-29 用户定稿），各难度密度一致
+			_budget_left = Players.scale_ambient_count(
 				randi_range(build_budget_min, build_budget_max))
 			_scatter_timer = 0.0  # 进入加压阶段的第一批立即生成（不干等）
 			print("[SpawnManager] L4D build: 预算 %d 只" % _budget_left)
 		&"peak":
-			_start_mob()
+			_start_mob()   ## 入场爆发 + 建立峰值补怪窗口
 		&"fade":
 			_horde_active = false
 		&"cooldown":
@@ -226,7 +233,7 @@ func _update_build_budget(delta: float, intensity: float, alive_count: int) -> v
 
 	var count: int = randi_range(mini(build_batch_min, build_batch_max),
 		maxi(build_batch_min, build_batch_max))
-	count = Players.scale_spawn_count(count)
+	count = Players.scale_ambient_count(count)
 	count = mini(count, _budget_left)
 	count = mini(count, active_cap - alive_count)
 	count = mini(count, ceiling_n - threat)
@@ -266,11 +273,11 @@ func _update_relax(delta: float, alive_count: int) -> void:
 
 ## 补怪人数下限 / 上限（按人数与难度放大，和全项目刷怪倍率同一口径）。
 func _refill_floor() -> int:
-	return Players.scale_spawn_count(maxi(0, offscreen_refill_min))
+	return Players.scale_ambient_count(maxi(0, offscreen_refill_min))
 
 
 func _refill_ceiling() -> int:
-	return maxi(_refill_floor(), Players.scale_spawn_count(maxi(0, offscreen_refill_max)))
+	return maxi(_refill_floor(), Players.scale_ambient_count(maxi(0, offscreen_refill_max)))
 
 
 ## 迟滞带判定（上下限的真正入口）：
@@ -306,8 +313,10 @@ func _threat_count() -> int:
 # ═══════════════════════════════════════
 # L4D 模型 — 尸潮（峰值入场，一次性）
 # ═══════════════════════════════════════
-## 进入峰值时一次性发出整波尸潮：一部分从前方、一部分从背后（L4D 是 75% 背后）。
-## 发完就不管了 —— 峰值期间不再补怪，这是「打完就有空窗」的关键。
+## 进入峰值时先发一波「砸下来」的尸潮（前方 + 背后 75%），
+## 然后**整个峰值期间持续补怪**，直到峰值阶段按时间结束（2026-10-29 用户定稿）。
+## 补怪目标复用旧模型的 horde_total_min/max（已按难度/人数放大）；
+## 窗口长度 = 峰值阶段时长（PacingController 的 phase_duration）。
 func _start_mob() -> void:
 	var size: int = Players.scale_spawn_count(randi_range(
 		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max)))
@@ -315,10 +324,19 @@ func _start_mob() -> void:
 	var behind: int = int(round(float(size) * ratio))
 	var front: int = size - behind
 	_horde_active = true
-	print("[SpawnManager] ★MOB 入场：共 %d 只（前方 %d / 背后 %d / 背后比例 %.0f%%）" % [
-		size, front, behind, ratio * 100.0])
+	## 峰值窗口：以 PacingController 抽好的 phase_duration 为准（峰值按时间结束）
+	_horde_target_alive = Players.scale_spawn_count(randi_range(
+		mini(horde_total_min, horde_total_max), maxi(horde_total_min, horde_total_max)))
+	var pc: Node = _director.get_node_or_null("PacingController") if _director != null else null
+	_horde_duration = float(pc.get("phase_duration")) if pc != null else 60.0
+	_horde_time_left = maxf(_horde_duration, 1.0)
+	_horde_spawned = 0
+	_horde_batch_timer = 0.0   # 入场爆发后立刻允许第一次补位
+	print("[SpawnManager] ★MOB 入场：共 %d 只（前方 %d / 背后 %d / 背后比例 %.0f%%），峰值 %.0fs 内维持 %d 只" % [
+		size, front, behind, ratio * 100.0, _horde_duration, _horde_target_alive])
 	if _director.has_method("spawn_mob_batch"):
 		var spawned: int = int(_director.call("spawn_mob_batch", front, behind))
+		_horde_spawned += spawned
 		print("[SpawnManager] MOB 落地 %d/%d 只（落点不足时宁缺不挤）" % [spawned, size])
 
 
@@ -360,7 +378,7 @@ func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
 	else:
 		count = randi_range(scatter_min, scatter_max)
 
-	count = Players.scale_spawn_count(count)
+	count = Players.scale_ambient_count(count)
 	count = mini(count, active_cap - alive_count)
 	if count <= 0:
 		return

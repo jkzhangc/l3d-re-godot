@@ -407,6 +407,8 @@ func _process(delta: float) -> void:
 		var engaged: bool = false
 		if intensity_tracker != null and is_instance_valid(intensity_tracker):
 			engaged = bool(intensity_tracker.get("in_combat"))
+		## 智能尸潮：把「本章新增击杀」喂给节奏控制器（杀得越多，下一波需要安静越久）
+		_feed_smart_horde_kills(pc, delta)
 		pc.update(delta, new_intensity, alive_count, horde_running, engaged)
 	var current_phase: StringName = &"cooldown"
 	if pc:
@@ -1392,6 +1394,7 @@ func spawn_ahead_batch(count: int) -> Array[Node2D]:
 			return out
 		want = mini(want, target - ahead)
 
+	var placed: Array[Vector2] = []
 	for _i: int in range(want):
 		var pos: Vector2 = Vector2.ZERO
 		if fs:
@@ -1401,9 +1404,12 @@ func spawn_ahead_batch(count: int) -> Array[Node2D]:
 			pos = _pick_spawn_position(player, _get_nearby_spawn_points(player, _get_valid_spawn_points(player, decor_layer)), 0)
 			if pos == Vector2.ZERO:
 				break
+		if not _batch_accepts(placed, pos):
+			continue   ## 本批这个角已经放了 3 只 → 跳过，别堆成一坨
 		var enemy: Node2D = spawn_enemy(_add_spawn_scatter(pos), decor_layer, -1)
 		if enemy:
 			out.append(enemy)
+			placed.append(pos)
 	return out
 
 
@@ -1423,19 +1429,26 @@ func spawn_mob_batch(front_count: int, behind_count: int) -> int:
 	if fs == null:
 		return 0
 	var spawned: int = 0
+	var placed: Array[Vector2] = []
 	## 先落地"背后"那一批：玩家此刻正朝前看，背后涌来的存在感最强（L4D 的 75%）。
 	for _i: int in range(maxi(behind_count, 0)):
 		var back_pos: Vector2 = fs.pick_behind_position(player)
 		if back_pos == Vector2.ZERO:
 			continue
+		if not _batch_accepts(placed, back_pos):
+			continue
 		if spawn_enemy(_add_spawn_scatter(back_pos), decor_layer, -1) != null:
 			spawned += 1
+			placed.append(back_pos)
 	for _i: int in range(maxi(front_count, 0)):
 		var front_pos: Vector2 = fs.pick_ahead_position(player)
 		if front_pos == Vector2.ZERO:
 			continue
+		if not _batch_accepts(placed, front_pos):
+			continue
 		if spawn_enemy(_add_spawn_scatter(front_pos), decor_layer, -1) != null:
 			spawned += 1
+			placed.append(front_pos)
 	if spawned > 0:
 		debug_event("MOB 落地 %d 只（前 %d / 后 %d）" % [spawned, front_count, behind_count])
 	return spawned
@@ -1467,7 +1480,7 @@ func seed_wanderers(count: int) -> int:
 	## ★密度自适应（2026-10-24 用户提议）：先数威胁圈里已有多少，只补差额。
 	## 效果：某个角落一直空 → 补到目标；某片已经一堆 → 一只都不加。
 	## 这比"固定补 N 只"稳定得多，也不会在窄图里越堆越挤。
-	var target: int = Players.scale_spawn_count(maxi(wander_target_near, 1))
+	var target: int = Players.scale_ambient_count(maxi(wander_target_near, 1))
 	var threat: int = count_threat_near_players()
 	var deficit: int = target - threat
 	if deficit <= 0:
@@ -1516,7 +1529,7 @@ func _update_wander_advance(players: Array[Node2D]) -> void:
 	_wander_advance += best
 	if _wander_advance >= wander_seed_step:
 		_wander_advance = 0.0
-		seed_wanderers(Players.scale_spawn_count(wander_seed_refill))
+		seed_wanderers(Players.scale_ambient_count(wander_seed_refill))
 
 
 ## 关卡进度推进（2026-10-25）：交给 ProgressTracker 估计，再把结果推给紧张度。
@@ -2189,7 +2202,7 @@ func _check_scene_change() -> void:
 		_wander_positions.clear()
 		var seed_n: int = randi_range(mini(wander_seed_min, wander_seed_max),
 			maxi(wander_seed_min, wander_seed_max))
-		seed_wanderers(Players.scale_spawn_count(seed_n))
+		seed_wanderers(Players.scale_ambient_count(seed_n))
 	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
 	## 开场强制回 cooldown 会把"地图开局立即 build（SpawnManager 立刻散兵刷怪）"变成
 	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。
@@ -2259,6 +2272,73 @@ func _apply_l4d_model() -> void:
 			sub.set("l4d_model", l4d_pacing)
 
 
+## ── 尸潮间隔换算（2026-10-29）──
+## FADE 余韵段的大致长度：算「两次尸潮之间的间隔」时要把它从 Build 里扣掉。
+## 真实长度由「无交战 2.5s / 兜底 12s」决定，这里取个中间常数就够（不需要精确）。
+const FADE_OVERHEAD_SECONDS: float = 6.0
+
+
+## 尸潮间隔（秒，峰值开始 → 下一次峰值开始）：本图覆盖优先，否则按难度表。
+## 难度表见 Global.difficulty_multipliers 的 horde_interval_min/max。
+func _horde_interval_for(cfg: DirectorConfig) -> Vector2:
+	if cfg != null and cfg.horde_interval_override_min > 0.0 \
+			and cfg.horde_interval_override_max > 0.0:
+		return Vector2(
+			minf(cfg.horde_interval_override_min, cfg.horde_interval_override_max),
+			maxf(cfg.horde_interval_override_min, cfg.horde_interval_override_max))
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("difficulty_horde_interval"):
+		var v: Variant = g.call("difficulty_horde_interval")
+		if v is Vector2:
+			return v
+	return Vector2(180.0, 300.0)
+
+
+## ── 智能尸潮的击杀喂入（2026-10-29 用户设计）──
+## 用 ChapterStats 的「本章击杀」当输入：换图 / 新局会自动归零，正好是"这一章杀得越多、
+## 下一波来得越晚"。0.5s 轮询一次即可（击杀是离散事件，get_totals 每次都会分配字典）。
+var _kill_poll_left: float = 0.0
+var _kills_seen: int = 0
+
+
+func _feed_smart_horde_kills(pc: Node, delta: float) -> void:
+	if pc == null or not bool(pc.get("smart_horde")):
+		return
+	_kill_poll_left -= delta
+	if _kill_poll_left > 0.0:
+		return
+	_kill_poll_left = 0.5
+	var cs: Node = get_node_or_null("/root/ChapterStats")
+	if cs == null or not cs.has_method("get_totals"):
+		return
+	var totals: Dictionary = cs.call("get_totals")
+	var kills: int = int(totals.get("kills", 0))
+	if kills < _kills_seen:
+		_kills_seen = kills      ## 换章 / 统计清零 → 重新对齐，不倒扣
+		return
+	if kills > _kills_seen:
+		pc.call("note_kills", kills - _kills_seen)
+		_kills_seen = kills
+
+
+## ── 同批聚堆闸（2026-10-29 用户实测「一个小拐角堆一堆丧尸」）──
+## 去重窗口（RECENT_SPAWN_RADIUS 48px / 2s）只防"同一个点被反复用"，
+## 一批 8 只仍然可以全挤在 48px 里。这里按**本批**再限一次：
+## 某个 96px 半径内本批最多 3 只，超了就跳过这只（宁缺不挤，下一批再补）。
+const BATCH_CLUSTER_RADIUS: float = 96.0
+const BATCH_CLUSTER_MAX: int = 3
+
+
+func _batch_accepts(placed: Array, pos: Vector2) -> bool:
+	var near: int = 0
+	for p: Variant in placed:
+		if (p as Vector2).distance_to(pos) < BATCH_CLUSTER_RADIUS:
+			near += 1
+			if near >= BATCH_CLUSTER_MAX:
+				return false
+	return true
+
+
 func _apply_config(cfg: DirectorConfig) -> void:
 	auto_spawn_enabled = cfg.spawn_enabled
 	spawn_min_dist = cfg.spawn_min_dist
@@ -2269,15 +2349,30 @@ func _apply_config(cfg: DirectorConfig) -> void:
 			"peak_sustain", "fade_quiet_sec", "fade_timeout"])
 		## L4D 模型开关：配置里的名字是 l4d_pacing，节奏控制器里叫 l4d_model。
 		pc.set("l4d_model", cfg.l4d_pacing)
+		## 智能尸潮（2026-10-29 用户设计）：默认开启 —— 节奏改由「无交战计时 + 击杀数」决定
+		pc.set("smart_horde", cfg.smart_horde_enabled)
+		pc.set("smart_base_sec", cfg.smart_horde_base_sec)
+		pc.set("smart_per_kill_sec", cfg.smart_horde_per_kill_sec)
+		pc.set("smart_min_sec", cfg.smart_horde_min_sec)
+		pc.set("smart_max_sec", cfg.smart_horde_max_sec)
 		## ★节奏时长按「地图尺度」打折（2026-10-24）：本作一章几分钟就跑完，
 		## L4D 那套按十几分钟一章标定的秒数直接照搬 → 一张图只够 1~2 个循环。
-		## 只缩这五个时长；peak_sustain / fade_quiet_sec 是体感下限，不缩。
+		## 只缩这四个时长；peak_sustain / fade_quiet_sec 是体感下限，不缩。
 		var t_scale: float = clampf(cfg.pacing_time_scale, 0.2, 2.0)
-		pc.set("build_min", maxf(3.0, cfg.build_min * t_scale))
-		pc.set("build_max", maxf(4.0, cfg.build_max * t_scale))
-		pc.set("peak_timeout", maxf(5.0, cfg.peak_timeout * t_scale))
-		pc.set("cooldown_min", maxf(1.0, cfg.cooldown_min * t_scale))
-		pc.set("cooldown_max", maxf(2.0, cfg.cooldown_max * t_scale))
+		var peak_len: float = maxf(5.0, cfg.peak_timeout * t_scale)
+		var cd_min: float = maxf(1.0, cfg.cooldown_min * t_scale)
+		var cd_max: float = maxf(2.0, cfg.cooldown_max * t_scale)
+		pc.set("peak_timeout", peak_len)
+		pc.set("cooldown_min", cd_min)
+		pc.set("cooldown_max", cd_max)
+		## ★Build 时长改由「尸潮间隔（难度表 / 本图覆盖）」反推（2026-10-29 用户定稿）：
+		## 普通 3~5 分钟一波、简单 4~6、困难 3~4、最高 ≈3。
+		## 旧口径 build_min/max × t_scale(0.55) ≈ 20~60s 一波 —— 用户实测「尸潮太快」。
+		## 间隔 = Build + 峰值 + 余韵 + 喘息，所以 Build 要把后三段的期望值扣掉。
+		var interval: Vector2 = _horde_interval_for(cfg)
+		var overhead: float = peak_len + (cd_min + cd_max) * 0.5 + FADE_OVERHEAD_SECONDS
+		pc.set("build_min", maxf(30.0, interval.x - overhead))
+		pc.set("build_max", maxf(35.0, interval.y - overhead))
 	l4d_pacing = cfg.l4d_pacing
 	relax_advance = cfg.relax_advance
 	## 画面外补怪总开关（2026-10-29）：本节点与 SpawnManager 各持一份 ——
@@ -2963,12 +3058,10 @@ func _special_rate_scale() -> float:
 	return maxf(0.5, float(players.call("spawn_scale")))
 
 
-## ★加压闸（2026-10-25 用户定稿）：
-##   · 简单难度**仅单人**：几乎不增压（特感与 Boss 基本不出现；多人不算，避免联机休闲化）。
-##   · A 怜悯（所有难度）：只看玩家状态 —— 任一存活玩家倒地或 HP 比例 < mercy_hp_ratio → 暂停加压。
+## ★加压闸：只看**玩家状态**（怜悯机制）。
+## ⚠ 2026-10-29 晚删除了旧的第一条「简单难度单人几乎不增压、特感/Boss 基本不出现」——
+##   难度现在只调血量/伤害/尸潮规模，**特感与 Boss 在简单难度也会出现**（不再整段缺席）。
 func is_pressure_blocked() -> bool:
-	if Players.spawn_player_count() <= 1 and Players.spawn_scale() <= 0.55:
-		return true
 	if mercy_hp_ratio <= 0.0:
 		return false
 	for p: Node2D in spawn_reference_players():
@@ -3255,9 +3348,11 @@ func _deal_tank_card() -> void:
 
 
 func _deal_witch_card() -> void:
-	## 女巫出现频率下调（2026-10-25 用户反馈偏高）：一半的"女巫牌"直接作废。
-	if randf() < 0.5:
-		print("[Director] Boss 发牌：女巫（概率跳过，视为无事）")
+	## 女巫出现频率下调（2026-10-25 用户反馈偏高）：一部分"女巫牌"直接作废。
+	## ★2026-10-29 晚：难度不再参与（只按人数）—— 单人恒 50%，人越多越少跳过。
+	var skip: float = clampf(0.5 + 0.3 * (1.0 - Players.spawn_scale()), 0.1, 0.9)
+	if randf() < skip:
+		print("[Director] Boss 发牌：女巫（难度跳过 %.0f%%，视为无事）" % (skip * 100.0))
 		return
 	if _boss_witches_dealt >= boss_deck_max_witches:
 		print("[Director] Boss 发牌：女巫（本图名额已满 %d/%d，跳过）" % [

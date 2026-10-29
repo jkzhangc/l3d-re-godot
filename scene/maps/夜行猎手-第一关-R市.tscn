@@ -6,6 +6,7 @@
 [ext_resource type="TileSet" uid="uid://uo4bgmvarek6" path="res://tres/Map0005_upper_tileset.tres" id="3_e4v00"]
 [ext_resource type="Script" uid="uid://cxd1favc5ntj4" path="res://script/director/player_spawn_slot.gd" id="4_mk0gx"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="4_mw0xi"]
+[ext_resource type="Script" uid="uid://b7i7kpp78wjwq" path="res://script/director/spawn_zone.gd" id="4_pk0wi"]
 [ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="5_cuyoc"]
 [ext_resource type="PackedScene" uid="uid://om55cuudhhrx" path="res://object/safe_door.tscn" id="5_sifus"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="6_ds0oj"]
@@ -45,6 +46,7 @@
 [ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="39_haw38"]
 [ext_resource type="Script" uid="uid://b8udnx3eyss6u" path="res://script/night_overlay.gd" id="40_llmiy"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="41_jobvx"]
+[ext_resource type="AudioStream" uid="uid://dag7vtla51iyw" path="res://music/ラッシュ２.mp3" id="45_u0e50"]
 
 [sub_resource type="Resource" id="Resource_vayc2"]
 script = ExtResource("38_p3mpu")
@@ -121,6 +123,47 @@ shadow_opacity = 0.8
 ember_amount = 16
 ember_speed = 46.0
 ember_radius = 18.0
+
+[node name="SpawnZone" type="Node2D" parent="DecorLayer" unique_id=1877615116]
+position = Vector2(824, 7752)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 256)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone2" type="Node2D" parent="DecorLayer" unique_id=239875095]
+position = Vector2(640, 6856)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 256)
+max_spawns = 3
+ambient_budget = 3
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone3" type="Node2D" parent="DecorLayer" unique_id=1263850868]
+position = Vector2(832, 7280)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 96)
+max_spawns = 2
+ambient_budget = 2
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone4" type="Node2D" parent="DecorLayer" unique_id=1243245081]
+position = Vector2(808, 8104)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 256)
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone5" type="Node2D" parent="DecorLayer" unique_id=1568082334]
+position = Vector2(2560, 7632)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1901728823]
 light_mask = 2
@@ -245,6 +288,7 @@ special_max_alive = 3
 night_darkness = 0.4
 drop_pool = SubResource("Resource_umlse")
 enemy_drop_pool = ExtResource("39_haw38")
+horde_music = ExtResource("45_u0e50")
 metadata/_custom_type_script = "uid://blx0cs5m3w80f"
 
 [node name="NoSpawnLayer" parent="." unique_id=1314162297 instance=ExtResource("41_jobvx")]
