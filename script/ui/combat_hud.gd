@@ -687,6 +687,18 @@ func _collect_action_hints() -> Array:
 		return out
 	var in_weapon: bool = player.get("player_in_weapon_state") == true
 	var locked: bool = player.has_method("is_facing_locked") and bool(player.call("is_facing_locked"))
+	## ── 投掷物瞄准（举起手雷/燃烧瓶）：按键与举枪完全不同，必须先判 ──
+	## 投掷状态也会把 player_in_weapon_state 置 true，不先拦就会提示「Shift/1 放下武器」——
+	## 而投掷状态下 Shift 根本不响应（放下的键是 5，见 PlayerThrowableState._process_ready）。
+	if _is_throwable_state(player):
+		_push_hint(out, &"投掷物键", "放下投掷物")
+		_push_hint(out, &"确定键", "按住瞄准 · 松开投掷")
+		var inc_key: String = _action_key_text(&"投掷加格键")
+		var dec_key: String = _action_key_text(&"投掷减格键")
+		if not inc_key.is_empty() and not dec_key.is_empty():
+			out.append(["%s / %s" % [inc_key, dec_key], "调整投掷距离"])
+		_push_hint(out, &"取消键", "取消瞄准")
+		return out
 	if in_weapon:
 		var down_key: String = _action_key_text(&"举起放下武器键")
 		## 放下键跟着「举的是哪把」走：举主武器 → Shift / 1，举副武器 → Shift / 2。
@@ -762,6 +774,18 @@ func _can_switch_character() -> bool:
 	if Players.is_online_session():
 		return false
 	return Players.seat_count() > 1
+
+
+## 是否处于投掷物瞄准。
+## 优先看状态机（`Throwable` 是唯一真源）；`_throwable_mode` 只在外观切换时才置位
+## （`PlayerThrowableState.enter` 里只有配了 held_walk_texture 才会调），不能单独依赖。
+func _is_throwable_state(player: Node2D) -> bool:
+	if player.get("_throwable_mode") == true:
+		return true
+	var sm: Node = player.get_node_or_null("StateMachine")
+	if sm != null and sm.has_method("current_state_name"):
+		return String(sm.call("current_state_name")) == "Throwable"
+	return false
 
 
 func _push_hint(out: Array, action: StringName, text: String) -> void:

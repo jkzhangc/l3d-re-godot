@@ -411,6 +411,7 @@ VXAnimSprite.play_at("anim/爆炸.tscn", pos, parent)
 
 **右下角操作提示**（2026-10-28）：`combat_hud.tscn` 的 `ActionHints`（PanelContainer → Margin → VBox → Row1..8，每行 = `Key` 键帽 + `Text` 说明，字号 36 = 弹药数字同款）是**可视化节点**，样式直接在编辑器改；`combat_hud.gd::_collect_action_hints()` 只按本地玩家状态挑行（最多 8 行，超出丢弃尾部）：
 - 未举枪：`1/2` 举起对应武器、`C` SA 技能（只在该角色有 `command_trigger="SA键"` 的技能时）、`S` 推击、`3` 治疗品 / `4` 辅助品 / `5` 投掷物（仅持有）、`Q` 切换角色（单人且队伍 >1）。
+- 投掷物瞄准（判定优先于举枪，靠状态机 `Throwable`）：`5` 放下投掷物、`Z` 按住瞄准 · 松开投掷、`A / S` 调整投掷距离、`X` 取消瞄准。⚠ 投掷态也会把 `player_in_weapon_state` 置 true，不先拦就会错误提示「Shift/1 放下武器」（投掷态 Shift 不响应）。
 - 举枪中：`Shift/1` 放下、`Z` 攻击、`A` 装填（仅弹匣未满）、`X` 固定朝向 / 解除固定、`C` SA、`空格` 觉醒（仅 `character.awaken_type != "none"`；觉醒只能在举枪态发动，地面不提示）、`S` 推击。
 - 移动端用 `Global.has_key_hint()` 过滤不存在的键；倒地/无玩家整块隐藏；**总开关 `Global.show_action_hints`**（设置 → 智能提示，PC 默认开、手机默认关，持久化到 config.json）。
 
