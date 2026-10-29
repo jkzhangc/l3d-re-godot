@@ -1480,7 +1480,7 @@ func seed_wanderers(count: int) -> int:
 	## ★密度自适应（2026-10-24 用户提议）：先数威胁圈里已有多少，只补差额。
 	## 效果：某个角落一直空 → 补到目标；某片已经一堆 → 一只都不加。
 	## 这比"固定补 N 只"稳定得多，也不会在窄图里越堆越挤。
-	var target: int = Players.scale_ambient_count(maxi(wander_target_near, 1))
+	var target: int = Players.scale_area_count(maxi(wander_target_near, 1))
 	var threat: int = count_threat_near_players()
 	var deficit: int = target - threat
 	if deficit <= 0:
@@ -1529,7 +1529,7 @@ func _update_wander_advance(players: Array[Node2D]) -> void:
 	_wander_advance += best
 	if _wander_advance >= wander_seed_step:
 		_wander_advance = 0.0
-		seed_wanderers(Players.scale_ambient_count(wander_seed_refill))
+		seed_wanderers(Players.scale_area_count(wander_seed_refill))
 
 
 ## 关卡进度推进（2026-10-25）：交给 ProgressTracker 估计，再把结果推给紧张度。
@@ -2202,7 +2202,7 @@ func _check_scene_change() -> void:
 		_wander_positions.clear()
 		var seed_n: int = randi_range(mini(wander_seed_min, wander_seed_max),
 			maxi(wander_seed_min, wander_seed_max))
-		seed_wanderers(Players.scale_ambient_count(seed_n))
+		seed_wanderers(Players.scale_area_count(seed_n))
 	## ⚠ 这里**不要**重置 pacing 阶段（2026-09-23 实测教训）：
 	## 开场强制回 cooldown 会把"地图开局立即 build（SpawnManager 立刻散兵刷怪）"变成
 	## "开局静默 20~35s"，联机 features / weapon 两个场景因此拿不到开场那批敌人而失败。
@@ -3810,7 +3810,9 @@ func _update_ambient_zones(delta: float) -> void:
 		if zone.poll_ambient_timer(delta) == false:
 			continue
 
-		var zone_cap: int = maxi(0, zone.max_spawns)
+		## 区域保底 / 上限都按**血量比例**吃难度（2026-10-29 三次定稿）：
+		## 简单铺得少、最高铺得多；只动这两个数，不动作者摆的 zone 位置。
+		var zone_cap: int = maxi(0, Players.scale_area_count(zone.max_spawns))
 		if zone_cap <= 0:
 			continue
 		var current_count: int = 0
@@ -3821,7 +3823,7 @@ func _update_ambient_zones(delta: float) -> void:
 				continue
 			if enemy.global_position.distance_to(zone.global_position) <= zone.get_zone_radius():
 				current_count += 1
-		var target_count: int = mini(zone.ambient_budget, zone_cap)
+		var target_count: int = mini(Players.scale_area_count(zone.ambient_budget), zone_cap)
 		var shortage: int = maxi(0, target_count - current_count)
 		if shortage <= 0:
 			continue

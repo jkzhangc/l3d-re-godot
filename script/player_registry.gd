@@ -256,6 +256,32 @@ func scale_ambient_count(base: int, minimum: int = 1) -> int:
 	return maxi(minimum, int(round(float(base) * ambient_spawn_scale())))
 
 
+## ── 区域刷怪倍率（**吃难度，比例同血量**）──
+## 2026-10-29 三次定稿：区域游荡者 / SpawnZone 保底这类"按区域铺人"的数量，
+## 用和敌人血量同一条曲线（简单 0.7 / 普通 1.0 / 困难 1.5 / 最高 2.0）。
+## 与"常态补怪"（ambient，各难度一致）分开，是为了让区域密度也参与难度差异。
+func area_spawn_scale() -> float:
+	var n: int = spawn_player_count()
+	var idx: int = mini(n, SPAWN_SCALE_TABLE.size()) - 1
+	var base: float = SPAWN_SCALE_TABLE[maxi(idx, 0)]
+	if n <= 1:
+		base *= _difficulty_area_scale()
+	return base
+
+
+func _difficulty_area_scale() -> float:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("difficulty_enemy_hp"):
+		return 1.0
+	return maxf(0.1, float(g.call("difficulty_enemy_hp")))
+
+
+func scale_area_count(base: int, minimum: int = 1) -> int:
+	if base <= 0:
+		return base
+	return maxi(minimum, int(round(float(base) * area_spawn_scale())))
+
+
 ## 把基准刷怪数量按人数放大。
 ## base <= 0 原样返回 —— 本工程里 0/负数是"关闭 / 沿用全局"的哨兵值，放大它会改变语义。
 ## minimum = 放大后的下限（默认 1：倍率再大也不把"该刷 0 只"变成 1 只；
