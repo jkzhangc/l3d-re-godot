@@ -288,7 +288,8 @@ func _update_scripted_event(delta: float, alive_count: int) -> void:
 		## 批次间隔（interval）**不**缩放：人数越多越靠"量"而不是"频率"加压，
 		## 否则 4 人下刷怪节奏会碎成滴答声。
 		per_wave = Players.scale_spawn_count(per_wave)
-		## 上限用温和曲线（见 Players.scaled_active_cap）：刷怪量照倍率，实体数不翻倍。
+		## 上限按真人数放大（见 Players.scaled_active_cap）：2026-10-30 起
+		## 多人 = 基础上限 ×2 / ×2.5 / ×3（2 / 3 / 4+ 人），单人再乘难度倍率。
 		max_active = Players.scaled_active_cap(max_active)
 
 		if alive_count < max_active:

@@ -358,7 +358,8 @@ func get_horde_progress() -> float:
 # 内部 — 散兵生成
 # ═══════════════════════════════════════
 func _update_scatter(delta: float, intensity: float, alive_count: int) -> void:
-	## 存活上限按真人数**温和**放大（见 Players.scaled_active_cap 的成本说明）。
+	## 存活上限按真人数放大（见 Players.scaled_active_cap）：
+	## 2026-10-30 起多人 = 基础上限 ×2 / ×2.5 / ×3（2 / 3 / 4+ 人），单人再乘难度倍率。
 	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		return

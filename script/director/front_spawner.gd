@@ -148,8 +148,8 @@ func update(delta: float, player: Node2D, alive_count: int, phase: StringName = 
 	if pause_in_cooldown and phase == &"cooldown":
 		last_reject = "喘息(cooldown)阶段暂停"
 		return 0
-	## 存活上限按真人数**温和**放大（见 Players.scaled_active_cap 的成本说明）：
-	## 上限完全不放大时多人会被闸门吃掉；但跟刷怪量一样线性翻倍会让物理成本爆炸。
+	## 存活上限按真人数放大（见 Players.scaled_active_cap）：
+	## 2026-10-30 起多人 = 基础上限 ×2 / ×2.5 / ×3（2 / 3 / 4+ 人），单人再乘难度倍率。
 	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		## 注意：这里的 alive_count 是**全场**存活数，包含已经被玩家甩在身后、

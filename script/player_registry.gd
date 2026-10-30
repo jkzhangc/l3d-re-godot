@@ -292,28 +292,31 @@ func scale_spawn_count(base: int, minimum: int = 1) -> int:
 	return maxi(minimum, int(round(float(base) * spawn_scale())))
 
 
-## 同屏**存活上限**的放大曲线（与"刷怪量倍率"分开，2026-09-26）。
+## 同屏**存活上限**的人数倍率（与"刷怪量倍率"分开）。
 ##
-## 【为什么不跟刷怪量一样翻倍】屏幕上的实体数是物理/渲染成本的直接来源：
-## 线性放大到 2 倍会把 40 只变成 80 只。实测（headless、**不含渲染**）：
-##   20 只 → 逻辑 12ms/帧；40 只 → 15ms；80 只 → 物理就到 36ms/帧，
-##   并且出现 250ms 级的尖峰帧（用户实测的「卡死一秒」）。
-## 所以上限只做温和放大：每多一名真人玩家 +5 只 →
-##   1 人 40 / 2 人 45 / 3 人 50 / 4 人 55。
-## 玩家感受到的"人多就更多怪"由**刷怪量**（波次/批量/尸潮总量）提供，那里仍是 1.5×/2.0×。
-const ACTIVE_CAP_PER_EXTRA_PLAYER: int = 5
+## ★2026-10-30 用户定稿：多人基础上限随人数递增，不再用"每人 +5"的温和曲线。
+##   基准 = 地图 `max_active_common`（默认 40）：
+##     1 人 = 40（再乘难度 active_cap）／2 人 2.0×=80／3 人 2.5×=100／4 人及以上 3.0×=120。
+##   多人**不再叠加难度**（否则 4 人 × 专家会变成 3.0×1.3 = 3.9×，与人数的本意重复）。
+##
+## 【成本提示】实体数是物理/渲染成本的直接来源。2026-09-26 的推挤优化前，
+## 80 只 headless 就到 36ms/帧并出现 250ms 级尖峰；优化后同一基准约 5.6ms/帧（噪声较大）。
+## 120 只尚未实测 —— 满员多人若出现掉帧，优先回调本表，而不是刷怪量。
+const ACTIVE_CAP_MP_SCALE_TABLE: Array[float] = [2.0, 2.5, 3.0]  ## index = 真人玩家数 - 2
 
 
 func scaled_active_cap(base: int) -> int:
 	if base <= 0:
 		return base
-	var extra: int = maxi(spawn_player_count() - 1, 0)
-	var cap: int = base + ACTIVE_CAP_PER_EXTRA_PLAYER * extra
-	## ★难度也参与（2026-10-29 用户要求「区域数量也按难度的比例」）：
-	## 刷怪**数量**早就按难度缩放，上限却一直只有人数口径 → 简单难度也会堆到同样多。
-	## 只在单人生效；多人依旧纯人数（否则 4 人 × 最高难度会叠乘成 2.0×1.3）。
-	if spawn_player_count() <= 1:
-		cap = int(round(float(cap) * _difficulty_active_cap()))
+	var n: int = spawn_player_count()
+	var cap: int
+	if n <= 1:
+		## ★难度只参与单人（2026-10-29 用户要求「区域数量也按难度的比例」）：
+		## 简单 0.8 / 普通 1.0 / 困难 1.15 / 专家 1.3。
+		cap = int(round(float(base) * _difficulty_active_cap()))
+	else:
+		var idx: int = clampi(n - 2, 0, ACTIVE_CAP_MP_SCALE_TABLE.size() - 1)
+		cap = int(round(float(base) * ACTIVE_CAP_MP_SCALE_TABLE[idx]))
 	return maxi(cap, 1)
 
 
