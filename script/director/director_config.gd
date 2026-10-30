@@ -63,10 +63,14 @@ class_name DirectorConfig extends Node
 ## 喘息期队伍累计前进这么多像素 → 提前结束喘息（走得快就走得快，对应 L4D Relax 的"走远即结束"）。
 @export var relax_advance: float = 700.0
 
-@export_group("节奏 — 智能尸潮（2026-10-29 用户设计）")
-## 开启后 BUILD **不再按固定时长**结束，而是「玩家连续无交战达到阈值」才开尸潮。
+@export_group("节奏 — 智能尸潮（2026-10-29；2026-10-30 双触发）")
+## ★开启后 BUILD **任一满足**即进尸潮：
+##   ① 连续**无交战**达到阈值（可提前，保留「安静久了来一波」的节奏感）；
+##   ② BUILD 时长走完（时间硬上限，兜底；一直交战也不会无限不来）。
 ## 阈值 = clamp(基础 + 本章击杀数 × 每杀秒数, 下限, 上限) —— 杀得越多，下一波来得越晚。
-## 关掉 = 回到难度间隔表（`horde_interval_*`）的定时节奏。
+## 两个计时都只在 BUILD 段累计；尸潮结束进入 FADE/COOLDOWN 时清零，下一段从头算。
+## 关掉 = 回到难度间隔表（`horde_interval_*`）的定时节奏；
+## 那时强度只在 BUILD 后段（`peak_trigger_after_ratio`）可提前触发。
 @export var smart_horde_enabled: bool = true
 ## 0 杀时的无交战阈值（秒）。默认 120 = 两分钟没交战就来一波。
 @export var smart_horde_base_sec: float = 120.0
@@ -165,13 +169,18 @@ class_name DirectorConfig extends Node
 ## 第二战役已补齐刷怪点，不开就只有尸潮/特感/作者点，路上会空）。
 ## 关闭后停掉的全部是"持续供水"：进图/换区游荡者、L4D 加压预算批次、喘息期补位、
 ## 旧模型的散兵与前方屏外补位。**尸潮事件、特感、Boss 不受影响**。
+## ★2026-10-30 混合补位：地图里若有**启用中的 SpawnZone**，区域先补局部缺口；
+## 屏外通道只在附近总人口低于 `offscreen_refill_min` 时补到该下限，余量交给区域。
+## 没有 SpawnZone 时才按原来的迟滞带补到 `offscreen_refill_max`。
 @export var offscreen_refill_enabled: bool = true
 ## 附近补怪人数**下限**：威胁圈（`threat_radius`，默认 600px）内活着的敌人跌到它以下才开补。
 ## 0 = 不补（等价于关闭总开关）。仅在 `offscreen_refill_enabled = true` 时生效。
+## ★2026-10-30 密度三档：≤下限 = 空场档（补位间隔 ×0.6、每批 +1）；
+## 下限~上限 = 正常档；≥上限 = 过密档（屏外通道停手，区域仍按自己的局部预算补）。
 @export var offscreen_refill_min: int = 2
 ## 附近补怪人数**上限**：开补后一直补到它才停手（迟滞带）——
 ## 中间区间既不会"杀一只补一只"，也不会补到一半就撒手。尸潮/事件推高到上限以上则保持停手，
-## 直到回落到下限以下才恢复。
+## 直到回落到下限以下才恢复。有 SpawnZone 时本值只作为「过密」判定线，不作为屏外补位目标。
 @export var offscreen_refill_max: int = 6
 
 @export_group("生成 — 前方屏外定点刷怪（FrontSpawner）")

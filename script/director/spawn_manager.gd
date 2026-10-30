@@ -35,10 +35,11 @@ extends Node
 # ═══════════════════════════════════════
 # 画面外补怪总开关（2026-10-29 用户需求）
 # ═══════════════════════════════════════
-## ★关闭（默认）→ build 预算批次与喘息补位**一律不发货**，路上只剩作者 SpawnZone 与
-## 尸潮/特感/Boss 事件。打开 → 按下面的人数区间在「前方屏外」补位：
-## 威胁圈内**跌到下限**才开补，**补到上限**才停手（迟滞带：中间区间不补也不停，避免"杀一只补一只"）。
-## ⚠ 打开后，本文件的 `build_threat_limit` 与 `relax_target` 不再是补怪闸门（被本区间取代）。
+## ★本脚本的默认值是关闭（给回归 harness 单独实例化时保留旧行为），
+## **实际运行由 DirectorConfig 覆盖**：配置里默认开启（`offscreen_refill_enabled = true`）。
+## 打开 → 按下面的人数区间在「前方屏外」补位：
+## 威胁圈内**跌到下限**才开补，**补到目标**才停手（迟滞带：中间区间不补也不停，避免"杀一只补一只"）。
+## 目标 = 无作者区域覆盖时取上限；有区域覆盖时取下限（混合补位，2026-10-30）。
 @export var offscreen_refill_enabled: bool = false
 @export var offscreen_refill_min: int = 4
 @export var offscreen_refill_max: int = 10
@@ -209,6 +210,8 @@ func _update_l4d(delta: float, intensity: float, alive_count: int) -> void:
 ## 预算耗尽 → 静默（这就是空窗的来源）；进入下一阶段会重新发预算。
 ## ★2026-10-29：补怪窗口由 `offscreen_refill_min/max` 决定 —— 只有威胁圈降到下限以下
 ## 才开补，一次最多补到上限（迟滞带，替代旧的 build_threat_limit 软闸）。
+## ★2026-10-30：地图有作者 SpawnZone 时改走「混合补位」—— 屏外通道只补到**下限**，
+## 余量交给区域；密度三档（空场加速 / 正常 / 过密停手）。
 func _update_build_budget(delta: float, intensity: float, alive_count: int) -> void:
 	if _budget_left <= 0:
 		return
@@ -221,36 +224,43 @@ func _update_build_budget(delta: float, intensity: float, alive_count: int) -> v
 	if floor_n <= 0:
 		return
 	var threat: int = _threat_count()
-	## 迟滞带：低于下限才开补；开补后一直补到上限才停手。
-	if not _refill_allowed(threat, floor_n, ceiling_n):
+	var target_n: int = _refill_target(floor_n, ceiling_n)
+	## 迟滞带：低于下限才开补；开补后一直补到目标才停手。
+	if not _refill_allowed(threat, floor_n, target_n):
 		return
 
 	_scatter_timer -= delta
 	if _scatter_timer > 0.0:
 		return
+	var tier: int = _density_tier(threat, floor_n, ceiling_n)
+	var interval_scale: float = 0.6 if tier == 0 else 1.0
 	_scatter_timer = randf_range(minf(build_interval_min, build_interval_max),
-		maxf(build_interval_min, build_interval_max))
+		maxf(build_interval_min, build_interval_max)) * interval_scale
 
 	var count: int = randi_range(mini(build_batch_min, build_batch_max),
 		maxi(build_batch_min, build_batch_max))
 	count = Players.scale_ambient_count(count)
+	if tier == 0:
+		count += 1   ## 空场档：每批多一只；下面仍会被 target 差额截断
 	count = mini(count, _budget_left)
 	count = mini(count, active_cap - alive_count)
-	count = mini(count, ceiling_n - threat)
+	count = mini(count, target_n - threat)
 	if count <= 0:
 		return
 
 	var spawned: int = _spawn_ahead_l4d(count)
 	_budget_left = maxi(_budget_left - spawned, 0)
 	if spawned > 0:
-		print("[SpawnManager] L4D build 批次 %d 只（预算剩 %d / 附近 %d→%d）"
-			% [spawned, _budget_left, threat, threat + spawned])
-	if threat + spawned >= ceiling_n:
+		print("[SpawnManager] L4D build 批次 %d 只（预算剩 %d / 附近 %d→%d / 目标 %d%s）"
+			% [spawned, _budget_left, threat, threat + spawned, target_n,
+				" / 区域混合" if _has_author_zones() else ""])
+	if threat + spawned >= target_n:
 		_refill_latch = false
 
 
 ## 喘息阶段：**只在补怪开关打开时**维持 `offscreen_refill_min` 的下限。
 ## 旧 `relax_target` 是"维持多少只"；现在统一由上下限接管（见 offscreen_refill_* 注释）。
+## ★2026-10-30：有 SpawnZone 时同样只补到下限；空场档缩短补位间隔。
 func _update_relax(delta: float, alive_count: int) -> void:
 	var floor_n: int = _refill_floor()
 	var ceiling_n: int = _refill_ceiling()
@@ -261,13 +271,17 @@ func _update_relax(delta: float, alive_count: int) -> void:
 		return
 	_relax_timer = relax_interval
 	var threat: int = _threat_count()
-	if not _refill_allowed(threat, floor_n, ceiling_n):
+	var target_n: int = _refill_target(floor_n, ceiling_n)
+	if not _refill_allowed(threat, floor_n, target_n):
 		return
 	var active_cap: int = Players.scaled_active_cap(max_active_common)
 	if alive_count >= active_cap:
 		return
+	var tier: int = _density_tier(threat, floor_n, ceiling_n)
+	if tier == 0:
+		_relax_timer = relax_interval * 0.6
 	var spawned: int = _spawn_ahead_l4d(1)
-	if spawned > 0 and threat + spawned >= ceiling_n:
+	if spawned > 0 and threat + spawned >= target_n:
 		_refill_latch = false
 
 
@@ -280,16 +294,58 @@ func _refill_ceiling() -> int:
 	return maxi(_refill_floor(), Players.scale_ambient_count(maxi(0, offscreen_refill_max)))
 
 
-## 迟滞带判定（上下限的真正入口）：
-##   ① 已到上限 → 关闩（本轮补位结束）
+## ── 混合补位（2026-10-30 用户定稿）──
+## 地图里有作者摆放的 SpawnZone 时：区域先补自己的局部缺口；
+## 屏外通道（游荡者 / BUILD 预算 / 喘息补位）只在「附近总人口 < 下限」时
+## 补到下限为止，不再追到上限 —— 余量交给区域，避免两条通道叠加。
+func _has_author_zones() -> bool:
+	if _director == null or not _director.has_method("has_enabled_spawn_zones"):
+		return false
+	return bool(_director.call("has_enabled_spawn_zones"))
+
+
+## 屏外补位的目标人口：无区域（或玩家这一带没有区域覆盖）= 上限（迟滞带补满）；
+## 有区域覆盖 = 下限（只补缺口，余量交给区域）。
+func _refill_target(floor_n: int, ceiling_n: int) -> int:
+	if not _has_author_zones():
+		return ceiling_n
+	if _director.has_method("has_spawn_zone_near_players") \
+			and bool(_director.call("has_spawn_zone_near_players", _threat_radius())):
+		return floor_n
+	return ceiling_n
+
+
+## 威胁圈半径：与人口计量口径保持一致（FrontSpawner 由 DirectorConfig 注入，默认 600）。
+func _threat_radius() -> float:
+	if _director == null:
+		return 600.0
+	var fs: Node = _director.get_node_or_null("FrontSpawner")
+	if fs != null and fs.get("threat_radius") != null:
+		return maxf(0.0, float(fs.get("threat_radius")))
+	return 600.0
+
+
+## 密度三档（2026-10-30）：0 = 空场（加速补），1 = 正常，2 = 过密（停手）。
+## 阈值沿用现有「下限 / 上限」；过密由 `_refill_allowed` 直接拦住。
+func _density_tier(threat: int, floor_n: int, ceiling_n: int) -> int:
+	if threat >= ceiling_n:
+		return 2
+	if threat <= floor_n:
+		return 0
+	return 1
+
+
+## 迟滞带判定（上下限的真正入口）。`target_n` = 屏外通道的人口目标：
+## 无作者区域 = 上限（补满迟滞带）；有作者区域 = 下限（只补缺口，余量交给区域）。
+##   ① 已到目标 → 关闩（本轮补位结束）
 ##   ② 跌到下限或以下 → 开闩（下一批可以补）
-##   ③ 中间区间 → 保持上一状态（开着就一直补到上限，关着就不补）
+##   ③ 中间区间 → 保持上一状态（开着就一直补到目标，关着就不补）
 ## 这样「补怪上下限」才都起作用：只写下限会变成"补一只就停"，只写上限会变成"永远在补"。
-func _refill_allowed(threat: int, floor_n: int, ceiling_n: int) -> bool:
-	if ceiling_n <= 0:
+func _refill_allowed(threat: int, floor_n: int, target_n: int) -> bool:
+	if target_n <= 0:
 		_refill_latch = false
 		return false
-	if threat >= ceiling_n:
+	if threat >= target_n:
 		_refill_latch = false
 		return false
 	if threat <= floor_n:

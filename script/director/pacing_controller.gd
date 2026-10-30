@@ -39,10 +39,12 @@ enum Phase { BUILD, PEAK, COOLDOWN, FADE }
 @export_range(0.1, 1.0, 0.05) var peak_trigger_after_ratio: float = 0.85
 @export var cooldown_intensity_threshold: float = 0.3  ## 紧张度 > 此值提前结束 Cooldown
 
-# ── 智能尸潮（2026-10-29 用户设计）──
-## 开启后 BUILD 不再按固定时长结束，而是「玩家连续**无交战**达到阈值」才开尸潮。
+# ── 智能尸潮（2026-10-29 用户设计；2026-10-30 改为双触发）──
+## 开启后 BUILD 有两个触发源，**任一满足即进尸潮**：
+##   ① 连续**无交战**达到阈值（提前触发，有节奏感）；
+##   ② BUILD 时长走完（时间硬上限，兜底，不会无限安静）。
 ## 阈值 = clamp(base + 本章击杀数 × per_kill, min, max)：杀得越多，需要安静越久。
-## 关掉 = 回到「难度间隔表 / build_min~max」的定时节奏。
+## 关掉 = 回到「难度间隔表 / build_min~max」的定时节奏（强度只在后段可提前）。
 @export var smart_horde: bool = false
 @export var smart_base_sec: float = 120.0      ## 0 杀时的无交战阈值（默认 2 分钟）
 @export var smart_per_kill_sec: float = 2.0    ## 每击杀 +2s（用户 2026-10-29 定）
@@ -101,20 +103,28 @@ func update(delta: float, intensity: float, alive_enemy_count: int,
 
 	match current_phase:
 		Phase.BUILD:
-			if smart_horde:
-				## 智能尸潮：不看固定时长、也不看强度峰值，只看「连续无交战」。
-				if engaged:
-					_quiet_sec = 0.0
-				else:
-					_quiet_sec += delta
-				if _quiet_sec >= smart_threshold():
-					should_transition = true
-			elif phase_elapsed >= phase_duration:
+			## ★2026-10-30 用户定稿：智能尸潮 = 双触发，任一满足即开：
+			##   ① 无交战计时达到阈值（可提前，保留「安静久了来一波」的节奏感）；
+			##   ② BUILD 时长走完（时间硬上限，兜底，不会因为一直交战而无限不来）。
+			## 两个计时都只在 BUILD 段累计；进 PEAK / FADE / COOLDOWN 一律清零，
+			## 下一次 BUILD 从 0 开始 —— 用户要求「尸潮结束后从头算起」。
+			if engaged:
+				_quiet_sec = 0.0
+			else:
+				_quiet_sec += delta
+			var time_up: bool = phase_elapsed >= phase_duration
+			var quiet_up: bool = smart_horde and _quiet_sec >= smart_threshold()
+			if time_up or quiet_up:
 				should_transition = true
-			elif intensity > peak_intensity_threshold and _peak_armed \
+				if time_up:
+					print("[Pacing] 触发尸潮：BUILD 时间上限 %.0fs 到" % phase_duration)
+				else:
+					print("[Pacing] 触发尸潮：连续无交战 %.0fs ≥ 阈值 %.0fs"
+						% [_quiet_sec, smart_threshold()])
+			elif not smart_horde and intensity > peak_intensity_threshold and _peak_armed \
 					and phase_elapsed >= phase_duration * peak_trigger_after_ratio:
-				## 强度触发只在 Build 的**后段**生效：间隔由难度表给出的时长兜底，
-				## 战斗再激烈也最多把它提前 (1-ratio) —— 否则"越会打，尸潮越密"。
+				## 旧模型的强度触发：只在 BUILD 后段生效；智能尸潮开启时不参与，
+				## 否则双触发之外又多出第三个触发源，节奏会被战斗拖着走。
 				should_transition = true
 
 		Phase.PEAK:
@@ -216,9 +226,9 @@ func _set_phase(new_phase: Phase) -> void:
 	current_phase = new_phase
 	phase_elapsed = 0.0
 	_fade_quiet = 0.0
-	## 进峰值 / 进加压都重新开始累计「无交战」（上一段的安静时间不该算进下一段）
-	if new_phase == Phase.BUILD or new_phase == Phase.PEAK:
-		_quiet_sec = 0.0
+	## ★2026-10-30：任何阶段切换都清零「无交战」计时 —— 尸潮结束（进 FADE/COOLDOWN）
+	## 后必须从头算起；`phase_elapsed` 本身每阶段归零，时间硬上限同样不会跨尸潮累积。
+	_quiet_sec = 0.0
 	## 进峰值即"解除武装"：下一次强度触发必须先让强度掉回阈值 80% 以下。
 	if new_phase == Phase.PEAK:
 		_peak_armed = false
@@ -226,8 +236,8 @@ func _set_phase(new_phase: Phase) -> void:
 
 	var phase_name: StringName = _phase_name(new_phase)
 	if new_phase == Phase.BUILD and smart_horde:
-		print("[Pacing] → build（智能尸潮：需连续无交战 %.0fs，本章击杀 %d）"
-			% [smart_threshold(), _horde_kills])
+		print("[Pacing] → build（智能尸潮：无交战 %.0fs 或时间上限 %.0fs，任一满足；本章击杀 %d）"
+			% [smart_threshold(), phase_duration, _horde_kills])
 	else:
 		print("[Pacing] → %s (duration=%.1fs)" % [phase_name, phase_duration])
 	phase_changed.emit(phase_name)

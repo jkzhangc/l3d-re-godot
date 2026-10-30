@@ -1463,13 +1463,73 @@ func count_threat_near_players() -> int:
 	return 0
 
 
+# ── 作者区域缓存（2026-10-30 混合补位）──
+## 用 instance_id 而不是 Node 引用做缓存键：换图后旧场景会被释放，
+## 直接比较 Node 引用可能踩到"已释放实例"。
+var _zone_cache_scene_id: int = 0
+var _zone_cache: Array[SpawnZone] = []
+
+
+func _refresh_zone_cache() -> void:
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	var scene_id: int = scene.get_instance_id() if scene != null else 0
+	if scene_id == _zone_cache_scene_id:
+		return
+	_zone_cache_scene_id = scene_id
+	_zone_cache.clear()
+	if scene == null:
+		return
+	var nodes: Array = []
+	_collect_spawn_nodes(scene, nodes)
+	for sp: Node in nodes:
+		if sp is SpawnZone and (sp as SpawnZone).enabled:
+			_zone_cache.append(sp as SpawnZone)
+
+
+## 当前地图是否有**启用中的** SpawnZone。
+## 缓存按场景实例失效 —— SpawnZone 是作者摆放的，运行时不动态增删；
+## 换图/重载会换场景实例，下一次查询自动重扫。
+func has_enabled_spawn_zones() -> bool:
+	_refresh_zone_cache()
+	for zone: SpawnZone in _zone_cache:
+		if is_instance_valid(zone) and zone.enabled:
+			return true
+	return false
+
+
+## 当前玩家附近是否有可覆盖的 SpawnZone：区域中心到最近玩家的距离 ≤ 区域半径 + radius。
+## 混合补位用它区分「玩家在区域覆盖范围内（区域先补，屏外只补到下限）」
+## 和「地图虽然有区域、但玩家这一带没有（屏外照旧补满迟滞带）」。
+func has_spawn_zone_near_players(radius: float = 600.0) -> bool:
+	_refresh_zone_cache()
+	for zone: SpawnZone in _zone_cache:
+		if not is_instance_valid(zone) or not zone.enabled:
+			continue
+		var d: float = nearest_player_distance(zone.global_position)
+		if d <= zone.get_zone_radius() + maxf(radius, 0.0):
+			return true
+	return false
+
+
+## 区域覆盖判定半径 = 当前威胁圈半径（由 DirectorConfig 注入 FrontSpawner，默认 600）。
+func _zone_probe_radius() -> float:
+	var fs: Node = get_node_or_null("FrontSpawner")
+	if fs != null and fs.get("threat_radius") != null:
+		return maxf(0.0, float(fs.get("threat_radius")))
+	return 600.0
+
+
 ## ★区域游荡者（wanderers）：在玩家四周（屏外、360° 整圈）铺一层徘徊的丧尸。
 ##
 ## 为什么要这个（2026-10-24 用户实测「进图跑 10 秒一只丧尸都没有」）：
-##   1. 本项目地图**没有任何 SpawnZone / SpawnPoint**（街道图实测 0 个）→ 作者点路径全程失效；
+##   1. 当时的地图**没有任何 SpawnZone / SpawnPoint**（街道图实测 0 个）→ 作者点路径全程失效；
 ##   2. 只剩"前方扇区 360~560px"这一条取点路径 → 街道图一拐弯就取不到点，预算花不出去；
 ##   3. L4D 的区域本来就是"已经有一群在晃"，不是等你走到才从正前方刷出来。
 ## 这三个叠加的结果就是"路上空无一人，只有特感"。本函数补的就是这一层人口。
+## ★2026-10-30：玩家附近有 SpawnZone 覆盖时走混合补位 —— 游荡者只补到屏外下限，
+## 局部密度交给区域，避免"区域补一批 + 游荡者再补到 6 只"叠加；
+## 地图有区域但玩家这一带没有覆盖时，仍按常驻目标补，走廊不会空。
 func seed_wanderers(count: int) -> int:
 	## 总开关关闭 → 一只都不铺（否则"进图先铺 6~9 只"仍是画面外补怪）。
 	if not offscreen_refill_enabled:
@@ -1481,6 +1541,8 @@ func seed_wanderers(count: int) -> int:
 	## 效果：某个角落一直空 → 补到目标；某片已经一堆 → 一只都不加。
 	## 这比"固定补 N 只"稳定得多，也不会在窄图里越堆越挤。
 	var target: int = Players.scale_area_count(maxi(wander_target_near, 1))
+	if has_enabled_spawn_zones() and has_spawn_zone_near_players(_zone_probe_radius()):
+		target = mini(target, Players.scale_ambient_count(maxi(offscreen_refill_min, 0)))
 	var threat: int = count_threat_near_players()
 	var deficit: int = target - threat
 	if deficit <= 0:
