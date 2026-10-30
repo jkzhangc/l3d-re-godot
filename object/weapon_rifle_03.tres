@@ -61,7 +61,7 @@ up = Vector2(6, 0)
 
 [resource]
 script = ExtResource("6_oiymr")
-attack_power = 14
+attack_power = 32
 attack_speed = 1.15
 attack_range = 200.0
 weapon_state_name = "Rifle"

@@ -46,7 +46,7 @@ right = Vector2(0, -12)
 
 [resource]
 script = ExtResource("7_nmfdk")
-attack_power = 11
+attack_power = 33
 attack_speed = 1.1
 attack_range = 190.0
 weapon_state_name = "Smg"

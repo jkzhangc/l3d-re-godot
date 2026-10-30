@@ -148,6 +148,13 @@ func process_update(delta: float) -> void:
 				# ★2026-10-30：走 consume_fire_input，后摇期间按下的那一下会在回到
 				# READY 时兑现（180ms 缓冲），不再被直接丢掉。
 				transition_requested.emit(_wd.get_attack_state_node_name())
+			elif _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键") \
+					and _can_hold_fire_now():
+				## ★2026-10-30 用户实测「单机步枪按住时偶尔射不出子弹」：
+				## HOLD 武器在自动换弹结束/举枪完成回到 READY 时，玩家通常还按着开火键，
+				## 但 READY 只认 just_pressed → 必须松手重按才会继续。按住即续射。
+				## 弹夹空且无备弹时不续射，避免每帧空响。
+				transition_requested.emit(_wd.get_attack_state_node_name())
 
 			if Input.is_action_just_pressed("装填键"):
 				transition_requested.emit("Reload")
@@ -202,6 +209,16 @@ func _play_sound(stream: AudioStream) -> void:
 
 func _get_weapon() -> WeaponData:
 	return get_player_state().get_active_weapon()
+
+
+## 按住续射的弹药闸门：弹夹空且没有备弹时不再自动进入攻击（否则每帧空响）。
+## 弹夹空但有备弹 → 允许进攻击，攻击状态会先自动装填。
+func _can_hold_fire_now() -> bool:
+	if not _wd.is_ranged or _wd.magazine_capacity <= 0:
+		return true
+	if get_player_state().get_magazine_ammo(_wd.item_id) > 0:
+		return true
+	return _wd.has_infinite_ammo() or get_player_state().count_ammo_item(_wd.ammo_item_id) > 0
 
 
 func _try_raise_weapon(slot: String) -> void:

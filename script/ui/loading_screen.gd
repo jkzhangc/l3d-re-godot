@@ -21,11 +21,22 @@ var _frame_t: float = 0.0
 var _anim_t: float = 0.0
 var _player_char_idx: int = 0
 var _closing: bool = false
+var _auto_hide_timer: Timer = null
 
 
 func _ready() -> void:
+	## ★章节总结 / 结算页会 `get_tree().paused = true`。加载画面必须能在暂停中跑完淡出，
+	## 否则会永远盖在总结页上面（2026-10-30 用户实测）。
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	layer = 127
 	_build()
+	## 兜底：即使调用方被暂停/漏掉 hide，加载画面也不会永久盖住章节总结。
+	_auto_hide_timer = Timer.new()
+	_auto_hide_timer.one_shot = true
+	_auto_hide_timer.wait_time = 5.0
+	_auto_hide_timer.process_mode = Node.PROCESS_MODE_ALWAYS
+	_auto_hide_timer.timeout.connect(finish)
+	add_child(_auto_hide_timer)
 	visible = false
 	set_process(false)
 
@@ -93,12 +104,16 @@ func show_loading() -> void:
 	_anim_t = 0.0
 	_apply_frames()
 	set_process(true)
+	if _auto_hide_timer != null:
+		_auto_hide_timer.start()
 
 
 func finish() -> void:
 	if not visible or _closing:
 		return
 	_closing = true
+	if _auto_hide_timer != null:
+		_auto_hide_timer.stop()
 	var tw := create_tween()
 	tw.tween_property(_root, "modulate:a", 0.0, FADE_SEC)
 	tw.tween_callback(func() -> void:

@@ -49,7 +49,7 @@ right = Vector2(0, -16)
 
 [resource]
 script = ExtResource("1")
-attack_power = 59
+attack_power = 64
 attack_range = 260.0
 weapon_state_name = "Magnum"
 weapon_walk_texture = ExtResource("9")
