@@ -57,7 +57,7 @@ up = Vector2(-2, 36)
 
 [resource]
 script = ExtResource("1")
-attack_power = 65
+attack_power = 217
 attack_speed = 0.55
 weapon_state_name = "Sledgehammer"
 weapon_walk_texture = ExtResource("10_oe700")

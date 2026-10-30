@@ -478,7 +478,7 @@ func _explode() -> void:
 	# 联机：把爆心与弹丸标识交给 NetworkWorld 广播（Client 用它播同一套爆炸表现）。
 	exploded.emit(network_entity_id, center)
 
-	var applied_force: float = _knockback_force if _knockback_force > 0.0 else 300.0
+	var applied_force: float = _knockback_force if _knockback_force > 0.0 else HitResolver.EXPLOSION_KNOCKBACK_FORCE
 	## 目标组 = 真敌人 + 训练木偶（木偶不在 "enemy" 组，见 HitResolver.DAMAGE_TARGET_GROUPS）。
 	for e: Node in HitResolver.damage_targets(get_tree()):
 		if e is not Node2D or not is_instance_valid(e):
@@ -494,16 +494,16 @@ func _explode() -> void:
 		# 即死効果在爆炸路径同样生效（2026-09-15 火箭筒）：普通敌人拉满即死；
 		# tank_enemies 组 Boss 免疫即死 → 伤害 ×1.5 + 0.8s 怯み（与直击路径同一结算）。
 		var blast_damage: float = damage
-		var blast_hitstun: float = 0.2
+		## ★2026-10-30：爆炸震慑 = 击退 + 位移结束后 2s 硬直（见 HitResolver 常量）。
+		var blast_hitstun: float = HitResolver.EXPLOSION_HITSTUN_SEC
 		if _instant_kill:
 			if enemy.is_in_group("tank_enemies") or enemy.get("instant_kill_immune") == true:
 				blast_damage *= 1.5
-				blast_hitstun = 0.8
 			else:
 				blast_damage = maxf(blast_damage, 99999.0)
-				blast_hitstun = 0.1
 		var hp_before: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else 0.0
-		enemy.take_damage(blast_damage, applied_force, dir, false, 0.3, blast_hitstun, _source_id, element, true)
+		enemy.take_damage(blast_damage, applied_force, dir, false,
+			HitResolver.EXPLOSION_KNOCKBACK_STUN, blast_hitstun, _source_id, element, true)
 		var hp_after: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else hp_before
 		_record_chapter_damage(hp_before, hp_after, false)
 

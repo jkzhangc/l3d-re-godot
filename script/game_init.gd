@@ -48,6 +48,8 @@ func _ready() -> void:
 				var mp_stats: Node = get_node_or_null("/root/ChapterStats")
 				if mp_stats and mp_stats.has_method("ensure_chapter"):
 					mp_stats.ensure_chapter(mp_path)
+		## 联机加载画面：由 NetworkWorld 等所有 peer ready 后关闭；这里只挂 20s 兜底。
+		call_deferred("_watch_loading_screen_online")
 		return
 
 	Global.try_load_or_init()
@@ -74,6 +76,29 @@ func _ready() -> void:
 	_spawn_switch_manager()
 	# 玩家与敌人必须在同一个 y 排序容器里，两者之间的遮挡才正确（见 _align_actor_layers）
 	call_deferred("_align_actor_layers")
+	# 单机加载画面：本图初始化已完成，给 0.35s 最短展示后淡出。
+	call_deferred("_dismiss_loading_screen_single")
+
+
+func _dismiss_loading_screen_single() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	await tree.create_timer(0.35).timeout
+	if is_inside_tree() and Global.is_loading_active():
+		Global.hide_loading_screen()
+
+
+func _watch_loading_screen_online() -> void:
+	## 正常情况下 NetworkWorld 的 loading_complete 会关闭加载画面；
+	## 这里只做兜底：某个 peer 永远不 ready（掉线/卡死）时 20s 后强收。
+	var tree := get_tree()
+	if tree == null:
+		return
+	await tree.create_timer(20.0).timeout
+	if is_inside_tree() and Global.is_loading_active():
+		print("[GameInit] 加载等待超时（20s），强制关闭加载画面")
+		Global.hide_loading_screen()
 
 
 func _apply_pending_arrival() -> void:
@@ -210,10 +235,11 @@ func _create_network_world() -> void:
 	tree.current_scene.add_child(world)
 	print("[GameInit] 已进入 Phase 1 Host 权威联机世界")
 
-## ── 安全屋台词（2026-09-28 用户需求）──
+## ── 安全屋台词（2026-09-28 用户需求；2026-10-30 改为双页随机角色）──
 ## 台词数据来自原作事件数据（见 `原作安全屋台词数据.md`），每张安全屋一张台词池。
 ## 触发：初始安全屋进图即说；**有章节总结的安全屋在总结关闭后**说（与到达音乐同一时机）。
-## 联机：各端本地执行、显示**自己角色**的台词（中文名 + `CharacterData.portrait`），零 RPC。
+## ★2026-10-30 用户定稿：A/B 两页**各自**从队伍角色里随机抽一个说话人
+##（第 1 页可能大雄、第 2 页可能静香）；多人由 Host 抽，两个角色 id 经 Net 广播。
 const SAFEHOUSE_DIALOGUE_SCENE := preload("res://scene/ui/safehouse_dialogue.tscn")
 const SAFEHOUSE_DIALOGUE_DATA := preload("res://script/safehouse_dialogue_data.gd")
 
@@ -248,31 +274,132 @@ func _open_safehouse_dialogue(key: String) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null or tree.current_scene == null:
 		return
-	## ★台词归属到**本机玩家角色**（原作把「谁说什么」写死在事件文本里）。
-	## 联机各端各取自己的角色 —— 纯本地表现，零 RPC。
-	var character: CharacterData = _resolve_local_character()
-	var speaker: String = ""
-	var char_id: String = ""
-	var portrait: Texture2D = null
-	if character != null:
-		var jp: String = character.character_name
-		## ★台词框用**短名**（原作口径：大雄 / 静香 / 小夫 / 胖虎）；
-		## 全名版 CHARACTER_NAME_ZH 继续留给 ED 对话与 credits 战报。
-		speaker = str(Global.CHARACTER_NAME_SHORT.get(
-			jp, Global.CHARACTER_NAME_ZH.get(jp, jp)))
-		char_id = character.get_character_key()
-		portrait = character.portrait_texture()
-	## ★一次给出全部**页**（A 批一屏 → 按确定键 → B 批一屏），每页内部的多行同屏显示。
-	var pages: Array = SAFEHOUSE_DIALOGUE_DATA.pages_for(key, char_id)
-	if pages.is_empty():
+	var net: Node = get_node_or_null("/root/Net")
+	var online: bool = net != null and net.has_method("is_online_session") \
+		and bool(net.call("is_online_session"))
+	if online:
+		if bool(net.get("is_host")):
+			var ids: Array[String] = _pick_dialogue_characters(2)
+			if ids.size() < 2:
+				return
+			## Host 决定后广播；Client 只按 id 查本地同款 CharacterData。
+			net.rpc("sync_safehouse_dialogue", key, ids[0], ids[1])
+			_show_safehouse_dialogue(key, ids[0], ids[1])
+		else:
+			await _wait_and_show_remote_dialogue(key)
+		return
+	var ids: Array[String] = _pick_dialogue_characters(2)
+	if ids.size() < 2:
+		return
+	_show_safehouse_dialogue(key, ids[0], ids[1])
+
+
+## Client：等待 Host 的角色选择（Net 的 RPC 可能早于本场景 GameInit 到达，已缓冲）。
+func _wait_and_show_remote_dialogue(key: String) -> void:
+	var net: Node = get_node_or_null("/root/Net")
+	if net == null:
+		return
+	## 最多等 15 秒（300 × 50ms）；Host 正常在场景 ready 后立刻发，
+	## Client 慢加载时也要能等到（与加载画面 20s 兜底同量级）。
+	for _i: int in range(300):
+		var sel: Dictionary = net.call("take_pending_safehouse_dialogue", key)
+		if not sel.is_empty():
+			_show_safehouse_dialogue(key, str(sel.get("a", "")), str(sel.get("b", "")))
+			return
+		if not is_inside_tree():
+			return
+		await get_tree().create_timer(0.05).timeout
+	print("[GameInit] 安全屋台词：等待 Host 选角超时，跳过")
+
+
+## 从队伍里随机抽 count 个角色 id（**每页独立抽**，允许两页同一人）。
+## 单机 = 全部座位；联机 = 所有 peer 在大厅选的角色。Host 调用。
+func _pick_dialogue_characters(count: int) -> Array[String]:
+	var pool: Array[CharacterData] = _dialogue_character_pool()
+	var out: Array[String] = []
+	if pool.is_empty() or count <= 0:
+		return out
+	for _i: int in range(count):
+		var cd: CharacterData = pool[randi_range(0, pool.size() - 1)]
+		out.append(cd.get_character_key())
+	return out
+
+
+## 队伍可用角色池（按 id 去重）。联机走 Net 的角色表 —— 大厅选角即写入、跨图常驻，
+## 早于 Players.seats 可用；单机走座位表。
+func _dialogue_character_pool() -> Array[CharacterData]:
+	var pool: Array[CharacterData] = []
+	var seen: Dictionary = {}
+	var net: Node = get_node_or_null("/root/Net")
+	var online: bool = net != null and net.has_method("is_online_session") \
+		and bool(net.call("is_online_session"))
+	if online:
+		for peer_id: int in net.call("get_peer_ids"):
+			var path: String = str(net.call("get_player_character_path", peer_id))
+			if path.is_empty() or not ResourceLoader.exists(path):
+				continue
+			var res: Resource = load(path)
+			if res is CharacterData:
+				var cd: CharacterData = res as CharacterData
+				var cid: String = cd.get_character_key()
+				if not seen.has(cid):
+					seen[cid] = true
+					pool.append(cd)
+	else:
+		for st: PlayerState in Players.seats:
+			if st == null or st.character == null:
+				continue
+			var cid: String = st.character.get_character_key()
+			if not seen.has(cid):
+				seen[cid] = true
+				pool.append(st.character)
+	if pool.is_empty():
+		var local: CharacterData = _resolve_local_character()
+		if local != null:
+			pool.append(local)
+	return pool
+
+
+func _character_by_id(id: String, pool: Array[CharacterData]) -> CharacterData:
+	for cd: CharacterData in pool:
+		if cd != null and cd.get_character_key() == id:
+			return cd
+	return null
+
+
+## 按 Host 选定的两个角色 id 打开两页台词（每页各自的说话人/头像）。
+func _show_safehouse_dialogue(key: String, id_a: String, id_b: String) -> void:
+	var tree: SceneTree = get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	if not SAFEHOUSE_DIALOGUE_DATA.has_key(key):
+		return
+	var pool: Array[CharacterData] = _dialogue_character_pool()
+	var entries: Array[Dictionary] = []
+	for stage: String in [SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER, SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY]:
+		var cid: String = id_a if stage == SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER else id_b
+		var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key, cid, stage)
+		if lines.is_empty():
+			continue
+		var cd: CharacterData = _character_by_id(cid, pool)
+		if cd == null:
+			continue
+		var speaker: String = str(Global.CHARACTER_NAME_SHORT.get(
+			cd.character_name, Global.CHARACTER_NAME_ZH.get(cd.character_name, cd.character_name)))
+		entries.append({
+			"lines": lines,
+			"speaker": speaker,
+			"portrait": cd.portrait_texture(),
+		})
+	if entries.is_empty():
 		return
 	## ★只在「确实要显示」时标记已看过（角色无台词不记，避免误抑制后续正常台词）。
 	Global.mark_safehouse_dialogue_seen(key)
 	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
 	tree.current_scene.add_child(dlg)
-	dlg.call("open_character", pages, speaker, portrait)
-	print("[GameInit] 安全屋台词：%s（角色=%s，%d 页，说话人=%s，头像=%s）" % [
-		key, char_id, pages.size(), speaker, "有" if portrait != null else "无"])
+	dlg.call("open_mixed_pages", entries)
+	print("[GameInit] 安全屋台词：%s（页1=%s / 页2=%s，%d 页）" % [
+		key, id_a, id_b, entries.size()])
 
 
 ## 解析「本机玩家」的 CharacterData（台词 / 头像归属）。

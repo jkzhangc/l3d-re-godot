@@ -73,7 +73,7 @@ up = Vector2(4, 32)
 
 [resource]
 script = ExtResource("1")
-attack_power = 55
+attack_power = 183
 attack_speed = 0.65
 weapon_state_name = "FireAxe"
 weapon_walk_texture = ExtResource("10_lklw2")

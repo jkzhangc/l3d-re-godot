@@ -60,6 +60,9 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 
 ## 宿主 player 实体。
 var _p: Node = null
+## 覚醒 TP 扣费的小数累加器：5 TP/s 在 60fps 下每帧只有 0.083 点，
+## `int(round(...))` 会恒为 0 → TP 永远不掉（2026-10-30 用户实测）。
+var _awaken_tp_accum: float = 0.0
 
 
 func _init(player: Node) -> void:
@@ -130,9 +133,10 @@ func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 			_p._sa_auto_mukiri_until_msec = Time.get_ticks_msec() + int(skill.duration * 1000.0)
 			print("[SA] 感覚向上：%.0f 秒内完全见切（敌方攻击无效化）" % skill.duration)
 		SkillData.SkillType.SA_RECITAL:
-			# ジャイアン「ジャイアンリサイタル」：半径内全体敌人踉跄（0 伤害 + 硬直）
-			var staggered: int = _sa_recital_stagger(skill.radius, skill.stagger_duration)
-			print("[SA] ジャイアンリサイタル：%.0fpx 内 %d 个敌人踉跄 %.1fs" % [skill.radius, staggered, skill.stagger_duration])
+			# ジャイアン「ジャイアンリサイタル」：半径内全体敌人踉跄 + 击退（2026-10-30 加强）
+			var staggered: int = _sa_recital_stagger(skill)
+			print("[SA] ジャイアンリサイタル：%.0fpx 内 %d 个敌人踉跄 %.1fs、击退 %.0f" % [
+				skill.radius, staggered, skill.stagger_duration, skill.sa_knockback_force])
 		SkillData.SkillType.SA_CROUCH:
 			# 静香「しゃがみ回避」：基础无敌 duration 秒；按住 SA 键持续蹲（急速耗 TP）
 			_start_crouch_dodge(skill)
@@ -162,16 +166,22 @@ func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 	_announce_network_sa_event("sa:" + (trigger if not trigger.is_empty() else skill.command_trigger))
 
 
-## リサイタル：半径内所有存活敌人进入踉跄（0 伤害 → 不弹数字；hitstun → 原地冻结）
-func _sa_recital_stagger(radius: float, stagger: float) -> int:
+## リサイタル：半径内所有存活敌人进入踉跄 + 沿远离玩家的方向击退。
+## 2026-10-30 用户需求：胖虎 SA 追加「把附近敌人震击退一定距离」。
+func _sa_recital_stagger(skill: SkillData) -> int:
 	var count: int = 0
 	for e: Node2D in _p.get_tree().get_nodes_in_group("enemy"):
 		if not is_instance_valid(e) or e.get("_is_dead") == true or e.get("_is_dying") == true:
 			continue
-		if e.global_position.distance_to(_p.global_position) > radius:
+		var to_e: Vector2 = e.global_position - _p.global_position
+		if to_e.length() > skill.radius:
 			continue
 		if e.has_method("take_damage"):
-			e.take_damage(0.0, 0.0, (e.global_position - _p.global_position).normalized(), false, 0.0, stagger)
+			var dir: Vector2 = to_e.normalized() if to_e.length() > 1.0 else Vector2.UP
+			## 0 伤害 + 硬直 + 击退：击退用 sa_knockback_force，硬直用 stagger_duration。
+			## knockback_stun 取 0.3s（位移持续时间），真正的原地硬直由后续 Hitstun 接着吃。
+			e.take_damage(0.0, skill.sa_knockback_force, dir, false, 0.3,
+				skill.stagger_duration, 0, 0, false)
 			count += 1
 	return count
 
@@ -191,9 +201,10 @@ func _end_crouch_dodge() -> void:
 	_p._sa_crouch_active = false
 	_p._sa_crouch_skill = null
 	_p._sa_crouch_drain_accum = 0.0
+	_p._sa_crouch_until_msec = 0
 	_p._network_sa_crouch_hold = false  # Host 权威实体的按住登记随蹲下结束一并清除
 	if _p.sprite:
-		_p.sprite.modulate = Color.WHITE
+		_p.sprite.modulate = _p.status_tint_color()
 	print("[SA] しゃがみ回避结束")
 	# 联机（C2）：Host 侧结束（超时/TP 尽/死亡）广播对齐表现；Client 本地结束
 	# 与 crouch_end_presentation 幂等（LAN 漂移 <1s）；单机 no-op。
@@ -308,6 +319,7 @@ func _activate_awaken_core() -> bool:
 		print("[覚醒] TP 不足，无法发动")
 		return false
 	_p._awaken_active = true
+	_awaken_tp_accum = 0.0
 	if _p.sprite:
 		_p.sprite.modulate = Color(1.9, 1.7, 0.9)
 		_p._awaken_tint_applied = true
@@ -318,6 +330,18 @@ func _activate_awaken_core() -> bool:
 
 func is_awaken_active() -> bool:
 	return _p._awaken_active
+
+
+## 当前是否有持续型 SA 技能生效（静香蹲下 / 的大雄感覚向上）。
+## 角色切换管理器用它阻止「SA 使用中切人」：蹲下计时/自动见切都挂在玩家实体上，
+## 换座位后旧实体被冻结/回收，SA 无法正常结束。
+func is_sa_active() -> bool:
+	var now: int = Time.get_ticks_msec()
+	if _p._sa_crouch_active or now < _p._sa_crouch_until_msec:
+		return true
+	if now < _p._sa_auto_mukiri_until_msec:
+		return true
+	return false
 
 
 ## 覚醒（集中射撃）射撃威力倍率。暴露成方法是因为联机 Host 侧持有的 shooter 变量
@@ -334,9 +358,15 @@ func _update_awaken(delta: float) -> void:
 	var state: PlayerState = Players.get_state_for_entity(_p)
 	var tp_left: int = state.current_tp if state else 0
 	if state:
-		## ★唯一写入口：钳到 [0, 上限]（旧实现裸减只有 0 下限、没有上限）
-		state.change_tp(-int(round(AWAKEN_TP_DRAIN_PER_SEC * delta)))
-		tp_left = state.current_tp
+		## ★2026-10-30 修复：旧实现 `change_tp(-int(round(5.0 * delta)))` 在 60fps 下
+		## 每帧只有 0.083 点 → round 成 0 → TP 永远不掉。改用小数累加器，
+		## 不足 1 点的部分留到下一帧，长期平均速率恒等于 AWAKEN_TP_DRAIN_PER_SEC。
+		_awaken_tp_accum += AWAKEN_TP_DRAIN_PER_SEC * delta
+		var whole: int = int(_awaken_tp_accum)
+		if whole > 0:
+			_awaken_tp_accum -= float(whole)
+			state.change_tp(-whole)
+			tp_left = state.current_tp
 	if tp_left <= 0 or _p._is_dying:
 		_deactivate_awaken()
 		if tp_left <= 0:
@@ -357,7 +387,7 @@ func _deactivate_awaken() -> void:
 	_p._awaken_active = false
 	# 还原染色：Heat 的红色染色优先（两者可能并存）
 	if _p.sprite and _p._awaken_tint_applied:
-		_p.sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
+		_p.sprite.modulate = _p.status_tint_color()
 		_p._awaken_tint_applied = false
 	# 联机（C1）：Host 权威实体上任何解除路径（TP 耗尽/死亡/放下武器）统一出口广播；
 	# 单机/Client 端 find_child 找不到 NetworkWorld → no-op。
@@ -390,7 +420,7 @@ func apply_network_awaken_state(active: bool) -> void:
 			return
 		_p._awaken_active = false
 		if _p.sprite and _p._awaken_tint_applied:
-			_p.sprite.modulate = Color(1.8, 0.6, 0.6) if is_heat_active() else Color.WHITE
+			_p.sprite.modulate = _p.status_tint_color()
 			_p._awaken_tint_applied = false
 		print("[覚醒] 联机染色 OFF（peer 表现）")
 
@@ -438,7 +468,7 @@ func _update_sa_state(delta: float) -> void:
 	if _p._heat_time > 0.0:
 		_p._heat_time -= delta
 		if _p._heat_time <= 0.0 and _p.sprite and not _p._sa_crouch_active:
-			_p.sprite.modulate = Color.WHITE
+			_p.sprite.modulate = _p.status_tint_color()
 			print("[状态] Heat 解除")
 	# SA 发动键（原作 X 键；本工程菜单在 P/Esc，X 无冲突，绑在 project.godot 的「SA键」）
 	if Input.is_action_just_pressed("SA键"):
@@ -549,7 +579,7 @@ func _try_mukiri_input() -> void:
 
 ## 见切成功 → 前方 ±60°、88px 扇形内敌人吃反击：
 ##   punch（拳打）= 2×攻击 + 推开；heavy（强打）= 3×攻击 + 大推；
-##   issen（一闪）= 4×攻击 + 超Push + 即死（Boss 抗性系统未实装，当前对全部敌人生效）。
+##   issen（一闪）= 6×攻击 + 超Push + 50% 即死（Boss 免疫即死）。
 func _try_counter() -> void:
 	var now: int = Time.get_ticks_msec()
 	if now < _p._counter_cooldown_until_msec:
@@ -578,7 +608,9 @@ func _try_counter() -> void:
 		"heavy":
 			dmg_mult = 3.0; push_force = 520.0; push_stun = 0.8
 		"issen":
-			dmg_mult = 4.0; push_force = 640.0; push_stun = 1.0; instant_kill = true
+			## ★2026-10-30 用户定稿：一闪伤害加高，即死从 100% 改为 50%。
+			dmg_mult = 6.0; push_force = 720.0; push_stun = 1.2
+			instant_kill = randf() < 0.5
 	var base: float = float(_p.current_character.get_effective_attack()) if _p.current_character else 10.0
 	var hit_count: int = 0
 	for e: Node2D in _p.get_tree().get_nodes_in_group("enemy"):
@@ -592,11 +624,16 @@ func _try_counter() -> void:
 		if not e.has_method("take_damage"):
 			continue
 		var dmg: float = base * dmg_mult
-		if instant_kill and e.get("current_hp") != null:
+		## 即死只对普通敌人；Boss（tank_enemies）与 instant_kill_immune 免疫。
+		if instant_kill and e.get("current_hp") != null \
+				and not e.is_in_group("tank_enemies") \
+				and e.get("instant_kill_immune") != true:
 			dmg = maxf(dmg, float(e.get("current_hp")) + 1.0)
 		e.take_damage(dmg, push_force, facing, false, push_stun, 0.0)
 		hit_count += 1
-	print("[反击] %s：命中 %d 个敌人（威力 x%.0f，推力 %.0f%s）" % [ctype, hit_count, dmg_mult, push_force, "，即死" if instant_kill else ""])
+	print("[反击] %s：命中 %d 个敌人（威力 x%.0f，推力 %.0f%s）" % [
+		ctype, hit_count, dmg_mult, push_force,
+		"，50% 即死判定成功" if instant_kill else ("，50% 即死判定失败" if ctype == "issen" else "")])
 	## 成就「カウンター免許皆伝」：计发动次数（命中至少一个敌人才算一次有效反击）
 	if hit_count > 0:
 		var cst: PlayerState = Players.get_state_for_entity(_p)
@@ -626,7 +663,7 @@ func _update_network_sa_state(delta: float) -> void:
 	if _p._heat_time > 0.0:
 		_p._heat_time -= delta
 		if _p._heat_time <= 0.0 and _p.sprite and not _p._sa_crouch_active:
-			_p.sprite.modulate = Color.WHITE
+			_p.sprite.modulate = _p.status_tint_color()
 			print("[状态] Heat 解除")
 	var now: int = Time.get_ticks_msec()
 	if _p._sa_crouch_active:

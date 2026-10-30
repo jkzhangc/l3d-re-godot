@@ -14,7 +14,7 @@
 
 [resource]
 script = ExtResource("1")
-attack_power = 40
+attack_power = 133
 attack_speed = 0.7
 attack_range = 56.0
 weapon_state_name = "Bat"

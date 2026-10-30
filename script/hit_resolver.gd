@@ -30,6 +30,15 @@ const PLAYER_HIT_MASK: int = 1 << 2  ## = 4
 const FRIENDLY_FIRE_MIN_DAMAGE: float = 1.0
 const FRIENDLY_FIRE_MAX_DAMAGE: float = 2.0
 
+## ── 爆炸震慑（2026-10-30 用户定稿）──
+## 任何爆炸物（子弹爆炸 / 投掷物）都统一使用这套力度：
+##   · 击退 420 px/s（震动位移约 0.3s）
+##   · 位移结束后追加 2.0s 原地硬直（enemy._hitstun_after_knockback 链）
+## 原先 bullet 默认 300/0.2、投掷物 200/0.2 —— 只有"推一下"，没有"震慑几秒"。
+const EXPLOSION_KNOCKBACK_FORCE: float = 420.0
+const EXPLOSION_KNOCKBACK_STUN: float = 0.3
+const EXPLOSION_HITSTUN_SEC: float = 2.0
+
 ## ── 可受伤的"敌人侧"目标组（2026-10-27）──
 ## `enemy` = 真敌人；`training_dummy` = 训练木偶。
 ## ⚠ 木偶**故意不进 `enemy` 组**：一旦进去，导演的威胁统计 / 刷怪名额 / 联机快照 /

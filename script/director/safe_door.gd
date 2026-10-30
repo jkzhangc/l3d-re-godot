@@ -255,6 +255,7 @@ func _enter_safe_room() -> void:
 	_apply_entry_effects()
 	_finish_chapter()
 	print("[SafeDoor] 进入安全屋: %s" % target_scene)
+	Global.show_loading_screen()
 	get_tree().change_scene_to_file.call_deferred(target_scene)
 
 

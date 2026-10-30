@@ -47,6 +47,13 @@ func process_update(delta: float) -> void:
 
 	_stun_timer -= delta
 	if _stun_timer <= 0.0:
+		## 2026-10-30：击退结束若还欠一段硬直（爆炸震慑 / 胖虎 SA），
+		## 先进 Hitstun 把「几秒不能动」补完，再回 Chase。
+		if character._hitstun_after_knockback and character._hitstun_duration > 0.0:
+			character._hitstun_after_knockback = false
+			print("[擊退] 击退结束 → 追加硬直 %.2fs" % character._hitstun_duration)
+			transition_requested.emit("Hitstun")
+			return
 		print("[擊退] 硬直结束 → 追击")
 		transition_requested.emit("Chase")
 

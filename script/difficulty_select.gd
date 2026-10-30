@@ -236,6 +236,6 @@ func _confirm() -> void:
 	else:
 		level_path = "res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"
 	Global.init_new_game()
-	var err: Error = get_tree().change_scene_to_file(level_path)
+	var err: Error = Global.loading_change_scene(level_path)
 	if err != OK:
 		printerr("[难度选择] 场景切换失败: %s (err=%d)" % [level_path, err])

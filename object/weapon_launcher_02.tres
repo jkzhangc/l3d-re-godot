@@ -53,7 +53,7 @@ right = Vector2(0, -8)
 
 [resource]
 script = ExtResource("1")
-attack_power = 100
+attack_power = 70
 attack_speed = 1.2
 attack_range = 240.0
 weapon_state_name = "Launcher"

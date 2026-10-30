@@ -151,6 +151,11 @@ var _moving: bool = false
 var _is_walking: bool = false   ## 当前外观是行走(true)还是跑步(false)
 var _weapon_mode: bool = false  ## 是否处于武器举起模式
 var _weapon_data: WeaponData = null
+## 开火输入缓冲（2026-10-30 用户实测「被丧尸围堵时有时枪射不出子弹」）：
+## 点按类远程武器在攻击后摇 / 换弹过渡 / 状态切换窗口里按下的射击，保留 180ms，
+## 回到 READY 后立刻兑现一次。没有它，猛点时落在后摇里的那几下会被直接丢掉。
+const FIRE_BUFFER_MSEC: int = 180
+var _fire_buffer_until_msec: int = 0
 var _current_weapon_char_idx: int = 0  ## 当前武器模式下使用的角色索引
 ## 当前处于**武器攻击序列**的第几步（`melee_attack_char_sequence` 的下标）。
 ## -1 = 不在攻击动画里（走路/举起/后摇收尾…）→ 武器单体动作图隐藏。
@@ -256,6 +261,8 @@ const NETWORK_MAX_RENDER_DELAY := 0.055
 var _remote_interp: Variant = null
 var _network_attack_token: int = 0
 var _network_reload_was_facing_locked: bool = false
+## 联机推击前是否举着武器：不举武器也能推（2026-10-30），推完要回到原姿态。
+var _network_shove_was_weapon_mode: bool = false
 
 var _tp_regen_timer: float = 0.0
 
@@ -532,6 +539,15 @@ func _process(delta: float) -> void:
 	_update_shove_fatigue(delta)
 	_update_tp_regen(delta)
 	_update_motion_input()
+	## 开火输入缓冲：攻击后摇/换弹/状态切换期间按下的射击先记 180ms，
+	## 回到 READY 后兑现一次（修「被围堵时有时射不出子弹」）。
+	## READY 帧不记 —— 该状态自己会消费 just_pressed，否则会多补一发。
+	if _weapon_mode and _weapon_data != null and Input.is_action_just_pressed("确定键"):
+		var sm_now: Node = get_node_or_null("StateMachine")
+		var in_ready: bool = sm_now != null and sm_now.get("current_state") != null \
+			and String(sm_now.current_state.name) == "Ranged"
+		if not in_ready:
+			buffer_fire_input()
 	_update_sa_state(delta)
 	_sanitize_facing_lock()
 	_try_shove_interrupt()
@@ -923,6 +939,44 @@ func update_facing(move_dir: Vector2) -> void:
 # 武器模式
 # ═══════════════════════════════════════
 
+## 记录一次开火输入（仅点按类远程武器）。由 `_process` 在武器模式中轮询按下事件时调用。
+func buffer_fire_input() -> void:
+	if _weapon_data == null or not _weapon_data.is_ranged:
+		return
+	if _weapon_data.fire_mode != WeaponData.FireMode.TAP:
+		return
+	_fire_buffer_until_msec = Time.get_ticks_msec() + FIRE_BUFFER_MSEC
+
+
+## 是否还有未兑现的缓冲射击。
+func has_buffered_fire() -> bool:
+	return _fire_buffer_until_msec > 0 and Time.get_ticks_msec() <= _fire_buffer_until_msec
+
+
+## 兑现缓冲射击（一次性）。超时未兑现则丢弃。
+func consume_buffered_fire() -> bool:
+	if _fire_buffer_until_msec <= 0:
+		return false
+	if Time.get_ticks_msec() > _fire_buffer_until_msec:
+		_fire_buffer_until_msec = 0
+		return false
+	_fire_buffer_until_msec = 0
+	return true
+
+
+func clear_fire_buffer() -> void:
+	_fire_buffer_until_msec = 0
+
+
+## READY 状态的开火入口：本帧刚按下优先；否则看缓冲。
+## 同一帧刚按下时清掉缓冲，避免一次按键被兑现两次。
+func consume_fire_input() -> bool:
+	if Input.is_action_just_pressed("确定键"):
+		_fire_buffer_until_msec = 0
+		return true
+	return consume_buffered_fire()
+
+
 func enter_weapon_mode(wd: WeaponData) -> void:
 	_weapon_mode = true
 	_weapon_data = wd
@@ -1148,6 +1202,7 @@ func play_network_shove_presentation(wd: WeaponData) -> void:
 		return
 	_network_attack_token += 1
 	var token := _network_attack_token
+	_network_shove_was_weapon_mode = _weapon_mode
 	enter_weapon_mode(wd)
 	player_in_weapon_state = true
 	enter_shove_mode()
@@ -1167,7 +1222,11 @@ func _run_network_shove_presentation(token: int, wd: WeaponData) -> void:
 		await get_tree().create_timer(wd.shove_frame_duration).timeout
 	if token == _network_attack_token and is_inside_tree():
 		exit_shove_mode()
-		set_weapon_ready_frame()
+		if _network_shove_was_weapon_mode:
+			set_weapon_ready_frame()
+		else:
+			## 空手推击：推完回空手 Idle，不能把武器"顺手举起来"。
+			exit_weapon_mode()
 		player_in_weapon_state = false
 
 
@@ -1776,6 +1835,19 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 	_play_sound(hurt_sound)
 
 
+## 当前应恢复的常驻染色（受击闪白/受伤红闪结束后回到这里，而不是一律白色）。
+## 2026-10-30 用户实测：觉醒的黄光被受伤闪白覆盖后不再回来，但技能仍在生效 ——
+## 状态染色必须由**状态本身**决定，不能被一次受击反馈永久清掉。
+func status_tint_color() -> Color:
+	if _awaken_active:
+		return Color(1.9, 1.7, 0.9)
+	if _heat_time > 0.0:
+		return Color(1.8, 0.6, 0.6)
+	if _sa_crouch_active:
+		return Color(0.75, 0.85, 1.0)
+	return Color.WHITE
+
+
 ## 播放受击反馈（闪红/渐隐）
 func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) -> void:
 	if duration < 0.0:
@@ -1790,12 +1862,12 @@ func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) ->
 		var tween := create_tween()
 		set_meta("_hf_tween", tween)
 		tween.tween_property(sprite, "modulate", hit_color, 0.0)
-		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+		tween.tween_property(sprite, "modulate", status_tint_color(), duration)
 	else:
 		sprite.modulate = hit_color
 		var tween := create_tween()
 		set_meta("_hf_tween", tween)
-		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+		tween.tween_property(sprite, "modulate", status_tint_color(), duration)
 
 
 func heal(amount: float) -> void:
@@ -2073,6 +2145,11 @@ func try_activate_awaken() -> bool:
 
 func is_awaken_active() -> bool:
 	return _special_action.is_awaken_active()
+
+
+## 持续型 SA 是否生效（静香蹲下 / 大雄感覚向上）。角色切换管理器用它阻止 SA 中切人。
+func is_sa_active() -> bool:
+	return _special_action.is_sa_active()
 
 
 func get_awaken_damage_mult() -> float:

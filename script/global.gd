@@ -151,11 +151,47 @@ var movement_locked: bool = false
 ## 锁计数：多个来源同时锁时，最后一个解锁前一直保持锁定（防互相覆盖）。
 var _movement_lock_count: int = 0
 
+## ── 全局加载画面（2026-10-30 用户需求）──
+## 常驻 Global、懒创建：跨场景存活，换图期间才能真正盖住画面。
+## 单机由 GameInit 在新图就绪后关闭；联机由 NetworkWorld 等所有 peer ready 后关闭。
+const LOADING_SCREEN_SCRIPT := preload("res://script/ui/loading_screen.gd")
+var _loading_screen: CanvasLayer = null
+var _loading_active: bool = false
+
+
+## 显示加载画面。重复调用幂等（联机 start_game 与本地切图可能都会调）。
+func show_loading_screen() -> void:
+	if _loading_screen == null:
+		_loading_screen = LOADING_SCREEN_SCRIPT.new()
+		add_child(_loading_screen)
+	_loading_active = true
+	_loading_screen.call("show_loading")
+
+
+## 关闭加载画面（淡出）。没有显示时幂等。
+func hide_loading_screen() -> void:
+	_loading_active = false
+	if _loading_screen != null:
+		_loading_screen.call("finish")
+
+
+func is_loading_active() -> bool:
+	return _loading_active
+
+
+## 单机/无 Net 的切图入口：先亮加载画面再换图；失败立即收起。
+func loading_change_scene(path: String) -> Error:
+	show_loading_screen()
+	var err: Error = get_tree().change_scene_to_file(path)
+	if err != OK:
+		hide_loading_screen()
+	return err
+
 
 ## 玩家移动输入的**唯一入口**。单机（各 Player*State）与联机（NetworkWorld._read_local_direction）
 ## 都必须走这里，否则闸门会漏掉其中一条路径。
 func move_input() -> Vector2:
-	if movement_locked:
+	if movement_locked or _loading_active:
 		return Vector2.ZERO
 	return Input.get_vector("左", "右", "上", "下")
 
@@ -1261,7 +1297,7 @@ func load_from_slot(slot_index: int) -> bool:
 		suppress_chapter_summary_on_scene("")
 		return false
 	print("[Global] 读档进入: %s (槽位 %d)" % [scene_path, slot_index])
-	var err: Error = tree.change_scene_to_file(scene_path)
+	var err: Error = loading_change_scene(scene_path)
 	if err != OK:
 		printerr("[Global] 读档切场景失败: %s (err=%d)" % [scene_path, err])
 		## 切图失败 → 清掉抑制标记，避免之后正常进入同一张图时被误抑制。

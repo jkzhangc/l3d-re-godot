@@ -340,6 +340,11 @@ var _client_local_ready := false
 var _last_client_fire_request_msec := 0
 ## Net 在双方真正换图前发出的过渡信号；置位后本场景不再发送任何 RPC，避免旧节点路径的在途包。
 var _scene_transitioning := false
+## 加载画面：Host 在所有 peer 都上报 scene-ready 后统一广播一次 loading_complete。
+var _loading_complete_sent: bool = false
+## Host 世界初始化（敌人/掉落物注册 + 首个可靠快照）是否已完成。
+## 没完成就收起加载画面 = 客户端进去看到空世界，必须等 _finish_host_world_initialization。
+var _host_world_ready: bool = false
 var _last_logged_remote_input: Dictionary = {}
 var _remote_input_age: Dictionary = {}
 var _auto_client_fire_confirmed := false
@@ -512,7 +517,11 @@ func _physics_process(delta: float) -> void:
 	var local_swallowed := _is_local_player_swallow_locked()
 	# 输入冻结条件：菜单打开、本地玩家倒地/真死亡、团灭收束中、或被丸呑み吞入
 	# ——这些状态都把移动输入归零；倒地只保留等待队友救援，不允许爬行。
-	var inputs_frozen := local_menu_open or local_life != 0 or _wipe_active or local_swallowed
+	var loading_active: bool = false
+	var global_node: Node = get_node_or_null("/root/Global")
+	if global_node != null and global_node.has_method("is_loading_active"):
+		loading_active = bool(global_node.call("is_loading_active"))
+	var inputs_frozen := local_menu_open or local_life != 0 or _wipe_active or local_swallowed or loading_active
 	if not inputs_frozen and local_life == 0:
 		# 救援占用功能键(D)、投掷占用确定键，都必须在普通战斗输入前优先处理。
 		# 倒地/死亡的本地玩家不进入此分支：他们不能开火、装填、投掷或救援他人。
@@ -725,6 +734,8 @@ func _finish_host_world_initialization() -> void:
 	# 上方只标记未发快照），此刻世界已完整，统一补发可靠世界快照。
 	# 对已在 _accept_ready_peer 中收过快照的对端，重复收一次是幂等的可靠包。
 	_broadcast_reliable_world_snapshot()
+	_host_world_ready = true
+	_check_loading_complete()
 
 
 ## 初始化 Client 场景中的表现实体。
@@ -1290,20 +1301,23 @@ func _client_has_tp_for(node: Node2D, trigger: String) -> bool:
 
 
 ## SA / 见切 输入收集（C2）：SA 键=技能释放请求；确定键=攻击兼见切（同原作）
-## 的窗口登记请求。Host 不进入本函数——Host 本机玩家由 player._update_sa_state
-## 直读输入并经 _use_skill_core 扣 TP，这里再发请求会双扣；投掷瞄准（占用
-## 确定键）时与开火一样被外层跳过。搓招缓冲由 poll_network_motion_input 按帧
-## 代为驱动，SA 请求信任 Client 的 validate_skill_motion 预校验（Host 无法
-## 重放输入序列，与射击瞄准同类的意图信任）。
+## 的窗口登记请求。Host 本机也走这里：联机实体的 `player._update_sa_state` 不运行，
+## 由本函数直接结算 Host 自己的技能（不发 RPC，避免双扣）；Client 只提交意图。
+## 投掷瞄准（占用确定键）时与开火一样被外层跳过。搓招缓冲由
+## poll_network_motion_input 按帧代为驱动，SA 请求信任 Client 的
+## validate_skill_motion 预校验（Host 无法重放输入序列，与射击瞄准同类的意图信任）。
 func _capture_sa_input() -> void:
-	if not _client_local_ready:
+	var host_local: bool = bool(net.is_host)
+	## ★2026-10-30 修复「主机用不了技能」：`_client_local_ready` 只在
+	## `_setup_client_local_player` 里置 true，**Host 永远不会置位**。
+	## 旧实现无条件早退 → Host 本机的 SA 请求根本走不到下面的直接结算分支。
+	if not _client_local_ready and not host_local:
 		return
 	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
 	var node := _player_node(entry)
 	if not is_instance_valid(node):
 		return
 	node.poll_network_motion_input()
-	var host_local: bool = bool(net.is_host)
 	if not host_local and not _client_ready_to_send():
 		return
 	# Host 本机直接结算，Client 只提交意图。
@@ -2019,8 +2033,10 @@ func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 	var entry: Dictionary = _players[peer_id]
 	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
-	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.is_weapon_mode_active() or not node.can_shove() or _is_host_throwable_held(peer_id):
+	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or not node.can_shove() or _is_host_throwable_held(peer_id):
 		return
+	# 2026-10-30 用户需求：不举武器也能推击。与单机 _try_shove_interrupt 对齐，
+	# 只要当前槽位有武器数据即可（空手状态也拿得到 active_weapon）。
 	# 滞后补偿：推击的命中查询在权威坐标上做，先对齐客户端自报位置。
 	_apply_lag_compensated_position(peer_id, node, claimed_position)
 	var wd := state.get_active_weapon()
@@ -3518,6 +3534,52 @@ func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 	# 中途加入的 Client 补发覚醒中的玩家染色（C1）。
 	for awaken_peer: int in _awaken_active_peers.keys():
 		awaken_presentation.rpc_id(peer_id, awaken_peer, true)
+	## 加载画面：本 peer 已就绪；若全场都就绪则广播收起。
+	if _loading_complete_sent:
+		loading_complete.rpc_id(peer_id)
+	_check_loading_complete()
+
+
+## Host：本场景所有 peer 是否都已完成 scene-ready（含 Host 自己世界初始化完成）。
+func is_loading_complete() -> bool:
+	if not net.is_host:
+		return _initial_world_received
+	if not _host_world_ready:
+		return false
+	var host_id: int = int(net.my_peer_id)
+	if not _players.has(host_id):
+		return false
+	for peer_id: int in net.get_peer_ids():
+		if peer_id == host_id:
+			continue
+		if not _ready_client_peers.has(peer_id):
+			return false
+	return true
+
+
+## Host：全场就绪 → 广播一次 loading_complete，并收起本机加载画面。
+## Client 收到 RPC 后才收起自己的画面 —— 这样"先加载完的玩家"也会等其他人。
+func _check_loading_complete() -> void:
+	if not net.is_host or _loading_complete_sent:
+		return
+	if not is_loading_complete():
+		return
+	_loading_complete_sent = true
+	loading_complete.rpc()
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("hide_loading_screen"):
+		g.call("hide_loading_screen")
+	print("[NetworkWorld] LOADING_COMPLETE peers=%d" % net.get_peer_ids().size())
+
+
+@rpc("authority", "call_remote", "reliable")
+func loading_complete() -> void:
+	if net.is_host:
+		return
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("hide_loading_screen"):
+		g.call("hide_loading_screen")
+	print("[NetworkWorld] CLIENT_LOADING_COMPLETE")
 
 
 func _send_reliable_world_snapshot(peer_id: int) -> void:
@@ -3543,6 +3605,7 @@ func _on_peer_left(peer_id: int) -> void:
 	if not net.is_host:
 		return
 	_ready_client_peers.erase(peer_id)
+	_check_loading_complete()
 	var had_player := _players.has(peer_id)
 	if had_player:
 		_remove_player(peer_id)

@@ -83,6 +83,9 @@ var _player_names: Dictionary = {}
 var _player_character_paths: Dictionary = {}
 var _allowed_character_paths: Dictionary = {} # resource_path -> display name
 var _pending_scene_ready: Dictionary = {}
+## 安全屋台词：Host 选好的「第 1 页角色 / 第 2 页角色」暂存给 Client。
+## 纯字符 id，不走资源传输；Client 收到后由 GameInit 打开台词窗口。
+var _pending_safehouse_dialogue: Dictionary = {}
 ## 切图前由 Client 回传的静默确认。Host 等待此确认后才释放旧场景，
 ## 防止客户端旧 NetworkWorld 的在途 RPC 命中 Host 已重建的新场景路径。
 var _pending_scene_transition_acks: Dictionary = {}
@@ -490,12 +493,36 @@ func _get_default_character_path() -> String:
 
 # ---------------------------------------------------------------- scene lifecycle
 
+## ── 安全屋台词（2026-10-30 用户定稿）──
+## 多人时台词由 **Host 决定**：Host 从全队角色里各抽一个作为第 1/2 页的说话人，
+## 把两个角色 id 经本 RPC 广播；Client 只按 id 查本地同款 CharacterData 资源。
+## 只传 id、不传资源，符合联机白名单铁律。
+@rpc("authority", "call_remote", "reliable")
+func sync_safehouse_dialogue(key: String, char_a: String, char_b: String) -> void:
+	if is_host:
+		return
+	_pending_safehouse_dialogue = {"key": key, "a": char_a, "b": char_b}
+	print("[Net] SAFEHOUSE_DIALOGUE_SYNC %s a=%s b=%s" % [key, char_a, char_b])
+
+
+## Client：取走本图 Host 选好的台词角色（没有则返回空字典）。
+## 必须先于显示调用；取走即清空，避免同一场景重复打开时复用旧选择。
+func take_pending_safehouse_dialogue(key: String) -> Dictionary:
+	if str(_pending_safehouse_dialogue.get("key", "")) != key:
+		return {}
+	var out: Dictionary = _pending_safehouse_dialogue
+	_pending_safehouse_dialogue = {}
+	return out
+
+
 ## Host 发起开局的第一阶段：通知两端旧场景中的 NetworkWorld 立即停止业务 RPC。
 ## 真正的 change_scene 被延后到双方 scene_transition_ack 均到达之后。
 @rpc("authority", "call_local", "reliable")
 func start_game(scene_path: String, arrival_id: String = "", arrival_position: Variant = null, difficulty: int = -1, friendly_fire: Variant = null) -> void:
 	if not is_online_session() or (not is_host and multiplayer.get_remote_sender_id() != 1):
 		return
+	## 加载画面：Host/Client 在旧场景里立刻亮起，直到新场景 NetworkWorld 确认全场 ready。
+	Global.show_loading_screen()
 	## 未携带设置的内部切图沿用已可靠同步的会话值，不能退回默认关闭。
 	if friendly_fire is bool:
 		_apply_room_settings(friendly_fire)
@@ -513,6 +540,7 @@ func start_game(scene_path: String, arrival_id: String = "", arrival_position: V
 	_scene_transition_serial += 1
 	var transition_serial := _scene_transition_serial
 	_pending_scene_transition_acks.clear()
+	_pending_safehouse_dialogue.clear()
 	## 第一阶段：双方保留旧场景，但立即令旧 NetworkWorld 静默。
 	## Client 只能确认静默，不能自行提前切图；否则 Host 先后顺序不同仍会让旧 RPC 打到已释放的节点路径。
 	scene_transition_started.emit(scene_path)
@@ -591,6 +619,7 @@ func request_scene_change(scene_path: String, arrival_id: String = "", arrival_p
 		printerr("[Net] CHANGE_SCENE_INVALID path=%s" % scene_path)
 		return
 	if not is_online_session():
+		Global.show_loading_screen()
 		Global.set_pending_arrival(scene_path, arrival_id, arrival_position)
 		call_deferred("_change_scene_safely", scene_path)
 		return
@@ -616,6 +645,7 @@ func _change_scene_safely(scene_path: String) -> void:
 	var err := get_tree().change_scene_to_file(scene_path)
 	if err != OK:
 		printerr("[Net] CHANGE_SCENE_FAILED path=%s error=%s" % [scene_path, error_string(err)])
+		Global.hide_loading_screen()
 
 ## ── 场景身份比较（2026-09-25）──────────────────────────────────────────────
 ## 同一张场景在两端可能以两种形式出现：**.tscn 里 Godot 4.4+ 默认把场景引用存成 `uid://…`**

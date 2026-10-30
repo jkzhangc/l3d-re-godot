@@ -62,7 +62,7 @@ right = Vector2(0, -14)
 
 [resource]
 script = ExtResource("1")
-attack_power = 33
+attack_power = 16
 attack_speed = 0.85
 attack_range = 184.0
 weapon_state_name = "Pistol"

@@ -14,7 +14,7 @@
 
 [resource]
 script = ExtResource("1")
-attack_power = 20
+attack_power = 67
 attack_speed = 1.25
 weapon_state_name = "CombatKnife"
 weapon_walk_texture = ExtResource("2")

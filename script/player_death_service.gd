@@ -306,11 +306,14 @@ func _reload_from_save() -> void:
 	var tree: SceneTree = _p.get_tree()
 	if not tree:
 		return
+	## 2026-10-30：死亡复活也是场景加载，亮加载画面；新图 GameInit 会收起。
+	Global.show_loading_screen()
 	if not safehouse.is_empty() and safehouse != tree.current_scene.scene_file_path:
 		# 不在安全屋 → 切回安全屋场景
 		var err := tree.change_scene_to_file(safehouse)
 		if err != OK:
 			printerr("[玩家] 无法切回安全屋: %s (err=%d)" % [safehouse, err])
+			Global.hide_loading_screen()
 			tree.reload_current_scene()
 	else:
 		# 已在安全屋死亡 → 直接重载

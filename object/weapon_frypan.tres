@@ -12,7 +12,7 @@
 
 [resource]
 script = ExtResource("1")
-attack_power = 25
+attack_power = 83
 attack_speed = 0.9
 weapon_state_name = "Frypan"
 weapon_walk_texture = ExtResource("2")

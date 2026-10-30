@@ -644,6 +644,9 @@ var _knockback_dir: Vector2 = Vector2.ZERO     ## 击退方向（由 take_damage
 var _knockback_force: float = 0.0              ## 击退力度
 var _knockback_stun: float = 0.0               ## 击退硬直时长
 var _hitstun_duration: float = 0.0             ## 命中硬直时长（无击退位移）
+## 击退结束后是否追加原地硬直（2026-10-30）：爆炸/胖虎 SA 这类"击退 + 震慑"效果。
+## 旧规则「有击退就不进硬直」会把 explosion 的几秒震慑吞掉，只剩 0.3s 位移。
+var _hitstun_after_knockback: bool = false
 var _recent_damage_sources: Dictionary = {}    ## source_id → hit_time_msec（防同一源头重复判定）
 
 ## ── 防守战目标锁定（由 HoldoutMachine → EventManager 注入）──
@@ -1435,6 +1438,15 @@ func update_moving(moving: bool) -> void:
 		_refresh_sprite()
 
 
+## 暴君（Tank / Boss 级）对玩家伤害缩放（2026-10-30 用户要求：整体减少 10%）。
+## 只作用于 tank_enemies 组；普通感染者 / 特感不受影响。
+const BOSS_PLAYER_DAMAGE_SCALE: float = 0.9
+
+
+func _player_damage_scale() -> float:
+	return BOSS_PLAYER_DAMAGE_SCALE if is_in_group("tank_enemies") else 1.0
+
+
 ## 敌人对玩家的最终攻击伤害 = attack_damage × 难度 enemy_damage 倍率（2026-09-16 用户反馈
 ## 「不管哪个难度攻击伤害都一样」—— 此前该倍率只被玩家**自己**的灼烧 DoT 消费过一处）。
 ## 普通攻击与首狩り都走这个入口，别再直接读 attack_damage。
@@ -1442,7 +1454,7 @@ func update_moving(moving: bool) -> void:
 func get_final_attack_damage() -> float:
 	if network_presentation_only:
 		return attack_damage
-	return attack_damage * Global.difficulty_enemy_damage()
+	return attack_damage * Global.difficulty_enemy_damage() * _player_damage_scale()
 
 
 ## 酸弹最终伤害 = spit_damage × 难度 enemy_damage 倍率（与 get_final_attack_damage 同规则：
@@ -1450,14 +1462,14 @@ func get_final_attack_damage() -> float:
 func get_spit_damage() -> float:
 	if network_presentation_only:
 		return spit_damage
-	return spit_damage * Global.difficulty_enemy_damage()
+	return spit_damage * Global.difficulty_enemy_damage() * _player_damage_scale()
 
 
 ## 舌头攻击最终伤害 = tongue_damage × 难度 enemy_damage 倍率（与吐酸同规则）。
 func get_tongue_damage() -> float:
 	if network_presentation_only:
 		return tongue_damage
-	return tongue_damage * Global.difficulty_enemy_damage()
+	return tongue_damage * Global.difficulty_enemy_damage() * _player_damage_scale()
 
 
 ## 近战/突进/吐酸等敌人攻击的 source_id：实例 ID + 递增序列。
@@ -1732,8 +1744,13 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 
 	# 设置硬直时长（无击退位移的原地冻结，击退优先）
 	var has_hitstun: bool = hitstun_duration > 0.0 and not has_knockback
-	if has_hitstun:
+	## ★2026-10-30：击退 + 硬直可以叠加 —— 先被推开，位移结束后原地硬直。
+	## 爆炸物「击退 + 几秒震慑」与胖虎 SA 都依赖这条；没有它，hitstun 会被
+	## `not has_knockback` 吞掉，只剩 0.3s 击退位移。
+	_hitstun_after_knockback = has_knockback and hitstun_duration > 0.0
+	if hitstun_duration > 0.0:
 		_hitstun_duration = hitstun_duration
+	if has_hitstun:
 		_knockback_dir = direction.normalized()  # 仅用于朝向伤害来源
 
 	## ── 女巫：被攻击 = 立刻惊动（2026-10-25）──

@@ -26,6 +26,8 @@ enum SkillType {
 @export var radius: float = 400.0
 ## SA_RECITAL：踉跄（硬直）时长（秒）。
 @export var stagger_duration: float = 2.0
+## SA_RECITAL：击退力度（像素/秒）。0 = 只踉跄不击退；胖虎 2026-10-30 追加震退。
+@export var sa_knockback_force: float = 0.0
 ## SA_CROUCH：按住 SA 键持续蹲时每秒消耗的 TP（TP 耗尽自动起身）。
 @export var crouch_tp_drain: float = 15.0
 ## 发动音效（如 ジャイアンリサイタル 的歌声、静香_ＳＡ）。

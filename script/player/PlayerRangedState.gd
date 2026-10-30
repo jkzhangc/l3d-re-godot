@@ -141,10 +141,12 @@ func process_update(delta: float) -> void:
 			## 收敛为 Player 层唯一入口。这里不再重复读键（否则同帧双触发）。
 			## 详见 player.gd 的 `_try_shove_interrupt` 注释。
 
-			if Input.is_action_just_pressed("确定键"):
+			if character.consume_fire_input():
 				# 2026-09-13 用户定稿：武器替换已改「按住功能键(D)」，点按 Z 在拾取物旁
 				# 也照常攻击 —— 旧「拾取物旁禁攻击」限制（_near_pickup 门）废除。
 				# 路由按武器类型（远程 → RangedAttack）。
+				# ★2026-10-30：走 consume_fire_input，后摇期间按下的那一下会在回到
+				# READY 时兑现（180ms 缓冲），不再被直接丢掉。
 				transition_requested.emit(_wd.get_attack_state_node_name())
 
 			if Input.is_action_just_pressed("装填键"):

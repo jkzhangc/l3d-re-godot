@@ -24,6 +24,8 @@ var _stun_timer: float = 0.0
 func enter() -> void:
 	var enemy: Node2D = character
 	enemy.update_moving(false)
+	## 硬直一旦真正开始，击退后追加重直标记就消费掉，避免下一次击退重复补时。
+	enemy._hitstun_after_knockback = false
 
 	# 读取硬直时长（由 enemy.take_damage() 在切换状态前设置）
 	_stun_timer = enemy._hitstun_duration

@@ -13,7 +13,7 @@
 
 [resource]
 script = ExtResource("1")
-attack_power = 18
+attack_power = 60
 attack_speed = 1.3
 weapon_state_name = "Knuckles"
 weapon_walk_texture = ExtResource("11_f0lhb")

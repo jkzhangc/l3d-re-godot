@@ -14,7 +14,10 @@ class_name CharacterSwitchManager extends Node
 ##   3. 切换时的镜头/状态迁移
 ##   4. 死亡后自动切换
 
-@export var switch_cooldown: float = 0.5
+## ★2026-10-30 用户定稿：切换角色**没有冷却**，但必须区分「按住」与「按一下」——
+## 只有轻按（按下后在 TAP_MAX_SEC 内松开）才切人；按住不放不触发。
+const TAP_MAX_SEC: float = 0.25
+
 @export var teammate_scene: PackedScene = preload("res://object/teammate_standin.tscn")
 ## 是否在地图上显示未操控队友的站立精灵（L4D2 风格）
 @export var show_teammate_standins: bool = false
@@ -22,8 +25,12 @@ class_name CharacterSwitchManager extends Node
 var _player: CharacterBody2D = null
 var _camera: Camera2D = null
 var _teammate_nodes: Array[Node2D] = []  ## 队友静态精灵节点列表，索引对应 team 索引
-var _cooldown_timer: float = 0.0
 var _team_size: int = 0
+
+## 轻按登记：按下时只记目标，松开时再判断按住时长。
+var _pending_target: int = -1
+var _pending_action: StringName = &""
+var _pending_since_msec: int = 0
 
 # ═══════════════════════════════════════
 # 精灵帧常量（与 player.gd 一致）
@@ -194,15 +201,15 @@ func _create_standin_for_index(index: int) -> void:
 # ═══════════════════════════════════════
 
 func _input(event: InputEvent) -> void:
-	if _team_size <= 1:
-		return
-	if _cooldown_timer > 0.0:
+	if _team_size <= 1 or _is_key_echo(event):
 		return
 
 	var target_index: int = -1
+	var action: StringName = &""
 
 	if event.is_action_pressed("切换角色键"):
 		target_index = _find_next_living_member()
+		action = &"切换角色键"
 	else:
 		## 「选择队员1/2/3键」的动作本身就绑在**裸数字 1/2/3** 上，与
 		## 主武器键(1) / 副武器键(2) / 治疗品键(3) **完全撞车**（2026-09-26 用户实测
@@ -212,12 +219,42 @@ func _input(event: InputEvent) -> void:
 		if not _ctrl_held(event):
 			return
 		for i: int in range(_team_size):
-			if event.is_action_pressed("选择队员%d键" % (i + 1)):
+			var act := StringName("选择队员%d键" % (i + 1))
+			if event.is_action_pressed(act):
 				target_index = i
+				action = act
 				break
-		if target_index < 0:
-			return
+	if target_index < 0 or target_index >= _team_size or action == &"":
+		return
 
+	## ★只登记，不立刻切：等松开时再判断是「轻按」还是「按住」。
+	_pending_target = target_index
+	_pending_action = action
+	_pending_since_msec = Time.get_ticks_msec()
+
+
+## 轻按判定：按下后在 TAP_MAX_SEC 内松开才切人；按住超过阈值则取消本次。
+## 没有冷却 —— 连续轻按可以连续切人（每次仍要完整按一下）。
+func _process(_delta: float) -> void:
+	if _pending_target < 0:
+		return
+	var held_ms: int = Time.get_ticks_msec() - _pending_since_msec
+	if Input.is_action_pressed(_pending_action):
+		if held_ms > int(TAP_MAX_SEC * 1000.0):
+			_pending_target = -1
+			_pending_action = &""
+		return
+	var target: int = _pending_target
+	_pending_target = -1
+	_pending_action = &""
+	if held_ms <= int(TAP_MAX_SEC * 1000.0):
+		_try_switch(target)
+
+
+## 切人前的统一闸门：目标存活、Heat 中不可、**SA 技能使用中不可**。
+## SA（静香蹲下 / 大雄感覚向上）的计时与无敌挂在当前玩家实体上，
+## 换座位后旧实体被冻结，SA 无法正常结束 —— 必须在切换入口直接拦住。
+func _try_switch(target_index: int) -> void:
 	if target_index < 0 or target_index >= _team_size:
 		return
 	if target_index == Players.active_seat_index:
@@ -225,15 +262,21 @@ func _input(event: InputEvent) -> void:
 	var target_state: PlayerState = Players.get_seat(target_index)
 	if not target_state or not target_state.is_alive():
 		return
+	var player: Node = Players.get_local_entity()
 	# Heat 中切人不可（原作 system.html ◆ヒート：「キャラチェンジ不可」）。
 	# 只挡手动切换 —— 死亡自动切换（switch_after_death）不走这里，Heat 角色死亡照常切人。
-	var player: Node = Players.get_local_entity()
 	if player and "is_heat_active" in player and player.is_heat_active():
 		print("[状态] Heat 中切人不可！")
 		return
-
+	if player and player.has_method("is_sa_active") and bool(player.call("is_sa_active")):
+		print("[状态] SA 技能使用中，不能切换角色！")
+		return
 	_do_switch(target_index)
-	_cooldown_timer = switch_cooldown
+
+
+func _is_key_echo(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+	return key != null and key.echo
 
 
 ## 输入事件是否按住 Ctrl（「选择队员」动作的限定修饰键，见 _input 注释）。
@@ -245,11 +288,6 @@ func _ctrl_held(event: InputEvent) -> bool:
 	if mouse != null:
 		return mouse.ctrl_pressed
 	return false
-
-
-func _process(delta: float) -> void:
-	if _cooldown_timer > 0.0:
-		_cooldown_timer -= delta
 
 
 func _is_online_session() -> bool:

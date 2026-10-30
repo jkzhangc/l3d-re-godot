@@ -571,6 +571,7 @@ func _do_teleport() -> void:
 	Global.set_pending_arrival(target_scene, target_arrival_id, arrival_position)
 	var tree: SceneTree = get_tree()
 	if tree:
+		Global.show_loading_screen()
 		tree.change_scene_to_file.call_deferred(target_scene)
 
 

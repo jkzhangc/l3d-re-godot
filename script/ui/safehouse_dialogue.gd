@@ -30,6 +30,9 @@ signal dialogue_closed
 @onready var _mark: Label = $Root/Window/ContinueMark
 
 var _pages: Array[String] = []
+## 每页各自的说话人 / 头像（2026-10-30：A/B 两页可以随机到不同角色）。
+var _page_speakers: Array[String] = []
+var _page_portraits: Array[Texture2D] = []
 var _page_index: int = 0
 var _opened: bool = false
 var _last_closed_msec: int = -100000
@@ -52,24 +55,69 @@ func _ready() -> void:
 ## 打开台词窗口。pages 为待显示的段落（已按上限裁剪）；speaker 为显示名；
 ## portrait 为空时自动隐藏头像框（等美术素材到位后再接）。
 func open(pages: Array, speaker_name: String, portrait: Texture2D = null) -> void:
-	if pages.is_empty():
+	if pages.is_empty() or _too_soon():
 		return
-	var now: int = Time.get_ticks_msec()
-	if now - _last_closed_msec < int(cooldown_seconds * 1000.0):
-		return
-	_pages.clear()
+	var flat: Array[String] = []
 	for p: Variant in pages:
 		var s: String = str(p).strip_edges()
 		if not s.is_empty():
-			_pages.append(s)
-	if _pages.is_empty():
+			flat.append(s)
+	if flat.is_empty():
 		return
+	_page_speakers.clear()
+	_page_portraits.clear()
+	for _i: int in range(flat.size()):
+		_page_speakers.append(speaker_name)
+		_page_portraits.append(portrait)
+	_present(flat)
+
+
+## ★2026-10-30：每页可以有不同的说话人 / 头像。
+## entries = [{ "lines": Array[String], "speaker": String, "portrait": Texture2D }, ...]
+## 用于「第 1 页随机到大雄、第 2 页随机到静香」的安全屋台词。
+func open_mixed_pages(entries: Array[Dictionary]) -> void:
+	if entries.is_empty() or _too_soon():
+		return
+	var texts: Array[String] = []
+	var speakers: Array[String] = []
+	var portraits: Array[Texture2D] = []
+	for entry: Dictionary in entries:
+		var lines_v: Variant = entry.get("lines", [])
+		var parts: Array[String] = []
+		if lines_v is Array:
+			for ln: Variant in (lines_v as Array):
+				var s: String = str(ln).strip_edges()
+				if not s.is_empty():
+					parts.append(s)
+		else:
+			var one: String = str(lines_v).strip_edges()
+			if not one.is_empty():
+				parts.append(one)
+		if parts.is_empty():
+			continue
+		texts.append("\n".join(parts))
+		speakers.append(str(entry.get("speaker", "")))
+		var portrait: Texture2D = entry.get("portrait", null) as Texture2D
+		portraits.append(portrait)
+	if texts.is_empty():
+		return
+	_page_speakers = speakers
+	_page_portraits = portraits
+	_present(texts)
+
+
+func _too_soon() -> bool:
+	var now: int = Time.get_ticks_msec()
+	return now - _last_closed_msec < int(cooldown_seconds * 1000.0)
+
+
+func _present(flat: Array[String]) -> void:
+	_pages = flat
 	if max_pages > 0 and _pages.size() > max_pages:
 		_pages = _pages.slice(0, max_pages)
+		_page_speakers = _page_speakers.slice(0, max_pages)
+		_page_portraits = _page_portraits.slice(0, max_pages)
 	_page_index = 0
-	_speaker.text = speaker_name
-	_portrait.texture = portrait
-	_portrait_box.visible = portrait != null
 	_opened = true
 	_window.visible = true
 	_lock_movement()
@@ -138,6 +186,11 @@ func _render_page() -> void:
 	if _page_index < 0 or _page_index >= _pages.size():
 		return
 	_line.text = _pages[_page_index]
+	if _page_index < _page_speakers.size():
+		_speaker.text = _page_speakers[_page_index]
+	var portrait: Texture2D = _page_portraits[_page_index] if _page_index < _page_portraits.size() else null
+	_portrait.texture = portrait
+	_portrait_box.visible = portrait != null
 	## ★每段都显示 ▼（用户 09-28：翻到第二句箭头就没了 —— 原著窗口里 ▼ 一直都在，
 	## 它表示"按确定键继续"，而不是"后面还有一句"）。
 	_mark.visible = true

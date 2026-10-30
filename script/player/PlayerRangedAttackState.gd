@@ -225,26 +225,36 @@ func _on_attack_complete() -> void:
 
 
 func _try_continue_attack() -> bool:
-	## HOLD 模式下按住确定键 → 重新开始一轮攻击。
-	## 返回 true 表示已重新开始攻击（含"已请求装填"——调用方不要再切回 Pistol）。
-	if _wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键"):
-		# HOLD 模式下检查弹药（空弹则终止连发）
-		if _wd.is_ranged and _wd.magazine_capacity > 0:
-			if get_player_state().get_magazine_ammo(_wd.item_id) <= 0:
-				# ★自动换弹（2026-09-30）：还有备弹 → 直接接装填；真打光了才播空弹音效。
-				if _try_auto_reload():
-					return true
-				if _wd.empty_fire_sound:
-					_play_attack_sound(_wd.empty_fire_sound)
-				return false
-		# 重新开始攻击
-		_seq_idx = 0
-		_timer = _wd.get_attack_frame_duration(_seq_idx)
-		_fired = false
-		_post_attack_active = false
-		_set_attack_frame(_seq_idx)
+	## ★2026-10-30：点按武器也吃 180ms 开火缓冲 —— 猛点时落在后摇里的那一下，
+	## 会在本轮结束时补发一次（与 HOLD 的"按住继续"并列）。
+	var buffered_tap: bool = _wd.fire_mode == WeaponData.FireMode.TAP \
+		and character.consume_buffered_fire()
+	if buffered_tap or (_wd.fire_mode == WeaponData.FireMode.HOLD and Input.is_action_pressed("确定键")):
+		## 弹夹空：有备弹 → 自动装填（返回 true，调用方不要切回 Ranged）；
+		## 真打光 → 空弹音效并返回 false，让调用方正常收尾。
+		if _magazine_empty():
+			if _try_auto_reload():
+				return true
+			if _wd.empty_fire_sound:
+				_play_attack_sound(_wd.empty_fire_sound)
+			return false
+		_restart_attack()
 		return true
 	return false
+
+
+func _magazine_empty() -> bool:
+	if not _wd.is_ranged or _wd.magazine_capacity <= 0:
+		return false
+	return get_player_state().get_magazine_ammo(_wd.item_id) <= 0
+
+
+func _restart_attack() -> void:
+	_seq_idx = 0
+	_timer = _wd.get_attack_frame_duration(_seq_idx)
+	_fired = false
+	_post_attack_active = false
+	_set_attack_frame(_seq_idx)
 
 
 ## ★自动换弹（2026-09-30 用户需求）：弹夹空 + 还有备弹（无限备弹武器恒成立）

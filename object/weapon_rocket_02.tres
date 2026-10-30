@@ -50,7 +50,7 @@ right = Vector2(0, -4)
 
 [resource]
 script = ExtResource("1")
-attack_power = 300
+attack_power = 200
 attack_range = 280.0
 weapon_state_name = "RLauncher"
 weapon_walk_texture = ExtResource("10")

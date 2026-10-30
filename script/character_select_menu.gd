@@ -330,9 +330,27 @@ func _refresh_info() -> void:
 	_info_labels[0].text = "「%s」" % cd.character_name
 	_info_labels[1].text = "Lv.%d　HP %d　ATK %d" % [cd.level, cd.get_effective_max_hp(), cd.get_effective_attack()]
 	_info_labels[2].text = _get_weapon_compat_text(cd)
-	_info_labels[3].text = "见切: 攻击后 0.3 秒内被击中=无伤，并自动发动角色专属反击"
+	_info_labels[3].text = _get_counter_text(cd)
 	_info_labels[4].text = _get_skills_text(cd)
 	_info_labels[5].text = _get_awaken_text(cd)
+
+
+## 见切/反击说明（2026-10-30 用户需求：补上每个角色的一闪/反击功能）。
+## 见切成功后按 counter_type 发动角色专属反击；一闪已改为 6 倍攻击 + 50% 即死。
+func _get_counter_text(cd: CharacterData) -> String:
+	var short_name: String = str(Global.CHARACTER_NAME_SHORT.get(
+		cd.character_name, cd.character_name))
+	var effect: String = ""
+	match String(cd.counter_type):
+		"punch":
+			effect = "拳打（2倍攻击+推开）"
+		"heavy":
+			effect = "强打（3倍攻击+大推）"
+		"issen":
+			effect = "一闪（6倍攻击+超推，50%秒杀）"
+		_:
+			effect = "无"
+	return "见切: 0.3秒内被击中=无伤并反击｜%s: %s" % [short_name, effect]
 
 
 ## 武器 ID → 中文名映射（与 object/weapon_*.tres 的 item_name 一致）

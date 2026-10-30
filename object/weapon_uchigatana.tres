@@ -50,7 +50,7 @@ up = Vector2(0, 34)
 
 [resource]
 script = ExtResource("1")
-attack_power = 50
+attack_power = 167
 weapon_state_name = "Uchigatana"
 weapon_walk_texture = ExtResource("2")
 weapon_raise_char_sequence = Array[int]([0])
