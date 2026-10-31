@@ -177,6 +177,9 @@ extends Resource
 ## ハンターβ 用 300（≈65px 的侧移），配合 `frontal_damage_mult = 1.0`。
 @export var frontal_dodge_force: float = 0.0
 @export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
+## 闪避第二段：侧移结束后朝玩家高速突进（原作手感）。0 = 只侧移。
+@export var frontal_dodge_dash_force: float = 0.0
+@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.26
 
 @export_group("首狩り突进（ハンター 系）")
 ## 是否启用首狩り突进（中距离高速扑咬）。普通僵尸与 Tyrant 保持 false。
@@ -458,6 +461,8 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.frontal_normalize_ratio = frontal_normalize_ratio
 	enemy.frontal_dodge_force = frontal_dodge_force
 	enemy.frontal_dodge_stun = frontal_dodge_stun
+	enemy.frontal_dodge_dash_force = frontal_dodge_dash_force
+	enemy.frontal_dodge_dash_time = frontal_dodge_dash_time
 	# 首狩り突进（ハンター 系）
 	enemy.pounce_enabled = pounce_enabled
 	enemy.pounce_trigger_min_dist = pounce_trigger_min_dist

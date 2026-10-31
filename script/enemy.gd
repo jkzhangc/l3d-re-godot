@@ -284,11 +284,18 @@ const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害�
 @export var frontal_dodge_force: float = 0.0
 ## 走位位移的持续时间（秒）；位移结束后立刻回 Chase 继续扑向玩家。
 @export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
+## ★闪避第二段（2026-10-31 用户补充「原作不只是侧移，还会高速往玩家身上扑一会」）：
+## 侧移结束后立刻以本速度朝**最近玩家**高速突进，持续 `frontal_dodge_dash_time` 秒。
+## 0 = 只侧移不突进（旧行为）。
+@export var frontal_dodge_dash_force: float = 420.0
+@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.26
 
 ## 本次命中是否触发正面走位（_apply_frontal_resist 置位，take_damage 消费）。
 var _frontal_dodge_pending: bool = false
 ## 走位方向左右交替（每次触发翻转，避免"总往同一边闪"被玩家算死）。
 var _dodge_sign: int = 1
+## 本次走位是否还要接一段「朝玩家高速突进」（由 Knockback 状态消费）。
+var _dodge_dash_pending: bool = false
 
 # ── 気まぐれ撤离（ティンダロス，2026-10-19）──
 ## 原作 enemy.html：「やや気まぐれなところもあり、何をしに来たのかを忘れて勝手に
@@ -1783,6 +1790,8 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 			_knockback_stun = frontal_dodge_stun
 			hitstun_duration = 0.0
 			_hitstun_after_knockback = false
+			## 第二阶段：侧移结束后朝玩家高速突进（由 Knockback 状态执行）。
+			_dodge_dash_pending = frontal_dodge_dash_force > 0.0 and frontal_dodge_dash_time > 0.0
 			has_knockback = true
 			print("[敵人] 正面走位：侧移 %.0f / %.2fs" % [frontal_dodge_force, frontal_dodge_stun])
 
@@ -1849,7 +1858,9 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 		##   · 已在 Knockback → 只有力度明显更大（>1.2 倍）才重启，避免连锁推挤每帧刷新把敌人钉住。
 		var blocked_states: Array[String] = ["Death", "HeadshotDeath", "Exhausted"]
 		var can_knock: bool = has_knockback and not current_state in blocked_states
-		if can_knock and current_state == "Knockback" and knockback_force <= prev_kb_force * 1.2:
+		## ★2026-10-31 二次调整：门槛 1.2 → 1.0，且改成**严格小于**才忽略 ——
+		## 同样力度的一击（比如连着两次同种推击）也要能重新触发，否则"推了没反应"依旧会出现。
+		if can_knock and current_state == "Knockback" and knockback_force < prev_kb_force * 1.0:
 			can_knock = false
 		if can_knock:
 			if sm.get_node_or_null("Knockback"):

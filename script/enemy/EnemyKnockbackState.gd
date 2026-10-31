@@ -20,6 +20,9 @@ const DECELERATION: float = 600.0
 
 var _knockback_velocity: Vector2 = Vector2.ZERO
 var _stun_timer: float = 0.0
+## ★闪避第二阶段（2026-10-31）：侧移结束后朝玩家高速突进的剩余时长 / 速度。
+var _dash_left: float = 0.0
+var _dash_speed: float = 0.0
 
 
 func enter() -> void:
@@ -33,6 +36,17 @@ func enter() -> void:
 	# 朝向伤害来源方向
 	enemy.update_facing_from_direction(-enemy._knockback_dir)
 
+	## 闪避第二段：正面走位标记 → 侧移结束后朝玩家高速突进（原作手感）。
+	_dash_left = 0.0
+	_dash_speed = 0.0
+	if enemy.get("_dodge_dash_pending") == true:
+		enemy.set("_dodge_dash_pending", false)
+		_dash_left = float(enemy.get("frontal_dodge_dash_time"))
+		_dash_speed = float(enemy.get("frontal_dodge_dash_force"))
+		if _dash_left > 0.0 and _dash_speed > 0.0:
+			enemy.update_moving(true)   # 突进时播行走帧，别像滑行
+			print("[閃避] 侧移后接突进：%.0f / %.2fs" % [_dash_speed, _dash_left])
+
 	print("[擊退] 进入击退状态 | force=%.0f stun=%.2fs dir=%s" % [
 		enemy._knockback_force, _stun_timer, enemy._knockback_dir])
 
@@ -45,6 +59,9 @@ func process_update(delta: float) -> void:
 	if character.guard_dead():
 		return
 
+	## 突进阶段由 physics_update 自己计时；此处直接返回，避免侧移硬直一到期就切走。
+	if _dash_left > 0.0:
+		return
 	_stun_timer -= delta
 	if _stun_timer <= 0.0:
 		## 2026-10-30：击退结束若还欠一段硬直（爆炸震慑 / 胖虎 SA），
@@ -59,6 +76,24 @@ func process_update(delta: float) -> void:
 
 
 func physics_update(delta: float) -> void:
+	var enemy_node: Node2D = character
+	## ── 第二阶段：朝最近玩家高速突进（不衰减，按时间收尾）──
+	if _dash_left > 0.0:
+		_dash_left -= delta
+		var target: Node2D = null
+		if Players != null and Players.has_method("nearest_entity_to"):
+			target = Players.nearest_entity_to(enemy_node.global_position)
+		if target != null and is_instance_valid(target):
+			var to_target: Vector2 = target.global_position - enemy_node.global_position
+			if to_target.length() > 1.0:
+				var dir: Vector2 = to_target.normalized()
+				enemy_node.move_and_collide(dir * _dash_speed * delta)
+				enemy_node.update_facing_from_direction(dir)
+				_chain_push_nearby_enemies(enemy_node, dir * _dash_speed)
+		if _dash_left <= 0.0:
+			_dash_left = 0.0
+			enemy_node.update_moving(false)
+		return
 	# 应用击退速度（逐帧衰减）
 	if _knockback_velocity.length() > 1.0:
 		var motion: Vector2 = _knockback_velocity * delta
