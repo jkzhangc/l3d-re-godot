@@ -3536,34 +3536,30 @@ func _reset_boss_deck() -> void:
 		boss_deck_step, first, boss_deck_nothing_weight, tank_cards])
 
 
-## 当前是本战役的第几张图（0 = 第一关）。认不出来时返回 0（保守：按"第一关"处理）。
-## 依据 `Global.selected_campaign.level_scenes`；安全屋/未登记的图不在表里 → 沿用最近一次的有效值？
-## 不沿用：没登记的图直接按 0 处理会过度限制。这里改成"能认出就返回真值，认不出返回 -1"，
-## 由调用方决定怎么处理（`_tank_first_level_skip_chance` 对 -1 不做额外限制）。
-func _campaign_level_index() -> int:
-	var campaign: Variant = Global.selected_campaign
-	if campaign == null:
-		return -1
-	var scenes: Array = campaign.get("level_scenes")
-	if scenes == null or scenes.is_empty():
-		return -1
+## 当前场景属于**第几关**（1 = 第一关；认不出返回 -1）。
+## ⚠ 不能用 `level_scenes` 下标：第一关占了「开头安全屋 / 街道 / 结尾安全屋」三张图，
+## 按下标判断会把街道当成第二张图 → 第一关的街道照样放 Tank（正是用户实测的现象）。
+static func _chapter_number_of(scene_path: String) -> int:
+	var campaign_script: GDScript = load("res://script/campaign_data.gd") as GDScript
+	if campaign_script != null and campaign_script.has_method("chapter_number_for_scene"):
+		return int(campaign_script.call("chapter_number_for_scene", scene_path))
+	return -1
+
+
+func _current_chapter_number() -> int:
 	var tree: SceneTree = get_tree()
 	var scene: Node = tree.current_scene if tree != null else null
 	if scene == null:
 		return -1
-	var path: String = scene.scene_file_path
-	for i: int in range(scenes.size()):
-		if str(scenes[i]) == path:
-			return i
-	return -1
+	return _chapter_number_of(scene.scene_file_path)
 
 
-## 第一关（第 0 张图）的 Tank 额外跳过率：
+## 第一关（章节号 1）的 Tank 额外跳过率：
 ## 简单/普通 = 1.0（完全不出，留给第二关）；困难 0.6；专家 0.3。
 ## ⚠ 这里用 `Global.selected_difficulty` 而不是 `Players.spawn_scale()`：
 ## 后者在多人局里是"按人数"的倍率（2~3），拿它当难度代理会把多人普通局误判成专家。
 func _tank_first_level_skip_chance() -> float:
-	if _campaign_level_index() != 0:
+	if _current_chapter_number() != 1:
 		return 0.0
 	var diff: int = int(Global.selected_difficulty)
 	if diff <= 1:

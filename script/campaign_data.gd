@@ -259,6 +259,20 @@ static func _list_scene_paths(map_dir: String, include_dev_maps: bool = false) -
 	return paths
 
 
+## 场景 → 章节号（1 = 第一关；**不是** level_scenes 下标）。
+## 为什么需要单独一个函数：第一关在 level_scenes 里占了三张图
+## （开头安全屋 / 街道 / 结尾安全屋），按下标判断会把"街道"当成第二张图。
+## 认不出（文件名不含「第X关」）返回 -1。
+static func chapter_number_for_scene(scene_path: String) -> int:
+	if scene_path.is_empty():
+		return -1
+	var base: String = scene_path.get_file().get_basename()
+	var parts: PackedStringArray = base.split("-")
+	if parts.size() < 3:
+		return -1
+	return int(_CN_NUMBERS.get(parts[1].replace("第", "").replace("关", ""), -1))
+
+
 ## 把一个地图场景描述成一条跳转条目（含排序键）。
 static func _describe_level(scene_path: String) -> Dictionary:
 	var base: String = scene_path.get_file().get_basename()
