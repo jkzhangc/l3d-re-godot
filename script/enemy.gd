@@ -277,6 +277,18 @@ const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害�
 ## Normalize 减免系数：实际伤害 = max(0, 伤害 - 伤害 * 本值)。
 ## 例如 0.6 → 100 伤只吃 40，10 伤只吃 4（高伤被削得更狠）。
 @export var frontal_normalize_ratio: float = 0.6
+## ★正面走位（2026-10-31 用户纠正）：猎杀者**不是无敌**，而是被正面打中时
+## 会以很快的速度侧向换位（走位），让玩家难以预判 —— 但仍然朝玩家推进，不会乱走。
+## >0 = 开启：正面扇区内被命中时，除了照常吃伤害，还触发一次侧向位移（力度 = 本值 px/s）。
+## 0 = 关闭（绝大多数敌人）。配合 `frontal_damage_mult = 1.0` 使用（不减免）。
+@export var frontal_dodge_force: float = 0.0
+## 走位位移的持续时间（秒）；位移结束后立刻回 Chase 继续扑向玩家。
+@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
+
+## 本次命中是否触发正面走位（_apply_frontal_resist 置位，take_damage 消费）。
+var _frontal_dodge_pending: bool = false
+## 走位方向左右交替（每次触发翻转，避免"总往同一边闪"被玩家算死）。
+var _dodge_sign: int = 1
 
 # ── 気まぐれ撤离（ティンダロス，2026-10-19）──
 ## 原作 enemy.html：「やや気まぐれなところもあり、何をしに来たのかを忘れて勝手に
@@ -1581,19 +1593,32 @@ func apply_backstab(final_damage: float) -> float:
 ##   夹角 ≤ frontal_arc_degrees 即视为"敌人在正面承受这一击"。
 ##
 ## 完全回避（mult=0）时返回 0：调用方后续的属性结算/掉血/硬直都会自然停摆
+## 命中方向是否落在「正面扇区」内：取反得到"敌人指向攻击者"的方向，与朝向点积 ≥ cos(半角)。
+## 扇区半角 = `frontal_arc_degrees`（60 → 合计 120°）。
+func _is_in_frontal_arc(direction: Vector2) -> bool:
+	if direction == Vector2.ZERO:
+		return false
+	var to_attacker: Vector2 = -direction.normalized()
+	if to_attacker == Vector2.ZERO:
+		return false
+	var facing_vec: Vector2 = get_facing_vector()
+	if facing_vec == Vector2.ZERO:
+		return false
+	var arc: float = clampf(frontal_arc_degrees, 0.0, 180.0)
+	return to_attacker.dot(facing_vec) >= cos(deg_to_rad(arc))
+
+
 ## （damage>0 的分支全部跳过），但依然走完"被弹开"的红色闪白与音效。
 func _apply_frontal_resist(damage: float, direction: Vector2) -> float:
+	var in_arc: bool = _is_in_frontal_arc(direction)
+	## ★正面走位（2026-10-31 用户纠正「猎杀者前方无敌是错的」）：
+	## 正面命中**照常吃伤害**，但要额外触发一次快速侧向换位（见 take_damage 的消费点）。
+	## 注意放在下面「倍率 = 1.0 直接返回」之前，否则默认配置下永远走不到。
+	if in_arc and frontal_dodge_force > 0.0:
+		_frontal_dodge_pending = true
 	if frontal_damage_mult >= 1.0 and not frontal_normalize:
 		return damage
-	if direction == Vector2.ZERO:
-		return damage
-	# 从敌人指向攻击者的方向
-	var to_attacker: Vector2 = -direction.normalized()
-	var facing_vec: Vector2 = get_facing_vector()
-	var cos_angle: float = to_attacker.dot(facing_vec)
-	# 扇区半角比较：cos 单调递减，夹角 ≤ 半角 ⟺ cos ≥ cos(半角)
-	var arc: float = clampf(frontal_arc_degrees, 0.0, 180.0)
-	if cos_angle < cos(deg_to_rad(arc)):
+	if not in_arc:
 		return damage  # 落在背面/侧面 → 全额
 	var before: float = damage
 	if frontal_normalize:
@@ -1614,7 +1639,7 @@ func _apply_frontal_resist(damage: float, direction: Vector2) -> float:
 					tree.current_scene, 0, Color(1.0, 0.95, 0.6), "無効")
 			## 联机：整段表现必须一起转发（0 伤害走不了伤害通道，见 network_block_applied 注释）。
 			network_block_applied.emit(global_position + hurt_effect_offset)
-		print("[敵人] 正面抗性: %d → %d（扇区 ±%d°）" % [int(before), int(damage), int(arc)])
+		print("[敵人] 正面抗性: %d → %d（扇区 ±%d°）" % [int(before), int(damage), int(frontal_arc_degrees)])
 	return damage
 
 
@@ -1635,6 +1660,8 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false) -> void:
 	if _is_dead:
 		return
+	## 每击重新判定「正面走位」，避免上一击的标记泄漏到背刺/侧击上。
+	_frontal_dodge_pending = false
 
 	# ── 正面抗性（特感：Hunter β 回避 / Tyrant Normalize）──
 	# ★背刺一次性标志：**在这里（受击入口）消费并清零**，而不是在伤害数字那一行 ——
@@ -1736,11 +1763,28 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 		hitstun_duration = 0.0
 
 	# 设置击退参数（所有状态统一设置，包括 Idle）
+	## 记下旧力度：已在击退中时，只有「明显更强」的一击才允许重启击退（见下方状态切换）。
+	var prev_kb_force: float = _knockback_force
 	var has_knockback: bool = knockback_force > 0.0 and knockback_stun > 0.0
 	if has_knockback:
 		_knockback_dir = direction.normalized()
 		_knockback_force = knockback_force
 		_knockback_stun = knockback_stun
+
+	## ★正面走位（2026-10-31 用户纠正「猎杀者前方无敌」）：被正面命中时**不是后退**，
+	## 而是以很快的速度侧向换位（左右交替），让玩家难以预判；位移结束立刻回 Chase 继续扑人。
+	## 覆盖上面的标准击退参数；不减免伤害（`frontal_damage_mult` 保持 1.0）。
+	if _frontal_dodge_pending:
+		_frontal_dodge_pending = false
+		if direction != Vector2.ZERO:
+			_dodge_sign = -_dodge_sign
+			_knockback_dir = direction.normalized().orthogonal() * float(_dodge_sign)
+			_knockback_force = frontal_dodge_force
+			_knockback_stun = frontal_dodge_stun
+			hitstun_duration = 0.0
+			_hitstun_after_knockback = false
+			has_knockback = true
+			print("[敵人] 正面走位：侧移 %.0f / %.2fs" % [frontal_dodge_force, frontal_dodge_stun])
 
 	# 设置硬直时长（无击退位移的原地冻结，击退优先）
 	var has_hitstun: bool = hitstun_duration > 0.0 and not has_knockback
@@ -1798,8 +1842,16 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# Exhausted（力竭倒地）视同受控例外：只掉血+闪色，不被击退/硬直打断 ——
 	# 倒地是给玩家的输出窗口，不能被流弹搅成反复起倒。
 	if sm:
-		var blocked_states: Array[String] = ["Knockback", "Death", "HeadshotDeath", "Exhausted"]
-		if has_knockback and not current_state in blocked_states:
+		## ★2026-10-31 用户实测修复：**硬直中再被推/炸应当继续后退**。
+		## 旧实现把 "Knockback"/"Hitstun" 一起放进 blocked_states → 硬直期间推击完全没反应。
+		## 现在：
+		##   · Hitstun → 允许直接切 Knockback（硬直可被击退打断）；
+		##   · 已在 Knockback → 只有力度明显更大（>1.2 倍）才重启，避免连锁推挤每帧刷新把敌人钉住。
+		var blocked_states: Array[String] = ["Death", "HeadshotDeath", "Exhausted"]
+		var can_knock: bool = has_knockback and not current_state in blocked_states
+		if can_knock and current_state == "Knockback" and knockback_force <= prev_kb_force * 1.2:
+			can_knock = false
+		if can_knock:
 			if sm.get_node_or_null("Knockback"):
 				sm._on_transition_requested("Knockback")
 			else:

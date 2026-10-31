@@ -227,12 +227,76 @@ func trigger() -> void:
 # ═══════════════════════════════════════
 
 ## 玩家状态下按功能键（也会检查距离 / 可见性）。
+## ★2026-10-31 联机（修 E1）：客户端**不本地翻转** —— 提交请求给 Host，
+## 由 Host 校验后执行并广播，否则两端各翻各的，开关与它控制的灯/门全部分叉。
 func interact() -> void:
 	if not is_visible_in_tree():
 		return
 	if not _can_interact:
 		return
+	if _is_client_session():
+		var world: Node = _network_world()
+		if world != null and world.has_method("request_switch_toggle"):
+			world.call("request_switch_toggle", _scene_rel_path())
+		return
 	toggle()
+
+
+# ── 联机辅助（2026-10-31）──
+## 当前是否处于联机会话（不看主机/客户端）。
+func _is_online_session() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	return net != null and net.has_method("is_online_session") and bool(net.call("is_online_session"))
+
+
+## 联机且**不是**主机 → 需要走请求。
+func _is_client_session() -> bool:
+	if not _is_online_session():
+		return false
+	var net: Node = get_node_or_null("/root/Net")
+	return not bool(net.get("is_host"))
+
+
+func _is_host_session() -> bool:
+	if not _is_online_session():
+		return false
+	var net: Node = get_node_or_null("/root/Net")
+	return bool(net.get("is_host"))
+
+
+func _network_world() -> Node:
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	return scene.get_node_or_null("NetworkWorld") if scene != null else null
+
+
+## 相对当前场景根节点的路径（RPC 两端用它定位同一个开关）。
+func _scene_rel_path() -> NodePath:
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	if scene == null:
+		return NodePath()
+	return scene.get_path_to(self)
+
+
+## Client 侧应用 Host 广播的状态：直接复用 `set_on` 的完整表现链路，
+## 但**不再回播**（`_network_applied` 标记）。
+var _network_applied: bool = false
+
+
+func apply_network_state(value: bool, animate: bool = true) -> void:
+	_network_applied = true
+	set_on(value, animate)
+	_network_applied = false
+
+
+## Host 侧状态变化后广播给所有已就绪的客户端。
+func _broadcast_state(value: bool, animate: bool) -> void:
+	if _network_applied or not _is_host_session():
+		return
+	var world: Node = _network_world()
+	if world != null and world.has_method("broadcast_switch_state"):
+		world.call("broadcast_switch_state", _scene_rel_path(), value, animate)
 
 
 func toggle() -> void:
@@ -261,6 +325,9 @@ func set_on(value: bool, animate: bool = true) -> void:
 	on_state_changed(_is_on)
 	_update_label()
 	_propagate_links(value, animate)
+	## 联机：Host 端每次真实状态变化都广播（联动传播进来的那次也会走这里，
+	## 但 `_link_depth > 0` 时客户端只需要最终状态，重复广播是幂等的 → 无害）。
+	_broadcast_state(value, animate)
 
 
 ## 联动传播深度（静态）：>0 说明本次状态变化是被别的开关联动过来的 → 不再往下传，

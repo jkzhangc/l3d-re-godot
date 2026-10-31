@@ -353,6 +353,8 @@ func _step_option(option: OptionButton, delta: int) -> void:
 	var idx: int = (option.selected + delta + option.item_count) % option.item_count
 	option.select(idx)
 	option.item_selected.emit(idx)
+	## 兜底：处理函数里若提前 return（非房主/无网络），Label 也要跟上真实选中项。
+	_refresh_arrow_selector(_diff_sel if option == difficulty_select else _chapter_sel, true)
 
 
 func _refresh_arrow_selector(sel: ArrowSelector, enabled: bool) -> void:
@@ -374,6 +376,9 @@ func _on_difficulty_selected(index: int) -> void:
 		return
 	Global.selected_difficulty = index
 	_log("难度已设为：%s" % difficulty_select.get_item_text(index))
+	## ★2026-10-31 修复：这里漏了刷新 —— 之前只有提示栏更新、箭头旁的难度名不变
+	## （`_refresh_arrow_selector` 是 label 的唯一刷新点）。
+	_refresh_room_info()
 
 
 func _refresh_room_info() -> void:

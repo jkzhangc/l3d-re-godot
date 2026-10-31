@@ -37,6 +37,8 @@ const HitResolver := preload("res://script/hit_resolver.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
 ## 地图弹药补给节点类型白名单：上行只收节点路径，不能接受客户端指定补给量或资源。
 const AMMO_SUPPLY_SCRIPT := preload("res://script/ammo_supply.gd")
+## 互动开关（派生自 MoveNode）。2026-10-31：补齐它在联机下的 Host 权威通道（E1）。
+const INTERACTIVE_SWITCH_SCRIPT := preload("res://script/director/interactive_switch_node.gd")
 ## 联机资源白名单（2026-10-08 拆分）：真源已移到 script/network_whitelist.gd。
 ## 这里保留**同名 const 转发别名** —— net_regression_harness.gd 子类直接引用
 ## NETWORK_KNIFE / NETWORK_WEAPONS 等常量，别名保证其零改动。
@@ -4360,6 +4362,74 @@ func _try_host_ammo_supply(peer_id: int, node_path: NodePath, claimed_position: 
 	_send_to_ready_clients(&"ammo_supply_feedback", [node_path])
 	print("[NetworkWorld] HOST_AMMO_SUPPLY peer=%d added=%d path=%s" % [peer_id, added, node_path])
 	return added
+
+
+# ---------------------------------------------------------------- 互动开关（Host 权威事务，2026-10-31）
+
+## Client 按下功能键 → 提交翻转请求；不本地改状态。
+func request_switch_toggle(node_path: NodePath) -> void:
+	if _scene_transitioning or not is_instance_valid(net) or not net.is_online_session():
+		return
+	if net.is_host:
+		_try_host_switch_toggle(int(net.my_peer_id), node_path)
+	elif _client_ready_to_send():
+		switch_toggle_request.rpc_id(1, node_path)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func switch_toggle_request(node_path: NodePath) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1 and _ready_client_peers.has(sender):
+		_try_host_switch_toggle(sender, node_path)
+
+
+## Host：校验「节点真是开关 + 玩家存活 + 在交互范围内」后执行翻转。
+## 翻转走开关自己的 `set_on()`（内部会广播给客户端 + 处理联动），不在这里重写表现。
+func _try_host_switch_toggle(peer_id: int, node_path: NodePath) -> bool:
+	if not net.is_host or _scene_transitioning or _wipe_active or not _players.has(peer_id):
+		return false
+	if node_path.is_empty() or node_path.is_absolute() or ".." in String(node_path).split("/"):
+		return false
+	var scene: Node = get_tree().current_scene
+	var node: Node = scene.get_node_or_null(node_path) if scene else null
+	if not is_instance_valid(node) or node.get_script() != INTERACTIVE_SWITCH_SCRIPT:
+		return false
+	if not node.is_visible_in_tree():
+		return false
+	var entry: Dictionary = _players[peer_id]
+	var player := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(player) or state == null or state.current_hp <= 0.0 \
+			or player.is_network_dead() or player.get("network_swallow_locked") == true:
+		return false
+	var reach: float = float(node.get("interact_range")) + 8.0
+	if player.global_position.distance_to((node as Node2D).global_position) > reach:
+		return false
+	var value: bool = not bool(node.call("is_on"))
+	node.call("set_on", value, true)
+	print("[NetworkWorld] HOST_SWITCH peer=%d %s → %s" % [peer_id, str(node_path), str(value)])
+	return true
+
+
+## Host 广播（由开关的 `set_on()` 调用）。
+func broadcast_switch_state(node_path: NodePath, value: bool, animate: bool) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	_send_to_ready_clients(&"switch_state", [node_path, value, animate])
+
+
+## Client：应用 Host 的开关状态（幂等，不回声）。
+@rpc("authority", "call_remote", "reliable")
+func switch_state(node_path: NodePath, value: bool, animate: bool) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var scene: Node = get_tree().current_scene
+	var node: Node = scene.get_node_or_null(node_path) if scene else null
+	if is_instance_valid(node) and node.get_script() == INTERACTIVE_SWITCH_SCRIPT \
+			and node.has_method("apply_network_state"):
+		node.call("apply_network_state", value, animate)
 
 
 @rpc("authority", "call_remote", "reliable")

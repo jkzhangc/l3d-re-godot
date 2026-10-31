@@ -172,6 +172,11 @@ extends Resource
 @export var frontal_normalize: bool = false
 ## Normalize 减免系数（frontal_normalize 开启时生效）：0.6 → 实际只吃 40%。
 @export var frontal_normalize_ratio: float = 0.6
+## ★正面走位（2026-10-31 用户纠正「猎杀者前方无敌是错的」）：
+## >0 = 正面被命中时不减免伤害，但会以该力度（px/s）**快速侧向换位**，仍然朝玩家推进。
+## ハンターβ 用 300（≈65px 的侧移），配合 `frontal_damage_mult = 1.0`。
+@export var frontal_dodge_force: float = 0.0
+@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
 
 @export_group("首狩り突进（ハンター 系）")
 ## 是否启用首狩り突进（中距离高速扑咬）。普通僵尸与 Tyrant 保持 false。
@@ -451,6 +456,8 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.frontal_arc_degrees = frontal_arc_degrees
 	enemy.frontal_normalize = frontal_normalize
 	enemy.frontal_normalize_ratio = frontal_normalize_ratio
+	enemy.frontal_dodge_force = frontal_dodge_force
+	enemy.frontal_dodge_stun = frontal_dodge_stun
 	# 首狩り突进（ハンター 系）
 	enemy.pounce_enabled = pounce_enabled
 	enemy.pounce_trigger_min_dist = pounce_trigger_min_dist
