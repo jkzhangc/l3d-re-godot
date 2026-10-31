@@ -244,9 +244,17 @@ func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
 # 大厅音乐
 # ═══════════════════════════════════════
 
-## 播放大厅音乐。幂等：已在播同曲时直接返回（切界面不会重头播）。
-func play_lobby_music() -> void:
-	if _lobby_music_player and is_instance_valid(_lobby_music_player) and _lobby_music_player.playing:
+## 播放大厅音乐。幂等：**已在播同一首**时直接返回（切界面不会重头播）。
+## `path_override`：个别界面用自己的曲子（2026-10-31：操作说明换成
+## 「瀬上純 - Advertise Prof.Omochao」）。传空 = 用 `LOBBY_MUSIC_PATH`。
+## 换曲子时会**从头播**新曲 —— 这是预期的界面切换。
+var _lobby_music_path: String = ""
+
+
+func play_lobby_music(path_override: String = "") -> void:
+	var path: String = path_override if not path_override.is_empty() else LOBBY_MUSIC_PATH
+	if _lobby_music_player and is_instance_valid(_lobby_music_player) \
+			and _lobby_music_player.playing and _lobby_music_path == path:
 		return
 	if _lobby_music_player == null or not is_instance_valid(_lobby_music_player):
 		_lobby_music_player = AudioStreamPlayer.new()
@@ -254,9 +262,11 @@ func play_lobby_music() -> void:
 		_lobby_music_player.bus = "Music"
 		if _host != null:
 			_host.add_child(_lobby_music_player)
-	if not ResourceLoader.exists(LOBBY_MUSIC_PATH):
+	if not ResourceLoader.exists(path):
+		push_warning("[AudioService] 大厅音乐不存在：%s" % path)
 		return
-	_lobby_music_player.stream = load(LOBBY_MUSIC_PATH)
+	_lobby_music_player.stream = load(path)
+	_lobby_music_path = path
 	_lobby_music_player.play()
 
 

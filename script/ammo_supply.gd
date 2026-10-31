@@ -4,8 +4,8 @@ class_name AmmoSupply extends Node2D
 ## ── 架构定位 ──
 ## 系统：弹药补给 ｜ 层：玩法（Node2D，可反复使用的地图互动物）
 ## 联机：Host 权威，Client 仅经 NetworkWorld 提交节点路径与位置提示。
-## 职责：行走图预览/踏步、实体碰撞、附近功能键补给；按随身枪械配置补足备弹，
-##       不改变弹夹、不降低已有备弹，无限次使用。仅联机开关不影响编辑器预览。
+## 职责：行走图预览/踏步、实体碰撞、附近功能键补给；按随身枪械配置补足**弹夹与备弹**，
+##       不降低已有备弹，无限次使用。仅联机开关不影响编辑器预览。
 ## 依赖：Players、PlayerState、Global、NetworkWorld（运行时）；可直接挂脚本或拖预制体。
 
 const FRAME_W: int = 48
@@ -211,7 +211,7 @@ func can_player_use(player: Node2D) -> bool:
 ## ── 交互输入仲裁（2026-10-27 用户需求）──
 ## 语义：此刻按「功能键」，本节点会不会真的做事（供存档点让路，见 interact_priority.gd）。
 ## 与 `_process` 的触发条件同源：联机专属箱在单机不响应；暂停时不响应；
-## 玩家在范围内且**确实缺备弹**才算占用此键（弹药已满时按键无收益 → 不挡存档）。
+## 玩家在范围内且**弹夹或备弹确实没满**才算占用此键（都不缺时按键无收益 → 不挡存档）。
 func can_use_function_key() -> bool:
 	if Engine.is_editor_hint():
 		return false
@@ -238,6 +238,9 @@ func _reserve_targets(state: PlayerState) -> Dictionary:
 
 
 func needs_refill(state: PlayerState) -> bool:
+	## 2026-10-31 用户需求：**弹夹与备弹任一未满**都算需要补给。
+	if not _magazine_gaps(state).is_empty():
+		return true
 	var targets := _reserve_targets(state)
 	for ammo_id: String in targets:
 		if state.count_ammo_item(ammo_id) < int(targets[ammo_id]):
@@ -245,13 +248,42 @@ func needs_refill(state: PlayerState) -> bool:
 	return false
 
 
+## 随身枪械的**弹夹缺口**（item_id → {current, capacity}）。
+## 只统计「远程 + 有弹夹 + 非无限弹」的枪；弹夹按 `weapon.item_id` 存（见 PlayerState）。
+func _magazine_gaps(state: PlayerState) -> Dictionary:
+	var gaps: Dictionary = {}
+	if state == null:
+		return gaps
+	for slot: String in ["primary", "secondary"]:
+		var weapon: WeaponData = state.get_equipped_weapon(slot)
+		if weapon == null or not weapon.is_ranged or weapon.has_infinite_ammo():
+			continue
+		if weapon.magazine_capacity <= 0 or weapon.item_id.is_empty():
+			continue
+		var current: int = state.get_magazine_ammo(weapon.item_id)
+		if current < weapon.magazine_capacity:
+			gaps[weapon.item_id] = {"current": current, "capacity": weapon.magazine_capacity}
+	return gaps
+
+
 ## 纯数据补给入口；联机只有 Host 在校验玩家/距离/节点身份之后调用。
-## 返回实际补充的总发数；弹夹和其它库存完全不动，满备弹/无限备弹返回 0。
+## 返回实际补充的总发数（弹夹 + 备弹）；备弹只增不减，无限备弹跳过。
+## ★2026-10-31：弹夹也补满（用户需求「弹夹和备弹任一没满都能补」），
+##   且**不从备弹里扣** —— 弹药箱是补给点，不是换弹动作。
 func refill_state(state: PlayerState) -> int:
 	if state == null:
 		return 0
-	var targets := _reserve_targets(state)
 	var added: int = 0
+	var gaps: Dictionary = _magazine_gaps(state)
+	for weapon_id: String in gaps:
+		var gap: Dictionary = gaps[weapon_id]
+		var cap: int = int(gap.get("capacity", 0))
+		var cur: int = int(gap.get("current", 0))
+		if cap <= cur:
+			continue
+		state.set_magazine_ammo(weapon_id, cap)
+		added += cap - cur
+	var targets := _reserve_targets(state)
 	for ammo_id: String in targets:
 		var current := state.count_ammo_item(ammo_id)
 		var target: int = int(targets[ammo_id])

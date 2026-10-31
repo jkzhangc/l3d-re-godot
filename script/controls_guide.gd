@@ -10,6 +10,8 @@ extends Control
 
 const TITLE_SCENE := "res://scene/title_screen.tscn"
 const GUIDE_TXT_PATH := "res://操作说明.txt"
+## 本界面专用 BGM（2026-10-31 用户指定）。与大厅共用播放器，离开时由 stop_lobby_music 收尾。
+const GUIDE_MUSIC_PATH := "res://music/瀬上純 - Advertise Prof.Omochao.mp3"
 
 const BACKDROP_PATH := "res://art/Panorama/地下.png"
 const WINDOW_BG_PATH := "res://art/System/Window background color.png"
@@ -52,7 +54,8 @@ const MOBILE_KEY_ALIAS: Dictionary = {
 
 
 func _ready() -> void:
-	Global.play_lobby_music()   # 与战役/角色选择共用大厅 BGM（切界面不中断）
+	## 操作说明用自己的 BGM（2026-10-31 用户指定）；离开本界面时 stop_lobby_music 照常收尾。
+	Global.play_lobby_music(GUIDE_MUSIC_PATH)
 	_is_mobile = Global.is_mobile_platform()
 	var g: Node = get_node_or_null("/root/Global")
 	if g:

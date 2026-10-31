@@ -1479,6 +1479,48 @@ func spawn_mob_batch(front_count: int, behind_count: int) -> int:
 	return spawned
 
 
+## ★尸潮补位取点（2026-10-31 用户需求：尸潮时直接在玩家画面外补点）。
+## 与 `spawn_mob_batch` 的分工：那个是**入场那一波**（固定前/后比例，讲观感），
+## 这个是**峰值期间的持续补位**（讲"无论如何都补得上"）。
+## 取点顺序：前方 → 背后 → **360° 环带**。前两条保持"从前面压过来 / 背后包抄"的观感，
+## 环带是兜底 —— 地图没有作者点位、玩家又跑得飞快时，只有它能保证每批都落地。
+func spawn_horde_surround(count: int, front_ratio: float = 0.6) -> int:
+	var decor_layer: Node = _find_decor_layer()
+	if decor_layer == null:
+		return 0
+	var player: Node2D = pick_spawn_anchor()
+	if player == null:
+		return 0
+	var total: int = maxi(count, 0)
+	if total <= 0:
+		return 0
+	var fs: Node = get_node_or_null("FrontSpawner")
+	var front_n: int = int(round(float(total) * clampf(front_ratio, 0.0, 1.0)))
+	var spawned: int = 0
+	var placed: Array[Vector2] = []
+	for i: int in range(total):
+		var pos: Vector2 = Vector2.ZERO
+		if fs != null:
+			if i < front_n:
+				pos = fs.pick_ahead_position(player)
+				if pos == Vector2.ZERO:
+					pos = fs.pick_behind_position(player)
+			else:
+				pos = fs.pick_behind_position(player)
+				if pos == Vector2.ZERO:
+					pos = fs.pick_ahead_position(player)
+			if pos == Vector2.ZERO and fs.has_method("pick_surround_position"):
+				pos = fs.call("pick_surround_position", player)
+		if pos == Vector2.ZERO:
+			continue
+		if not _batch_accepts(placed, pos):
+			continue
+		if spawn_enemy(_add_spawn_scatter(pos), decor_layer, -1) != null:
+			spawned += 1
+			placed.append(pos)
+	return spawned
+
+
 ## 威胁圈内存活敌人数（**含已经贴脸的**）—— 供 SpawnManager 的预算闸门使用。
 ## 旧口径只数 360~560px 环带，敌人走近就"离开名额"，是原地打不完的根源之一。
 func count_threat_near_players() -> int:

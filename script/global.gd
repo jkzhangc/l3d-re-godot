@@ -1769,9 +1769,10 @@ func action_hints_label() -> String:
 const LOBBY_MUSIC_PATH: String = AudioService.LOBBY_MUSIC_PATH
 
 ## 播放大厅音乐。幂等：已在播同曲时直接返回（切界面不会重头播）。
-func play_lobby_music() -> void:
+## 播放大厅音乐。`path_override` 非空时用该曲（操作说明界面 2026-10-31 起用自己的 BGM）。
+func play_lobby_music(path_override: String = "") -> void:
 	if _audio_service != null:
-		_audio_service.play_lobby_music()
+		_audio_service.play_lobby_music(path_override)
 
 
 ## 停止大厅音乐（难度确认 / 回标题等正式离开大厅时调用）。

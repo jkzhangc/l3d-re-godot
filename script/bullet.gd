@@ -507,6 +507,12 @@ func _explode() -> void:
 		var hp_after: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else hp_before
 		_record_chapter_damage(hp_before, hp_after, false)
 
+	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直，不吃伤害。
+	var ring: int = HitResolver.apply_explosion_outer_ring(get_tree(), center, _explosion_radius, _source_id)
+	if ring > 0:
+		print("[爆炸] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs）" % [
+			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC])
+
 	if _explosion_hurts_players:
 		# 对玩家的自爆半径独立可调（2026-09-15）：0=同爆炸半径；>0 用小半径——
 		# 爆风对敌人范围大，但自爆只惩罚贴脸开火，远处误伤观感由该值控制。

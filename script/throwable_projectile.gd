@@ -260,6 +260,12 @@ func _explode() -> void:
 					HitResolver.EXPLOSION_KNOCKBACK_FORCE, dir.normalized(), false,
 					HitResolver.EXPLOSION_KNOCKBACK_STUN, HitResolver.EXPLOSION_HITSTUN_SEC,
 					get_instance_id(), _td.element, true)
+	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直，不吃伤害。
+	var ring: int = HitResolver.apply_explosion_outer_ring(
+		get_tree(), global_position, radius_px, get_instance_id())
+	if ring > 0:
+		print("[投掷物] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs）" % [
+			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC])
 	## 可爆破墙体（blast_wall）：只有 breaks_blast_wall=true 的投掷物（炸药）计入破坏；
 	## 手雷等炸得响但炸不开（2026-09-16 用户定稿）。
 	## 只有 Host/单机的授权爆炸会走到这里（_authoritative 前提），Client 只看 flag 广播的表现。

@@ -258,6 +258,13 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 ## random_pickup / item_manager / _drop_weapon 三条掉落路径共用。
 static func apply_weapon_ground_display(pickup: Node2D, wd: WeaponData) -> void:
 	pickup.weapon_data = wd
+	## ★2026-10-31：**运行时生成的掉落物一律从「满弹夹 / 未携带备弹」起步**。
+	## 起因：地图里手摆的 weapon_pickup 节点被存成 `pickup_magazine_ammo = null`，
+	## 加载时 null→int 会变成 **0** → 捡起来弹夹是空的（用户实测「有的手枪捡了没子弹」）。
+	## 这里显式复位，保证掉落池/敌人掉落不受场景根节点上的脏值影响；
+	## 需要带特定余弹的调用方（`drop_weapon_for_player`）会在本函数之后覆盖。
+	pickup.pickup_magazine_ammo = -1
+	pickup.pickup_reserve_ammo = -1
 	pickup.pickup_texture = wd.pickup_texture if wd.pickup_texture else wd.weapon_walk_texture
 	pickup.pickup_char_idx = wd.pickup_char_idx
 	pickup.pickup_direction = wd.pickup_direction
@@ -489,36 +496,18 @@ func _process_local_pickup(delta: float) -> bool:
 		return false
 	if not weapon_data:
 		return false
-
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	if not state:
 		return false
-	var slot: String = state.resolve_weapon_slot(weapon_data)
-	var current: WeaponData = state.get_equipped_weapon(slot)
-
-	# 该槽位为空 → 默认自动拾取；require_function_key 时同样走按住流程
-	if current == null:
-		if not require_function_key:
-			if not _can_auto_take():
-				## ★2026-09-30 用户实测：把主武器丢掉后靠近地上的主武器，
-				## 地图上明明显示着「D」键帽，**按住功能键却毫无反应**。
-				## 根因：空槽走的是「自动拾取」分支，它**根本不读功能键**；而键帽的显示
-				## 条件只要求"在范围内 + 角色能用"，与这个分支无关 → 提示与实际行为不一致。
-				## 而 `_can_auto_take()` 的三道闸门（最近的一件 / 本次靠近没捡过 / 角色能用）
-				## 任一不过都会静默 return，表现就是"按了没反应"。
-				## 修法：自动拾取被挡下时，**也接受按住功能键** —— 与"有武器时替换"手感一致。
-				return _process_hold(delta)
-			mark_auto_picked(get_tree(), _player_ref)
-			_do_pickup()
-			return false
-		return _process_hold(delta)
-
+	## ★2026-10-31 用户需求：枪械掉落**不再「接触即拾取」** —— 统一跟随设置里的
+	## 「点击一下 / 按住」（`PickupInteraction`），与药品/投掷物同一口径。
+	## 旧实现在「空槽 + require_function_key=false」时走 `_can_auto_take()` 自动拿走，
+	## 玩家把拾取方式设成「点击一下」也照样被自动拾走（用户实测反馈的正是这条）。
 	return _process_hold(delta)
-
-
-## 自动拾取闸门：① 本节点必须是离玩家最近的武器拾取物；
-## ② 本次"靠近"还没自动捡过（走开再回来即可换下一件）—— 修"堆一起被全捡"；
-## ③ 本角色能使用该武器（2026-09-16 用户：不能拿的武器路过也不自动捡）。
+## ── 自动拾取闸门（2026-10-31 起**不再用于拾取流程**）──
+## 位置/本节点必须是离玩家最近的武器拾取物、本次靠近没捡过、角色能用。
+## 保留原因：`mark_auto_picked()` 仍被 `player_death_service` 调用（记录"这堆刚掉的不该被瞬间捡回"），
+## 且将来若加「自动拾取」开关，可以直接复用这两道闸门。
 func _can_auto_take() -> bool:
 	if not _is_nearest_weapon_pickup():
 		return false
@@ -609,7 +598,7 @@ func _is_online_network_pickup() -> bool:
 
 
 func _process_network_pickup(delta: float) -> bool:
-## 联机交互入口：本地只显示提示和发送意图，成功与否由 Host 的拾取事务决定。
+	## 联机交互入口：本地只显示提示和发送意图，成功与否由 Host 的拾取事务决定。
 	# 尚未收到 Host 的可靠 pickup_snapshot 前只能展示，不能执行本地拾取。
 	if network_pickup_id <= 0:
 		_hold_timer = 0.0
@@ -621,24 +610,12 @@ func _process_network_pickup(delta: float) -> bool:
 	if not in_range or not weapon_data:
 		_hold_timer = 0.0
 		return false
-	var state: PlayerState = Players.get_state_for_entity(local_player)
-	var current: WeaponData = state.get_equipped_weapon(state.resolve_weapon_slot(weapon_data)) if state else null
-	# 空槽 + 未要求功能键 → 直接请求；其余按住流程
-	if current == null and not require_function_key:
-		## 堆叠仲裁同样作用于联机请求：只让最近的一个发请求，且一次靠近只自动要一件。
-		if not _can_auto_take():
-			return false
-		mark_auto_picked(get_tree(), local_player)
-		_request_network_pickup()
-		return false
-	## ⚠ 联机下绝不能走单机 _process_hold → _do_pickup()：那会把武器塞进 Client
+	## ★2026-10-31：空槽同样跟随「点击一下 / 按住」，不再自动发请求。
+	## ⚠ 联机下绝不能走单机 `_process_hold → _do_pickup()`：那会把武器塞进 Client
 	## 本地域 PlayerState 并本地 queue_free —— Host 完全不知情，下一拍快照把
 	## Host 域装备写回，表现为「拾到又消失 / 扔下后永远捡不上」（2026-09-22 实测）。
 	## 这里用网络版按住：满进度只提交请求，事务在 Host。
 	return _process_network_hold(delta)
-
-
-## 附近（72px）是否有倒地队友：有则功能键优先用于救援（network_world 的 revive 流程）。
 func _downed_player_near() -> bool:
 	if not _player_ref:
 		return false

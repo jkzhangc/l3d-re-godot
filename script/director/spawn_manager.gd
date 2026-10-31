@@ -411,6 +411,18 @@ func _intensity_mob_gain() -> float:
 	return 0.0
 
 
+## 尸潮狂暴是否开着（附加参数）。关掉时丧尸**速度不加成**，追不上边跑边打的玩家，
+## 观感就是「稀」—— 所以峰值维持数给它补一档（2026-10-31 用户实测）。
+const BERSERK_OFF_TARGET_MUL: float = 1.25
+
+
+func _berserk_on() -> bool:
+	var g: Node = _global()
+	if g == null or not g.has_method("horde_modifier"):
+		return true
+	return bool(g.call("horde_modifier", "berserk"))
+
+
 # ═══════════════════════════════════════
 # L4D 模型 — 尸潮（峰值入场，一次性）
 # ═══════════════════════════════════════
@@ -433,11 +445,17 @@ func _start_mob() -> void:
 	_horde_active = true
 	## 峰值窗口：以 PacingController 抽好的 phase_duration 为准（峰值按时间结束）
 	## 维持数同样兜底（下限的一半）：否则简单难度峰值只剩 1~2 只，尸潮"砸下来"的感觉没了。
-	_horde_target_alive = Players.scale_spawn_count(roundi(
-		float(randi_range(mini(horde_total_min, horde_total_max),
-			maxi(horde_total_min, horde_total_max))) * stress),
+	## ★2026-10-31：关掉「尸潮狂暴」时**维持数 ×1.25** —— 不狂暴的丧尸没有速度加成，
+	## 追不上边跑边打的玩家，观感就是"稀"（用户实测）。时间节奏不动，只补人口。
+	var target_raw: int = randi_range(mini(horde_total_min, horde_total_max),
+		maxi(horde_total_min, horde_total_max))
+	var berserk_on: bool = _berserk_on()
+	if not berserk_on:
+		target_raw = roundi(float(target_raw) * BERSERK_OFF_TARGET_MUL)
+	_horde_target_alive = Players.scale_spawn_count(roundi(float(target_raw) * stress),
 		maxi(floor_size / 2, 1))
-	print("[SpawnManager] 尸潮规模：基准 %d × 紧张度加成 %.2f = %d 只" % [raw_size, stress, size])
+	print("[SpawnManager] 尸潮规模：基准 %d × 紧张度加成 %.2f = %d 只%s" % [
+		raw_size, stress, size, "" if berserk_on else "（狂暴关 → 维持数 ×%.2f）" % BERSERK_OFF_TARGET_MUL])
 	var pc: Node = _director.get_node_or_null("PacingController") if _director != null else null
 	_horde_duration = float(pc.get("phase_duration")) if pc != null else 60.0
 	_horde_time_left = maxf(_horde_duration, 1.0)
@@ -447,6 +465,12 @@ func _start_mob() -> void:
 		size, front, behind, ratio * 100.0, _horde_duration, _horde_target_alive])
 	if _director.has_method("spawn_mob_batch"):
 		var spawned: int = int(_director.call("spawn_mob_batch", front, behind))
+		## ★入场那波没落满（没有作者点位 / 走廊取不到前后点）→ 用 360° 环带补足。
+		if spawned < size and _director.has_method("spawn_horde_surround"):
+			var extra: int = int(_director.call("spawn_horde_surround", size - spawned))
+			spawned += extra
+			if extra > 0:
+				print("[SpawnManager] 入场补足：环带再落 %d 只" % extra)
 		_horde_spawned += spawned
 		print("[SpawnManager] MOB 落地 %d/%d 只（落点不足时宁缺不挤）" % [spawned, size])
 
@@ -569,7 +593,14 @@ func _update_horde(delta: float, alive_count: int) -> void:
 
 	print("[SpawnManager] horde batch: %d 只（场上 %d / 目标 %d，剩 %.0fs）" % [
 		batch, alive_count, target_alive, _horde_time_left])
-	var spawned: int = _director.spawn_ahead_batch(batch).size()
+	## ★2026-10-31 用户需求：尸潮期间**直接在玩家画面外补点**。
+	## 走 `spawn_horde_surround`（前方 → 背后 → 360° 环带），不再只靠前方扇区 ——
+	## 玩家跑得快、或走到没有作者点位的段落时，前方通道会整帧取不到点，表现为"压根没补"。
+	var spawned: int = 0
+	if _director.has_method("spawn_horde_surround"):
+		spawned = int(_director.call("spawn_horde_surround", batch))
+	else:
+		spawned = _director.spawn_ahead_batch(batch).size()
 	_horde_spawned += spawned
 
 	## 下一批间隔（基准 horde_batch_interval，允许 ±40% 抖动避免机械感）

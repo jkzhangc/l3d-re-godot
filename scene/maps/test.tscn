@@ -32,14 +32,14 @@ position = Vector2(-222, -66)
 weapon_data = ExtResource("7_oqc8j")
 pickup_char_idx = null
 pickup_direction = null
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 
 [node name="小刀" parent="GroundLayer" unique_id=1811310426 instance=ExtResource("6_1wkr3")]
 position = Vector2(-271, -64)
 weapon_data = ExtResource("6_23swb")
 pickup_char_idx = 2
 pickup_direction = 3
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 
 [node name="霰弹枪" parent="GroundLayer" unique_id=857466232 instance=ExtResource("6_1wkr3")]
 position = Vector2(-325, -123)
@@ -47,14 +47,14 @@ weapon_data = ExtResource("7_ushfk")
 pickup_char_idx = null
 pickup_direction = 1
 pickup_reserve_ammo = 280
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 
 [node name="步枪" parent="GroundLayer" unique_id=1615159628 instance=ExtResource("6_1wkr3")]
 position = Vector2(-179, -125)
 weapon_data = ExtResource("8_emmcv")
 pickup_char_idx = null
 pickup_direction = 2
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 pickup_step_frames = Array[int]([1])
 
 [node name="冲锋枪" parent="GroundLayer" unique_id=1694232618 instance=ExtResource("6_1wkr3")]
@@ -62,7 +62,7 @@ position = Vector2(-261, -124)
 weapon_data = ExtResource("9_1a117")
 pickup_char_idx = null
 pickup_direction = 2
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 pickup_step_frames = Array[int]([2])
 
 [node name="狙击枪" parent="GroundLayer" unique_id=1873420917 instance=ExtResource("6_1wkr3")]
@@ -71,7 +71,7 @@ weapon_data = ExtResource("20_snip")
 pickup_char_idx = 2
 pickup_direction = 0
 pickup_reserve_ammo = 120
-pickup_magazine_ammo = null
+pickup_magazine_ammo = -1
 pickup_step_frames = Array[int]([1])
 pickup_animated = false
 

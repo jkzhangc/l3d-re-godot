@@ -39,6 +39,54 @@ const EXPLOSION_KNOCKBACK_FORCE: float = 420.0
 const EXPLOSION_KNOCKBACK_STUN: float = 0.3
 const EXPLOSION_HITSTUN_SEC: float = 2.0
 
+## ── 爆炸外圈：击退 + 硬直，**不吃伤害**（2026-10-31 用户需求）──
+## 主爆半径以外再挂一圈「冲击波」：圈内敌人被推开、原地硬直 1 秒。
+## 为什么需要：主爆只处理半径内，站远半步就完全没反应 —— 玩家会以为「炸到了却没效果」。
+## ⚠ 外圈**不继承元素**（传 Element.NONE）：否则氷元素会把「硬直 1 秒」变成冻结 2.5 秒，
+##   火元素会额外点燃，都与「击退 + 硬直 1 秒」的定稿不符。
+const OUTER_RING_PAD_RATIO: float = 0.35   ## 外圈厚度 = 主半径 × 本值
+const OUTER_RING_PAD_MIN: float = 24.0     ## 厚度下限（小半径爆炸也要有一圈）
+const OUTER_RING_KNOCKBACK: float = 300.0  ## 比主爆的 420 弱一档
+const OUTER_RING_KNOCKBACK_STUN: float = 0.25
+const OUTER_RING_HITSTUN_SEC: float = 1.0  ## 用户定稿：硬直 1 秒
+
+
+## 外圈半径（主半径 + 厚度）。主半径 <= 0 → 0（没有爆炸就没有外圈）。
+static func explosion_outer_radius(blast_radius: float) -> float:
+	if blast_radius <= 0.0:
+		return 0.0
+	return blast_radius + maxf(OUTER_RING_PAD_MIN, blast_radius * OUTER_RING_PAD_RATIO)
+
+
+## 对「主爆半径之外、外圈之内」的敌人执行击退 + 硬直，**不造成伤害**。
+## 返回受影响的数量。调用方：`bullet._explode()` / `throwable_projectile._explode()`。
+## 用 `take_damage(0, ...)` 实现：Enemy 里 0 伤害走「被推击」分支 ——
+## 不弹伤害数字、不播受伤音，但击退/硬直照常；`source_is_explosive = true` 让 Tank 也被推开。
+static func apply_explosion_outer_ring(tree: SceneTree, center: Vector2, blast_radius: float,
+		source_id: int = 0) -> int:
+	var outer: float = explosion_outer_radius(blast_radius)
+	if outer <= blast_radius or tree == null:
+		return 0
+	var affected: int = 0
+	for e: Node in damage_targets(tree):
+		if not (e is Node2D) or not is_instance_valid(e):
+			continue
+		var target := e as Node2D
+		var dist: float = target.global_position.distance_to(center)
+		if dist <= blast_radius or dist > outer:
+			continue
+		if not target.has_method("take_damage"):
+			continue
+		if target.get("_is_dead") == true or target.get("_is_dying") == true:
+			continue
+		var dir: Vector2 = target.global_position - center
+		if dir == Vector2.ZERO:
+			dir = Vector2.UP
+		target.take_damage(0.0, OUTER_RING_KNOCKBACK, dir.normalized(), false,
+			OUTER_RING_KNOCKBACK_STUN, OUTER_RING_HITSTUN_SEC, source_id, 0, true)
+		affected += 1
+	return affected
+
 ## ── 可受伤的"敌人侧"目标组（2026-10-27）──
 ## `enemy` = 真敌人；`training_dummy` = 训练木偶。
 ## ⚠ 木偶**故意不进 `enemy` 组**：一旦进去，导演的威胁统计 / 刷怪名额 / 联机快照 /

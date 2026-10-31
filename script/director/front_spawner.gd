@@ -461,6 +461,19 @@ func pick_behind_position(player: Node2D) -> Vector2:
 	return _pick_in_dir(player, back)
 
 
+## ★360° 环带取点（2026-10-31 用户需求：尸潮时直接在玩家画面外补点）。
+## 与「前方 / 背后」两条通道的差别：**不绑定行进方向**。
+## 为什么需要：玩家跑得快、地图又没有作者点位时，只靠前方扇区会在走廊/开阔处整帧取不到点
+## （用户实测「尸潮时根本补不上，走到没区域的段落一个新怪都没有」）。
+## 这里随机一个方位角，再走与前方通道完全相同的「屏外 + 可行走 + 未被占用」判定。
+func pick_surround_position(player: Node2D, angle_deg: float = -1.0) -> Vector2:
+	var base: Vector2 = _last_dir
+	if base == Vector2.ZERO:
+		base = Vector2.RIGHT
+	var deg: float = angle_deg if angle_deg >= 0.0 else _rng.randf_range(0.0, 360.0)
+	return _pick_in_dir(player, base.rotated(deg_to_rad(deg)))
+
+
 ## 沿给定方向 dir 在「扇区 + 屏幕外 + 距离带」里找一个可行走位置（前后通道共用）。
 func _pick_in_dir(player: Node2D, dir: Vector2) -> Vector2:
 	var view_half: Vector2 = _view_half_extents()
