@@ -251,10 +251,12 @@ func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
 var _lobby_music_path: String = ""
 
 
-func play_lobby_music(path_override: String = "") -> void:
+func play_lobby_music(path_override: String = "", volume_db: float = 0.0) -> void:
 	var path: String = path_override if not path_override.is_empty() else LOBBY_MUSIC_PATH
 	if _lobby_music_player and is_instance_valid(_lobby_music_player) \
 			and _lobby_music_player.playing and _lobby_music_path == path:
+		## 同一首在播：只更新音量（换界面不重头播）。
+		_lobby_music_player.volume_db = volume_db
 		return
 	if _lobby_music_player == null or not is_instance_valid(_lobby_music_player):
 		_lobby_music_player = AudioStreamPlayer.new()
@@ -267,6 +269,7 @@ func play_lobby_music(path_override: String = "") -> void:
 		return
 	_lobby_music_player.stream = load(path)
 	_lobby_music_path = path
+	_lobby_music_player.volume_db = volume_db
 	_lobby_music_player.play()
 
 

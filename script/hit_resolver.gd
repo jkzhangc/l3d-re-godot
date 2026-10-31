@@ -30,14 +30,15 @@ const PLAYER_HIT_MASK: int = 1 << 2  ## = 4
 const FRIENDLY_FIRE_MIN_DAMAGE: float = 1.0
 const FRIENDLY_FIRE_MAX_DAMAGE: float = 2.0
 
-## ── 爆炸震慑（2026-10-30 用户定稿）──
+## ── 爆炸震慑（2026-10-30 用户定稿 / 2026-10-31 调整）──
 ## 任何爆炸物（子弹爆炸 / 投掷物）都统一使用这套力度：
 ##   · 击退 420 px/s（震动位移约 0.3s）
-##   · 位移结束后追加 2.0s 原地硬直（enemy._hitstun_after_knockback 链）
-## 原先 bullet 默认 300/0.2、投掷物 200/0.2 —— 只有"推一下"，没有"震慑几秒"。
+##   · 位移结束后追加**原地硬直**（enemy._hitstun_after_knockback 链）
+## ★2026-10-31：硬直 2.0 → 1.7。玩家算的是「从被炸到能动」的总时长，
+##   而位移那 0.3s 也要算进去 → 0.3 + 1.7 ≈ 2.0s，与「改成 2 秒左右」一致。
 const EXPLOSION_KNOCKBACK_FORCE: float = 420.0
 const EXPLOSION_KNOCKBACK_STUN: float = 0.3
-const EXPLOSION_HITSTUN_SEC: float = 2.0
+const EXPLOSION_HITSTUN_SEC: float = 1.7
 
 ## ── 爆炸外圈：击退 + 硬直，**不吃伤害**（2026-10-31 用户需求）──
 ## 主爆半径以外再挂一圈「冲击波」：圈内敌人被推开、原地硬直 1 秒。

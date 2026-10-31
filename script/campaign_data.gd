@@ -18,10 +18,63 @@ class_name CampaignData extends Resource
 ## ── 关卡扁平表（2026-09-27）──
 ## 把各战役的关卡按顺序摊平，供两个地方共用：①调试「跳转章节」（多人主机）②多人房间的
 ## 「选择章节」。清单与 campaign_select 保持一致；章节骨架期 level_scenes 为空的战役跳过。
+
+## 旧版写死的两条路径 —— 现在只作**导出包兜底**（打包后 DirAccess 可能列不出目录）。
+## ★2026-10-31 用户需求「战役选择能够识别到目前有的战役」：
+## 真正的主清单改成运行时扫描 `res://object/campaign_*.tres`，
+## 新增战役只要放一个资源文件就能被认出来，不用改代码。
 const CAMPAIGN_RESOURCE_PATHS: Array[String] = [
 	"res://object/campaign_assault.tres",
 	"res://object/campaign_night_hunter.tres",
 ]
+
+static var _cached_campaign_paths: Array[String] = []
+static var _cached_campaign_order: Array[String] = []
+
+
+## 战役资源清单 = 扫描目录发现 ∪ 写死兜底（去重、只保留真实存在的）。
+static func campaign_resource_paths() -> Array[String]:
+	if not _cached_campaign_paths.is_empty():
+		return _cached_campaign_paths
+	var out: Array[String] = []
+	for preset: String in CAMPAIGN_RESOURCE_PATHS:
+		if not preset.is_empty() and ResourceLoader.exists(preset) and preset not in out:
+			out.append(preset)
+	var dir: DirAccess = DirAccess.open("res://object")
+	if dir != null:
+		dir.list_dir_begin()
+		var f: String = dir.get_next()
+		while f != "":
+			if not dir.current_is_dir():
+				var name: String = f.trim_suffix(".remap")
+				if name.begins_with("campaign_") and name.ends_with(".tres"):
+					var p: String = "res://object/" + name
+					if p not in out and ResourceLoader.exists(p):
+						out.append(p)
+			f = dir.get_next()
+		dir.list_dir_end()
+	out.sort()
+	_cached_campaign_paths = out
+	return out
+
+
+## 战役前缀顺序（= 地图文件名第一段，如 "突袭" / "夜行猎手"）。
+## 由**战役资源的 `campaign_name`** 决定顺序，不再写死表 —— 新增战役自动接在后面。
+static func campaign_order() -> Array[String]:
+	if not _cached_campaign_order.is_empty():
+		return _cached_campaign_order
+	var out: Array[String] = []
+	for p: String in campaign_resource_paths():
+		var res: Resource = load(p)
+		if res is CampaignData:
+			var nm: String = str((res as CampaignData).campaign_name)
+			if not nm.is_empty() and nm not in out:
+				out.append(nm)
+	if out.is_empty():
+		var fallback: Array[String] = ["突袭", "夜行猎手"]
+		out = fallback
+	_cached_campaign_order = out
+	return out
 
 
 ## 场景路径 → 所属战役 id（"assault" / "night_hunter"）。找不到 = 空。
@@ -31,7 +84,7 @@ static func campaign_id_for_scene(scene_path: String) -> String:
 	if scene_path.is_empty():
 		return ""
 	var file_name: String = scene_path.get_file()
-	for p: String in CAMPAIGN_RESOURCE_PATHS:
+	for p: String in campaign_resource_paths():
 		if not ResourceLoader.exists(p):
 			continue
 		var res: Resource = load(p)
@@ -43,7 +96,7 @@ static func campaign_id_for_scene(scene_path: String) -> String:
 	## 第二道：按文件名前缀认（本工程地图命名约定「战役名-第N关-…」）。
 	## 第一战役的 level_scenes 只登记到学校内部，矿洞 / 实验室 / 列车台不在表里 ——
 	## 终章在列车台，只靠 level_scenes 会认不出来。
-	for p: String in CAMPAIGN_RESOURCE_PATHS:
+	for p: String in campaign_resource_paths():
 		if not ResourceLoader.exists(p):
 			continue
 		var res2: Resource = load(p)
@@ -58,7 +111,7 @@ static func campaign_id_for_scene(scene_path: String) -> String:
 ## 返回 [{campaign, chapter, label, scene}, ...]（按战役→关卡顺序）。
 static func collect_chapter_entries() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for p: String in CAMPAIGN_RESOURCE_PATHS:
+	for p: String in campaign_resource_paths():
 		if not ResourceLoader.exists(p):
 			continue
 		var res: Resource = load(p)
@@ -127,6 +180,8 @@ const MAP_SCENE_PATHS: Array[String] = [
 
 ## 战役顺序（2026-10-25）：`_describe_level` 用它给多战役条目排序 + 决定标签是否带战役名。
 ## 新增战役必须同时进本表，否则会被归到「其它」。
+## [已停用] 旧版写死的战役前缀顺序。2026-10-31 起由 `campaign_order()`（读战役资源的
+## `campaign_name`）动态生成；保留常量只为兼容可能存在的旧引用，代码里不再读取。
 const CAMPAIGN_ORDER: Array[String] = ["突袭", "夜行猎手"]
 
 const _CN_NUMBERS: Dictionary = {
@@ -211,7 +266,7 @@ static func _describe_level(scene_path: String) -> Dictionary:
 	## 战役前缀识别改为查表（2026-10-25）：原来写死 `parts[0] == "突袭"`，
 	## 夜行猎手的地图因此全被归成「[其它]」，房间里选章节无法区分两个战役。
 	var prefix: String = parts[0] if parts.size() >= 3 else ""
-	var order: int = CAMPAIGN_ORDER.find(prefix)
+	var order: int = campaign_order().find(prefix)
 	if order < 0:
 		return {
 			"campaign": "其它",

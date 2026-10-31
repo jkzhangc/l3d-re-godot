@@ -3536,6 +3536,43 @@ func _reset_boss_deck() -> void:
 		boss_deck_step, first, boss_deck_nothing_weight, tank_cards])
 
 
+## 当前是本战役的第几张图（0 = 第一关）。认不出来时返回 0（保守：按"第一关"处理）。
+## 依据 `Global.selected_campaign.level_scenes`；安全屋/未登记的图不在表里 → 沿用最近一次的有效值？
+## 不沿用：没登记的图直接按 0 处理会过度限制。这里改成"能认出就返回真值，认不出返回 -1"，
+## 由调用方决定怎么处理（`_tank_first_level_skip_chance` 对 -1 不做额外限制）。
+func _campaign_level_index() -> int:
+	var campaign: Variant = Global.selected_campaign
+	if campaign == null:
+		return -1
+	var scenes: Array = campaign.get("level_scenes")
+	if scenes == null or scenes.is_empty():
+		return -1
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree != null else null
+	if scene == null:
+		return -1
+	var path: String = scene.scene_file_path
+	for i: int in range(scenes.size()):
+		if str(scenes[i]) == path:
+			return i
+	return -1
+
+
+## 第一关（第 0 张图）的 Tank 额外跳过率：
+## 简单/普通 = 1.0（完全不出，留给第二关）；困难 0.6；专家 0.3。
+## ⚠ 这里用 `Global.selected_difficulty` 而不是 `Players.spawn_scale()`：
+## 后者在多人局里是"按人数"的倍率（2~3），拿它当难度代理会把多人普通局误判成专家。
+func _tank_first_level_skip_chance() -> float:
+	if _campaign_level_index() != 0:
+		return 0.0
+	var diff: int = int(Global.selected_difficulty)
+	if diff <= 1:
+		return 1.0      ## 简单 / 普通
+	if diff == 2:
+		return 0.6      ## 困难
+	return 0.3          ## 专家
+
+
 func _deal_boss_card() -> void:
 	if _boss_deck.is_empty():
 		_boss_deck = build_boss_bag(_boss_deck_last, boss_deck_nothing_weight, _boss_tank_weight)
@@ -3572,12 +3609,23 @@ func _deal_tank_card() -> void:
 		return
 	## ★难度概率（2026-10-25 用户需求「接近 L4D：低难度更少遇 Tank」）：
 	## 用 Players.spawn_scale()（简单 0.5 / 普通 0.75 / 困难 1.0 / 最高 1.25）当难度代理，
-	## 换算成跳过率 ≈ 0.6 / 0.4 / 0.2 / 0.0 —— 普通难度约有 4 成 Tank 牌被当成"无事"。
+	## 换算成跳过率 —— 普通难度约有 4 成半 Tank 牌被当成"无事"。
 	## L4D 里 Tank 是低概率事件，不是每张牌都兑现。
+	## ★2026-10-31：系数 0.8 → 0.72，整体再降一档（用户实测「Tank 概率有点高」）。
 	var diff_scale: float = Players.spawn_scale()
-	var skip_chance: float = clampf(1.0 - 0.8 * diff_scale, 0.0, 0.7)
+	var skip_chance: float = clampf(1.0 - 0.72 * diff_scale, 0.0, 0.7)
 	if skip_chance > 0.0 and randf() < skip_chance:
 		print("[Director] Boss 发牌：Tank（难度跳过 %.0f%%，视为无事）" % (skip_chance * 100.0))
+		return
+	## ★关卡深度闸（2026-10-31 用户实测）：普通难度「尽量第二关才见到 Tank」。
+	## 第一张图额外加一道跳过率 —— 难度越低越接近"完全不出"；
+	## 困难/专家仍保留小概率（"运气不好就第一关撞上"）。
+	var first_skip: float = _tank_first_level_skip_chance()
+	if first_skip >= 1.0:
+		print("[Director] Boss 发牌：Tank（第一关 + 本难度不出，视为无事）")
+		return
+	if first_skip > 0.0 and randf() < first_skip:
+		print("[Director] Boss 发牌：Tank（第一关跳过 %.0f%%）" % (first_skip * 100.0))
 		return
 	## 简单难度（单人）/ 怜悯期：不兑现 Tank 牌（牌已消耗，等同"无事"）。
 	if is_pressure_blocked():

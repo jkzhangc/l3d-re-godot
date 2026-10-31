@@ -97,8 +97,16 @@ var _internet_host_token := ""
 var _heartbeat_accum := 0.0
 const HEARTBEAT_INTERVAL := 10.0
 
+## 多人大厅 BGM（2026-10-31 用户指定曲目 + 音量）。与其他大厅界面不是同一首。
+const LOBBY_BGM_PATH := "res://music/瀬上純 - Advertise Rhythmic Passage.mp3"
+const LOBBY_BGM_VOLUME_DB := -6.0
+
 
 func _ready() -> void:
+	## ★多人大厅专属 BGM（2026-10-31 用户需求）：Advertise - Rhythmic Passage，音量压 -6dB。
+	## 与标题/战役选择的 `l3d_lobby.mp3` 是**同一台播放器**，进来会换曲、离开由
+	## `_on_start_pressed`/返回标题的 `stop_lobby_music()` 收尾。
+	Global.play_lobby_music(LOBBY_BGM_PATH, LOBBY_BGM_VOLUME_DB)
 	## 场景内全部 Label 套全局阴影（原 .tscn 里的 Label 都没带阴影，与全游戏风格不一致）
 	for node in find_children("", "Label", true, false):
 		Global.apply_text_shadow(node as Label)
@@ -219,6 +227,7 @@ func _setup_room_panel() -> void:
 	difficulty_select.select(clampi(Global.selected_difficulty, 0,
 		maxi(difficulty_select.item_count - 1, 0)))
 	difficulty_select.item_selected.connect(_on_difficulty_selected)
+	_diff_sel = _attach_arrow_selector(difficulty_select, "难度")
 	_setup_horde_modifier_rows()
 	_setup_visual_style()
 	_setup_chapter_select()
@@ -286,6 +295,79 @@ func _refresh_horde_modifier_controls() -> void:
 		check.set_pressed_no_signal(Global.horde_modifier(key))
 
 
+# ═══════════════════════════════════════
+# 按钮化选择器（2026-10-31 用户需求：大厅从鼠标交互改成按钮交互）
+# ═══════════════════════════════════════
+## 把 `OptionButton` 换成「◀ 值 ▶」按钮行：`OptionButton` 本体**隐藏、只当数据源**，
+## 值由中间 Label 显示。左右按钮都是 Control 焦点对象 →
+## 键盘/手柄用 `ui_left / ui_right / ui_accept` 就能操作，鼠标点同样有效。
+class ArrowSelector:
+	var option: OptionButton
+	var prev: Button
+	var next: Button
+	var label: Label
+
+var _diff_sel: ArrowSelector = null
+var _chapter_sel: ArrowSelector = null
+
+
+func _attach_arrow_selector(option: OptionButton, title: String) -> ArrowSelector:
+	if option == null or not is_instance_valid(option):
+		return null
+	var row: Node = option.get_parent()
+	if row == null:
+		return null
+	var sel := ArrowSelector.new()
+	sel.option = option
+	option.visible = false
+	sel.prev = _make_arrow_button("◀")
+	sel.next = _make_arrow_button("▶")
+	sel.label = Label.new()
+	sel.label.name = "%sValue" % option.name
+	sel.label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	sel.label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sel.label.add_theme_font_size_override("font_size", 24)
+	sel.label.tooltip_text = title
+	sel.label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(sel.prev)
+	row.add_child(sel.label)
+	row.add_child(sel.next)
+	sel.prev.pressed.connect(_step_option.bind(option, -1))
+	sel.next.pressed.connect(_step_option.bind(option, 1))
+	return sel
+
+
+func _make_arrow_button(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.focus_mode = Control.FOCUS_ALL
+	b.custom_minimum_size = Vector2(44, 32)
+	b.add_theme_font_size_override("font_size", 24)
+	return b
+
+
+## 左右步进：改 selected 后**复用原有信号**，权限/日志/联动逻辑一份不重写。
+func _step_option(option: OptionButton, delta: int) -> void:
+	if option == null or option.item_count <= 0:
+		return
+	var idx: int = (option.selected + delta + option.item_count) % option.item_count
+	option.select(idx)
+	option.item_selected.emit(idx)
+
+
+func _refresh_arrow_selector(sel: ArrowSelector, enabled: bool) -> void:
+	if sel == null:
+		return
+	var has_items: bool = sel.option.item_count > 0
+	sel.prev.disabled = not enabled or not has_items
+	sel.next.disabled = not enabled or not has_items
+	if has_items:
+		var idx: int = clampi(sel.option.selected, 0, sel.option.item_count - 1)
+		sel.label.text = sel.option.get_item_text(idx)
+	else:
+		sel.label.text = "—"
+
+
 func _on_difficulty_selected(index: int) -> void:
 	if net == null or not bool(net.get("is_host")):
 		_refresh_room_info()
@@ -297,6 +379,7 @@ func _on_difficulty_selected(index: int) -> void:
 func _refresh_room_info() -> void:
 	var host_side: bool = net != null and bool(net.get("is_host"))
 	difficulty_select.disabled = not host_side
+	_refresh_arrow_selector(_diff_sel, host_side)
 	room_name_label.text = "房间：%s" % ("本机（主机）" if host_side else "已加入")
 	var campaign_name: String = "—"
 	if _chapter_entries.size() > 0:
@@ -854,6 +937,7 @@ func _setup_chapter_select() -> void:
 	for entry: Dictionary in _chapter_entries:
 		chapter_select.add_item(str(entry.get("label", "?")))
 	chapter_select.item_selected.connect(_on_chapter_selected)
+	_chapter_sel = _attach_arrow_selector(chapter_select, "起始章节")
 	_refresh_chapter_select()
 
 
@@ -873,6 +957,7 @@ func _refresh_chapter_select() -> void:
 	chapter_select.disabled = not host_side or chapter_select.item_count == 0
 	if chapter_select.item_count > 0:
 		chapter_select.select(clampi(_selected_chapter, 0, chapter_select.item_count - 1))
+	_refresh_arrow_selector(_chapter_sel, host_side and chapter_select.item_count > 0)
 
 
 ## 开始游戏用哪张图：选了章节就用它，否则回退到默认第一关。
