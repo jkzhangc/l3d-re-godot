@@ -153,8 +153,17 @@ func _show_state(s: int) -> void:
 			_hint.text = "方向键选择 · 确定 · 取消=离开"
 		State.DIFFICULTY:
 			_items = DIFFICULTY_NAMES.duplicate()
-			_hint.text = "改动立即生效（影响后续刷怪与敌人强度）"
+			## ★附加参数（2026-10-31）：接在难度后面，同一列上下选，确定/左右翻转。
+			for key: String in Global.HORDE_MODIFIER_ORDER:
+				_items.append(_modifier_item_text(key))
+			_hint.text = "难度：确定=生效并关闭 · 附加参数：确定=翻转"
 	_layout()
+
+
+## 附加参数行文案（前缀「· 」与难度名区分开；状态直接写开/关）。
+func _modifier_item_text(key: String) -> String:
+	var on: bool = Global.horde_modifier(key)
+	return "· %s：%s" % [str(Global.HORDE_MODIFIER_LABELS.get(key, key)), "开" if on else "关"]
 
 
 func _layout() -> void:
@@ -233,6 +242,11 @@ func _input(event: InputEvent) -> void:
 		_cursor = (_cursor + 1) % n
 		Global.play_ui_sfx("cursor")
 		_refresh_cursor()
+	elif event.is_action_pressed("左") or event.is_action_pressed("右"):
+		## 附加参数行：左右也能翻转（与难度行的"左右不动"不冲突）
+		if _state == State.DIFFICULTY and _cursor >= DIFFICULTY_NAMES.size():
+			get_viewport().set_input_as_handled()
+			_toggle_modifier(_cursor - DIFFICULTY_NAMES.size())
 
 
 func _confirm() -> void:
@@ -243,10 +257,27 @@ func _confirm() -> void:
 			1:
 				_show_state(State.DIFFICULTY)
 	else:
-		## 难度：立即生效（Global.selected_difficulty 被难度倍率实时读取）
-		Global.selected_difficulty = _cursor
-		print("[存档点] 难度改为: %s" % DIFFICULTY_NAMES[_cursor])
-		_toast_and_close("难度已改为 %s" % DIFFICULTY_NAMES[_cursor])
+		if _cursor < DIFFICULTY_NAMES.size():
+			## 难度：立即生效（Global.selected_difficulty 被难度倍率实时读取）
+			Global.selected_difficulty = _cursor
+			print("[存档点] 难度改为: %s" % DIFFICULTY_NAMES[_cursor])
+			_toast_and_close("难度已改为 %s" % DIFFICULTY_NAMES[_cursor])
+			return
+		## 附加参数：翻转后**留在本界面**（玩家通常要连改好几个）
+		_toggle_modifier(_cursor - DIFFICULTY_NAMES.size())
+
+
+func _toggle_modifier(mod_index: int) -> void:
+	if mod_index < 0 or mod_index >= Global.HORDE_MODIFIER_ORDER.size():
+		return
+	var key: String = Global.HORDE_MODIFIER_ORDER[mod_index]
+	Global.toggle_horde_modifier(key)
+	print("[存档点] 附加参数 %s = %s" % [
+		str(Global.HORDE_MODIFIER_LABELS.get(key, key)),
+		"开" if Global.horde_modifier(key) else "关"])
+	## 只改当前行的文字再重排，光标停在原处
+	_items[_cursor] = _modifier_item_text(key)
+	_layout()
 
 
 # ═══════════════════════════════════════

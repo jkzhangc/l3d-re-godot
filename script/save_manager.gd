@@ -116,6 +116,9 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 		"team_spray_item": _encode_item(Players.team_spray_item) if Players.using_shared_spray_pool() else {},
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
 		"selected_difficulty": Global.selected_difficulty,
+		# ★开局附加参数（2026-10-31）：尸潮狂暴 / 强制不加压 / 关闭尸潮 —— 属于本局设置，
+		#   必须跟着存档走；读旧档（无此键）回落默认值。
+		"horde_modifiers": Global.horde_modifiers_snapshot(),
 		"quest_flags": Global.quest_flags.duplicate(),
 		# ★地图补给点「本次 roll 结果」（2026-10-12）：保证重载后同一补给点内容不变
 		# （防「这次冲锋枪、下次霰弹枪」）。已消耗状态本身走 quest_flags，不在此。
@@ -289,6 +292,8 @@ static func load_slot(idx: int) -> Dictionary:
 	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
 		Global.selected_campaign = load(campaign_path) as CampaignData
 	Global.selected_difficulty = data.get("selected_difficulty", 0)
+	## 附加参数（2026-10-31）：旧档没有该键 → 全部回落默认值（不会被上一次游戏的设置污染）。
+	Global.apply_horde_modifiers(data.get("horde_modifiers", {}))
 
 	print("[存档] 已加载槽位 %d: %s (time=%s, v%d)" % [idx, slot_path(idx), data.get("timestamp", "?"), version])
 	print("[存档] 恢复完成 | 座位=%d %s" % [Players.seat_count(), Players.get_active_state().describe()])

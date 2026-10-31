@@ -183,10 +183,12 @@ func _on_phase_changed_l4d(phase: StringName) -> void:
 		&"build":
 			_horde_active = false
 			## 常态补怪：**不吃难度**（2026-10-29 用户定稿），各难度密度一致
-			_budget_left = Players.scale_ambient_count(
-				randi_range(build_budget_min, build_budget_max))
+			## ★附加参数「强制不加压」（2026-10-31）：直接发 0 预算 → 本段一只都不刷。
+			_budget_left = 0 if _no_pressure() \
+				else Players.scale_ambient_count(randi_range(build_budget_min, build_budget_max))
 			_scatter_timer = 0.0  # 进入加压阶段的第一批立即生成（不干等）
-			print("[SpawnManager] L4D build: 预算 %d 只" % _budget_left)
+			print("[SpawnManager] L4D build: 预算 %d 只%s" % [
+				_budget_left, "（强制不加压）" if _no_pressure() else ""])
 		&"peak":
 			_start_mob()   ## 入场爆发 + 建立峰值补怪窗口
 		&"fade":
@@ -196,11 +198,14 @@ func _on_phase_changed_l4d(phase: StringName) -> void:
 			_budget_left = 0
 			_relax_timer = relax_interval
 
-
 # ═══════════════════════════════════════
 # L4D 模型 — 每帧驱动
 # ═══════════════════════════════════════
 func _update_l4d(delta: float, intensity: float, alive_count: int) -> void:
+	## ★附加参数「强制不加压」（2026-10-31）：加压与喘息两条补给通道全关。
+	## 保留：作者摆的 SpawnZone（`Director._update_ambient_zones`）、尸潮、特感、Boss。
+	if _no_pressure():
+		return
 	match current_phase:
 		&"build":
 			_update_build_budget(delta, intensity, alive_count)
@@ -370,6 +375,42 @@ func _threat_count() -> int:
 	return 0
 
 
+## ── 附加参数 / 紧张度取数（2026-10-31）──
+## 「强制不加压」：导演不再持续供水（加压预算 + 喘息补位）。
+## 注意与 `offscreen_refill_enabled` 分工：那个是**地图级**开关，这个是**本局设置**，
+## 由难度选择界面的开关控制、随存档走。
+## `_global_cache` 做一次缓存：`_no_pressure()` 每帧都会被 `_update_l4d` 调用。
+var _global_cache: Node = null
+
+
+func _global() -> Node:
+	if _global_cache == null or not is_instance_valid(_global_cache):
+		_global_cache = get_node_or_null("/root/Global")
+	return _global_cache
+
+
+func _no_pressure() -> bool:
+	var g: Node = _global()
+	if g == null or not g.has_method("horde_modifier"):
+		return false
+	return bool(g.call("horde_modifier", "no_build_pressure"))
+
+
+## 当前紧张度（导演每帧算好的 0~1）。取不到 → 0（不加成，等价旧行为）。
+func _current_intensity() -> float:
+	if _director != null and _director.has_method("get_intensity"):
+		return clampf(float(_director.call("get_intensity")), 0.0, 1.0)
+	return 0.0
+
+
+## 难度表的「紧张度 → 尸潮规模」系数（普通 0.15 / 最高 0.40）。
+func _intensity_mob_gain() -> float:
+	var g: Node = _global()
+	if g != null and g.has_method("difficulty_intensity_mob"):
+		return float(g.call("difficulty_intensity_mob"))
+	return 0.0
+
+
 # ═══════════════════════════════════════
 # L4D 模型 — 尸潮（峰值入场，一次性）
 # ═══════════════════════════════════════
@@ -380,17 +421,23 @@ func _threat_count() -> int:
 func _start_mob() -> void:
 	## ★规模下限（2026-10-31）：`scale_spawn_count` 的 minimum 参数，缩放后不足就补上。
 	var floor_size: int = maxi(mob_size_floor, 1)
-	var size: int = Players.scale_spawn_count(randi_range(
-		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max)), floor_size)
+	var raw_size: int = randi_range(
+		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max))
+	## ★紧张度 → 规模（2026-10-31 用户需求）：队伍越吃紧，这一波越大。
+	## 倍率 = 1 + 难度系数 × 紧张度（普通档 0.15 → 满紧张度 +15%），先放大再走人数/难度缩放。
+	var stress: float = 1.0 + _intensity_mob_gain() * _current_intensity()
+	var size: int = Players.scale_spawn_count(roundi(float(raw_size) * stress), floor_size)
 	var ratio: float = clampf(mob_behind_ratio, 0.0, 1.0)
 	var behind: int = int(round(float(size) * ratio))
 	var front: int = size - behind
 	_horde_active = true
 	## 峰值窗口：以 PacingController 抽好的 phase_duration 为准（峰值按时间结束）
 	## 维持数同样兜底（下限的一半）：否则简单难度峰值只剩 1~2 只，尸潮"砸下来"的感觉没了。
-	_horde_target_alive = Players.scale_spawn_count(randi_range(
-		mini(horde_total_min, horde_total_max), maxi(horde_total_min, horde_total_max)),
+	_horde_target_alive = Players.scale_spawn_count(roundi(
+		float(randi_range(mini(horde_total_min, horde_total_max),
+			maxi(horde_total_min, horde_total_max))) * stress),
 		maxi(floor_size / 2, 1))
+	print("[SpawnManager] 尸潮规模：基准 %d × 紧张度加成 %.2f = %d 只" % [raw_size, stress, size])
 	var pc: Node = _director.get_node_or_null("PacingController") if _director != null else null
 	_horde_duration = float(pc.get("phase_duration")) if pc != null else 60.0
 	_horde_time_left = maxf(_horde_duration, 1.0)

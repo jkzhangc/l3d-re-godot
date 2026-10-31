@@ -408,6 +408,8 @@ func _process(delta: float) -> void:
 		if intensity_tracker != null and is_instance_valid(intensity_tracker):
 			engaged = bool(intensity_tracker.get("in_combat"))
 		## 智能尸潮：把「本章新增击杀」喂给节奏控制器（杀得越多，压力条越快填满）
+		## 附加参数（关闭尸潮 / 紧张度系数）先对齐一次，保证首帧就正确。
+		_sync_horde_modifiers(pc)
 		_feed_smart_horde_kills(pc, delta)
 		pc.update(delta, new_intensity, alive_count, horde_running, engaged)
 	var current_phase: StringName = &"cooldown"
@@ -442,7 +444,7 @@ func _process(delta: float) -> void:
 		var fs: Node = get_node_or_null("FrontSpawner")
 		## 画面外补怪关闭时，FrontSpawner 只保留"取点器"职责（尸潮/事件批仍要用它算落点），
 		## 不再自己补位。旧模型（l4d_pacing=false）的补位入口就是这里。
-		if fs and fs.has_method("update") and offscreen_refill_enabled:
+		if fs and fs.has_method("update") and refill_allowed():
 			fs.update(delta, anchor, alive_count, current_phase)
 
 		# ── 特感编排：与常规刷怪同一闸门（防守战挂起期间冻结）──
@@ -688,8 +690,13 @@ func _on_phase_changed(phase: StringName) -> void:
 		_play_calm_music()
 	elif phase == &"peak":
 		_stop_calm_music()
-		_horde_rage = true
-		_set_all_enemies_rage(true)   ## 尸潮触发 → 僵尸切换クリムゾンヘッド（狂暴）
+		## ★附加参数「尸潮狂暴」（2026-10-31）：关掉后只是不变红/不加速，
+		## 尸潮本身、BGM、预告音全部照常 —— 它只控制形态切换。
+		_horde_rage = _berserk_enabled()
+		if _horde_rage:
+			_set_all_enemies_rage(true)   ## 尸潮触发 → 僵尸切换クリムゾンヘッド（狂暴）
+		else:
+			print("[Director] 尸潮狂暴已关闭（附加参数）：本波保持普通形态")
 		_lock_all_enemies_for_horde() ## 尸潮触发 → 附近全部丧尸直接追击最近玩家（对齐防守战）
 		_play_horde_music()
 		## 临峰已预告过（5 秒内）就不要再响一次
@@ -1531,8 +1538,8 @@ func _zone_probe_radius() -> float:
 ## 局部密度交给区域，避免"区域补一批 + 游荡者再补到 6 只"叠加；
 ## 地图有区域但玩家这一带没有覆盖时，仍按常驻目标补，走廊不会空。
 func seed_wanderers(count: int) -> int:
-	## 总开关关闭 → 一只都不铺（否则"进图先铺 6~9 只"仍是画面外补怪）。
-	if not offscreen_refill_enabled:
+	## 总开关关闭 / 本局「强制不加压」→ 一只都不铺（否则"进图先铺 6~9 只"仍是画面外补怪）。
+	if not refill_allowed():
 		return 0
 	var decor_layer: Node = _find_decor_layer()
 	if decor_layer == null:
@@ -1583,8 +1590,9 @@ func _update_wander_advance(players: Array[Node2D]) -> void:
 		if _boss_trail >= _boss_next_anchor:
 			_boss_next_anchor = _boss_trail + boss_deck_step
 			_deal_boss_card()
-	## 游荡者补层同样只在正常行军时进行（防守战期间补游荡者＝往阵地上堆怪）。
-	if not offscreen_refill_enabled:
+	## 游荡者补层同样只在正常行军时进行（防守战期间补游荡者＝往阵地上堆怪）；
+	## 本局「强制不加压」时也停手（2026-10-31）。
+	if not refill_allowed():
 		return
 	if not l4d_pacing or wander_seed_step <= 0.0 or not _can_deal_boss():
 		return
@@ -2266,7 +2274,7 @@ func _check_scene_change() -> void:
 	## 本项目地图没有 SpawnZone/SpawnPoint，且街道/走廊图一拐弯就取不到前方点，
 	## 所以"一片区域里有丧尸在晃"必须由导演主动预置，而不是等玩家走到才从前方刷。
 	## 安全屋 / 不刷怪的图跳过。放在安全屋收尾之后：收尾会把阶段打回喘息，不能被打扰。
-	if offscreen_refill_enabled and l4d_pacing and wander_seed_max > 0 \
+	if refill_allowed() and l4d_pacing and wander_seed_max > 0 \
 			and not _scene_is_safe_room(scene) and _is_spawn_map():
 		_wander_advance = 0.0
 		_wander_positions.clear()
@@ -2470,6 +2478,13 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		## 换图 = 新的一张图：压力表清零、首波计数归零、硬间隔计时重置。
 		if pc.has_method("reset_for_new_map"):
 			pc.call("reset_for_new_map")
+		## 附加参数 + 紧张度系数：开局显式对齐一次（`_sync_horde_modifiers` 之后只在变化时写）。
+		var g_mod: Node = get_node_or_null("/root/Global")
+		if g_mod != null:
+			pc.set("no_horde", bool(g_mod.call("horde_modifier", "no_horde")))
+			pc.set("intensity_gain", float(g_mod.call("difficulty_intensity_pressure")))
+			_mod_cache_no_horde = bool(pc.get("no_horde"))
+			_mod_cache_pressure_gain = float(pc.get("intensity_gain"))
 		## ★节奏时长按「地图尺度」打折（2026-10-24）：本作一章几分钟就跑完，
 		## L4D 那套按十几分钟一章标定的秒数直接照搬 → 一张图只够 1~2 个循环。
 		## 只缩这四个时长；peak_sustain / fade_quiet_sec 是体感下限，不缩。
@@ -3158,6 +3173,69 @@ func _set_all_enemies_rage(on: bool) -> void:
 		print("[Director] 尸潮狂暴%s：%d 只僵尸%s" % [
 			"开启" if on else "解除", n,
 			"切换为クリムゾンヘッド" if on else "恢复普通形态"])
+
+
+# ═══════════════════════════════════════
+# 开局附加参数（2026-10-31 用户需求）
+# ═══════════════════════════════════════
+## 难度选择界面下方的三个开关，随存档/检查点走。这里只做**读取 + 分发**，
+## 真正的判定落在各自的消费点（节奏控制器 / 刷怪管理器 / 本方狂暴分支）。
+
+## 尸潮狂暴是否开启。关掉只影响**形态切换**（不变红、不吃クリムゾンヘッド的速度加成），
+## 尸潮本身、BGM、预警音照常。
+func _berserk_enabled() -> bool:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("horde_modifier"):
+		return true
+	return bool(g.call("horde_modifier", "berserk"))
+
+
+## 附加参数「关闭尸潮」当前值（节奏控制器据此跳过峰值）。
+func _horde_disabled() -> bool:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("horde_modifier"):
+		return false
+	return bool(g.call("horde_modifier", "no_horde"))
+
+
+## 附加参数「强制不加压」当前值（**只看本局设置**，不含地图级开关）。
+func _pressure_disabled() -> bool:
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null or not g.has_method("horde_modifier"):
+		return false
+	return bool(g.call("horde_modifier", "no_build_pressure"))
+
+
+## 是否允许「持续供水」= 地图级 `offscreen_refill_enabled` ∧ 本局「强制不加压」未开。
+## 管的是：FrontSpawner 补位、进图/换区游荡者。
+## **不管**：尸潮、特感、Boss、作者摆的 SpawnZone（那些是事件与地图内容，不是加压）。
+func refill_allowed() -> bool:
+	if not offscreen_refill_enabled:
+		return false
+	return not _pressure_disabled()
+
+
+## 每帧把附加参数同步进节奏控制器 —— **只在值变化时写**，避免每帧 set 属性。
+## 顺带刷新「紧张度 → 压力」的难度系数：玩家可能在存档点中途改难度。
+var _mod_cache_no_horde: bool = false
+var _mod_cache_pressure_gain: float = -1.0
+
+
+func _sync_horde_modifiers(pc: Node) -> void:
+	if pc == null:
+		return
+	var g: Node = get_node_or_null("/root/Global")
+	if g == null:
+		return
+	var no_horde: bool = bool(g.call("horde_modifier", "no_horde"))
+	if no_horde != _mod_cache_no_horde:
+		_mod_cache_no_horde = no_horde
+		pc.set("no_horde", no_horde)
+		print("[Director] 附加参数：关闭尸潮 = %s" % ("开" if no_horde else "关"))
+	var gain: float = float(g.call("difficulty_intensity_pressure"))
+	if not is_equal_approx(gain, _mod_cache_pressure_gain):
+		_mod_cache_pressure_gain = gain
+		pc.set("intensity_gain", gain)
 
 
 # ═══════════════════════════════════════
@@ -4104,6 +4182,10 @@ func debug_snapshot() -> Dictionary:
 		"horde_since_peak": float(smart.get("since_peak", -1.0)),
 		"horde_gap": float(smart.get("gap", 0.0)),
 		"horde_build_index": int(smart.get("build_index", 0)),
+		## 开局附加参数（2026-10-31）：F3 里能直接看出这局被改成了什么。
+		"mod_berserk": _berserk_enabled(),
+		"mod_no_horde": _horde_disabled(),
+		"mod_no_pressure": _pressure_disabled(),
 		"intensity": get_intensity(),
 		"intensity_raw": raw,
 		"in_combat": combat,

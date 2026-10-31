@@ -77,6 +77,13 @@ var first_build_max: float = 0.0
 ## 距上一次 PEAK **开始**的秒数：`smart_gap_sec` 硬间隔闸用。
 ## 换图时置大值，避免「上一张图的尸潮」把新图首波也压住。
 var _since_peak_sec: float = 1.0e9
+## ── 紧张度接入（2026-10-31 用户需求）──
+## 压力表填充倍率 = 1 + 本值 × 紧张度。由 Director 从难度表 `intensity_pressure` 注入；
+## 0 = 紧张度不参与（与旧行为等价）。普通档刻意压低（0.22），高难度才明显放大。
+var intensity_gain: float = 0.0
+## 关闭尸潮（附加参数）：节奏永不进入峰值，BUILD ↔ COOLDOWN 循环。
+## 由 Director 每帧按 `Global.horde_modifier("no_horde")` 同步；`force_peak()`（剧本/防守战）不受影响。
+var no_horde: bool = false
 
 # ── L4D 模型（2026-10-24）──
 ## 开启后：峰值为「停手段」（不再持续供怪），峰值结束先进 FADE 余韵，再进 COOLDOWN 喘息。
@@ -138,7 +145,10 @@ func update(delta: float, intensity: float, alive_enemy_count: int,
 			## 所以「难度改变时间」仍然成立，只是击杀会让它提前。
 			if smart_horde:
 				var idle_mult: float = maxf(smart_idle_mult, 0.0) if not engaged else 1.0
-				_progress_sec += delta * idle_mult
+				## ★紧张度接入（2026-10-31）：队伍越吃紧，压力条涨得越快（与击杀加成相乘）。
+				## `intensity_gain` 来自难度表 `intensity_pressure`，普通档 0.22 → 满紧张度才 +22%。
+				var stress_mult: float = 1.0 + intensity_gain * clampf(intensity, 0.0, 1.0)
+				_progress_sec += delta * idle_mult * stress_mult
 				var target: float = phase_duration
 				## 两道闸叠加：①本段 BUILD 至少走 `smart_min_sec`；②距上一波开始至少 `smart_gap_sec`。
 				## ②是 2026-10-31 新加的「防突然再来一次」兜底 —— 它与 FADE/COOLDOWN 的长度、
@@ -267,7 +277,9 @@ func reset_for_new_map() -> void:
 # ═══════════════════════════════════════
 func _advance_phase() -> void:
 	match current_phase:
-		Phase.BUILD:     _set_phase(Phase.PEAK)
+		## ★附加参数「关闭尸潮」（2026-10-31）：BUILD 到点直接回喘息，永不进峰值。
+		## 走 COOLDOWN 而不是原地续 BUILD —— 保留「有起有落」的停顿感与铺底音乐切换。
+		Phase.BUILD:     _set_phase(Phase.COOLDOWN if no_horde else Phase.PEAK)
 		## L4D 模型：峰值结束后先进余韵（等战斗自然收尾），再进喘息。
 		Phase.PEAK:      _set_phase(Phase.FADE if l4d_model else Phase.COOLDOWN)
 		Phase.FADE:      _set_phase(Phase.COOLDOWN)

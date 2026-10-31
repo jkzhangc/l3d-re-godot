@@ -115,6 +115,16 @@ func _format(s: Dictionary) -> String:
 	var since_txt: String = "新图" if since_peak < 0.0 else "%.0fs" % since_peak
 	lines.append("距上一波 %-6s / 硬闸 %.0fs   BUILD 第 %d 段" % [
 		since_txt, gap, int(s.get("horde_build_index", 0))])
+	## 开局附加参数（2026-10-31）：全默认时不占篇幅，改过的才列出来。
+	var mods: Array[String] = []
+	if not bool(s.get("mod_berserk", true)):
+		mods.append("尸潮不狂暴")
+	if bool(s.get("mod_no_horde", false)):
+		mods.append("关闭尸潮")
+	if bool(s.get("mod_no_pressure", false)):
+		mods.append("不加压")
+	if not mods.is_empty():
+		lines.append("附加：" + " / ".join(mods))
 
 	var inten: float = float(s.get("intensity", 0.0))
 	var raw: float = float(s.get("intensity_raw", 0.0))

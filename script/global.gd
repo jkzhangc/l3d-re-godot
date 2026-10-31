@@ -481,18 +481,27 @@ var selected_difficulty: int = 0  ## 0=Easy, 1=Normal, 2=Hard, 3=Expert
 ## ⚠ 「正常补怪」（游荡者 / 加压预算 / 喘息补位）**不吃难度**，见 Players.ambient_spawn_scale()。
 ##   horde_interval_*        —— 尸潮**基线**间隔（秒）：智能尸潮的目标时长由它反推
 ##                              （击杀会在此基础上提前）；关掉智能尸潮时就是纯定时。
+##   intensity_pressure      —— **紧张度 → 压力表填充**的放大系数（2026-10-31 接入）：
+##                              实际填充倍率 = 1 + 本值 × 紧张度。0 = 紧张度不影响压力。
+##   intensity_mob           —— **紧张度 → 尸潮规模**的放大系数：实际规模 = 基准 × (1 + 本值 × 紧张度)。
 ## ★2026-10-31 逐档重标定：此前四档全是 180~300 → 难度对尸潮时间零影响，
 ##   而且 180~300s 在 3~4 分钟的短图上意味着「一波都遇不到」（用户实测零尸潮）。
 ##   现在按「一张 3~4 分钟的图遇到 2~3 波」标定；**首波**用同一张表（普通 ≈ 2 分钟）。
+## ⚠ 普通档的紧张度加成刻意压低（压力 +22%、规模 +15% 上限）：用户 2026-10-31 要求
+##   「普通难度加压不要太大」—— 紧张度在普通档只做微调，高难度才明显放大。
 var difficulty_multipliers: Dictionary = {
 	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6, "spawn_scale": 0.5,
-		"active_cap": 0.8, "horde_interval_min": 125.0, "horde_interval_max": 170.0},
+		"active_cap": 0.8, "horde_interval_min": 125.0, "horde_interval_max": 170.0,
+		"intensity_pressure": 0.10, "intensity_mob": 0.08},
 	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0, "spawn_scale": 0.75,
-		"active_cap": 1.0, "horde_interval_min": 110.0, "horde_interval_max": 145.0},
+		"active_cap": 1.0, "horde_interval_min": 110.0, "horde_interval_max": 145.0,
+		"intensity_pressure": 0.22, "intensity_mob": 0.15},
 	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5, "spawn_scale": 1.0,
-		"active_cap": 1.15, "horde_interval_min": 80.0, "horde_interval_max": 112.0},
+		"active_cap": 1.15, "horde_interval_min": 80.0, "horde_interval_max": 112.0,
+		"intensity_pressure": 0.40, "intensity_mob": 0.28},
 	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0, "spawn_scale": 1.25,
-		"active_cap": 1.3, "horde_interval_min": 65.0, "horde_interval_max": 95.0},
+		"active_cap": 1.3, "horde_interval_min": 65.0, "horde_interval_max": 95.0,
+		"intensity_pressure": 0.55, "intensity_mob": 0.40},
 }
 
 
@@ -534,6 +543,18 @@ func difficulty_active_cap() -> float:
 	return difficulty_mult("active_cap")
 
 
+## ── 紧张度 → 压力表填充系数（2026-10-31 用户需求「把紧张度接入压力表」）──
+## 实际填充倍率 = 1 + 本值 × 紧张度；0 = 不影响。
+func difficulty_intensity_pressure() -> float:
+	return difficulty_mult("intensity_pressure")
+
+
+## ── 紧张度 → 尸潮规模系数（2026-10-31 用户需求「接入尸潮规模」）──
+## 实际规模 = 基准 × (1 + 本值 × 紧张度)。
+func difficulty_intensity_mob() -> float:
+	return difficulty_mult("intensity_mob")
+
+
 ## ── 尸潮间隔（秒）：两次「峰值开始」之间的目标间隔 ──
 ## ⚠ **智能尸潮（无交战计时）默认接管**，本表只在关掉智能尸潮时生效（各难度统一 180~300s）。
 func difficulty_horde_interval() -> Vector2:
@@ -542,6 +563,91 @@ func difficulty_horde_interval() -> Vector2:
 	if lo <= 0.0 or hi <= 0.0:
 		return Vector2(180.0, 300.0)
 	return Vector2(minf(lo, hi), maxf(lo, hi))
+
+
+# ═══════════════════════════════════════
+# 开局附加参数（2026-10-31 用户需求）
+# ═══════════════════════════════════════
+## 难度选择界面下方的开关组。**随存档槽位与死亡检查点一起保存/恢复**。
+## 键名同时是存档字段名；读取一律走 `horde_modifier()`，不要直接碰字典。
+## 语义（三者互相独立，可以任意组合）：
+##   · `berserk`          —— 尸潮期间普通丧尸是否切换狂暴形态（クリムゾンヘッド）。关掉只是不变红，
+##                           **不改变血量/伤害/速度**（速度加成挂在狂暴形态上，见 ZombieVariant）。
+##   · `no_build_pressure`—— 强制不加压：导演不再「持续供水」（加压预算 / 喘息补位 / 屏外补怪 /
+##                           换区游荡者）。作者摆的 SpawnZone、尸潮、特感、Boss 不受影响。
+##   · `no_horde`         —— 关闭尸潮：节奏永不进入峰值（BUILD ↔ COOLDOWN 循环），
+##                           尸潮 BGM / 预警音 / 尸潮狂暴自然都不会发生。
+## 两个都开 ≈ 纯探索模式（只剩地图自带的区域刷怪）。
+const HORDE_MODIFIER_DEFAULTS: Dictionary = {
+	"berserk": true,
+	"no_build_pressure": false,
+	"no_horde": false,
+}
+var horde_modifiers: Dictionary = HORDE_MODIFIER_DEFAULTS.duplicate()
+
+
+## 唯一读取入口。未知键 / 缺键一律回落默认值（读旧档不会炸）。
+func horde_modifier(key: String) -> bool:
+	if horde_modifiers.has(key):
+		return bool(horde_modifiers[key])
+	return bool(HORDE_MODIFIER_DEFAULTS.get(key, false))
+
+
+## 写入并**立即生效**：消费方（导演/节奏控制器/刷怪管理器）在各自的下一个决策点读 Global。
+func set_horde_modifier(key: String, value: bool) -> void:
+	if not HORDE_MODIFIER_DEFAULTS.has(key):
+		push_warning("[Global] 未知附加参数键：%s" % key)
+		return
+	horde_modifiers[key] = value
+
+
+## 翻转一个开关（UI 用）。返回翻转后的值。
+func toggle_horde_modifier(key: String) -> bool:
+	set_horde_modifier(key, not horde_modifier(key))
+	return horde_modifier(key)
+
+
+## 回到「全是默认值」。新开局 / 新战役时调用。
+func reset_horde_modifiers() -> void:
+	horde_modifiers = HORDE_MODIFIER_DEFAULTS.duplicate()
+
+
+## 存档用快照（只含已知键，保证写进 JSON 的结构稳定）。
+func horde_modifiers_snapshot() -> Dictionary:
+	var out: Dictionary = {}
+	for key: String in HORDE_MODIFIER_DEFAULTS.keys():
+		out[key] = horde_modifier(key)
+	return out
+
+
+## 读档用：缺键回落默认值（旧存档没有这个字段也不会被清成全 false）。
+func apply_horde_modifiers(data: Dictionary) -> void:
+	var out: Dictionary = HORDE_MODIFIER_DEFAULTS.duplicate()
+	for key: String in HORDE_MODIFIER_DEFAULTS.keys():
+		if data.has(key):
+			out[key] = bool(data[key])
+	horde_modifiers = out
+
+
+## 中文显示名（UI 与日志共用一套措辞，避免两处漂移）。
+const HORDE_MODIFIER_LABELS: Dictionary = {
+	"berserk": "尸潮狂暴",
+	"no_build_pressure": "强制不加压",
+	"no_horde": "关闭尸潮",
+}
+## 每个开关的「开/关」状态描述（UI 第二段文字）。
+const HORDE_MODIFIER_ON_TEXT: Dictionary = {
+	"berserk": "丧尸变红加速",
+	"no_build_pressure": "导演不补零星怪",
+	"no_horde": "不再出现尸潮",
+}
+const HORDE_MODIFIER_OFF_TEXT: Dictionary = {
+	"berserk": "保持普通形态",
+	"no_build_pressure": "正常加压",
+	"no_horde": "正常触发",
+}
+## UI 展示顺序（数组顺序 = 界面从上到下）。
+const HORDE_MODIFIER_ORDER: Array[String] = ["berserk", "no_horde", "no_build_pressure"]
 
 # ═══════════════════════════════════════
 # 尸体管理
@@ -1159,6 +1265,9 @@ func capture_checkpoint() -> void:
 		"gold": gold,
 		"selected_campaign": selected_campaign,
 		"selected_difficulty": selected_difficulty,
+		## ★2026-10-31：附加参数（尸潮狂暴 / 强制不加压 / 关闭尸潮）属于**本局设置**，
+		## 死亡重载必须跟着回来，否则「关掉尸潮」在一次团灭后就悄悄失效了。
+		"horde_modifiers": horde_modifiers_snapshot(),
 	}
 	print("[Checkpoint] 已捕获: 场景=%s 座位=%d %s" % [
 		scene_path, seat_clones.size(), Players.get_active_state().describe(),
@@ -1223,6 +1332,9 @@ func restore_checkpoint() -> void:
 	map_pickup_rolls = (checkpoint.get("map_pickup_rolls", {}) as Dictionary).duplicate()
 	selected_campaign = checkpoint.get("selected_campaign")
 	selected_difficulty = checkpoint.get("selected_difficulty", 0)
+	## 附加参数（2026-10-31）：旧 checkpoint 没有这个键 → `apply_horde_modifiers({})`
+	## 会把它们全部回落默认值，等价于旧行为（不会把当前值莫名其妙留着）。
+	apply_horde_modifiers(checkpoint.get("horde_modifiers", {}))
 	# 联机团灭重载由 NetworkWorld 驱动；Host 的 Net 会话状态必须同步指向
 	# checkpoint 恢复后的座位对象，否则下一张图仍会拿旧的 HP/装备/物资状态。
 	var net: Node = get_node_or_null("/root/Net")
