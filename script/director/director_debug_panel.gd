@@ -105,6 +105,16 @@ func _format(s: Dictionary) -> String:
 	var total: float = float(s.get("phase_duration", 0.0))
 	lines.append("导演 F3 关闭    %s" % str(s.get("scene", "")))
 	lines.append("阶段 %-8s 剩余 %5.1fs / %.1fs" % [phase, maxf(left, 0.0), total])
+	## 智能尸潮压力表（2026-10-31）：BUILD 段填满即开尸潮 —— 直接看「还差多少」。
+	lines.append("尸潮压力 %3.0f / %3.0fs  本章击杀 %d  每杀 +%.1fs" % [
+		float(s.get("horde_progress", 0.0)), float(s.get("horde_target", 0.0)),
+		int(s.get("horde_kills", 0)), float(s.get("horde_per_kill", 0.0))])
+	## 硬间隔闸：距上一波多久 / 还差多少才允许下一波（-1 = 本图还没打过）。
+	var since_peak: float = float(s.get("horde_since_peak", -1.0))
+	var gap: float = float(s.get("horde_gap", 0.0))
+	var since_txt: String = "新图" if since_peak < 0.0 else "%.0fs" % since_peak
+	lines.append("距上一波 %-6s / 硬闸 %.0fs   BUILD 第 %d 段" % [
+		since_txt, gap, int(s.get("horde_build_index", 0))])
 
 	var inten: float = float(s.get("intensity", 0.0))
 	var raw: float = float(s.get("intensity_raw", 0.0))

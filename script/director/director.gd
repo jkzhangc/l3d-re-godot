@@ -407,7 +407,7 @@ func _process(delta: float) -> void:
 		var engaged: bool = false
 		if intensity_tracker != null and is_instance_valid(intensity_tracker):
 			engaged = bool(intensity_tracker.get("in_combat"))
-		## 智能尸潮：把「本章新增击杀」喂给节奏控制器（杀得越多，下一波需要安静越久）
+		## 智能尸潮：把「本章新增击杀」喂给节奏控制器（杀得越多，压力条越快填满）
 		_feed_smart_horde_kills(pc, delta)
 		pc.update(delta, new_intensity, alive_count, horde_running, engaged)
 	var current_phase: StringName = &"cooldown"
@@ -2243,6 +2243,14 @@ func _check_scene_change() -> void:
 			_apply_immediate_spawn_start()
 	else:
 		print("[Director] no DirectorConfig in scene, using defaults")
+		## ★没配 DirectorConfig 的图也要重置节奏状态（2026-10-31）：
+		## 否则会把上一张图的「首波已过 / 距上一波多久」带过来 —— 首波会被跳过、
+		## 甚至被上一张图的硬间隔闸压住。首波区间清零 = 退回 build_min/max。
+		var pc_def: Node = get_node_or_null("PacingController")
+		if pc_def != null and pc_def.has_method("reset_for_new_map"):
+			pc_def.set("first_build_min", 0.0)
+			pc_def.set("first_build_max", 0.0)
+			pc_def.call("reset_for_new_map")
 	## ★进入安全屋 = 本局的中场休息（2026-10-03 用户实测：「安全屋里尸潮音乐还没结束」
 	## 「出安全屋后直接尸潮」）：必须在这里把门外那一波尸潮彻底收掉 ——
 	## 停尸潮/Boss BGM、解除狂暴与目标锁定、Pacing 回 cooldown 并重掷时长、
@@ -2341,6 +2349,7 @@ const FADE_OVERHEAD_SECONDS: float = 6.0
 
 
 ## 尸潮间隔（秒，峰值开始 → 下一次峰值开始）：本图覆盖优先，否则按难度表。
+## 这是**无击杀时的基线**：实际间隔会被 `smart_horde_per_kill_sec` 提前。
 ## 难度表见 Global.difficulty_multipliers 的 horde_interval_min/max。
 func _horde_interval_for(cfg: DirectorConfig) -> Vector2:
 	if cfg != null and cfg.horde_interval_override_min > 0.0 \
@@ -2356,9 +2365,46 @@ func _horde_interval_for(cfg: DirectorConfig) -> Vector2:
 	return Vector2(180.0, 300.0)
 
 
-## ── 智能尸潮的击杀喂入（2026-10-29 用户设计）──
-## 用 ChapterStats 的「本章击杀」当输入：换图 / 新局会自动归零，正好是"这一章杀得越多、
-## 下一波来得越晚"。0.5s 轮询一次即可（击杀是离散事件，get_totals 每次都会分配字典）。
+## 由「尸潮间隔」反推本图的 Build 时长区间（x=下限，y=上限）。
+## 与 `_apply_config` 里 `peak_timeout` / `cooldown_*` 的缩放口径必须一致 ——
+## 抽成独立函数是为了让用例能直接断言「各难度实际等多久」。
+func resolve_build_range(cfg: DirectorConfig) -> Vector2:
+	var t_scale: float = clampf(cfg.pacing_time_scale, 0.2, 2.0)
+	var peak_len: float = maxf(5.0, cfg.peak_timeout * t_scale)
+	var cd_min: float = maxf(1.0, cfg.cooldown_min * t_scale)
+	var cd_max: float = maxf(2.0, cfg.cooldown_max * t_scale)
+	var interval: Vector2 = _horde_interval_for(cfg)
+	var overhead: float = peak_len + (cd_min + cd_max) * 0.5 + FADE_OVERHEAD_SECONDS
+	return Vector2(maxf(30.0, interval.x - overhead), maxf(35.0, interval.y - overhead))
+
+
+## 两波尸潮之间的硬间隔（秒）。`smart_horde_gap_sec` 为 0 时按「间隔下限 × 0.9」自动取 ——
+## **必须随难度缩放**：固定 90s 会把「最高难度 65~95s 一波」直接压成 90s，难度分档就没了。
+func resolve_horde_gap(cfg: DirectorConfig) -> float:
+	if cfg.smart_horde_gap_sec > 0.0:
+		return cfg.smart_horde_gap_sec
+	return _horde_interval_for(cfg).x * 0.9
+
+
+## 首波 BUILD 时长区间（x=下限，y=上限）= `间隔 × smart_horde_first_scale`。
+## ⚠ **不扣 overhead**：开场没有峰值/余韵/喘息要先还债，所以第一段 BUILD 的时长
+## 就等于玩家从进图到第一波尸潮的等待时间。旧的错误写法有两种，都导致「首波太早」：
+##   · 乘在已经扣过 overhead 的 BUILD 上（0.6×）→ 普通只剩 35~59s；
+##   · 按 `间隔 − overhead` 算 → 只有 68~103s，仍然到不了 2 分钟。
+## 1.0 = 首波在「普通 110~145s」到来（用户 2026-10-31 要求「起码 2 分钟左右」）。
+func resolve_first_build_range(cfg: DirectorConfig) -> Vector2:
+	var interval: Vector2 = _horde_interval_for(cfg)
+	var scale: float = clampf(cfg.smart_horde_first_scale, 0.2, 2.0)
+	var lo: float = maxf(cfg.smart_horde_min_sec, interval.x * scale)
+	var hi: float = maxf(lo + 1.0, interval.y * scale)
+	return Vector2(lo, hi)
+
+
+## ── 智能尸潮的击杀喂入（2026-10-31 压力表）──
+## 用 ChapterStats 的「本章击杀」当输入：换图 / 新局会自动归零。
+## 语义（用户 2026-10-31 定）：**杀得越多，尸潮来得越快** —— 每杀给压力条加
+## `smart_per_kill_sec` 秒；非 BUILD 段的击杀由 PacingController 自行忽略（防连环尸潮）。
+## 0.5s 轮询一次即可（击杀是离散事件，get_totals 每次都会分配字典）。
 var _kill_poll_left: float = 0.0
 var _kills_seen: int = 0
 
@@ -2411,12 +2457,19 @@ func _apply_config(cfg: DirectorConfig) -> void:
 			"peak_sustain", "fade_quiet_sec", "fade_timeout"])
 		## L4D 模型开关：配置里的名字是 l4d_pacing，节奏控制器里叫 l4d_model。
 		pc.set("l4d_model", cfg.l4d_pacing)
-		## 智能尸潮（2026-10-29 用户设计）：默认开启 —— 节奏改由「无交战计时 + 击杀数」决定
+		## 智能尸潮（2026-10-31 重做：击杀驱动的压力表）：节奏改由「时间 + 击杀 + 安静」
+		## 三条来源共同填充一个进度条决定；目标时长仍由难度间隔表反推。
 		pc.set("smart_horde", cfg.smart_horde_enabled)
-		pc.set("smart_base_sec", cfg.smart_horde_base_sec)
 		pc.set("smart_per_kill_sec", cfg.smart_horde_per_kill_sec)
+		pc.set("smart_idle_mult", cfg.smart_horde_idle_mult)
 		pc.set("smart_min_sec", cfg.smart_horde_min_sec)
+		pc.set("smart_gap_sec", resolve_horde_gap(cfg))
+		## 停用字段仍转发一次：旧场景若存过值不会因为不再 set 而残留上一张图的状态。
+		pc.set("smart_base_sec", cfg.smart_horde_base_sec)
 		pc.set("smart_max_sec", cfg.smart_horde_max_sec)
+		## 换图 = 新的一张图：压力表清零、首波计数归零、硬间隔计时重置。
+		if pc.has_method("reset_for_new_map"):
+			pc.call("reset_for_new_map")
 		## ★节奏时长按「地图尺度」打折（2026-10-24）：本作一章几分钟就跑完，
 		## L4D 那套按十几分钟一章标定的秒数直接照搬 → 一张图只够 1~2 个循环。
 		## 只缩这四个时长；peak_sustain / fade_quiet_sec 是体感下限，不缩。
@@ -2427,14 +2480,16 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		pc.set("peak_timeout", peak_len)
 		pc.set("cooldown_min", cd_min)
 		pc.set("cooldown_max", cd_max)
-		## ★Build 时长改由「尸潮间隔（难度表 / 本图覆盖）」反推（2026-10-29 用户定稿）：
-		## 普通 3~5 分钟一波、简单 4~6、困难 3~4、最高 ≈3。
-		## 旧口径 build_min/max × t_scale(0.55) ≈ 20~60s 一波 —— 用户实测「尸潮太快」。
+		## ★Build 时长改由「尸潮间隔（难度表 / 本图覆盖）」反推（2026-10-29 用户定稿，
+		## 2026-10-31 抽成 `resolve_build_range()` 以便被用例直接校验）：
 		## 间隔 = Build + 峰值 + 余韵 + 喘息，所以 Build 要把后三段的期望值扣掉。
-		var interval: Vector2 = _horde_interval_for(cfg)
-		var overhead: float = peak_len + (cd_min + cd_max) * 0.5 + FADE_OVERHEAD_SECONDS
-		pc.set("build_min", maxf(30.0, interval.x - overhead))
-		pc.set("build_max", maxf(35.0, interval.y - overhead))
+		var build_range: Vector2 = resolve_build_range(cfg)
+		pc.set("build_min", build_range.x)
+		pc.set("build_max", build_range.y)
+		## 首波单独给时长（2026-10-31）：用户实测首波 35~59s 太早，普通要 2 分钟左右。
+		var first_range: Vector2 = resolve_first_build_range(cfg)
+		pc.set("first_build_min", first_range.x)
+		pc.set("first_build_max", first_range.y)
 	l4d_pacing = cfg.l4d_pacing
 	relax_advance = cfg.relax_advance
 	## 画面外补怪总开关（2026-10-29）：本节点与 SpawnManager 各持一份 ——
@@ -2549,7 +2604,7 @@ func _apply_config(cfg: DirectorConfig) -> void:
 			"build_budget_min", "build_budget_max",
 			"build_batch_min", "build_batch_max",
 			"build_interval_min", "build_interval_max",
-			"mob_size_min", "mob_size_max", "mob_behind_ratio",
+			"mob_size_min", "mob_size_max", "mob_behind_ratio", "mob_size_floor",
 			"relax_target", "relax_interval", "build_threat_limit"])
 		sm.set("l4d_model", cfg.l4d_pacing)
 	print("[Director] config applied: spawn=%s cooldown=%.0f-%.0fs" % [cfg.spawn_enabled, cfg.cooldown_min, cfg.cooldown_max])
@@ -4016,6 +4071,11 @@ func debug_snapshot() -> Dictionary:
 			raw = float(intensity_tracker.call("get_raw_intensity"))
 		combat = bool(intensity_tracker.get("in_combat"))
 
+	## 智能尸潮压力表（2026-10-31）：现场排查「为什么还不来尸潮」就看这三项。
+	var smart: Dictionary = {}
+	if pc != null and pc.has_method("smart_debug"):
+		smart = pc.call("smart_debug")
+
 	var pt: Dictionary = {}
 	if progress_tracker != null and is_instance_valid(progress_tracker):
 		pt = progress_tracker.call("get_debug")
@@ -4037,6 +4097,13 @@ func debug_snapshot() -> Dictionary:
 		"phase": String(phase),
 		"phase_left": duration - elapsed,
 		"phase_duration": duration,
+		"horde_progress": float(smart.get("progress", 0.0)),
+		"horde_target": float(smart.get("target", 0.0)),
+		"horde_kills": int(smart.get("kills", 0)),
+		"horde_per_kill": float(smart.get("per_kill_sec", 0.0)),
+		"horde_since_peak": float(smart.get("since_peak", -1.0)),
+		"horde_gap": float(smart.get("gap", 0.0)),
+		"horde_build_index": int(smart.get("build_index", 0)),
 		"intensity": get_intensity(),
 		"intensity_raw": raw,
 		"in_combat": combat,

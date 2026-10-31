@@ -66,6 +66,10 @@ var _refill_latch: bool = false
 @export_group("L4D — 尸潮（PEAK 入场爆发 + 整段补怪）")
 @export var mob_size_min: int = 14             ## 尸潮规模下限（按难度/人数放大）
 @export var mob_size_max: int = 22             ## 尸潮规模上限
+## ★尸潮规模**下限**（2026-10-31 用户定）：缩放后不足此值就补到此值。
+## 简单难度 `spawn_scale`=0.5 会把 8~13 只砍成 4~6 只，玩家体感是「来了，但没感觉」。
+## 低难度应该靠血量/伤害降，不靠把尸潮砍到看不见。峰值维持数按它的一半兜底。
+@export var mob_size_floor: int = 8
 ## 从**背后**来的比例（L4D 原版 75%）。玩家回头才有压力，才有被包夹的戏剧性。
 @export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
 
@@ -374,15 +378,19 @@ func _threat_count() -> int:
 ## 补怪目标复用旧模型的 horde_total_min/max（已按难度/人数放大）；
 ## 窗口长度 = 峰值阶段时长（PacingController 的 phase_duration）。
 func _start_mob() -> void:
+	## ★规模下限（2026-10-31）：`scale_spawn_count` 的 minimum 参数，缩放后不足就补上。
+	var floor_size: int = maxi(mob_size_floor, 1)
 	var size: int = Players.scale_spawn_count(randi_range(
-		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max)))
+		mini(mob_size_min, mob_size_max), maxi(mob_size_min, mob_size_max)), floor_size)
 	var ratio: float = clampf(mob_behind_ratio, 0.0, 1.0)
 	var behind: int = int(round(float(size) * ratio))
 	var front: int = size - behind
 	_horde_active = true
 	## 峰值窗口：以 PacingController 抽好的 phase_duration 为准（峰值按时间结束）
+	## 维持数同样兜底（下限的一半）：否则简单难度峰值只剩 1~2 只，尸潮"砸下来"的感觉没了。
 	_horde_target_alive = Players.scale_spawn_count(randi_range(
-		mini(horde_total_min, horde_total_max), maxi(horde_total_min, horde_total_max)))
+		mini(horde_total_min, horde_total_max), maxi(horde_total_min, horde_total_max)),
+		maxi(floor_size / 2, 1))
 	var pc: Node = _director.get_node_or_null("PacingController") if _director != null else null
 	_horde_duration = float(pc.get("phase_duration")) if pc != null else 60.0
 	_horde_time_left = maxf(_horde_duration, 1.0)

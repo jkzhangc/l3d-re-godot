@@ -24,10 +24,11 @@ class_name DirectorConfig extends Node
 ## `horde_interval_override_*`）」反推。保留字段只为旧场景不报错，请勿再调。
 @export var build_min: float = 36.0              ## [已停用] 旧：压力爬升阶段最短秒数
 @export var build_max: float = 108.0             ## [已停用] 旧：压力爬升阶段最长秒数
-## ★尸潮间隔覆盖（2026-10-29）：两次「峰值开始」之间的目标秒数。
-## **0 = 用难度表**（简单 240~360 / 普通 180~300 / 困难 180~240 / 最高 165~190）；
+## ★尸潮间隔覆盖（2026-10-31 重标定）：两次「峰值开始」之间的目标秒数（**无击杀时的基线**）。
+## **0 = 用难度表**（简单 125~170 / 普通 100~140 / 困难 80~112 / 最高 65~95）；
 ## 两个值都 > 0 时由本图决定。Director 会自动扣掉峰值时长与喘息，换算成 Build 时长，
 ## 所以这里填的是「玩家实际感到的间隔」，不是 Build 本身的长度。
+## ⚠ 击杀会按 `smart_horde_per_kill_sec` 把实际间隔**提前**，这里只是基线。
 @export var horde_interval_override_min: float = 0.0
 @export var horde_interval_override_max: float = 0.0
 
@@ -63,22 +64,35 @@ class_name DirectorConfig extends Node
 ## 喘息期队伍累计前进这么多像素 → 提前结束喘息（走得快就走得快，对应 L4D Relax 的"走远即结束"）。
 @export var relax_advance: float = 700.0
 
-@export_group("节奏 — 智能尸潮（2026-10-29；2026-10-30 双触发）")
-## ★开启后 BUILD **任一满足**即进尸潮：
-##   ① 连续**无交战**达到阈值（可提前，保留「安静久了来一波」的节奏感）；
-##   ② BUILD 时长走完（时间硬上限，兜底；一直交战也不会无限不来）。
-## 阈值 = clamp(基础 + 本章击杀数 × 每杀秒数, 下限, 上限) —— 杀得越多，下一波来得越晚。
-## 两个计时都只在 BUILD 段累计；尸潮结束进入 FADE/COOLDOWN 时清零，下一段从头算。
-## 关掉 = 回到难度间隔表（`horde_interval_*`）的定时节奏；
-## 那时强度只在 BUILD 后段（`peak_trigger_after_ratio`）可提前触发。
+@export_group("节奏 — 智能尸潮（2026-10-31：击杀驱动的压力表）")
+## ★BUILD 段累计一个「压力进度」，填满即进尸潮。三个来源叠加：
+##   ① 基线：每帧 +dt（纯时间，无论打不打都在涨）；
+##   ② **击杀：每杀 +`smart_horde_per_kill_sec` 秒 → 杀得越多越容易触发**（用户 2026-10-31 定）；
+##   ③ 安静：无交战时填充倍率 ×`smart_horde_idle_mult`（躲着不打也会被摸上门）。
+## 目标时长由「尸潮间隔（难度表 / `horde_interval_override_*`）」反推成 Build 时长，
+## 所以**难度依然决定基准时间**，击杀只是把它提前。
+## 只统计 BUILD 段的击杀 —— 峰值/余韵/喘息里杀的怪属于这一波本身，不会直接喂下一波。
+## 关掉 = 回到难度间隔表的纯定时节奏（强度只在 BUILD 后段可提前）。
 @export var smart_horde_enabled: bool = true
-## 0 杀时的无交战阈值（秒）。默认 120 = 两分钟没交战就来一波。
-@export var smart_horde_base_sec: float = 120.0
-## 每击杀增加的秒数（默认 2：60 杀 → 4 分钟，120 杀 → 封顶 6 分钟）。
+## 每击杀相当于「提前多少秒」。2.0 = 30 杀提前 1 分钟。设 0 = 击杀不参与（纯时间）。
 @export var smart_horde_per_kill_sec: float = 2.0
-## 阈值下限（秒）：两波尸潮之间的硬间隔，配置再低也不会低于它。
+## 无交战时的进度填充倍率（1.5 = 安静时比交战快 50%）。设 1.0 = 交战与否等价。
+@export var smart_horde_idle_mult: float = 1.5
+## 本段 BUILD 的**最短时长**（秒）：尸潮不会早于它触发。
 @export var smart_horde_min_sec: float = 30.0
-## 阈值上限（秒）：再怎么杀也不会超过 6 分钟才来。
+## ★两波尸潮之间的**硬间隔**（秒，从上一波峰值**开始**算）。
+## **0 = 自动**（= 间隔下限 × 0.9，随难度缩放：简单 112 / 普通 99 / 困难 72 / 最高 58）。
+## 与阶段长短、`force_build()` 强推、击杀爆发都无关 —— 这是「刚结束又立刻来一波」的最后一道兜底。
+## 实际最小间隔 = max(本值, 峰值时长 + 余韵 + 喘息 + `smart_horde_min_sec`) ≈ 72s。
+@export var smart_horde_gap_sec: float = 0.0
+## ★**首波时长倍率**：乘在「尸潮**间隔**」上，得到**第一段 BUILD 的时长**。
+## 1.0 = 首波在难度基线间隔到来 → 普通档 110~145s（约 2 分钟，用户 2026-10-31 要求）；
+## <1 = 开场更快来；>1 = 更长的暖场。
+## ⚠ 首波**不扣 overhead**（开场没有峰值/余韵/喘息要还），所以本值直接等于「进图到第一波」的秒数。
+@export_range(0.2, 2.0, 0.05) var smart_horde_first_scale: float = 1.0
+## [已停用] 旧「0 杀无交战阈值」。2026-10-31 起目标时长由难度间隔表反推，本值不再读取。
+@export var smart_horde_base_sec: float = 120.0
+## [已停用] 旧「阈值上限」。同上，不再读取。
 @export var smart_horde_max_sec: float = 360.0
 
 @export_group("进度（紧张度因子 / Boss 路程闸，2026-10-25）")
@@ -108,6 +122,10 @@ class_name DirectorConfig extends Node
 @export var mob_size_max: int = 13               ## 尸潮规模上限（×0.6）
 ## 尸潮从「背后」来的比例（L4D 原版是 75%）。0 = 全从前方来，1 = 全从背后来。
 @export_range(0.0, 1.0, 0.05) var mob_behind_ratio: float = 0.75
+## ★尸潮规模**下限**（2026-10-31 用户定）：缩放后不足此值时补到此值。
+## 简单难度 `spawn_scale`=0.5 会把 8~13 只砍成 4~6 只 —— 玩家体感是「来了，但没感觉」。
+## 低难度应该靠**血量/伤害**降，不靠把尸潮砍到看不见。峰值维持数按它的一半兜底。
+@export var mob_size_floor: int = 8
 
 @export_group("L4D — 喘息（Relax 阶段低人口维持）")
 ## 喘息期维持多少只。**0 = 完全不生成**（最接近 L4D 原版 Relax）。

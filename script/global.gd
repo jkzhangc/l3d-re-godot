@@ -478,17 +478,21 @@ var selected_difficulty: int = 0  ## 0=Easy, 1=Normal, 2=Hard, 3=Expert
 ##   director_intensity      —— 紧张度换算（高难度更快攒压力 → 特感更早出现）
 ##   spawn_scale             —— **尸潮相关**的刷怪量（多人只按人数；单人再乘难度）
 ##   active_cap              —— 同屏存活上限（给高难度更大的尸潮留余量）
-##   horde_interval_*        —— 关掉智能尸潮时的回退间隔
 ## ⚠ 「正常补怪」（游荡者 / 加压预算 / 喘息补位）**不吃难度**，见 Players.ambient_spawn_scale()。
+##   horde_interval_*        —— 尸潮**基线**间隔（秒）：智能尸潮的目标时长由它反推
+##                              （击杀会在此基础上提前）；关掉智能尸潮时就是纯定时。
+## ★2026-10-31 逐档重标定：此前四档全是 180~300 → 难度对尸潮时间零影响，
+##   而且 180~300s 在 3~4 分钟的短图上意味着「一波都遇不到」（用户实测零尸潮）。
+##   现在按「一张 3~4 分钟的图遇到 2~3 波」标定；**首波**用同一张表（普通 ≈ 2 分钟）。
 var difficulty_multipliers: Dictionary = {
 	0: {"enemy_hp": 0.7, "enemy_damage": 0.5, "director_intensity": 0.6, "spawn_scale": 0.5,
-		"active_cap": 0.8, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+		"active_cap": 0.8, "horde_interval_min": 125.0, "horde_interval_max": 170.0},
 	1: {"enemy_hp": 1.0, "enemy_damage": 1.0, "director_intensity": 1.0, "spawn_scale": 0.75,
-		"active_cap": 1.0, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+		"active_cap": 1.0, "horde_interval_min": 110.0, "horde_interval_max": 145.0},
 	2: {"enemy_hp": 1.5, "enemy_damage": 1.5, "director_intensity": 1.5, "spawn_scale": 1.0,
-		"active_cap": 1.15, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+		"active_cap": 1.15, "horde_interval_min": 80.0, "horde_interval_max": 112.0},
 	3: {"enemy_hp": 2.0, "enemy_damage": 2.0, "director_intensity": 2.0, "spawn_scale": 1.25,
-		"active_cap": 1.3, "horde_interval_min": 180.0, "horde_interval_max": 300.0},
+		"active_cap": 1.3, "horde_interval_min": 65.0, "horde_interval_max": 95.0},
 }
 
 

@@ -39,22 +39,44 @@ enum Phase { BUILD, PEAK, COOLDOWN, FADE }
 @export_range(0.1, 1.0, 0.05) var peak_trigger_after_ratio: float = 0.85
 @export var cooldown_intensity_threshold: float = 0.3  ## 紧张度 > 此值提前结束 Cooldown
 
-# ── 智能尸潮（2026-10-29 用户设计；2026-10-30 改为双触发）──
-## 开启后 BUILD 有两个触发源，**任一满足即进尸潮**：
-##   ① 连续**无交战**达到阈值（提前触发，有节奏感）；
-##   ② BUILD 时长走完（时间硬上限，兜底，不会无限安静）。
-## 阈值 = clamp(base + 本章击杀数 × per_kill, min, max)：杀得越多，需要安静越久。
-## 关掉 = 回到「难度间隔表 / build_min~max」的定时节奏（强度只在后段可提前）。
+# ── 智能尸潮（2026-10-31 重做：击杀驱动的压力表）──
+## BUILD 段累计一个「压力进度」（单位=秒），填满即开尸潮。三个来源：
+##   ① 基线：每帧 +delta（无论打不打都在涨）→ 纯时间节奏；
+##   ② 击杀：每杀 +`smart_per_kill_sec` 秒 → **杀得越多越容易触发**（2026-10-31 用户定）；
+##   ③ 安静：无交战时填充倍率 ×`smart_idle_mult`（躲着不打也会被摸上门）。
+## 目标时长 = 本段 BUILD 的 `phase_duration`（由难度间隔表反推，见 Director._apply_config）。
+## 只统计 **BUILD 段**的击杀 —— 峰值/余韵/喘息里的击杀属于这一波本身，不能直接喂下一波。
+## 关掉 = 回到「难度间隔表」的纯定时节奏（强度只在后段可提前）。
 @export var smart_horde: bool = false
-@export var smart_base_sec: float = 120.0      ## 0 杀时的无交战阈值（默认 2 分钟）
-@export var smart_per_kill_sec: float = 2.0    ## 每击杀 +2s（用户 2026-10-29 定）
-@export var smart_min_sec: float = 30.0        ## 阈值下限（两波之间的硬间隔）
-@export var smart_max_sec: float = 360.0       ## 阈值上限（6 分钟）
+## 每击杀相当于「提前多少秒」。2.0 = 30 杀提前 1 分钟。设 0 = 击杀不参与（纯时间）。
+@export var smart_per_kill_sec: float = 2.0
+## 无交战时的进度填充倍率（1.5 = 安静时比交战快 50%）。设 1.0 = 交战与否等价。
+@export var smart_idle_mult: float = 1.5
+## 本段 BUILD 的**最短时长**（秒）：尸潮不会早于它触发，充当两波之间的硬间隔。
+@export var smart_min_sec: float = 30.0
+## ★两波尸潮之间的**硬间隔**（秒，从上一波 PEAK **开始**算）。0 = 不设闸。
+## 这是一道与阶段无关的兜底闸：即使 `force_build()` 把阶段强推回 BUILD、
+## 或击杀把压力条瞬间灌满，也不会出现「刚结束又立刻来一波」。
+## 实际最小间隔 = max(本值, 峰值时长 + 余韵 + 喘息 + `smart_min_sec`)。
+@export var smart_gap_sec: float = 90.0
+## [已停用] 旧「0 杀无交战阈值」。2026-10-31 起目标时长由难度间隔表反推，本值不再读取。
+@export var smart_base_sec: float = 120.0
+## [已停用] 旧「阈值上限」。同上，不再读取。
+@export var smart_max_sec: float = 360.0
 
-## 本章累计击杀（Director 每 0.5s 从 ChapterStats 喂进来；换图由 ChapterStats 归零）
+## 本章累计击杀（Director 每 0.5s 从 ChapterStats 喂进来；仅用于诊断展示）
 var _horde_kills: int = 0
-## 连续无交战秒数：只在 BUILD 段累计，进峰值清零
-var _quiet_sec: float = 0.0
+## 本段 BUILD 已累积的压力进度（秒）。进 BUILD 时清零。
+var _progress_sec: float = 0.0
+## 本图第几段 BUILD（0 = 开场第一段，用于「首波时长单独给」）。
+var build_index: int = 0
+## 首波 BUILD 时长区间（秒），由 Director 用「间隔 × first_scale − overhead」算好注入。
+## `first_build_max <= 0` = 未配置，退回 build_min/max。
+var first_build_min: float = 0.0
+var first_build_max: float = 0.0
+## 距上一次 PEAK **开始**的秒数：`smart_gap_sec` 硬间隔闸用。
+## 换图时置大值，避免「上一张图的尸潮」把新图首波也压住。
+var _since_peak_sec: float = 1.0e9
 
 # ── L4D 模型（2026-10-24）──
 ## 开启后：峰值为「停手段」（不再持续供怪），峰值结束先进 FADE 余韵，再进 COOLDOWN 喘息。
@@ -87,14 +109,17 @@ var _peak_armed: bool = true
 # ═══════════════════════════════════════
 ## `horde_active`：旧模型下 = 尸潮窗口是否仍在维持数量（**已不参与结束判定**，
 ## 2026-10-29 起峰值一律按时间结束，保留参数是为了不破坏外部调用签名）。
-## `engaged`：**L4D 模型专用** —— 当前是否有敌人在交战（Director 每帧传入
-## `IntensityTracker.in_combat`）。FADE 段必须等到「无交战」才算自然收尾。
+## `engaged`：当前是否有敌人在交战（Director 每帧传入 `IntensityTracker.in_combat`）。
+## FADE 段必须等到「无交战」才算自然收尾；BUILD 段则用它决定是否套用
+## `smart_idle_mult`（安静加速）。
 func update(delta: float, intensity: float, alive_enemy_count: int,
 		_horde_active: bool = false, engaged: bool = false) -> void:
 	if paused or not enabled:
 		return
 
 	phase_elapsed += delta
+	## 记录「距上一波 PEAK 开始」的时长：`smart_gap_sec` 硬间隔闸的唯一依据。
+	_since_peak_sec += delta
 	var should_transition: bool = false
 
 	## 重新武装：强度掉回阈值 80% 以下才算"这一波真的过去了"。
@@ -103,29 +128,35 @@ func update(delta: float, intensity: float, alive_enemy_count: int,
 
 	match current_phase:
 		Phase.BUILD:
-			## ★2026-10-30 用户定稿：智能尸潮 = 双触发，任一满足即开：
-			##   ① 无交战计时达到阈值（可提前，保留「安静久了来一波」的节奏感）；
-			##   ② BUILD 时长走完（时间硬上限，兜底，不会因为一直交战而无限不来）。
-			## 两个计时都只在 BUILD 段累计；进 PEAK / FADE / COOLDOWN 一律清零，
-			## 下一次 BUILD 从 0 开始 —— 用户要求「尸潮结束后从头算起」。
-			if engaged:
-				_quiet_sec = 0.0
+			## ★2026-10-31 用户定稿：智能尸潮 = **击杀驱动的压力表**。
+			## 旧实现（2026-10-30 双触发）有两个问题：
+			##   ① 阈值 = base + 击杀×2 —— 杀得越多**越晚**来，与用户要的正好相反；
+			##   ② 「连续无交战 120s」在实战里几乎攒不起来（in_combat 是「任一玩家 500px
+			##      内有敌人」，路上一直有游荡者），实际只剩时间上限一条路 → 短图一波都没有。
+			## 现在：进度条基线随 `delta` 涨，击杀直接加秒数，安静再乘倍率，任一条都能推满。
+			## 目标时长 `phase_duration` 由难度间隔表反推（Director._apply_config），
+			## 所以「难度改变时间」仍然成立，只是击杀会让它提前。
+			if smart_horde:
+				var idle_mult: float = maxf(smart_idle_mult, 0.0) if not engaged else 1.0
+				_progress_sec += delta * idle_mult
+				var target: float = phase_duration
+				## 两道闸叠加：①本段 BUILD 至少走 `smart_min_sec`；②距上一波开始至少 `smart_gap_sec`。
+				## ②是 2026-10-31 新加的「防突然再来一次」兜底 —— 它与 FADE/COOLDOWN 的长度、
+				## 以及 `force_build()` 强推阶段都无关，只认「上一波什么时候开始的」。
+				var gap_ok: bool = smart_gap_sec <= 0.0 or _since_peak_sec >= smart_gap_sec
+				if gap_ok and phase_elapsed >= smart_min_sec and _progress_sec >= target:
+					should_transition = true
+					print("[Pacing] 触发尸潮：压力 %.0f/%.0fs（本章击杀 %d，每杀 +%.1fs，安静×%.2f，距上一波 %.0fs）"
+						% [_progress_sec, target, _horde_kills, smart_per_kill_sec,
+							smart_idle_mult, _since_peak_sec])
 			else:
-				_quiet_sec += delta
-			var time_up: bool = phase_elapsed >= phase_duration
-			var quiet_up: bool = smart_horde and _quiet_sec >= smart_threshold()
-			if time_up or quiet_up:
-				should_transition = true
-				if time_up:
+				## 旧模型：时间硬上限，强度只在 BUILD 后段（`peak_trigger_after_ratio`）可提前。
+				if phase_elapsed >= phase_duration:
+					should_transition = true
 					print("[Pacing] 触发尸潮：BUILD 时间上限 %.0fs 到" % phase_duration)
-				else:
-					print("[Pacing] 触发尸潮：连续无交战 %.0fs ≥ 阈值 %.0fs"
-						% [_quiet_sec, smart_threshold()])
-			elif not smart_horde and intensity > peak_intensity_threshold and _peak_armed \
-					and phase_elapsed >= phase_duration * peak_trigger_after_ratio:
-				## 旧模型的强度触发：只在 BUILD 后段生效；智能尸潮开启时不参与，
-				## 否则双触发之外又多出第三个触发源，节奏会被战斗拖着走。
-				should_transition = true
+				elif intensity > peak_intensity_threshold and _peak_armed \
+						and phase_elapsed >= phase_duration * peak_trigger_after_ratio:
+					should_transition = true
 
 		Phase.PEAK:
 			## ★2026-10-29 用户定稿：峰值**按时间结束**，不再看场上是否清空。
@@ -189,25 +220,46 @@ func get_phase_name() -> StringName:
 	return _phase_name(current_phase)
 
 
-## ── 智能尸潮：击杀喂入 / 阈值查询（2026-10-29）──
+## ── 智能尸潮：击杀喂入 / 进度查询（2026-10-31 压力表）──
 ## Director 每 0.5s 把「本章新增击杀」喂进来（来源 ChapterStats.get_totals().kills）。
+## **只计入 BUILD 段**：峰值里杀的怪就是这一波本身，让它直接喂下一波会造成连环尸潮。
 func note_kills(count: int) -> void:
-	_horde_kills += maxi(count, 0)
+	var n: int = maxi(count, 0)
+	if n <= 0:
+		return
+	_horde_kills += n
+	if not smart_horde or current_phase != Phase.BUILD:
+		return
+	if smart_per_kill_sec > 0.0:
+		_progress_sec += float(n) * smart_per_kill_sec
 
 
-## 当前需要的「无交战秒数」。杀得越多越久，夹在 [min, max] 里。
-func smart_threshold() -> float:
-	return clampf(smart_base_sec + float(_horde_kills) * smart_per_kill_sec,
-			smart_min_sec, smart_max_sec)
+## 本段 BUILD 的目标时长（秒）。非 BUILD 段返回 0。
+func smart_target() -> float:
+	return phase_duration if current_phase == Phase.BUILD else 0.0
 
 
-## 诊断用：当前累计击杀 / 已安静多久。
+## 诊断用：当前累计击杀 / 压力进度 / 目标时长 / 触发参数。
 func smart_debug() -> Dictionary:
 	return {
 		"kills": _horde_kills,
-		"quiet": _quiet_sec,
-		"threshold": smart_threshold(),
+		"progress": _progress_sec,
+		"target": smart_target(),
+		"per_kill_sec": smart_per_kill_sec,
+		"idle_mult": smart_idle_mult,
+		"build_index": build_index,
+		"since_peak": _since_peak_sec if _since_peak_sec < 1.0e8 else -1.0,
+		"gap": smart_gap_sec,
 	}
+
+
+## 换图 / 新局：重置压力表、首波计数与硬间隔计时。Director 在应用 DirectorConfig 时调用。
+func reset_for_new_map() -> void:
+	_horde_kills = 0
+	_progress_sec = 0.0
+	build_index = 0
+	## 新图还没打过尸潮 —— 置大值让 `smart_gap_sec` 不拦首波。
+	_since_peak_sec = 1.0e9
 
 
 # ═══════════════════════════════════════
@@ -226,18 +278,23 @@ func _set_phase(new_phase: Phase) -> void:
 	current_phase = new_phase
 	phase_elapsed = 0.0
 	_fade_quiet = 0.0
-	## ★2026-10-30：任何阶段切换都清零「无交战」计时 —— 尸潮结束（进 FADE/COOLDOWN）
-	## 后必须从头算起；`phase_elapsed` 本身每阶段归零，时间硬上限同样不会跨尸潮累积。
-	_quiet_sec = 0.0
+	## ★2026-10-31：压力进度随阶段切换清零 —— 一波结束后从 0 重新累积，
+	## 不会把上一波之前攒的进度带过来（用户要求「尸潮结束后从头算起」）。
+	_progress_sec = 0.0
 	## 进峰值即"解除武装"：下一次强度触发必须先让强度掉回阈值 80% 以下。
 	if new_phase == Phase.PEAK:
 		_peak_armed = false
+		## ★2026-10-31：硬间隔闸的计时从「尸潮开始」重新起算 —— 之后的
+		## 余韵/喘息/加压不管多短，都不可能在下一次尸潮上「攒时间」。
+		_since_peak_sec = 0.0
 	phase_duration = _rand_duration(new_phase)
+	if new_phase == Phase.BUILD:
+		build_index += 1
 
 	var phase_name: StringName = _phase_name(new_phase)
 	if new_phase == Phase.BUILD and smart_horde:
-		print("[Pacing] → build（智能尸潮：无交战 %.0fs 或时间上限 %.0fs，任一满足；本章击杀 %d）"
-			% [smart_threshold(), phase_duration, _horde_kills])
+		print("[Pacing] → build（智能尸潮：压力 0/%.0fs；每杀 +%.1fs，安静×%.2f；本章击杀 %d）"
+			% [phase_duration, smart_per_kill_sec, smart_idle_mult, _horde_kills])
 	else:
 		print("[Pacing] → %s (duration=%.1fs)" % [phase_name, phase_duration])
 	phase_changed.emit(phase_name)
@@ -247,7 +304,16 @@ func _rand_duration(phase: Phase) -> float:
 	var base_min: float
 	var base_max: float
 	match phase:
-		Phase.BUILD:     base_min = build_min; base_max = build_max
+		Phase.BUILD:
+			## ★首波单独给时长（2026-10-31 用户实测「首波 35~59s 太早，普通要 2 分钟左右」）：
+			## 区间由 Director 按「间隔 × smart_horde_first_scale − overhead」算好注入，
+			## 对**间隔**打折而不是对 BUILD 打折 —— 否则峰值/余韵/喘息会被一起缩掉。
+			if build_index == 0 and smart_horde and first_build_max > 0.0:
+				base_min = first_build_min
+				base_max = first_build_max
+			else:
+				base_min = build_min
+				base_max = build_max
 		Phase.PEAK:      return maxf(peak_timeout, peak_sustain)
 		Phase.FADE:      return fade_timeout
 		Phase.COOLDOWN:  base_min = cooldown_min; base_max = cooldown_max
