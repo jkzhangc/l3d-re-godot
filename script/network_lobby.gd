@@ -219,9 +219,71 @@ func _setup_room_panel() -> void:
 	difficulty_select.select(clampi(Global.selected_difficulty, 0,
 		maxi(difficulty_select.item_count - 1, 0)))
 	difficulty_select.item_selected.connect(_on_difficulty_selected)
+	_setup_horde_modifier_rows()
 	_setup_visual_style()
 	_setup_chapter_select()
 	_refresh_room_info()
+
+
+# ── 开局附加参数（2026-10-31 用户需求：联机大厅也加上）──
+## 与难度同属「本局设置」，但**只有房主能改** —— 导演系统只在 Host 端跑，
+## 客户端的值不会参与任何决策（也不需要走 RPC 同步）。
+## 版式照抄场景里预置的 `FriendlyFireRow`：HBox(CheckBox) + Label(24 号、自动换行)。
+var _modifier_checks: Dictionary = {}
+
+
+func _setup_horde_modifier_rows() -> void:
+	if not _modifier_checks.is_empty():
+		return
+	if friendly_fire_check == null:
+		return
+	var anchor_row: Node = friendly_fire_check.get_parent()      ## FriendlyFireRow
+	if anchor_row == null:
+		return
+	var box: Node = anchor_row.get_parent()                      ## InfoBox（VBoxContainer）
+	if box == null:
+		return
+	for i: int in range(Global.HORDE_MODIFIER_ORDER.size()):
+		var key: String = Global.HORDE_MODIFIER_ORDER[i]
+		var row := HBoxContainer.new()
+		row.name = "ModRow_%s" % key
+		row.add_theme_constant_override("separation", 8)
+		var check := CheckBox.new()
+		check.name = "ModCheck_%s" % key
+		check.tooltip_text = "仅房主可以修改；尸潮相关设置只影响房主端的导演系统。"
+		var label := Label.new()
+		label.text = str(Global.HORDE_MODIFIER_LABELS.get(key, key))
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.add_theme_font_size_override("font_size", 24)
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		check.toggled.connect(_on_horde_modifier_toggled.bind(key))
+		row.add_child(check)
+		row.add_child(label)
+		box.add_child(row)
+		## 插在友伤行后面，保持「本局设置」这一组连在一起
+		box.move_child(row, anchor_row.get_index() + 1 + i)
+		_modifier_checks[key] = check
+	_refresh_horde_modifier_controls()
+
+
+func _on_horde_modifier_toggled(pressed: bool, key: String) -> void:
+	var host_side: bool = net != null and bool(net.get("is_host"))
+	if not host_side:
+		_refresh_horde_modifier_controls()
+		return
+	Global.set_horde_modifier(key, pressed)
+	_log("附加参数 %s：%s" % [
+		str(Global.HORDE_MODIFIER_LABELS.get(key, key)), "开" if pressed else "关"])
+
+
+func _refresh_horde_modifier_controls() -> void:
+	var host_side: bool = net != null and bool(net.get("is_host"))
+	for key: String in _modifier_checks:
+		var check: CheckBox = _modifier_checks[key]
+		if not is_instance_valid(check):
+			continue
+		check.disabled = not host_side
+		check.set_pressed_no_signal(Global.horde_modifier(key))
 
 
 func _on_difficulty_selected(index: int) -> void:
@@ -242,6 +304,7 @@ func _refresh_room_info() -> void:
 			_chapter_entries.size() - 1)].get("campaign", "—"))
 	room_info_label.text = "战役：%s\n起始章节：%s" % [campaign_name, _selected_chapter + 1]
 	_refresh_chapter_select()
+	_refresh_horde_modifier_controls()
 
 
 ## 大厅 / 房间两个界面按"是否已连接"切换。

@@ -66,7 +66,14 @@ var recycle_dist: float = 1400.0
 const PEAK_RECYCLE_SCALE: float = 0.6
 var recycle_clear_corpses: bool = true
 var _zombie_pool: Array = []          ## ZombieVariant 池（_apply_config 注入；空则用默认池）
-var _horde_rage: bool = false         ## 尸潮（peak 阶段）期间 = true，僵尸切换クリムゾンヘッド形态
+## ★两个**必须分开**的标志（2026-10-31 修复 bug）：
+## `_horde_rage` = 「尸潮/防守战窗口进行中」—— 决定**新刷的敌人是否直接锁定玩家追击**。
+## `_horde_berserk` = 「窗口内是否真的切成クリムゾンヘッド形态」—— 只受附加参数控制。
+## ⚠ 曾经把「目标锁定」写在 `if _horde_rage` 里，而 `_horde_rage` 又被附加参数直接置 false，
+##   结果关掉「尸潮狂暴」后：新刷的丧尸不锁目标 → 站着不追人 → 不死 → 场上存活数卡在目标值
+##   → `_update_horde` 认为达标不再补怪。玩家看到的就是「没补怪 + 新怪不主动来」。
+var _horde_rage: bool = false         ## 尸潮/防守战窗口进行中（决定 spawn 时是否 lock_forced_target）
+var _horde_berserk: bool = false      ## 窗口内是否切狂暴形态（附加参数可关；防守战恒开）
 var _horde_locked_enemies: Array[Node2D] = []  ## 尸潮期间被锁定"直接追击最近玩家"的丧尸（peak 结束统一解锁）
 var _recycle_timer: float = 0.0
 var _recycle_cleared: int = 0     ## 累计清除的存活敌人数（诊断 / 现场报告用）
@@ -539,6 +546,7 @@ func _freeze_for_death() -> void:
 	## 复活后全场丧尸仍是クリムゾンヘッド、且继续无条件追着玩家，观感就是"尸潮没结束"。
 	## 两个函数都是幂等的，重复调用无副作用。
 	_horde_rage = false
+	_horde_berserk = false
 	_set_all_enemies_rage(false)
 	_release_horde_locks()
 	## Boss BGM 一并收（2026-09-16 用户反馈「死亡后尸潮/Boss 音乐还在响」）：
@@ -656,6 +664,7 @@ func _reset_live_combat_state() -> void:
 			sm.call("on_phase_changed", &"cooldown")
 	## ⑤ 狂暴形态 / 目标锁定（与 _freeze_for_death 同款，幂等）
 	_horde_rage = false
+	_horde_berserk = false
 	_set_all_enemies_rage(false)
 	_release_horde_locks()
 	## ⑥ BGM：尸潮 + Boss 都收（判据见 _stop_horde_music 的 stream_paused 铁律）
@@ -690,13 +699,15 @@ func _on_phase_changed(phase: StringName) -> void:
 		_play_calm_music()
 	elif phase == &"peak":
 		_stop_calm_music()
-		## ★附加参数「尸潮狂暴」（2026-10-31）：关掉后只是不变红/不加速，
-		## 尸潮本身、BGM、预告音全部照常 —— 它只控制形态切换。
-		_horde_rage = _berserk_enabled()
-		if _horde_rage:
+		## ★附加参数「尸潮狂暴」（2026-10-31）：只控制**形态切换**。
+		## 窗口标志 `_horde_rage` 与形态标志 `_horde_berserk` 必须分开 ——
+		## 前者决定「新刷的敌人是否直接锁定玩家」，关掉狂暴**绝不能**连带关掉锁定。
+		_horde_rage = true
+		_horde_berserk = _berserk_enabled()
+		if _horde_berserk:
 			_set_all_enemies_rage(true)   ## 尸潮触发 → 僵尸切换クリムゾンヘッド（狂暴）
 		else:
-			print("[Director] 尸潮狂暴已关闭（附加参数）：本波保持普通形态")
+			print("[Director] 尸潮狂暴已关闭（附加参数）：保持普通形态，但目标锁定照常")
 		_lock_all_enemies_for_horde() ## 尸潮触发 → 附近全部丧尸直接追击最近玩家（对齐防守战）
 		_play_horde_music()
 		## 临峰已预告过（5 秒内）就不要再响一次
@@ -706,6 +717,7 @@ func _on_phase_changed(phase: StringName) -> void:
 	elif phase == &"cooldown" or phase == &"fade":
 		_play_calm_music()
 		_horde_rage = false
+		_horde_berserk = false
 		_set_all_enemies_rage(false)  ## 尸潮结束 / 进入余韵 → 恢复普通形态
 		_release_horde_locks()        ## 解除目标锁定，恢复普通 AI
 		_stop_horde_music()
@@ -1210,6 +1222,8 @@ func set_director_suspended(suspended: bool) -> void:
 ## 自己管理（target_lock / lock_nearby_at_start），与 _horde_locked_enemies 互不干扰。
 func set_holdout_rage(active: bool) -> void:
 	_horde_rage = active
+	## 防守战不读「尸潮狂暴」开关：它的狂暴是剧本演出的一部分（2026-10-31）
+	_horde_berserk = active
 	_set_all_enemies_rage(active)
 
 
@@ -1295,9 +1309,13 @@ func spawn_enemy(pos: Vector2, decor_layer: Node, facing: int = -1) -> Node2D:
 		enemy.free()
 		return null
 	decor_layer.add_child(enemy)
-	## 尸潮期间刷出的敌人直接以狂暴形态登场（在 add_child 之后，_refresh_sprite 已就绪）
+	## ★尸潮/防守战窗口内刷出的敌人（2026-10-31 修复）：
+	##   · **目标锁定**只看窗口（`_horde_rage`）—— 这是「尸潮感」的来源，不能被狂暴开关影响；
+	##   · **狂暴形态**只看 `_horde_berserk`（附加参数可关，防守战恒开）。
+	## 顺序不能反：`set_rage` 依赖 `_refresh_sprite` 已就绪（add_child 之后）。
 	if _horde_rage:
-		enemy.set_rage(true)
+		if _horde_berserk:
+			enemy.set_rage(true)
 		# 尸潮期间新刷的丧尸同样直接锁定最近玩家追击（对齐防守战行为）
 		if enemy.has_method("lock_forced_target"):
 			enemy.lock_forced_target(Players.nearest_entity_to(enemy.global_position))
