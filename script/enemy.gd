@@ -283,12 +283,12 @@ const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害�
 ## 0 = 关闭（绝大多数敌人）。配合 `frontal_damage_mult = 1.0` 使用（不减免）。
 @export var frontal_dodge_force: float = 0.0
 ## 走位位移的持续时间（秒）；位移结束后立刻回 Chase 继续扑向玩家。
-@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
+@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.14
 ## ★闪避第二段（2026-10-31 用户补充「原作不只是侧移，还会高速往玩家身上扑一会」）：
 ## 侧移结束后立刻以本速度朝**最近玩家**高速突进，持续 `frontal_dodge_dash_time` 秒。
 ## 0 = 只侧移不突进（旧行为）。
-@export var frontal_dodge_dash_force: float = 420.0
-@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.26
+@export var frontal_dodge_dash_force: float = 700.0
+@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.22
 
 ## 本次命中是否触发正面走位（_apply_frontal_resist 置位，take_damage 消费）。
 var _frontal_dodge_pending: bool = false
@@ -377,7 +377,9 @@ var _electro_time: float = 0.0
 ## 吸附转向速率（0~1）：冲刺途中 _dash_dir 朝玩家的插值系数。
 ## 位移通常小于触发带宽，纯直线必然扑空，故默认开启吸附（0.08 偏"有惯性"）。
 ## 设 0 则退回纯直线突进（需要把触发带收窄到位移可达范围）。
-@export var pounce_homing_turn_rate: float = 0.08
+## ★2026-10-31 用户定稿：扑杀是**纯直线**，不做追踪导弹式转向。
+## 0 = 完全不修正方向（起手那一刻定死航线，扑空就是扑空）。
+@export var pounce_homing_turn_rate: float = 0.0
 ## 冲刺末帧命中宽容倍率：终点时距离 ≤ hit_radius × 此值即视作接触命中。
 ## 兜底防止「差几像素就空扑」，1.6 表示允许 42×1.6≈67px。
 @export var pounce_hit_tolerance: float = 1.6

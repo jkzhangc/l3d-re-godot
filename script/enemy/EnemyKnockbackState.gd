@@ -115,7 +115,7 @@ func physics_update(delta: float) -> void:
 ## 现在改为**每跳固定基准力度 + 温和距离衰减**：力度不随父级速度衰减，
 ## 所以一列上的每只都被顶开相近的距离，不会越传越弱。
 const CHAIN_PUSH_RADIUS: float = 40.0        ## 检测半径（≥ 两个身位贴靠）
-const CHAIN_PUSH_BASE_FORCE: float = 280.0   ## 每跳基准力度（位移 ≈ 65px）
+const CHAIN_PUSH_BASE_FORCE: float = 380.0   ## 每跳基准力度（位移 ≈ 76px）
 const CHAIN_PUSH_MIN_FACTOR: float = 0.6     ## 最远端的力度下限倍率
 const CHAIN_PUSH_MIN_VEL: float = 20.0       ## 自身速度低于此值不再传递（已在滑停）
 const CHAIN_PUSH_STUN: float = 0.25          ## 连锁推挤的位移时长（秒）

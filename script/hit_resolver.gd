@@ -36,8 +36,11 @@ const FRIENDLY_FIRE_MAX_DAMAGE: float = 2.0
 ##   · 位移结束后追加**原地硬直**（enemy._hitstun_after_knockback 链）
 ## ★2026-10-31：硬直 2.0 → 1.7。玩家算的是「从被炸到能动」的总时长，
 ##   而位移那 0.3s 也要算进去 → 0.3 + 1.7 ≈ 2.0s，与「改成 2 秒左右」一致。
-const EXPLOSION_KNOCKBACK_FORCE: float = 420.0
-const EXPLOSION_KNOCKBACK_STUN: float = 0.3
+## ★2026-10-31 二次调整（用户："像被很慢的桌球撞了一下，又平滑又慢"）：
+## 提高初速、缩短位移时长 —— 变成"啪一下被掀开"而不是"匀速滑走"。
+## 位移 ≈ 860 × 0.20 − ½×600×0.04 ≈ 160px（原来 420×0.3 ≈ 99px 但更慢）。
+const EXPLOSION_KNOCKBACK_FORCE: float = 860.0
+const EXPLOSION_KNOCKBACK_STUN: float = 0.20
 const EXPLOSION_HITSTUN_SEC: float = 1.7
 
 ## ── 爆炸外圈：击退 + 硬直，**不吃伤害**（2026-10-31 用户需求）──
@@ -47,8 +50,8 @@ const EXPLOSION_HITSTUN_SEC: float = 1.7
 ##   火元素会额外点燃，都与「击退 + 硬直 1 秒」的定稿不符。
 const OUTER_RING_PAD_RATIO: float = 0.35   ## 外圈厚度 = 主半径 × 本值
 const OUTER_RING_PAD_MIN: float = 24.0     ## 厚度下限（小半径爆炸也要有一圈）
-const OUTER_RING_KNOCKBACK: float = 300.0  ## 比主爆的 420 弱一档
-const OUTER_RING_KNOCKBACK_STUN: float = 0.25
+const OUTER_RING_KNOCKBACK: float = 520.0  ## 比主爆的 860 弱一档
+const OUTER_RING_KNOCKBACK_STUN: float = 0.22
 const OUTER_RING_HITSTUN_SEC: float = 1.0  ## 用户定稿：硬直 1 秒
 
 

@@ -176,10 +176,10 @@ extends Resource
 ## >0 = 正面被命中时不减免伤害，但会以该力度（px/s）**快速侧向换位**，仍然朝玩家推进。
 ## ハンターβ 用 300（≈65px 的侧移），配合 `frontal_damage_mult = 1.0`。
 @export var frontal_dodge_force: float = 0.0
-@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.16
+@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.14
 ## 闪避第二段：侧移结束后朝玩家高速突进（原作手感）。0 = 只侧移。
 @export var frontal_dodge_dash_force: float = 0.0
-@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.26
+@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.22
 
 @export_group("首狩り突进（ハンター 系）")
 ## 是否启用首狩り突进（中距离高速扑咬）。普通僵尸与 Tyrant 保持 false。
@@ -243,7 +243,8 @@ extends Resource
 @export var pounce_hit_radius: float = 42.0
 ## 吸附转向速率（0~1）：冲刺途中朝玩家插值转向。位移通常小于触发带宽，
 ## 纯直线会扑空，故默认开启吸附。设 0 = 纯直线突进。
-@export var pounce_homing_turn_rate: float = 0.08
+## ★2026-10-31：默认 0 = 扑杀纯直线（不做追踪修正）。
+@export var pounce_homing_turn_rate: float = 0.0
 ## 冲刺末帧命中宽容倍率：终点距离 ≤ hit_radius × 此值即视作接触命中。
 @export var pounce_hit_tolerance: float = 1.6
 ## 命中伤害倍率（相对 attack_damage）。
