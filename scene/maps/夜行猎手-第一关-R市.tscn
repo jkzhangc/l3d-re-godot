@@ -142,7 +142,7 @@ random_facing = true
 metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
 
 [node name="SpawnZone3" type="Node2D" parent="DecorLayer" unique_id=1263850868]
-position = Vector2(832, 7280)
+position = Vector2(832, 7304)
 script = ExtResource("4_pk0wi")
 zone_size = Vector2(200, 96)
 max_spawns = 2
@@ -162,6 +162,228 @@ position = Vector2(2560, 7632)
 script = ExtResource("4_pk0wi")
 zone_size = Vector2(500, 200)
 ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone6" type="Node2D" parent="DecorLayer" unique_id=1097173319]
+position = Vector2(2672, 6968)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone7" type="Node2D" parent="DecorLayer" unique_id=190671725]
+position = Vector2(2552, 6328)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 96)
+max_spawns = 2
+ambient_budget = 2
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone8" type="Node2D" parent="DecorLayer" unique_id=817499821]
+position = Vector2(2920, 6344)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 96)
+max_spawns = 2
+ambient_budget = 2
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone9" type="Node2D" parent="DecorLayer" unique_id=1916796107]
+position = Vector2(2928, 6752)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 96)
+max_spawns = 2
+ambient_budget = 2
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone10" type="Node2D" parent="DecorLayer" unique_id=472063134]
+position = Vector2(3736, 5368)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone11" type="Node2D" parent="DecorLayer" unique_id=585198073]
+position = Vector2(3896, 4384)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(500, 500)
+max_spawns = 7
+ambient_budget = 7
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone12" type="Node2D" parent="DecorLayer" unique_id=547358952]
+position = Vector2(2600, 8144)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone13" type="Node2D" parent="DecorLayer" unique_id=104574428]
+position = Vector2(3312, 8144)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone14" type="Node2D" parent="DecorLayer" unique_id=792671907]
+position = Vector2(4248, 8064)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone15" type="Node2D" parent="DecorLayer" unique_id=132517206]
+position = Vector2(3952, 8016)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone16" type="Node2D" parent="DecorLayer" unique_id=835752515]
+position = Vector2(4264, 7008)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone17" type="Node2D" parent="DecorLayer" unique_id=1541693960]
+position = Vector2(3784, 6336)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone18" type="Node2D" parent="DecorLayer" unique_id=938128522]
+position = Vector2(4272, 6120)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone19" type="Node2D" parent="DecorLayer" unique_id=1135432607]
+position = Vector2(4344, 4824)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone20" type="Node2D" parent="DecorLayer" unique_id=837771562]
+position = Vector2(3448, 4736)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 500)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone21" type="Node2D" parent="DecorLayer" unique_id=1166867569]
+position = Vector2(3456, 3832)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 500)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone22" type="Node2D" parent="DecorLayer" unique_id=1185355097]
+position = Vector2(4240, 3424)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 500)
+max_spawns = 6
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone23" type="Node2D" parent="DecorLayer" unique_id=788778099]
+position = Vector2(3944, 3568)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(200, 120)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone24" type="Node2D" parent="DecorLayer" unique_id=165543088]
+position = Vector2(3312, 2848)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone25" type="Node2D" parent="DecorLayer" unique_id=31547790]
+position = Vector2(4336, 2136)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone26" type="Node2D" parent="DecorLayer" unique_id=1873305526]
+position = Vector2(3664, 2176)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone27" type="Node2D" parent="DecorLayer" unique_id=582259286]
+position = Vector2(2856, 1872)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone28" type="Node2D" parent="DecorLayer" unique_id=808217267]
+position = Vector2(2144, 3440)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone29" type="Node2D" parent="DecorLayer" unique_id=1335615419]
+position = Vector2(2728, 3104)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone30" type="Node2D" parent="DecorLayer" unique_id=1979078746]
+position = Vector2(2200, 2704)
+script = ExtResource("4_pk0wi")
+zone_size = Vector2(150, 300)
+max_spawns = 4
+ambient_budget = 4
 random_facing = true
 metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
 
