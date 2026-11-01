@@ -273,10 +273,12 @@ func _burn() -> void:
 	var radius_px: float = _radius * 32.0 + 16.0
 	# 目标组 = 真敌人 + 训练木偶（木偶**不在** "enemy" 组，见 HitResolver.DAMAGE_TARGET_GROUPS）；
 	# `_damage_players` 时再带上玩家。
+	# 2026-11-01：玩家组还要过房间设置 `HitResolver.hazard_hurts_players()`
+	# —— 联机房主可以把"火焰/酸液伤不伤玩家"关掉（单机恒 true）。
 	var groups: Array[StringName] = []
 	for target_group: StringName in HitResolver.DAMAGE_TARGET_GROUPS:
 		groups.append(target_group)
-	if _damage_players:
+	if _damage_players and HitResolver.hazard_hurts_players():
 		groups.append(&"player")
 	for group: StringName in groups:
 		for n: Node in get_tree().get_nodes_in_group(group):

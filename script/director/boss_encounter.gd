@@ -131,7 +131,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if not _player_near:
 		return
-	if event.is_action_pressed("功能键"):
+	if event.is_action_pressed("功能键") and not Players.local_player_is_throwing():
 		# 收敛输入，防止菜单/其它交互被同一次按键连带触发
 		get_viewport().set_input_as_handled()
 		trigger()

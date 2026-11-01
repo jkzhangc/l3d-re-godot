@@ -481,6 +481,15 @@ func unregister_entity(node: Node2D) -> void:
 # 实体查询
 # ═══════════════════════════════════════
 
+## 本机玩家是否**正举着投掷物**（READY / AIM 都算）。
+## 2026-11-01 用户需求：投掷瞄准时「投掷减格键」是 D，而 D 同时是「功能键」——
+## 交互物（弹药箱 / 防守机器 / 开关 / 医疗箱 / 存档点 / 补给点）统一用它把功能键让位，
+## 否则按一次 D 会同时"调距离 + 触发交互"。
+func local_player_is_throwing() -> bool:
+	var p: Node2D = get_local_entity()
+	return is_instance_valid(p) and p.get("in_throwable_state") == true
+
+
 ## 本客户端操控的玩家实体。替代全部 _find_player()。
 ## 未注册时回退到 group("player") 扫描（兼容 _ready() 时序竞争）。
 func get_local_entity() -> Node2D:

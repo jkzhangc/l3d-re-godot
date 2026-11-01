@@ -193,7 +193,9 @@ func _process(delta: float) -> void:
 	if label and is_instance_valid(label):
 		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
 		label.visible = eligible
-	if eligible and Input.is_action_just_pressed("功能键") and not get_tree().paused:
+	## 投掷物举起/瞄准时 D 是「投掷减格键」，让位给投掷（2026-11-01）
+	if eligible and not Players.local_player_is_throwing() \
+			and Input.is_action_just_pressed("功能键") and not get_tree().paused:
 		_request_use(player)
 
 

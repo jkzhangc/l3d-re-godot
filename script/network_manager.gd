@@ -42,7 +42,8 @@ signal scene_transition_started(scene_path: String)
 signal upnp_port_mapped(port: int, external_ip: String)
 signal upnp_mapping_failed(reason: String)
 
-const PROTOCOL_VERSION := "l3d_main_v3_snapshot_versions"
+## v4（2026-11-01）：room_settings / hello_ack 增加 hazard_hurts_players 参数。
+const PROTOCOL_VERSION := "l3d_main_v4_hazard_setting"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 ## ENet channel 0 保留 reliable；1=玩家热状态，2=敌人/世界热状态。
@@ -65,6 +66,15 @@ var friendly_fire_enabled: bool = false:
 	set(value):
 		set_host_friendly_fire_enabled(value)
 var _friendly_fire_enabled: bool = false
+## 房间设置：地上的**火海 / 酸液**是否伤害玩家（`FirePatch` 的持续伤害）。
+## 2026-11-01 用户需求：联机默认**开**（单机的燃烧瓶本来就会烧到自己）；
+## 与「友伤」分开 —— 友伤管玩家打玩家，这个只管"站在自己/队友的火里会不会掉血"。
+var hazard_hurts_players_enabled: bool = true:
+	get:
+		return _hazard_hurts_players_enabled
+	set(value):
+		set_host_hazard_hurts_players_enabled(value)
+var _hazard_hurts_players_enabled: bool = true
 var active_scene_path := ""
 ## 当前场景转换的目的入口 ID；由 Host 随转换广播，供 NetworkWorld 放置玩家。
 var active_arrival_id := ""
@@ -202,6 +212,7 @@ func leave() -> void:
 	_scene_transition_serial = 0
 	_session_player_states.clear()
 	_friendly_fire_enabled = false
+	_hazard_hurts_players_enabled = true
 	room_settings_changed.emit()
 	## 延迟测量一并复位：新会话要重新量，不能沿用上一局残留的数值/界面。
 	rtt_ms = -1
@@ -358,25 +369,37 @@ func remove_session_player_state(peer_id: int) -> void:
 func set_host_friendly_fire_enabled(enabled: bool) -> bool:
 	if not is_host or not is_online_session():
 		return false
-	_apply_room_settings(enabled)
+	_apply_room_settings(enabled, _hazard_hurts_players_enabled)
 	if not multiplayer.get_peers().is_empty():
-		room_settings.rpc(friendly_fire_enabled)
+		room_settings.rpc(_friendly_fire_enabled, _hazard_hurts_players_enabled)
 	return true
 
 
-func _apply_room_settings(enabled: bool) -> void:
-	if _friendly_fire_enabled == enabled:
+## 房间设置：火焰 / 酸液要不要伤玩家（同上，Host 权威，Client 只投影）。
+func set_host_hazard_hurts_players_enabled(enabled: bool) -> bool:
+	if not is_host or not is_online_session():
+		return false
+	_apply_room_settings(_friendly_fire_enabled, enabled)
+	if not multiplayer.get_peers().is_empty():
+		room_settings.rpc(_friendly_fire_enabled, _hazard_hurts_players_enabled)
+	return true
+
+
+func _apply_room_settings(friendly_fire: bool, hazard_hurts_players: bool = true) -> void:
+	if _friendly_fire_enabled == friendly_fire \
+			and _hazard_hurts_players_enabled == hazard_hurts_players:
 		return
-	_friendly_fire_enabled = enabled
+	_friendly_fire_enabled = friendly_fire
+	_hazard_hurts_players_enabled = hazard_hurts_players
 	room_settings_changed.emit()
 
 
 @rpc("authority", "call_remote", "reliable")
-func room_settings(enabled: bool) -> void:
+func room_settings(friendly_fire: bool, hazard_hurts_players: bool) -> void:
 	## 已离房的在途包不得恢复上一房间选项；本地直调也不能绕过 Host 权威。
 	if not has_network() or is_host or multiplayer.get_remote_sender_id() != 1:
 		return
-	_apply_room_settings(enabled)
+	_apply_room_settings(friendly_fire, hazard_hurts_players)
 
 
 # ---------------------------------------------------------------- handshake
@@ -396,7 +419,7 @@ func hello(version: String, name: String) -> void:
 		return
 	_player_names[sender] = _sanitize_name(name)
 	print("[Net] HANDSHAKE_OK peer=%d name=%s" % [sender, _player_names[sender]])
-	hello_ack.rpc_id(sender, PROTOCOL_VERSION, _player_names.duplicate(), _player_character_paths.duplicate(), friendly_fire_enabled)
+	hello_ack.rpc_id(sender, PROTOCOL_VERSION, _player_names.duplicate(), _player_character_paths.duplicate(), _friendly_fire_enabled, _hazard_hurts_players_enabled)
 	player_list.rpc(_player_names.duplicate())
 	player_character_list.rpc(_player_character_paths.duplicate())
 	player_list_changed.emit()
@@ -405,7 +428,8 @@ func hello(version: String, name: String) -> void:
 ## Host → Client 的握手确认。完整名单和角色路径表是大厅 UI 的只读投影；
 ## Client 不得直接修改它们，任何选择都必须回到 request_character_selection() 请求。
 @rpc("authority", "call_remote", "reliable")
-func hello_ack(version: String, names: Dictionary, character_paths: Dictionary, friendly_fire: bool) -> void:
+func hello_ack(version: String, names: Dictionary, character_paths: Dictionary,
+		friendly_fire: bool, hazard_hurts_players: bool = true) -> void:
 	if not has_network() or is_host or multiplayer.get_remote_sender_id() != 1:
 		return
 	if version != PROTOCOL_VERSION:
@@ -415,7 +439,7 @@ func hello_ack(version: String, names: Dictionary, character_paths: Dictionary, 
 	_player_names = names.duplicate()
 	_player_character_paths = character_paths.duplicate()
 	my_peer_id = get_my_peer_id()
-	_apply_room_settings(friendly_fire)
+	_apply_room_settings(friendly_fire, hazard_hurts_players)
 	print("[Net] HANDSHAKE_OK client peer=%d players=%d" % [my_peer_id, _player_names.size()])
 	player_list_changed.emit()
 	player_character_list_changed.emit()
@@ -518,14 +542,19 @@ func take_pending_safehouse_dialogue(key: String) -> Dictionary:
 ## Host 发起开局的第一阶段：通知两端旧场景中的 NetworkWorld 立即停止业务 RPC。
 ## 真正的 change_scene 被延后到双方 scene_transition_ack 均到达之后。
 @rpc("authority", "call_local", "reliable")
-func start_game(scene_path: String, arrival_id: String = "", arrival_position: Variant = null, difficulty: int = -1, friendly_fire: Variant = null) -> void:
+func start_game(scene_path: String, arrival_id: String = "", arrival_position: Variant = null,
+		difficulty: int = -1, friendly_fire: Variant = null, hazard_hurts_players: Variant = null) -> void:
 	if not is_online_session() or (not is_host and multiplayer.get_remote_sender_id() != 1):
 		return
 	## 加载画面：Host/Client 在旧场景里立刻亮起，直到新场景 NetworkWorld 确认全场 ready。
 	Global.show_loading_screen()
 	## 未携带设置的内部切图沿用已可靠同步的会话值，不能退回默认关闭。
-	if friendly_fire is bool:
-		_apply_room_settings(friendly_fire)
+	## 2026-11-01：新增 hazard_hurts_players（火焰/酸液伤玩家）；两个都按"带了才覆盖"处理，
+	## 只带友伤时不能把火海开关顺手冲回默认值。
+	if friendly_fire is bool or hazard_hurts_players is bool:
+		_apply_room_settings(
+			friendly_fire if friendly_fire is bool else _friendly_fire_enabled,
+			hazard_hurts_players if hazard_hurts_players is bool else _hazard_hurts_players_enabled)
 	## 存**规范形式**（uid:// → res://），与 current_scene.scene_file_path 同口径，
 	## 避免"安全门发 uid、客户端报路径"这类混用（2026-09-25 安全屋不同步的根因）。
 	active_scene_path = canonical_scene_path(scene_path)
@@ -624,7 +653,7 @@ func request_scene_change(scene_path: String, arrival_id: String = "", arrival_p
 		call_deferred("_change_scene_safely", scene_path)
 		return
 	if is_host:
-		start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty, friendly_fire_enabled)
+		start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty, friendly_fire_enabled, hazard_hurts_players_enabled)
 	else:
 		request_scene_change_rpc.rpc_id(1, scene_path, arrival_id, arrival_position)
 
@@ -639,7 +668,7 @@ func request_scene_change_rpc(scene_path: String, arrival_id: String = "", arriv
 		printerr("[Net] CHANGE_SCENE_INVALID peer=%d path=%s" % [sender, scene_path])
 		return
 	print("[Net] SCENE_CHANGE_REQUEST peer=%d path=%s arrival=%s" % [sender, scene_path, arrival_id])
-	start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty, friendly_fire_enabled)
+	start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty, friendly_fire_enabled, hazard_hurts_players_enabled)
 
 func _change_scene_safely(scene_path: String) -> void:
 	var err := get_tree().change_scene_to_file(scene_path)

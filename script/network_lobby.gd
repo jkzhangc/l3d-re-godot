@@ -34,8 +34,13 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var upnp_check: CheckBox = %UpnpCheck
 @onready var next_room_friendly_fire_check: CheckBox = %NextRoomFriendlyFireCheck
 @onready var friendly_fire_check: CheckBox = %FriendlyFireCheck
+## 房间设置：地上的火焰 / 酸液是否伤害玩家（2026-11-01）。与友伤分开的独立开关。
+@onready var next_room_hazard_check: CheckBox = %NextRoomHazardCheck
+@onready var hazard_check: CheckBox = %HazardCheck
 ## 仅保存当前大厅的下一房间预选，不写 Net/配置；离房后清零。
 var _pending_friendly_fire_enabled := false
+## 同上；默认开（单机的燃烧瓶本来就会烧到自己，联机没理由突然免疫）。
+var _pending_hazard_hurts_players_enabled := true
 @onready var create_btn: Button = %CreateBtn
 @onready var join_btn: Button = %JoinBtn
 @onready var start_btn: Button = %StartBtn
@@ -126,6 +131,8 @@ func _ready() -> void:
 	net.room_settings_changed.connect(_on_room_settings_changed)
 	next_room_friendly_fire_check.toggled.connect(_on_next_room_friendly_fire_toggled)
 	friendly_fire_check.toggled.connect(_on_friendly_fire_toggled)
+	next_room_hazard_check.toggled.connect(_on_next_room_hazard_toggled)
+	hazard_check.toggled.connect(_on_hazard_toggled)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
 	start_btn.pressed.connect(_on_start_pressed)
@@ -417,9 +424,22 @@ func _on_friendly_fire_toggled(enabled: bool) -> void:
 		_refresh_friendly_fire_controls()
 
 
+func _on_next_room_hazard_toggled(enabled: bool) -> void:
+	if net == null or net.has_network():
+		_refresh_friendly_fire_controls()
+		return
+	_pending_hazard_hurts_players_enabled = enabled
+
+
+func _on_hazard_toggled(enabled: bool) -> void:
+	if not net.set_host_hazard_hurts_players_enabled(enabled):
+		_refresh_friendly_fire_controls()
+
+
 func _on_room_settings_changed() -> void:
 	if not net.has_network():
 		_pending_friendly_fire_enabled = false
+		_pending_hazard_hurts_players_enabled = true
 	_refresh_friendly_fire_controls()
 
 
@@ -429,16 +449,24 @@ func _refresh_friendly_fire_controls() -> void:
 	next_room_friendly_fire_check.set_pressed_no_signal(_pending_friendly_fire_enabled)
 	friendly_fire_check.disabled = not (online and net.is_host and net.handshake_ok)
 	friendly_fire_check.set_pressed_no_signal(bool(net.friendly_fire_enabled))
+	## 2026-11-01：火焰/酸液伤玩家（房间设置第二项），交互规则与友伤完全一致。
+	next_room_hazard_check.disabled = online
+	next_room_hazard_check.set_pressed_no_signal(_pending_hazard_hurts_players_enabled)
+	hazard_check.disabled = not (online and net.is_host and net.handshake_ok)
+	hazard_check.set_pressed_no_signal(bool(net.hazard_hurts_players_enabled))
 
 
 ## host_game 开头会 leave/reset 并刷新 UI，必须先保存预选再建房、成功后应用。
 func _host_game_with_room_settings(port: int) -> Error:
 	var selected: bool = _pending_friendly_fire_enabled
+	var selected_hazard: bool = _pending_hazard_hurts_players_enabled
 	var err: Error = net.host_game(port)
 	if err == OK:
 		net.set_host_friendly_fire_enabled(selected)
+		net.set_host_hazard_hurts_players_enabled(selected_hazard)
 	else:
 		_pending_friendly_fire_enabled = selected
+		_pending_hazard_hurts_players_enabled = selected_hazard
 	_refresh_friendly_fire_controls()
 	return err
 
@@ -1054,7 +1082,8 @@ func _run_auto_host() -> void:
 	print("[AUTO] host 握手完成，广播开始游戏: %s" % game_scene)
 	# D2 修正：开局 RPC 必须携带难度（B1 随 start_game 广播）；原调用漏参导致
 	# net-test 流程恒走 -1（不覆盖），Client 的 Global.selected_difficulty 与 Host 脱钩。
-	net.start_game.rpc(game_scene, "", null, Global.selected_difficulty, net.friendly_fire_enabled)
+	net.start_game.rpc(game_scene, "", null, Global.selected_difficulty,
+		net.friendly_fire_enabled, net.hazard_hurts_players_enabled)
 
 
 func _run_auto_client() -> void:
@@ -1209,7 +1238,8 @@ func _on_start_pressed() -> void:
 	# 联机开局的 Client 难度从未被同步，只有中途切图（request_scene_change）才带上。
 	## 起始关卡 = 房间里选的章节（2026-09-27 用户需求：主机可选战役/章节）；
 	## 没选就回退到默认第一关。这样"不想从头测"可以直接从房间跳到目标关。
-	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty, net.friendly_fire_enabled)
+	net.start_game.rpc(_current_start_scene(), "", null, Global.selected_difficulty,
+		net.friendly_fire_enabled, net.hazard_hurts_players_enabled)
 
 
 ## 开局前向大厅下架房间（**保留隧道**），并等 DELETE 送达或超时。

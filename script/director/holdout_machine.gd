@@ -393,7 +393,8 @@ func _process(delta: float) -> void:
 		_tick_countdown(delta)
 	elif _can_interact and auto_start_on_approach:
 		trigger()
-	elif _can_interact and Input.is_action_just_pressed("功能键"):
+	elif _can_interact and not Players.local_player_is_throwing() \
+			and Input.is_action_just_pressed("功能键"):
 		## ★2026-10-02 用户反馈「有玩家互动不了防守战机器」→ 改用**轮询**取键。
 		## 旧实现走 `_unhandled_input`：那条路依赖"没有任何节点先 consume 掉功能键"，
 		## 一旦别处 consume（或焦点被某个 Control 抢走）就静默失效，且**举枪 / 其它模式下

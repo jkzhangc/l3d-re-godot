@@ -421,6 +421,11 @@ func _process_pickup(delta: float) -> bool:
 func _process_hold(delta: float, throwable_replacement: bool) -> bool:
 	## 按住进度：投掷物替换用确定键（旧行为），功能键获取用功能键(D)。
 	var action: String = "确定键" if throwable_replacement else "功能键"
+	## ★2026-11-01：投掷物举起 / 瞄准期间，「功能键 D」被「投掷减格键」占用
+	## （见 `Players.local_player_is_throwing()`），这里不响应，避免调距离顺手捡走地上的药。
+	if action == "功能键" and Players.local_player_is_throwing():
+		_hold_timer = 0.0
+		return false
 	## 点击模式（默认，2026-10-26）：按一下立刻执行，不累积进度、不出进度环。
 	if not PickupInteraction.is_hold_mode():
 		_hold_timer = 0.0

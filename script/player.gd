@@ -172,6 +172,10 @@ var _weapon_attack_pose: bool = false
 ## 与 `_weapon_attack_pose` 同源管理：enter/exit_weapon_mode 与状态 exit 都会复位成 1。
 var _melee_attack_stage: int = 1
 var player_in_weapon_state: bool = false  ## 供 menu_controller 检查菜单屏蔽
+## 是否**正举着投掷物**（READY / AIM 都算）。2026-11-01：投掷瞄准时「投掷减格键」是 D，
+## 而 D 同时是「功能键」—— 由 `Global.function_key_available()` 据此把交互拦下来，
+## 否则一次按键会同时"调距离 + 触发弹药箱/防守机器/开关"。
+var in_throwable_state: bool = false
 var _throwable_mode: bool = false           ## 是否处于投掷物举起模式（使用投掷物行走图）
 var _throwable_texture: Texture2D = null    ## 投掷物举起行走图精灵表
 var _throwable_char_idx: int = 0            ## 投掷物举起行走图角色索引

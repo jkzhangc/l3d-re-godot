@@ -29,6 +29,8 @@ class TestLobby extends "res://script/network_lobby.gd":
 		net.room_settings_changed.connect(_on_room_settings_changed)
 		next_room_friendly_fire_check.toggled.connect(_on_next_room_friendly_fire_toggled)
 		friendly_fire_check.toggled.connect(_on_friendly_fire_toggled)
+		next_room_hazard_check.toggled.connect(_on_next_room_hazard_toggled)
+		hazard_check.toggled.connect(_on_hazard_toggled)
 		_apply_panel_font_sizes()
 		_refresh_friendly_fire_controls()
 
@@ -117,8 +119,11 @@ func _make_lobby(connection: TestNet) -> TestLobby:
 func _run() -> void:
 	var host := _make_net("Host")
 	var host_ui := _make_lobby(host)
-	_check(host.PROTOCOL_VERSION == "l3d_main_v3_snapshot_versions", "协议版本号已升级为 v3_snapshot_versions")
+	_check(host.PROTOCOL_VERSION == "l3d_main_v4_hazard_setting", "协议版本号已升级为 v4_hazard_setting")
 	_check(not host.friendly_fire_enabled, "Net 默认关闭友伤")
+	_check(host.hazard_hurts_players_enabled, "Net 默认开启「火焰/酸液伤玩家」")
+	_check(host_ui.next_room_hazard_check.button_pressed, "离线预选默认勾选「火焰/酸液伤玩家」")
+	_check(not host.set_host_hazard_hurts_players_enabled(false), "离线不可直接修改火海伤害设置")
 	_check(not host_ui.next_room_friendly_fire_check.button_pressed, "离线预选默认关闭")
 	_check(not host.set_host_friendly_fire_enabled(true), "离线不可直接修改房间状态")
 	host_ui.next_room_friendly_fire_check.button_pressed = true
@@ -143,11 +148,13 @@ func _run() -> void:
 		return
 	_check(client.friendly_fire_enabled and client_ui.friendly_fire_check.button_pressed,
 		"Client 握手后显示 Host 当前值")
+	_check(client.hazard_hurts_players_enabled and client_ui.hazard_check.button_pressed,
+		"Client 握手后同步「火焰/酸液伤玩家」= 开")
 	_check(client_ui.friendly_fire_check.disabled and client_ui.next_room_friendly_fire_check.disabled,
 		"Client 的房间设置及预选均只读")
 	_check(not client.set_host_friendly_fire_enabled(false), "Client 调用 Host setter 被拒绝")
 	client.friendly_fire_enabled = false
-	client.room_settings(false)
+	client.room_settings(false, false)
 	client_ui._on_friendly_fire_toggled(false)
 	_check(client.friendly_fire_enabled and host.friendly_fire_enabled, "Client 直接赋值、本地伪同步及 UI 回调均不能改设置")
 	host_ui.friendly_fire_check.button_pressed = false
@@ -158,6 +165,16 @@ func _run() -> void:
 	if not await _wait_until(func() -> bool: return client.friendly_fire_enabled, "房主开启后可靠广播到 Client"):
 		_finish()
 		return
+	## 第二项房间设置独立广播：关掉火海伤害，友伤不能被顺手改回去。
+	host_ui.hazard_check.button_pressed = false
+	if not await _wait_until(func() -> bool: return not client.hazard_hurts_players_enabled,
+			"房主关闭「火焰/酸液伤玩家」后可靠广播到 Client"):
+		_finish()
+		return
+	_check(client.friendly_fire_enabled and host.friendly_fire_enabled,
+		"改火海开关不影响友伤（两项独立）")
+	_check(not host_ui.hazard_check.disabled and host_ui.hazard_check.button_pressed == false,
+		"房主侧火海开关已关闭且仍可操作")
 	var late := _make_net("LateClient")
 	var late_ui := _make_lobby(late)
 	err = late.join_game("127.0.0.1", port)
@@ -167,15 +184,20 @@ func _run() -> void:
 		return
 	_check(late.friendly_fire_enabled and late_ui.friendly_fire_check.button_pressed and late_ui.friendly_fire_check.disabled,
 		"晚加入收到当前开关并只读显示")
+	_check(not late.hazard_hurts_players_enabled and not late_ui.hazard_check.button_pressed,
+		"晚加入收到「火焰/酸液伤玩家」= 关")
 	var first_scene := "res://tools/net_room_settings_check.tscn"
 	var second_scene := "res://scene/network_lobby.tscn"
-	host.start_game.rpc(first_scene, "", null, Global.selected_difficulty, host.friendly_fire_enabled)
+	host.start_game.rpc(first_scene, "", null, Global.selected_difficulty,
+		host.friendly_fire_enabled, host.hazard_hurts_players_enabled)
 	if not await _wait_until(func() -> bool: return host.visited_scenes.size() == 1 and client.visited_scenes.size() == 1 and late.visited_scenes.size() == 1,
 		"真实 start_game/ACK/commit/flush 完成，不加载地图"):
 		_finish()
 		return
 	_check(host.friendly_fire_enabled and client.friendly_fire_enabled and late.friendly_fire_enabled,
 		"开局后三端保持同一开启值")
+	_check(not host.hazard_hurts_players_enabled and not client.hazard_hurts_players_enabled
+		and not late.hazard_hurts_players_enabled, "开局后三端「火焰/酸液伤玩家」也保持一致")
 	host.request_scene_change(second_scene)
 	if not await _wait_until(func() -> bool: return host.visited_scenes.size() == 2 and client.visited_scenes.size() == 2 and late.visited_scenes.size() == 2,
 		"经 request_scene_change 完成第二轮切图"):
@@ -197,11 +219,15 @@ func _run() -> void:
 		_check(not _nets[index].friendly_fire_enabled and not _lobbies[index].next_room_friendly_fire_check.button_pressed
 			and not _lobbies[index].next_room_friendly_fire_check.disabled,
 			"端 %d 离房清零且可预选新房间" % index)
-	client.room_settings(true)
-	client.hello_ack(host.PROTOCOL_VERSION, {}, {}, true)
-	client.start_game(first_scene, "", null, -1, true)
+		_check(_nets[index].hazard_hurts_players_enabled
+			and _lobbies[index].next_room_hazard_check.button_pressed,
+			"端 %d 离房后火海伤害回到默认开启" % index)
+	client.room_settings(true, false)
+	client.hello_ack(host.PROTOCOL_VERSION, {}, {}, true, false)
+	client.start_game(first_scene, "", null, -1, true, false)
 	_check(not client.friendly_fire_enabled and not client.handshake_ok and client.active_scene_path.is_empty(),
 		"离房后在途/本地回调不能恢复旧房间设置")
+	_check(client.hazard_hurts_players_enabled, "离房后在途包也不能把火海伤害改回关闭")
 	err = host_ui._host_game_with_room_settings(0)
 	_check(err == OK and not host.friendly_fire_enabled, "重新建房默认关闭，不继承上一房间")
 	_finish()

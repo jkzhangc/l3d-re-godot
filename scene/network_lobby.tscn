@@ -72,6 +72,23 @@ theme_override_font_sizes/font_size = 24
 text = "友伤（每次1–2点）"
 autowrap_mode = 2
 
+[node name="NextRoomHazardRow" type="HBoxContainer" parent="ConnectPanel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="NextRoomHazardCheck" type="CheckBox" parent="ConnectPanel/VBox/NextRoomHazardRow"]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+tooltip_text = "地面的火焰 / 酸液会不会烧到玩家。下一次创建房间使用；加入时以房主为准，默认开启。"
+
+[node name="HazardLabel" type="Label" parent="ConnectPanel/VBox/NextRoomHazardRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "火焰/酸液伤玩家"
+autowrap_mode = 2
+
 [node name="SubTitle" type="Label" parent="ConnectPanel/VBox" unique_id=2110000002]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
@@ -255,6 +272,24 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 24
 text = "友伤（每次1–2点）"
+autowrap_mode = 2
+
+[node name="HazardRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HazardCheck" type="CheckBox" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+button_pressed = true
+tooltip_text = "仅房主可以修改，所有玩家共享此房间设置。关闭后燃烧瓶的火海与酸液不再伤害玩家。"
+
+[node name="HazardLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "火焰/酸液伤玩家"
 autowrap_mode = 2
 
 [node name="RoomInfoLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000022]

@@ -132,6 +132,21 @@ static func friendly_fire_enabled() -> bool:
 	return is_online_session() and net != null and bool(net.get("friendly_fire_enabled"))
 
 
+## 房间设置：**地上的火海 / 酸液**要不要伤害玩家（`FirePatch` 的持续伤害）。
+## 单机恒为 true —— 没有"房间"这个概念，燃烧瓶烧到自己就该掉血（原有手感）。
+## 联机读 Host 同步下来的 `Net.hazard_hurts_players_enabled`（2026-11-01 新增）。
+## ⚠ 与「友伤」是两件事：友伤管"玩家打玩家"，这个只管"站在自己的火里会不会烧到"。
+static func hazard_hurts_players() -> bool:
+	if not is_online_session():
+		return true
+	var net: Node = Engine.get_main_loop().get_root().get_node_or_null("Net") \
+		if Engine.get_main_loop() else null
+	if net == null:
+		return true
+	var v: Variant = net.get("hazard_hurts_players_enabled")
+	return true if v == null else bool(v)
+
+
 ## 仅单机或 Host 可以结算伤害；客户端只能消费权威快照与表现。
 static func is_damage_authority() -> bool:
 	if not is_online_session():

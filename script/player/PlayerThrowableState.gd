@@ -54,6 +54,8 @@ func enter() -> void:
 	## 取用即清空（避免陈旧值）。
 	_return_state = character.take_return_pose_state()
 	character.player_in_weapon_state = true
+	## 屏蔽「功能键」交互（减格键就是 D，见 Player.in_throwable_state 的注释）
+	character.in_throwable_state = true
 	_phase = Phase.RAISE
 	_range = DEFAULT_RANGE
 	# 配置了举起行走图 → 切投掷物行走图；否则不显示持物外观
@@ -67,6 +69,7 @@ func enter() -> void:
 
 func exit() -> void:
 	character.player_in_weapon_state = false
+	character.in_throwable_state = false
 	character.unlock_facing()
 	character.exit_throwable_mode()
 	_remove_aim_indicator()

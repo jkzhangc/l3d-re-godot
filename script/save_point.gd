@@ -177,7 +177,8 @@ func _process(delta: float) -> void:
 	## ★存档优先级最低（2026-10-27 用户需求）：掉落物 / 医疗箱 / 弹药补给 / 防守战机器 /
 	## Boss 遭遇与存档点贴在一起时，同一次按键要归**它们**；只有它们此刻都触发不了，
 	## 存档点才响应（判据见 script/interact_priority.gd，各交互节点实现 can_use_function_key）。
-	if _can_interact and _menu == null and not get_tree().paused:
+	if _can_interact and _menu == null and not get_tree().paused \
+			and not Players.local_player_is_throwing():
 		if Input.is_action_just_pressed("功能键"):
 			if not INTERACT_PRIORITY.has_priority_interaction(get_tree(), self):
 				_open_menu()

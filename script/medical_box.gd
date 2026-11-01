@@ -142,7 +142,8 @@ func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	_check_player_proximity()
-	if _can_interact and Input.is_action_just_pressed("功能键"):
+	if _can_interact and not Players.local_player_is_throwing() \
+			and Input.is_action_just_pressed("功能键"):
 		get_viewport().set_input_as_handled()
 		_request_use()
 

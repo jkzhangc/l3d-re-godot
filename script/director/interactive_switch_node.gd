@@ -195,7 +195,8 @@ func _process(delta: float) -> void:
 	## 功能键走**轮询**而不是 _unhandled_input：事件路径依赖"没人先 consume"，
 	## 任何一处 consume 都会让它静默失效（2026-10-02 用户实测「互动不了」的根因），
 	## 与医疗箱 / 弹药堆 / 防守机器同一口径。
-	if _can_interact and Input.is_action_just_pressed("功能键"):
+	if _can_interact and not Players.local_player_is_throwing() \
+			and Input.is_action_just_pressed("功能键"):
 		interact()
 
 

@@ -550,6 +550,11 @@ func _is_nearest_weapon_pickup() -> bool:
 
 func _process_hold(delta: float) -> bool:
 	## 按住功能键(D)的替换/拾取进度。返回是否按住中。
+	## 2026-11-01：投掷物举起 / 瞄准期间，「功能键 D」是「投掷减格键」→ 拾取让位，
+	## 否则按一下 D 会一边调投掷距离一边把地上的武器/道具捡走。
+	if Players.local_player_is_throwing():
+		_hold_timer = 0.0
+		return false
 	if not _can_hold_pickup():
 		_hold_timer = 0.0
 		return false
@@ -654,6 +659,11 @@ func _request_network_pickup() -> void:
 ## 网络版按住流程：交互条件与单机 _process_hold 一致（仲裁/角色限制/救人优先），
 ## 但满进度只提交拾取请求，绝不本地入包。
 func _process_network_hold(delta: float) -> bool:
+	## 2026-11-01：投掷物举起 / 瞄准期间，「功能键 D」是「投掷减格键」→ 拾取让位，
+	## 否则按一下 D 会一边调投掷距离一边把地上的武器/道具捡走。
+	if Players.local_player_is_throwing():
+		_hold_timer = 0.0
+		return false
 	if not _can_hold_pickup():
 		_hold_timer = 0.0
 		return false

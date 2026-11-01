@@ -835,7 +835,9 @@ func _find_revive_target_for(peer_id: int, max_range: float = REVIVE_RANGE) -> i
 
 func _capture_revive_input() -> bool:
 	var peer_id := int(net.my_peer_id)
-	if Input.is_action_pressed("功能键"):
+	## 2026-11-01：投掷物举起 / 瞄准期间 D 是「投掷减格键」，救援让位（同理见
+	## `Players.local_player_is_throwing()`）；放下投掷物即可正常按住救援。
+	if Input.is_action_pressed("功能键") and not Players.local_player_is_throwing():
 		# ★按住期间**逐帧重算目标**（2026-10-11 用户实测「多人救不了玩家」）。
 		# 旧实现只在 just_pressed 那一帧找目标：只要该帧快照的 downed 字段尚未同步
 		# （target_id=0）或本地预测位置与目标距离瞬时超出范围，整段长按就作废，
@@ -1831,7 +1833,11 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 	else:
 		node.apply_network_throwable_presentation(null, false, false, THROW_RANGE_DEFAULT)
 		_send_to_ready_clients(&"throwable_state_presentation", [peer_id, "", false, false, 3])
-	ThrowableProjectile.spawn(td, start, landing_position, node, true, false)
+	## ★2026-11-01：末位 `damage_players` 由 false 改 true。
+	## 原来写死 false → 联机里燃烧瓶/酸瓶的火海对玩家**完全无害**（单机却会烧到）。
+	## 现在统一传 true，真正的开关交给房间设置 `HitResolver.hazard_hurts_players()`
+	## （`FirePatch._burn()` 里判，单机恒 true、联机读房主选项）。
+	ThrowableProjectile.spawn(td, start, landing_position, node, true, true)
 	_send_to_ready_clients(&"throwable_presentation", [peer_id, td.item_id, start, landing_position])
 	print("[NetworkWorld] HOST_THROWABLE peer=%d item=%s" % [peer_id, td.item_id])
 
