@@ -1727,7 +1727,7 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 
 ## source_is_explosive：本次伤害是否来自**爆炸家族**（RPG/榴弹/弩等，即 bullet 的
 ## explosion_radius > 0）。2026-09-27 新增，专供 Tank（暴君）抗打断判定 —— 见下方抗打断门。
-func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false) -> void:
+func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false, keep_knockback_on_freeze: bool = false) -> void:
 	if _is_dead:
 		return
 	## 每击重新判定「正面走位」，避免上一击的标记泄漏到背刺/侧击上。
@@ -1766,8 +1766,12 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 		WeaponData.Element.ICE:
 			if not resist_ice:
 				ice_freeze = true
-				knockback_force = 0.0
-				knockback_stun = 0.0
+				## 默认清击退 = "冻在原地"（2026-10-27 让冻结硬直真正生效的关键）。
+				## 例外：爆炸外圈的冲击波传 `keep_knockback_on_freeze = true`，
+				## 允许"推飞 + 冻住"同时发生 —— 否则冰属性爆炸的外圈就不推人了。
+				if not keep_knockback_on_freeze:
+					knockback_force = 0.0
+					knockback_stun = 0.0
 				hitstun_duration = maxf(hitstun_duration, FREEZE_TIME)
 				_frozen_time = FREEZE_TIME
 		WeaponData.Element.FIRE:
@@ -1896,8 +1900,11 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 			return
 
 		if sm:
-			if ice_freeze and sm.get_node_or_null("Hitstun"):
-				# 冻结优先：未发现的敌人也直接冻住（不播"！"→Discover 的解锁流程）
+			## 冻结优先进 Hitstun（原地冻住，不播"！"→Discover 解锁流程）。
+			## 2026-11-01 例外：`keep_knockback_on_freeze`（爆炸外圈）会保留击退 →
+			## `has_knockback` 为真时改走 Knockback，把敌人**先推飞**，
+			## 位移结束再由 `_hitstun_after_knockback` 接回 Hitstun 冻住。
+			if ice_freeze and not has_knockback and sm.get_node_or_null("Hitstun"):
 				sm._on_transition_requested("Hitstun")
 			elif has_knockback and sm.get_node_or_null("Knockback"):
 				sm._on_transition_requested("Knockback")

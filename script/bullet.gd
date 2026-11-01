@@ -513,9 +513,10 @@ func _explode() -> void:
 		_record_chapter_damage(hp_before, hp_after, false)
 
 	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直 + 20% 主爆伤害
-	## （2026-11-01 加伤害）。传**基础 damage**（不含即死拉满）—— 外圈不该变成即死范围。
+	## （2026-11-01 加伤害与**属性效果**）。传**基础 damage**（不含即死拉满）——
+	## 外圈不该变成即死范围；element 跟随本发子弹，雷/氷/炎的 debuff 外圈同样吃。
 	var ring: int = HitResolver.apply_explosion_outer_ring(
-		get_tree(), center, _explosion_radius, _source_id, damage)
+		get_tree(), center, _explosion_radius, _source_id, damage, element)
 	if ring > 0:
 		print("[爆炸] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs + %.0f 伤害）" % [
 			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC,

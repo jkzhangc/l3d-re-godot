@@ -50,12 +50,14 @@ const EXPLOSION_HITSTUN_SEC: float = 1.7
 ##   火元素会额外点燃，都与「击退 + 硬直 1 秒」的定稿不符。
 const OUTER_RING_PAD_RATIO: float = 0.35   ## 外圈厚度 = 主半径 × 本值
 const OUTER_RING_PAD_MIN: float = 24.0     ## 厚度下限（小半径爆炸也要有一圈）
-const OUTER_RING_KNOCKBACK: float = 520.0  ## 比主爆的 860 弱一档
+## 比主爆的 860 弱一档。2026-11-01 用户反馈"外圈推得太远"：520 → 320
+## （位移 ≈ force × knockback_stun，0.22s 下由 ~114px/3.5 格缩到 ~70px/2.2 格）。
+const OUTER_RING_KNOCKBACK: float = 320.0
 const OUTER_RING_KNOCKBACK_STUN: float = 0.22
 const OUTER_RING_HITSTUN_SEC: float = 1.0  ## 用户定稿：硬直 1 秒
 ## 外圈伤害 = 主爆伤害 × 本值（2026-11-01 用户需求：外圈除了击退也要"刮伤"）。
-## ⚠ 外圈**不携带属性**（element 固定 0）：氷的冻结通道会把 knockback 清 0
-## （见 enemy.gd 的「氷=真冻结」分支），带上属性外圈就不再是"击退圈"了。
+## ⚠ 外圈**携带属性**（2026-11-01 用户要求）：靠 take_damage 的
+## `keep_knockback_on_freeze = true` 绕开"氷冻结清击退"，否则冰属性爆炸的外圈会不推人。
 const OUTER_RING_DAMAGE_RATIO: float = 0.2
 
 
@@ -66,13 +68,13 @@ static func explosion_outer_radius(blast_radius: float) -> float:
 	return blast_radius + maxf(OUTER_RING_PAD_MIN, blast_radius * OUTER_RING_PAD_RATIO)
 
 
-## 对「主爆半径之外、外圈之内」的敌人执行击退 + 硬直 + **20% 主爆伤害**。
+## 对「主爆半径之外、外圈之内」的敌人执行击退 + 硬直 + **20% 主爆伤害 + 属性效果**。
 ## 返回受影响的数量。调用方：`bullet._explode()` / `throwable_projectile._explode()`。
 ## `damage` = 本次爆炸的主伤害（调用方传自己的最终伤害；外圈按 OUTER_RING_DAMAGE_RATIO 折扣）。
 ## 当年用 `take_damage(0, ...)`：0 伤害走 Enemy 的「被推击」分支（不弹数字、不播受伤音）。
 ## 现在有伤害了 → 正常弹数字/播受伤音，但仍保留爆炸击退与硬直（`source_is_explosive = true` 让 Tank 也吃）。
 static func apply_explosion_outer_ring(tree: SceneTree, center: Vector2, blast_radius: float,
-		source_id: int = 0, damage: float = 0.0) -> int:
+		source_id: int = 0, damage: float = 0.0, element: int = 0) -> int:
 	var outer: float = explosion_outer_radius(blast_radius)
 	if outer <= blast_radius or tree == null:
 		return 0
@@ -92,8 +94,12 @@ static func apply_explosion_outer_ring(tree: SceneTree, center: Vector2, blast_r
 		var dir: Vector2 = target.global_position - center
 		if dir == Vector2.ZERO:
 			dir = Vector2.UP
+		## 2026-11-01 用户需求：外圈**也要带属性效果**（雷=感电 / 氷=冻结 / 炎=燃烧 / 酸=无）。
+		## 末位 `keep_knockback_on_freeze = true`：氷的冻结通道默认会把 knockback 清零
+		## （见 enemy.gd「氷=真冻结」），那样外圈对所有元素就只剩冰"不推"，与"冲击波推一圈"
+		## 的定位冲突 —— 外圈例外地允许"推飞 + 冻住"同时发生。
 		target.take_damage(outer_damage, OUTER_RING_KNOCKBACK, dir.normalized(), false,
-			OUTER_RING_KNOCKBACK_STUN, OUTER_RING_HITSTUN_SEC, source_id, 0, true)
+			OUTER_RING_KNOCKBACK_STUN, OUTER_RING_HITSTUN_SEC, source_id, element, true, true)
 		affected += 1
 	return affected
 

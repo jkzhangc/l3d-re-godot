@@ -18,13 +18,17 @@
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="9_kh35d"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="10_e4a51"]
 [ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="10_kh35d"]
+[ext_resource type="Resource" uid="uid://dpgbtgk6euctu" path="res://tres/specials/ネメシス.tres" id="10_o8gq4"]
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="10_ravsi"]
+[ext_resource type="Resource" uid="uid://bsw8rcxh66t5e" path="res://tres/specials/ブラックタイガー.tres" id="11_a1ak8"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="11_fvt21"]
 [ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="11_y2uxk"]
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="12_5fbns"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="12_cgtdq"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="13_ock6s"]
 [ext_resource type="Resource" uid="uid://bjsfi6r2o0ulo" path="res://tres/zombies/男性ゾンビ.tres" id="13_oj32u"]
+[ext_resource type="Resource" uid="uid://bkcg8hn6ghxjw" path="res://tres/specials/グリーンソルジャー.tres" id="13_qj87a"]
+[ext_resource type="Resource" uid="uid://dkq4vdc7w4oe7" path="res://tres/specials/バイオゲラス.tres" id="14_61jvc"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="14_ps8nn"]
 [ext_resource type="Resource" uid="uid://ycwi6hulksfl" path="res://tres/zombies/学生ゾンビ.tres" id="14_vpsco"]
 [ext_resource type="Resource" uid="uid://cf1ay21u0ekph" path="res://tres/zombies/女子学生ゾンビ.tres" id="15_8depf"]
@@ -144,9 +148,11 @@ position = Vector2(465, 938)
 
 [node name="DevEnemySpawner" type="Node2D" parent="DecorLayer" unique_id=991501218]
 script = ExtResource("99_devspawn")
+zombie_enabled = false
 zombie_mode = 1
-special_fixed = ExtResource("4_cgtdq")
-special_pool = Array[ExtResource("17_flfka")]([ExtResource("18_t3ys5"), ExtResource("19_4shf0"), ExtResource("90_90_gm")])
+special_enabled = true
+special_mode = 1
+special_pool = Array[ExtResource("17_flfka")]([ExtResource("18_t3ys5"), ExtResource("19_4shf0"), ExtResource("90_90_gm"), ExtResource("4_cgtdq"), ExtResource("20_543jk"), ExtResource("10_o8gq4"), ExtResource("11_a1ak8"), ExtResource("91_demos"), ExtResource("13_qj87a"), ExtResource("14_61jvc")])
 special_interval = 1.0
 special_max_alive = 1
 

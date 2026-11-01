@@ -310,9 +310,9 @@ func _explode() -> void:
 					HitResolver.EXPLOSION_KNOCKBACK_STUN, HitResolver.EXPLOSION_HITSTUN_SEC,
 					get_instance_id(), _td.element, true)
 	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直 + 20% 主爆伤害
-	## （2026-11-01 用户需求加伤害；外圈不带属性，见 HitResolver.OUTER_RING_DAMAGE_RATIO）。
+	## （2026-11-01 用户需求：伤害 + **属性效果**都带上；击退力度见 OUTER_RING_KNOCKBACK）。
 	var ring: int = HitResolver.apply_explosion_outer_ring(
-		get_tree(), global_position, radius_px, get_instance_id(), _td.damage)
+		get_tree(), global_position, radius_px, get_instance_id(), _td.damage, _td.element)
 	if ring > 0:
 		print("[投掷物] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs + %.0f 伤害）" % [
 			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC,
