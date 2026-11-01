@@ -1,8 +1,11 @@
 [gd_resource type="Resource" script_class="SpecialEnemyData" format=3 uid="uid://cjequ6xby4tg5"]
 
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
+[ext_resource type="AudioStream" uid="uid://dxwgv7oi28247" path="res://sound/ケルベロス声.ogg" id="1_nykll"]
 [ext_resource type="Texture2D" uid="uid://b0kwtped8wl6j" path="res://art/Characters/ティン_ポス.png" id="2"]
-[ext_resource type="AudioStream" uid="uid://b2tex3v4qbavc" path="res://sound/SDK2死ボス2.ogg" id="3"]
+[ext_resource type="AudioStream" uid="uid://tntj1oxtp23p" path="res://sound/ケルベロス声4.ogg" id="2_jqtiu"]
+[ext_resource type="AudioStream" uid="uid://btvpe46v21427" path="res://sound/ケルベロス声3.ogg" id="2_tmcky"]
+[ext_resource type="AudioStream" uid="uid://b4qhkw0ww5ppi" path="res://sound/ケルベロス声2.ogg" id="3_21spu"]
 
 [resource]
 script = ExtResource("1")
@@ -16,11 +19,19 @@ death_char_index = 4
 max_hp = 600.0
 move_speed = 245.0
 attack_damage = 30.0
-attack_range = Vector2(72, 56)
+attack_range = Vector2(56, 40)
 attack_hit_range = Vector2(56, 40)
 attack_cooldown_frames = 55
 vision_range = 420.0
-death_sound = ExtResource("3")
+discover_sound = ExtResource("3_21spu")
+discover_sound_pitch = 1.0
+hurt_sound = ExtResource("2_tmcky")
+hurt_sound_pitch = 1.0
+attack_sound = ExtResource("1_nykll")
+attack_sound_pitch = 1.0
+hit_target_sound_pitch = 1.0
+death_sound = ExtResource("2_jqtiu")
+death_sound_pitch = 1.0
 frontal_damage_mult = 0.0
 frontal_arc_degrees = 70.0
 instant_kill_immune = true

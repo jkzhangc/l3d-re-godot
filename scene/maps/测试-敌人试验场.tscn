@@ -4,7 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_c6bxe"]
 [ext_resource type="TileSet" uid="uid://b2v2ndordnd7n" path="res://tres/Map0147_upper_tileset.tres" id="3_02tox"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="4_4shf0"]
-[ext_resource type="Resource" uid="uid://cjequ6xby4tg5" path="res://tres/specials/ティンダロス.tres" id="4_cgtdq"]
+[ext_resource type="Resource" uid="uid://bkcg8hn6ghxjw" path="res://tres/specials/グリーンソルジャー.tres" id="4_cgtdq"]
 [ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="4_hf72w"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="5_543jk"]
 [ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="5_u60el"]

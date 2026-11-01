@@ -104,6 +104,12 @@ var _armed: bool = false
 
 
 func _ready() -> void:
+	## ★「通关时长」定格点：ED 段会解除树暂停（`CampaignEnding._go_credits`，名单要靠
+	## `_process` 滚动），如果不停表，看名单的时长会被算进通关时间。
+	var clock_holder: Node = get_node_or_null("/root/ChapterStats")
+	if clock_holder != null and clock_holder.has_method("stop_campaign_clock"):
+		clock_holder.call("stop_campaign_clock")
+
 	var black: ColorRect = ColorRect.new()
 	black.color = Color.BLACK
 	black.set_anchors_preset(Control.PRESET_FULL_RECT)

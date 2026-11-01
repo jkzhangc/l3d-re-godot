@@ -844,6 +844,10 @@ func _reset_session_state() -> void:
 	## 本局尸潮曲目失效：下一局开局会重新抽（`_last_run_horde_track` 不清，
 	## 用来避免连续两局同一首）。
 	horde_music_track = -1
+	## 战役墙钟（ED「通关时长」）：回标题 = 离开这一局 → 停表，标题停留时间不计。
+	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
+	if chapter_stats != null and chapter_stats.has_method("stop_campaign_clock"):
+		chapter_stats.call("stop_campaign_clock")
 	print("[Global] 会话状态已清空（座位表 / checkpoint / 任务旗标 / 金币）")
 
 

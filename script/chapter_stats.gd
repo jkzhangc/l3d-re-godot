@@ -38,11 +38,36 @@ var finished_elapsed_seconds: float = -1.0
 var stats_by_seat: Dictionary = {}
 ## 战役累计（begin_chapter 不清零；只有 init_new_game 的 reset_campaign 清）
 var stats_campaign_by_seat: Dictionary = {}
-## 战役累计用时（各章 finish_chapter 的用时之和，秒）。ED「通关时长」用；
-## 终章一般不走 safe_door.finish_chapter → get_campaign_elapsed_seconds 会补上当前章。
+## 战役墙钟用时（秒，ED「通关时长」）：从新游戏开局起累计**游戏在跑**的时间。
+## · 安全屋 / 关卡 / 过图都算 —— 它们不暂停
+## · 菜单、章节结算页、ED（`get_tree().paused = true`）不计 —— 本节点默认
+##   PROCESS_MODE_INHERIT，暂停即停帧，不需要额外判据
+## · 标题界面不计 —— Global.go_to_title_screen() 调 stop_campaign_clock()
 var campaign_elapsed_seconds: float = 0.0
+var _campaign_clock_running: bool = false
+## 上次记账的墙钟毫秒（0 = 下一帧重建基准点）。
+## ★用 `Time.get_ticks_msec()` 而不是累加 `_process` 的 delta：delta 会被
+## `Engine.time_scale` 缩放、且实测与真实墙钟有 ~30% 偏差（2026-11-01 探针）。
+var _clock_last_msec: int = 0
 ## ★客户端：Host 广播来的权威快照（非空时优先于本地值）。见文件末尾「联机同步」。
 var _remote_payload: Dictionary = {}
+
+
+## 战役墙钟推进（暂停时本节点不处理，天然停表）。
+func _process(_delta: float) -> void:
+	if not _campaign_clock_running:
+		_clock_last_msec = 0
+		return
+	var now: int = Time.get_ticks_msec()
+	if _clock_last_msec > 0:
+		campaign_elapsed_seconds += float(now - _clock_last_msec) / 1000.0
+	_clock_last_msec = now
+
+
+func _notification(what: int) -> void:
+	## 暂停期间 _process 不跑；解除暂停后的第一帧不能把暂停时长补进来 → 基准点归零。
+	if what == NOTIFICATION_PAUSED or what == NOTIFICATION_UNPAUSED:
+		_clock_last_msec = 0
 
 
 func begin_chapter(scene_path: String, display_title: String = "") -> void:
@@ -53,6 +78,8 @@ func begin_chapter(scene_path: String, display_title: String = "") -> void:
 	stats_by_seat = {}
 	_remote_payload.clear()   ## 新章节 → 丢弃上一章的远端快照
 	_ensure_all_seats()
+	_campaign_clock_running = true   ## 从标题/菜单回到关卡 → 继续走表
+	_clock_last_msec = 0             ## 换图/读盘的空白不计入
 	print("[ChapterStats] 开始章节: %s" % scene_path)
 
 
@@ -67,9 +94,8 @@ func finish_chapter() -> void:
 	if started_msec <= 0:
 		started_msec = Time.get_ticks_msec()
 	finished_elapsed_seconds = maxf(0.0, float(Time.get_ticks_msec() - started_msec) / 1000.0)
-	campaign_elapsed_seconds += finished_elapsed_seconds
 	_ensure_all_seats()
-	print("[ChapterStats] 章节完成，用时 %.1f 秒（战役累计 %.1f 秒）" % [
+	print("[ChapterStats] 章节完成，用时 %.1f 秒（战役墙钟 %.1f 秒）" % [
 		finished_elapsed_seconds, campaign_elapsed_seconds])
 
 
@@ -151,23 +177,28 @@ func get_campaign_totals() -> Dictionary:
 		["kills", "headshots", "healing_items", "deaths"])
 
 
-## 新游戏开局清零（Global.init_new_game 调用）。
+## 新游戏开局清零（Global.init_new_game 调用），并从 0 开始走表。
 func reset_campaign() -> void:
 	stats_campaign_by_seat.clear()
 	campaign_elapsed_seconds = 0.0
+	_campaign_clock_running = true
+	_clock_last_msec = 0
 	_remote_payload.clear()
-	print("[ChapterStats] 战役累计统计已清零")
+	print("[ChapterStats] 战役累计统计已清零，墙钟开始计时")
 
 
-## 战役累计用时（ED「通关时长」）：已结算章节之和 + 当前章实时（未结算时补）。
-## 客户端一律吃 Host 快照 —— 本端计时起点与 Host 有一帧级偏差。
+## 停表（回标题 / 进 ED 时调用）：之后再读到的就是定格值。
+func stop_campaign_clock() -> void:
+	_campaign_clock_running = false
+	_clock_last_msec = 0
+
+
+## 战役墙钟用时（ED「通关时长」）：暂停/标题不计，安全屋与关卡都算。
+## 客户端一律吃 Host 快照 —— 两端记账起点不同，必须同源。
 func get_campaign_elapsed_seconds() -> float:
 	if not _remote_payload.is_empty():
 		return maxf(0.0, float(_remote_payload.get("campaign_elapsed", 0.0)))
-	var total: float = campaign_elapsed_seconds
-	if finished_elapsed_seconds < 0.0:
-		total += get_elapsed_seconds()
-	return total
+	return campaign_elapsed_seconds
 
 
 func get_totals() -> Dictionary:

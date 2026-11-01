@@ -125,30 +125,33 @@ extends Resource
 @export var melee_enabled: bool = true
 
 @export_group("音效")
-## 发现/低吼音效（ハンター=「ハンター声」系列）。留空则沿用敌人自身 discover_sound。
+## ★特感音效**一律以 tres 为准：留空 = 不播**（2026-11-01 用户需求）。
+## 不再回退到 `enemy.tscn` 的丧尸默认音 —— 没有对应音效的怪宁可安静，也不借用丧尸叫声。
+## ⚠ 普通丧尸不走 SpecialEnemyData，默认音（攻击/受伤/撕咬）保持不变，两套互不串味。
+## 发现/低吼音效（ハンター=「ハンター声」系列）。
 @export var discover_sound: AudioStream = null
-## 发现音效音调。0 = 沿用敌人自身 discover_sound_pitch（2026-09-15 每音效可设音调）。
+## 发现音效音调。0 = 用敌人默认（1.0）。
 @export var discover_sound_pitch: float = 0.0
-## 受伤音效。留空则沿用敌人自身 hurt_sound。
+## 受伤音效（被子弹/近战打中）。
 @export var hurt_sound: AudioStream = null
-## 受伤音效音调。0 = 沿用敌人自身 hurt_sound_pitch。
+## 受伤音效音调。0 = 用敌人默认。
 @export var hurt_sound_pitch: float = 0.0
-## 攻击挥击音效（EnemyAttackState 起手播放）。留空则沿用敌人自身 attack_sound。
+## 攻击挥击音效（EnemyAttackState 起手播放）。
 @export var attack_sound: AudioStream = null
-## 攻击挥击音效音调。0 = 沿用敌人自身 attack_sound_pitch。
+## 攻击挥击音效音调。0 = 用敌人默认。
 @export var attack_sound_pitch: float = 0.0
-## 击中目标音效（攻击命中玩家且实际掉血时播放）。留空则沿用敌人自身 hit_target_sound。
+## 击中目标音效（攻击命中玩家且实际掉血时播放）。
 @export var hit_target_sound: AudioStream = null
-## 击中目标音效音调。0 = 沿用敌人自身 hit_target_sound_pitch。
+## 击中目标音效音调。0 = 用敌人默认。
 @export var hit_target_sound_pitch: float = 0.0
-## 死亡音效（普通死亡 EnemyDeathState / _die）。留空则沿用敌人自身 death_sound。
+## 死亡音效（普通死亡 EnemyDeathState / _die）。
 @export var death_sound: AudioStream = null
-## 死亡音效音调。0 = 沿用敌人自身 death_sound_pitch（2026-09-15 特感 tres 可配）。
+## 死亡音效音调。0 = 用敌人默认（2026-09-15 特感 tres 可配）。
 @export var death_sound_pitch: float = 0.0
 
 @export_group("音效 — 随机池（等概率，2026-10-29）")
 ## 每个槽可挂多条候选：**非空时等概率抽一条**，空则用上面的单条。
-## 与单条字段并存（旧 tres 不填 = 行为不变）。联机时 Host 抽中的下标会随 RPC 转发。
+## ⚠ 单条与池都留空 = 该槽**没有音效**（不会回退到丧尸默认）。联机时 Host 抽中的下标随 RPC 转发。
 @export var discover_sound_pool: Array[AudioStream] = []
 @export var hurt_sound_pool: Array[AudioStream] = []
 @export var attack_sound_pool: Array[AudioStream] = []
@@ -260,7 +263,7 @@ extends Resource
 ## ハンターγ 的突刺素材要求「直到突刺移动结束之前，一直保持1」；
 ## ハンター/ハンターβ 保持 false（进度式推进，视觉上是连续扑咬）。
 @export var pounce_hold_frame_during_dash: bool = false
-## 首狩り起跳/突进音效。留空则沿用敌人自身 pounce_sound（再回退 attack_sound）。
+## 首狩り起跳/突进音效。留空 = 静音（音效已不再回退丧尸默认音）。
 @export var pounce_sound: AudioStream = null
 ## 首狩り音效音调。0 = 沿用敌人自身 pounce_sound_pitch。
 @export var pounce_sound_pitch: float = 0.0
@@ -287,11 +290,11 @@ extends Resource
 @export var witch_touch_radius: float = 46.0
 ## 激怒后的移速倍率。
 @export var witch_enrage_speed_mult: float = 2.2
-## 激怒尖叫音效。留空则用 discover_sound。
+## 激怒尖叫音效。留空 = 用自己的 discover_sound（两者都空则静音）。
 @export var witch_scream_sound: AudioStream = null
 ## 激怒尖叫音效音调。0 = 沿用敌人自身 witch_scream_sound_pitch。
 @export var witch_scream_sound_pitch: float = 0.0
-## 警戒低吼音效（进警戒圈时播一次）。留空 = 用 discover_sound 降调。
+## 警戒低吼音效（进警戒圈时播一次）。留空 = 用 discover_sound 降调（两者都空则静音）。
 @export var witch_alert_sound: AudioStream = null
 
 @export_group("丸呑み（ハンターγ）")
@@ -456,8 +459,6 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.spit_damage = spit_damage
 	enemy.spit_char_sequence = spit_char_sequence
 	enemy.spit_fire_at_sequence_idx = spit_fire_at_sequence_idx
-	enemy.spit_sound = spit_sound
-	enemy.spit_sound_pitch = spit_sound_pitch
 	enemy.spit_impact_effect = spit_impact_effect
 	enemy.spit_impact_tone = spit_impact_tone
 	# 正面抗性（Hunter β 回避 / Tyrant Normalize）
@@ -497,37 +498,54 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.tongue_effect_frame_seconds = tongue_effect_frame_seconds
 	if tongue_hit_at_sequence_idx >= 0:
 		enemy.tongue_hit_at_sequence_idx = tongue_hit_at_sequence_idx
-	if tongue_sound != null:
-		enemy.tongue_sound = tongue_sound
-		if tongue_sound_pool.is_empty():
-			enemy.tongue_sound_pool.clear()
+	## ── 音效（★2026-11-01 用户需求：特感一律以 tres 为准，留空 = **静音**）──
+	## 旧行为是「空 = 沿用 enemy.tscn 的丧尸默认音」，于是没有对应音效的特感会借用丧尸的
+	## 受伤/撕咬叫声（用户实测「有些怪被击中没对应音效」）。现在单条与随机池都**无条件**
+	## 写入：空 AudioStream / 空数组会把敌人自带的默认值直接清掉。
+	## ⚠ 普通丧尸走自己的生成路径、不经过本函数，默认音保持不变 —— 两套互不串味。
+	enemy.discover_sound = discover_sound
+	enemy.discover_sound_pool = discover_sound_pool
+	enemy.hurt_sound = hurt_sound
+	enemy.hurt_sound_pool = hurt_sound_pool
+	enemy.attack_sound = attack_sound
+	enemy.attack_sound_pool = attack_sound_pool
+	enemy.hit_target_sound = hit_target_sound
+	enemy.hit_target_sound_pool = hit_target_sound_pool
+	enemy.death_sound = death_sound
+	enemy.death_sound_pool = death_sound_pool
+	enemy.pounce_sound = pounce_sound
+	enemy.pounce_sound_pool = pounce_sound_pool
+	enemy.spit_sound = spit_sound
+	enemy.spit_sound_pool = spit_sound_pool
+	enemy.tongue_sound = tongue_sound
+	enemy.tongue_sound_pool = tongue_sound_pool
+	enemy.witch_scream_sound = witch_scream_sound
+	enemy.witch_scream_sound_pool = witch_scream_sound_pool
+	enemy.witch_alert_sound = witch_alert_sound
+	enemy.witch_alert_sound_pool = witch_alert_sound_pool
+	enemy.water_enter_sound = water_enter_sound
+	enemy.water_enter_sound_pool = water_enter_sound_pool
+	enemy.water_exit_sound = water_exit_sound
+	enemy.water_exit_sound_pool = water_exit_sound_pool
+	## 音调：0 = 用敌人默认（1.0）。音效为空时这些值无意义，故仍只按 >0 覆盖。
+	if discover_sound_pitch > 0.0:
+		enemy.discover_sound_pitch = discover_sound_pitch
+	if hurt_sound_pitch > 0.0:
+		enemy.hurt_sound_pitch = hurt_sound_pitch
+	if attack_sound_pitch > 0.0:
+		enemy.attack_sound_pitch = attack_sound_pitch
+	if hit_target_sound_pitch > 0.0:
+		enemy.hit_target_sound_pitch = hit_target_sound_pitch
+	if death_sound_pitch > 0.0:
+		enemy.death_sound_pitch = death_sound_pitch
+	if pounce_sound_pitch > 0.0:
+		enemy.pounce_sound_pitch = pounce_sound_pitch
+	if spit_sound_pitch > 0.0:
+		enemy.spit_sound_pitch = spit_sound_pitch
 	if tongue_sound_pitch > 0.0:
 		enemy.tongue_sound_pitch = tongue_sound_pitch
-	# 音效随机池（非空才覆盖；空 = 沿用敌人自身池）
-	if not discover_sound_pool.is_empty():
-		enemy.discover_sound_pool = discover_sound_pool
-	if not hurt_sound_pool.is_empty():
-		enemy.hurt_sound_pool = hurt_sound_pool
-	if not attack_sound_pool.is_empty():
-		enemy.attack_sound_pool = attack_sound_pool
-	if not hit_target_sound_pool.is_empty():
-		enemy.hit_target_sound_pool = hit_target_sound_pool
-	if not death_sound_pool.is_empty():
-		enemy.death_sound_pool = death_sound_pool
-	if not pounce_sound_pool.is_empty():
-		enemy.pounce_sound_pool = pounce_sound_pool
-	if not spit_sound_pool.is_empty():
-		enemy.spit_sound_pool = spit_sound_pool
-	if not witch_scream_sound_pool.is_empty():
-		enemy.witch_scream_sound_pool = witch_scream_sound_pool
-	if not witch_alert_sound_pool.is_empty():
-		enemy.witch_alert_sound_pool = witch_alert_sound_pool
-	if not water_enter_sound_pool.is_empty():
-		enemy.water_enter_sound_pool = water_enter_sound_pool
-	if not water_exit_sound_pool.is_empty():
-		enemy.water_exit_sound_pool = water_exit_sound_pool
-	if not tongue_sound_pool.is_empty():
-		enemy.tongue_sound_pool = tongue_sound_pool
+	if witch_scream_sound_pitch > 0.0:
+		enemy.witch_scream_sound_pitch = witch_scream_sound_pitch
 	enemy.pounce_speed_mult = pounce_speed_mult
 	enemy.pounce_dash_speed = pounce_dash_speed
 	enemy.pounce_hit_radius = pounce_hit_radius
@@ -541,12 +559,6 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.water_walk_enabled = water_walk_enabled
 	enemy.water_submerge_ratio = water_submerge_ratio
 	enemy.water_submerge_alpha = water_submerge_alpha
-	enemy.water_enter_sound = water_enter_sound
-	if water_enter_sound_pool.is_empty():
-		enemy.water_enter_sound_pool.clear()
-	enemy.water_exit_sound = water_exit_sound
-	if water_exit_sound_pool.is_empty():
-		enemy.water_exit_sound_pool.clear()
 	# 特感专属攻击动画帧序列（空 = 沿用丧尸默认帧）
 	if attack_char_sequence.size() > 0:
 		enemy.attack_char_sequence = attack_char_sequence
@@ -590,37 +602,6 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.witch_stim_speed = witch_stim_speed
 	enemy.witch_touch_radius = witch_touch_radius
 	enemy.witch_enrage_speed_mult = witch_enrage_speed_mult
-	if witch_scream_sound != null:
-		enemy.witch_scream_sound = witch_scream_sound
-		if witch_scream_sound_pool.is_empty():
-			enemy.witch_scream_sound_pool.clear()
-	if witch_scream_sound_pitch > 0.0:
-		enemy.witch_scream_sound_pitch = witch_scream_sound_pitch
-	if witch_alert_sound != null:
-		enemy.witch_alert_sound = witch_alert_sound
-		if witch_alert_sound_pool.is_empty():
-			enemy.witch_alert_sound_pool.clear()
-	# 攻击挥击音效（空 = 沿用敌人自身 attack_sound）
-	if attack_sound != null:
-		enemy.attack_sound = attack_sound
-		if attack_sound_pool.is_empty():
-			enemy.attack_sound_pool.clear()
-	if attack_sound_pitch > 0.0:
-		enemy.attack_sound_pitch = attack_sound_pitch
-	# 击中目标音效（空 = 沿用敌人自身 hit_target_sound）
-	if hit_target_sound != null:
-		enemy.hit_target_sound = hit_target_sound
-		if hit_target_sound_pool.is_empty():
-			enemy.hit_target_sound_pool.clear()
-	if hit_target_sound_pitch > 0.0:
-		enemy.hit_target_sound_pitch = hit_target_sound_pitch
-	# 死亡音效（空 = 沿用敌人自身 death_sound）
-	if death_sound != null:
-		enemy.death_sound = death_sound
-		if death_sound_pool.is_empty():
-			enemy.death_sound_pool.clear()
-	if death_sound_pitch > 0.0:
-		enemy.death_sound_pitch = death_sound_pitch
 	# 気まぐれ撤离（ティンダロス）：AI 字段，Client 不跑状态机 → 注入也无副作用
 	enemy.disengage_enabled = disengage_enabled
 	enemy.disengage_min_seconds = disengage_min_seconds
@@ -628,13 +609,6 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.disengage_check_interval = disengage_check_interval
 	enemy.disengage_chance = disengage_chance
 	enemy.disengage_flee_seconds = disengage_flee_seconds
-	# 首狩り起跳/突进音效（空 = 沿用敌人自身 pounce_sound，再回退 attack_sound）
-	if pounce_sound != null:
-		enemy.pounce_sound = pounce_sound
-		if pounce_sound_pool.is_empty():
-			enemy.pounce_sound_pool.clear()
-	if pounce_sound_pitch > 0.0:
-		enemy.pounce_sound_pitch = pounce_sound_pitch
 	# 丸呑み（ハンターγ）
 	enemy.swallow_enabled = swallow_enabled
 	enemy.swallow_trigger_range = swallow_trigger_range
@@ -648,15 +622,3 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.swallow_weapon_attrition = swallow_weapon_attrition
 	if swallow_texture != null:
 		enemy.swallow_texture = swallow_texture
-	if discover_sound != null:
-		enemy.discover_sound = discover_sound
-		if discover_sound_pool.is_empty():
-			enemy.discover_sound_pool.clear()
-	if discover_sound_pitch > 0.0:
-		enemy.discover_sound_pitch = discover_sound_pitch
-	if hurt_sound != null:
-		enemy.hurt_sound = hurt_sound
-		if hurt_sound_pool.is_empty():
-			enemy.hurt_sound_pool.clear()
-	if hurt_sound_pitch > 0.0:
-		enemy.hurt_sound_pitch = hurt_sound_pitch
