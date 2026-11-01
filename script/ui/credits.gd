@@ -22,7 +22,9 @@ const SKIP_ACTIONS: Array[String] = ["确定键", "取消键", "菜单键"]
 const STATS_PLACEHOLDER := "@@STATS@@"
 
 ## 名单文本（可在 Inspector 编辑；默认 = 原作名单全文中译 + 本项目段占位）
-@export_multiline var credits_text: String = """　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
+@export_multiline var credits_text: String = """@@STATS@@
+
+　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
 
 
 　　[原作]
@@ -76,8 +78,6 @@ const STATS_PLACEHOLDER := "@@STATS@@"
 　　野比ハザCODE:Vow制作团队
 　　冲绳
 
-@@STATS@@
-
 　　―――
 
 　　野比大雄的求生之路 〜L3D 重制版〜
@@ -85,8 +85,9 @@ const STATS_PLACEHOLDER := "@@STATS@@"
 　　[重制]
 　　野比ハザ重制组（Godot 4）
 　　制作：剑客
-　　策划/玩法设计：Eluniht、剑客、阿茶Atea
-　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员
+　　策划/玩法设计：Eluniht、阿茶Atea、剑客
+　　测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克
+　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克、加速赔冰、还有 你
 
 　　 感谢游玩！
 　　　　在本片拍摄中牺牲的
@@ -282,6 +283,15 @@ func _build_stats_block() -> String:
 		return ""
 
 	var lines: Array[String] = []
+	## ★2026-11-01 用户要求：战报放到名单最前面，且「死亡次数 / 通关时长」排在杀敌排名之前。
+	lines.append("　　[本次远征]")
+	lines.append("　　死亡次数：%d 次" % int(total.get("deaths", 0)))
+	var elapsed: float = 0.0
+	if stats_node.has_method("get_campaign_elapsed_seconds"):
+		elapsed = float(stats_node.call("get_campaign_elapsed_seconds"))
+	if elapsed > 0.0:
+		lines.append("　　通关时长：%s" % _format_duration(elapsed))
+	lines.append("")
 	lines.append("　　[幸存者战报]")
 	lines.append("")
 	## 排名条目：label → 统计键 → 单位（空 = 不带括号数值）
@@ -316,6 +326,16 @@ func _build_stats_block() -> String:
 		lines.append("　　没能走到终点的：%s" % "、".join(fallen))
 	lines.append("")
 	return "\n".join(lines)
+
+
+## 秒 → 「1 小时 23 分」/「23 分 45 秒」/「45 秒」（ED「通关时长」）。
+func _format_duration(seconds: float) -> String:
+	var s: int = maxi(0, roundi(seconds))
+	if s >= 3600:
+		return "%d 小时 %d 分" % [s / 3600, (s % 3600) / 60]
+	if s >= 60:
+		return "%d 分 %d 秒" % [s / 60, s % 60]
+	return "%d 秒" % s
 
 
 func _pick_top(per_seat: Array[Dictionary], key: String) -> Dictionary:

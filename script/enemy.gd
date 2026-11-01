@@ -462,7 +462,11 @@ var _spit_cooldown_left: float = 0.0
 @export var tongue_frames_up: Array[int] = [8, 12, 13, 15, 17, 19]
 ## 特效每帧秒数。
 @export var tongue_effect_frame_seconds: float = 0.09
-## 音效 / 音调。
+## 判定触发位置：舌头特效帧序列中的索引（0 = 第 1 帧，按该朝向的帧序列计）。
+## -1 = 旧口径（按总时长的 45% 估算）；≥ 序列长度 = 取最后一帧。
+## 时间换算走 tongue_effect_frame_seconds 均摊（不看特效场景内的 frame_durations）。
+@export var tongue_hit_at_sequence_idx: int = -1
+## 音效 / 音调。⚠ 随机池 tongue_sound_pool 非空时池优先，本条不会播（同 attack 等槽）。
 @export var tongue_sound: AudioStream = null
 @export var tongue_sound_pitch: float = 1.0
 ## 冷却剩余（EnemyTongueState 收尾置位，_process 递减）。
@@ -523,6 +527,11 @@ func play_network_tongue_presentation(facing: int) -> void:
 	if packed == null or seq.is_empty():
 		return
 	_tongue_net_playing = true
+	## 吐舌音效：Client 不跑状态机，Host 的 _play_sound 也不转发舌头音（不在
+	## NETWORK_SFX_FIELDS 表里）—— 在这里用本地同名字段补播一条，两端都听得到。
+	## 资源不过网络（同 A3 音效事件化铁律）。
+	if tongue_sound or not tongue_sound_pool.is_empty():
+		_play_pool(tongue_sound_pool, tongue_sound, tongue_sound_pitch)
 	var frame_sec: float = maxf(0.03, tongue_effect_frame_seconds)
 	var anim: Node2D = VX_ANIM.from_scene(packed)
 	var played: bool = false
@@ -542,7 +551,13 @@ func play_network_tongue_presentation(facing: int) -> void:
 			anim.queue_free()
 	if played and sprite != null:
 		sprite.visible = false
-	await get_tree().create_timer(float(seq.size()) * frame_sec + 0.05).timeout
+	## ★等特效**真的**结束再恢复本体（2026-11-01 用户实测「特效结束有一帧本体不显示」）：
+	## 特效场景自带的 frame_durations 让实际时长 ≠ 帧数 × tongue_effect_frame_seconds，
+	## 按固定时长睡一觉会估早/估晚；直接挂在节点离场上，恢复时机与特效寿命严格对齐。
+	if played and anim != null and is_instance_valid(anim) and anim.is_inside_tree():
+		await anim.tree_exited
+	else:
+		await get_tree().create_timer(float(seq.size()) * frame_sec + 0.05).timeout
 	if is_instance_valid(self):
 		if sprite != null:
 			sprite.visible = true

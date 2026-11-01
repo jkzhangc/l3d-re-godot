@@ -5,7 +5,9 @@
 [node name="Credits" type="CanvasLayer" unique_id=1188331924]
 layer = 95
 script = ExtResource("1")
-credits_text = "　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
+credits_text = "@@STATS@@
+
+　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
 
 
 　　[原作]
@@ -59,8 +61,6 @@ credits_text = "　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
 　　野比ハザCODE:Vow制作团队
 　　冲绳
 
-@@STATS@@
-
 　　―――
 
 　　野比大雄的求生之路 〜L3D 重制版〜
@@ -69,8 +69,8 @@ credits_text = "　　　　　野比大雄的生化危机 〜LEFT 3 DEAD〜
 　　野比ハザ重制组（Godot 4）
 　　制作：剑客
 　　策划/玩法设计：Eluniht、阿茶Atea、剑客
-		测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔
-　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、还有 你
+　　测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克
+　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克、加速赔冰、还有 你
 
 　　 感谢游玩！
 　　　　在本片拍摄中牺牲的

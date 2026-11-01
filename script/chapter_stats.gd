@@ -38,6 +38,9 @@ var finished_elapsed_seconds: float = -1.0
 var stats_by_seat: Dictionary = {}
 ## 战役累计（begin_chapter 不清零；只有 init_new_game 的 reset_campaign 清）
 var stats_campaign_by_seat: Dictionary = {}
+## 战役累计用时（各章 finish_chapter 的用时之和，秒）。ED「通关时长」用；
+## 终章一般不走 safe_door.finish_chapter → get_campaign_elapsed_seconds 会补上当前章。
+var campaign_elapsed_seconds: float = 0.0
 ## ★客户端：Host 广播来的权威快照（非空时优先于本地值）。见文件末尾「联机同步」。
 var _remote_payload: Dictionary = {}
 
@@ -64,8 +67,10 @@ func finish_chapter() -> void:
 	if started_msec <= 0:
 		started_msec = Time.get_ticks_msec()
 	finished_elapsed_seconds = maxf(0.0, float(Time.get_ticks_msec() - started_msec) / 1000.0)
+	campaign_elapsed_seconds += finished_elapsed_seconds
 	_ensure_all_seats()
-	print("[ChapterStats] 章节完成，用时 %.1f 秒" % finished_elapsed_seconds)
+	print("[ChapterStats] 章节完成，用时 %.1f 秒（战役累计 %.1f 秒）" % [
+		finished_elapsed_seconds, campaign_elapsed_seconds])
 
 
 func record_damage_dealt(seat_index: int, amount: float) -> void:
@@ -149,8 +154,20 @@ func get_campaign_totals() -> Dictionary:
 ## 新游戏开局清零（Global.init_new_game 调用）。
 func reset_campaign() -> void:
 	stats_campaign_by_seat.clear()
+	campaign_elapsed_seconds = 0.0
 	_remote_payload.clear()
 	print("[ChapterStats] 战役累计统计已清零")
+
+
+## 战役累计用时（ED「通关时长」）：已结算章节之和 + 当前章实时（未结算时补）。
+## 客户端一律吃 Host 快照 —— 本端计时起点与 Host 有一帧级偏差。
+func get_campaign_elapsed_seconds() -> float:
+	if not _remote_payload.is_empty():
+		return maxf(0.0, float(_remote_payload.get("campaign_elapsed", 0.0)))
+	var total: float = campaign_elapsed_seconds
+	if finished_elapsed_seconds < 0.0:
+		total += get_elapsed_seconds()
+	return total
 
 
 func get_totals() -> Dictionary:
@@ -212,6 +229,7 @@ func build_sync_payload() -> Dictionary:
 		"campaign_totals": _sum_table(stats_campaign_by_seat, EMPTY_CAMPAIGN_STATS,
 			["kills", "headshots", "healing_items", "deaths"]),
 		"elapsed": get_elapsed_seconds(),
+		"campaign_elapsed": get_campaign_elapsed_seconds(),
 		"chapter_scene": chapter_scene,
 	}
 

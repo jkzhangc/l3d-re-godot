@@ -14,6 +14,7 @@
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="11_htmnk"]
 [ext_resource type="Resource" uid="uid://bjsfi6r2o0ulo" path="res://tres/zombies/男性ゾンビ.tres" id="12_n3gtv"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="12_qtbql"]
+[ext_resource type="Script" uid="uid://b7i7kpp78wjwq" path="res://script/director/spawn_zone.gd" id="13_m0nkf"]
 [ext_resource type="Resource" uid="uid://ycwi6hulksfl" path="res://tres/zombies/学生ゾンビ.tres" id="13_nirxy"]
 [ext_resource type="PackedScene" uid="uid://om55cuudhhrx" path="res://object/safe_door.tscn" id="14_i8sxk"]
 [ext_resource type="Resource" uid="uid://cf1ay21u0ekph" path="res://tres/zombies/女子学生ゾンビ.tres" id="14_n0u3p"]
@@ -27,10 +28,10 @@
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="22_4w5we"]
 [ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="23_eagd5"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="24_1c6j6"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="25_60kky"]
+[ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="25_60kky"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="26_1y134"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="27_7suwq"]
-[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="28_lmjlu"]
+[ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="28_lmjlu"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="29_ldsx6"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="30_2na64"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="31_pq3wh"]
@@ -148,6 +149,203 @@ pool = SubResource("Resource_qtbql")
 [node name="火箭炮类" parent="DecorLayer" unique_id=1568210754 instance=ExtResource("3_vc2es")]
 position = Vector2(3840, 2272)
 pool = SubResource("Resource_xjr1b")
+
+[node name="SpawnZone" type="Node2D" parent="DecorLayer" unique_id=1478174950]
+position = Vector2(8688, 2168)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 300)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone2" type="Node2D" parent="DecorLayer" unique_id=336743549]
+position = Vector2(8672, 3040)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 300)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone3" type="Node2D" parent="DecorLayer" unique_id=1045097446]
+position = Vector2(8672, 3768)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 300)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone4" type="Node2D" parent="DecorLayer" unique_id=642154655]
+position = Vector2(8672, 4288)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 300)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone5" type="Node2D" parent="DecorLayer" unique_id=417979281]
+position = Vector2(8040, 4328)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone6" type="Node2D" parent="DecorLayer" unique_id=1902373940]
+position = Vector2(7120, 4320)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone7" type="Node2D" parent="DecorLayer" unique_id=1055156941]
+position = Vector2(5328, 4280)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone8" type="Node2D" parent="DecorLayer" unique_id=995471722]
+position = Vector2(6184, 4320)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone9" type="Node2D" parent="DecorLayer" unique_id=2051062723]
+position = Vector2(3864, 4312)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone10" type="Node2D" parent="DecorLayer" unique_id=1981504638]
+position = Vector2(3032, 4320)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone11" type="Node2D" parent="DecorLayer" unique_id=2070321215]
+position = Vector2(1640, 4320)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone12" type="Node2D" parent="DecorLayer" unique_id=71756899]
+position = Vector2(1152, 3776)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 400)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone13" type="Node2D" parent="DecorLayer" unique_id=1954227008]
+position = Vector2(1152, 2952)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 400)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone14" type="Node2D" parent="DecorLayer" unique_id=1100230985]
+position = Vector2(1160, 1752)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 400)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone15" type="Node2D" parent="DecorLayer" unique_id=1551777658]
+position = Vector2(1152, 928)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(200, 400)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone16" type="Node2D" parent="DecorLayer" unique_id=256250116]
+position = Vector2(2000, 744)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone17" type="Node2D" parent="DecorLayer" unique_id=281621839]
+position = Vector2(3320, 744)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone18" type="Node2D" parent="DecorLayer" unique_id=1760083286]
+position = Vector2(5368, 768)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone19" type="Node2D" parent="DecorLayer" unique_id=2063968346]
+position = Vector2(4168, 768)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone20" type="Node2D" parent="DecorLayer" unique_id=948219753]
+position = Vector2(3952, 2880)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(96, 400)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone21" type="Node2D" parent="DecorLayer" unique_id=1353214505]
+position = Vector2(5376, 2800)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(96, 400)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone22" type="Node2D" parent="DecorLayer" unique_id=1276675484]
+position = Vector2(4096, 3400)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 96)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone23" type="Node2D" parent="DecorLayer" unique_id=1246475677]
+position = Vector2(5032, 3400)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 96)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="SpawnZone24" type="Node2D" parent="DecorLayer" unique_id=1767781519]
+position = Vector2(5848, 3408)
+script = ExtResource("13_m0nkf")
+zone_size = Vector2(400, 96)
+max_spawns = 4
+ambient_budget = 4
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1341325483]
 y_sort_enabled = true

@@ -1,15 +1,14 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://dmetsacyi84qe"]
 
-[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1"]
-[ext_resource type="Texture2D" path="res://art/Animations/バイオゲラス攻撃アニメ2.png" id="2"]
+[ext_resource type="Script" uid="uid://bjc07b4qm3yaj" path="res://script/vx_anim_sprite.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://d3hywg1am2u2u" path="res://art/Animations/バイオゲラス攻撃アニメ2.png" id="2"]
 
-[node name="BiogerasTongueUp" type="Node2D"]
+[node name="BiogerasTongueUp" type="Node2D" unique_id=620261378]
 z_index = 1
 script = ExtResource("1")
 texture = ExtResource("2")
-h_frames = 5
 v_frames = 5
-fps = 12.0
-auto_free = true
+fps = 12.5
 position_offset = Vector2(0, -64)
 frame_sequence = Array[int]([8, 12, 13, 15, 17, 19])
+frame_durations = Array[float]([0.05, 0.05, 0.05, 0.05, 0.05, 0.05])

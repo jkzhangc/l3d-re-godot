@@ -232,7 +232,12 @@ extends Resource
 @export var tongue_frames_up: Array[int] = [8, 12, 13, 15, 17, 19]
 ## 舌头特效每帧时长（秒）。
 @export var tongue_effect_frame_seconds: float = 0.09
+## 判定触发位置：舌头特效帧序列中的索引（0 = 第 1 帧，按该朝向的帧序列计）。
+## -1 = 旧口径（按总时长的 45% 估算）。バイオゲラス 5×5 表里「舌头全长伸展」是序列
+## 第 4 帧 → 填 3；想更早判定就减，想贴住伸展末端就加（越界按末帧算）。
+@export var tongue_hit_at_sequence_idx: int = -1
 ## 舌头攻击音效 / 音调。
+## ⚠ tongue_sound_pool 非空时随机池优先（与其他音效槽同规则），本条不会播。
 @export var tongue_sound: AudioStream = null
 @export var tongue_sound_pitch: float = 1.0
 ## 冲刺速度倍率（相对 move_speed）。
@@ -490,6 +495,8 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.tongue_frames_down = tongue_frames_down
 	enemy.tongue_frames_up = tongue_frames_up
 	enemy.tongue_effect_frame_seconds = tongue_effect_frame_seconds
+	if tongue_hit_at_sequence_idx >= 0:
+		enemy.tongue_hit_at_sequence_idx = tongue_hit_at_sequence_idx
 	if tongue_sound != null:
 		enemy.tongue_sound = tongue_sound
 		if tongue_sound_pool.is_empty():

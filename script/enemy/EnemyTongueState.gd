@@ -13,6 +13,9 @@ class_name EnemyTongueState extends State
 ##
 ## 【朝向帧序列】5×5 表按方向分组（右 / 左 / 下 / 上），帧序列由
 ## SpecialEnemyData.tongue_frames_* 注入。横向/下用第一张表，上用第二张表。
+##
+## 【判定帧】tongue_hit_at_sequence_idx = 在**该朝向帧序列**里的触发索引（0 = 第 1 帧），
+## 与敌人普攻的 hit_at_sequence_idx 同语义；-1 = 退化为「总时长 45%」的旧口径。
 
 enum Phase { WINDUP, STRIKE, RECOVER }
 
@@ -25,9 +28,12 @@ var _dir: Vector2 = Vector2.ZERO
 var _seq: Array[int] = []
 var _strike_elapsed: float = 0.0
 var _strike_duration: float = 0.0
-var _hit_at: float = 0.0
+var _hit_at: float = 0.0        ## 判定时刻（相对 STRIKE 起点，秒），由 tongue_hit_at_sequence_idx 换算
 var _hit_done: bool = false
 var _sprite_hidden: bool = false
+## 当前吐舌特效节点（auto_free 后自毁）。本体精灵跟着它的真实寿命恢复，
+## 不按 _strike_duration 估算 —— 特效场景里的 frame_durations 会让实际时长与估算不一致。
+var _effect: Node2D = null
 
 
 func enter() -> void:
@@ -36,6 +42,7 @@ func enter() -> void:
 	_hit_done = false
 	_strike_elapsed = 0.0
 	_sprite_hidden = false
+	_effect = null
 
 	# 停掉行走动画 timer，防止回调覆盖动作帧（与 Attack/Pounce/Swallow 同约定）
 	if enemy.animation_timer:
@@ -122,7 +129,7 @@ func _start_strike(enemy: Node2D) -> void:
 	_seq = _frames_for_facing(enemy)
 	var frame_sec: float = maxf(0.03, enemy.tongue_effect_frame_seconds)
 	_strike_duration = maxf(frame_sec, float(_seq.size()) * frame_sec)
-	_hit_at = clampf(_strike_duration * 0.45, 0.08, maxf(0.09, _strike_duration - 0.05))
+	_hit_at = _resolve_hit_at(enemy, frame_sec)
 
 	# 吐舌音效 + 特效（特效里含本体，先隐藏本体精灵）
 	if enemy.tongue_sound or not enemy.tongue_sound_pool.is_empty():
@@ -132,6 +139,22 @@ func _start_strike(enemy: Node2D) -> void:
 	## 只有特效真的播出来才隐藏本体；特效缺失时保持本体可见（宁可不播，也不能让敌人凭空消失）。
 	if _play_tongue_effect(enemy):
 		_hide_enemy_sprite(enemy)
+	## 判定落在第 1 帧（索引 0）→ 起手即判，不等下一次 process_update（同 EnemyAttackState）。
+	if _hit_at <= 0.0:
+		_do_tongue_hit(enemy)
+		_hit_done = true
+
+
+## 判定触发时刻（相对 STRIKE 起点，秒）。
+## 优先用 tongue_hit_at_sequence_idx：按特效帧序列索引 × tongue_effect_frame_seconds 换算，
+## 索引 = 舌头开始伸出到该帧的那一瞬（与 hit_at_sequence_idx 的「进帧即判」同语义）。
+## -1 / 帧序列为空 = 旧口径（总时长的 45%，下限 0.08 秒）。
+func _resolve_hit_at(enemy: Node2D, frame_sec: float) -> float:
+	var idx: int = int(enemy.tongue_hit_at_sequence_idx)
+	if idx >= 0 and not _seq.is_empty():
+		var clamped: int = mini(idx, _seq.size() - 1)
+		return clampf(float(clamped) * frame_sec, 0.0, _strike_duration)
+	return clampf(_strike_duration * 0.45, 0.08, maxf(0.09, _strike_duration - 0.05))
 
 
 func _frames_for_facing(enemy: Node2D) -> Array[int]:
@@ -163,7 +186,25 @@ func _play_tongue_effect(enemy: Node2D) -> bool:
 		anim.queue_free()
 		return false
 	parent.add_child(anim)
+	_effect = anim
+	## ★本体恢复时机绑定特效的**真实**寿命（2026-11-01 用户实测「特效结束有一帧本体不显示」）：
+	## 特效场景自带 `frame_durations`（バイオゲラス = [0.05,0.05,0.05,0.08]），实际播放时长
+	## 与「帧数 × tongue_effect_frame_seconds」并不相等；旧写法按 `_strike_duration + 0.05`
+	## 估算恢复时刻，估早了就是一条空白帧。tree_exiting 在节点离场当帧触发，与隐藏对称。
+	anim.tree_exiting.connect(_on_effect_exiting.bind(enemy, anim))
 	return true
+
+
+## 特效结束（auto_free / 场景切换 / 被打断回收）→ 立刻把本体精灵放回来。
+## 幂等：exit() 已经恢复过时 `_sprite_hidden` 为 false，直接早退。
+## 若收尾的是「上一发」的旧特效（当前已有新特效在播）→ 不动本体，避免把新特效的本体抢出来。
+func _on_effect_exiting(enemy: Node2D, effect: Node2D) -> void:
+	if effect != _effect and is_instance_valid(_effect):
+		return
+	if effect == _effect:
+		_effect = null
+	if is_instance_valid(enemy):
+		_show_enemy_sprite(enemy)
 
 
 func _hide_enemy_sprite(enemy: Node2D) -> void:
@@ -183,7 +224,10 @@ func _show_enemy_sprite(enemy: Node2D) -> void:
 
 func _enter_recover(enemy: Node2D) -> void:
 	_phase = Phase.RECOVER
-	_show_enemy_sprite(enemy)
+	## 特效还活着就**不要**提前放回本体（特效里画着本体，提前放回 = 双影）；
+	## 由 _on_effect_exiting 在特效真正结束时恢复。
+	if not is_instance_valid(_effect):
+		_show_enemy_sprite(enemy)
 	# 后摇 + 冷却（冷却从后摇结束起算，与首狩り/吐酸同规则）
 	_timer = maxf(0.05, enemy.tongue_recover_seconds)
 	enemy._tongue_cooldown_left = _timer + maxf(0.0, enemy.tongue_cooldown_seconds)
