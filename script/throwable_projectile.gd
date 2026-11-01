@@ -26,6 +26,10 @@ var _sprite: Sprite2D = null
 var _shadow: Sprite2D = null
 var _arc_height: float = 0.0   ## 抛物线最高点（像素）
 var _spin_speed: float = 0.0    ## 旋转速度（弧度/秒）
+## ── 直线弹道（飞刀，2026-11-01）──
+var _flight_dir: Vector2 = Vector2.RIGHT  ## 生成时定死的飞行方向（之后不再变）
+var _flown: float = 0.0                   ## 已飞距离（px）
+var _max_range: float = 0.0               ## 本次射程（= 起点到落点，至少 1 格）
 var _authoritative: bool = true
 var _damage_players: bool = true
 var _source_owner: Node = null
@@ -56,6 +60,12 @@ static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context
 	var scene := tree.current_scene
 	scene.add_child(proj)
 	proj.global_position = start
+	## 直线弹道（飞刀）：方向在生成时定死（飞行中不再变），射程取"起点→落点"。
+	## 与抛物线不同，这里不关心总时长，速度是唯一的进度来源。
+	if td.straight_flight:
+		var fly: Vector2 = end - start
+		proj._flight_dir = fly.normalized() if fly.length_squared() > 0.0001 else Vector2.DOWN
+		proj._max_range = maxf(float(TILE_SIZE), fly.length())
 	proj._setup_sprite()
 	if td.throw_sound:
 		## pitch 来自 ThrowableData.throw_sound_pitch（<=0 = 原调；手雷/炸药/燃烧瓶 tres 定 1.4）
@@ -68,6 +78,12 @@ func _setup_sprite() -> void:
 	_sprite.z_index = 3
 	_arc_height = _td.arc_height if _td else 0.0
 	_spin_speed = _td.spin_speed if _td else 0.0
+	## 直线弹道：精灵按飞行方向定一次角度（口径同 bullet.gd 的 -PI/2 补偿），
+	## 之后**不再自转** —— 刀尖始终朝着前进方向。
+	if _td != null and _td.straight_flight:
+		_spin_speed = 0.0
+		if _sprite:
+			_sprite.rotation = _flight_dir.angle() + deg_to_rad(_td.sprite_angle_offset_deg)
 	var tex: Texture2D = _td.projectile_texture if _td.projectile_texture else _td.icon
 	if tex:
 		_sprite.texture = tex
@@ -83,6 +99,9 @@ func _setup_sprite() -> void:
 
 func _process(delta: float) -> void:
 	if _landed:
+		return
+	if _td != null and _td.straight_flight:
+		_straight_step(delta)
 		return
 	_t += delta
 	var k: float = clampf(_t / FLY_DURATION, 0.0, 1.0)
@@ -104,6 +123,25 @@ func _process(delta: float) -> void:
 		if _direct_hit_step(from, global_position):
 			return
 	if k >= 1.0:
+		_land()
+
+
+## 直线匀速步进（飞刀）。与抛物线分支的区别：没有 `_t / k / 高度弧线`，也不自转。
+## 每帧位移最多到"剩余射程"，所以最后一帧不会冲过落点。
+func _straight_step(delta: float) -> void:
+	var remain: float = maxf(0.0, _max_range - _flown)
+	if remain <= 0.0:
+		_land()
+		return
+	var from: Vector2 = global_position
+	var step_len: float = minf(maxf(1.0, _td.flight_speed) * delta, remain)
+	global_position = from + _flight_dir * step_len
+	_flown += step_len
+	## 直击判定在所有端都跑（Host/单机结算伤害，Client 靠它停在同一个位置）。
+	if _td.direct_hit_radius > 0.0:
+		if _direct_hit_step(from, global_position):
+			return
+	if _flown >= _max_range:
 		_land()
 
 
@@ -142,11 +180,13 @@ func _apply_direct_hit(target: Node2D, from: Vector2, to: Vector2) -> void:
 		dir = Vector2.DOWN
 	target.call("take_damage", _td.damage, 120.0, dir.normalized(), false, 0.2, 0.1,
 		get_instance_id(), _td.element, false)
-	## 击中音：按属性取默认值（2026-11-01 用户要求「每个属性不同击中音」）。
-	## 投掷物没有单独的击中音字段，所以统一走属性表；想改某件道具就改 element_fx.gd。
-	var hit_sfx: AudioStream = ELEMENT_FX.hit_sound(_td.element)
+	## 击中音：**数据优先**（飞刀 = 切り裂く.ogg），留空才回退属性表。
+	## 早期投掷物没有击中音字段，统一走 element_fx.gd；2026-11-01 补上 per-item 覆盖。
+	var hit_sfx: AudioStream = _td.direct_hit_sound if _td.direct_hit_sound != null \
+		else ELEMENT_FX.hit_sound(_td.element)
+	var hit_pitch: float = maxf(_td.direct_hit_sound_pitch, 0.01) if _td.direct_hit_sound != null else 1.0
 	if hit_sfx:
-		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, 1.0,
+		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, hit_pitch,
 			(target as Node2D).global_position)
 
 

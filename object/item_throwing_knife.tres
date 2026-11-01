@@ -5,12 +5,19 @@
 [ext_resource type="Texture2D" uid="uid://cwmnluse0xpav" path="res://art/Barrages/スローイングナイフ.png" id="3_pamkk"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_58x6b"]
 [ext_resource type="Texture2D" uid="uid://bh0ummygcr7xl" path="res://art/Weapon/[2K-VX]-A武器セット５.png" id="pickup_tex"]
+[ext_resource type="AudioStream" uid="uid://b47lh3nfcklw2" path="res://sound/切り裂く.ogg" id="hit_sfx"]
 
 [resource]
 script = ExtResource("1")
 projectile_texture = ExtResource("3_pamkk")
 arc_height = 0.0
+throw_range_max = 8
 direct_hit_radius = 16.0
+straight_flight = true
+flight_speed = 800.0
+sprite_angle_offset_deg = -90.0
+direct_hit_sound = ExtResource("hit_sfx")
+direct_hit_sound_pitch = 1.0
 damage = 90.0
 throw_sound = ExtResource("7_58x6b")
 throw_sound_pitch = 1.4

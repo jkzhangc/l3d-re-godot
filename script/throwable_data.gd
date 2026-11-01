@@ -39,6 +39,19 @@ class_name ThrowableData extends ItemData
 ## true = 直线类投掷物撞到**有物理层的图块**就地落下（不穿墙）。
 ## 仅对 `direct_hit_radius > 0` 生效；手雷/燃烧瓶是抛物线，本来就该越过矮墙落到落点。
 @export var direct_hit_stop_on_wall: bool = true
+## ── 直线弹道（飞刀，2026-11-01 用户需求）──
+## true = **不做抛物线插值**：按 `flight_speed` 沿投掷方向匀速直飞（像子弹），
+## 精灵不旋转、只在生成时按飞行方向定一次角度；撞墙 / 命中 / 飞到落点即停。
+## false = 原抛物线（手雷 / 燃烧瓶）。
+@export var straight_flight: bool = false
+## 直线飞行速度（px/s）。子弹约 700~900，飞刀设 800 手感接近弹道武器。
+@export var flight_speed: float = 800.0
+## 直线飞行时精灵相对飞行方向的额外旋转（度）。
+## 口径同 `bullet.gd`：素材"图默认朝下"就填 -90；朝右则填 0。
+@export var sprite_angle_offset_deg: float = -90.0
+## 直击命中音效（飞刀 = 切り裂く.ogg）。留空 = 走属性表 `element_fx.gd`。
+@export var direct_hit_sound: AudioStream = null
+@export var direct_hit_sound_pitch: float = 1.0
 
 @export_group("爆炸（手雷）")
 @export var explosion_radius: int = 0       ## 爆炸半径（格，0=不爆炸）

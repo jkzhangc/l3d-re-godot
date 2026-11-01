@@ -57,7 +57,10 @@ func enter() -> void:
 	## 屏蔽「功能键」交互（减格键就是 D，见 Player.in_throwable_state 的注释）
 	character.in_throwable_state = true
 	_phase = Phase.RAISE
-	_range = DEFAULT_RANGE
+	## 直线弹道的投掷物（飞刀，2026-11-01）默认用**满射程**：
+	## 它不像手雷"扔到落点消失"，而是像子弹一样直线飞出去，
+	## 起手 2 格会让刀刚出手就停。抛物线类仍沿用 DEFAULT_RANGE。
+	_range = _td.throw_range_max if _td.straight_flight else DEFAULT_RANGE
 	# 配置了举起行走图 → 切投掷物行走图；否则不显示持物外观
 	if _td.held_walk_texture:
 		character.enter_throwable_mode(_td)
@@ -137,7 +140,9 @@ func _process_aim(delta: float) -> void:
 	##   应沿用 A/D 预先调好的距离（用户要求「按 Z 扔的操作不变」）。
 	_aim_hold_time += delta
 	if not _aim_range_reset and _aim_hold_time >= AIM_HOLD_RESET_SEC:
-		_range = _td.throw_range_min
+		## 抛物线类是"从最近处往外扫"，直线弹道（飞刀）则保持满射程 ——
+		## 否则按住 Z 会把刀压成只飞 1 格。
+		_range = _td.throw_range_max if _td.straight_flight else _td.throw_range_min
 		_aim_range_reset = true
 
 	## ★方向键 = 选投掷方向（角色跟着**转身**，扔出去的方向就是角色面向）；
