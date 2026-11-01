@@ -176,10 +176,10 @@ extends Resource
 ## >0 = 正面被命中时不减免伤害，但会以该力度（px/s）**快速侧向换位**，仍然朝玩家推进。
 ## ハンターβ 用 300（≈65px 的侧移），配合 `frontal_damage_mult = 1.0`。
 @export var frontal_dodge_force: float = 0.0
-@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.14
+@export_range(0.02, 0.6, 0.01) var frontal_dodge_stun: float = 0.05
 ## 闪避第二段：侧移结束后朝玩家高速突进（原作手感）。0 = 只侧移。
 @export var frontal_dodge_dash_force: float = 0.0
-@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.22
+@export_range(0.03, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.08
 
 @export_group("首狩り突进（ハンター 系）")
 ## 是否启用首狩り突进（中距离高速扑咬）。普通僵尸与 Tyrant 保持 false。

@@ -77,8 +77,17 @@ func process_update(delta: float) -> void:
 
 func physics_update(delta: float) -> void:
 	var enemy_node: Node2D = character
-	## ── 第二阶段：朝最近玩家高速突进（不衰减，按时间收尾）──
+	## ── 闪避序列：**先侧移、再突进**，两段各自计时 ──
+	## ★2026-11-01 修时序 bug：上一版突进分支排在最前，`_dash_left` 从 enter 起就 > 0，
+	## 于是第一帧就进突进、侧移那一段**从来没执行过**；`process_update` 又因为
+	## `_dash_left > 0` 提前 return，`_stun_timer` 永远不减 → 侧移彻底失效。
+	## 现在用 `_stun_timer`（= `frontal_dodge_stun`）当第一段的时间轴：
+	## 侧移期走原来的衰减逻辑，计时归零后才切突进。
 	if _dash_left > 0.0:
+		if _stun_timer > 0.0:
+			_stun_timer -= delta
+			_apply_knockback_step(enemy_node, delta)
+			return
 		_dash_left -= delta
 		var target: Node2D = null
 		if Players != null and Players.has_method("nearest_entity_to"):
@@ -94,14 +103,14 @@ func physics_update(delta: float) -> void:
 			_dash_left = 0.0
 			enemy_node.update_moving(false)
 		return
-	# 应用击退速度（逐帧衰减）
+	_apply_knockback_step(enemy_node, delta)
+
+
+## 普通击退的一帧：速度逐帧衰减位移 + 连锁推挤（闪避的侧移段也复用它）。
+func _apply_knockback_step(enemy: Node2D, delta: float) -> void:
 	if _knockback_velocity.length() > 1.0:
-		var motion: Vector2 = _knockback_velocity * delta
-		var enemy: Node2D = character
-		enemy.move_and_collide(motion)
-		# 线性减速
+		enemy.move_and_collide(_knockback_velocity * delta)
 		_knockback_velocity = _knockback_velocity.move_toward(Vector2.ZERO, DECELERATION * delta)
-		# 连锁推挤（仅一级）：被击退的敌人推开附近敌人，但被推开的不再连锁
 		_chain_push_nearby_enemies(enemy, _knockback_velocity)
 	else:
 		_knockback_velocity = Vector2.ZERO

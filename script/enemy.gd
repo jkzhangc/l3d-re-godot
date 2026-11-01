@@ -283,12 +283,12 @@ const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害�
 ## 0 = 关闭（绝大多数敌人）。配合 `frontal_damage_mult = 1.0` 使用（不减免）。
 @export var frontal_dodge_force: float = 0.0
 ## 走位位移的持续时间（秒）；位移结束后立刻回 Chase 继续扑向玩家。
-@export_range(0.05, 0.6, 0.01) var frontal_dodge_stun: float = 0.14
+@export_range(0.02, 0.6, 0.01) var frontal_dodge_stun: float = 0.05
 ## ★闪避第二段（2026-10-31 用户补充「原作不只是侧移，还会高速往玩家身上扑一会」）：
 ## 侧移结束后立刻以本速度朝**最近玩家**高速突进，持续 `frontal_dodge_dash_time` 秒。
 ## 0 = 只侧移不突进（旧行为）。
 @export var frontal_dodge_dash_force: float = 700.0
-@export_range(0.05, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.22
+@export_range(0.03, 0.8, 0.01) var frontal_dodge_dash_time: float = 0.08
 
 ## 本次命中是否触发正面走位（_apply_frontal_resist 置位，take_damage 消费）。
 var _frontal_dodge_pending: bool = false
