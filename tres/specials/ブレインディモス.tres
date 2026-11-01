@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://oj3abxiovxwc" path="res://art/Characters/[2K-VX]-ブレインディモス1.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://ddw2c70ludiec" path="res://sound/ハンター声2.ogg" id="3_7f5ko"]
 [ext_resource type="Texture2D" uid="uid://duldls0mm8ecp" path="res://art/Characters/[2K-VX]-ブレインディモス2.png" id="3_death"]
+[ext_resource type="AudioStream" uid="uid://b47lh3nfcklw2" path="res://sound/切り裂く.ogg" id="4_rnn5q"]
 [ext_resource type="AudioStream" uid="uid://mjo0xbjv686j" path="res://sound/酸発射.ogg" id="4_spit"]
 [ext_resource type="PackedScene" uid="uid://b826u628r1jyb" path="res://anim/anim_effect_酸.tscn" id="5_impact"]
 
@@ -27,8 +28,14 @@ hurt_sound = ExtResource("3_7f5ko")
 hurt_sound_pitch = 0.7
 attack_sound = ExtResource("4_spit")
 attack_sound_pitch = 0.5
+hit_target_sound = ExtResource("4_rnn5q")
+hit_target_sound_pitch = 1.0
 death_sound = ExtResource("1_itnaw")
 spit_enabled = true
+spit_trigger_min_dist = 96.0
+spit_trigger_max_dist = 256.0
+spit_windup_seconds = 0.1
+spit_projectile_speed = 600.0
 spit_damage = 20.0
 spit_char_sequence = Array[int]([3, 4])
 spit_sound = ExtResource("4_spit")

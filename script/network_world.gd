@@ -3069,6 +3069,48 @@ func enemy_acid_spit_presentation(entity_id: int, spawn_pos: Vector2, dir: Vecto
 	print("[NetworkWorld] CLIENT_ENEMY_ACID_SPIT entity=%d pos=%s" % [entity_id, spawn_pos])
 
 
+## Host：ネメシス 火箭开火广播（entity_id + 出口坐标 + 方向）。
+## 速度/半径/特效由 Client 从本地 enemy 节点字段解析（apply_to_enemy 注入保证有值）。
+func announce_enemy_rocket(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -> void:
+	if not net.is_host:
+		return
+	var entity_id: int = enemy.network_entity_id
+	if entity_id <= 0:
+		return
+	_send_to_ready_clients(&"enemy_rocket_presentation", [entity_id, spawn_pos, dir])
+
+
+## Client：生成非权威镜像火箭（只做视觉与音效；爆炸伤害全部 Host 判定）。
+@rpc("authority", "call_remote", "reliable")
+func enemy_rocket_presentation(entity_id: int, spawn_pos: Vector2, dir: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if not is_instance_valid(enemy):
+		return
+	var parent: Node = get_tree().current_scene
+	if parent == null:
+		parent = enemy.get_parent()
+	## ⚠ 不用 `EnemyRocket.spawn_mirror()`：本工程的 class_name 不在 headless 的全局类缓存里
+	##（同 enemy_acid_spit 的注释），跨文件引用会 Parse Error → 这里直接按场景生成。
+	var scene: PackedScene = load("res://object/enemy_rocket.tscn")
+	var proj: Node2D = scene.instantiate()
+	proj.global_position = spawn_pos
+	proj.set("direction", dir)
+	proj.set("speed", enemy.rocket_speed)
+	proj.set("explosion_radius", enemy.rocket_explosion_radius)
+	proj.set("visual_scale", enemy.rocket_visual_scale)
+	proj.set("explosion_effect", enemy.rocket_explosion_effect)
+	proj.set("_authoritative", false)
+	if parent != null:
+		parent.add_child(proj)
+	else:
+		proj.queue_free()
+	if enemy.rocket_fire_sound:
+		enemy._play_sound(enemy.rocket_fire_sound, 1.0)
+	print("[NetworkWorld] CLIENT_ENEMY_ROCKET entity=%d pos=%s" % [entity_id, spawn_pos])
+
+
 ## Host：enemy._play_sound 反查命中缺口音效（attack/discover/rage_discover/
 ## witch_scream/frontal_block）后调用（A3 音效事件化）。单机/Client 调用为 no-op。
 ## 只传 entity_id + 音效 key + pitch；AudioStream 由 Client 从本地 enemy 节点

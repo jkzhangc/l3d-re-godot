@@ -91,6 +91,7 @@ func _apply_network_death_state() -> void:
 	_p.apply_network_throwable_presentation(null, false, false, 0)
 	_p._shove_mode = false
 	_p._shove_texture = null
+	_clear_weapon_pose()
 	if _p.animation_timer:
 		_p.animation_timer.stop()
 	var tex: Texture2D = _p.death_texture if _p.death_texture else _p.walk_texture
@@ -193,6 +194,7 @@ func _die() -> void:
 	_p._weapon_mode = false
 	_p._shove_mode = false
 	_p._shove_texture = null
+	_clear_weapon_pose()
 	if _p.animation_timer:
 		_p.animation_timer.stop()
 
@@ -221,6 +223,18 @@ func _die() -> void:
 
 	# 创建黑屏遮罩
 	_create_fade_overlay()
+
+
+## 死亡 / 倒地时收掉「武器攻击姿态」与「武器单体动作图」（2026-11-01 用户实测：
+## 用带武器动作图的武器攻击中死亡，武器动作图会留在尸体上不消失）。
+## 为什么直接隐藏而不再跑 `_refresh_sprite()`：死亡后 `_refresh_character_sprite()`
+## 会因 `_is_dying` 早退，只有武器叠层分支还在动 —— 这里一次写清三个姿态字段更可控。
+func _clear_weapon_pose() -> void:
+	_p._weapon_attack_pose = false
+	_p._melee_attack_stage = 1
+	_p._current_weapon_seq_idx = -1
+	if _p.weapon_sprite != null:
+		_p.weapon_sprite.visible = false
 
 
 func _create_fade_overlay() -> void:

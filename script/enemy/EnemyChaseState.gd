@@ -256,6 +256,12 @@ func process_update(_delta: float) -> void:
 		transition_requested.emit("Tongue")
 		return
 
+	# ── 火箭筒（ネメシス）：距离带内举筒 → 举着靠近 → 进带开火 ──
+	# 放在近战之后：贴脸还是先打近战，中距离才掏火箭筒。
+	if _can_rocket(enemy, player):
+		transition_requested.emit("Rocket")
+		return
+
 	# ── 首狩り（ハンター 系）：中距离锁定 → 突进扑咬 ──
 	# 判定放在普通攻击之后：能直接咬到就不必起跳（避免"近距离还做突进"的滑稽表现）。
 	# 距离带由 pounce_trigger_min/max_dist 控制，冷却由 enemy._pounce_cooldown_left 控制。
@@ -321,6 +327,26 @@ func _can_tongue(enemy: Node2D, player: Node2D) -> bool:
 		return false
 	var d: float = player.global_position.distance_to(enemy.global_position)
 	return d >= enemy.tongue_trigger_min_dist and d <= enemy.tongue_trigger_max_dist
+
+
+## 火箭筒（ネメシス）触发条件：距离带内 + 冷却已过 + 状态机有 Rocket 节点
+## + 与玩家之间无墙（隔墙举筒必炸墙，纯浪费演出与冷却，与吐酸同判据）。
+func _can_rocket(enemy: Node2D, player: Node2D) -> bool:
+	if not enemy.rocket_enabled:
+		return false
+	if enemy._rocket_cooldown_left > 0.0:
+		return false
+	var sm: Node = enemy.get_node_or_null("StateMachine")
+	if sm == null or sm.get_node_or_null("Rocket") == null:
+		return false
+	var d: float = player.global_position.distance_to(enemy.global_position)
+	if d < enemy.rocket_trigger_min_dist or d > enemy.rocket_trigger_max_dist:
+		return false
+	var space: PhysicsDirectSpaceState2D = enemy.get_world_2d().direct_space_state
+	var query := PhysicsRayQueryParameters2D.create(
+		enemy.global_position, player.global_position, 1 | 32)
+	query.exclude = [enemy.get_rid()]
+	return space.intersect_ray(query).is_empty()
 
 
 func _can_pounce(enemy: Node2D, player: Node2D) -> bool:

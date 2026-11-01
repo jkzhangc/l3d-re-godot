@@ -469,6 +469,42 @@ var _spit_cooldown_left: float = 0.0
 ## 音效 / 音调。⚠ 随机池 tongue_sound_pool 非空时池优先，本条不会播（同 attack 等槽）。
 @export var tongue_sound: AudioStream = null
 @export var tongue_sound_pitch: float = 1.0
+## 冷却剩余（EnemyRocketState 收尾置位，_process 递减）。
+var _rocket_cooldown_left: float = 0.0
+
+@export_group("火箭筒（ネメシス，2026-11-01）")
+## 触发带内举起 → 举着继续靠近 → 进开火带开火 → 倒放举起动作放下武器 → 回追击。
+@export var rocket_enabled: bool = false
+## 触发带（px）：玩家落在 [min, max] 内才开始掏火箭筒。
+@export var rocket_trigger_min_dist: float = 120.0
+@export var rocket_trigger_max_dist: float = 420.0
+## 开火带（px）：举起后继续靠近，进到 [min, max] 才开火；比 min 还近（贴脸）直接开火。
+@export var rocket_fire_min_dist: float = 80.0
+@export var rocket_fire_max_dist: float = 300.0
+## 举枪动作：角色格序列 + 每格时长（口径同 attack_char_sequence / attack_frame_durations）。
+@export var rocket_raise_char_sequence: Array[int] = [4]
+@export var rocket_raise_frame_durations: Array[float] = [0.2]
+## 开火动作：角色格序列 + 每格时长 + 在第几个下标发射。
+@export var rocket_fire_char_sequence: Array[int] = [5]
+@export var rocket_fire_frame_durations: Array[float] = [0.25]
+@export var rocket_fire_at_sequence_idx: int = 0
+## 帧时长兜底（durations 比序列短时用）。
+@export var rocket_frame_seconds: float = 0.12
+## 举着火箭筒接近时的移速倍率（相对 move_speed）。
+@export var rocket_approach_speed_mult: float = 1.0
+## 火箭弹：伤害 / 速度 / 最大射程 / 爆炸半径 / 视觉缩放。
+@export var rocket_damage: float = 80.0
+@export var rocket_speed: float = 460.0
+@export var rocket_max_range: float = 720.0
+@export var rocket_explosion_radius: float = 96.0
+@export var rocket_visual_scale: float = 1.0
+@export var rocket_explosion_effect: PackedScene = preload("res://anim/anim_effect_RPG爆炸动画.tscn")
+@export var rocket_explode_sound: AudioStream = preload("res://sound/ロケットランチャー爆発.ogg")
+@export var rocket_fire_sound: AudioStream = preload("res://sound/ロケットランチャー.ogg")
+## 举枪 / 放枪音：默认与玩家火箭筒一致（カチャ），可被 SpecialEnemyData 覆盖。
+@export var rocket_raise_sound: AudioStream = preload("res://sound/カチャ.ogg")
+@export var rocket_lower_sound: AudioStream = preload("res://sound/カチャ.ogg")
+@export var rocket_cooldown_seconds: float = 6.0
 ## 冷却剩余（EnemyTongueState 收尾置位，_process 递减）。
 var _tongue_cooldown_left: float = 0.0
 ## Client 舌头表现进行中（防重入）。
@@ -1008,6 +1044,9 @@ func _process(delta: float) -> void:
 		_spit_cooldown_left = maxf(0.0, _spit_cooldown_left - delta)
 	if _tongue_cooldown_left > 0.0:
 		_tongue_cooldown_left = maxf(0.0, _tongue_cooldown_left - delta)
+	# 火箭筒冷却（ネメシス）：从放下武器结束起算
+	if _rocket_cooldown_left > 0.0:
+		_rocket_cooldown_left = maxf(0.0, _rocket_cooldown_left - delta)
 
 	# 丸呑み冷却（ハンターγ）：两次零距离必杀之间的最短间隔
 	if _swallow_cooldown_left > 0.0:
@@ -1506,6 +1545,13 @@ func get_tongue_damage() -> float:
 	if network_presentation_only:
 		return tongue_damage
 	return tongue_damage * Global.difficulty_enemy_damage() * _player_damage_scale()
+
+
+## 火箭筒最终伤害 = rocket_damage × 难度 enemy_damage 倍率（与舌头/吐酸同规则）。
+func get_rocket_damage() -> float:
+	if network_presentation_only:
+		return rocket_damage
+	return rocket_damage * Global.difficulty_enemy_damage() * _player_damage_scale()
 
 
 ## 近战/突进/吐酸等敌人攻击的 source_id：实例 ID + 递增序列。
@@ -2423,6 +2469,7 @@ func _refresh_sprite() -> void:
 
 func _refresh_sprite_with_index(char_idx: int) -> void:
 	_sprite_renderer.refresh_sprite_with_index(char_idx)
+
 
 
 # ── 步行/跑步双移动模式（暴君・猎杀者）──

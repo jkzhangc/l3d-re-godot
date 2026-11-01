@@ -243,6 +243,8 @@ extends Resource
 ## ⚠ tongue_sound_pool 非空时随机池优先（与其他音效槽同规则），本条不会播。
 @export var tongue_sound: AudioStream = null
 @export var tongue_sound_pitch: float = 1.0
+
+@export_group("首狩り突进（ハンター 系）")
 ## 冲刺速度倍率（相对 move_speed）。
 @export var pounce_speed_mult: float = 1.8
 ## 突进绝对速度（2026-09-15）：>0 直接用作冲刺速度（忽略 move_speed×mult）。ハンター=400。
@@ -267,6 +269,55 @@ extends Resource
 @export var pounce_sound: AudioStream = null
 ## 首狩り音效音调。0 = 沿用敌人自身 pounce_sound_pitch。
 @export var pounce_sound_pitch: float = 0.0
+
+@export_group("火箭筒（ネメシス，2026-11-01）")
+## 是否启用火箭筒攻击：触发带内举起 → 举着继续靠近 → 进开火带开火 →
+## 倒放举起动作放下武器 → 回追击。
+@export var rocket_enabled: bool = false
+
+## ── 距离（px）：触发与开火**分开设置** ──
+## 触发带：玩家落在 [min, max] 内才**开始掏火箭筒**。
+@export var rocket_trigger_min_dist: float = 120.0
+@export var rocket_trigger_max_dist: float = 420.0
+## 开火带：举起后继续靠近，玩家进到 [min, max] 才**开火**。
+## 比 min 还近（贴脸）时直接开火 —— 否则会举着筒永远不打。
+@export var rocket_fire_min_dist: float = 80.0
+@export var rocket_fire_max_dist: float = 300.0
+
+## ── 举枪动作（口径同 attack_char_sequence / attack_frame_durations）──
+## 每个元素 = 行走图里的**角色格号**（标准表 4 列 × 2 行角色格，取值 0~7），
+## 逐格播放；第 i 格的时长取 `rocket_raise_frame_durations[i]`
+## （durations 比序列短时，缺的用 rocket_frame_seconds）。
+## 例：ネメシス 想「普通姿势 → 扛起」就填 [0, 4]，时长 [0.12, 0.25]。
+@export var rocket_raise_char_sequence: Array[int] = [4]
+@export var rocket_raise_frame_durations: Array[float] = [0.2]
+
+## ── 开火动作（同口径）──
+## 最后一个举枪格会一直保持到开火。本序列播完后开始**倒放举枪序列**放下武器。
+@export var rocket_fire_char_sequence: Array[int] = [5]
+@export var rocket_fire_frame_durations: Array[float] = [0.25]
+## 在开火序列的第几个下标发射火箭（0 起；同 hit_at_sequence_idx / spit_fire_at_sequence_idx）。
+@export var rocket_fire_at_sequence_idx: int = 0
+## 帧时长兜底（durations 比序列短时用）。
+@export var rocket_frame_seconds: float = 0.12
+
+## 举着火箭筒接近玩家时的移速倍率（相对 move_speed）。
+@export var rocket_approach_speed_mult: float = 1.0
+## 火箭伤害 / 飞行速度 / 最大射程 / 爆炸半径（px）。
+@export var rocket_damage: float = 80.0
+@export var rocket_speed: float = 460.0
+@export var rocket_max_range: float = 720.0
+@export var rocket_explosion_radius: float = 96.0
+## 火箭弹视觉缩放（1 = 与玩家火箭完全同尺寸；boss 想更醒目可调大）。
+@export var rocket_visual_scale: float = 1.0
+## 爆炸特效 / 爆炸音 / 开火音。举枪 / 放枪音默认与玩家火箭筒一致（カチャ），可覆盖。
+@export var rocket_explosion_effect: PackedScene = preload("res://anim/anim_effect_RPG爆炸动画.tscn")
+@export var rocket_explode_sound: AudioStream = preload("res://sound/ロケットランチャー爆発.ogg")
+@export var rocket_fire_sound: AudioStream = preload("res://sound/ロケットランチャー.ogg")
+@export var rocket_raise_sound: AudioStream = preload("res://sound/カチャ.ogg")
+@export var rocket_lower_sound: AudioStream = preload("res://sound/カチャ.ogg")
+## 冷却（秒）：从放下武器结束起算。
+@export var rocket_cooldown_seconds: float = 6.0
 
 @export_group("女巫徘徊（ブレアウィッチ）")
 ## 是否启用女巫模式：初始进徘徊态（不主动接近/攻击），被惊动后全力追杀。
@@ -498,6 +549,30 @@ func apply_to_enemy(enemy: Node) -> void:
 	enemy.tongue_effect_frame_seconds = tongue_effect_frame_seconds
 	if tongue_hit_at_sequence_idx >= 0:
 		enemy.tongue_hit_at_sequence_idx = tongue_hit_at_sequence_idx
+	# 火箭筒（ネメシス，2026-11-01）：全部无条件写 —— 与音效槽同理，tres 是唯一真源。
+	enemy.rocket_enabled = rocket_enabled
+	enemy.rocket_trigger_min_dist = rocket_trigger_min_dist
+	enemy.rocket_trigger_max_dist = rocket_trigger_max_dist
+	enemy.rocket_fire_min_dist = rocket_fire_min_dist
+	enemy.rocket_fire_max_dist = rocket_fire_max_dist
+	enemy.rocket_raise_char_sequence = rocket_raise_char_sequence
+	enemy.rocket_raise_frame_durations = rocket_raise_frame_durations
+	enemy.rocket_fire_char_sequence = rocket_fire_char_sequence
+	enemy.rocket_fire_frame_durations = rocket_fire_frame_durations
+	enemy.rocket_fire_at_sequence_idx = rocket_fire_at_sequence_idx
+	enemy.rocket_frame_seconds = rocket_frame_seconds
+	enemy.rocket_approach_speed_mult = rocket_approach_speed_mult
+	enemy.rocket_damage = rocket_damage
+	enemy.rocket_speed = rocket_speed
+	enemy.rocket_max_range = rocket_max_range
+	enemy.rocket_explosion_radius = rocket_explosion_radius
+	enemy.rocket_visual_scale = rocket_visual_scale
+	enemy.rocket_explosion_effect = rocket_explosion_effect
+	enemy.rocket_explode_sound = rocket_explode_sound
+	enemy.rocket_fire_sound = rocket_fire_sound
+	enemy.rocket_raise_sound = rocket_raise_sound
+	enemy.rocket_lower_sound = rocket_lower_sound
+	enemy.rocket_cooldown_seconds = rocket_cooldown_seconds
 	## ── 音效（★2026-11-01 用户需求：特感一律以 tres 为准，留空 = **静音**）──
 	## 旧行为是「空 = 沿用 enemy.tscn 的丧尸默认音」，于是没有对应音效的特感会借用丧尸的
 	## 受伤/撕咬叫声（用户实测「有些怪被击中没对应音效」）。现在单条与随机池都**无条件**
@@ -591,6 +666,12 @@ func apply_to_enemy(enemy: Node) -> void:
 			enemy.death_texture_char_index = death_char_index
 		else:
 			enemy.death_char_index = death_char_index
+			## ★2026-11-01 修「蜘蛛 boss 死亡时有时会换索引」：特感的行走表里
+			## `headshot_char_index_1/2`（丧尸的 5 → 6 两段倒地）没有意义，爆头致死时
+			## 会走到那两格 → 尸体与普通死亡（death_char_index）长得不一样。
+			## 特感没有专用死亡表时，把两段爆头帧都钉到自己的死亡格，倒地表现才唯一。
+			enemy.headshot_char_index_1 = death_char_index
+			enemy.headshot_char_index_2 = death_char_index
 	# 女巫徘徊（ブレアウィッチ）
 	enemy.witch_enabled = witch_enabled
 	enemy.witch_wander_speed = witch_wander_speed
