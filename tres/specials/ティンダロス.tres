@@ -2,21 +2,25 @@
 
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="1"]
 [ext_resource type="AudioStream" uid="uid://dxwgv7oi28247" path="res://sound/ケルベロス声.ogg" id="1_nykll"]
-[ext_resource type="Texture2D" uid="uid://b0kwtped8wl6j" path="res://art/Characters/ティン_ポス.png" id="2"]
 [ext_resource type="AudioStream" uid="uid://tntj1oxtp23p" path="res://sound/ケルベロス声4.ogg" id="2_jqtiu"]
 [ext_resource type="AudioStream" uid="uid://btvpe46v21427" path="res://sound/ケルベロス声3.ogg" id="2_tmcky"]
 [ext_resource type="AudioStream" uid="uid://b4qhkw0ww5ppi" path="res://sound/ケルベロス声2.ogg" id="3_21spu"]
+[ext_resource type="AudioStream" uid="uid://c0m5bt0p2rpik" path="res://sound/ロケットランチャー爆発.ogg" id="5_0atfe"]
+[ext_resource type="PackedScene" uid="uid://bmqw2hs5aqshd" path="res://anim/anim_effect_RPG爆炸动画.tscn" id="6_vfv20"]
+[ext_resource type="AudioStream" uid="uid://cwjuklape7gpf" path="res://sound/ロケットランチャー.ogg" id="7_gauff"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="8_gw377"]
+[ext_resource type="Texture2D" uid="uid://kj64rk50nqcd" path="res://art/Characters/[2K-VX]-ティン_金.png" id="10_papcc"]
 
 [resource]
 script = ExtResource("1")
 id = &"tindalos"
 weight = 0.35
-texture = ExtResource("2")
+texture = ExtResource("10_papcc")
 attack_char_sequence = Array[int]([1, 2, 3])
 attack_frame_durations = Array[float]([0.09, 0.09, 0.15])
 hit_at_sequence_idx = 2
 death_char_index = 4
-max_hp = 600.0
+max_hp = 800.0
 move_speed = 245.0
 attack_damage = 30.0
 attack_range = Vector2(56, 40)
@@ -32,7 +36,7 @@ attack_sound_pitch = 1.0
 hit_target_sound_pitch = 1.0
 death_sound = ExtResource("2_jqtiu")
 death_sound_pitch = 1.0
-frontal_damage_mult = 0.0
+frontal_damage_mult = 0.1
 frontal_arc_degrees = 70.0
 instant_kill_immune = true
 disengage_enabled = true

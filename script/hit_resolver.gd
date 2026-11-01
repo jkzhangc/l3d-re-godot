@@ -53,6 +53,10 @@ const OUTER_RING_PAD_MIN: float = 24.0     ## 厚度下限（小半径爆炸也�
 const OUTER_RING_KNOCKBACK: float = 520.0  ## 比主爆的 860 弱一档
 const OUTER_RING_KNOCKBACK_STUN: float = 0.22
 const OUTER_RING_HITSTUN_SEC: float = 1.0  ## 用户定稿：硬直 1 秒
+## 外圈伤害 = 主爆伤害 × 本值（2026-11-01 用户需求：外圈除了击退也要"刮伤"）。
+## ⚠ 外圈**不携带属性**（element 固定 0）：氷的冻结通道会把 knockback 清 0
+## （见 enemy.gd 的「氷=真冻结」分支），带上属性外圈就不再是"击退圈"了。
+const OUTER_RING_DAMAGE_RATIO: float = 0.2
 
 
 ## 外圈半径（主半径 + 厚度）。主半径 <= 0 → 0（没有爆炸就没有外圈）。
@@ -62,15 +66,17 @@ static func explosion_outer_radius(blast_radius: float) -> float:
 	return blast_radius + maxf(OUTER_RING_PAD_MIN, blast_radius * OUTER_RING_PAD_RATIO)
 
 
-## 对「主爆半径之外、外圈之内」的敌人执行击退 + 硬直，**不造成伤害**。
+## 对「主爆半径之外、外圈之内」的敌人执行击退 + 硬直 + **20% 主爆伤害**。
 ## 返回受影响的数量。调用方：`bullet._explode()` / `throwable_projectile._explode()`。
-## 用 `take_damage(0, ...)` 实现：Enemy 里 0 伤害走「被推击」分支 ——
-## 不弹伤害数字、不播受伤音，但击退/硬直照常；`source_is_explosive = true` 让 Tank 也被推开。
+## `damage` = 本次爆炸的主伤害（调用方传自己的最终伤害；外圈按 OUTER_RING_DAMAGE_RATIO 折扣）。
+## 当年用 `take_damage(0, ...)`：0 伤害走 Enemy 的「被推击」分支（不弹数字、不播受伤音）。
+## 现在有伤害了 → 正常弹数字/播受伤音，但仍保留爆炸击退与硬直（`source_is_explosive = true` 让 Tank 也吃）。
 static func apply_explosion_outer_ring(tree: SceneTree, center: Vector2, blast_radius: float,
-		source_id: int = 0) -> int:
+		source_id: int = 0, damage: float = 0.0) -> int:
 	var outer: float = explosion_outer_radius(blast_radius)
 	if outer <= blast_radius or tree == null:
 		return 0
+	var outer_damage: float = maxf(0.0, damage) * OUTER_RING_DAMAGE_RATIO
 	var affected: int = 0
 	for e: Node in damage_targets(tree):
 		if not (e is Node2D) or not is_instance_valid(e):
@@ -86,7 +92,7 @@ static func apply_explosion_outer_ring(tree: SceneTree, center: Vector2, blast_r
 		var dir: Vector2 = target.global_position - center
 		if dir == Vector2.ZERO:
 			dir = Vector2.UP
-		target.take_damage(0.0, OUTER_RING_KNOCKBACK, dir.normalized(), false,
+		target.take_damage(outer_damage, OUTER_RING_KNOCKBACK, dir.normalized(), false,
 			OUTER_RING_KNOCKBACK_STUN, OUTER_RING_HITSTUN_SEC, source_id, 0, true)
 		affected += 1
 	return affected

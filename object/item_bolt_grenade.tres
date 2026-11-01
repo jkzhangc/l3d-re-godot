@@ -3,8 +3,7 @@
 [ext_resource type="Script" uid="uid://1h5p04lnmtcx" path="res://script/throwable_data.gd" id="1"]
 [ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="1_rtgqi"]
 [ext_resource type="Texture2D" uid="uid://bvckxdao6hkit" path="res://art/Ui/装備アイコンボルトグレネード.png" id="2"]
-[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="2_butmx"]
-[ext_resource type="Texture2D" uid="uid://cnn1rpqt41nlw" path="res://art/Barrages/手榴弾PIC.png" id="3_pamkk"]
+[ext_resource type="Texture2D" uid="uid://b7d1ngduu3j68" path="res://art/Barrages/ボルトグレネード.png" id="3_pamkk"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="7_58x6b"]
 [ext_resource type="Texture2D" uid="uid://d4l853mw2cgxy" path="res://art/Weapon/[2K-VX]-A武器セット１２.png" id="pickup_tex"]
 
@@ -13,18 +12,17 @@ script = ExtResource("1")
 projectile_texture = ExtResource("3_pamkk")
 arc_height = 64.0
 explosion_radius = 1
-damage = 180.0
+damage = 150.0
 element = 2
 explode_effect_anim = ExtResource("1_rtgqi")
 throw_sound = ExtResource("7_58x6b")
 throw_sound_pitch = 1.4
-explode_sound = ExtResource("2_butmx")
 item_id = "bolt_grenade_01"
 item_name = "ボルトグレネード"
 item_type = 8
-description = "原作 投擲物/ボルトグレネード。破片手雷，范围伤害。"
+description = "原作 投擲物/ボルトグレネード。怯み効果・雷属性・自爆あり。无雷抗性者会被感电，感电期间攻击不能——意外地能救命。"
 icon = ExtResource("2")
-effect_text = "爆炸（破片）"
+effect_text = "怯み + 感电（攻击不能）"
 sell_price = 50
 pickup_texture = ExtResource("pickup_tex")
 pickup_char_idx = 6

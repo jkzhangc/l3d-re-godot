@@ -14,11 +14,14 @@ extends State
 ##   快速按一下「确定键」= 即刻扔出（按下进固定瞄准、松开即掷，手感为按 Z 扔）。
 ## 固定朝向 = 旧逻辑原样保留：按住「确定键」锁定朝向瞄准，松开投掷；
 ##   按住时按「取消键」取消瞄准解锁朝向。
-## 「投掷加格键」(A) / 「投掷减格键」(S) 调终点格数（0 ~ throw_range_max），
+## 「投掷加格键」(A) / 「投掷减格键」(D) 调终点格数（0 ~ throw_range_max），
 ##   轨迹常显后 READY / AIM 两阶段都可调。
+##   ⚠ 2026-11-01 减格键由 S 改成 D：S 是「推击键」，瞄准时按下去会误触推击。
 
 const TILE_SIZE: int = 32
-const DEFAULT_RANGE: int = 3
+## 按「投掷物键」掏出来时的起步距离（格）。2026-11-01 用户要求 3 → 2：
+## 原来一掏出来就是 3 格，手一抖就扔过头，默认口径改为"贴近 2 格"。
+const DEFAULT_RANGE: int = 2
 
 const AIM_INDICATOR_SCRIPT := preload("res://script/throw_aim_indicator.gd")
 
@@ -33,7 +36,7 @@ var _aim_indicator: Node2D = null
 var _return_state: String = ""
 
 ## ── 按住 Z 的"持续瞄准"参数（2026-10-03 用户需求改版）──
-## 「轻按 Z 直接扔」与「A/S 调距离」保持原样；**只改按住 Z 之后**的行为：
+## 「轻按 Z 直接扔」与「A/D 调距离」保持原样；**只改按住 Z 之后**的行为：
 ##   ① 角色原地不动 ② 方向键选投掷方向（角色转身）
 ##   ③ **重复按同一个方向键**把落点推远一格（换方向保留距离）
 ##   ④ 「按住」比轻按更久时，距离自动压回**最低**，从最近处开始往外扫
@@ -93,7 +96,7 @@ func _process_ready() -> void:
 	if move_dir != Vector2.ZERO:
 		character.update_facing(move_dir)
 	character.update_appearance(move_dir != Vector2.ZERO, false)
-	# 调终点格数（READY 阶段轨迹已常显，A/S 直接可调）
+	# 调终点格数（READY 阶段轨迹已常显，A/D 直接可调）
 	if Input.is_action_just_pressed("投掷加格键"):
 		_range = mini(_range + 1, _td.throw_range_max)
 	if Input.is_action_just_pressed("投掷减格键"):
@@ -128,7 +131,7 @@ func _process_aim(delta: float) -> void:
 	## ★「按住」比轻按更久 → 把落点距离压回**最低**，于是「按住 Z + 连按方向键」
 	##   是从最**近**处开始往外扫的（2026-10-03 用户需求）。
 	##   **轻按 Z**（点一下立刻松手）不重置 —— 那是"随手扔出去"，
-	##   应沿用 A/S 预先调好的距离（用户要求「按 Z 扔的操作不变」）。
+	##   应沿用 A/D 预先调好的距离（用户要求「按 Z 扔的操作不变」）。
 	_aim_hold_time += delta
 	if not _aim_range_reset and _aim_hold_time >= AIM_HOLD_RESET_SEC:
 		_range = _td.throw_range_min
@@ -147,7 +150,7 @@ func _process_aim(delta: float) -> void:
 		_last_aim_dir = pressed_dir
 	character.update_appearance(dir_in != Vector2.ZERO, false)
 
-	# A/S 调距离（保持原样；下限用数据里的最低距离，允许作者设 0 = 扔脚下）
+	# A/D 调距离（下限用数据里的最低距离，允许作者设 0 = 扔脚下）
 	if Input.is_action_just_pressed("投掷加格键"):
 		_range = mini(_range + 1, _td.throw_range_max)
 	if Input.is_action_just_pressed("投掷减格键"):

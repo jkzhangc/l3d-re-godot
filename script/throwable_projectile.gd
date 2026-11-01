@@ -14,6 +14,7 @@ const TILE_SIZE: int = 32
 ## ⚠ 投掷物爆炸走**本文件**，枪械爆炸走 `bullet.gd` —— 两条独立路径，两边都要接，
 ## 否则"调试环只对手雷不显示"或反之。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+const ELEMENT_FX := preload("res://script/element_fx.gd")
 ## 直线类投掷物（飞刀）的撞墙判据：与传送落点/刷怪点共用同一套图块碰撞解析。
 const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 
@@ -141,6 +142,12 @@ func _apply_direct_hit(target: Node2D, from: Vector2, to: Vector2) -> void:
 		dir = Vector2.DOWN
 	target.call("take_damage", _td.damage, 120.0, dir.normalized(), false, 0.2, 0.1,
 		get_instance_id(), _td.element, false)
+	## 击中音：按属性取默认值（2026-11-01 用户要求「每个属性不同击中音」）。
+	## 投掷物没有单独的击中音字段，所以统一走属性表；想改某件道具就改 element_fx.gd。
+	var hit_sfx: AudioStream = ELEMENT_FX.hit_sound(_td.element)
+	if hit_sfx:
+		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, 1.0,
+			(target as Node2D).global_position)
 
 
 ## 线段的圆判定：返回**离起点最近**的未命中敌人（贯穿时逐个消费）。
@@ -192,10 +199,12 @@ func _land() -> void:
 	if _landed:
 		return
 	_landed = true
-	if _td.explode_sound:
+	## 爆炸音：数据优先，没配则按属性取默认（炎/雷/氷/酸 各不相同）
+	var boom_sfx: AudioStream = ELEMENT_FX.resolve_explosion(_td.explode_sound, _td.element)
+	if boom_sfx:
 		## 世界坐标定位（2026-10-20）：爆炸音随距离衰减，声源=落点。
 		## 播放器挂场景而非本节点 —— 投掷物随后释放，挂自身会被一起回收掐断声音。
-		Global.play_sfx_managed(_td.explode_sound, get_tree().current_scene, true, 1.0, global_position)
+		Global.play_sfx_managed(boom_sfx, get_tree().current_scene, true, 1.0, global_position)
 	if _td.explode_effect_anim:
 		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, get_tree().current_scene)
 	## ★调试可视化（2026-10-01 用户需求）：把这一炸的实际范围画出来并停留 2 秒。
@@ -260,12 +269,14 @@ func _explode() -> void:
 					HitResolver.EXPLOSION_KNOCKBACK_FORCE, dir.normalized(), false,
 					HitResolver.EXPLOSION_KNOCKBACK_STUN, HitResolver.EXPLOSION_HITSTUN_SEC,
 					get_instance_id(), _td.element, true)
-	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直，不吃伤害。
+	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直 + 20% 主爆伤害
+	## （2026-11-01 用户需求加伤害；外圈不带属性，见 HitResolver.OUTER_RING_DAMAGE_RATIO）。
 	var ring: int = HitResolver.apply_explosion_outer_ring(
-		get_tree(), global_position, radius_px, get_instance_id())
+		get_tree(), global_position, radius_px, get_instance_id(), _td.damage)
 	if ring > 0:
-		print("[投掷物] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs）" % [
-			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC])
+		print("[投掷物] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs + %.0f 伤害）" % [
+			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC,
+			_td.damage * HitResolver.OUTER_RING_DAMAGE_RATIO])
 	## 可爆破墙体（blast_wall）：只有 breaks_blast_wall=true 的投掷物（炸药）计入破坏；
 	## 手雷等炸得响但炸不开（2026-09-16 用户定稿）。
 	## 只有 Host/单机的授权爆炸会走到这里（_authoritative 前提），Client 只看 flag 广播的表现。

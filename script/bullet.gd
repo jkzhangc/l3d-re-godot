@@ -422,8 +422,10 @@ func _hit(target: Node2D) -> void:
 			follow_id = int(damageable.network_entity_id)
 		hit_effect_applied.emit(damageable.global_position, follow_id)
 	# 播放命中音效（世界坐标定位：声源=命中点，2026-10-20）
-	if _hit_sound:
-		Global.play_sfx_managed(_hit_sound, get_tree().current_scene, true, 1.0, damageable.global_position)
+	## 数据没配 → 按属性取默认击中音（2026-11-01 用户要求「每个属性不同击中音」）
+	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(_hit_sound, element)
+	if hit_sfx:
+		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, 1.0, damageable.global_position)
 
 	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(final_damage), str(is_headshot), penetration - _hits + 1])
 
@@ -454,6 +456,7 @@ func cancel_by_enemy_acid() -> void:
 ## 调试用爆炸范围环（TAB 打开 `Global.debug_visuals` 后才真的生成节点）。
 ## 静态入口内部自带开关判断 —— 关闭时零开销，调用点不需要再写一遍 if。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+const ELEMENT_FX := preload("res://script/element_fx.gd")
 const HitResolver := preload("res://script/hit_resolver.gd")
 
 
@@ -471,10 +474,12 @@ func _explode() -> void:
 		_explosion_player_radius if _explosion_hurts_players else 0.0)
 	if _explode_effect_anim:
 		VXAnimSprite.play_scene(_explode_effect_anim, center, get_tree().current_scene)
-	if _explode_sound:
+	## 爆炸音：数据没配 → 按属性取默认爆炸音（炎/雷/氷/酸 各不相同）
+	var boom_sfx: AudioStream = ELEMENT_FX.resolve_explosion(_explode_sound, element)
+	if boom_sfx:
 		## 世界坐标定位 + 距离衰减（2026-10-20）：播放器挂场景、声源钉在爆心 ——
 		## 子弹随即 queue_free，不能把播放器作为自己的子节点（否则声音被一起释放）。
-		Global.play_sfx_managed(_explode_sound, get_tree().current_scene, true, 1.0, center)
+		Global.play_sfx_managed(boom_sfx, get_tree().current_scene, true, 1.0, center)
 	# 联机：把爆心与弹丸标识交给 NetworkWorld 广播（Client 用它播同一套爆炸表现）。
 	exploded.emit(network_entity_id, center)
 
@@ -507,11 +512,14 @@ func _explode() -> void:
 		var hp_after: float = float(enemy.get("current_hp")) if enemy.get("current_hp") != null else hp_before
 		_record_chapter_damage(hp_before, hp_after, false)
 
-	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直，不吃伤害。
-	var ring: int = HitResolver.apply_explosion_outer_ring(get_tree(), center, _explosion_radius, _source_id)
+	## ★爆炸外圈（2026-10-31）：主半径之外再推一圈 —— 击退 + 1s 硬直 + 20% 主爆伤害
+	## （2026-11-01 加伤害）。传**基础 damage**（不含即死拉满）—— 外圈不该变成即死范围。
+	var ring: int = HitResolver.apply_explosion_outer_ring(
+		get_tree(), center, _explosion_radius, _source_id, damage)
 	if ring > 0:
-		print("[爆炸] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs）" % [
-			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC])
+		print("[爆炸] 冲击圈推开 %d 只敌人（击退 %.0f + 硬直 %.1fs + %.0f 伤害）" % [
+			ring, HitResolver.OUTER_RING_KNOCKBACK, HitResolver.OUTER_RING_HITSTUN_SEC,
+			damage * HitResolver.OUTER_RING_DAMAGE_RATIO])
 
 	if _explosion_hurts_players:
 		# 对玩家的自爆半径独立可调（2026-09-15）：0=同爆炸半径；>0 用小半径——

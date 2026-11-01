@@ -52,6 +52,8 @@ const ENTRIES: Array[Dictionary] = [
 	{"id": "aid_box_01", "name": "救急箱", "group": "治疗品", "path": "res://object/item_aid_box.tres"},
 	{"id": "first_aid_spray", "name": "急救喷雾", "group": "治疗品", "path": "res://object/item_first_aid_spray.tres"},
 	{"id": "adrenaline_01", "name": "肾上腺素", "group": "辅助品", "path": "res://object/item_adrenaline.tres"},
+	{"id": "greenherbs_01", "name": "绿色草药", "group": "辅助品", "path": "res://object/item_greenherbs.tres"},
+	{"id": "mineralwater_01", "name": "矿泉水", "group": "辅助品", "path": "res://object/item_mineralwater.tres"},
 	{"id": "painkiller_01", "name": "镇痛剂", "group": "辅助品", "path": "res://object/item_painkiller.tres"},
 	{"id": "acid_bottle_01", "name": "ディモ酢瓶", "group": "投掷物", "path": "res://object/item_acid_bottle.tres"},
 	{"id": "bolt_grenade_01", "name": "ボルトグレネード", "group": "投掷物", "path": "res://object/item_bolt_grenade.tres"},

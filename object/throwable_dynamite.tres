@@ -6,10 +6,12 @@
 [ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="4_butmx"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="5_58x6b"]
 [ext_resource type="Texture2D" uid="uid://d4l853mw2cgxy" path="res://art/Weapon/[2K-VX]-A武器セット１２.png" id="pickup_tex"]
+[ext_resource type="Texture2D" uid="uid://crjlvtn42d3ru" path="res://art/Barrages/炸药.png" id="proj_tex"]
 
 [resource]
 script = ExtResource("1")
 throw_range_max = 6
+projectile_texture = ExtResource("proj_tex")
 arc_height = 64.0
 explosion_radius = 3
 damage = 80.0

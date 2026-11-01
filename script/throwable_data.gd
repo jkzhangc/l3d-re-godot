@@ -14,7 +14,9 @@ class_name ThrowableData extends ItemData
 ## 设为 0 表示允许扔在自己脚下。
 @export var throw_range_min: int = 1
 @export var throw_range_max: int = 8        ## 最大投掷格数（默认 3 格）
-@export var projectile_texture: Texture2D   ## 飞行中的投掷物精灵（可选，回退 pickup_texture/icon）
+## 飞行中的投掷物精灵。留空会回退到 `icon`（UI 图标，一般偏大，建议都配上专用弹幕图）。
+## 按原图像素 1:1 渲染 + 抛物线旋转，所以图本身就是"看到的尺寸"。
+@export var projectile_texture: Texture2D
 
 @export_group("举起显示")
 ## 举起投掷物时的角色行走图精灵表（包含各角色的持物外观）。留空则不显示持物外观

@@ -1261,13 +1261,13 @@ func apply_network_element_tint(state: int) -> void:
 	# A5 狂暴换皮（bit3）：与染色正交，先换皮再调 modulate。
 	set_rage(bool(state & 8))
 	if state & 2:
-		sprite.modulate = Color(0.6, 0.85, 2.0)       # 氷=青蓝
+		sprite.modulate = ELEMENT_TINT_ICE
 	elif state & 4:
-		sprite.modulate = Color(2.0, 2.0, 0.7)        # 雷=黄白
+		sprite.modulate = ELEMENT_TINT_ELECTRO
 	elif state & 1:
-		sprite.modulate = Color(1.8, 0.9, 0.55)       # 炎=橙红
+		sprite.modulate = ELEMENT_TINT_BURN
 	else:
-		sprite.modulate = Color.WHITE
+		sprite.modulate = ELEMENT_TINT_NONE
 
 
 ## Client 专用：立即应用 Host 可靠广播的死亡表现。
@@ -1989,16 +1989,21 @@ func _play_hit_feedback(hit_color: Color = Color.RED, duration: float = -1.0) ->
 			old.kill()
 	if hit_feedback_mode == 0:
 		# 闪模式：瞬间变色 → 渐变恢复
+		## ⚠ 恢复目标不是写死的白：冻结/感电期间被打，旧实现 tween 回 WHITE 就把元素染色洗掉了，
+		## 只剩"闪一下白"——这是"冻住了看不出被冻"的主要原因。恢复到当前元素色，
+		## 末尾再补一次回调：tween 期间状态可能刚好结束，按**当时**状态重上一次才准。
 		var tween := create_tween()
 		set_meta("_hf_tween", tween)
 		tween.tween_property(sprite, "modulate", hit_color, 0.0)
-		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+		tween.tween_property(sprite, "modulate", element_tint_color(), duration)
+		tween.tween_callback(_apply_element_tint)
 	else:
 		# 渐隐模式：变色 → 颜色渐渐消失
 		sprite.modulate = hit_color
 		var tween := create_tween()
 		set_meta("_hf_tween", tween)
-		tween.tween_property(sprite, "modulate", Color.WHITE, duration)
+		tween.tween_property(sprite, "modulate", element_tint_color(), duration)
+		tween.tween_callback(_apply_element_tint)
 	print("[受击反馈] color=%s duration=%.2fs mode=%d" % [hit_color, duration, hit_feedback_mode])
 
 
@@ -2223,20 +2228,40 @@ func _update_element_status(delta: float) -> void:
 		BurnEffect.detach(self)  # 燃烧自然结束（死亡路径随宿主 queue_free 一并回收）
 
 
+## ── 元素状态染色（2026-11-01：要「看得见」的表现，不再是几乎察觉不到的一点点偏色）──
+## 口径是**乘算 + alpha**：>1 的通道提亮，alpha < 1 让本体半透明（同玩家「覚醒」的整体染色手感）。
+##   · 氷 = 半透明天蓝（冰块通透感，肉眼一眼能看出被冻住）
+##   · 雷 = 半透明淡黄（感电呆滞）
+##   · 炎 = 橙红（保持不透明，燃烧时本体仍然清晰）
+## 单机（`_apply_element_tint`）与联机 Client（`apply_network_element_tint`）**必须共用这组常量**，
+## 否则两端颜色会漂移。
+const ELEMENT_TINT_NONE := Color(1.0, 1.0, 1.0, 1.0)
+const ELEMENT_TINT_ICE := Color(0.86, 1.14, 1.60, 0.66)
+const ELEMENT_TINT_ELECTRO := Color(1.48, 1.36, 0.60, 0.84)
+const ELEMENT_TINT_BURN := Color(1.80, 0.90, 0.55, 1.0)
+
+
+## 当前元素状态对应的染色（优先级 氷 > 雷 > 炎；无状态 = 白且不透明）。
+## 受击闪白结束时也回到这里 —— 否则闪一下白就把染色洗掉了（旧实现的观感问题根源）。
+func element_tint_color() -> Color:
+	if _frozen_time > 0.0:
+		return ELEMENT_TINT_ICE
+	if _electro_time > 0.0:
+		return ELEMENT_TINT_ELECTRO
+	if _burning_time > 0.0:
+		return ELEMENT_TINT_BURN
+	return ELEMENT_TINT_NONE
+
+
 ## 按当前状态染色（覆层 modulate；状态结束由 _clear_element_tint 还原）。
 func _apply_element_tint() -> void:
 	if not sprite:
 		return
-	if _frozen_time > 0.0:
-		sprite.modulate = Color(0.6, 0.85, 2.0)       # 氷=青蓝
-	elif _electro_time > 0.0:
-		sprite.modulate = Color(2.0, 2.0, 0.7)        # 雷=黄白
-	elif _burning_time > 0.0:
-		sprite.modulate = Color(1.8, 0.9, 0.55)       # 炎=橙红
+	sprite.modulate = element_tint_color()
 
 func _clear_element_tint() -> void:
 	if sprite:
-		sprite.modulate = Color.WHITE
+		sprite.modulate = ELEMENT_TINT_NONE
 
 
 ## 尸体 reparent 到 GroundLayer（物理回调里不能直接改树，走 deferred）。

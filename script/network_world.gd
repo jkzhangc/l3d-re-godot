@@ -45,6 +45,10 @@ const INTERACTIVE_SWITCH_SCRIPT := preload("res://script/director/interactive_sw
 const Whitelist := preload("res://script/network_whitelist.gd")
 
 const NETWORK_SPRAY: ItemData = Whitelist.NETWORK_SPRAY
+## 投掷瞄准距离的**起步/兜底**格数（2026-11-01 用户要求 3 → 2）。
+## 必须与 `PlayerThrowableState.DEFAULT_RANGE` 保持一致：这里是联机中继/快照缺失时
+## 客户端预测用的兜底值，两边不一致会出现"按下去先跳一格"。
+const THROW_RANGE_DEFAULT: int = 2
 ## ⚠ 2026-10-24：`NETWORK_PILLS` 随 `object/item_pills.tres` 的删除一并移除
 ##（该常量只剩镜像，无其它引用点）。
 const NETWORK_HEALINGS: Dictionary = Whitelist.NETWORK_HEALINGS
@@ -1720,7 +1724,7 @@ func _get_network_variant_data(variant_id: String) -> ZombieVariant:
 
 
 func _get_host_throwable_state(peer_id: int) -> Dictionary:
-	return _network_throwable_state.get(peer_id, {"held": false, "aiming": false, "range": 3}) as Dictionary
+	return _network_throwable_state.get(peer_id, {"held": false, "aiming": false, "range": THROW_RANGE_DEFAULT}) as Dictionary
 
 
 func _is_host_throwable_held(peer_id: int) -> bool:
@@ -1732,7 +1736,7 @@ func _clear_host_combat_state_for_dead_peer(peer_id: int) -> void:
 	if not net.is_host:
 		return
 	if _is_host_throwable_held(peer_id):
-		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": THROW_RANGE_DEFAULT}
 		_apply_host_throwable_presentation(peer_id)
 	_revive_attempts.erase(peer_id)
 	_weapon_transition_state.erase(peer_id)
@@ -1751,7 +1755,7 @@ func _apply_host_throwable_presentation(peer_id: int) -> void:
 		return
 	var throw_state := _get_host_throwable_state(peer_id)
 	var td: ThrowableData = state.throwable if state else null
-	node.apply_network_throwable_presentation(td, bool(throw_state.get("held", false)), bool(throw_state.get("aiming", false)), int(throw_state.get("range", 3)))
+	node.apply_network_throwable_presentation(td, bool(throw_state.get("held", false)), bool(throw_state.get("aiming", false)), int(throw_state.get("range", THROW_RANGE_DEFAULT)))
 
 
 func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
@@ -1765,12 +1769,12 @@ func _try_host_set_throwable_held(peer_id: int, held: bool) -> void:
 	var td: ThrowableData = state.throwable
 	if held and not td:
 		return
-	_network_throwable_state[peer_id] = {"held": held, "aiming": false, "range": clampi(int(_get_host_throwable_state(peer_id).get("range", 3)), 0, td.throw_range_max if td else 0)}
+	_network_throwable_state[peer_id] = {"held": held, "aiming": false, "range": clampi(int(_get_host_throwable_state(peer_id).get("range", THROW_RANGE_DEFAULT)), 0, td.throw_range_max if td else 0)}
 	if held:
 		node.exit_weapon_mode()
 		node.unlock_facing()
 	_apply_host_throwable_presentation(peer_id)
-	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", 3))])
+	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id if td else "", held, false, int(_get_host_throwable_state(peer_id).get("range", THROW_RANGE_DEFAULT))])
 	_send_host_facing_lock_state(peer_id)
 
 
@@ -1787,7 +1791,7 @@ func _try_host_set_throwable_aiming(peer_id: int, aiming: bool) -> void:
 	throw_state["aiming"] = aiming
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
-	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, aiming, int(throw_state.get("range", 3))])
+	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, aiming, int(throw_state.get("range", THROW_RANGE_DEFAULT))])
 	_send_host_facing_lock_state(peer_id)
 
 
@@ -1800,7 +1804,7 @@ func _try_host_adjust_throwable_range(peer_id: int, delta: int) -> void:
 	var td: ThrowableData = state.throwable if state else null
 	if not td or not bool(throw_state.get("held", false)) or not bool(throw_state.get("aiming", false)):
 		return
-	throw_state["range"] = clampi(int(throw_state.get("range", 3)) + delta, 0, td.throw_range_max)
+	throw_state["range"] = clampi(int(throw_state.get("range", THROW_RANGE_DEFAULT)) + delta, 0, td.throw_range_max)
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
 	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, true, int(throw_state["range"])])
@@ -1817,15 +1821,15 @@ func _try_host_throw_throwable(peer_id: int) -> void:
 	if not is_instance_valid(node) or not td or node.current_hp <= 0.0 or not bool(throw_state.get("held", false)) or not bool(throw_state.get("aiming", false)):
 		return
 	var start := node.global_position
-	var landing_position: Vector2 = start + node.get_facing_vector() * (clampi(int(throw_state.get("range", 3)), 0, td.throw_range_max) * 32.0)
+	var landing_position: Vector2 = start + node.get_facing_vector() * (clampi(int(throw_state.get("range", THROW_RANGE_DEFAULT)), 0, td.throw_range_max) * 32.0)
 	state.consume_throwable()
-	_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+	_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": THROW_RANGE_DEFAULT}
 	if state.throwable and state.throwable_count > 0:
 		# 炸药类叠数投掷物：槽没空 → 保留举起外观，只清瞄准状态
-		node.apply_network_throwable_presentation(td, false, false, 3)
+		node.apply_network_throwable_presentation(td, false, false, THROW_RANGE_DEFAULT)
 		_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, false, false, 3])
 	else:
-		node.apply_network_throwable_presentation(null, false, false, 3)
+		node.apply_network_throwable_presentation(null, false, false, THROW_RANGE_DEFAULT)
 		_send_to_ready_clients(&"throwable_state_presentation", [peer_id, "", false, false, 3])
 	ThrowableProjectile.spawn(td, start, landing_position, node, true, false)
 	_send_to_ready_clients(&"throwable_presentation", [peer_id, td.item_id, start, landing_position])
@@ -3905,7 +3909,7 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
 		var previous_throw_state: Dictionary = _network_throwable_state.get(peer_id, {}) as Dictionary
 		var throwable_held := bool(public_state.get("throwable_held", previous_throw_state.get("held", false))) and remote_throwable != null
 		var throwable_aiming := bool(public_state.get("throwable_aiming", previous_throw_state.get("aiming", false))) and throwable_held
-		var throwable_range := clampi(int(public_state.get("throw_range", previous_throw_state.get("range", 3))), 0, remote_throwable.throw_range_max if remote_throwable else 0)
+		var throwable_range := clampi(int(public_state.get("throw_range", previous_throw_state.get("range", THROW_RANGE_DEFAULT))), 0, remote_throwable.throw_range_max if remote_throwable else 0)
 		if throwable_field_present:
 			state.throwable = remote_throwable
 		_network_throwable_state[peer_id] = {"held": throwable_held, "aiming": throwable_aiming, "range": throwable_range}
@@ -4626,7 +4630,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 				_spawn_host_dropped_throwable(old_throwable, PICKUP_SCRIPT.drop_landing_position(player))
 			state.throwable = throwable
 			state.throwable_count = 1
-		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": 3}
+		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": THROW_RANGE_DEFAULT}
 		_apply_host_throwable_presentation(peer_id)
 		_pickups.erase(pickup_id)
 		pickup.call("disable_network_pickup") if pickup.has_method("disable_network_pickup") else pickup.hide()
@@ -5480,7 +5484,7 @@ func _public_state(peer_id: int) -> Dictionary:
 		"throwable_id": state.throwable.item_id if state and state.throwable else "",
 		"throwable_held": bool(_get_host_throwable_state(peer_id).get("held", false)),
 		"throwable_aiming": bool(_get_host_throwable_state(peer_id).get("aiming", false)),
-		"throw_range": int(_get_host_throwable_state(peer_id).get("range", 3)),
+		"throw_range": int(_get_host_throwable_state(peer_id).get("range", THROW_RANGE_DEFAULT)),
 		"dead": node.is_network_dead() if is_instance_valid(node) else true,
 		"magazine_ammo": state.get_magazine_ammo(weapon.item_id) if state and weapon else 0,
 		# 倒地扩展字段（追加在尾部，旧字段顺序保持不变）：
