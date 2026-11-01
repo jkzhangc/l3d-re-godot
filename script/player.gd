@@ -403,6 +403,13 @@ func _exit_tree() -> void:
 ## 以保证单机、联机 Host 权威模拟、联机本地预测三种路径下手感完全一致。
 ## 算法本体与两个关键坑的说明见 `script/corner_assist.gd`。
 func move_with_corner_assist() -> void:
+	## ★2026-11-01 用户实测「被吞的时候还能动」：这里是**所有玩家状态唯一的移动入口**。
+	## 旧实现只靠 `EnemySwallowState` 关 `set_process/_physics_process` —— 那关的是
+	## 玩家脚本自己的回调，状态机（独立节点）照样每帧调本方法 → 被吞玩家仍能走。
+	## 在入口直接拦掉，单机与联机一并生效。
+	if network_swallow_locked:
+		velocity = Vector2.ZERO
+		return
 	CornerAssist.move_with_assist(self, velocity,
 		corner_assist_enabled, corner_assist_speed, corner_assist_max_shift,
 		corner_assist_step, corner_assist_follow_input, corner_assist_world_mask)

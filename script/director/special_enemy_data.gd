@@ -165,7 +165,7 @@ extends Resource
 @export_group("正面抗性")
 ## 正面扇区内受到的伤害倍率：1.0 = 无减免（默认）。
 ## Hunter β 的「正面枪击完全回避」= 0.0；Tyrant 的硬抗 = 用 frontal_normalize 代替。
-@export var frontal_damage_mult: float = 1.0
+@export var frontal_damage_mult: float = 0.45
 ## 正面扇区半角（度）：60 = 以朝向为中心 ±60°（合计 120°）算"正面"。
 @export var frontal_arc_degrees: float = 60.0
 ## Normalize（Tyrant）：正面伤害改为按比例减免，单发越高削越多。

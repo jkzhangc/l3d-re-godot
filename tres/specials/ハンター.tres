@@ -37,3 +37,4 @@ pounce_sound = ExtResource("5_cdtb0")
 discover_sound_pool = Array[AudioStream]([ExtResource("2_om4wq"), ExtResource("3")])
 hurt_sound_pool = Array[AudioStream]([ExtResource("4"), ExtResource("3"), ExtResource("5_cdtb0")])
 death_sound_pool = Array[AudioStream]([ExtResource("3"), ExtResource("4"), ExtResource("5_cdtb0")])
+max_hp = 600.0
