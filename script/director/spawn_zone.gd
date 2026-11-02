@@ -33,8 +33,9 @@ enum SpawnType { COMMON = 0, SPECIAL = 1, BOTH = 2 }
 
 @export_group("定点特感（独立于导演特感池）")
 ## ★2026-11-02 用户需求：作者指定「这个区域刷这只特感」。
-## 与导演的常规特感通道**完全独立** —— 不参与 special_pool 抽选，不吃
+## **触发**与导演的常规特感通道完全独立 —— 不参与 special_pool 抽选，也不吃
 ## special_max_alive / 紧张度门槛 / 尸潮阶段，只按本区域自己的间隔、概率、次数走。
+## （生成出来的特感仍计入全局同屏特感压力，避免区域埋伏与常规特感叠满屏。）
 ## 典型用法：河里的区域定时刷一只两栖的ハンターγ（记得关掉 special_require_walkable）。
 @export var special_enabled: bool = false
 ## 要生成的特感资源（tres/specials/*.tres）。留空 = 不生成。
@@ -47,7 +48,7 @@ enum SpawnType { COMMON = 0, SPECIAL = 1, BOTH = 2 }
 @export_range(0.0, 1.0, 0.01) var special_chance: float = 1.0
 ## 本区域**累计最多**生成几只；0 = 不限。默认 1 = 「生成一只后永不再生成」。
 @export var special_max_count: int = 1
-## 本区域半径内同时最多存活几只（0 = 不限）。达到上限时暂停计时。
+## 本区域半径内**同种**特感同时最多存活几只（0 = 不限）。达到上限时暂停计时。
 @export var special_max_alive: int = 1
 ## 玩家进入这个距离后才开始走表；0 = 常驻计时。
 ## 默认 900 而不是 0：否则开场在远处就会把「仅一只」的名额刷掉，玩家走到河边时怪早没了。

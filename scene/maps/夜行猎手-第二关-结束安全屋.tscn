@@ -46,7 +46,6 @@
 [ext_resource type="Resource" uid="uid://ckqf4k1fb4ylo" path="res://object/weapon_sniper_03.tres" id="30_ytlha"]
 [ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="31_wmcd0"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="32_oafj6"]
-[ext_resource type="Resource" path="res://object/item_aid_box.tres" id="32_vcj2o"]
 [ext_resource type="Resource" uid="uid://dnis6jovgvl42" path="res://object/item_painkiller.tres" id="33_1hmwh"]
 [ext_resource type="Resource" uid="uid://c8wad2y7x0axn" path="res://object/weapon_rocket_02.tres" id="33_daqj4"]
 [ext_resource type="Resource" uid="uid://bxdfrkdx1cpw5" path="res://object/weapon_rocket_03.tres" id="34_oycr6"]
@@ -68,8 +67,8 @@
 [ext_resource type="Resource" uid="uid://b4glice3nx8q" path="res://object/weapon_launcher_ice.tres" id="49_0pj78"]
 [ext_resource type="Resource" uid="uid://b2glthneak4r" path="res://object/weapon_launcher_thunder.tres" id="50_7bw1u"]
 [ext_resource type="Resource" uid="uid://cacwbg4n7p3q" path="res://object/weapon_bowgun.tres" id="51_kvhhf"]
-[ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
-[ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
+[ext_resource type="Resource" uid="uid://d2732xipnwe11" path="res://object/item_greenherbs.tres" id="herb1029"]
+[ext_resource type="Resource" uid="uid://bqfbe6u03oqts" path="res://object/item_mineralwater.tres" id="water1029"]
 
 [sub_resource type="Resource" id="Resource_sw1c5"]
 script = ExtResource("14_g75pk")
@@ -232,6 +231,16 @@ pool = SubResource("Resource_j7tyj")
 position = Vector2(336, 360)
 pool = SubResource("Resource_7cc3y")
 
+[node name="TeleportPoint" type="Node2D" parent="DecorLayer" unique_id=151171567]
+z_index = 1
+position = Vector2(656, 224)
+script = ExtResource("7_2mcsd")
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台外.tscn"
+walk_texture = ExtResource("8_1jl68")
+walk_char_index = 2
+step_frames = Array[int]([1])
+animated = false
+
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=499096415]
 y_sort_enabled = true
 tile_map_data = PackedByteArray("AAAJAAkAAAAAAAAAAAAKAAkAAAAAAAAAAAANAAkAAAABAAAAAAAOAAkAAAACAAAAAAAPAAkAAAADAAAAAAAQAAkAAAAEAAAAAAAJAAoAAAAAAAAAAAAKAAoAAAAAAAAAAAALAAoAAAAFAAAAAAAOAAoAAAAGAAAAAAAPAAoAAAAHAAAAAAAQAAoAAAAIAAAAAAARAAoAAAAJAAAAAAARAAsAAAAKAAAAAAALAAwAAAALAAAAAAAPAAwAAAALAAAAAAAJAA0AAAAMAAAAAAAKAA0AAAANAAAAAAALAA0AAAAMAAAAAAAMAA0AAAANAAAAAAANAA0AAAAMAAAAAAAOAA0AAAANAAAAAAAPAA0AAAAMAAAAAAAQAA0AAAANAAAAAAAJAA4AAAAOAAAAAAAKAA4AAAAPAAAAAAALAA4AAAAOAAAAAAAMAA4AAAAPAAAAAAANAA4AAAAOAAAAAAAOAA4AAAAPAAAAAAAPAA4AAAAOAAAAAAAQAA4AAAAPAAAAAAAJAA8AAAAAAAEAAAALAA8AAAAAAAEAAAANAA8AAAAAAAEAAAARABAAAAALAAAAAAA=")
@@ -247,16 +256,6 @@ position = Vector2(624, 352)
 
 [node name="AmmoSupply" parent="UpperLayer" unique_id=1997091261 instance=ExtResource("6_2mcsd")]
 position = Vector2(432, 368)
-
-[node name="TeleportPoint" type="Node2D" parent="UpperLayer" unique_id=151171567]
-z_index = 1
-position = Vector2(656, 224)
-script = ExtResource("7_2mcsd")
-target_scene = "res://scene/maps/夜行猎手-第三关-电视台外.tscn"
-walk_texture = ExtResource("8_1jl68")
-walk_char_index = 2
-step_frames = Array[int]([1])
-animated = false
 
 [node name="药品类" parent="." unique_id=1702995436 instance=ExtResource("3_gs053")]
 position = Vector2(528, 408)

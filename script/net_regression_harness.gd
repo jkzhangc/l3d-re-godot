@@ -862,6 +862,12 @@ func _run_auto_host_appearance_test() -> void:
 		net.leave()
 		get_tree().quit(1)
 		return
+	## ★2026-11-02：外观用例不考察生存。同屏上限 40→50 后，街道图的普通丧尸
+	## 会在等待收编的 30s 内把测试玩家打死 → HOST_TEAM_WIPE_RESTART 反复重载场景，
+	## Client 永远等不到外观断言（实测连跑两次都卡在 CLIENT_LOADING_COMPLETE 循环）。
+	## 这里给测试玩家一个极高的血量，只影响该 net-test 进程。
+	player.set("max_hp", 100000.0)
+	player.set("current_hp", 100000.0)
 	# 特感：走 Director 生产路径（注入 special_data → 快照携带 special_id）。
 	var special_data := load("res://tres/specials/ブレインディモス.tres") as SpecialEnemyData
 	var director := get_node_or_null("/root/Director")
@@ -909,6 +915,15 @@ func _run_auto_host_appearance_test() -> void:
 	await get_tree().create_timer(3.0).timeout
 
 
+## 取出 CanvasTexture 的 diffuse_texture；普通 Texture2D 原样返回。
+## 敌人 `_ready()` 会给 walk_texture 包一层 CanvasTexture（带法线），
+## 断言"注入的是哪张图"必须看 diffuse，而不是外层包装。
+func _diffuse_texture(tex: Variant) -> Texture2D:
+	if tex is CanvasTexture:
+		return (tex as CanvasTexture).diffuse_texture
+	return tex as Texture2D
+
+
 func _find_entity_id_by_filter(filter: Callable) -> int:
 	for key: Variant in _enemies.keys():
 		var enemy := _resolve_enemy_entry(_enemies[key] as Dictionary)
@@ -932,10 +947,13 @@ func _run_auto_client_appearance_test() -> void:
 			var enemy := _resolve_enemy_entry(_enemies[key] as Dictionary)
 			if not is_instance_valid(enemy):
 				continue
-			if not special_hit and enemy.get("walk_texture") == special_res.texture \
+			## ⚠ `_ready()` 会把 walk_texture 包一层 CanvasTexture（法线贴图通道），
+			## 直接和 tres.texture 比引用会永远不等 → 必须先取回 diffuse_texture。
+			var walk_tex: Texture2D = _diffuse_texture(enemy.get("walk_texture"))
+			if not special_hit and walk_tex == special_res.texture \
 					and enemy.get("spit_enabled") == true:
 				special_hit = true
-			if not variant_hit and enemy.get("walk_texture") == variant_res.normal_texture:
+			if not variant_hit and walk_tex == variant_res.normal_texture:
 				variant_hit = true
 		if special_hit and variant_hit:
 			break
@@ -948,8 +966,11 @@ func _run_auto_client_appearance_test() -> void:
 		get_tree().quit(1)
 		return
 	# 酸弹镜像（A2）：Host 周期广播，任意时刻场景里出现非权威镜像弹即通过。
+	# ★2026-11-02：先看 `_auto_client_enemy_acid_spits` 累计计数 —— 镜像弹寿命只有 3s，
+	# 而上面等 special/variant 可能耗时更久；如果只轮询 `current_scene`，镜像早已消散，
+	# 测试会误报"没同步"（实测 appearance 连跑两次失败）。
+	var mirror_seen: bool = _auto_client_enemy_acid_spits > 0
 	deadline = Time.get_ticks_msec() + 12000
-	var mirror_seen := false
 	while Time.get_ticks_msec() < deadline and not mirror_seen:
 		for child: Node in get_tree().current_scene.get_children():
 			if child is EnemyAcidSpit and child.get("_authoritative") == false:

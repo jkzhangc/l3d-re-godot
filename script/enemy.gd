@@ -1023,6 +1023,10 @@ func _process(delta: float) -> void:
 		# 只在被禁用的状态机里被调用 → `_run_mode` 一旦置真就永久锁死 → 与 Host 权威形态
 		# 分叉（走路时会误停动画 timer → 平移）。现改为完全跟随快照的 `visual_char_index`
 		# （在 `apply_network_presentation` 里更新），零网络改动、两端形态必然一致。
+		## ★水面表现（2026-11-02）：Client 以前在 `_update_water_state()` 里直接早退，
+		## 于是联机时只有 Host 看得到 γ 下半身没入水中，Client 看到的是整只站在水面上。
+		## 这里在快照插值之后补一次纯表现更新（不跑 AI、不改权威状态）。
+		_update_water_state()
 		if Global.debug_visuals:
 			queue_redraw()
 		return
@@ -1091,7 +1095,9 @@ func is_water_submerged() -> bool:
 ## 每帧维护「是否在水面」：只在**切换瞬间**做三件事 —— 播进出水音效、重画精灵、切碰撞。
 ## 常驻开销 = 一次格子查询（水面层不存在时立即返回）。
 func _update_water_state() -> void:
-	if not water_walk_enabled or _is_dead or network_presentation_only:
+	## `network_presentation_only`（Client 镜像）也要更新：它只改本地渲染/音效，
+	## 不参与 AI 与权威结算。旧实现把 Client 一起早退，导致联机两端水面表现不同步。
+	if not water_walk_enabled or _is_dead:
 		return
 	var wet: bool = EnemyChaseState.is_water_at(global_position)
 	if wet == _water_submerged:

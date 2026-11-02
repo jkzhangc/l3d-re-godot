@@ -14,7 +14,7 @@
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="9_21l25"]
 [ext_resource type="Resource" uid="uid://xi0k4nuyj31j" path="res://object/weapon_combat_knife.tres" id="9_cn2cj"]
 [ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="10_1xumd"]
-[ext_resource type="Resource" path="res://object/item_acid_bottle.tres" id="10_rrxwh"]
+[ext_resource type="Resource" uid="uid://bip17yw6uvt73" path="res://object/item_acid_bottle.tres" id="10_rrxwh"]
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="11_vaka2"]
 [ext_resource type="Resource" uid="uid://lu2vkf4nagjj" path="res://object/weapon_pipe.tres" id="11_ve673"]
 [ext_resource type="Resource" uid="uid://bjsfi6r2o0ulo" path="res://tres/zombies/男性ゾンビ.tres" id="12_c73fe"]
@@ -32,10 +32,10 @@
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="22_b47ug"]
 [ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="23_4c40e"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="24_vjeka"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="25_xkc03"]
+[ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="25_xkc03"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="26_ul0f3"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="27_ex2fi"]
-[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="28_0k4rf"]
+[ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="28_0k4rf"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="29_g81cv"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="30_70ckt"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="31_vyehq"]
@@ -90,7 +90,7 @@ position = Vector2(1744, 1200)
 [node name="TeleportPoint2" type="Node2D" parent="DecorLayer" unique_id=1225456893]
 position = Vector2(784, 872)
 script = ExtResource("3_mju30")
-target_scene = "res://scene/maps/夜行猎手-第三关-电视台内.tscn"
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台内-一楼.tscn"
 walk_texture = ExtResource("4_011wa")
 walk_char_index = 6
 walk_direction = 3
@@ -98,7 +98,7 @@ walk_direction = 3
 [node name="TeleportPoint3" type="Node2D" parent="DecorLayer" unique_id=1755103037]
 position = Vector2(816, 872)
 script = ExtResource("3_mju30")
-target_scene = "res://scene/maps/夜行猎手-第三关-电视台内.tscn"
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台内-一楼.tscn"
 walk_texture = ExtResource("4_011wa")
 walk_char_index = 6
 walk_direction = 3

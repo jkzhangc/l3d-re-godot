@@ -203,16 +203,7 @@ func enter() -> void:
 	_first_path = true
 	# 找到所有 TileMapLayer（static 缓存，只在首次进入时搜索并打印）
 	if _tilemaps.is_empty() or not is_instance_valid(_tilemaps[0]):
-		_tilemaps.clear()
-		_tilemap_scan_done = false
-		_tile_walk_cache.clear()
-		_water_cell_cache.clear()
-		_stand_cache.clear()
-		_cell_rect_cache.clear()
-		_astar_grid = null  ## 失效 AStarGrid2D，触发重建
-		_astar_swim_grid = null
-		_grid_building = false  ## 中断分帧构建
-		_find_all_tilemaps()
+		_invalidate_tilemap_caches()
 		var names: String = ""
 		for tm in _tilemaps:
 			if not is_instance_valid(tm):
@@ -1273,6 +1264,25 @@ static func notify_map_changed() -> void:
 	_grid_building = false
 
 
+static func _invalidate_tilemap_caches() -> void:
+	## 场景重载 / 图块集合变化：清空所有静态缓存并重新发现 TileMapLayer。
+	## ⚠ 必须连 `_tilemap_roles` 一起清：旧实现漏了这一步，重新搜索后若图层数
+	## 恰好相同，`_ensure_roles()` 会按 size 判定"不用重算"，把上一张图的角色
+	## （GROUND/WALL）粘到新图上 → 水面/墙体判定整体错位。
+	_tilemaps.clear()
+	_tilemap_roles.clear()
+	_tile_walk_cache.clear()
+	_water_cell_cache.clear()
+	_stand_cache.clear()
+	_cell_rect_cache.clear()
+	_astar_grid = null
+	_astar_swim_grid = null
+	_grid_building = false
+	_tilemap_scan_done = false
+	_find_all_tilemaps()
+	_tilemap_scan_done = not _tilemaps.is_empty()
+
+
 static func _find_all_tilemaps() -> void:
 	var main_loop := Engine.get_main_loop()
 	if main_loop is SceneTree:
@@ -1359,18 +1369,9 @@ static func _is_walkable(gp: Vector2i) -> bool:
 
 	# 检测静态缓存是否失效（场景重载后）
 	if not _tilemaps.is_empty() and not is_instance_valid(_tilemaps[0]):
-		_tilemaps.clear()
 		## ⚠ 角色表必须跟着清：`_tilemaps` 清空后重新搜索**可能凑出同一个 size**，
 		## 而 `_ensure_roles()` 是按 size 判"要不要重算" → 旧角色会原地粘住。
-		_tilemap_roles.clear()
-		_tile_walk_cache.clear()
-		_water_cell_cache.clear()
-		_stand_cache.clear()
-		_cell_rect_cache.clear()
-		_astar_grid = null  ## 场景重载 → 失效网格
-		_astar_swim_grid = null
-		_grid_building = false  ## 中断分帧构建
-		_find_all_tilemaps()
+		_invalidate_tilemap_caches()
 
 	var blocks: Array[Rect2] = []
 	var mask: int = _scan_cell(gp, blocks)
@@ -1495,6 +1496,12 @@ static func _water_layer_id(tm: TileMapLayer) -> int:
 
 ## 世界坐标是否落在水面上（任意一层标记即可）。
 static func is_water_at(world_pos: Vector2) -> bool:
+	## 场景重载后 `_tilemaps` 可能还是上一张图的**已释放节点**。旧实现只在
+	## `_tilemaps.is_empty()` 时重扫，于是换图后第一次水面判定会遍历一堆 invalid 节点、
+	## 全部跳过并返回 false（水域区域刷特感会莫名失败），要等某个敌人进 Chase
+	## 触发 `_is_walkable` 的失效分支才恢复。这里补上同一道失效检查。
+	if not _tilemaps.is_empty() and not is_instance_valid(_tilemaps[0]):
+		_invalidate_tilemap_caches()
 	if _tilemaps.is_empty() and not _tilemap_scan_done:
 		## 追击前（Idle/登场帧）也要能判定：整个场景只扫一次，扫不到就不再重试
 		## （测试场景 / 无图块的战斗场里，每帧全树扫描是纯浪费）。

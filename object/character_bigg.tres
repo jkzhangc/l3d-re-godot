@@ -21,6 +21,7 @@
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセットボウガン.png" id="17_bg"]
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセット金属バット.png" id="18_bat"]
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセットスナイパー.png" id="19_snp"]
+[ext_resource type="Texture2D" uid="uid://btv2w3mg3jk6p" path="res://art/Characters/ジャイアンセットロケットランチャー.png" id="23_slksw"]
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセット近接武器.png" id="31_melee"]
 
 [resource]
@@ -51,6 +52,7 @@ weapon_walk_textures = {
 "Pipe": ExtResource("17_2lud0"),
 "Pistol": ExtResource("8_d74mw"),
 "RLauncher": ExtResource("15_rk"),
+"RLauncher2": ExtResource("23_slksw"),
 "Rifle": ExtResource("10_lxnma"),
 "Shotgun": ExtResource("9_w6m76"),
 "Shovel": ExtResource("31_melee"),

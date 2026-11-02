@@ -4130,6 +4130,10 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
 			var special := _get_network_special_data(str(public_state.get("special_id", "")))
 			if special:
 				special.apply_to_enemy(node)
+				## 2026-11-02：Client 镜像也保留 special_data（与 Host 同语义）。
+				## 目前伤害结算不走 Client，但 `is_special_enemy()` / 调试面板 / 以后可能
+				## 加的本地表现都要靠它；只在 apply_to_enemy 里注入外观是不够的。
+				node.set("special_data", special)
 			else:
 				var variant := _get_network_variant_data(str(public_state.get("variant_id", "")))
 				if variant:
@@ -4137,6 +4141,9 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
 			node.configure_network_entity(entity_id, true)
 			node.global_position = _packet_position(public_state)
 			_players_parent.add_child(node)
+			if special:
+				## 与 Host 同组：Client 侧的调试/统计（以及未来的本地表现）能看到"这是特感"。
+				node.add_to_group("special_enemies")
 		if is_instance_valid(_players_parent) and node.get_parent() != _players_parent:
 			node.reparent(_players_parent, true)
 		node.configure_network_entity(entity_id, true)

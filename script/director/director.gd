@@ -33,6 +33,9 @@ const DEBUG_SPAWN_COUNT = 5
 ## 敌人碰撞盒 20×28 → 半宽 10 / 半高 14，取 14 保证整盒不压墙。
 ## 用 preload 常量而不是裸全局类名（新建脚本的 class_name 要等编辑器重扫才进全局缓存）。
 const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
+## 联机资源白名单：区域定点特感允许作者拖任意 `SpecialEnemyData`，但 Client 只认
+## 白名单里的 id 重建镜像。生成时查一次，避免"Host 有、Client 没有"的静默不同步。
+const NETWORK_WHITELIST := preload("res://script/network_whitelist.gd")
 const ENEMY_SPOT_PROBE_RADIUS: float = 14.0
 ## 内置默认僵尸池（关卡 DirectorConfig.zombie_pool 留空时使用）。
 ## 按关卡定制：把 tres/zombies/ 下的变体拖进关卡 DirectorConfig 的 zombie_pool。
@@ -384,9 +387,11 @@ func _process(delta: float) -> void:
 			_update_ambient_zones(delta)
 
 	## ── 定点特感（SpawnZone.special_*，2026-11-02）──
-	## 作者指定的「这个区域刷这只特感」通道：与上面的常规编排**完全独立** ——
-	## 不吃 special_pool / special_max_alive / 紧张度门槛 / 尸潮阶段，
+	## 作者指定的「这个区域刷这只特感」通道：**触发**与常规编排完全独立 ——
+	## 不参与 special_pool 抽选，也不吃 special_max_alive / 紧张度门槛 / 尸潮阶段，
 	## 只按区域自己的触发距离、间隔、概率、次数上限走（见 SpawnZone 同名分组）。
+	## ⚠ 生成出来的特感仍会计入全局 `special_enemies`（同屏压力统计/上限共享），
+	## 避免区域埋伏与常规特感叠加到满屏；区域通道本身不会因此停表。
 	## 依然只在「本图允许刷怪」时运行；防守战挂起期间暂停，避免打乱剧本节奏。
 	if spawn_map and not director_suspended:
 		_update_special_zones(delta)
@@ -1382,6 +1387,14 @@ func spawn_special_enemy(pos: Vector2, data: SpecialEnemyData, decor_layer: Node
 	if data == null:
 		printerr("[Director] spawn_special aborted: data is null")
 		return null
+	## 联机校验（2026-11-02）：特感资源必须同时存在于 NetworkWhitelist.NETWORK_SPECIALS，
+	## 否则 spawn 快照只带 id，Client 反查不到 → 这只怪只在 Host 画面上存在。
+	## 单机不拦（作者可以自由用非白名单资源），只打警告提示联机风险。
+	var net_probe: Node = get_node_or_null("/root/Net")
+	if net_probe != null and net_probe.has_method("is_online_session") \
+			and bool(net_probe.call("is_online_session")) \
+			and NETWORK_WHITELIST.special_by_id(String(data.id)) == null:
+		push_warning("[Director] 特感 %s 不在联机白名单，Client 无法重建（联机时只会在 Host 出现）" % data.id)
 	if not _enemy_scene:
 		printerr("[Director] enemy scene not loaded")
 		return null
@@ -4288,16 +4301,22 @@ func _update_special_zones(delta: float) -> void:
 				zone.get_special_spawned(), zone.special_max_count])
 
 
-## 区域半径内当前存活的特感数量（含女巫；Boss 级特感也算，若作者真在区域里放 Boss）。
+## 区域半径内当前存活的**同种**特感数量。
+## 只数 `zone.special_data` 这一种：导演从别处刷来的ハンター不应占用「这个区域还能刷几只」；
+## 区域自己的 `special_max_alive` 是"本区域这类特感"的上限，不是全局特感上限。
 func _count_alive_specials_in_zone(zone: SpawnZone) -> int:
 	var tree: SceneTree = get_tree()
-	if tree == null:
+	if tree == null or zone == null or zone.special_data == null:
 		return 0
+	var want_id: String = String(zone.special_data.id)
 	var count: int = 0
 	for e: Node2D in tree.get_nodes_in_group("special_enemies"):
 		if not is_instance_valid(e):
 			continue
 		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		var d: Variant = e.get("special_data")
+		if d == null or String(d.get("id")) != want_id:
 			continue
 		if e.global_position.distance_to(zone.global_position) <= zone.get_zone_radius():
 			count += 1
