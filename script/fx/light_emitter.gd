@@ -42,6 +42,12 @@ class_name LightEmitter extends Node2D
 @export_range(0.0, 800.0, 1.0) var shadow_range: float = 0.0
 ## 影子在脚底处的最大不透明度（远端会自动淡出）
 @export_range(0.0, 1.0, 0.01) var shadow_opacity: float = 0.34
+## 勾上 = 这盏灯用**自己的**影子落点偏移，不吃 `NightOverlay` 的全局默认值。
+## （2026-11-02 用户需求：逐灯调，而不是整体挪）
+@export var shadow_offset_override: bool = false
+## 这盏灯投出的影子落点 XY 微调（世界像素，正 X 右移 / 正 Y 下移）。
+## 只在上面 `shadow_offset_override` 勾选时生效；不勾则跟随 NightOverlay 的全局值。
+@export var shadow_offset: Vector2 = Vector2.ZERO
 
 @export_group("火星粒子（可选）")
 ## 勾上会在光源位置生成一层上升的火星（CPUParticles2D，加法混合）
@@ -103,7 +109,8 @@ func _try_register() -> void:
 	ov.register_light(self, radius, intensity, light_color, flicker, occlude)
 	ov.set_light_height(self, light_height)
 	ov.set_light_flicker(self, flicker, flicker_mode, flicker_interval)
-	ov.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
+	ov.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow,
+		shadow_offset, shadow_offset_override)
 	_registered = true
 
 
@@ -124,7 +131,8 @@ func apply_params() -> void:
 	_overlay.register_light(self, radius, intensity, light_color, flicker, occlude)
 	_overlay.set_light_height(self, light_height)
 	_overlay.set_light_flicker(self, flicker, flicker_mode, flicker_interval)
-	_overlay.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow)
+	_overlay.set_light_shadow(self, shadow_scale, shadow_opacity, shadow_range, cast_shadow,
+		shadow_offset, shadow_offset_override)
 
 
 func set_light_enabled(value: bool) -> void:

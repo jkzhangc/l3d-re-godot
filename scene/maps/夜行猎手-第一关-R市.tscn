@@ -111,7 +111,7 @@ position = Vector2(625, 6562)
 [node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_mk0gx")]
 
 [node name="Torch" type="Node2D" parent="DecorLayer" unique_id=1606626114]
-position = Vector2(560, 6656)
+position = Vector2(560, 6672)
 script = ExtResource("3_6cmbv")
 radius = 172.0
 light_color = Color(1, 0.94195384, 0.7655037, 1)
@@ -386,6 +386,20 @@ max_spawns = 4
 ambient_budget = 4
 random_facing = true
 metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
+
+[node name="Torch2" type="Node2D" parent="DecorLayer" unique_id=2100599368]
+position = Vector2(720, 6704)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1901728823]
 light_mask = 2

@@ -134,8 +134,10 @@ class LightRecord:
 	var shadow_scale: float = SHADOW_SCALE
 	var shadow_range: float = SHADOW_RANGE
 	var shadow_opacity: float = SHADOW_OPACITY
-	## 这盏灯的影子落点 XY 微调（像素）。ZERO = 用 NightOverlay 的全局 shadow_offset。
+	## 这盏灯自己的影子落点 XY 微调（像素）。仅当 `shadow_offset_enabled` 为真时生效；
+	## 关闭时跟随 NightOverlay 的全局 `shadow_offset`（这样可以表达"这盏灯就是 0 偏移"）。
 	var shadow_offset: Vector2 = Vector2.ZERO
+	var shadow_offset_enabled: bool = false
 	var exit_hook: Callable = Callable()
 
 
@@ -169,9 +171,9 @@ var shadow_groups: Array[StringName] = [&"player", &"enemy"]
 ## 拖影柔化倍率：0 = 完全硬边的像素影子，1 = 默认（最远约 0.9px），2 = 明显发软。
 ## 只影响角色拖影，不影响墙体阴影（墙影走 Light2D 的 shadow_filter）。可在 Inspector 实时调。
 @export_range(0.0, 2.0, 0.05) var shadow_softness: float = 1.0
-## 角色拖影的落点 XY 微调（世界像素，正 X 右移 / 正 Y 下移）。
-## 2026-11-02 用户需求：影子整体偏了一点时不必改公式，Inspector 里直接推。
-## 单盏灯可用 `set_light_shadow(..., offset)` 覆盖（ZERO = 跟随这里）。
+## 角色拖影落点的**全局默认** XY 微调（世界像素，正 X 右移 / 正 Y 下移）。
+## 2026-11-02 用户需求：主要用**每盏灯**的偏移（`LightEmitter.shadow_offset`），
+## 这里只是它们没单独设置时的默认值（默认 (0,0) = 与旧行为逐像素一致）。
 @export var shadow_offset: Vector2 = Vector2.ZERO
 ## 影子其实有**两层**，这个值现在**同时控制两层**（2026-10-21 用户实测反馈后统一）：
 ##   ① 拖影（NightShadow 精灵）的 alpha 羽化
@@ -305,10 +307,13 @@ func register_light(source: Node2D, radius_px: float, intensity: float = 1.0,
 ## opacity: 最大不透明度（近处实际值，远处自动衰减）。
 ## range_px: 投影作用距离（世界像素）。0 = 用灯半径；超出就不投影。
 ## cast:    false = 这盏灯不投影（原工程 [noshadow]）。
-## offset: 这盏灯的影子落点微调（像素）。ZERO = 沿用全局 `shadow_offset`。
+## offset / offset_enabled: 这盏灯**自己的**影子落点微调（像素）。
+##   offset_enabled = false（默认）→ 跟随全局 `shadow_offset`，offset 忽略；
+##   offset_enabled = true        → 用本灯的 offset（可显式填 (0,0) 抵消全局）。
 func set_light_shadow(source: Node2D, scale: float = SHADOW_SCALE,
 		opacity: float = SHADOW_OPACITY, range_px: float = SHADOW_RANGE,
-		cast: bool = true, offset: Vector2 = Vector2.ZERO) -> void:
+		cast: bool = true, offset: Vector2 = Vector2.ZERO,
+		offset_enabled: bool = false) -> void:
 	var rec: LightRecord = null
 	for r: LightRecord in _records:
 		if r.source == source:
@@ -321,6 +326,7 @@ func set_light_shadow(source: Node2D, scale: float = SHADOW_SCALE,
 	rec.shadow_range = maxf(range_px, 0.0)
 	rec.shadow_opacity = clampf(opacity, 0.0, 1.0)
 	rec.shadow_offset = offset
+	rec.shadow_offset_enabled = offset_enabled
 
 
 func unregister_light(source: Node2D) -> void:
@@ -635,8 +641,8 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	sh.flip_h = s.flip_h
 	# 支点放到底边中点（脚底），这样 scale.y / rotation 都绕脚底做。
 	sh.offset = Vector2(-base_w * 0.5, -base_h + SHADOW_FRAME_BOTTOM_PAD)
-	## XY 微调：单灯设置了就用灯的，否则跟随全局（ZERO 时与旧行为完全一致）。
-	var xy_offset: Vector2 = rec.shadow_offset if rec.shadow_offset != Vector2.ZERO else shadow_offset
+	## XY 微调：这盏灯专门设了就用它的（可以显式 0），否则用全局默认。
+	var xy_offset: Vector2 = rec.shadow_offset if rec.shadow_offset_enabled else shadow_offset
 	sh.position = s.position + Vector2(0.0, h * 0.5) - dir * (h * SHADOW_NEAR_NUDGE_RATIO) + xy_offset
 	# 拉得越长越收窄一点，避免变成一条胖带子
 	# 拉得越长越收窄（0.14 → 0.22）：原来的尾部偏胖，和遮挡影叠起来像一条粗带子
