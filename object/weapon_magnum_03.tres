@@ -24,7 +24,6 @@ max_range = 600.0
 penetration = 2
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
-instant_kill = false
 collision_size = Vector2(28, 8)
 
 [sub_resource type="Resource" id="WSO_magnum_01_bigg"]
