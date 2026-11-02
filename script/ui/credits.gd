@@ -86,8 +86,10 @@ const STATS_PLACEHOLDER := "@@STATS@@"
 　　野比ハザ重制组（Godot 4）
 　　制作：剑客
 　　策划/玩法设计：Eluniht、阿茶Atea、剑客
-　　测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克
-　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、肥熊指挥官、关卡设置、11不会玩、无辜杰克、加速赔冰、还有 你
+　　测试：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、
+　　　　　肥熊指挥官、关卡设置、11不会玩、无辜杰克
+　　特别感谢：Eluniht、阿茶Atea、乔杉杉、划水员、小石曼曼、丧尸洗头用飘柔、
+　　　　　　　肥熊指挥官、关卡设置、11不会玩、无辜杰克、加速赔冰、还有 你
 
 　　 感谢游玩！
 　　　　在本片拍摄中牺牲的
@@ -131,7 +133,7 @@ func _ready() -> void:
 	_label.reset_size()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
 	_label.position = Vector2(0.0, vp_size.y)
-	_label.size.x = vp_size.x
+	_fit_label_width(vp_size.x)
 
 	## ★联机同步（2026-09-27）：客户端本地没有全队战役统计（击杀只在 Host 上累计）→
 	## `@@STATS@@` 段要么整段空白、要么与主机不同（用户实测"客户端跟主机内容好像不一样"）。
@@ -242,10 +244,27 @@ func _refresh_text_from_remote() -> void:
 	_label.text = updated
 	_label.reset_size()
 	var vp_size: Vector2 = get_viewport().get_visible_rect().size
-	_label.size.x = vp_size.x
+	_fit_label_width(vp_size.x)
 	if _label.position.y > vp_size.y - 64.0:
 		_label.position.y = vp_size.y   ## 还没滚起来 → 重新贴到底部，保证完整可读
 	print("[Credits] 已按 Host 权威统计重排名单内容")
+
+
+## 把名单 Label 的排版宽度钉在屏幕宽上。
+## ★为什么必须有这个函数（2026-11-02 用户实测「名单整体偏右」）：
+##   Label 未开 autowrap 时，`minimum_size.x` = **最长一行的宽度**；
+##   `size.x = 屏幕宽` 会被 clamp 到这个最小值 —— 一旦某行超宽（例如致谢名单加到 60 字，
+##   实测 1608px > 1280），Label 就变成 1653 宽的框，而 `position.x` 仍是 0、
+##   文本又是居中绘制 → **整块名单右移 (1653-1280)/2 ≈ 186px**。
+##   所以：宽度够就正常铺满；真的超宽时退回自动换行，至少保证水平居中不跑偏。
+func _fit_label_width(width: float) -> void:
+	_label.size.x = width
+	if _label.get_minimum_size().x <= width + 0.5:
+		return
+	push_warning("[Credits] 有单行超过屏幕宽度（%.0f > %.0f），已改用自动换行" % [
+		_label.get_minimum_size().x, width])
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_label.size = Vector2(width, _label.get_minimum_size().y)
 
 
 # ═══════════════════════════════════════

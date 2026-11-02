@@ -667,9 +667,10 @@ func _reset_live_combat_state() -> void:
 	_horde_berserk = false
 	_set_all_enemies_rage(false)
 	_release_horde_locks()
-	## ⑥ BGM：尸潮 + Boss 都收（判据见 _stop_horde_music 的 stream_paused 铁律）
-	_stop_horde_music()
-	stop_boss_music(false)
+	## ⑥ BGM：尸潮 + Boss + **常驻铺底**全收（判据见 _stop_horde_music 的 stream_paused 铁律）。
+	## 2026-11-02：铺底原先漏在复位之外 —— 进安全屋/回标题时上一张图的关卡 BGM 还在响。
+	## 这里换场景要立刻干净，所以走 immediate（不吃淡出 tween）。
+	stop_all_music(true)
 	## ⑦ 紧张度归零（残留高紧张度会让 cooldown 走「3 秒提前结束」捷径）
 	_reset_intensity()
 	## ⑦b 喘息期前进量快照（换图后旧 instance_id 全部失效）
@@ -850,6 +851,9 @@ func _stop_calm_music() -> void:
 	if _calm_tween != null and _calm_tween.is_valid():
 		_calm_tween.kill()
 	_calm_tween = create_tween()
+	## ★暂停时也要推进（2026-11-02）：死亡黑屏 / 终章 ED 期间树是 paused 的，
+	## 默认的 TWEEN_PAUSE_BOUND 会让淡出卡住 → `stop()` 永远等不到，音乐一直响。
+	_calm_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_calm_tween.tween_property(_calm_music_player, "volume_db",
 		_calm_music_player.volume_db - 30.0, 0.9)
 	_calm_tween.tween_callback(Callable(_calm_music_player, "stop"))
@@ -1108,6 +1112,33 @@ func apply_network_music(music_key: String, active: bool, track_index: int = -1)
 func stop_battle_music() -> void:
 	stop_boss_music(false)
 	_stop_horde_music()
+
+
+## 立刻停掉本节点持有的**全部** BGM（Boss / 尸潮 / 常驻铺底）。
+## 为什么需要它（2026-11-02 用户实测「播放 ED 时鼓底音乐还在响」）：
+##   `_stop_calm_music()` 靠 **0.9 秒 tween 淡出**，而终章 ED 期间整棵树是 `paused` 的，
+##   Tween 不推进 → 淡出永远走不到 `stop()`，铺底曲就一直压在 ED 音乐下面。
+##   Boss / 尸潮那两路本来就是直接 `stop()`，所以只有铺底会漏。
+## `immediate = true`（默认）= 不走淡出，直接静音；换场景 / 进 ED 这类要立刻干净的场合用它。
+func stop_all_music(immediate: bool = true) -> void:
+	stop_boss_music(false)
+	_stop_horde_music()
+	if immediate:
+		_stop_calm_music_immediate()
+	else:
+		_stop_calm_music()
+
+
+## 立即停铺底曲（杀掉淡出 tween 再 stop）。暂停中也能真正静音。
+func _stop_calm_music_immediate() -> void:
+	if _calm_music_player == null:
+		return
+	if _calm_tween != null and _calm_tween.is_valid():
+		_calm_tween.kill()
+	_calm_tween = null
+	if _calm_music_player.playing or _calm_music_player.stream_paused:
+		_calm_music_player.stop()
+		print("[Director] 铺底 BGM 立即停止")
 
 
 ## 每帧调用：Boss 全灭（tank 组空 + 监视列表全灭）→ 收 Boss BGM。

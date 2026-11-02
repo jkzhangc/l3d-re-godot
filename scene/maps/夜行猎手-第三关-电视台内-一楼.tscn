@@ -24,15 +24,18 @@
 [ext_resource type="Resource" uid="uid://cf1ay21u0ekph" path="res://tres/zombies/女子学生ゾンビ.tres" id="14_0o4xi"]
 [ext_resource type="Resource" path="res://tres/zombies/職員ゾンビ.tres" id="15_hh8xd"]
 [ext_resource type="Script" uid="uid://cw81g8ykpdnns" path="res://script/director/special_enemy_data.gd" id="16_j0bhv"]
+[ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="17_752we"]
 [ext_resource type="Resource" uid="uid://dfqkujph8xko0" path="res://tres/specials/ハンター.tres" id="17_yidus"]
 [ext_resource type="Resource" uid="uid://dtwr8d4xchwiw" path="res://tres/specials/ハンターβ.tres" id="18_8ucoa"]
+[ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="18_l58vc"]
+[ext_resource type="Script" uid="uid://b7i7kpp78wjwq" path="res://script/director/spawn_zone.gd" id="19_l58vc"]
 [ext_resource type="Resource" uid="uid://b8fm67dg4gjwk" path="res://tres/specials/ブレアウィッチ.tres" id="19_xsyxr"]
 [ext_resource type="Resource" uid="uid://deb1w2kxs4bll" path="res://tres/specials/ハンターγ.tres" id="20_kmp3a"]
 [ext_resource type="Resource" uid="uid://nbk5ma46gfcc" path="res://tres/specials/ブレインディモス.tres" id="21_hvpb7"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="22_acrrj"]
 [ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="23_qg6nu"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="24_0f1mk"]
-[ext_resource type="Resource" path="res://object/item_first_aid_spray.tres" id="25_ab4am"]
+[ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="25_ab4am"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="26_8njbg"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="27_q2w1i"]
 [ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="28_p0qhi"]
@@ -158,6 +161,23 @@ pool = SubResource("Resource_ie6ws")
 [node name="霰弹枪跟狙击枪" parent="DecorLayer" unique_id=1699113123 instance=ExtResource("3_lmn2b")]
 position = Vector2(1296, 520)
 pool = SubResource("Resource_l58vc")
+
+[node name="TeleportPoint2" type="Node2D" parent="DecorLayer" unique_id=1750309101]
+position = Vector2(1344, 496)
+script = ExtResource("17_752we")
+target_scene = "res://scene/maps/夜行猎手-第三关-电视台内-二楼.tscn"
+walk_texture = ExtResource("18_l58vc")
+walk_char_index = 6
+walk_direction = 3
+interaction_mode = 1
+
+[node name="SpawnZone" type="Node2D" parent="DecorLayer" unique_id=1186276260]
+position = Vector2(1704, 6976)
+script = ExtResource("19_l58vc")
+zone_size = Vector2(300, 200)
+ambient_budget = 5
+random_facing = true
+metadata/_custom_type_script = "uid://b7i7kpp78wjwq"
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1185997775]
 y_sort_enabled = true

@@ -122,8 +122,14 @@ func start() -> void:
 	## 它们挂 /root/Director 下不进场景树释放，且 AudioStreamPlayer 在树暂停时照常出声
 	## —— 不收就会压在结算页 summary_music / ED 的 l3d_ed 上（用户实测两首一起响）。
 	var director: Node = get_node_or_null("/root/Director")
-	if director and director.has_method("stop_battle_music"):
-		director.call("stop_battle_music")
+	## 2026-11-02：必须连**常驻铺底（calm）**一起收。
+	## 旧接口 `stop_battle_music()` 只收 Boss / 尸潮，铺底曲会一直压在 ED 音乐下面
+	##（用户实测「播放 ED 时鼓底音乐还在响」）。优先用新接口，旧接口兜底。
+	if director != null:
+		if director.has_method("stop_all_music"):
+			director.call("stop_all_music", true)
+		elif director.has_method("stop_battle_music"):
+			director.call("stop_battle_music")
 	# 淡出瞬间冻结全场（用户 2026-09-13：黑屏过程玩家/敌人全部暂停、不能移动）。
 	# 本层 PROCESS_MODE_ALWAYS，计时/补间不受影响。
 	get_tree().paused = true

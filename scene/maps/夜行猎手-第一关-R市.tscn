@@ -401,6 +401,216 @@ ember_amount = 16
 ember_speed = 46.0
 ember_radius = 18.0
 
+[node name="Torch3" type="Node2D" parent="DecorLayer" unique_id=1825396293]
+position = Vector2(592, 7760)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch4" type="Node2D" parent="DecorLayer" unique_id=837112772]
+position = Vector2(1072, 7952)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch5" type="Node2D" parent="DecorLayer" unique_id=204265146]
+position = Vector2(464, 8208)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch7" type="Node2D" parent="DecorLayer" unique_id=1956893021]
+position = Vector2(3568, 2864)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch8" type="Node2D" parent="DecorLayer" unique_id=805078556]
+position = Vector2(3856, 2864)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch9" type="Node2D" parent="DecorLayer" unique_id=1074657539]
+position = Vector2(4144, 2864)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch10" type="Node2D" parent="DecorLayer" unique_id=910715723]
+position = Vector2(4400, 2864)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch11" type="Node2D" parent="DecorLayer" unique_id=1098431488]
+position = Vector2(4208, 1936)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch12" type="Node2D" parent="DecorLayer" unique_id=1488094279]
+position = Vector2(2288, 1744)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch13" type="Node2D" parent="DecorLayer" unique_id=713543257]
+position = Vector2(2128, 1744)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch14" type="Node2D" parent="DecorLayer" unique_id=915830524]
+position = Vector2(2640, 3408)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch15" type="Node2D" parent="DecorLayer" unique_id=558738598]
+position = Vector2(2544, 3248)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch16" type="Node2D" parent="DecorLayer" unique_id=1845116868]
+position = Vector2(2352, 3408)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch17" type="Node2D" parent="DecorLayer" unique_id=1040396481]
+position = Vector2(1840, 3632)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
+[node name="Torch18" type="Node2D" parent="DecorLayer" unique_id=1120316364]
+position = Vector2(848, 7248)
+script = ExtResource("3_6cmbv")
+radius = 172.0
+light_color = Color(1, 0.94195384, 0.7655037, 1)
+flicker = 1.0
+flicker_mode = 1
+flicker_interval = 0.39
+shadow_scale = 1.0
+shadow_opacity = 0.8
+ember_amount = 16
+ember_speed = 46.0
+ember_radius = 18.0
+
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=1901728823]
 light_mask = 2
 visibility_layer = 2
