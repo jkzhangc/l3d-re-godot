@@ -33,6 +33,8 @@ const COLLISION_SHAPE_NODE: String = "Shape"
 const COLLISION_SIZE: int = 32
 ## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于医疗箱等其余交互）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 ## 已用玩家的箱子不透明度（"你已用过"的视觉提示）。
 const USED_ALPHA: float = 0.45
 ## 治疗绿闪颜色（沿用旧实现的过曝绿）。
@@ -142,7 +144,10 @@ func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 	_check_player_proximity()
+	## ★拾取优先（2026-11-02 用户需求）：附近有能用功能键的拾取物（或本帧已被拾取消费）
+	## 时，本次按键归拾取，医疗箱让路 —— 站在药品与医疗箱中间按 D 不再两边都触发。
 	if _can_interact and not Players.local_player_is_throwing() \
+			and not INTERACT_PRIORITY.pickup_blocks_function_key(get_tree(), self) \
 			and Input.is_action_just_pressed("功能键"):
 		get_viewport().set_input_as_handled()
 		_request_use()

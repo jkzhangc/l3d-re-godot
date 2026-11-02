@@ -48,6 +48,8 @@ const HOLDOUT_SPAWN_POINT := preload("res://script/director/holdout_spawn_point.
 
 # 显式 preload 保证类型在编辑器热重载期间也已注册
 const TELEPORT_POINT_SCRIPT := preload("res://script/director/teleport_point.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于防守战机器等其余交互）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 ## 击杀计数过滤用（enemy.gd 无 class_name，node_added 时机早于 add_to_group，
 ## 不能用 "enemy" 组过滤新刷的丧尸，按脚本比对）
 const ENEMY_SCRIPT := preload("res://script/enemy.gd")
@@ -394,6 +396,7 @@ func _process(delta: float) -> void:
 	elif _can_interact and auto_start_on_approach:
 		trigger()
 	elif _can_interact and not Players.local_player_is_throwing() \
+			and not INTERACT_PRIORITY.pickup_blocks_function_key(get_tree(), self) \
 			and Input.is_action_just_pressed("功能键"):
 		## ★2026-10-02 用户反馈「有玩家互动不了防守战机器」→ 改用**轮询**取键。
 		## 旧实现走 `_unhandled_input`：那条路依赖"没有任何节点先 consume 掉功能键"，

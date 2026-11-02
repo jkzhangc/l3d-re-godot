@@ -36,6 +36,8 @@ enum AnimOverride { INHERIT = 0, ENABLED = 1, DISABLED = 2 }
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 ## 成就系统入口（preload 常量而不是 class_name：本项目 class_name 不进全局类缓存）。
 const ACHIEVEMENTS := preload("res://script/achievements.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于互动开关等其余交互）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 
 # ═══════════════════════════════════════
 # 配置 — 开关
@@ -195,7 +197,9 @@ func _process(delta: float) -> void:
 	## 功能键走**轮询**而不是 _unhandled_input：事件路径依赖"没人先 consume"，
 	## 任何一处 consume 都会让它静默失效（2026-10-02 用户实测「互动不了」的根因），
 	## 与医疗箱 / 弹药堆 / 防守机器同一口径。
+	## ★拾取优先（2026-11-02）：有拾取物能用功能键（或本帧已被拾取消费）时让路。
 	if _can_interact and not Players.local_player_is_throwing() \
+			and not INTERACT_PRIORITY.pickup_blocks_function_key(get_tree(), self) \
 			and Input.is_action_just_pressed("功能键"):
 		interact()
 

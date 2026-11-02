@@ -46,6 +46,8 @@ const PICKUP_GROUP := &"ground_pickup"          ## 全部地面掉落物（武�
 const WEAPON_PICKUP_GROUP := &"weapon_pickup"   ## 仅武器拾取物 → 最近者仲裁用
 ## 交互判定（点击一下 / 按住）的唯一入口，见 script/pickup_interaction.gd。
 const PickupInteraction := preload("res://script/pickup_interaction.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于存档/医疗箱/补给/开关等）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
 ## 落点避墙判据（2026-09-26）：与传送落点 / 多人补位 / 固定刷怪点**共用同一个解析器**
 ## —— 图块碰撞（任一物理层，含 physics_layer_0 角色层）+ 物理探测 + require_tile。
@@ -389,6 +391,9 @@ const HINT_FONT_SIZE: int = 12
 func _ready() -> void:
 	add_to_group(WEAPON_PICKUP_GROUP)
 	add_to_group(PICKUP_GROUP)
+	## 拾取优先级组（2026-11-02）：其它交互（存档点/医疗箱/补给/开关/遭遇）按键前会问
+	## "有没有拾取物能用功能键"，有就全部让路。
+	add_to_group(INTERACT_PRIORITY.PICKUP_GROUP)
 	if Engine.is_editor_hint():
 		# 编辑器预览（@tool）：只按 pickup_texture/pickup_char_idx/pickup_direction 刷出
 		# 48x64 裁帧，让摆点时能看见掉落物长相。不注册掉落上限、不连 Area2D、不建指示器。
@@ -574,6 +579,8 @@ func _process_hold(delta: float) -> bool:
 	if not PickupInteraction.is_hold_mode():
 		_hold_timer = 0.0
 		if PickupInteraction.tapped_once("功能键"):
+			## 本次按键归拾取：同帧让医疗箱/补给/开关/存档全部让路（见 interact_priority.gd）。
+			INTERACT_PRIORITY.mark_pickup_key_used()
 			_do_pickup()
 		return false
 
@@ -680,6 +687,8 @@ func _process_network_hold(delta: float) -> bool:
 	if not PickupInteraction.is_hold_mode():
 		_hold_timer = 0.0
 		if PickupInteraction.tapped_once("功能键"):
+			## 本次按键归拾取：同帧让医疗箱/补给/开关/存档全部让路（见 interact_priority.gd）。
+			INTERACT_PRIORITY.mark_pickup_key_used()
 			_request_network_pickup()
 		return false
 	if Input.is_action_pressed("功能键"):

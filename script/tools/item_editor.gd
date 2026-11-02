@@ -1772,10 +1772,15 @@ func _save_current(show_toast: bool = true) -> void:
 	var focus: Control = get_viewport().gui_get_focus_owner()
 	if focus != null:
 		focus.release_focus()
+	## ★先抓原 uid（2026-11-02 实测：编辑器二进制「跑场景」这条路保存 .tres 会丢 uid 头，
+	## 与 tools/add_bullet_physics_layer.gd 踩的是同一个坑）—— 地图 .tscn 按 uid 引用武器/物品
+	## 资源，丢了会退化成路径回退 + invalid UID 噪音。保存后补回。
+	var keep_uid: String = _read_resource_uid(_selected_path)
 	var err: Error = ResourceSaver.save(_res, _selected_path)
 	if err != OK:
 		_toast_show("保存失败（%d）：%s" % [err, _selected_path], C_ERR)
 		return
+	_reapply_resource_uid(_selected_path, keep_uid)
 	_dirty = false
 	_update_header()
 	## 列表可能改了名称 / id / 图标 → 重建但保住选中项
@@ -1784,6 +1789,44 @@ func _save_current(show_toast: bool = true) -> void:
 	_rebuild_list()
 	if show_toast:
 		_toast_show("已保存：%s" % _selected_path.get_file(), C_OK)
+
+
+## 读 .tres 头部 `uid="uid://xxx"` 的完整文本（没有则返回空串）。
+func _read_resource_uid(path: String) -> String:
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var head: String = f.get_line()
+	f.close()
+	var i: int = head.find("uid=\"")
+	if i < 0:
+		return ""
+	var j: int = head.find("\"", i + 5)
+	if j < 0:
+		return ""
+	return head.substr(i + 5, j - i - 5)
+
+
+## 把 uid 补回 .tres 头部（幂等：头部已有 uid / uid 为空都不动）。
+func _reapply_resource_uid(path: String, uid: String) -> void:
+	if uid.is_empty():
+		return
+	var f: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return
+	var text: String = f.get_as_text()
+	f.close()
+	var first_nl: int = text.find("\n")
+	var head: String = text.substr(0, first_nl) if first_nl > 0 else text
+	if head.contains("uid=") or not head.begins_with("[gd_resource"):
+		return
+	var fixed: String = head.replace("format=3", "format=3 uid=\"%s\"" % uid)
+	var w: FileAccess = FileAccess.open(path, FileAccess.WRITE)
+	if w == null:
+		_toast_show("uid 回写失败：%s" % path, C_ERR)
+		return
+	w.store_string(fixed + text.substr(first_nl))
+	w.close()
 
 
 func _reload_current() -> void:

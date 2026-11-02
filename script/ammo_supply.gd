@@ -16,6 +16,8 @@ const DIRECTIONS: int = 4
 const WALK := preload("res://script/vx_walk_sheet.gd")
 ## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于弹药补给等其余交互）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 
 @export_group("出现条件")
 ## 勾选后单机移除整个节点（包括碰撞），联机保留；编辑器始终可见。
@@ -194,7 +196,9 @@ func _process(delta: float) -> void:
 		label.text = "%s  [%s]" % [interact_label, Global.key_hint(&"功能键")]
 		label.visible = eligible
 	## 投掷物举起/瞄准时 D 是「投掷减格键」，让位给投掷（2026-11-01）
+	## ★拾取优先（2026-11-02）：有拾取物能用功能键（或本帧已被拾取消费）时让路。
 	if eligible and not Players.local_player_is_throwing() \
+			and not INTERACT_PRIORITY.pickup_blocks_function_key(get_tree(), self) \
 			and Input.is_action_just_pressed("功能键") and not get_tree().paused:
 		_request_use(player)
 

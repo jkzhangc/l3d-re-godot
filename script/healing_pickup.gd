@@ -41,6 +41,8 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 const ACHIEVEMENTS := preload("res://script/achievements.gd")
 ## 交互判定（点击一下 / 按住）的唯一入口，见 script/pickup_interaction.gd。
 const PickupInteraction := preload("res://script/pickup_interaction.gd")
+## 交互优先级仲裁（2026-11-02：拾取优先于存档/补给/开关等）。
+const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 ## 拾取范围的单一真源（与武器拾取物同规则，2026-09-23 用户：拾取范围调小一些）。
 ## ⚠ tscn 的 Area2D 半径须同为 WEAPON_PICKUP_SCRIPT.PICKUP_RANGE(16)。
 const WEAPON_PICKUP_SCRIPT := preload("res://script/weapon_pickup.gd")
@@ -119,6 +121,9 @@ func _ready() -> void:
 	## Host 收编不到、Client 也看不见）。
 	add_to_group(&"ground_pickup")
 	add_to_group(&"healing_pickup")
+	## 拾取优先级组（2026-11-02）：其它交互（存档点/医疗箱/补给/开关/遭遇）按键前会问
+	## "有没有拾取物能用功能键"，有就全部让路。
+	add_to_group(INTERACT_PRIORITY.PICKUP_GROUP)
 	## 自动判定：编辑器摆进场景的实例 owner 非空 → 豁免（运行时刷出 owner 为空）。
 	## 用 or 是为了不覆盖 random_pickup 对预摆实例刷出物的预设豁免。
 	cap_exempt = cap_exempt or owner != null
@@ -183,9 +188,9 @@ func _need_function_key() -> bool:
 ## ── 交互输入仲裁（2026-10-27 用户需求）──
 ## 语义：此刻按「功能键」，本节点会不会真的做事。存档点据此让路（见
 ## script/interact_priority.gd：存档优先级最低）。
-## 只有「需要按 D 拾取」的路径才占用该键：
+## 只有「按 D 能真正生效」的路径才占用该键：
 ##   · 触碰即自动拾取的物品不占用 → 不挡存档；
-##   · 已持有投掷物时替换走**确定键**（见 `_process_pickup` / `_process_network_hold`）→ 不挡存档。
+##   · 已持有投掷物时按 D 替换（2026-11-02 用户口径，原先走确定键）→ 占用，存档让路。
 func can_use_function_key() -> bool:
 	if Engine.is_editor_hint():
 		return false
@@ -198,9 +203,14 @@ func can_use_function_key() -> bool:
 	## 与 `_process_pickup` 同口径：刚掉落的短冷却期内按 D 也不生效。
 	if Time.get_ticks_msec() - _spawn_msec < PICKUP_DELAY_MSEC:
 		return false
-	var state: PlayerState = Players.get_state_for_entity(_player_ref)
-	if state != null and item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null:
+	## 投掷物举起 / 瞄准期间，功能键被「投掷减格」占用 → 本节点不会响应，也就别挡别人。
+	if Players.local_player_is_throwing():
 		return false
+	var state: PlayerState = Players.get_state_for_entity(_player_ref)
+	## ★已持有投掷物 → 按 D 替换（2026-11-02 用户口径）：这条**占用**功能键，
+	## 存档点必须让路（旧实现返回 false 且替换走确定键 → 按 D 没反应、存档反而弹出来）。
+	if state != null and item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null:
+		return not bool(_player_ref.get("player_in_weapon_state"))
 	## 拾取即用的物品（草药/矿泉水）：拾取者数值已满 → `_do_pickup` 会把它留在地上，
 	## 按 D 等于白按 → 不挡存档（与下面喷雾满仓同一条口径）。
 	if item.uses_on_pickup():
@@ -209,6 +219,15 @@ func can_use_function_key() -> bool:
 	if item.item_type == ItemData.ItemType.HEALING and _healing_storage_full(state):
 		return false
 	return _need_function_key()
+
+
+## 此刻拾取是否必须按功能键(D)：
+## 物品数据开关 / 节点开关，**或已持有投掷物要替换**（2026-11-02 统一到 D）。
+func _needs_key_press(state: PlayerState) -> bool:
+	if _need_function_key():
+		return true
+	return item != null and item.item_type == ItemData.ItemType.THROWABLE \
+		and state != null and state.throwable != null
 
 
 ## 喷雾存量是否已满（与 `_do_pickup` 的收纳判据同源：单机共用池 / 联机按座位）。
@@ -223,7 +242,13 @@ func _healing_storage_full(state: PlayerState) -> bool:
 ## 头顶键帽：只有"进范围 + 需要按 D"才显示（与 weapon_pickup 的键帽同款外观/层级）。
 ## 联机镜像（presentation_only）与「还没拿到 Host 分配 id」的掉落物不显示 —— 那时按 D 也捡不起来。
 func _update_keycap_hint() -> void:
-	var show: bool = _player_in_range and is_instance_valid(_player_ref) and _need_function_key()
+	var state: PlayerState = Players.get_state_for_entity(_player_ref) if is_instance_valid(_player_ref) else null
+	var show: bool = _player_in_range and is_instance_valid(_player_ref) and _needs_key_press(state)
+	## 投掷物替换在武器/瞄准状态下不响应（D 是减格键）→ 键帽跟着藏，不骗人按。
+	if show and item != null and item.item_type == ItemData.ItemType.THROWABLE \
+			and state != null and state.throwable != null \
+			and bool(_player_ref.get("player_in_weapon_state")):
+		show = false
 	if show and (network_presentation_only or (_is_online_network_pickup() and network_pickup_id <= 0)):
 		show = false
 	if show:
@@ -343,18 +368,20 @@ func _request_network_pickup() -> void:
 ## 网络版按住流程（2026-10-13 / 2026-10-26 扩展）：交互条件与单机 `_process_hold` 一致，
 ## 但满进度**只提交拾取请求**，绝不本地 `_do_pickup()` —— 事务在 Host（与 weapon_pickup 的
 ## `_process_network_hold` 同款）。
-## `throwable_replacement = true` → 已持有投掷物时按**确定键**替换；
-## `false` → 按**功能键(D)** 拾取（物品数据 `pickup_requires_function_key` 打开的药品类）。
+## 2026-11-02 起：投掷物替换也统一按**功能键(D)**（旧「确定键」路径已废 —— 按确定键会先举起
+## 投掷物进入武器状态，`player_in_weapon_state` 守卫永远先绊住自己，替换根本触发不了）。
 func _process_network_hold(delta: float, throwable_replacement: bool) -> bool:
-	## 玩家正在武器/投掷物举起/瞄准状态时不触发替换（避免与确定键瞄准冲突）。
+	## 玩家正在武器/投掷物举起/瞄准状态时不触发替换（此时 D 是「投掷减格键」，见 Players）。
 	if throwable_replacement and _player_ref.get("player_in_weapon_state"):
 		_hold_timer = 0.0
 		return false
-	var action: String = "确定键" if throwable_replacement else "功能键"
+	var action: String = "功能键"
 	## 点击模式（默认，2026-10-26）：按一下就提交请求，不累积进度。
 	if not PickupInteraction.is_hold_mode():
 		_hold_timer = 0.0
 		if PickupInteraction.tapped_once(action):
+			## 本次按键归拾取：同帧让医疗箱/补给/开关/存档全部让路（见 interact_priority.gd）。
+			INTERACT_PRIORITY.mark_pickup_key_used()
 			_request_network_pickup()
 		return false
 	if Input.is_action_pressed(action):
@@ -402,8 +429,9 @@ func _process_pickup(delta: float) -> bool:
 	if not state:
 		return false
 
-	# 投掷物且已持有 → 按住确定键替换；其余默认自动拾取，
-	# 需要按住功能键(D) 时（物品数据开关 / 节点开关）改走按住流程（进度环提示，避免路过误拾）
+	# 投掷物且已持有 → 按功能键(D)替换（2026-11-02：旧「确定键」按法会被
+	# player_in_weapon_state 守卫绊死 —— 按确定键的那一帧玩家先进武器状态，替换永远不触发）；
+	# 其余默认自动拾取，需要按功能键(D) 时（物品数据开关 / 节点开关）改走按住流程（进度环提示，避免路过误拾）
 	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
 	if not throwable_replacement:
 		if not _need_function_key():
@@ -411,7 +439,7 @@ func _process_pickup(delta: float) -> bool:
 			return false
 		return _process_hold(delta, false)
 
-	# 玩家正在武器/投掷物举起/瞄准状态，不触发替换（避免与确定键瞄准冲突）
+	# 玩家正在武器/投掷物举起/瞄准状态，不触发替换（此时 D 是「投掷减格键」）
 	if _player_ref.get("player_in_weapon_state"):
 		_hold_timer = 0.0
 		return false
@@ -419,17 +447,19 @@ func _process_pickup(delta: float) -> bool:
 
 
 func _process_hold(delta: float, throwable_replacement: bool) -> bool:
-	## 按住进度：投掷物替换用确定键（旧行为），功能键获取用功能键(D)。
-	var action: String = "确定键" if throwable_replacement else "功能键"
+	## 按住进度：投掷物替换与普通按键拾取统一走功能键(D)（2026-11-02 用户口径）。
+	var action: String = "功能键"
 	## ★2026-11-01：投掷物举起 / 瞄准期间，「功能键 D」被「投掷减格键」占用
 	## （见 `Players.local_player_is_throwing()`），这里不响应，避免调距离顺手捡走地上的药。
-	if action == "功能键" and Players.local_player_is_throwing():
+	if Players.local_player_is_throwing():
 		_hold_timer = 0.0
 		return false
 	## 点击模式（默认，2026-10-26）：按一下立刻执行，不累积进度、不出进度环。
 	if not PickupInteraction.is_hold_mode():
 		_hold_timer = 0.0
 		if PickupInteraction.tapped_once(action):
+			## 本次按键归拾取：同帧让医疗箱/补给/开关/存档全部让路（见 interact_priority.gd）。
+			INTERACT_PRIORITY.mark_pickup_key_used()
 			_do_pickup()
 		return false
 	if Input.is_action_pressed(action):
