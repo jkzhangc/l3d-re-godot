@@ -46,12 +46,16 @@ const C_ACCENT_DIM := Color("#264f78")
 const THUMB_SIZE: int = 96
 const CELL_W: int = 112
 const CELL_H: int = 136
-const MAX_RESULTS: int = 400
+## 每页显示多少个结果（2026-11-02 用户反馈：原先直接截断到 400，多的图片根本看不到）。
+## 现在按页切：仍是一次只建 400 个格子（缩略图不卡），但可以翻页看到全部。
+const PAGE_SIZE: int = 400
 
 var _mode: int = Mode.TEXTURE
 var _selected: String = ""
 var _filter_text: String = ""
 var _current_dir: String = ""
+var _page: int = 0                     ## 当前页（0 起）
+var _matched: Array[String] = []       ## 当前筛选条件下的**全部**命中（分页的数据源）
 
 var _files: Array[String] = []
 var _dirs: Array[Dictionary] = []
@@ -75,6 +79,9 @@ var _list_box: VBoxContainer = null
 var _hint_label: Label = null
 var _confirm_btn: Button = null
 var _play_btn: Button = null
+var _prev_btn: Button = null
+var _next_btn: Button = null
+var _page_label: Label = null
 
 var _preview_title: Label = null
 var _preview_clip: Control = null
@@ -107,9 +114,24 @@ func open(mode: int, current: String = "") -> void:
 	_build_tree(current)
 	_show_preview(_selected)
 	_refresh_files()
+	_reveal_selected()
 	_confirm_btn.disabled = _selected.is_empty()
 	if not _selected.is_empty() and _visible.has(_selected):
 		_select(_selected)
+
+
+## 打开时把**当前已选文件**所在页翻出来（2026-11-02 分页引入）：
+## 否则当这个文件排在 400 名之后时，打开浏览器只会看到第 1 页、像是"没选中"。
+func _reveal_selected() -> void:
+	if _selected.is_empty():
+		return
+	var idx: int = _matched.find(_selected)
+	if idx < 0:
+		return
+	var p: int = idx / PAGE_SIZE
+	if p != _page:
+		_page = p
+		_refresh_files()
 
 
 func _build_theme() -> void:
@@ -189,8 +211,8 @@ func _build_ui() -> void:
 	_panel.add_child(_search)
 
 	_status = _label("", 12, C_MUTED)
-	_status.position = Vector2(left_w + 10 + center_w - 116, 70)
-	_status.size = Vector2(106, 20)
+	_status.position = Vector2(left_w + 10 + center_w - 170, 70)
+	_status.size = Vector2(160, 20)
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_panel.add_child(_status)
 
@@ -304,8 +326,27 @@ func _build_ui() -> void:
 
 	var hint := _label("双击文件直接确定 · Esc 取消", 12, C_MUTED)
 	hint.position = Vector2(18, ph - 38.0)
-	hint.size = Vector2(pw - 260, 24)
+	hint.size = Vector2(240, 24)
 	_panel.add_child(hint)
+
+	## 分页控件（2026-11-02）：只有一页时隐藏，不占视觉噪音。
+	_prev_btn = _button("◀ 上一页", false)
+	_prev_btn.position = Vector2(270, ph - 42.0)
+	_prev_btn.size = Vector2(78, 30)
+	_prev_btn.pressed.connect(_page_step.bind(-1))
+	_panel.add_child(_prev_btn)
+
+	_page_label = _label("1 / 1", 12, C_MUTED)
+	_page_label.position = Vector2(354, ph - 38.0)
+	_page_label.size = Vector2(96, 20)
+	_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_panel.add_child(_page_label)
+
+	_next_btn = _button("下一页 ▶", false)
+	_next_btn.position = Vector2(456, ph - 42.0)
+	_next_btn.size = Vector2(78, 30)
+	_next_btn.pressed.connect(_page_step.bind(1))
+	_panel.add_child(_next_btn)
 
 	_confirm_btn = _button(_mode_confirm_text(), true)
 	_confirm_btn.position = Vector2(pw - 150, ph - 42.0)
@@ -408,11 +449,13 @@ func _on_folder_selected() -> void:
 	if item == null:
 		return
 	_current_dir = str(item.get_metadata(0))
+	_page = 0
 	_refresh_files()
 
 
 func _on_search_changed(text: String) -> void:
 	_filter_text = text.strip_edges().to_lower()
+	_page = 0
 	_refresh_files()
 
 
@@ -421,26 +464,36 @@ func _on_search_changed(text: String) -> void:
 # ═══════════════════════════════════════
 
 func _refresh_files() -> void:
+	_matched.clear()
 	_visible.clear()
 	var q: String = _filter_text
 	var all_mode: bool = _current_dir.is_empty()
-	var capped: bool = false
 	if all_mode and q.is_empty() and _mode == Mode.TEXTURE:
 		_show_hint("选择左侧文件夹，或在上方输入关键词搜索全部图像。")
 		_status.text = "共 %d 个图像" % _files.size()
+		_update_pager()
 		return
 	for f: String in _files:
 		if not all_mode and f.get_base_dir() != _current_dir:
 			continue
 		if not q.is_empty() and not f.to_lower().contains(q):
 			continue
-		_visible.append(f)
-		if _visible.size() >= MAX_RESULTS:
-			capped = true
-			break
+		_matched.append(f)
+
+	## 分页：`_matched` 才是全量，`_visible` 只装当前这一页（一次最多建 PAGE_SIZE 个格子）。
+	var pages: int = _page_count()
+	_page = clampi(_page, 0, pages - 1)
+	var start: int = _page * PAGE_SIZE
+	var end: int = mini(start + PAGE_SIZE, _matched.size())
+	for i: int in range(start, end):
+		_visible.append(_matched[i])
+
 	_hint_label.visible = false
-	_status.text = "显示 %d%s / %d" % [
-		_visible.size(), "+" if capped else "", _files.size()]
+	if _matched.is_empty():
+		_status.text = "0 / %d" % _files.size()
+	else:
+		_status.text = "显示 %d–%d / %d" % [start + 1, end, _matched.size()]
+	_update_pager()
 	if _visible.is_empty():
 		_show_hint("这里没有匹配的文件。\n试试子文件夹、清空搜索，或选择左上角「全部」。")
 		return
@@ -448,6 +501,38 @@ func _refresh_files() -> void:
 		_rebuild_grid()
 	else:
 		_rebuild_rows()
+
+
+## 当前筛选结果一共几页（至少 1 页，便于显示 "1 / 1"）。
+func _page_count() -> int:
+	return maxi(1, int(ceil(float(_matched.size()) / float(PAGE_SIZE))))
+
+
+## 刷新分页控件状态：只有一页时整组隐藏。
+func _update_pager() -> void:
+	if _page_label == null or _prev_btn == null or _next_btn == null:
+		return
+	var pages: int = _page_count()
+	var show: bool = pages > 1
+	_prev_btn.visible = show
+	_next_btn.visible = show
+	_page_label.visible = show
+	if not show:
+		return
+	_page_label.text = "%d / %d" % [_page + 1, pages]
+	_prev_btn.disabled = _page <= 0
+	_next_btn.disabled = _page >= pages - 1
+
+
+func _page_step(delta: int) -> void:
+	var pages: int = _page_count()
+	if pages <= 1:
+		return
+	_page = clampi(_page + delta, 0, pages - 1)
+	_refresh_files()
+	## 翻页后回到顶部，否则新一页会停在上一页的滚动位置（看上去像"没翻页"）。
+	if _grid_scroll:
+		_grid_scroll.scroll_vertical = 0
 
 
 func _show_hint(text: String) -> void:
