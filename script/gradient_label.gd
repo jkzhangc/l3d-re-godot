@@ -38,6 +38,14 @@ const DEFAULT_SHADOW_OFFSET: Vector2 = Vector2(2, 2)
 		_font_dirty = true
 		_request_render()
 
+## 自动换行宽度（px）。**>0 = 超过这个宽度折行**（中文按字、拉丁按词）；
+## 0 = 旧行为（单行：超长文字会直接画到父容器外面 —— 2026-11-02 角色介绍 SA 行穿窗就是它）。
+## 开启后本节点的 `size` 由折行后的实际行数算出，调用方可据此做逐行下移。
+@export var autowrap_width: float = 0.0:
+	set(v):
+		autowrap_width = maxf(v, 0.0)
+		_request_render()
+
 @export var color_index: int = DEFAULT_COLOR_INDEX:
 	set(v):
 		color_index = clampi(v, 0, 19)
@@ -307,6 +315,12 @@ func _configure_label(lbl: Label, col: Color, apply_outline: bool) -> void:
 	lbl.add_theme_font_override("font", _font)
 	lbl.add_theme_font_size_override("font_size", text_font_size)
 	lbl.add_theme_color_override("font_color", col)
+	## 自动换行（2026-11-02）：宽度写死在 Label 上才折得动；关掉时恢复单行。
+	if autowrap_width > 0.0:
+		lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		lbl.size = Vector2(autowrap_width, lbl.size.y)
+	else:
+		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	if apply_outline:
 		lbl.add_theme_color_override("font_outline_color", outline_color)
 		lbl.add_theme_constant_override("outline_size", maxi(2, text_font_size / 8))
@@ -316,8 +330,27 @@ func _configure_label(lbl: Label, col: Color, apply_outline: bool) -> void:
 
 
 func _update_size_from_labels() -> void:
+	if autowrap_width > 0.0:
+		## 用实际渲染的那个 Label 量行数 × 行高 —— 与屏幕上的折行结果同源，
+		## 不会出现「量出来 2 行、画出来 3 行」的错位。宽度即为折行宽度。
+		var line_count: int = maxi(_label_main.get_line_count(), 1)
+		var height: float = 0.0
+		for i: int in range(line_count):
+			height += _label_main.get_line_height(i)
+		size = Vector2(ceili(autowrap_width), ceili(maxf(height, 1.0)))
+		return
 	var ts := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, text_font_size)
 	size = Vector2(ceili(ts.x), ceili(ts.y))
+
+
+## 立即重建并同步 `size`（跳过 call_deferred）。
+## 供调用方「设完 text 马上要读尺寸做排版」的场景用 —— 例如角色选择信息窗里
+## 技能行折行后把觉醒行往下挪（2026-11-02）。
+func refresh_now() -> void:
+	if not is_inside_tree():
+		return
+	_dirty = true
+	_rebuild()
 
 
 func _hide_labels() -> void:

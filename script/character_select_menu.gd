@@ -333,6 +333,17 @@ func _refresh_info() -> void:
 	_info_labels[3].text = _get_counter_text(cd)
 	_info_labels[4].text = _get_skills_text(cd)
 	_info_labels[5].text = _get_awaken_text(cd)
+	_reflow_info_rows()
+
+
+## 技能行折行后把觉醒行往下挪（2026-11-02 用户反馈：SA 介绍穿出信息窗）。
+## 单行时保持场景里的原位置（200），折行才下移；`refresh_now()` 让 size 立即可读。
+func _reflow_info_rows() -> void:
+	var skill: GradientLabel = _info_labels[4]
+	var awaken: GradientLabel = _info_labels[5]
+	skill.refresh_now()
+	const AWAKEN_BASE_Y: float = 200.0
+	awaken.position.y = maxf(AWAKEN_BASE_Y, skill.position.y + skill.size.y + 8.0)
 
 
 ## 见切/反击说明（2026-10-30 用户需求：补上每个角色的一闪/反击功能）。
@@ -400,8 +411,9 @@ func _get_skills_text(cd: CharacterData) -> String:
 		if sname.is_empty() or sname.contains("测试"):
 			continue
 		var desc: String = str(skill.get("description"))
-		## 2026-09-15 用户要求：SA 介绍显示完整（信息窗内容区约 1100px，24px 字约容纳
-		## 45 字，当前各角色 SA 描述长度内不溢出；GradientLabel 不换行，超长会超窗）
+		## 2026-09-15 用户要求：SA 介绍显示完整（信息窗内容区约 1120px）。
+		## 2026-11-02：SkillLabel 开启 autowrap_width=1120 —— 超长 SA 描述自动折行，
+		## 不再画到窗口外面；折行高度由 `_reflow_info_rows()` 用来下移觉醒行。
 		parts.append(sname if desc.is_empty() else "%s: %s" % [sname, desc])
 	if parts.is_empty():
 		return "SA 技能: ——"

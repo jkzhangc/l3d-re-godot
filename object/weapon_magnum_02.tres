@@ -21,10 +21,10 @@ script = ExtResource("2")
 bullet_texture = ExtResource("3")
 speed = 1200.0
 max_range = 600.0
-penetration = 1
+penetration = 2
 offset_left = Vector2(0, -16)
 offset_right = Vector2(0, -16)
-instant_kill = true
+instant_kill = false
 collision_size = Vector2(28, 8)
 
 [sub_resource type="Resource" id="WSO_magnum_01_bigg"]
@@ -49,7 +49,7 @@ right = Vector2(0, -16)
 
 [resource]
 script = ExtResource("1")
-attack_power = 52
+attack_power = 150
 attack_range = 260.0
 weapon_state_name = "Magnum"
 weapon_walk_texture = ExtResource("9")
@@ -81,7 +81,7 @@ hitstun_duration = 0.2
 item_id = "magnum_02"
 item_name = "沙漠之鹰"
 item_type = 3
-description = "原作 マグナム/ﾃﾞｻﾞｰﾄｲｰｸﾞﾙ（威力80／连射C）。威力略低、备弹更多。"
+description = "原作 マグナム/ﾃﾞｻﾞｰﾄｲｰｸﾞﾙ。单发 150 伤害，子弹可贯穿 3 个敌人（不再即死）。"
 icon = ExtResource("icon")
 sell_price = 250
 max_stack = 1
