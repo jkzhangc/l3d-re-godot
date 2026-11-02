@@ -72,12 +72,21 @@ static var _cell_size: float = 32.0  ## 网格分辨率（原生图块大小）
 static var _tilemaps: Array[TileMapLayer] = []  ## 缓存所有 TileMapLayer（所有敌人共享）
 static var _tilemap_roles: Array[int] = []  ## 与 _tilemaps 平行：图层角色（名字判定只做一次）
 static var _astar_grid: AStarGrid2D = null  ## Godot 内置 A* 网格（静态，全图共享）
+## 两栖专用网格（ハンターγ，2026-11-02）：与 `_astar_grid` 同区域、同格子尺寸，
+## 唯一区别是**水面格不设 solid** —— 普通敌人的网格把水面当墙，γ 用主网格永远
+## 只会绕岸（实测河心的出生点连最近可行走格都找不到，直接无路径）。
+## 两套网格在同一次分帧构建里一起写，扫描/碰撞计算仍只做一次。
+static var _astar_swim_grid: AStarGrid2D = null
+## 本地图是否存在水面数据层。没有 → 两栖网格与主网格语义相同，直接别名复用，
+## 省掉第二套 6 万格的构建与内存（突袭战役等无水图）。
+static var _has_water_layers: bool = false
 static var _grid_building: bool = false   ## 是否正在分帧构建网格
 static var _grid_build_y: int = 0         ## 当前构建到的行
 static var _grid_build_x: int = 0         ## 当前构建到的列（行内游标，避免分帧时重扫整行）
 static var _grid_build_bounds: Rect2i = Rect2i()  ## 构建区域
 static var _grid_build_frame: int = -1    ## 当前帧已处理过（防同帧重复）
-static var _grid_build_solids: int = 0     ## 累计障碍物计数
+static var _grid_build_solids: int = 0     ## 累计障碍物计数（主网格）
+static var _grid_build_swim_solids: int = 0  ## 累计障碍物计数（两栖网格：水面不算）
 static var _grid_build_start_usec: int = 0  ## 构建起始时刻（用于报告累计 CPU 耗时）
 var _collision_half: Vector2 = Vector2(12, 14)  ## 碰撞体半尺寸，用于推墙距离
 
@@ -201,6 +210,7 @@ func enter() -> void:
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
 		_astar_grid = null  ## 失效 AStarGrid2D，触发重建
+		_astar_swim_grid = null
 		_grid_building = false  ## 中断分帧构建
 		_find_all_tilemaps()
 		var names: String = ""
@@ -478,15 +488,12 @@ func physics_update(delta: float) -> void:
 
 	var speed: float = enemy.move_speed
 
-	## ── 水面行走（ハンターγ，2026-10-22）──
-	## A* 网格是**全体敌人共享**的（水面在那里被当成墙），不能为单只改；
-	## 两栖敌人只要「直线到玩家没有墙」就直接趟过去 —— 水面本身就是开阔地，
-	## 让它沿 A* 绕岸反而会卡在岸边（且永远不下水）。
-	if enemy.has_method("is_amphibious") and bool(enemy.call("is_amphibious")) \
-			and _segment_crosses_water(enemy.global_position, player.global_position) \
-			and not _segment_has_wall(enemy.global_position, player.global_position):
-		_move_direct(enemy, to_player, speed, delta)
-		return
+	## ── 水面行走（ハンターγ，2026-11-02 改由 A* 专用网格处理）──
+	## 旧实现：A* 网格是全体敌人共享的（水面在那里被当成墙），所以只能「直线到玩家
+	## 跨水且无墙 → 直接位移」。它对不跨水的绕行无效，而且只查 wall 层，
+	## 会从 GroundLayer 的树/石头里直接穿过去。
+	## 现在 `_find_path` 对两栖敌人改用 `_astar_swim_grid`（水面不 solid），
+	## 这里不再需要特判 —— 正常走路径即可，水面/岸边由 _can_swim_step 负责位移。
 
 	# ── 降级模式：连续失败2次 → 切到直接追击（避免A*卡顿）──
 	if _fallback_mode:
@@ -775,7 +782,7 @@ static func tick_build() -> void:
 static func _ensure_astar_grid() -> bool:
 	## 确保 AStarGrid2D 已构建。返回 true 表示就绪（立即可用）。
 	## 如果尚未构建，启动分帧构建并返回 false（调用者应使用降级追击）。
-	if _astar_grid and not _tilemaps.is_empty() and is_instance_valid(_tilemaps[0]):
+	if _astar_grid and _astar_swim_grid and not _tilemaps.is_empty() and is_instance_valid(_tilemaps[0]):
 		if _grid_building:
 			return false  ## 构建中，尚未就绪
 		return true
@@ -823,6 +830,17 @@ static func _ensure_astar_grid() -> bool:
 	_astar_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
 	_astar_grid.update()
 
+	## 两栖网格：同区域/同尺寸，构建时把水面留空（见 _build_step）。
+	## 本地图没有 `is_water` 数据层 → 两套网格完全等价，直接别名复用（省一半构建/内存）。
+	if _has_water_layers:
+		_astar_swim_grid = AStarGrid2D.new()
+		_astar_swim_grid.region = bounds
+		_astar_swim_grid.cell_size = Vector2(_cell_size, _cell_size)
+		_astar_swim_grid.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_NEVER
+		_astar_swim_grid.update()
+	else:
+		_astar_swim_grid = _astar_grid
+
 	# 启动分帧构建
 	_grid_building = true
 	_grid_build_y = bounds.position.y
@@ -830,6 +848,7 @@ static func _ensure_astar_grid() -> bool:
 	_grid_build_bounds = bounds
 	_grid_build_frame = -1
 	_grid_build_solids = 0
+	_grid_build_swim_solids = 0
 	_grid_build_start_usec = Time.get_ticks_usec()
 
 	return false  ## 构建中，稍后才就绪
@@ -838,7 +857,7 @@ static func _ensure_astar_grid() -> bool:
 static func _build_step() -> void:
 	## 每帧处理 BUILD_CHUNK 个格子，分帧完成障碍物标记。
 	## 可被多次调用，同帧内只执行一次。
-	if not _grid_building or not _astar_grid:
+	if not _grid_building or not _astar_grid or not _astar_swim_grid:
 		return
 
 	var cf: int = Engine.get_physics_frames()
@@ -861,11 +880,15 @@ static func _build_step() -> void:
 			## 场景切换（安全门/传送点）会在 _is_walkable 内部把缓存整体失效
 			## （_astar_grid = null、_grid_building = false）。此时旧构建进度已无意义，
 			## 必须立即中止本帧 —— 否则下一行就是对空引用 set_point_solid（学校门口实测崩溃）。
-			if not _grid_building or not _astar_grid:
+			if not _grid_building or not _astar_grid or not _astar_swim_grid:
 				return
 			if not walkable:
 				_astar_grid.set_point_solid(gp, true)
 				_grid_build_solids += 1
+				## 两栖网格：水面照常通行（也允许 wall 层水面保持阻挡 —— 铁栅/桥墩不能穿）。
+				if _has_water_layers and not _is_swim_cell(gp):
+					_astar_swim_grid.set_point_solid(gp, true)
+					_grid_build_swim_solids += 1
 			_grid_build_x += 1
 			count += 1
 			if count >= BUILD_CHUNK:
@@ -880,12 +903,13 @@ static func _build_step() -> void:
 	# 构建完成
 	_grid_building = false
 	var total: int = bounds.size.x * bounds.size.y
-	print("[A*] AStarGrid2D 构建完成: %d cells, 障碍物 %d (%.1f%%), 累计 CPU 耗时 %d ms" % [
+	print("[A*] AStarGrid2D 构建完成: %d cells, 障碍物 %d (%.1f%%), 两栖障碍 %d, 累计 CPU 耗时 %d ms" % [
 		total, _grid_build_solids, float(_grid_build_solids) / float(total) * 100.0,
+		_grid_build_swim_solids,
 		int((Time.get_ticks_usec() - _grid_build_start_usec) / 1000)])
 
 
-func _mark_enemy_soft_costs(player_pos: Vector2) -> Array[Vector2i]:
+func _mark_enemy_soft_costs(player_pos: Vector2, grid: AStarGrid2D = null) -> Array[Vector2i]:
 	## 给「挡在路上」的同伴占用格加软代价，返回被改动的格子以便还原。
 	##
 	## 相比原来的 set_point_solid(true) 有两处关键区别：
@@ -893,8 +917,11 @@ func _mark_enemy_soft_costs(player_pos: Vector2) -> Array[Vector2i]:
 	## ② 玩家 ENEMY_IGNORE_RADIUS 内的同伴完全不标记 —— 保证目标格与紧邻格永远可达；
 	##    贴身围拢交给 _push_apart_from_other_enemies 的软推力处理（那才是它的职责）。
 	## 只考虑 ENEMY_MARK_RADIUS 内的同伴：更远的同伴不会与本路径竞争同一段走廊。
+	## `grid`：两栖敌人传 `_astar_swim_grid`，普通敌人留空走主网格。
 	var touched: Array[Vector2i] = []
-	if not _astar_grid:
+	if grid == null:
+		grid = _astar_grid
+	if not grid:
 		return touched
 
 	var tree: SceneTree = character.get_tree()
@@ -921,31 +948,37 @@ func _mark_enemy_soft_costs(player_pos: Vector2) -> Array[Vector2i]:
 		var gp: Vector2i = _world_to_grid(other_pos)
 		if gp == my_grid:
 			continue
-		if not _astar_grid.region.has_point(gp):
+		if not grid.region.has_point(gp):
 			continue
-		if _astar_grid.is_point_solid(gp):
+		if grid.is_point_solid(gp):
 			continue  ## 静态墙不动，只处理可通行格
-		if _astar_grid.get_point_weight_scale(gp) >= ENEMY_SOFT_COST:
+		if grid.get_point_weight_scale(gp) >= ENEMY_SOFT_COST:
 			continue  ## 已被同伴（同格）标记过，避免重复记录
-		_astar_grid.set_point_weight_scale(gp, ENEMY_SOFT_COST)
+		grid.set_point_weight_scale(gp, ENEMY_SOFT_COST)
 		touched.append(gp)
 
 	return touched
 
 
-func _clear_enemy_soft_costs(cells: Array[Vector2i]) -> void:
-	if not _astar_grid:
+func _clear_enemy_soft_costs(cells: Array[Vector2i], grid: AStarGrid2D = null) -> void:
+	if grid == null:
+		grid = _astar_grid
+	if not grid:
 		return
 	for gp in cells:
-		if _astar_grid.region.has_point(gp):
-			_astar_grid.set_point_weight_scale(gp, DEFAULT_POINT_COST)
+		if grid.region.has_point(gp):
+			grid.set_point_weight_scale(gp, DEFAULT_POINT_COST)
 
 
 func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	var start: Vector2i = _world_to_grid(from)
 	var end: Vector2i = _world_to_grid(to)
-	var start_ok: bool = _is_walkable(start)
-	var end_ok: bool = _is_walkable(end)
+	## 两栖（ハンターγ）：水面是可通行区域，A* 走专用的 `_astar_swim_grid`。
+	## 主网格必须继续把水面当墙，否则普通丧尸会寻路进水、物理上又被水图块挡住。
+	var amphibious: bool = character.has_method("is_amphibious") \
+		and bool(character.call("is_amphibious"))
+	var start_ok: bool = _cell_passable(start, amphibious)
+	var end_ok: bool = _cell_passable(end, amphibious)
 
 	character._debug_start_grid = start
 	character._debug_end_grid = end
@@ -953,13 +986,13 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	character._debug_end_walkable = end_ok
 
 	if _first_path and Global.debug_visuals:
-		print("[A*] ═══ 寻路开始（AStarGrid2D, %dpx 格子）═══" % int(_cell_size))
-		print("[A*] 敌人世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [from.x, from.y, str(start), str(start_ok)])
-		print("[A*] 玩家世界: (%.0f, %.0f) → 格子: %s  可行走=%s" % [to.x, to.y, str(end), str(end_ok)])
+		print("[A*] ═══ 寻路开始（AStarGrid2D, %dpx 格子, 两栖=%s）═══" % [int(_cell_size), str(amphibious)])
+		print("[A*] 敌人世界: (%.0f, %.0f) → 格子: %s  可通行=%s" % [from.x, from.y, str(start), str(start_ok)])
+		print("[A*] 玩家世界: (%.0f, %.0f) → 格子: %s  可通行=%s" % [to.x, to.y, str(end), str(end_ok)])
 
 	if not end_ok:
 		print("[A*] ⚠ 目标不可通行，搜索邻近格子...")
-		end = _find_nearest_walkable(end)
+		end = _find_nearest_walkable(end, amphibious)
 		if end == NO_CELL:
 			print("[A*] ❌ 找不到可通行的邻近格子！")
 			character._debug_path_found = false
@@ -971,7 +1004,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	if not start_ok:
 		## 敌人贴着墙站着时，自身所在格的格心可能站不下（身体压到墙上）。这不是"没有路"，
 		## 只是取样点不好 —— 吸附到附近的可行走格即可。直接放弃会掉进降级冲撞 → 挤墙。
-		var snapped_start: Vector2i = _find_nearest_walkable(start)
+		var snapped_start: Vector2i = _find_nearest_walkable(start, amphibious)
 		if snapped_start == NO_CELL:
 			print("[A*] ❌ 起点附近找不到可通行格子！")
 			character._debug_path_found = false
@@ -997,14 +1030,15 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 		_first_path = false
 		return []
 
+	var grid: AStarGrid2D = _astar_swim_grid if amphibious else _astar_grid
 	# ── 给附近同伴加「软代价」（让路但不封死），用完立即还原 ──
-	var soft_cells: Array[Vector2i] = _mark_enemy_soft_costs(to)
+	var soft_cells: Array[Vector2i] = _mark_enemy_soft_costs(to, grid)
 
 	# ── 使用 Godot 内置 AStarGrid2D 寻路 ──
-	var id_path: PackedVector2Array = _astar_grid.get_id_path(start, end)
+	var id_path: PackedVector2Array = grid.get_id_path(start, end)
 
 	# ── 还原软代价 ──
-	_clear_enemy_soft_costs(soft_cells)
+	_clear_enemy_soft_costs(soft_cells, grid)
 
 	if id_path.is_empty():
 		if Global.debug_visuals:
@@ -1020,7 +1054,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 		grid_path.append(Vector2i(int(p.x), int(p.y)))
 
 	# 平滑路径（共线简化 + 碰撞体感知推墙）
-	var smoothed: Array[Vector2] = _smooth_path(grid_path)
+	var smoothed: Array[Vector2] = _smooth_path(grid_path, amphibious)
 
 	if Global.debug_visuals:
 		print("[A*] ✅ 找到路径！原始=%d 平滑后=%d" % [grid_path.size(), smoothed.size()])
@@ -1033,7 +1067,7 @@ func _find_path(from: Vector2, to: Vector2) -> Array[Vector2]:
 	return smoothed
 
 
-func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
+func _smooth_path(grid_path: Array[Vector2i], amphibious: bool = false) -> Array[Vector2]:
 	## 三段式路径优化：共线简化 → 视线简化 → 立足点重插，最后**逐段硬校验**。
 	##
 	## ① 共线简化：把「一直朝同一方向」的连续格子压成一个拐点；
@@ -1050,7 +1084,7 @@ func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
 	## 真正的保障是"每一段都可跟随"，由下面的 `_verify_or_raw()` 兜底。
 	var world := _to_world_array(grid_path)
 	if grid_path.size() <= 2:
-		return _verify_or_raw(world, grid_path)
+		return _verify_or_raw(world, grid_path, amphibious)
 
 	var keypoints: Array[Vector2i] = [grid_path[0]]
 	for i in range(1, grid_path.size() - 1):
@@ -1061,39 +1095,45 @@ func _smooth_path(grid_path: Array[Vector2i]) -> Array[Vector2]:
 			keypoints.append(curr)
 	keypoints.append(grid_path[grid_path.size() - 1])
 
-	world = _pull_string(_to_world_array(keypoints))
+	world = _pull_string(_to_world_array(keypoints), amphibious)
 	world = _reinject_offset_cells(world)
-	return _verify_or_raw(world, grid_path)
+	return _verify_or_raw(world, grid_path, amphibious)
 
 
-func _verify_or_raw(points: Array[Vector2], grid_path: Array[Vector2i]) -> Array[Vector2]:
+func _verify_or_raw(points: Array[Vector2], grid_path: Array[Vector2i],
+		amphibious: bool = false) -> Array[Vector2]:
 	## 最后一道闸：逐段复核「碰撞体全程可通过」。任何一段不通过就整条退回
 	## **A* 原始格心序列** —— 相邻格（4 邻域）的中心连线只经过这两格，
 	## 而这两格都可行走，所以按构造必然可跟随。
 	## 简化与重插都是启发式，这一层保证「路径一定走得通」这个硬性质不会丢。
-	if _path_followable(points):
+	if _path_followable(points, amphibious):
 		return points
 	if Global.debug_visuals:
 		print("[A*] ⚠ 平滑结果存在不可跟随的段 → 退回原始格心路径（%d 点）" % grid_path.size())
 	return _to_world_array(grid_path)
 
 
-static func _path_followable(points: Array[Vector2]) -> bool:
+static func _path_followable(points: Array[Vector2], amphibious: bool = false) -> bool:
 	for i in range(points.size() - 1):
-		if not _segment_followable(points[i], points[i + 1]):
+		if not _segment_followable(points[i], points[i + 1], amphibious):
 			return false
 	return true
 
 
-static func _segment_followable(a: Vector2, b: Vector2) -> bool:
+static func _segment_followable(a: Vector2, b: Vector2, amphibious: bool = false) -> bool:
 	## 线段全程「碰撞体站得下」——两层判定：
 	##   ① 格子级：经过的格子都可行走（不漏格）；
 	##   ② 碰撞体级：沿线段等距采样，每点身体都不与任何碰撞盒相交。
-	if not _segment_cells_walkable(a, b):
+	## 两栖：水面格算可通行，水面段的碰撞体采样直接跳过（图块碰撞是"岸"，
+	## 不是"游不过去"）；非水面段仍按普通规则逐点校验。
+	if not _segment_cells_walkable(a, b, amphibious):
 		return false
 	var steps: int = clampi(ceili(a.distance_to(b) / LOS_SAMPLE_STEP), 1, LOS_SAMPLE_MAX)
 	for i in range(steps + 1):
-		if not _body_fits_at(a.lerp(b, float(i) / float(steps))):
+		var p: Vector2 = a.lerp(b, float(i) / float(steps))
+		if amphibious and is_water_at(p):
+			continue
+		if not _body_fits_at(p):
 			return false
 	return true
 
@@ -1121,7 +1161,7 @@ func _reinject_offset_cells(points: Array[Vector2]) -> Array[Vector2]:
 	return out
 
 
-func _pull_string(points: Array[Vector2]) -> Array[Vector2]:
+func _pull_string(points: Array[Vector2], amphibious: bool = false) -> Array[Vector2]:
 	## 视线简化：维护一个锚点，向后试探最远的可直达点；
 	## 一旦不可直达，就保留当前点的前一个点，并把它设为新锚点。
 	if points.size() <= 2:
@@ -1129,25 +1169,26 @@ func _pull_string(points: Array[Vector2]) -> Array[Vector2]:
 	var out: Array[Vector2] = [points[0]]
 	var anchor: int = 0
 	for i in range(2, points.size()):
-		if not _has_line_of_sight(points[anchor], points[i]):
+		if not _has_line_of_sight(points[anchor], points[i], amphibious):
 			out.append(points[i - 1])
 			anchor = i - 1
 	out.append(points[points.size() - 1])
 	return out
 
 
-func _has_line_of_sight(from_world: Vector2, to_world: Vector2) -> bool:
+func _has_line_of_sight(from_world: Vector2, to_world: Vector2,
+		amphibious: bool = false) -> bool:
 	## 通视 = 线段全程「碰撞体站得下」。判定实现在 `_segment_followable()`（两层：格 + 碰撞体），
 	## 与路径复核用的是同一个判据 —— 视线简化认为通的段，路径复核也一定认为通。
 	if from_world.distance_to(to_world) < 0.5:
 		return true
-	return _segment_followable(from_world, to_world)
+	return _segment_followable(from_world, to_world, amphibious)
 
 
-static func _segment_cells_walkable(a: Vector2, b: Vector2) -> bool:
-	## 线段经过的格子是否全部可行走。
+static func _segment_cells_walkable(a: Vector2, b: Vector2, amphibious: bool = false) -> bool:
+	## 线段经过的格子是否全部可通行（两栖水面放行）。
 	for gp in _segment_cells(a, b):
-		if not _is_walkable(gp):
+		if not _cell_passable(gp, amphibious):
 			return false
 	return true
 
@@ -1228,6 +1269,7 @@ static func notify_map_changed() -> void:
 	_stand_cache.clear()
 	_cell_rect_cache.clear()
 	_astar_grid = null
+	_astar_swim_grid = null
 	_grid_building = false
 
 
@@ -1236,6 +1278,12 @@ static func _find_all_tilemaps() -> void:
 	if main_loop is SceneTree:
 		_search_tilemaps((main_loop as SceneTree).root)
 	_ensure_roles()
+	_has_water_layers = false
+	for tm in _tilemaps:
+		if is_instance_valid(tm) and tm.tile_set != null \
+				and tm.tile_set.get_custom_data_layer_by_name(WATER_DATA_LAYER) >= 0:
+			_has_water_layers = true
+			break
 
 
 static func _ensure_roles() -> void:
@@ -1280,13 +1328,14 @@ func _to_world_array(grid_path: Array[Vector2i]) -> Array[Vector2]:
 	return result
 
 
-func _find_nearest_walkable(pos: Vector2i) -> Vector2i:
-	## 以 pos 为中心由近及远找第一个可行走格；找不到返回 NO_CELL。
+func _find_nearest_walkable(pos: Vector2i, amphibious: bool = false) -> Vector2i:
+	## 以 pos 为中心由近及远找第一个可通行格；找不到返回 NO_CELL。
+	## `amphibious = true` 时水面也算可通行（γ 在河心出生时周围全是水）。
 	for r in range(1, 8):
 		for dx in range(-r, r + 1):
 			for dy in range(-r, r + 1):
 				var n: Vector2i = Vector2i(pos.x + dx, pos.y + dy)
-				if _is_walkable(n):
+				if _cell_passable(n, amphibious):
 					return n
 	return NO_CELL
 
@@ -1319,6 +1368,7 @@ static func _is_walkable(gp: Vector2i) -> bool:
 		_stand_cache.clear()
 		_cell_rect_cache.clear()
 		_astar_grid = null  ## 场景重载 → 失效网格
+		_astar_swim_grid = null
 		_grid_building = false  ## 中断分帧构建
 		_find_all_tilemaps()
 
@@ -1471,23 +1521,27 @@ static func is_water_at(world_pos: Vector2) -> bool:
 	return wet
 
 
-## 线段是否经过水面（用于决定两栖敌人能否直接趟过去）。
-static func _segment_crosses_water(a: Vector2, b: Vector2) -> bool:
-	for gp in _segment_cells(a, b):
-		if is_water_at(Vector2((float(gp.x) + 0.5) * _cell_size, (float(gp.y) + 0.5) * _cell_size)):
-			return true
-	return false
+## 该格两栖敌人能否通过：水面（且非 wall 层）算可游；其余仍要求站得下。
+## 注意水面图块通常带整格碰撞 —— 普通敌人的 `_is_walkable()` 会判 false，
+## 这里刻意绕过碰撞盒，只认 `is_water` 数据层。
+static func _is_swim_cell(gp: Vector2i) -> bool:
+	if _has_wall_at(gp):
+		return false
+	return is_water_at(Vector2((float(gp.x) + 0.5) * _cell_size, (float(gp.y) + 0.5) * _cell_size))
 
 
-## 线段是否经过 wall 层（两栖的直线追击必须保证不穿墙）。
-static func _segment_has_wall(a: Vector2, b: Vector2) -> bool:
-	for gp in _segment_cells(a, b):
-		if _has_wall_at(gp):
-			return true
-	return false
+## 统一通行判据（普通敌人 / 两栖）。两栖 = 可行走格 + 水面格。
+static func _cell_passable(gp: Vector2i, amphibious: bool) -> bool:
+	if _is_walkable(gp):
+		return true
+	return amphibious and _is_swim_cell(gp)
 
 
-## 这一步能否「游过去」：两栖 + 落点是水面 + 落点没有 wall 图块。
+## 这一步能否「游过去 / 从水里爬上岸」：
+##   · 两栖 + 落点是水面 + 落点没有 wall 图块 → 直接位移（水面图块带碰撞，不能走 move_and_collide）；
+##   · 已经在水中 + 落点是普通可行走格 → 同样直接位移。
+##     ★2026-11-02：旧实现只处理"进水面"，从水里往岸上走时走 move_and_collide，
+##     而身体此刻正压在水面图块的碰撞盒里 → 起步就被判碰撞、原地不动（γ 卡在岸边）。
 func _can_swim_step(body: CharacterBody2D, motion: Vector2) -> bool:
 	if not body.has_method("is_amphibious") or not bool(body.call("is_amphibious")):
 		return false
@@ -1495,7 +1549,11 @@ func _can_swim_step(body: CharacterBody2D, motion: Vector2) -> bool:
 	var gp := Vector2i(floori(to_pos.x / _cell_size), floori(to_pos.y / _cell_size))
 	if _has_wall_at(gp):
 		return false
-	return is_water_at(to_pos)
+	if is_water_at(to_pos):
+		return true
+	if is_water_at(body.global_position) and _is_walkable(gp):
+		return true
+	return false
 
 
 static func _has_ground_at(gp: Vector2i) -> bool:
