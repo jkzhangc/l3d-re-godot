@@ -161,6 +161,11 @@ var _loading_active: bool = false
 
 ## 显示加载画面。重复调用幂等（联机 start_game 与本地切图可能都会调）。
 func show_loading_screen() -> void:
+	## ★报错界面在场时**不许**亮加载黑幕（2026-11-02 用户反馈「加载画面把报错界面覆盖了」）。
+	## 报错界面是模态且必须可读的：加载黑幕即使层级更低，也会把整块画面压暗、并遮住报错面板
+	## 周围的内容；更糟的是玩家关掉报错后还被黑幕挡着。这里直接从源头拒绝。
+	if _error_screen != null and is_instance_valid(_error_screen) and _error_screen.visible:
+		return
 	if _loading_screen == null:
 		_loading_screen = LOADING_SCREEN_SCRIPT.new()
 		add_child(_loading_screen)
@@ -706,6 +711,9 @@ const ERROR_SCREEN := preload("res://script/ui/error_screen.gd")
 
 ## 必须先持有引用再注册：`OS.add_logger` 不接管所有权，局部变量会被 GC 掉 → 捕获静默失效。
 var _error_capture: Logger = null
+## 最近一次弹出的报错界面。用途只有一个：**报错界面在场时不许亮加载黑幕**
+##（2026-11-02 用户反馈「报错的时候加载画面把报错界面覆盖了」）。
+var _error_screen: CanvasLayer = null
 
 
 func _setup_error_capture() -> void:
@@ -725,8 +733,17 @@ func _on_game_error_captured(info: Dictionary) -> void:
 	## 否则一个"每帧都错"的 bug 会让玩家陷入弹窗地狱，反而看不到日志。
 	if not ERROR_SCREEN.should_show(info):
 		return
-	var screen: CanvasLayer = ERROR_SCREEN.new(info)
-	add_child(screen)
+	## ★报错优先级最高（2026-11-02）：报错瞬间先把加载黑幕收掉 —— 玩家必须能看见错误信息。
+	## 之后 `show_loading_screen()` 也会因为 `_error_screen` 在场而拒绝再亮（见该函数）。
+	hide_loading_screen()
+	## 延后一帧建节点：错误经常发生在 `change_scene_to_file()` 期间，此时场景树正忙于
+	## 增删子节点，直接 `add_child` 会触发「Parent node is busy adding/removing children」。
+	call_deferred("_present_error_screen", info)
+
+
+func _present_error_screen(info: Dictionary) -> void:
+	_error_screen = ERROR_SCREEN.new(info)
+	add_child(_error_screen)
 
 
 ## 是否允许弹报错界面（玩家手玩 = 允许；自动化 = 不允许，但日志照写）。

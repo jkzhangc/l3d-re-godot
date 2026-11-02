@@ -13,8 +13,9 @@ extends CanvasLayer
 ## 【为什么是 CanvasLayer 而不是 Control】它必须在**暂停**下仍然显示与响应（`PROCESS_MODE_ALWAYS`），
 ## 且要压过所有既有 UI（触摸层最高会抬到 110）→ 本层取 `layer = 200`。
 
-## 层级：压过触摸层（最高 110）与一切游戏 UI。
-const LAYER_INDEX: int = 200
+## 层级：压过触摸层（最高 110）、**加载画面（127）**与一切游戏 UI，且留足余量 ——
+## 2026-11-02 用户反馈「报错的时候加载画面把报错界面覆盖了」，层级抬到 300 做最后一道保险。
+const LAYER_INDEX: int = 300
 const FONT_TITLE: int = 36
 const FONT_BODY: int = 24
 ## 正文最多显示行数（超出的进日志文件，不塞进界面；给调用栈与最近日志留出面板空间）
