@@ -9,8 +9,10 @@ extends CharacterBody2D
 ## 依赖：DamageNumber（飘字）、Global（像素字体）
 
 ## ── 接口契约 ──
-## 受击入口与 `Enemy.take_damage()` 前 11 个参数**签名一致**：
-##   子弹直击（9 参）、近战（9 参）、爆炸（9 参）、火海（11 参）都能直接调用。
+## 受击入口与 `Enemy.take_damage()` **完全同口径（10 参）**：
+##   子弹直击（9 参）、近战（9 参）、爆炸（9 参）、爆炸外圈（10 参）都能直接调用。
+##   ⚠ 这里的参数表必须跟着 `Enemy.take_damage` 一起改 —— 少一个就会把 bool 参数顶到
+##   后面的位置上，运行期变成「Cannot convert argument N from bool to Object」。
 ## 另外必须提供 `_is_dead` / `instant_kill_immune` / `is_backstab_hit()` / `apply_backstab()`：
 ##   · `Bullet` 会读 `instant_kill_immune` 判断即死是否生效（**字段缺了会 null 崩**）；
 ##   · 近战/子弹会先问 `is_backstab_hit()` 再决定是否走 `apply_backstab()`。
@@ -107,12 +109,15 @@ func _ready() -> void:
 # 受击
 # ═══════════════════════════════════════
 
-## 与 Enemy.take_damage 前 11 参一致；击退/硬直/元素一律忽略（木偶不动）。
+## 与 `Enemy.take_damage()` **完全同口径**（10 参）；击退/硬直/元素一律忽略（木偶不动）。
+## ⚠ 末尾 `_keep_knockback_on_freeze` 不是装饰：爆炸外圈（`HitResolver.apply_explosion_outer_ring`）
+## 会以 10 参调用本方法，少一个参数就会把 bool 当成下一个 `Node` 参数报
+## 「Cannot convert argument 10 from bool to Object」（2026-11-02 实测）。
 func take_damage(damage: float, _knockback_force: float = 0.0,
 		_direction: Vector2 = Vector2.ZERO, is_headshot: bool = false,
 		_knockback_stun: float = 0.0, _hitstun: float = 0.0,
 		_source_id: int = 0, _element: int = 0, _source_is_explosive: bool = false,
-		_shooter: Node = null, _source_is_player_origin: bool = false) -> void:
+		_keep_knockback_on_freeze: bool = false) -> void:
 	if _is_dead:
 		return
 	## 血量无限：先回满再统计（不产生 hp 差，章节统计不会记到木偶头上）。
