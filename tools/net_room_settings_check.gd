@@ -119,7 +119,7 @@ func _make_lobby(connection: TestNet) -> TestLobby:
 func _run() -> void:
 	var host := _make_net("Host")
 	var host_ui := _make_lobby(host)
-	_check(host.PROTOCOL_VERSION == "l3d_main_v4_hazard_setting", "协议版本号已升级为 v4_hazard_setting")
+	_check(host.PROTOCOL_VERSION == "l3d_main_v5_dialogue3", "协议版本号已升级为 v5_dialogue3")
 	_check(not host.friendly_fire_enabled, "Net 默认关闭友伤")
 	_check(host.hazard_hurts_players_enabled, "Net 默认开启「火焰/酸液伤玩家」")
 	_check(host_ui.next_room_hazard_check.button_pressed, "离线预选默认勾选「火焰/酸液伤玩家」")

@@ -52,6 +52,11 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 ## ⚠ 索引按**实际使用的行走图**算：角色在 CharacterData.weapon_walk_textures
 ## 配了同名武器行走图时用角色的图（各角色格位可能不同），否则用 weapon_walk_texture。
 @export var weapon_ready_char_index: int = -1
+## 弹夹打空后的「待机姿态」角色索引（-1 = 不区分，沿用就绪格）。
+## 例：RPG 只有 1 发，射完后筒身是空的 → 换另一格（本作 = 6）。
+## 只对**远程武器且 magazine_capacity > 0** 生效；装填/换弹后自动回到普通就绪格。
+## ⚠ 与 `weapon_ready_char_index` 同口径：索引按实际使用的行走图算。
+@export var weapon_empty_char_index: int = -1
 
 
 @export_group("武器类型")
@@ -505,7 +510,9 @@ func get_raise_char_sequence() -> Array[int]:
 ## `weapon_ready_char_index` >= 0 时直接用它；否则沿用举起序列的最后一帧（旧行为）。
 ## 【为什么要单独一格】有些武器举起动画只有 1 帧（如防火斧 [0]），
 ## 那一帧是"掏出武器"的过渡动作，站稳后应该换到持武器的姿态格。
-func get_ready_char_index() -> int:
+func get_ready_char_index(empty: bool = false) -> int:
+	if empty and weapon_empty_char_index >= 0:
+		return weapon_empty_char_index
 	if weapon_ready_char_index >= 0:
 		return weapon_ready_char_index
 	var seq: Array[int] = get_raise_char_sequence()

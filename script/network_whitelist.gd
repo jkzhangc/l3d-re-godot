@@ -34,6 +34,17 @@ const NETWORK_HEALINGS: Dictionary = {
 	"first_aid_spray": NETWORK_SPRAY,
 }
 
+## 辅助品白名单（2026-11-02）：辅助品此前**完全不在联机同步范围** ——
+## Host 拾取后只写自己的权威 PlayerState，Client 的 support_item 恒 null →
+## HUD 不显示「辅助品」提示、按 4 也发不出请求。现在随玩家快照尾字段下发 id，
+## Client 只从本表解析资源（联机铁律：远端包只带 id，绝不 load 任意路径）。
+const NETWORK_PAINKILLER: ItemData = preload("res://object/item_painkiller.tres")
+const NETWORK_ADRENALINE: ItemData = preload("res://object/item_adrenaline.tres")
+const NETWORK_SUPPORTS: Dictionary = {
+	"painkiller_01": NETWORK_PAINKILLER,
+	"adrenaline_01": NETWORK_ADRENALINE,
+}
+
 
 # ═══════════════════════════════════════
 # 武器白名单

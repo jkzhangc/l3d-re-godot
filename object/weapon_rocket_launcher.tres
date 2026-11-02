@@ -53,6 +53,7 @@ script = ExtResource("1")
 attack_power = 200
 attack_range = 280.0
 weapon_state_name = "RLauncher"
+weapon_empty_char_index = 6
 weapon_walk_texture = ExtResource("10")
 attack_sound = ExtResource("4")
 empty_fire_sound = ExtResource("7")

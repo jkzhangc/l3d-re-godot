@@ -285,10 +285,9 @@ func _ensure_backpack_label() -> void:
 func _update_backpack_label(state: PlayerState) -> void:
 	if _backpack_label == null:
 		return
-	## 联机 Client 的 backpack_index 不在快照里（只同步当前背包的两把武器），
-	## 显示「背包 1/2」可能与 Host 实际不符 → 只在单机 / Host 显示。
-	var online: bool = Net != null and Net.has_method("has_network") and bool(Net.has_network())
-	var show: bool = state != null and state.has_second_backpack() and (not online or Net.is_host)
+	## 2026-11-02：backpack_index 已随玩家快照同步，Client 也能显示正确页码
+	##（此前只同步当前背包的两把武器，Client 显示可能与 Host 不符 → 干脆只让 Host 显示）。
+	var show: bool = state != null and state.has_second_backpack()
 	_backpack_label.visible = show
 	if show:
 		_backpack_label.text = "背包 %d/2" % (state.backpack_index + 1)

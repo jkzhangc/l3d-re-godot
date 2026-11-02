@@ -258,6 +258,14 @@ const ELECTRO_TIME: float = 3.0         ## 感电持续时间（攻击不能，�
 const FREEZE_TIME: float = 2.5          ## 冻结持续时间
 const FROZEN_DMG_MULT: float = 1.5      ## 原作：冻结中受 1.5 倍伤害（"一击粉碎"的数值化）
 
+## 普通小硬直门槛（2026-11-02 用户要求）：单次伤害 ≥ 40 的武器才打出几帧硬直。
+## 手枪/冲锋枪这类低伤武器不再把敌人钉在原地；爆炸（含外圈）有自己的震慑硬直，
+## 不受此闸限制；属性注入的感电/冻结在下面才结算，也不会被这道闸误清。
+const HITSTUN_MIN_DAMAGE: float = 40.0
+## Boss 级（`tank_enemies` 组）击退门槛：单次伤害 ≥ 200 才推得动，
+## **包括爆炸与外圈**（外圈按主爆 20% 伤害算，所以普通手雷推不动 Boss）。
+const BOSS_KNOCKBACK_MIN_DAMAGE: float = 200.0
+
 # ── 正面抗性（特感专用：Hunter β 正面枪击回避 / Tyrant Normalize）──
 ## 设计（2026-09-12，对齐设计总纲 §3.1）：
 ##   · Hunter β：`frontal_damage_mult = 0.0` + `frontal_arc_degrees = 120`
@@ -1752,6 +1760,10 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 氷：冻结中受 1.5 倍（"一击粉碎"的数值化）
 	if _frozen_time > 0.0:
 		damage *= FROZEN_DMG_MULT
+	## ★普通小硬直门槛（2026-11-02）：单次伤害 < 40 的武器不产生硬直。
+	## 放在属性结算**之前** —— 感电/冻结会在下面重新注入 hitstun，不能被误清。
+	if not source_is_explosive and damage < HITSTUN_MIN_DAMAGE:
+		hitstun_duration = 0.0
 	## ★氷 = 真冻结（2026-10-27 修复）：液体窒素这类**爆炸型**投掷物必带击退，而下面
 	## `has_hitstun` 的条件是"**没有**击退" → 2.5s 冻结硬直从来没生效过（实测只剩蓝色染色
 	## 与 1.5 倍易伤，敌人 0.3s 击退后照常行动）。这里给氷开"冻结优先"通道：
@@ -1831,10 +1843,17 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	## 推击/闪光弹/近战一律免疫。此前 Tank 毫无抗打断配置，而"即死降级成 0.8s 硬直"
 	## 让觉醒期的手枪都能打断它。雷/氷元素注入的硬直同样在下闸之内（属性榴弹本身是爆炸源，
 	## 会带 source_is_explosive = true 通过）。
-	if is_in_group("tank_enemies") and not source_is_explosive:
-		knockback_force = 0.0
-		knockback_stun = 0.0
-		hitstun_duration = 0.0
+	if is_in_group("tank_enemies"):
+		## 非爆炸：一律免疫（旧规则：子弹/近战/推击都推不动 Boss）。
+		## 爆炸：**单次伤害 ≥ 200** 才吃击退；外圈按主爆 20% 伤害，同样走这条判据。
+		## 硬直不跟伤害闸走：非爆炸仍完全免疫，爆炸保留原有震慑（只是不再推飞）。
+		if not source_is_explosive:
+			knockback_force = 0.0
+			knockback_stun = 0.0
+			hitstun_duration = 0.0
+		elif damage < BOSS_KNOCKBACK_MIN_DAMAGE:
+			knockback_force = 0.0
+			knockback_stun = 0.0
 
 	# 设置击退参数（所有状态统一设置，包括 Idle）
 	## 记下旧力度：已在击退中时，只有「明显更强」的一击才允许重启击退（见下方状态切换）。

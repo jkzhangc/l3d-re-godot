@@ -238,8 +238,8 @@ func _create_network_world() -> void:
 ## ── 安全屋台词（2026-09-28 用户需求；2026-10-30 改为双页随机角色）──
 ## 台词数据来自原作事件数据（见 `原作安全屋台词数据.md`），每张安全屋一张台词池。
 ## 触发：初始安全屋进图即说；**有章节总结的安全屋在总结关闭后**说（与到达音乐同一时机）。
-## ★2026-10-30 用户定稿：A/B 两页**各自**从队伍角色里随机抽一个说话人
-##（第 1 页可能大雄、第 2 页可能静香）；多人由 Host 抽，两个角色 id 经 Net 广播。
+## ★2026-11-02 用户定稿：第 1/2/3 页**各自**从队伍角色里随机抽一个说话人
+##（允许同一人，也允许不同人）；多人由 Host 抽，三个角色 id 经 Net 广播。
 const SAFEHOUSE_DIALOGUE_SCENE := preload("res://scene/ui/safehouse_dialogue.tscn")
 const SAFEHOUSE_DIALOGUE_DATA := preload("res://script/safehouse_dialogue_data.gd")
 
@@ -279,19 +279,19 @@ func _open_safehouse_dialogue(key: String) -> void:
 		and bool(net.call("is_online_session"))
 	if online:
 		if bool(net.get("is_host")):
-			var ids: Array[String] = _pick_dialogue_characters(2)
-			if ids.size() < 2:
+			var ids: Array[String] = _pick_dialogue_characters(3)
+			if ids.size() < 3:
 				return
 			## Host 决定后广播；Client 只按 id 查本地同款 CharacterData。
-			net.rpc("sync_safehouse_dialogue", key, ids[0], ids[1])
-			_show_safehouse_dialogue(key, ids[0], ids[1])
+			net.rpc("sync_safehouse_dialogue", key, ids[0], ids[1], ids[2])
+			_show_safehouse_dialogue(key, ids[0], ids[1], ids[2])
 		else:
 			await _wait_and_show_remote_dialogue(key)
 		return
-	var ids: Array[String] = _pick_dialogue_characters(2)
-	if ids.size() < 2:
+	var ids: Array[String] = _pick_dialogue_characters(3)
+	if ids.size() < 3:
 		return
-	_show_safehouse_dialogue(key, ids[0], ids[1])
+	_show_safehouse_dialogue(key, ids[0], ids[1], ids[2])
 
 
 ## Client：等待 Host 的角色选择（Net 的 RPC 可能早于本场景 GameInit 到达，已缓冲）。
@@ -304,7 +304,8 @@ func _wait_and_show_remote_dialogue(key: String) -> void:
 	for _i: int in range(300):
 		var sel: Dictionary = net.call("take_pending_safehouse_dialogue", key)
 		if not sel.is_empty():
-			_show_safehouse_dialogue(key, str(sel.get("a", "")), str(sel.get("b", "")))
+			_show_safehouse_dialogue(key, str(sel.get("a", "")), str(sel.get("b", "")),
+				str(sel.get("c", "")))
 			return
 		if not is_inside_tree():
 			return
@@ -367,8 +368,10 @@ func _character_by_id(id: String, pool: Array[CharacterData]) -> CharacterData:
 	return null
 
 
-## 按 Host 选定的两个角色 id 打开两页台词（每页各自的说话人/头像）。
-func _show_safehouse_dialogue(key: String, id_a: String, id_b: String) -> void:
+## 按 Host 选定的三个角色 id 打开台词（每页各自的说话人/头像）。
+## 原作第二战役有几张图分 **3 批**（临场感叹 → 对策 → 出发）；三页各用各的 id。
+## 没有第 3 批的图，`lines_for(key, id_c, "c")` 返回空 → 不会多出一页。
+func _show_safehouse_dialogue(key: String, id_a: String, id_b: String, id_c: String) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null or tree.current_scene == null:
 		return
@@ -376,8 +379,15 @@ func _show_safehouse_dialogue(key: String, id_a: String, id_b: String) -> void:
 		return
 	var pool: Array[CharacterData] = _dialogue_character_pool()
 	var entries: Array[Dictionary] = []
-	for stage: String in [SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER, SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY]:
-		var cid: String = id_a if stage == SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER else id_b
+	var stage_ids: Dictionary = {
+		SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER: id_a,
+		SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY: id_b,
+		SAFEHOUSE_DIALOGUE_DATA.STAGE_CLOSING: id_c,
+	}
+	for stage: String in [SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER,
+			SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY,
+			SAFEHOUSE_DIALOGUE_DATA.STAGE_CLOSING]:
+		var cid: String = str(stage_ids.get(stage, ""))
 		var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key, cid, stage)
 		if lines.is_empty():
 			continue

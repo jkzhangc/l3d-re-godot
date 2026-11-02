@@ -52,6 +52,7 @@ const THROW_RANGE_DEFAULT: int = 2
 ## ⚠ 2026-10-24：`NETWORK_PILLS` 随 `object/item_pills.tres` 的删除一并移除
 ##（该常量只剩镜像，无其它引用点）。
 const NETWORK_HEALINGS: Dictionary = Whitelist.NETWORK_HEALINGS
+const NETWORK_SUPPORTS: Dictionary = Whitelist.NETWORK_SUPPORTS
 
 const NETWORK_PISTOL: WeaponData = Whitelist.NETWORK_PISTOL
 const NETWORK_KNIFE: WeaponData = Whitelist.NETWORK_KNIFE
@@ -539,6 +540,7 @@ func _physics_process(delta: float) -> void:
 			_capture_facing_lock_input()
 			_capture_reload_input()
 			_capture_shove_input()
+			_capture_item_input()
 			_capture_fire_input()
 			_capture_awaken_input()
 			_capture_sa_input()
@@ -1306,6 +1308,29 @@ func _client_has_tp_for(node: Node2D, trigger: String) -> bool:
 		return true
 	var state: PlayerState = Players.get_state_for_entity(node)
 	return state != null and state.current_tp >= cost
+
+
+## 治疗品（3）/ 辅助品（4）输入采集。
+## ★为什么必须有它（2026-11-02 审计）：联机实体的状态机被
+## `_disable_network_state_machine()` 整个关掉，而消耗品键只在
+## `PlayerGroundState / PlayerMeleeState / PlayerRangedState` 里读取 ——
+## 于是**联机下 Host 和 Client 都按不出治疗品 / 辅助品**（单机走状态机不受影响）。
+## 这里补上唯一入口：Host 本机直接结算；Client 调 `use_healing_item()` /
+## `use_support_item()`，两者内部各自提交请求（Host 权威扣减 + 快照回灌）。
+func _capture_item_input() -> void:
+	var host_local: bool = bool(net.is_host)
+	if not _client_local_ready and not host_local:
+		return
+	var entry: Dictionary = _players.get(int(net.my_peer_id), {})
+	var node := _player_node(entry)
+	if not is_instance_valid(node):
+		return
+	if not host_local and not _client_ready_to_send():
+		return
+	if Global.item_key_just_pressed("治疗品键"):
+		node.use_healing_item()
+	elif Global.item_key_just_pressed("辅助品键"):
+		node.use_support_item()
 
 
 ## SA / 见切 输入收集（C2）：SA 键=技能释放请求；确定键=攻击兼见切（同原作）
@@ -3820,6 +3845,13 @@ func _normalize_player_snapshot(value: Variant) -> Dictionary:
 			# 调用方据此判定为「本包未携带」而不是错误地清空客户端已同步的喷雾。
 			"healing_id": str(packet[27]) if packet.size() > 27 else "",
 			"healing_count": int(packet[28]) if packet.size() > 28 else -1,
+			# 辅助品 / 背包序号（尾部追加）。旧长度包 → support_known=false（不动本地域）。
+			"support_id": str(packet[29]) if packet.size() > 29 else "",
+			"support_known": packet.size() > 29,
+			"backpack_index": int(packet[30]) if packet.size() > 30 else -1,
+			# 投掷物剩余数量（2026-11-02）：此前只同步 id，Client HUD 的「×N」与
+			# 实际库存脱钩（用完仍显示旧数）。-1 = 旧包未携带，不动本地域。
+			"throwable_count": int(packet[31]) if packet.size() > 31 else -1,
 		}
 	return {}
 
@@ -3948,6 +3980,24 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
 				if healing_proto:
 					state.healing_item = healing_proto
 					state.healing_item_count = healing_count
+		# 辅助品收敛（2026-11-02）：支持品单槽，id 空 = 已用完/没有。
+		# ⚠ 只在包**确实携带**该字段时覆盖（旧 Host 的包不带 → 不动客户端本地域）。
+		if bool(public_state.get("support_known", true)):
+			var support_id := str(public_state.get("support_id", ""))
+			if support_id.is_empty():
+				state.support_item = null
+			else:
+				var support_proto := NETWORK_SUPPORTS.get(support_id) as ItemData
+				if support_proto:
+					state.support_item = support_proto
+		# 背包序号（スネ夫）：只影响 HUD 显示，武器槽位由上面的 primary/secondary 同步。
+		var backpack_index := int(public_state.get("backpack_index", -1))
+		if backpack_index >= 0:
+			state.backpack_index = clampi(backpack_index, 0, 1)
+		# 投掷物剩余数量：Host 权威值直接覆盖（与备弹/喷雾同款幂等收敛）。
+		var throwable_count := int(public_state.get("throwable_count", -1))
+		if throwable_count >= 0:
+			state.throwable_count = throwable_count
 	# 实体是否已在平滑渲染：可靠重同步对它必须软并流（见 apply_network_resync_state），
 	# 否则每 2 秒一次的可靠包会把位置硬切、把行走动画打回起点 —— 客户端表现为
 	# 全体实体周期性"一顿一顿"、踏步动画相位/频率反复跳变。
@@ -4554,6 +4604,52 @@ func _try_host_use_healing(peer_id: int) -> void:
 		peer_id, used.item_id, state.healing_item_count, node.current_hp])
 
 
+# ---------------------------------------------------------------- 辅助品使用（Host 权威事务）
+
+## 联机辅助品（鎮痛剤 / アドレナリン）与治疗品同模式：Client 只提交意图，
+## Host 在权威 PlayerState 上扣减并结算效果，再经玩家快照把「辅助品已空」回灌。
+## 2026-11-02 补齐 —— 此前根本没有这条链路，Client 按 4 完全没反应。
+func request_support_use() -> void:
+	if net.is_host:
+		return
+	if _initial_world_received:
+		support_use_request.rpc_id(1)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func support_use_request() -> void:
+	if not net.is_host:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_use_support(sender)
+
+
+## Host：对 sender 的权威座位执行一次「使用辅助品」。辅助品只有单槽（无数量），
+## 用完即空；效果（鎮痛剤免伤 / アドレナリン攻击翻倍）由 apply_item_effects 写在
+## **权威实体**上，伤害结算也发生在 Host，因此 Client 不需要各自再跑一份计时。
+func _try_host_use_support(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var node := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(node) or not state:
+		return
+	if state.support_item == null:
+		print("[NetworkWorld] HOST_SUPPORT_USE_REJECTED peer=%d（自己座位无辅助品）" % peer_id)
+		return
+	var used: ItemData = state.use_support_item()
+	if not used:
+		return
+	if node.has_method("apply_item_effects"):
+		node.call("apply_item_effects", used)
+	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
+	## 辅助品槽已空：立刻可靠回灌，Client HUD 不必等最多 2 秒的周期重同步。
+	_broadcast_reliable_world_snapshot()
+	print("[NetworkWorld] HOST_SUPPORT_USE peer=%d item=%s" % [peer_id, used.item_id])
+
+
 ## 是否存在没满血的座位（「恢复全员」道具的满血闸门要用）。
 func _any_seat_hurt() -> bool:
 	for s: PlayerState in Players.seats:
@@ -4623,6 +4719,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 			return
 		_pickups.erase(pickup_id)
 		_send_pickup_snapshot_to_ready_clients()
+		## 消耗品库存不在高频热包里 → 立刻补一次可靠世界快照，Client HUD 的
+		## 「治疗品 / 辅助品」提示不用等最多 2 秒的周期重同步。
+		_broadcast_reliable_world_snapshot()
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d healing=%s" % [peer_id, pickup_id, healing.item_id])
 		return
 	if throwable:
@@ -4644,6 +4743,8 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		if not map_key.is_empty():
 			Global.mark_map_pickup_consumed(map_key)
 		_send_pickup_snapshot_to_ready_clients()
+		## 投掷物数量（×N）同理立刻回灌，避免 HUD 短暂显示旧数量。
+		_broadcast_reliable_world_snapshot()
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
 	if state.character and not state.character.can_use_weapon(weapon):
@@ -5454,6 +5555,10 @@ func _build_compact_player_snapshot() -> Array:
 			state["facing_locked"], state["locked_facing"],
 			state["ammo_counts"], state["healing_id"], state["healing_count"],
 		]
+		## ⚠ 辅助品 / 背包序号 / 投掷物数量**不要**塞进这个热包（2026-11-02 实测）：
+		## 行内已有 ammo_counts / magazines 等大字段，裁剪后 308B；再加 3 项会到 348B，
+		## 4 人同帧就是 1392B ≈ ENet MTU，必触发 "packet above MTU"。
+		## 它们都是低频库存，走 `_build_snapshot()`（可靠重同步，2s 一次）即可。
 		## 先保护高频位置包的实际Variant字节预算；低频字段由可靠快照恢复。
 		if var_to_bytes(hot_row).size() > PLAYER_HOT_ROW_MAX_BYTES:
 			## null 表示“本热包省略，等待可靠快照”，不能用空字典覆盖客户端库存。
@@ -5488,6 +5593,7 @@ func _public_state(peer_id: int) -> Dictionary:
 		"weapon_raised": node.is_weapon_mode_active() if is_instance_valid(node) else false,
 		"weapon_transition": str(_weapon_transition_state.get(peer_id, "")),
 		"throwable_id": state.throwable.item_id if state and state.throwable else "",
+		"throwable_count": state.throwable_count if state else 0,
 		"throwable_held": bool(_get_host_throwable_state(peer_id).get("held", false)),
 		"throwable_aiming": bool(_get_host_throwable_state(peer_id).get("aiming", false)),
 		"throw_range": int(_get_host_throwable_state(peer_id).get("range", THROW_RANGE_DEFAULT)),
@@ -5510,6 +5616,12 @@ func _public_state(peer_id: int) -> Dictionary:
 		# 捡到算在主机头上」。联机喷雾是每人独立槽位，必须随快照同步。
 		"healing_id": state.healing_item.item_id if state and state.healing_item else "",
 		"healing_count": state.healing_item_count if state else 0,
+		# 辅助品（2026-11-02 审计补齐，尾部追加）：单槽无数量，id 空 = 没有。
+		# 之前完全没同步 → Client HUD 看不到辅助品、按 4 也无从请求。
+		"support_id": state.support_item.item_id if state and state.support_item else "",
+		# 当前背包序号（スネ夫专用）：Client HUD 的「背包 x/2」需要它；
+		# 武器本身已按当前背包同步，这里只补显示用的索引。
+		"backpack_index": state.backpack_index if state else 0,
 	}
 
 

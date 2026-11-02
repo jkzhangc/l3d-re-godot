@@ -43,7 +43,8 @@ signal upnp_port_mapped(port: int, external_ip: String)
 signal upnp_mapping_failed(reason: String)
 
 ## v4（2026-11-01）：room_settings / hello_ack 增加 hazard_hurts_players 参数。
-const PROTOCOL_VERSION := "l3d_main_v4_hazard_setting"
+## v5（2026-11-02）：`sync_safehouse_dialogue` 增加第 3 页说话人 char_c。
+const PROTOCOL_VERSION := "l3d_main_v5_dialogue3"
 const DEFAULT_PORT := 27015
 const MAX_CLIENTS := 4
 ## ENet channel 0 保留 reliable；1=玩家热状态，2=敌人/世界热状态。
@@ -518,15 +519,15 @@ func _get_default_character_path() -> String:
 # ---------------------------------------------------------------- scene lifecycle
 
 ## ── 安全屋台词（2026-10-30 用户定稿）──
-## 多人时台词由 **Host 决定**：Host 从全队角色里各抽一个作为第 1/2 页的说话人，
-## 把两个角色 id 经本 RPC 广播；Client 只按 id 查本地同款 CharacterData 资源。
+## 多人时台词由 **Host 决定**：Host 为第 1/2/3 页**各抽一次**说话人（允许重复），
+## 把三个角色 id 经本 RPC 广播；Client 只按 id 查本地同款 CharacterData 资源。
 ## 只传 id、不传资源，符合联机白名单铁律。
 @rpc("authority", "call_remote", "reliable")
-func sync_safehouse_dialogue(key: String, char_a: String, char_b: String) -> void:
+func sync_safehouse_dialogue(key: String, char_a: String, char_b: String, char_c: String) -> void:
 	if is_host:
 		return
-	_pending_safehouse_dialogue = {"key": key, "a": char_a, "b": char_b}
-	print("[Net] SAFEHOUSE_DIALOGUE_SYNC %s a=%s b=%s" % [key, char_a, char_b])
+	_pending_safehouse_dialogue = {"key": key, "a": char_a, "b": char_b, "c": char_c}
+	print("[Net] SAFEHOUSE_DIALOGUE_SYNC %s a=%s b=%s c=%s" % [key, char_a, char_b, char_c])
 
 
 ## Client：取走本图 Host 选好的台词角色（没有则返回空字典）。

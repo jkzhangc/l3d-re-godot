@@ -1080,11 +1080,26 @@ func set_weapon_frame(idx: int) -> void:
 ## 设置武器就绪帧。
 ## 索引取 `WeaponData.get_ready_char_index()`：默认 = 举起序列最后一帧；
 ## 武器单独配了 `weapon_ready_char_index` 时用它（举起动画末帧只是过渡、站稳换格的武器）。
+## 弹夹为空且武器配了 `weapon_empty_char_index` → 用空仓姿态（RPG 打完变空筒）。
 func set_weapon_ready_frame() -> void:
 	if _weapon_data:
-		_current_weapon_char_idx = _weapon_data.get_ready_char_index()
+		_current_weapon_char_idx = _weapon_data.get_ready_char_index(_magazine_is_empty())
 		_current_weapon_seq_idx = -1
 	_refresh_sprite()
+
+
+## 当前举着的远程武器弹夹是否为空（近战 / 无弹夹 / 状态未就绪 → false）。
+## 只用于「待机姿态」选格；真正的弹药判定仍以 PlayerState 为准。
+func _magazine_is_empty() -> bool:
+	if _weapon_data == null or not _weapon_data.is_ranged or _weapon_data.magazine_capacity <= 0:
+		return false
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state == null:
+		return false
+	## 没有记录 = 还没初始化（新捡/预置武器）→ 视为满弹，避免凭空显示空仓姿势。
+	if not state.weapon_magazines.has(_weapon_data.item_id):
+		return false
+	return state.get_magazine_ammo(_weapon_data.item_id) <= 0
 
 
 ## 设置攻击动画的角色索引（直接使用 char_idx 值）
@@ -1950,6 +1965,24 @@ func _submit_network_healing_use() -> bool:
 	return false
 
 
+## 联机 Client 的辅助品使用提交。返回 true = 已转交 Host（本机不结算）。
+## ★2026-11-02 审计补齐：辅助品此前没有联机提交路径，Client 按 4 只会在**本地**
+## 消费镜像状态（Host 无感知）→ 表现就是「按了没反应 / 数量对不上」。
+func _submit_network_support_use() -> bool:
+	var net: Node = get_node_or_null("/root/Net")
+	if not net or not net.has_method("is_online_session") or not bool(net.is_online_session()):
+		return false
+	if bool(net.get("is_host")):
+		return false
+	var tree: SceneTree = get_tree()
+	var scene: Node = tree.current_scene if tree else null
+	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
+	if world and world.has_method("request_support_use"):
+		world.call("request_support_use")
+		return true
+	return false
+
+
 ## 看护（说明书 §6.2，静香被动）：手动使用治疗品 → 全队同时回复相同 HP。
 ## 提为独立方法是为了让联机 Host 权威侧（network_world._try_host_use_healing）复用同一规则。
 func apply_nursing_passive(used: ItemData) -> void:
@@ -1964,9 +1997,14 @@ func apply_nursing_passive(used: ItemData) -> void:
 
 
 ## 使用当前座位的辅助品。
+## 联机 Client 只提交请求（Host 权威扣减），Host 本机 / 单机直接结算 —— 与治疗品同款。
 func use_support_item() -> bool:
 	var state: PlayerState = Players.get_state_for_entity(self)
-	var used: ItemData = state.use_support_item() if state else null
+	if state == null or state.support_item == null:
+		return false
+	if _submit_network_support_use():
+		return true
+	var used: ItemData = state.use_support_item()
 	if not used:
 		return false
 	apply_item_effects(used)
@@ -2330,9 +2368,15 @@ func _drop_all_weapons_locally() -> void:
 ## 用 _unhandled_input 而不是 _process 轮询：UI（菜单/安全门/拾取提示）会先消费按键，
 ## 否则开着菜单按 E 也会把武器丢一地。
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("丢弃武器键"):
-		get_viewport().set_input_as_handled()
-		request_drop_all_weapons()
+	if not event.is_action_pressed("丢弃武器键"):
+		return
+	## 联机：只有本机操控的那个 Player 节点处理 E。
+	## 场上每个 Player 节点都会收到 _unhandled_input，而 request_drop_all_weapons()
+	## 在联机下统一按 `net.my_peer_id` 提交 —— 不设闸就会一次按键发 N 次重复 RPC。
+	if network_controlled and not network_local_player:
+		return
+	get_viewport().set_input_as_handled()
+	request_drop_all_weapons()
 
 
 # ═══════════════════════════════════════
