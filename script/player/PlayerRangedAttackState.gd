@@ -22,6 +22,9 @@ var _fired: bool = false
 var _post_attack_active: bool = false  ## 是否正在播放攻击后动画
 var _wait_frames: int = 0              ## 攻击完成后等待帧计数器（fire rate 控制）
 
+## 锁定打击（便携式地对空导弹）运行时节点，见 script/lock_on_strike.gd
+const LOCK_ON_STRIKE := preload("res://script/lock_on_strike.gd")
+
 
 func enter() -> void:
 	_wd = _get_weapon()
@@ -40,6 +43,15 @@ func enter() -> void:
 				_play_attack_sound(_wd.empty_fire_sound)
 			transition_requested.emit(_wd.get_state_node_name())
 			return
+
+	## ★锁定打击（便携式地对空导弹，2026-11-02 用户口径）：范围内一个可锁目标都没有
+	## → 不消耗弹药、不进攻击动画，只播空弹音效（等同"没锁定就不发射"）。
+	if _uses_lock_on() and not _has_lock_on_target():
+		print("[锁定] 范围内无可锁定目标，开空火")
+		if _wd.empty_fire_sound:
+			_play_attack_sound(_wd.empty_fire_sound)
+		transition_requested.emit(_wd.get_state_node_name())
+		return
 
 	_seq_idx = 0
 	_timer = _wd.get_attack_frame_duration(_seq_idx)
@@ -156,11 +168,10 @@ func _fire_bullet() -> void:
 
 	var base_dir: Vector2 = character.get_facing_vector()
 	var base_pos: Vector2 = character.global_position
+	var fired_any: bool = false
 
 	# 遍历 bullet_list，每颗子弹独立配置
 	for bd: BulletData in _wd.bullet_list:
-		var bullet: Node2D = bullet_scene.instantiate()
-
 		# 方向：BulletData 控制角度/方向覆盖
 		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
 		var damage: float = bd.get_effective_damage(_wd.attack_power)
@@ -170,6 +181,24 @@ func _fire_bullet() -> void:
 			damage *= character.AWAKEN_DAMAGE_MULT
 		# アドレナリン（原作 強化アイテム）：15 秒内出伤 ×2
 		damage *= character.get_attack_damage_mult()
+
+		## ★锁定打击（便携式地对空导弹，2026-11-02）：本颗子弹不飞行 —— 开火帧锁定目标，
+		## 在锁定点显示准星，延时后定点爆炸。目标在**开火帧**算好后交给节点，避免二次选取不一致。
+		if bd.lock_on_enabled:
+			var targets: Array[Node2D] = LOCK_ON_STRIKE.collect_targets(
+				character.get_tree(), base_pos, base_dir,
+				bd.get_lock_on_radius(_wd), bd.lock_on_max_targets, bd.lock_on_cone_degrees)
+			if targets.is_empty():
+				# 预检之后目标全没了：这一颗不发射，也不扣弹（见下方 fired_any）
+				print("[锁定] 开火帧无可锁定目标，跳过")
+				continue
+			var strike: Node2D = LOCK_ON_STRIKE.new()
+			strike.setup(bd, _wd, character, damage, awaken or bd.instant_kill, targets)
+			character.get_tree().current_scene.add_child(strike)
+			fired_any = true
+			continue
+
+		var bullet: Node2D = bullet_scene.instantiate()
 
 		if bullet.has_method("setup"):
 			# 参数由 BulletData.build_setup_params 统一给出（与联机 Host 同一入口，
@@ -190,6 +219,11 @@ func _fire_bullet() -> void:
 
 		# 添加到场景树
 		character.get_tree().current_scene.add_child(bullet)
+		fired_any = true
+
+	## 一颗都没发出去（锁定打击没锁到目标）→ 不扣弹、不播开枪音效/特效。
+	if not fired_any:
+		return
 
 	## ★扣弹放在**子弹全部生成之后**（2026-10-25 修复「被打断时子弹没出但弹药减少」）：
 	## 原来是先扣弹再生成子弹；一旦生成过程中途异常中止（受击硬直/参数为空等），
@@ -282,6 +316,32 @@ func _play_attack_sound(stream: AudioStream) -> void:
 
 func _get_weapon() -> WeaponData:
 	return get_player_state().get_active_weapon()
+
+
+## ── 锁定打击（便携式地对空导弹）──
+## 本武器是否**全部**子弹都是锁定打击。只有这种武器才在"无目标"时整枪拦下：
+## 混合配置（锁定弹 + 普通弹）不拦 —— 普通弹照常发射，锁定弹自己跳过。
+func _uses_lock_on() -> bool:
+	if _wd.bullet_list.is_empty():
+		return false
+	for bd: BulletData in _wd.bullet_list:
+		if not bd.lock_on_enabled:
+			return false
+	return true
+
+
+## 是否至少有一个可锁定目标（只做存在性判断；真正的锁定在开火帧用 collect_targets 重算）。
+## 口径与发射帧一致：同一半径、按 BulletData 的锁定上限取 1 个即可判定"有没有"。
+func _has_lock_on_target() -> bool:
+	for bd: BulletData in _wd.bullet_list:
+		if not bd.lock_on_enabled:
+			continue
+		var targets: Array[Node2D] = LOCK_ON_STRIKE.collect_targets(
+			character.get_tree(), character.global_position, character.get_facing_vector(),
+			bd.get_lock_on_radius(_wd), 1, bd.lock_on_cone_degrees)
+		if not targets.is_empty():
+			return true
+	return false
 
 
 ## 通知枪声范围内的敌人（仅影响 Idle 状态的敌人）

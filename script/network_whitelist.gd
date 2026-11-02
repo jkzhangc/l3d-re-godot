@@ -59,6 +59,8 @@ const NETWORK_SNIPER: WeaponData = preload("res://object/weapon_sniper.tres")
 const NETWORK_MAGNUM: WeaponData = preload("res://object/weapon_magnum.tres")
 const NETWORK_LAUNCHER: WeaponData = preload("res://object/weapon_grenade_launcher.tres")
 const NETWORK_ROCKET: WeaponData = preload("res://object/weapon_rocket_launcher.tres")
+## 便携式地对空导弹（锁定打击）：Client 需要它来解析准星/爆炸表现与弹丸索引。
+const NETWORK_ROCKET_03: WeaponData = preload("res://object/weapon_rocket_03.tres")
 const NETWORK_BOWGUN: WeaponData = preload("res://object/weapon_bowgun.tres")
 const NETWORK_LAUNCHER_ACID: WeaponData = preload("res://object/weapon_launcher_acid.tres")
 const NETWORK_LAUNCHER_ICE: WeaponData = preload("res://object/weapon_launcher_ice.tres")
@@ -77,6 +79,7 @@ const NETWORK_WEAPONS: Dictionary = {
 	"magnum_01": NETWORK_MAGNUM,
 	"launcher_01": NETWORK_LAUNCHER,
 	"rocket_01": NETWORK_ROCKET,
+	"rocket_03": NETWORK_ROCKET_03,
 	"bowgun_01": NETWORK_BOWGUN,
 	"launcher_acid_01": NETWORK_LAUNCHER_ACID,
 	"launcher_ice_01": NETWORK_LAUNCHER_ICE,

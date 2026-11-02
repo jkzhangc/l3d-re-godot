@@ -24,6 +24,8 @@ extends Node
 
 const PLAYER_SCENE: PackedScene = preload("res://object/player.tscn")
 const BULLET_SCENE: PackedScene = preload("res://object/bullet.tscn")
+## 锁定打击（便携式地对空导弹）：Host 生成权威版，Client 生成纯表现版（见 lock_on_strike.gd）
+const LOCK_ON_STRIKE := preload("res://script/lock_on_strike.gd")
 const ENEMY_SCENE: PackedScene = preload("res://object/enemy.tscn")
 const PICKUP_SCENE: PackedScene = preload("res://object/weapon_pickup.tscn")
 ## 武器拾取物脚本（静态工具：落点避让 find_free_drop_position 等）
@@ -2191,13 +2193,25 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 				Global.play_player_sfx(wd.empty_fire_sound, node)
 				_send_to_ready_clients(&"empty_fire_presentation", [peer_id, wd.item_id])
 			return
+		## ★锁定打击（便携式地对空导弹，2026-11-02）：范围内一个可锁目标都没有
+		## → 不开火、不扣弹，只播空弹「咔嚓」并广播（与单机同一口径）。
+		if _weapon_all_lock_on(wd) and not _host_has_lock_on_target(node, wd):
+			print("[NetworkWorld] HOST_LOCK_ON_NO_TARGET peer=%d weapon=%s" % [peer_id, wd.item_id])
+			if wd.empty_fire_sound:
+				Global.play_player_sfx(wd.empty_fire_sound, node)
+				_send_to_ready_clients(&"empty_fire_presentation", [peer_id, wd.item_id])
+			return
 		state.set_magazine_ammo(wd.item_id, current - 1)
 		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 		node.play_network_attack_presentation(wd)
 		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, current - 1, 1])
 		var bullet_index := 0
 		for bd: BulletData in wd.bullet_list:
-			_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
+			## 锁定打击子弹不飞行：Host 选目标 + 结算，Client 只复刻准星与爆点表现。
+			if bd.lock_on_enabled:
+				_spawn_host_lock_on(node, wd, bd, bullet_index)
+			else:
+				_spawn_host_bullet(peer_id, node, wd, bd, bullet_index)
 			bullet_index += 1
 		if wd.gunshot_range > 0.0:
 			_alert_host_enemies(node, wd.gunshot_range)
@@ -2388,6 +2402,81 @@ func _on_host_bullet_exploded(_network_entity_id: int, position: Vector2, weapon
 	if not net.is_host:
 		return
 	_send_to_ready_clients(&"bullet_explode_effect", [position, weapon_id, bullet_index])
+
+
+# ═══════════════════════════════════════
+# 锁定打击（便携式地对空导弹）—— Host 权威 + Client 纯表现
+# ═══════════════════════════════════════
+
+## 本武器的子弹是否**全部**为锁定打击。只有这种武器才在"无目标"时整枪拦下；
+## 混合配置（锁定弹 + 普通弹）不拦 —— 普通弹照常发射（与单机 PlayerRangedAttackState 同口径）。
+func _weapon_all_lock_on(wd: WeaponData) -> bool:
+	if wd == null or wd.bullet_list.is_empty():
+		return false
+	for bd: BulletData in wd.bullet_list:
+		if not bd.lock_on_enabled:
+			return false
+	return true
+
+
+## Host 射前判定：是否至少有一个可锁目标（只判存在性，真正锁定在生成时重算）。
+func _host_has_lock_on_target(shooter: CharacterBody2D, wd: WeaponData) -> bool:
+	for bd: BulletData in wd.bullet_list:
+		if not bd.lock_on_enabled:
+			continue
+		var targets: Array[Node2D] = LOCK_ON_STRIKE.collect_targets(
+			get_tree(), shooter.global_position, shooter.get_facing_vector(),
+			bd.get_lock_on_radius(wd), 1, bd.lock_on_cone_degrees)
+		if not targets.is_empty():
+			return true
+	return false
+
+
+## Host 生成权威锁定打击，并把**锁定点**广播给 Client。
+## 伤害计算与 `_spawn_host_bullet` 同口径（含覚醒倍率）；Client 只播准星与爆炸表现，
+## 不产生伤害、不做碰撞 —— 与联机子弹的"Host 权威"铁律一致。
+func _spawn_host_lock_on(shooter: CharacterBody2D, wd: WeaponData, bd: BulletData, bullet_index: int) -> void:
+	var targets: Array[Node2D] = LOCK_ON_STRIKE.collect_targets(
+		get_tree(), shooter.global_position, shooter.get_facing_vector(),
+		bd.get_lock_on_radius(wd), bd.lock_on_max_targets, bd.lock_on_cone_degrees)
+	if targets.is_empty():
+		return
+	var damage: float = bd.get_effective_damage(wd.attack_power)
+	var awaken: bool = bool(shooter.call("is_awaken_active")) if shooter.has_method("is_awaken_active") else false
+	if awaken and shooter.has_method("get_awaken_damage_mult"):
+		damage *= float(shooter.call("get_awaken_damage_mult"))
+	var strike: Node2D = LOCK_ON_STRIKE.new()
+	strike.setup(bd, wd, shooter, damage, awaken or bd.instant_kill, targets)
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		strike.queue_free()
+		return
+	scene.add_child(strike)
+	## 锁定点在 _ready 里快照完成 → **加进场景树之后**再取，保证两端爆炸点逐点一致。
+	_send_to_ready_clients(&"lock_on_strike", [
+		PackedVector2Array(strike.get_marker_positions()), wd.item_id, bullet_index])
+	print("[NetworkWorld] HOST_LOCK_ON weapon=%s targets=%d" % [wd.item_id, targets.size()])
+
+
+## Client 收到 Host 确认的锁定点 → 复刻准星 + 延时爆炸表现（纯表现，零伤害）。
+@rpc("authority", "call_remote", "reliable")
+func lock_on_strike(points: PackedVector2Array, weapon_id: String, bullet_index: int) -> void:
+	if net.is_host:
+		return
+	# 资源只从白名单武器的弹丸表解析，远端包只带 id / 索引 / 坐标。
+	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
+	if bd == null or not bd.lock_on_enabled or points.is_empty():
+		return
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	var pts: Array[Vector2] = []
+	for p: Vector2 in points:
+		pts.append(p)
+	var strike: Node2D = LOCK_ON_STRIKE.new()
+	strike.setup_visual(bd, pts)
+	scene.add_child(strike)
+	print("[NetworkWorld] CLIENT_LOCK_ON weapon=%s points=%d" % [weapon_id, pts.size()])
 
 
 ## 调试用爆炸范围环（与 Host 侧 `bullet.gd::_explode()` 同一个入口 → 两端表现一致）。

@@ -453,6 +453,23 @@ func cancel_by_enemy_acid() -> void:
 	queue_free()
 
 
+## 定点引爆（スティンガー锁定打击用，2026-11-02）：
+## 不飞行、不做扫掠/碰撞，直接在 `center` 结算**一次本发子弹的爆炸**（含即死、
+## 爆风外圈、自爆玩家、blast_wall、爆炸特效/音效、章节统计），随后销毁。
+##
+## 【为什么复用本节点而不是另写一套】爆炸语义全集中在 `_explode()`：即死对 Boss 的
+## 降级、外圈推击、属性抗性、可爆破墙……任何一处另写都会和普通弹道逐渐分叉
+## （2026-09-24「联机弓弩不爆炸」就是同类分叉的教训）。锁定打击只需要一个"不会动的爆点"。
+func detonate_at(center: Vector2) -> void:
+	if _finished:
+		return
+	global_position = center
+	_finished = true
+	if _explosion_radius > 0.0 and not _exploded:
+		_explode()
+	finished.emit(network_entity_id)
+	queue_free()
+
 ## 调试用爆炸范围环（TAB 打开 `Global.debug_visuals` 后才真的生成节点）。
 ## 静态入口内部自带开关判断 —— 关闭时零开销，调用点不需要再写一遍 if。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")

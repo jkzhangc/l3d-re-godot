@@ -10,16 +10,18 @@
 [ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="8"]
 [ext_resource type="Texture2D" uid="uid://kudm1h8k8qaf" path="res://art/Ui/装備アイコンロケットランチャー３.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
-[ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="10"]
+[ext_resource type="Texture2D" uid="uid://dnr0i8dsbaqsl" path="res://art/Characters/のび太セットスティンガー.png" id="10"]
 [ext_resource type="Texture2D" uid="uid://3pnx2cypqcey" path="res://art/Weapon/A武器セット2.png" id="10_ntswo"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="11_4ooyv"]
+[ext_resource type="Texture2D" uid="uid://cmfwkv4q3ekwv" path="res://art/Characters/スティンガーターゲット.png" id="12_target"]
+[ext_resource type="AudioStream" uid="uid://cv2clmpjk7mhe" path="res://sound/(効果音)ピピピピ.ogg" id="13_beep"]
 
 [sub_resource type="Resource" id="Resource_rk1"]
 script = ExtResource("2")
 bullet_texture = ExtResource("3")
 speed = 560.0
 max_range = 560.0
-instant_kill = true
+instant_kill = false
 explosion_radius = 96.0
 explosion_hurts_players = false
 explosion_player_radius = 96.0
@@ -27,6 +29,17 @@ explode_effect_anim = ExtResource("5")
 explode_sound = ExtResource("6")
 knockback_enabled = true
 knockback_force = 600.0
+lock_on_enabled = true
+lock_on_radius = 320.0
+lock_on_max_targets = 5
+lock_on_delay = 1.0
+lock_on_cone_degrees = 120.0
+lock_on_marker_texture = ExtResource("12_target")
+lock_on_marker_char_index = 0
+lock_on_marker_facing = 0
+lock_on_marker_frame_duration = 0.12
+lock_on_marker_offset = Vector2(0, 0)
+lock_on_beep_sound = ExtResource("13_beep")
 
 [sub_resource type="Resource" id="WSO_rocket_01_bigg"]
 script = ExtResource("9wspawn")
@@ -50,9 +63,9 @@ right = Vector2(0, -4)
 
 [resource]
 script = ExtResource("1")
-attack_power = 200
+attack_power = 300
 attack_range = 320.0
-weapon_state_name = "RLauncher"
+weapon_state_name = "Stinger"
 weapon_walk_texture = ExtResource("10")
 attack_sound = ExtResource("4")
 empty_fire_sound = ExtResource("7")
@@ -73,7 +86,7 @@ bullet_list = Array[ExtResource("2")]([SubResource("Resource_rk1")])
 item_id = "rocket_03"
 item_name = "便携式地对空导弹"
 item_type = 3
-description = "原作 携帯式地対空ミサイル（威力300／连射D）。射程更远。"
+description = "原作 携帯式地対空ミサイル（威力300）。发射时锁定附近最多 5 个敌人，1 秒后在其位置各造成 300 点爆炸伤害（非即死）。"
 icon = ExtResource("9")
 sell_price = 400
 max_stack = 1

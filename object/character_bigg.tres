@@ -23,6 +23,7 @@
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセットスナイパー.png" id="19_snp"]
 [ext_resource type="Texture2D" uid="uid://btv2w3mg3jk6p" path="res://art/Characters/ジャイアンセットロケットランチャー.png" id="23_slksw"]
 [ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセット近接武器.png" id="31_melee"]
+[ext_resource type="Texture2D" uid="uid://1kaxd4ullxn7" path="res://art/Characters/ジャイアンセットスティンガー.png" id="32_stinger"]
 
 [resource]
 script = ExtResource("5_lxnma")
@@ -59,6 +60,7 @@ weapon_walk_textures = {
 "Sledgehammer": ExtResource("31_melee"),
 "Smg": ExtResource("10_lxnma"),
 "Sniper": ExtResource("19_snp"),
+"Stinger": ExtResource("32_stinger"),
 "Uchigatana": ExtResource("31_melee")
 }
 weapon_attack_walk_textures = {

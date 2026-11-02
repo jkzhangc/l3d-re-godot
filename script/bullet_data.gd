@@ -56,6 +56,41 @@ class_name BulletData extends Resource
 
 
 # ═══════════════════════════════════════
+# 锁定打击（スティンガー）
+# ═══════════════════════════════════════
+@export_group("锁定打击（地对空导弹）")
+## ★总开关：开启后本子弹**不再飞行**，改为「锁定打击」——
+## 发射瞬间在玩家周围锁定最多 N 个敌人，在**锁定瞬间的位置**显示准星行走图，
+## 延时到点后逐个在该位置定点爆炸（爆炸结算完全复用 bullet.gd，含即死/外圈/自爆/墙体）。
+## 关：完全按旧行为飞一条普通子弹（零改动）。
+@export var lock_on_enabled: bool = false
+## 锁定半径（像素，以**玩家**为圆心）。0 = 回退武器 attack_range。
+@export var lock_on_radius: float = 0.0
+## 同时锁定上限（原作式地对空 = 5）。<=0 视为 1。
+@export var lock_on_max_targets: int = 5
+## 从准星出现到爆炸的延时（秒）。
+@export var lock_on_delay: float = 1.0
+## 面朝优先扇形：总张角（度）。>0 → 先取面朝方向扇形内的敌人（按距离），
+## 不足上限再用扇形外的最近敌人补齐；<=0 → 纯最近优先（不分朝向）。
+@export var lock_on_cone_degrees: float = 120.0
+## 锁定图标行走图（VX Ace 布局：一行 4 个角色格 × 2 行，每格 3 帧 × 4 方向）。
+## 本作用 `art/Characters/スティンガーターゲット.png`。
+@export var lock_on_marker_texture: Texture2D = null
+## 图标角色格索引（0~7；准星素材在第 0 格）。
+@export_range(0, 7, 1) var lock_on_marker_char_index: int = 0
+## 图标朝向（0=下 1=左 2=右 3=上）。准星四方向同图，一般保持 0。
+@export_range(0, 3, 1) var lock_on_marker_facing: int = 0
+## 踏步动画每帧时长（秒）。准星按行走图的 0→1→2→1 循环踏步。
+@export var lock_on_marker_frame_duration: float = 0.12
+## 图标相对**目标受击盒中心**的额外偏移（受击盒 = 子弹实际命中位置，敌人大都自带）。
+## 默认 0 = 准星正压在受击盒中心；想抬高/压低再用它微调。
+@export var lock_on_marker_offset: Vector2 = Vector2.ZERO
+## 锁定图标出现时播放的「嘀嘀嘀」提示音（一次开火只播一次，不随目标数叠加）。
+## 单机 / Host / Client 各自在本地播 —— 联机不做音效 RPC。
+@export var lock_on_beep_sound: AudioStream = null
+
+
+# ═══════════════════════════════════════
 # 即死 / 爆炸
 # ═══════════════════════════════════════
 @export_group("即死/爆炸")
@@ -157,6 +192,14 @@ func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Di
 ## 获取有效伤害（子弹伤害优先，否则用武器攻击力）
 func get_effective_damage(attack_power: float) -> float:
 	return damage if damage > 0.0 else attack_power
+
+
+## 锁定半径：本子弹配了 lock_on_radius 就用它，否则回退武器射程。
+## 武器为空时返回 0 → 调用方按"谁都不锁"处理（宁可空放，不锁到全图）。
+func get_lock_on_radius(wd: WeaponData) -> float:
+	if lock_on_radius > 0.0:
+		return lock_on_radius
+	return wd.attack_range if wd != null else 0.0
 
 
 ## 根据角色朝向获取子弹的额外偏移
