@@ -134,6 +134,8 @@ class LightRecord:
 	var shadow_scale: float = SHADOW_SCALE
 	var shadow_range: float = SHADOW_RANGE
 	var shadow_opacity: float = SHADOW_OPACITY
+	## 这盏灯的影子落点 XY 微调（像素）。ZERO = 用 NightOverlay 的全局 shadow_offset。
+	var shadow_offset: Vector2 = Vector2.ZERO
 	var exit_hook: Callable = Callable()
 
 
@@ -167,6 +169,10 @@ var shadow_groups: Array[StringName] = [&"player", &"enemy"]
 ## 拖影柔化倍率：0 = 完全硬边的像素影子，1 = 默认（最远约 0.9px），2 = 明显发软。
 ## 只影响角色拖影，不影响墙体阴影（墙影走 Light2D 的 shadow_filter）。可在 Inspector 实时调。
 @export_range(0.0, 2.0, 0.05) var shadow_softness: float = 1.0
+## 角色拖影的落点 XY 微调（世界像素，正 X 右移 / 正 Y 下移）。
+## 2026-11-02 用户需求：影子整体偏了一点时不必改公式，Inspector 里直接推。
+## 单盏灯可用 `set_light_shadow(..., offset)` 覆盖（ZERO = 跟随这里）。
+@export var shadow_offset: Vector2 = Vector2.ZERO
 ## 影子其实有**两层**，这个值现在**同时控制两层**（2026-10-21 用户实测反馈后统一）：
 ##   ① 拖影（NightShadow 精灵）的 alpha 羽化
 ##   ② 遮挡影（LightOccluder2D 多边形投影）的 shadow_filter_smooth
@@ -215,8 +221,9 @@ func _ready() -> void:
 	set_glow_strength(glow_strength)
 	# 启动日志：用来确认"编辑器里调的值有没有真的进到运行中的实例"。
 	# 编辑器 Inspector 的修改不会影响已经在跑的游戏，必须重启（或用远程检查器）。
-	print("[NightOverlay] path=%s softness=%.2f smooth=%.1f occluders=%s tint=%.2f" % [
-		get_path(), shadow_softness, shadow_smooth, str(character_occluders), night_tint_strength])
+	print("[NightOverlay] path=%s softness=%.2f smooth=%.1f occluders=%s tint=%.2f shadow_offset=%s" % [
+		get_path(), shadow_softness, shadow_smooth, str(character_occluders), night_tint_strength,
+		str(shadow_offset)])
 
 
 ## CanvasModulate 负责"黑"，PointLight2D 负责"亮"，遮挡交给 TileSet 遮挡层生成的
@@ -298,9 +305,10 @@ func register_light(source: Node2D, radius_px: float, intensity: float = 1.0,
 ## opacity: 最大不透明度（近处实际值，远处自动衰减）。
 ## range_px: 投影作用距离（世界像素）。0 = 用灯半径；超出就不投影。
 ## cast:    false = 这盏灯不投影（原工程 [noshadow]）。
+## offset: 这盏灯的影子落点微调（像素）。ZERO = 沿用全局 `shadow_offset`。
 func set_light_shadow(source: Node2D, scale: float = SHADOW_SCALE,
 		opacity: float = SHADOW_OPACITY, range_px: float = SHADOW_RANGE,
-		cast: bool = true) -> void:
+		cast: bool = true, offset: Vector2 = Vector2.ZERO) -> void:
 	var rec: LightRecord = null
 	for r: LightRecord in _records:
 		if r.source == source:
@@ -312,6 +320,7 @@ func set_light_shadow(source: Node2D, scale: float = SHADOW_SCALE,
 	rec.shadow_scale = maxf(scale, 0.0)
 	rec.shadow_range = maxf(range_px, 0.0)
 	rec.shadow_opacity = clampf(opacity, 0.0, 1.0)
+	rec.shadow_offset = offset
 
 
 func unregister_light(source: Node2D) -> void:
@@ -594,7 +603,9 @@ func _shadow_for(node: Node2D) -> Sprite2D:
 ##   angle  = atan2(dir.x, -dir.y)   （让剪影的"头"朝远离灯的一侧）
 ##   zoom_y = (距离 / 32) * shadow_scale
 ##   alpha  = shadow_opacity * (1 - 距离 / 投影范围)，再由 shader 沿长度二次淡出
-## 位置不需要额外偏移：精灵支点就在脚底，旋转/缩放都绕脚底进行。
+## 位置本身不需要"沿灯方向"的额外偏移：精灵支点就在脚底，旋转/缩放都绕脚底进行。
+## 2026-11-02：末位再叠加一个**纯 XY 微调**（`shadow_offset`，或单灯的 `rec.shadow_offset`），
+## 用来矫正素材脚底不在帧底、或美术想要影子略微偏后/偏侧的手感。
 func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom: float) -> void:
 	# 角色脚本一般有 `sprite` 属性；没有的话退回找名为 Sprite2D 的子节点（试验场假人）。
 	var spr: Variant = node.get("sprite")
@@ -624,7 +635,9 @@ func _set_shadow(node: Node2D, dir: Vector2, dist: float, rec: LightRecord, zoom
 	sh.flip_h = s.flip_h
 	# 支点放到底边中点（脚底），这样 scale.y / rotation 都绕脚底做。
 	sh.offset = Vector2(-base_w * 0.5, -base_h + SHADOW_FRAME_BOTTOM_PAD)
-	sh.position = s.position + Vector2(0.0, h * 0.5) - dir * (h * SHADOW_NEAR_NUDGE_RATIO)
+	## XY 微调：单灯设置了就用灯的，否则跟随全局（ZERO 时与旧行为完全一致）。
+	var xy_offset: Vector2 = rec.shadow_offset if rec.shadow_offset != Vector2.ZERO else shadow_offset
+	sh.position = s.position + Vector2(0.0, h * 0.5) - dir * (h * SHADOW_NEAR_NUDGE_RATIO) + xy_offset
 	# 拉得越长越收窄一点，避免变成一条胖带子
 	# 拉得越长越收窄（0.14 → 0.22）：原来的尾部偏胖，和遮挡影叠起来像一条粗带子
 	var width_scale: float = clampf(1.0 - 0.22 * stretch, 0.45, 1.0)
