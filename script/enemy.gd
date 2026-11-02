@@ -266,6 +266,14 @@ const HITSTUN_MIN_DAMAGE: float = 40.0
 ## **包括爆炸与外圈**（外圈按主爆 20% 伤害算，所以普通手雷推不动 Boss）。
 const BOSS_KNOCKBACK_MIN_DAMAGE: float = 200.0
 
+## 特感（`special_enemies` 组）控制抗性（2026-11-02 用户需求）：
+## 「特感受到的击退和硬直要比丧尸低」—— 击退力度 ×0.45、位移时长 ×0.6、硬直 ×0.5。
+## 位移量 ≈ force × stun，合起来约为普通丧尸的 27%（爆炸 160px → 约 43px）。
+## 元素注入的感电/冻结时长也走硬直倍率，否则特感被液氮冻 2.5s 一样是白给。
+const SPECIAL_KNOCKBACK_FORCE_SCALE: float = 0.45
+const SPECIAL_KNOCKBACK_STUN_SCALE: float = 0.6
+const SPECIAL_HITSTUN_SCALE: float = 0.5
+
 # ── 正面抗性（特感专用：Hunter β 正面枪击回避 / Tyrant Normalize）──
 ## 设计（2026-09-12，对齐设计总纲 §3.1）：
 ##   · Hunter β：`frontal_damage_mult = 0.0` + `frontal_arc_degrees = 120`
@@ -1733,6 +1741,13 @@ func get_attack_frame_duration(seq_idx: int) -> float:
 # 伤害
 # ═══════════════════════════════════════
 
+## 是否为特感（`special_enemies` 组 或 已注入 SpecialEnemyData）。
+## ⚠ Boss 级特感**同时**在 `special_enemies` 与 `tank_enemies` 里 —— 调用方必须先判 Boss，
+## 否则会把 Boss 当成普通特感做倍率削减（应完全免疫硬直）。
+func is_special_enemy() -> bool:
+	return special_data != null or is_in_group("special_enemies")
+
+
 ## source_is_explosive：本次伤害是否来自**爆炸家族**（RPG/榴弹/弩等，即 bullet 的
 ## explosion_radius > 0）。2026-09-27 新增，专供 Tank（暴君）抗打断判定 —— 见下方抗打断门。
 func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false, keep_knockback_on_freeze: bool = false) -> void:
@@ -1764,6 +1779,21 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	## 放在属性结算**之前** —— 感电/冻结会在下面重新注入 hitstun，不能被误清。
 	if not source_is_explosive and damage < HITSTUN_MIN_DAMAGE:
 		hitstun_duration = 0.0
+
+	## ── 控制抗性（2026-11-02 用户需求）──
+	## Boss（tank_enemies）与特感（special_enemies）都比普通丧尸抗打断：
+	##   · Boss：**完全免疫硬直**（含爆炸震慑、感电/冻结定身），只有「爆炸 + 单次伤害 ≥ 200」
+	##     才吃一段短击退 —— 否则玩家拿 RPG 连射就能把 Boss 永久钉在原地。
+	##   · 特感：击退力度/时长与硬直按倍率削减，元素定身同样缩短。
+	## 倍率必须在**属性注入之前**算好：元素时长若在注入后再缩，会与 maxf 互相覆盖。
+	var boss_control_immune: bool = is_in_group("tank_enemies")
+	var special_control: bool = not boss_control_immune and is_special_enemy()
+	if special_control:
+		knockback_force *= SPECIAL_KNOCKBACK_FORCE_SCALE
+		knockback_stun *= SPECIAL_KNOCKBACK_STUN_SCALE
+		hitstun_duration *= SPECIAL_HITSTUN_SCALE
+	var control_hitstun_scale: float = SPECIAL_HITSTUN_SCALE if special_control else 1.0
+
 	## ★氷 = 真冻结（2026-10-27 修复）：液体窒素这类**爆炸型**投掷物必带击退，而下面
 	## `has_hitstun` 的条件是"**没有**击退" → 2.5s 冻结硬直从来没生效过（实测只剩蓝色染色
 	## 与 1.5 倍易伤，敌人 0.3s 击退后照常行动）。这里给氷开"冻结优先"通道：
@@ -1772,11 +1802,13 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 雷=感电 / 氷=冻结：并入硬直（Hitstun 状态即"原地冻结、攻击不能"）
 	match element:
 		WeaponData.Element.LIGHTNING:
-			if not resist_lightning:
-				hitstun_duration = maxf(hitstun_duration, ELECTRO_TIME)
-				_electro_time = ELECTRO_TIME
+			## Boss 免疫定身（2026-11-02）：跳过注入 = 不感电、不染色、不进硬直。
+			if not resist_lightning and not boss_control_immune:
+				var electro_sec: float = ELECTRO_TIME * control_hitstun_scale
+				hitstun_duration = maxf(hitstun_duration, electro_sec)
+				_electro_time = electro_sec
 		WeaponData.Element.ICE:
-			if not resist_ice:
+			if not resist_ice and not boss_control_immune:
 				ice_freeze = true
 				## 默认清击退 = "冻在原地"（2026-10-27 让冻结硬直真正生效的关键）。
 				## 例外：爆炸外圈的冲击波传 `keep_knockback_on_freeze = true`，
@@ -1784,8 +1816,9 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 				if not keep_knockback_on_freeze:
 					knockback_force = 0.0
 					knockback_stun = 0.0
-				hitstun_duration = maxf(hitstun_duration, FREEZE_TIME)
-				_frozen_time = FREEZE_TIME
+				var freeze_sec: float = FREEZE_TIME * control_hitstun_scale
+				hitstun_duration = maxf(hitstun_duration, freeze_sec)
+				_frozen_time = freeze_sec
 		WeaponData.Element.FIRE:
 			if not resist_fire:
 				# tick 只在首燃清零（防火海连续点燃饿死 DoT）；重复点燃只重置持续时间
@@ -1838,20 +1871,13 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	if damage > 0.0:
 		_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 
-	## ★Tank（暴君）抗打断（2026-09-27 用户定稿）：只有**爆炸家族**（RPG/榴弹/弩等，即
-	## bullet 的 explosion_radius > 0）能击退或打出硬直；手枪/步枪/冲锋枪/霰弹/马格南/
-	## 推击/闪光弹/近战一律免疫。此前 Tank 毫无抗打断配置，而"即死降级成 0.8s 硬直"
-	## 让觉醒期的手枪都能打断它。雷/氷元素注入的硬直同样在下闸之内（属性榴弹本身是爆炸源，
-	## 会带 source_is_explosive = true 通过）。
-	if is_in_group("tank_enemies"):
-		## 非爆炸：一律免疫（旧规则：子弹/近战/推击都推不动 Boss）。
-		## 爆炸：**单次伤害 ≥ 200** 才吃击退；外圈按主爆 20% 伤害，同样走这条判据。
-		## 硬直不跟伤害闸走：非爆炸仍完全免疫，爆炸保留原有震慑（只是不再推飞）。
-		if not source_is_explosive:
-			knockback_force = 0.0
-			knockback_stun = 0.0
-			hitstun_duration = 0.0
-		elif damage < BOSS_KNOCKBACK_MIN_DAMAGE:
+	## ★Tank / Boss 抗打断（2026-11-02 二次收紧）：
+	## 旧规则「非爆炸免疫、爆炸 ≥200 可推且照吃 1.7s 震慑」被 RPG 连射打穿 ——
+	## 爆炸的震慑硬直现在**对 Boss 完全无效**，无论多少伤害都不进 Hitstun；
+	## 只有「爆炸家族 + 单次伤害 ≥200」才保留一段 0.2s 的击退位移作打击反馈。
+	if boss_control_immune:
+		hitstun_duration = 0.0
+		if not source_is_explosive or damage < BOSS_KNOCKBACK_MIN_DAMAGE:
 			knockback_force = 0.0
 			knockback_stun = 0.0
 

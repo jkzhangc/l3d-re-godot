@@ -30,7 +30,7 @@ extends Node
 @export var horde_batch_interval: float = 5.0 ## 补充批次的基础间隔（秒）
 @export var horde_duration_min: float = 25.0  ## 尸潮持续时长下限（秒）—— 结束条件从"额度刷完"改为"窗口走完"
 @export var horde_duration_max: float = 40.0  ## 尸潮持续时长上限（秒）；会被 peak_timeout 截断
-@export var max_active_common: int = 15       ## 同时最多普通感染者
+@export var max_active_common: int = 50       ## 同时最多普通感染者（运行时由 DirectorConfig 同名字段注入）
 
 # ═══════════════════════════════════════
 # 画面外补怪总开关（2026-10-29 用户需求）

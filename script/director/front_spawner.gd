@@ -63,8 +63,8 @@ extends Node
 @export var batch_peak: int = 3
 ## 【尸潮（peak）阶段】两批之间的最短间隔（秒）。尸潮必须比平常刷得**快得多**。
 @export var interval_min_peak: float = 1.2
-## 场上存活总数上限（与 SpawnManager.max_active_common 同源，由 DirectorConfig 统一注入）。
-@export var max_active_common: int = 15
+## 场上存活总数上限（与 SpawnManager.max_active_common 同源，由 DirectorConfig 统一注入，默认 50）。
+@export var max_active_common: int = 50
 
 @export_group("位置")
 ## 前方扇区半角（度）。90 = 只刷正前方；60 = 正前方 ±60°。

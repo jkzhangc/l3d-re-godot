@@ -383,6 +383,14 @@ func _process(delta: float) -> void:
 		if not l4d_pacing or _phase_cache == &"build":
 			_update_ambient_zones(delta)
 
+	## ── 定点特感（SpawnZone.special_*，2026-11-02）──
+	## 作者指定的「这个区域刷这只特感」通道：与上面的常规编排**完全独立** ——
+	## 不吃 special_pool / special_max_alive / 紧张度门槛 / 尸潮阶段，
+	## 只按区域自己的触发距离、间隔、概率、次数上限走（见 SpawnZone 同名分组）。
+	## 依然只在「本图允许刷怪」时运行；防守战挂起期间暂停，避免打乱剧本节奏。
+	if spawn_map and not director_suspended:
+		_update_special_zones(delta)
+
 	# ── 紧张度（按全体存活玩家取「最吃紧的那位」，2026-09-24）──
 	var prev_intensity: float = get_intensity()
 	var new_intensity: float = prev_intensity
@@ -4224,6 +4232,111 @@ func _count_enemies_in_zone(zone: SpawnZone) -> int:
 
 
 # ═══════════════════════════════════════
+# 定点特感（SpawnZone.special_*，2026-11-02 用户需求）
+# ═══════════════════════════════════════
+##
+## 【与常规特感通道的区别】`_update_specials` 是"导演按压力自己挑一只特感"；
+## 本通道是作者在区域上写死"这里刷哪只、多久一次、最多几只"。两者互不占名额：
+## 定点特感不吃 special_max_alive / 紧张度 / 尸潮阶段，也不会修改常规冷却。
+##
+## 【为什么放在导演里而不是 SpawnZone 自己 _process】
+## 生成要拿 DecorLayer、走 Host 权威闸门（spawn_special_enemy 在 Client 直接 return），
+## 还要复用 `_is_footprint_walkable` / `_was_recently_used` 等落点判据。
+## 区域只保存"什么时候该刷、还能刷几只"的状态，真正落地仍由导演统一执行。
+
+func _update_special_zones(delta: float) -> void:
+	## Client 不生成（与 spawn_special_enemy 同一条禁令）：连计时都不该走，
+	## 否则客户端每过一个间隔就空转一次，且区域状态会和 Host 的"已生成次数"错开。
+	if _is_network_client_session():
+		return
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	_refresh_zone_cache()
+	if _zone_cache.is_empty():
+		return
+	var decor_layer: Node = _find_decor_layer()
+	if decor_layer == null:
+		return
+	for zone: SpawnZone in _zone_cache:
+		if not is_instance_valid(zone) or not zone.enabled:
+			continue
+		if not zone.can_spawn_special():
+			continue
+		var near: float = nearest_player_distance(zone.global_position)
+		## 触发距离：玩家没接近时**不走表** —— 否则开场在远处就把「仅一只」的名额刷掉，
+		## 玩家真正走到河边时反而什么都没有。
+		if zone.special_activate_distance > 0.0 and near > zone.special_activate_distance:
+			continue
+		## 同屏上限只在**本区域半径**内计数：别处游荡过来的同类不算占位。
+		if zone.special_max_alive > 0 \
+				and _count_alive_specials_in_zone(zone) >= zone.special_max_alive:
+			continue
+		if not zone.poll_special_timer(delta):
+			continue
+		## 概率失败只重置计时，不消耗次数 —— 玩家能感知的是"这次没出"，而不是"名额没了"。
+		if randf() > zone.special_chance:
+			continue
+		var pos: Vector2 = _pick_zone_special_position(zone)
+		if pos == Vector2.ZERO:
+			continue
+		var spawned: Node2D = spawn_special_enemy(pos, zone.special_data, decor_layer, zone.special_facing)
+		if spawned != null:
+			zone.note_special_spawned()
+			print("[Director] 定点特感: %s @ (%.0f, %.0f) 区域=%s 累计 %d/%d" % [
+				String(zone.special_data.id), pos.x, pos.y, zone.name,
+				zone.get_special_spawned(), zone.special_max_count])
+
+
+## 区域半径内当前存活的特感数量（含女巫；Boss 级特感也算，若作者真在区域里放 Boss）。
+func _count_alive_specials_in_zone(zone: SpawnZone) -> int:
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return 0
+	var count: int = 0
+	for e: Node2D in tree.get_nodes_in_group("special_enemies"):
+		if not is_instance_valid(e):
+			continue
+		if e.get("_is_dying") == true or e.get("_is_dead") == true:
+			continue
+		if e.global_position.distance_to(zone.global_position) <= zone.get_zone_radius():
+			count += 1
+	return count
+
+
+## 区域特感的落点：距离/屏外/水面/可行走/占用全套判据，再交给 pick_spread_position 分散。
+## `special_require_water` 开启时**自动忽略可行走**（水域图块带碰撞，普通落点判据必然筛空）。
+func _pick_zone_special_position(zone: SpawnZone) -> Vector2:
+	var fs: Node = get_node_or_null("FrontSpawner")
+	var offscreen_required: bool = zone.special_require_offscreen \
+		and fs != null and fs.get("enabled") == true and fs.has_method("is_offscreen_for_all")
+	var require_water: bool = zone.special_require_water
+	var require_walkable: bool = zone.special_require_walkable and not require_water
+	var min_dist: float = maxf(zone.special_min_player_dist, 0.0)
+	var ok_cb: Callable = func(p: Vector2) -> bool:
+		if min_dist > 0.0 and nearest_player_distance(p) < min_dist:
+			return false
+		if offscreen_required and not bool(fs.call("is_offscreen_for_all", p)):
+			return false
+		if require_water and not EnemyChaseState.is_water_at(p):
+			return false
+		if require_walkable and not _is_footprint_walkable(p):
+			return false
+		if _is_occupied_by_enemy(p) or _was_recently_used(p):
+			return false
+		return true
+	var pos: Vector2 = zone.pick_spread_position(ok_cb, [], 32)
+	if pos != Vector2.ZERO:
+		return pos
+	## 兜底：最大最小采样会被窄河道/水面筛空，改成纯随机重试（仍走同一套判据）。
+	for _i: int in range(32):
+		var p: Vector2 = zone.get_random_position()
+		if bool(ok_cb.call(p)):
+			return p
+	return Vector2.ZERO
+
+
+# ═══════════════════════════════════════
 # 调试面板（F3，2026-10-25）
 # ═══════════════════════════════════════
 ##
@@ -4298,12 +4411,20 @@ func debug_snapshot() -> Dictionary:
 		item_debug = im.call("get_debug")
 
 	var budget: int = 0
-	var max_common: int = 40
+	var max_common: int = 50
 	if sm != null:
 		if sm.get("_budget_left") != null:
 			budget = int(sm.get("_budget_left"))
 		if sm.get("max_active_common") != null:
 			max_common = int(sm.get("max_active_common"))
+
+	## 定点特感区域（2026-11-02）：F3 里直接看每圈的计时 / 已生成数 / 是否耗尽。
+	var special_zones: Array = []
+	if tree != null:
+		_refresh_zone_cache()
+		for zone: SpawnZone in _zone_cache:
+			if is_instance_valid(zone) and zone.special_enabled:
+				special_zones.append(zone.get_special_debug())
 
 	return {
 		"scene": scene.scene_file_path.get_file() if scene != null else "-",
@@ -4336,6 +4457,7 @@ func debug_snapshot() -> Dictionary:
 		"specials_max": special_max_alive,
 		"specials_first_left": _special_first_delay_left,
 		"specials_cool_left": _special_cooldown_left,
+		"special_zones": special_zones,
 		"mercy": is_pressure_blocked(),
 		"pressure_blocked": is_pressure_blocked(),
 		"deck_size": _boss_deck.size(),

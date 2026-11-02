@@ -382,7 +382,7 @@ class_name DirectorConfig extends Node
 @export var recycle_clear_corpses: bool = true
 
 @export_group("生成 — 限制")
-@export var max_active_common: int = 40          ## 地图上同时最多存活多少个普通感染者。超过此值暂停生成，等玩家杀到低于此值再继续。防止满屏敌人卡死
+@export var max_active_common: int = 50          ## 地图上同时最多存活多少个普通感染者。超过此值暂停生成，等玩家杀到低于此值再继续。防止满屏敌人卡死
 @export var spawn_min_dist: float = 400.0        ## 敌人生成位置离玩家至少多少像素。防止敌人在玩家脸上刷出来。设大=更有"从远处跑来"的感觉，但需要地图够大
 
 @export_group("投放 — 掉落池（ItemManager 随机投放）")
