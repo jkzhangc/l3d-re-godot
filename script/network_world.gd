@@ -288,6 +288,11 @@ var _host_melee_combo_window: Dictionary = {}
 var _combat_busy_until_msec: Dictionary = {}
 ## peer_id -> {"held": bool, "aiming": bool, "range": int}; Host 是唯一写入者。
 var _network_throwable_state: Dictionary = {}
+## 投掷瞄准的本地镜像（2026-11-03：操作方式对齐单机 PlayerThrowableState）：
+## 按住 Z 超过 0.20s → 落点压回最低；重复按同一方向键 → 落点推远一格。
+var _throw_aim_hold: float = 0.0
+var _throw_range_reset: bool = false
+var _throw_last_dir: Vector2 = Vector2.ZERO
 ## reviver peer -> {"target": peer_id, "started_msec": int}; only Host advances or completes revives.
 var _revive_attempts: Dictionary = {}
 ## peer_id -> "raising" / "lowering"; published so late snapshots never reset transition presentation.
@@ -535,7 +540,7 @@ func _physics_process(delta: float) -> void:
 		# 救援占用功能键(D)、投掷占用确定键，都必须在普通战斗输入前优先处理。
 		# 倒地/死亡的本地玩家不进入此分支：他们不能开火、装填、投掷或救援他人。
 		var revive_input_active := _capture_revive_input()
-		var throwable_input_active := false if revive_input_active else _capture_throwable_input()
+		var throwable_input_active := false if revive_input_active else _capture_throwable_input(delta)
 		if not revive_input_active and not throwable_input_active:
 			_capture_weapon_switch_input()
 			_capture_weapon_raise_input()
@@ -1148,12 +1153,13 @@ func _process(_delta: float) -> void:
 	_wipe_fade_overlay.color = Color(0, 0, 0, clampf(elapsed / WIPE_FADE_SECONDS, 0.0, 1.0))
 
 
-func _capture_throwable_input() -> bool:
+func _capture_throwable_input(delta: float = 0.0) -> bool:
 	var local_id := int(net.my_peer_id)
 	var local_throw_state: Dictionary = _network_throwable_state.get(local_id, {})
 	var held := bool(local_throw_state.get("held", false))
 	var aiming := bool(local_throw_state.get("aiming", false))
 	if Global.item_key_just_pressed("投掷物键"):
+		_throw_reset_aim_mirror()
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, not held)
 		elif _client_ready_to_send():
@@ -1162,19 +1168,42 @@ func _capture_throwable_input() -> bool:
 	if not held:
 		return false
 	if Global.item_key_just_pressed("主武器键") or Global.item_key_just_pressed("副武器键"):
+		_throw_reset_aim_mirror()
 		if net.is_host:
 			_try_host_set_throwable_held(local_id, false)
 		elif _client_ready_to_send():
 			throwable_hold_request.rpc_id(1, false)
 		return true
+	## ★与单机 `PlayerThrowableState._process_ready` 对齐（2026-11-03 用户：联机投掷操作和单机不一致）：
+	## READY（掏出但没按 Z）阶段也允许 A/D 调落点格数 —— 旧实现只在瞄准中可调。
+	if not aiming:
+		if Input.is_action_just_pressed("投掷加格键"):
+			_request_throwable_range(1)
+		elif Input.is_action_just_pressed("投掷减格键"):
+			_request_throwable_range(-1)
 	if not aiming and Input.is_action_just_pressed("确定键"):
+		_throw_reset_aim_mirror()
 		if net.is_host:
 			_try_host_set_throwable_aiming(local_id, true)
 		elif _client_ready_to_send():
 			throwable_aim_request.rpc_id(1, true)
 		return true
 	if aiming:
+		## 「按住 Z」的持续瞄准（单机 PlayerThrowableState._process_aim 同款）：
+		##   ① 超过 0.20s → 落点压回最低，从最近处开始往外扫；
+		##   ② 重复按同一个方向键 → 落点再推远一格（换方向保留距离）；
+		##   ③ 方向键只转身不移动（移动冻结见 _predict_client_local_movement / _simulate_host_players）。
+		_throw_aim_hold += delta
+		if not _throw_range_reset and _throw_aim_hold >= 0.20:
+			_throw_range_reset = true
+			_request_throwable_range_to_min()
+		var dir_pressed := _pressed_direction_key()
+		if dir_pressed != Vector2.ZERO:
+			if dir_pressed == _throw_last_dir:
+				_request_throwable_range(1)
+			_throw_last_dir = dir_pressed
 		if Input.is_action_just_pressed("取消键"):
+			_throw_reset_aim_mirror()
 			if net.is_host:
 				_try_host_set_throwable_aiming(local_id, false)
 			elif _client_ready_to_send():
@@ -1184,12 +1213,47 @@ func _capture_throwable_input() -> bool:
 		elif Input.is_action_just_pressed("投掷减格键"):
 			_request_throwable_range(-1)
 		elif Input.is_action_just_released("确定键"):
+			_throw_reset_aim_mirror()
 			if net.is_host:
 				_try_host_throw_throwable(local_id)
 			elif _client_ready_to_send():
 				throwable_throw_request.rpc_id(1)
 		return true
 	return true
+
+
+## 瞄准镜像复位（换出手/放下/进瞄准/投出时清）。
+func _throw_reset_aim_mirror() -> void:
+	_throw_aim_hold = 0.0
+	_throw_range_reset = false
+	_throw_last_dir = Vector2.ZERO
+
+
+## 本帧刚按下的方向键（4 向）。单机同款：按住不放只算一次，必须松手再按才继续推远。
+func _pressed_direction_key() -> Vector2:
+	if Input.is_action_just_pressed("右"):
+		return Vector2.RIGHT
+	if Input.is_action_just_pressed("左"):
+		return Vector2.LEFT
+	if Input.is_action_just_pressed("下"):
+		return Vector2.DOWN
+	if Input.is_action_just_pressed("上"):
+		return Vector2.UP
+	return Vector2.ZERO
+
+
+## 把落点距离直接设到最低（按住 Z 的"从最近处往外扫"）。
+func _request_throwable_range_to_min() -> void:
+	if net.is_host:
+		_try_host_set_throwable_range_to_min(int(net.my_peer_id))
+	elif _client_ready_to_send():
+		throwable_range_min_request.rpc_id(1)
+
+
+## 本地玩家是否正在投掷瞄准（移动冻结 / 方向键只转身的唯一判据）。
+func _local_player_is_throw_aiming() -> bool:
+	var state: Dictionary = _network_throwable_state.get(int(net.my_peer_id), {})
+	return bool(state.get("aiming", false))
 
 
 func _request_throwable_range(delta: int) -> void:
@@ -1478,6 +1542,14 @@ func _predict_client_local_movement(blocked: bool = false) -> void:
 		return
 	var direction := Vector2.ZERO if blocked else _read_local_direction()
 	var walking := false if blocked else Input.is_action_pressed("行走键")
+	## ★2026-11-03：投掷瞄准期间原地不动，方向键只转身（与单机 PlayerThrowableState.AIM 一致）。
+	if _local_player_is_throw_aiming():
+		if not direction.is_zero_approx():
+			node.update_facing(direction)
+		node.velocity = Vector2.ZERO
+		node.update_appearance(false, false)
+		_set_input(peer_id, direction, false)
+		return
 	var moving := not direction.is_zero_approx()
 	node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 	if moving:
@@ -1544,6 +1616,16 @@ func _simulate_host_players(delta: float) -> void:
 			## 仅在Host端清零过期远端输入；本地Host输入每帧会被_capture_host_input刷新。
 			direction = Vector2.ZERO
 			walking = false
+		## ★2026-11-03：投掷瞄准期间原地不动、方向键只转身（与单机 PlayerThrowableState.AIM 一致）。
+		## 输入方向仍用于转身（否则联机里无法改投掷方向），但不产生位移。
+		if _is_host_throwable_aiming(peer_id):
+			if not direction.is_zero_approx():
+				node.update_facing(direction)
+			node.velocity = Vector2.ZERO
+			node.move_with_corner_assist()
+			node.update_appearance(false, false)
+			_sync_state_from_node(peer_id, node, false, false)
+			continue
 		var moving := not direction.is_zero_approx()
 		node.velocity = direction * (node.walk_speed if walking else node.run_speed)
 		if moving:
@@ -1760,6 +1842,11 @@ func _is_host_throwable_held(peer_id: int) -> bool:
 	return bool(_get_host_throwable_state(peer_id).get("held", false))
 
 
+## 投掷瞄准中（单机 PlayerThrowableState.AIM：原地不动、方向键只转身）。
+func _is_host_throwable_aiming(peer_id: int) -> bool:
+	return bool(_get_host_throwable_state(peer_id).get("aiming", false))
+
+
 ## 玩家死亡后取消其投掷、主动救援和举放过渡；保留其他队友对该倒地玩家的救援进度。
 func _clear_host_combat_state_for_dead_peer(peer_id: int) -> void:
 	if not net.is_host:
@@ -1831,12 +1918,32 @@ func _try_host_adjust_throwable_range(peer_id: int, delta: int) -> void:
 	var state := entry.get("state") as PlayerState
 	var throw_state := _get_host_throwable_state(peer_id)
 	var td: ThrowableData = state.throwable if state else null
-	if not td or not bool(throw_state.get("held", false)) or not bool(throw_state.get("aiming", false)):
+	## 2026-11-03：READY（掏出未瞄准）阶段也允许调距 —— 与单机 PlayerThrowableState 一致。
+	if not td or not bool(throw_state.get("held", false)):
 		return
-	throw_state["range"] = clampi(int(throw_state.get("range", THROW_RANGE_DEFAULT)) + delta, 0, td.throw_range_max)
+	throw_state["range"] = clampi(int(throw_state.get("range", THROW_RANGE_DEFAULT)) + delta,
+		maxi(0, td.throw_range_min), td.throw_range_max)
 	_network_throwable_state[peer_id] = throw_state
 	_apply_host_throwable_presentation(peer_id)
-	_send_to_ready_clients(&"throwable_state_presentation", [peer_id, td.item_id, true, true, int(throw_state["range"])])
+	_send_to_ready_clients(&"throwable_state_presentation",
+		[peer_id, td.item_id, true, bool(throw_state.get("aiming", false)), int(throw_state["range"])])
+
+
+## 把落点距离直接压到最低（按住 Z 的"从最近处往外扫"）。
+func _try_host_set_throwable_range_to_min(peer_id: int) -> void:
+	if not net.is_host or not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var state := entry.get("state") as PlayerState
+	var throw_state := _get_host_throwable_state(peer_id)
+	var td: ThrowableData = state.throwable if state else null
+	if not td or not bool(throw_state.get("held", false)):
+		return
+	throw_state["range"] = maxi(0, td.throw_range_min)
+	_network_throwable_state[peer_id] = throw_state
+	_apply_host_throwable_presentation(peer_id)
+	_send_to_ready_clients(&"throwable_state_presentation",
+		[peer_id, td.item_id, true, bool(throw_state.get("aiming", false)), int(throw_state["range"])])
 
 
 func _try_host_throw_throwable(peer_id: int) -> void:
@@ -3081,6 +3188,16 @@ func throwable_range_request(delta: int) -> void:
 		var sender := multiplayer.get_remote_sender_id()
 		if sender > 1:
 			_try_host_adjust_throwable_range(sender, delta)
+
+
+## 把落点距离直接设到最低（按住 Z 的"从最近处往外扫"，单机同款）。
+@rpc("any_peer", "call_remote", "reliable")
+func throwable_range_min_request() -> void:
+	if not net.is_host:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_try_host_set_throwable_range_to_min(sender)
 
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -4828,7 +4945,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		else:
 			if old_throwable:
 				## 落点推远（2026-09-23）：与武器掉落同规则，避免旧投掷物刚脱手被自己捡回。
-				_spawn_host_dropped_throwable(old_throwable, PICKUP_SCRIPT.drop_landing_position(player))
+				## anchor=玩家坐标（2026-11-02）：贴墙替换不再把旧投掷物丢进墙里/墙另一侧。
+				_spawn_host_dropped_throwable(old_throwable,
+					PICKUP_SCRIPT.drop_landing_position(player), player.global_position)
 			state.throwable = throwable
 			state.throwable_count = 1
 		_network_throwable_state[peer_id] = {"held": false, "aiming": false, "range": THROW_RANGE_DEFAULT}
@@ -4845,11 +4964,17 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		return
 	if state.character and not state.character.can_use_weapon(weapon):
 		return
-	var slot: String = weapon.get_slot_key()
+	## ★2026-11-03 用户实测「联机里替换武器还是按主/副武器默认槽走」：
+	## 旧实现用 `weapon.get_slot_key()`（只看武器自身的主/副属性）→ 玩家举着第 1 格、
+	## 地上是把"副武器类"的枪时，被替换的却是第 2 格。
+	## 与单机 `weapon_pickup._do_pickup` 统一走 `PlayerState.resolve_weapon_slot()`：
+	## 默认槽空就放默认槽；两槽都满时替换**当前举着的那一格**。
+	var slot: String = state.resolve_weapon_slot(weapon)
 	var old: WeaponData = state.get_equipped_weapon(slot)
 	if old:
 		_spawn_host_dropped_weapon(old, player, state)
-	state.equipment[slot] = weapon
+	## 与单机同一入口（收集解锁 mark_acquired、旧枪入 inventory 等副作用都在里面）。
+	state.equip_weapon_in_slot(weapon, slot)
 	if weapon.is_ranged:
 		var mag: int = int(pickup.get("pickup_magazine_ammo"))
 		state.set_magazine_ammo(weapon.item_id, clampi(weapon.magazine_capacity if mag < 0 else mag, 0, weapon.magazine_capacity))
@@ -4900,21 +5025,27 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, player: Node2D, state: Playe
 	## 落点须在拾取范围外，否则刚脱手就被自己的自动拾取捡回），再做
 	## ≥24px 的掉落物间距避让（2026-09-16 反馈②）。必须在 add_child（=入组）之后算，
 	## 否则看不到刚掉下的那一件。
+	## ★2026-11-02：anchor = 玩家坐标 —— 围绕玩家搜 + 视线判定，贴墙换枪不再跨墙落地。
 	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(
-		get_tree(), PICKUP_SCRIPT.drop_landing_position(player))
+		get_tree(), PICKUP_SCRIPT.drop_landing_position(player),
+		PICKUP_SCRIPT.DROP_MIN_GAP, Callable(), player.global_position)
 	_register_host_pickup(pickup)
 
 
-func _spawn_host_dropped_throwable(throwable: ThrowableData, position: Vector2) -> void:
+func _spawn_host_dropped_throwable(throwable: ThrowableData, position: Vector2,
+		anchor: Variant = null) -> void:
 	if not throwable:
 		return
 	var pickup := HEALING_PICKUP_SCENE.instantiate() as Node2D
 	if not is_instance_valid(pickup):
 		return
 	pickup.set("item", throwable)
-	pickup.global_position = position
 	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
 	(parent if parent else get_tree().current_scene).add_child(pickup)
+	## ★2026-11-02：与武器掉落同规则 —— 必须过避墙/视线判定（旧实现直接落在
+	## `drop_landing_position`，贴墙替换投掷物时旧投掷物会掉进墙里/墙另一侧）。
+	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(
+		get_tree(), position, PICKUP_SCRIPT.DROP_MIN_GAP, Callable(), anchor)
 	_register_host_pickup(pickup)
 
 

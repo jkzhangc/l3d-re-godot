@@ -549,6 +549,11 @@ func start_game(scene_path: String, arrival_id: String = "", arrival_position: V
 		return
 	## 加载画面：Host/Client 在旧场景里立刻亮起，直到新场景 NetworkWorld 确认全场 ready。
 	Global.show_loading_screen()
+	## ★2026-11-03 用户实测「进入游戏后多人模式 BGM 还会继续播放」：
+	## 大厅 BGM 是 autoload 播放器（跨场景不中断），单人路径在 difficulty_select 里停了，
+	## **联机开局没有对应收尾** —— 于是 Advertise Rhythmic Passage 一路播进游戏。
+	## 放在 start_game（含 host/client、含内部切图）里停：内部切图时本就没在播，幂等无副作用。
+	Global.stop_lobby_music()
 	## 未携带设置的内部切图沿用已可靠同步的会话值，不能退回默认关闭。
 	## 2026-11-01：新增 hazard_hurts_players（火焰/酸液伤玩家）；两个都按"带了才覆盖"处理，
 	## 只带友伤时不能把火海开关顺手冲回默认值。

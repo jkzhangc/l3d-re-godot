@@ -576,15 +576,17 @@ func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 		return
 	var drop: Node2D = PICKUP_SCENE.instantiate()
 	drop.item = old
-	## 落点与武器掉落统一（2026-09-23）：沿朝向推远 + 与已有掉落物避让 —— 否则旧投掷物
-	## 掉在脚下会被自己的自动拾取立刻捡回（同「丢下的武器又被捡回」问题）。
-	## ★同理（2026-10-27 用户定稿）：这类「替换掉落」不避玩家；避玩家只约束敌人掉落/导演投放。
-	drop.position = WEAPON_PICKUP_SCRIPT.find_free_drop_position(
-		get_tree(), WEAPON_PICKUP_SCRIPT.drop_landing_position(body))
 	var parent: Node = get_parent()
 	if not parent:
 		parent = get_tree().current_scene
 	parent.add_child(drop)
+	## 落点与武器掉落统一（2026-09-23）：沿朝向推远 + 与已有掉落物避让 —— 否则旧投掷物
+	## 掉在脚下会被自己的自动拾取立刻捡回（同「丢下的武器又被捡回」问题）。
+	## ★同理（2026-10-27 用户定稿）：这类「替换掉落」不避玩家；避玩家只约束敌人掉落/导演投放。
+	## ★2026-11-02：anchor = 玩家坐标 —— 围绕玩家搜 + 视线判定，贴墙替换不会跨墙落到另一侧。
+	drop.global_position = WEAPON_PICKUP_SCRIPT.find_free_drop_position(
+		get_tree(), WEAPON_PICKUP_SCRIPT.drop_landing_position(body),
+		WEAPON_PICKUP_SCRIPT.DROP_MIN_GAP, Callable(), body.global_position)
 	print("[拾取] 投掷物替换: %s → %s" % [old.item_name, item.item_name])
 
 

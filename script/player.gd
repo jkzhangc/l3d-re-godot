@@ -1646,17 +1646,23 @@ func _apply_current_character_data(cd: CharacterData) -> void:
 		return
 	# 贴图包一层 CanvasTexture（带法线），PointLight2D 才有表面起伏；
 	# 没有对应法线图时 NormalMaps.canvas() 原样返回，零开销。
-	if cd.walk_texture:   walk_texture = NormalMaps.canvas(cd.walk_texture)
+	## ★2026-11-03：缺省贴图**回退到本角色自己的行走图**，不能沿用上一个角色的 ——
+	## 旧实现在 `cd.run_texture/death_texture` 为空时直接跳过，切到没配该贴图的角色
+	## 会顶着上一个角色的跑步/尸体图（与下面音效是同一类残留）。
+	walk_texture = NormalMaps.canvas(cd.walk_texture)
 	walk_char_index = cd.walk_char_index
 	walk_frame_duration = cd.walk_frame_duration
-	if cd.run_texture:    run_texture = NormalMaps.canvas(cd.run_texture)
+	run_texture = NormalMaps.canvas(cd.run_texture) if cd.run_texture else walk_texture
 	run_char_index = cd.run_char_index
 	run_frame_duration = cd.run_frame_duration
-	if cd.death_texture:  death_texture = NormalMaps.canvas(cd.death_texture)
+	death_texture = NormalMaps.canvas(cd.death_texture) if cd.death_texture else walk_texture
 	death_char_index = cd.death_char_index
 	max_hp = float(cd.get_effective_max_hp())
-	if cd.hurt_sound:     hurt_sound = cd.hurt_sound
-	if cd.death_sound:    death_sound = cd.death_sound
+	## ★2026-11-03 用户实测「最后一个角色死亡，放的是上一个死亡角色的音效」：
+	## 旧实现只在非空时覆盖 —— 没配 death_sound 的角色（静香）会继承前一个角色的音效。
+	## 无条件覆盖（null = 该角色没有这条音效，`play_sound` 内部 no-op）。
+	hurt_sound = cd.hurt_sound
+	death_sound = cd.death_sound
 
 
 ## 角色切换后刷新外观/HP/装备/状态（由 CharacterSwitchManager 调用）

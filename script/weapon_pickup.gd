@@ -49,6 +49,13 @@ const PickupInteraction := preload("res://script/pickup_interaction.gd")
 ## 交互优先级仲裁（2026-11-02：拾取优先于存档/医疗箱/补给/开关等）。
 const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
 const DROP_MIN_GAP: float = 24.0                ## 掉落物之间的最小间距（像素，用户定稿约 24）
+## 掉落物精灵的视觉占位采样点（相对脚点）。48×64 行走图、Sprite2D 偏移 (0,-8)：
+## 脚点可站 ≠ 图不压墙 —— 贴着墙掉时图的左右仍可能盖在墙格上，看起来就是"掉进墙里"。
+## 只取「脚点 + 左右腰」三点：上半身（-20 以上）在墙面上沿外露是正常观感，
+## 也把它算成阻挡会让窄道/墙根一律无解（实测 60 次贴墙掉落有 16 次被迫退回脚下）。
+const DROP_VISUAL_PROBES: Array[Vector2] = [
+	Vector2(0, 0), Vector2(-10, -6), Vector2(10, -6),
+]
 ## 落点避墙判据（2026-09-26）：与传送落点 / 多人补位 / 固定刷怪点**共用同一个解析器**
 ## —— 图块碰撞（任一物理层，含 physics_layer_0 角色层）+ 物理探测 + require_tile。
 ## 用 preload 常量而不是全局类名：新建脚本的 class_name 要等编辑器重扫才进
@@ -126,8 +133,12 @@ static func drop_landing_position(player: Node2D) -> Vector2:
 ##   旧实现的第 ② 轮把 **"不在墙里"这条也一并放宽了**（只要间距够，墙里照收）。
 ##   现在：「不压进有物理层的图块」是**硬不变量**，任何一轮都不放宽；
 ##   逐轮放宽的只有**掉落物之间的间距**，并按「近环 → 远环」三段搜索兜底。
+## ⚠ 2026-11-02 用户复测「替换武器时**仍然**会到不可通行的图块上」→ 根因不在判据本身，
+##   而在搜索圆心：`base` = 玩家沿朝向推远 40px，贴着墙换枪时它直接**跨过一格墙**落到墙
+##   另一侧（可站，但要走远路/根本过不去，画面又压在墙上）。传入 `anchor`（= 玩家坐标）
+##   后改为围绕玩家搜、并加**图块视线**判定：候选点与玩家之间不允许被墙隔断。
 static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: float = DROP_MIN_GAP,
-		is_free: Callable = Callable()) -> Vector2:
+		is_free: Callable = Callable(), anchor: Variant = null) -> Vector2:
 	if tree == null:
 		return base
 	var free_check: Callable = is_free if is_free.is_valid() else _default_free_check(tree)
@@ -135,6 +146,59 @@ static func find_free_drop_position(tree: SceneTree, base: Vector2, min_gap: flo
 	for n: Node in tree.get_nodes_in_group(PICKUP_GROUP):
 		if n is Node2D and is_instance_valid(n) and not n.is_queued_for_deletion():
 			others.append((n as Node2D).global_position)
+
+	## ── 新路径（有玩家坐标）：围绕玩家、朝向优先、不跨墙 ──
+	if anchor is Vector2:
+		var origin: Vector2 = anchor
+		var world: Node2D = _resolve_world_node(tree)
+		var pref: Vector2 = base - origin
+		pref = pref.normalized() if pref.length_squared() > 0.01 else Vector2.ZERO
+		var dirs: Array[Vector2] = []
+		for i: int in 16:
+			dirs.append(Vector2(cos(TAU * float(i) / 16.0), sin(TAU * float(i) / 16.0)))
+		## 朝向方向排最前：贴墙换枪时优先把枪放在"看得到的那一侧"。
+		if pref != Vector2.ZERO:
+			dirs.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.dot(pref) > b.dot(pref))
+		var radii: Array[float] = [
+			DROP_PUSH_DISTANCE, DROP_MIN_GAP * 2.0, DROP_MIN_GAP * 3.0,
+			DROP_MIN_GAP * 4.0, DROP_MIN_GAP * 6.0, DROP_MIN_GAP * 8.0,
+		]
+		var ordered: Array[Vector2] = []
+		for radius: float in radii:
+			for d: Vector2 in dirs:
+				ordered.append(origin + d * radius)
+		## 三段（每段都要求 可用 + 不跨墙）：① 间距达标 → ② 间距只要求不重合 →
+		## ③ 完全无视其它掉落物（物品密集的角落也别退回墙里）。
+		var loose: Array[Vector2] = []
+		var any: Array[Vector2] = []
+		for cand: Vector2 in ordered:
+			if not bool(free_check.call(cand)):
+				continue
+			if world != null and not SPOT_SCRIPT.tile_los_clear(world, origin, cand):
+				continue
+			any.append(cand)
+			var gap_ok := true
+			var distinct := true
+			for o: Vector2 in others:
+				var dist: float = cand.distance_to(o)
+				if dist < min_gap - 0.01:
+					gap_ok = false
+				if dist < 1.99:
+					distinct = false
+			if gap_ok:
+				return cand
+			if distinct:
+				loose.append(cand)
+		if not loose.is_empty():
+			return loose[0]
+		if not any.is_empty():
+			return any[0]
+		## 四面都放不下（极窄通道）：退回**玩家脚下** —— 玩家站的地方一定可走、可捡回；
+		## 退回 base 反而可能正是墙里/墙另一侧（旧实现的最后一跳）。
+		push_warning("[WeaponPickup] 掉落落点四周无空位，改放玩家脚下 %s" % origin)
+		return origin
+
+	## ── 旧路径（无玩家坐标）：base 周围近环 → 远环，保持既有行为/单测口径 ──
 	## 三个搜索段（**每段都要求 free_check 通过**）：
 	##  ① 近环 + 间距 ≥ min_gap（正常路径，与旧实现第 ① 轮完全一致）
 	##  ② 近环 + 只要求不与别的掉落物**完全重合**（≥2px）—— 掉落物密集的角落
@@ -184,7 +248,15 @@ static func _default_free_check(tree: SceneTree) -> Callable:
 	var world: Node2D = _resolve_world_node(tree)
 	if world != null:
 		return func(pos: Vector2) -> bool:
-			return SPOT_SCRIPT.is_free(world, pos, DROP_PROBE_RADIUS, true)
+			## 硬不变量①：脚点不能在图块碰撞格 / 地图外。
+			if not SPOT_SCRIPT.is_free(world, pos, DROP_PROBE_RADIUS, true):
+				return false
+			## 硬不变量②（2026-11-02）：精灵视觉占位也不能压墙 —— 48×64 的图比脚点宽得多，
+			## 脚点贴墙外侧时上半身照样盖在墙格上，观感就是"掉进墙里"。
+			for off: Vector2 in DROP_VISUAL_PROBES:
+				if not SPOT_SCRIPT.is_free(world, pos + off, 3.0, true):
+					return false
+			return true
 	return func(_pos: Vector2) -> bool: return true
 
 
@@ -240,7 +312,6 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 	## 这里也不该改成"正好落在玩家坐标"：DROP_PUSH_DISTANCE 的存在是为了让
 	## 「全部丢弃」后空槽不会立刻把刚丢下的武器自动捡回来。
 	var base: Vector2 = drop_landing_position(player)
-	pickup.position = find_free_drop_position(tree, base)
 	var parent: Node = null
 	if tree.current_scene:
 		parent = tree.current_scene.find_child("GroundLayer", true, false)
@@ -248,8 +319,13 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 		parent = tree.current_scene if tree.current_scene else player.get_parent()
 	if parent:
 		parent.add_child(pickup)
+	## anchor = 玩家坐标：围绕玩家搜落点 + 视线判定，贴墙换枪不会再跨过一格墙落到另一侧。
+	## ★入树后再写 `global_position`：候选点是世界坐标，容器（GroundLayer）若带偏移，
+	## 先写 `position` 会整体错位 —— 判定"可站"的点与实际落点就不是同一个位置了。
+	pickup.global_position = find_free_drop_position(
+		tree, base, DROP_MIN_GAP, Callable(), player.global_position)
 	print("[拾取] %s 掉落在地上 (%s) | 弹夹=%d 备弹=%d" % [
-		wd.item_name, pickup.position, pickup.pickup_magazine_ammo, pickup.pickup_reserve_ammo])
+		wd.item_name, pickup.global_position, pickup.pickup_magazine_ammo, pickup.pickup_reserve_ammo])
 	return pickup
 
 

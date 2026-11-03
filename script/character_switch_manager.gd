@@ -143,12 +143,19 @@ func _apply_standin_appearance(standin: Node2D, st: PlayerState) -> void:
 	var sprite: Sprite2D = standin.get_node_or_null("Sprite2D")
 	if not sprite:
 		return
-	sprite.texture = NormalMaps.canvas(cd.walk_texture)
+	## ★2026-11-03 用户实测「角色死亡后看起来还活着」：死亡队员留下的站立精灵
+	## 此前一律用 `walk_texture` 的站立帧 —— HP=0 的队友站着像没事人，玩家分不清谁死了。
+	## 现在死亡席位改用 `death_texture` + 死亡帧（未配死亡图的角色回退行走图）。
+	var dead: bool = st.current_hp <= 0.0
+	var tex: Texture2D = cd.death_texture if dead and cd.death_texture else cd.walk_texture
+	sprite.texture = NormalMaps.canvas(tex)
 	sprite.region_enabled = true
 	var facing: int = st.facing
-	var char_idx: int = cd.walk_char_index
+	var char_idx: int = cd.death_char_index if dead else cd.walk_char_index
 	## 文件名带 `$` 前缀时按单角色表取帧（帧尺寸 = 图/3×4），见 vx_walk_sheet.gd
-	sprite.region_rect = WALK.region_rect(cd.walk_texture, char_idx, DIR_ROWS[facing], STAND_FRAME)
+	sprite.region_rect = WALK.region_rect(tex, char_idx, DIR_ROWS[facing], STAND_FRAME)
+	## 尸体压暗一档，和活着的队友一眼区分（死亡席位才加）。
+	sprite.modulate = Color(1.0, 0.72, 0.72, 0.9) if dead else Color.WHITE
 
 
 func _remove_teammate_standin(index: int) -> void:
@@ -431,6 +438,22 @@ func switch_after_death() -> bool:
 	_player._moving = false
 	_player.velocity = Vector2.ZERO
 	_player.queue_redraw()
+
+	## ★死亡反馈（2026-11-03 用户：「看不出谁死了，像没死一样」）——
+	## 在倒下的位置弹一条「XX 倒下了！」，配合尸体精灵，让换人这件事有明确交代。
+	var dead_state: PlayerState = Players.get_seat(old_index)
+	var dead_name: String = "队员"
+	if dead_state and dead_state.character:
+		dead_name = dead_state.character.character_name
+	var scene: Node = get_tree().current_scene if get_tree() else null
+	if scene:
+		var banner: DamageNumber = DamageNumber.spawn(
+			_player.global_position + Vector2(0, -8), 0.0, scene, 3,
+			Color(1.0, 0.45, 0.4), "%s 倒下了！" % dead_name)
+		if banner:
+			banner.duration = 1.6
+			banner.rise_distance = 26.0
+			banner.font_size = 24
 
 	# 镜头不瞬切（同 _do_switch）：死亡切换保持玩家位置不变，相机继续阻尼跟随。
 	print("[SwitchMgr] 死亡切换 %d→%d" % [old_index, next_idx])

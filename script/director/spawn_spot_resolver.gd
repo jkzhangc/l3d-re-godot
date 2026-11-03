@@ -51,6 +51,24 @@ static func is_free(world_node: Node2D, pos: Vector2, probe_radius: float = PROB
 	return _acceptable(world_node, pos, probe_radius, Callable(), require_tile, ignore_bodies)
 
 
+## 图块视线：`from` → `to` 沿线采样，任一采样点落在**图块碰撞格**里即视为被墙隔断。
+## 用途：掉落落点不能"穿过一格墙"落到墙另一侧（视觉上像掉进墙里、实际又捡不到）。
+## 只查图块（不查实体）——玩家/敌人身体不该阻止"看得到的地方"。
+static func tile_los_clear(world_node: Node2D, from: Vector2, to: Vector2,
+		sample_step: float = 8.0) -> bool:
+	if world_node == null or not is_instance_valid(world_node):
+		return true
+	var dist: float = from.distance_to(to)
+	if dist < 1.0:
+		return true
+	var steps: int = maxi(1, int(ceil(dist / maxf(sample_step, 2.0))))
+	for i: int in range(1, steps + 1):
+		var p: Vector2 = from.lerp(to, float(i) / float(steps))
+		if _tile_blocked(world_node, p):
+			return false
+	return true
+
+
 ## 找 `base` 附近最近的可站位置；**一个都没有时返回 null** ——
 ## 调用方据此决定回退策略（玩家落点=保留原地，敌人刷怪=退回屏幕外刷法）。
 ## `extra_ok` 是附加判据（例如 `Director._is_walkable`：地图范围闸 + 作者禁刷层）。
