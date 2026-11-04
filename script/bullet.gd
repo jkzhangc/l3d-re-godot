@@ -423,9 +423,11 @@ func _hit(target: Node2D) -> void:
 		hit_effect_applied.emit(damageable.global_position, follow_id)
 	# 播放命中音效（世界坐标定位：声源=命中点，2026-10-20）
 	## 数据没配 → 按属性取默认击中音（2026-11-01 用户要求「每个属性不同击中音」）
+	## → 都没配 → 通用默认打击音「殴る」1.5 调（2026-11-04 用户指定）。
 	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(_hit_sound, element)
 	if hit_sfx:
-		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, 1.0, damageable.global_position)
+		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true,
+			ELEMENT_FX.resolve_hit_pitch(_hit_sound, element), damageable.global_position)
 
 	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(final_damage), str(is_headshot), penetration - _hits + 1])
 

@@ -89,7 +89,9 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
 @export var gunshot_range: float = 500.0         ## 枪声传播范围（像素）。0=静音武器（近战），>0=开火时范围内敌人会被惊动
-@export var shove_sound: AudioStream = null     ## 推击音效
+## 推击音效。默认「打撃3」（2026-11-04 用户指定）：推击是空手/枪托都能做的动作，
+## 因此**不按武器区分**，所有武器共用一个默认打击音；tres 可逐武器覆盖。
+@export var shove_sound: AudioStream = preload("res://sound/(効果音)打撃3.ogg")
 
 
 @export_group("装填/装弹")
@@ -425,7 +427,13 @@ func get_attack_effect_offset(cd: CharacterData, facing: int, fallback: Vector2 
 @export_group("近战推击")
 ## 推击动画：角色索引序列（在推击行走图上的 char_idx）
 @export var shove_char_sequence: Array[int] = [0, 1, 1]
-## 推击动画每帧持续时间（秒）。所有帧统一时长（与踏步动画模式相同）
+## 推击动画**每帧**持续时间（秒），长度与 `shove_char_sequence` 对应。
+## 2026-11-04 用户需求：与「武器举起/放下动画」的每帧时长同款（`weapon_raise_frame_durations`），
+## 前摇/推击/收势可以逐帧调快慢。默认 `[0.1, 0.05, 0.2]`（用户指定：抬手慢、推出快、收势更慢）。
+## 空 / 条目不足时回退下面的 `shove_frame_duration`。
+@export var shove_frame_durations: Array[float] = [0.1, 0.05, 0.2]
+## 推击动画的**统一帧时长**（秒）：`shove_frame_durations` 覆盖不到的下标用它兜底。
+## 保留这个字段是为了兼容旧数据与「自定义了更长帧序列但只想调一个数」的场景。
 @export var shove_frame_duration: float = 0.05
 ## 推击行走图精灵表。空→回退 CharacterData.shove_walk_texture → 回退 weapon_walk_texture
 @export var shove_walk_texture: Texture2D
@@ -659,6 +667,32 @@ func get_shove_char_sequence() -> Array[int]:
 	if shove_char_sequence.size() > 0:
 		return shove_char_sequence
 	return [3, 2]
+
+
+## 获取推击动画**第 seq_idx 帧**的持续时间（秒）—— 与 `get_raise_frame_duration()` 同构。
+## 条目不足（自定义了更长的帧序列 / 旧数据没配数组）回退 `shove_frame_duration`。
+func get_shove_frame_duration(seq_idx: int) -> float:
+	if seq_idx >= 0 and shove_frame_durations.size() > seq_idx:
+		return shove_frame_durations[seq_idx]
+	return maxf(shove_frame_duration, 0.01)
+
+
+## 推击整段动画时长（秒）。Host 的「战斗忙」窗口按它封顶 —— 与逐帧播放保持一致。
+func get_shove_total_duration() -> float:
+	var total: float = 0.0
+	for index: int in range(get_shove_char_sequence().size()):
+		total += get_shove_frame_duration(index)
+	return total
+
+
+## 推击**命中帧之前**的累计延迟（秒）= 前 `shove_hit_at_sequence_idx` 帧时长之和。
+## Host 用它决定何时做命中查询（旧的「统一时长 × 索引」在逐帧时长下会算错）。
+func get_shove_hit_delay() -> float:
+	var total: float = 0.0
+	var upto: int = clampi(shove_hit_at_sequence_idx, 0, get_shove_char_sequence().size())
+	for index: int in range(upto):
+		total += get_shove_frame_duration(index)
+	return total
 
 
 ## 获取装填动画每帧持续时间（秒）

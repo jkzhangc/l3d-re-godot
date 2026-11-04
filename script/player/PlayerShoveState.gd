@@ -9,7 +9,7 @@ extends State
 ## 推击是纯击退动作；联机 Client 只请求，Host 在命中帧执行推击并广播受击表现。
 ## 推击状态 — 近战推击（无伤害，纯击退）
 ##
-## 推击动画：shove_char_sequence（统一帧时长 shove_frame_duration）
+## 推击动画：shove_char_sequence（逐帧时长 shove_frame_durations，条目不足回退 shove_frame_duration）
 ## 在 shove_hit_at_sequence_idx 处创建判定区域
 ## 动画结束后直接切回武器举起状态（无攻击后动画）
 ## 敌人被推中：闪白 2 帧（由 enemy._play_hit_feedback 处理）
@@ -46,7 +46,7 @@ func enter() -> void:
 		return
 
 	_seq_idx = 0
-	_timer = _wd.shove_frame_duration
+	_timer = _wd.get_shove_frame_duration(_seq_idx)
 	_hit_done = false
 	_hitbox = null
 
@@ -101,7 +101,7 @@ func process_update(delta: float) -> void:
 			_finish()
 			return
 
-		_timer = _wd.shove_frame_duration
+		_timer = _wd.get_shove_frame_duration(_seq_idx)
 		_set_shove_frame(_seq_idx)
 
 		# 在命中索引发射判定区域

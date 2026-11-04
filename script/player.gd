@@ -1245,7 +1245,7 @@ func _run_network_shove_presentation(token: int, wd: WeaponData) -> void:
 		if index == wd.shove_hit_at_sequence_idx:
 			_play_network_sfx(wd.shove_sound)
 		set_attack_char_index(wd.get_shove_char_sequence()[index])
-		await get_tree().create_timer(wd.shove_frame_duration).timeout
+		await get_tree().create_timer(wd.get_shove_frame_duration(index)).timeout
 	if token == _network_attack_token and is_inside_tree():
 		exit_shove_mode()
 		if _network_shove_was_weapon_mode:

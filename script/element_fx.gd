@@ -35,6 +35,13 @@ const HIT_SOUNDS: Dictionary = {
 	WeaponData.Element.ACID: preload("res://sound/酸発射.ogg"),
 }
 
+## 通用默认击中音（2026-11-04 用户指定）：数据没配、属性也没有专属音时用它 ——
+## 典型场景就是**普通远程武器**（element = NONE）。音调 1.5 见 `resolve_hit_pitch()`。
+## 放在这里而不是 `WeaponData.hit_sound` 的导出默认值上，是因为后者一旦非空就会
+## 抢在属性表前面（`resolve_hit` 是「数据优先」），火/雷/冰/酸的专属击中音会被整体覆盖。
+const DEFAULT_HIT_SOUND: AudioStream = preload("res://sound/殴る.ogg")
+const DEFAULT_HIT_SOUND_PITCH: float = 1.5
+
 
 ## 该属性的默认爆炸音（NONE / 表外 → null）。
 static func explosion_sound(element: int) -> AudioStream:
@@ -51,6 +58,18 @@ static func resolve_explosion(explicit: AudioStream, element: int) -> AudioStrea
 	return explicit if explicit != null else explosion_sound(element)
 
 
-## 数据优先、属性兜底：给子弹选击中音用。
+## 数据优先、属性其次、最后通用默认（2026-11-04 起**恒非 null**）。
+## 想「这把武器命中不出声」请把 `hit_sound` 配成静音资源 —— 空值现在等于「用默认打击音」。
 static func resolve_hit(explicit: AudioStream, element: int) -> AudioStream:
-	return explicit if explicit != null else hit_sound(element)
+	if explicit != null:
+		return explicit
+	var by_element: AudioStream = hit_sound(element)
+	return by_element if by_element != null else DEFAULT_HIT_SOUND
+
+
+## 与 `resolve_hit` 配套的音调：只有落到**通用默认**那一层才是 1.5，
+## 武器自定义音效 / 属性专属音效一律保持原调（1.0）。
+static func resolve_hit_pitch(explicit: AudioStream, element: int) -> float:
+	if explicit != null or hit_sound(element) != null:
+		return 1.0
+	return DEFAULT_HIT_SOUND_PITCH

@@ -2188,7 +2188,9 @@ func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 	var wd := state.get_active_weapon()
 	if not wd:
 		return
-	var duration := maxf(0.05, wd.shove_frame_duration * wd.get_shove_char_sequence().size())
+	## 2026-11-04：推击改为**逐帧时长**（同武器举放），整段长度必须逐帧求和 ——
+	## 旧的「统一时长 × 帧数」在逐帧配置下会把战斗忙窗口算错。
+	var duration := maxf(0.05, wd.get_shove_total_duration())
 	_combat_busy_until_msec[peer_id] = Time.get_ticks_msec() + int(ceili(duration * 1000.0))
 	var facing: Vector2 = node.get_facing_vector()
 	node.on_shove_performed()
@@ -2201,7 +2203,8 @@ func _try_host_shove(peer_id: int, claimed_position: Variant = null) -> void:
 func _schedule_host_shove_hit(node: CharacterBody2D, wd: WeaponData, facing: Vector2) -> void:
 	if not is_inside_tree():
 		return
-	var delay := wd.shove_frame_duration * clampi(wd.shove_hit_at_sequence_idx, 0, wd.get_shove_char_sequence().size())
+	## 命中帧之前的逐帧时长之和（旧写法「统一时长 × 索引」在逐帧配置下会提前/延后判定）。
+	var delay := wd.get_shove_hit_delay()
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
 	if is_inside_tree() and is_instance_valid(node) and node.is_inside_tree():
@@ -2588,6 +2591,8 @@ func lock_on_strike(points: PackedVector2Array, weapon_id: String, bullet_index:
 
 ## 调试用爆炸范围环（与 Host 侧 `bullet.gd::_explode()` 同一个入口 → 两端表现一致）。
 const DEBUG_BLAST_RING := preload("res://script/debug_blast_ring.gd")
+## 属性/默认命中音解析（与 bullet.gd 同源，保证 主机命中音 == 客户端远端命中音）。
+const ELEMENT_FX := preload("res://script/element_fx.gd")
 
 
 @rpc("authority", "call_remote", "reliable")
@@ -2629,21 +2634,28 @@ func bullet_hit_effect(position: Vector2, weapon_id: String, bullet_index: int, 
 		return
 	## 资源只从白名单武器解析（远端包只带 id 与索引）——同 bullet_explode_effect 的铁律。
 	var wd: WeaponData = _get_network_weapon_data_by_id(weapon_id)
-	if wd == null or wd.hit_effect_anim == null:
+	if wd == null:
 		return
-	var follow: Node2D = null
-	var offset: Vector2 = wd.hit_effect_offset_override
-	if follow_entity_id > 0:
-		var target := _resolve_enemy_entry(_enemies.get(follow_entity_id, {}) as Dictionary)
-		if is_instance_valid(target):
-			follow = target
-			## 偏移优先级同 Host 侧：武器覆盖为 0 时用目标自身 hurt_effect_offset（大体型敌人抬到躯干）。
-			if offset == Vector2.ZERO and "hurt_effect_offset" in target:
-				offset = target.hurt_effect_offset
-	VXAnimSprite.play_scene(wd.hit_effect_anim, position, scene, 10.0, follow, offset)
-	if wd.hit_sound:
+	## ★特效与音效必须**分开判空**（2026-11-04）：旧写法 `wd.hit_effect_anim == null` 直接
+	## return，于是「没配命中特效的武器」连命中音也一起没了 —— 远端队友开枪打中敌人时静音。
+	if wd.hit_effect_anim != null:
+		var follow: Node2D = null
+		var offset: Vector2 = wd.hit_effect_offset_override
+		if follow_entity_id > 0:
+			var target := _resolve_enemy_entry(_enemies.get(follow_entity_id, {}) as Dictionary)
+			if is_instance_valid(target):
+				follow = target
+				## 偏移优先级同 Host 侧：武器覆盖为 0 时用目标自身 hurt_effect_offset（大体型敌人抬到躯干）。
+				if offset == Vector2.ZERO and "hurt_effect_offset" in target:
+					offset = target.hurt_effect_offset
+		VXAnimSprite.play_scene(wd.hit_effect_anim, position, scene, 10.0, follow, offset)
+	## 命中音：数据 → 属性专属 → 通用默认「殴る」1.5 调（2026-11-04 用户指定）。
+	## 与 bullet.gd 用同一个解析入口，两端听感一致。
+	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(wd.hit_sound, wd.element)
+	if hit_sfx:
 		## 世界坐标定位（2026-10-20）：远端队友的命中音随距离衰减，声源=命中点。
-		Global.play_sfx_managed(wd.hit_sound, scene, true, 1.0, position)
+		Global.play_sfx_managed(hit_sfx, scene, true,
+			ELEMENT_FX.resolve_hit_pitch(wd.hit_sound, wd.element), position)
 	print("[NetworkWorld] CLIENT_BULLET_HIT_EFFECT weapon=%s index=%d follow=%d pos=(%.0f, %.0f)" % [
 		weapon_id, bullet_index, follow_entity_id, position.x, position.y])
 
