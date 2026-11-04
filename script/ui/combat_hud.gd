@@ -25,6 +25,25 @@ const GROUP_NAME: StringName = &"combat_hud"
 ## 自定义兜底字体：它本身缺 506/1733 常用字，绝不能当界面字体用。
 const AMMO_FONT_FALLBACK_PATH: String = "res://art/System/DotGothic16-Regular.ttf"
 
+## 【★2026-11-04 字形错乱根因】盖过一切旧注释：
+## 旧实现用 `base.duplicate()` 造「锐利副本」。**必须废掉** —— 它会让屏幕上的字变成别的字。
+##
+## 本机可稳定重现（Godot 4.6.3）：
+##   ① 图集还空着时先 duplicate() 出副本，并用它画一次 "30/270 12/96 7/48"；
+##   ② 再用基字体画 1355 个汉字 × 12/24/36/48 号（玩家在菜单/剧情里必然发生）；
+##   ③ **不改文本、只等一帧** —— 副本那一行的数字变成了汉字。
+## 这正是玩家大面积反馈的「字体错乱」：HUD 在场景加载时就画了 "12/96"，
+## 玩家进图后菜单/剧情的中文把字形图集铺满，那块区域被覆盖 → 弹药数字变字。
+##
+## 机理（据上述现象推断）：`duplicate()` 造出的是**第二份 FontFile**，
+## 它与基字体共享字形图集、却各自维护一份占用表；基字体之后栅格化的字形会覆盖副本
+## 已占用的区域，而屏幕上**已经发出的绘制指令仍指向那块 UV** ——
+## 数字变字母、字母变数字、中文变别的中文，**重绘一次还可能换成另一种**。
+##
+## 正确做法：**不要对同一份字体数据造第二个 FontFile**。
+## 需要「加兜底链 / 加变体」时用 `FontVariation` —— 它只包装 `base_font`，自己不持有图集。
+## 铁律：本工程**禁止再使用 `FontFile.duplicate()`**。
+
 const SPRAY_TEXTS: Array[Texture2D] = [
 	preload("res://art/Ui/回復薬×０.png"),
 	preload("res://art/Ui/回復薬×１.png"),
@@ -102,47 +121,48 @@ func _apply_ammo_font() -> void:
 	var base := Global.get_ui_font() if Global.has_method("get_ui_font") else null
 	if base == null:
 		return
-	var ammo_font := _make_crisp_copy(base, true)
+	var ammo_font := _make_font_variant(base, true)
 	## 描边一律关掉：像素字体加描边等于在字形周围再糊一圈（用户报的就是"周围有像素点"）。
 	for label: Label in [primary_ammo_label, secondary_ammo_label, throwable_count_label]:
 		_apply_font_override(label, ammo_font)
 	## 右下角操作提示也是 36px（12 的 3 倍），同样要「像素字体应有的样子」：
-	## 2026-10-28 用户实测 C / S 曾显示成其它字形（数字）—— 与弹药数字当初「边缘零散白点」
-	## 是同一类 36px 栅格化问题（共用字体 oversampling 跟随视口 + 分数缩放）。
+	## 2026-10-28 用户实测 C / S 曾显示成其它字形（数字）—— 根因就是当年的 duplicate()
+	## （见 AMMO_FONT_FALLBACK_PATH 上方的 ★ 说明），2026-11-04 已改 FontVariation。
 	## ⚠ 这里**不带 ∞ 兜底链**：提示文字用不到 ∞，而 DotGothic16 的行高更大，
 	## 带上会让每行高出 ~17px（面板整体变高一大截）。
-	_crisp_ui_font = _make_crisp_copy(base, false)
+	_crisp_ui_font = _make_font_variant(base, false)
 	_apply_crisp_font_to_rows()
 
 
-## 构造一份「像素字体应有的样子」的副本：关抗锯齿 / 次像素定位 / 钉 1:1 栅格化。
-## with_ammo_fallback=true 时追加 ∞ 的 DotGothic16 兜底（仅弹药数字需要）。
-func _make_crisp_copy(base: Font, with_ammo_fallback: bool) -> FontFile:
-	var out := base.duplicate() as FontFile
-	if out == null:
+## 构造「像素字体应有的样子 + 可选 ∞ 兜底」的字体**视图**。
+##
+## ★为什么是 FontVariation 而不是 `base.duplicate()`：
+## duplicate() 会产生第二份 FontFile，它和基字体共用同一张字形图集、却各有一份占用表 →
+## 基字体后来栅格化的字形会覆盖副本用过的区域，屏幕上的字就变成别的字（玩家反馈的字形错乱）。
+## FontVariation 只持有 `base_font` 引用，字形一律经基字体分配，不存在两套占用表。
+## 抗锯齿 / 次像素定位 / oversampling 也由基字体决定 —— 基字体在
+## `Global.load_ui_font()` 里已统一过 `make_pixel_crisp()`，所以这里不需要（也不能）再设。
+func _make_font_variant(base: Font, with_ammo_fallback: bool) -> Font:
+	if base == null:
 		return null
+	var out := FontVariation.new()
+	out.base_font = base
 	if with_ammo_fallback:
 		var fallback := load(AMMO_FONT_FALLBACK_PATH) as FontFile
 		if fallback:
 			## fallback 同样要关抗锯齿 + 次像素定位 + 钉 1:1 栅格化：
 			## 否则 ∞ 这类走兜底的字形照样会在 36px 下渗出零散白点（2026-09-30 用户实测）。
+			## ⚠ 这是**同一份**兜底资源的属性设置（幂等），不是再造字体。
 			fallback.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 			fallback.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 			fallback.oversampling = 1.0
 			out.fallbacks = [fallback]
-	## duplicate() 出来的副本也要显式关一遍（基字体已在 Global.load_ui_font 里关过，
-	## 但这里再做一次可保证「本标签的字体链」整体干净）。
-	## ⚠ `oversampling` 是手机端残留白点的关键项：移动端是分数缩放，留 0（跟随视口）
-	## 会让字形被按 1.125 倍栅格化再缩回 36px → 边缘零散白点。
-	out.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	out.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-	out.oversampling = 1.0
 	return out
 
 
 ## 把字体套到 Label 上，并标记 `ui_font_custom`：Global 的整树字体重套会跳过它，
 ## 由本文件在 font_changed 时重建（否则会丢掉兜底链，或把字体换回共用实例）。
-func _apply_font_override(label: Label, font: FontFile) -> void:
+func _apply_font_override(label: Label, font: Font) -> void:
 	if label == null or font == null:
 		return
 	label.set_meta(&"ui_font_custom", true)
@@ -661,8 +681,9 @@ const ACTION_HINT_FONT_SIZE: int = 36
 
 ## [[KeyLabel, TextLabel], ...]，按场景里的行顺序缓存。
 var _hint_rows: Array = []
-## 36px 提示统一使用的「锐利字体副本」（AA/次像素关、oversampling=1，见 _apply_ammo_font）。
-var _crisp_ui_font: FontFile = null
+## 36px 提示统一使用的字体视图（FontVariation 包装基字体 + 无兜底链，见 _apply_ammo_font）。
+## ⚠ 不能用 FontFile.duplicate()：那会让字随机变成别的字（见 _make_font_variant 的 ★ 说明）。
+var _crisp_ui_font: Font = null
 
 
 func _cache_action_hint_rows() -> void:

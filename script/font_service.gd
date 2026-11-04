@@ -89,6 +89,15 @@ func load_ui_font(path: String) -> FontFile:
 func make_pixel_crisp(ff: FontFile) -> void:
 	if ff == null:
 		return
+	## ★值没变就一个 setter 都别碰（2026-11-04）：这些属性一旦真的被改写，
+	## TextServer 会清掉该字体的字形缓存并重新栅格化 —— 屏幕上**已经发出的绘制指令**
+	## 仍指向旧的字形图集区域，会被新栅格化的字形覆盖 → 玩家看到「数字变字母/字母变数字」。
+	## .import 已把这些值设成同样数值，且 Global.load_ui_font() 在启动时就过了一遍，
+	## 所以正常情况下这里必然全命中提前返回；加这道判定是为了让它**结构上**不可能误清缓存。
+	if (ff.antialiasing == TextServer.FONT_ANTIALIASING_NONE
+			and ff.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_DISABLED
+			and is_equal_approx(ff.oversampling, 1.0)):
+		return
 	ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
 	ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 	ff.oversampling = 1.0
