@@ -1,23 +1,25 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://xi0k4nuyj31j"]
 
-[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="2"]
-[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2_vxpjb"]
-[ext_resource type="Texture2D" uid="uid://dp1r5qhap55k7" path="res://art/WeaponAttack/人斬り包丁/人斬り包丁_attack1.png" id="3"]
-[ext_resource type="Texture2D" uid="uid://dmjow6qlmi38s" path="res://art/Ui/装備アイコンナイフ.png" id="4"]
-[ext_resource type="AudioStream" uid="uid://8w1a47d6hbdd" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
-[ext_resource type="AudioStream" uid="uid://cq8l1xcyq0g13" path="res://sound/打撃5.ogg" id="6"]
-[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
-[ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8"]
-[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_17khu"]
-[ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="8_qrx06"]
+[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Script" path="res://script/bullet_data.gd" id="2_vxpjb"]
+[ext_resource type="Texture2D" path="res://art/WeaponAttack/人斬り包丁/人斬り包丁_attack1.png" id="3"]
+[ext_resource type="Texture2D" path="res://art/Ui/装備アイコンナイフ.png" id="4"]
+[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="5"]
+[ext_resource type="AudioStream" path="res://sound/打撃5.ogg" id="6"]
+[ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="8"]
+[ext_resource type="AudioStream" path="res://sound/チャキッ.ogg" id="8_17khu"]
+[ext_resource type="Texture2D" path="res://art/Weapon/A武器セット４.png" id="8_qrx06"]
+[ext_resource type="AudioStream" path="res://sound/(効果音)打撃3.ogg" id="11_qsnu7"]
+[ext_resource type="AudioStream" path="res://sound/回避2.ogg" id="12_qdnuf"]
+[ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-のび太セット包丁.png" id="13_8eg6x"]
 
 [resource]
 script = ExtResource("1")
 attack_power = 67
 attack_speed = 1.25
 weapon_state_name = "CombatKnife"
-weapon_walk_texture = ExtResource("2")
+weapon_walk_texture = ExtResource("13_8eg6x")
 is_ranged = false
 weapon_slot = 1
 attack_sound = ExtResource("5")

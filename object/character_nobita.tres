@@ -1,33 +1,33 @@
 [gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://blrhmbkq42534"]
 
-[ext_resource type="Script" uid="uid://b67yvyyt02jmw" path="res://script/character_data.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://dsmgfx2at3vf6" path="res://art/Characters/のび太セット.png" id="1_8a3k1"]
-[ext_resource type="AudioStream" uid="uid://gjqqcva5ucwt" path="res://sound/死んだ.ogg" id="1_dgx65"]
-[ext_resource type="Texture2D" uid="uid://j0u8qai8kpvk" path="res://art/Characters/のび太歩行セット.png" id="2_dd21q"]
-[ext_resource type="AudioStream" uid="uid://bol0wtfln05v2" path="res://sound/のび太[6].ogg" id="3_o5s41"]
-[ext_resource type="Texture2D" uid="uid://dfg4otovkga7k" path="res://art/Face/主人公顔.png" id="5_egp5s"]
-[ext_resource type="Texture2D" uid="uid://b8xq3152r8cpm" path="res://art/Characters/のび太反撃セット.png" id="6_o5s41"]
-[ext_resource type="Script" uid="uid://cx2uh27f5clbv" path="res://script/skill_data.gd" id="7_iwmu5"]
+[ext_resource type="Script" path="res://script/character_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット.png" id="1_8a3k1"]
+[ext_resource type="AudioStream" path="res://sound/死んだ.ogg" id="1_dgx65"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太歩行セット.png" id="2_dd21q"]
+[ext_resource type="AudioStream" path="res://sound/のび太[6].ogg" id="3_o5s41"]
+[ext_resource type="Texture2D" path="res://art/Face/主人公顔.png" id="5_egp5s"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太反撃セット.png" id="6_o5s41"]
+[ext_resource type="Script" path="res://script/skill_data.gd" id="7_iwmu5"]
 [ext_resource type="Resource" path="res://object/skill_test.tres" id="7_skill"]
 [ext_resource type="Resource" path="res://object/skill_sa_kankaku.tres" id="9_skill"]
-[ext_resource type="AudioStream" uid="uid://drnowuxstl1o1" path="res://sound/(効果音)打撃1.ogg" id="10_counter"]
-[ext_resource type="Texture2D" uid="uid://dit06cxwuy6mn" path="res://art/Characters/のび太セット近战.png" id="17_gbxpp"]
-[ext_resource type="Texture2D" uid="uid://dwyjyjwk0ve33" path="res://art/Characters/のび太セット近接武器２.png" id="20_iva5t"]
-[ext_resource type="Texture2D" uid="uid://b0fjnhsn2mqe5" path="res://art/Characters/のび太セットナイフ.png" id="20_knife"]
-[ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="21_mag"]
-[ext_resource type="Texture2D" uid="uid://r04meep8xkd2" path="res://art/Characters/のび太セットフライパン.png" id="22_fp"]
-[ext_resource type="Texture2D" uid="uid://ivldoltn11wm" path="res://art/Characters/のび太セットボウガン.png" id="23_bg"]
-[ext_resource type="Texture2D" uid="uid://cqmnwxbhnmwut" path="res://art/Characters/のび太セット近接武器.png" id="23_nq468"]
-[ext_resource type="Texture2D" uid="uid://bslp7hqoi2wwy" path="res://art/Characters/のび太セット近战5.png" id="24_1esmk"]
-[ext_resource type="Texture2D" uid="uid://bdta1cv0caxvv" path="res://art/Characters/のび太セットアサルトライフル.png" id="24_ar"]
-[ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="25_sg"]
-[ext_resource type="Texture2D" uid="uid://beww2cyxhe4c1" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="26_smg"]
-[ext_resource type="Texture2D" uid="uid://ddq710bajidb7" path="res://art/Characters/[2K-VX]-のび太セットロケットランチャー.png" id="27_f28ms"]
-[ext_resource type="Texture2D" uid="uid://csoysbu3j0wy" path="res://art/Characters/のび太グレネードランチャー.png" id="27_gl"]
-[ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="28_rpg"]
-[ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="29_snp"]
-[ext_resource type="Texture2D" uid="uid://cyy5n63gmh5os" path="res://art/Characters/のび太セット近战1.png" id="31_melee"]
-[ext_resource type="Texture2D" uid="uid://dnr0i8dsbaqsl" path="res://art/Characters/のび太セットスティンガー.png" id="32_stinger"]
+[ext_resource type="AudioStream" path="res://sound/(効果音)打撃1.ogg" id="10_counter"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战.png" id="17_gbxpp"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近接武器２.png" id="20_iva5t"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットナイフ.png" id="20_knife"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットマグナム.png" id="21_mag"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットフライパン.png" id="22_fp"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットボウガン.png" id="23_bg"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近接武器.png" id="23_nq468"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战5.png" id="24_1esmk"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットアサルトライフル.png" id="24_ar"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットショットガン.png" id="25_sg"]
+[ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-のび太セットマシンガン.png" id="26_smg"]
+[ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-のび太セットロケットランチャー.png" id="27_f28ms"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太グレネードランチャー.png" id="27_gl"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットRPG7.png" id="28_rpg"]
+[ext_resource type="Texture2D" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="29_snp"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战1.png" id="31_melee"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セットスティンガー.png" id="32_stinger"]
 
 [resource]
 script = ExtResource("1")
@@ -45,7 +45,7 @@ death_texture = ExtResource("1_8a3k1")
 death_char_index = 6
 weapon_walk_textures = {
 "Bowgun": ExtResource("23_bg"),
-"CombatKnife": ExtResource("31_melee"),
+"CombatKnife": ExtResource("20_knife"),
 "FireAxe": ExtResource("23_nq468"),
 "Frypan": ExtResource("22_fp"),
 "Knife": ExtResource("20_knife"),
