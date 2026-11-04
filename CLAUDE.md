@@ -208,6 +208,15 @@ Global 启动时自动创建 `SFX` / `Music` 总线。SFX 音效→SFX 总线，
 （空或属于字体族的路径 → 跟随开关，其它 → 原样）/ `resolve_and_load_font(path)` / `apply_ui_font(label, size)`。
 字体切换会广播 `Global.font_changed`，并整树重套当前场景。
 
+**铁律：禁止 `FontFile.duplicate()`（2026-11-04 玩家大面积「字体错乱」的根因）。**
+`duplicate()` 造出的是**第二份 FontFile**，它与基字体共享字形图集却各自维护占用表；
+基字体后栅格化的字形会覆盖副本用过的区域，而屏幕上**已发出的绘制指令仍指向那块 UV** →
+数字变字母、字母变数字，重绘一次还可能换成另一种（HUD 弹药显示 `30/A70` 就是这么来的）。
+需要「加兜底链 / 加变体」时用 `FontVariation`（只包装 `base_font`，自身不持有图集），
+抗锯齿/oversampling 交给基字体（`Global.load_ui_font()` 已过 `make_pixel_crisp()`）。
+静态守卫：`godot --headless --path <项目> res://tools/font_duplicate_guard_check.tscn`（违规退出码 1）。
+例外豁免：该行写 `font-guard-allow` 注释，并在 commit 说明理由。
+
 导入参数：缝合像素 `antialiasing=1`、其余 `antialiasing=0`、`hinting=0`、`subpixel_positioning=0`、`oversampling=1.0`。
 
 ### 文字渲染
