@@ -1308,7 +1308,12 @@ func _run_network_attack_presentation(token: int, wd: WeaponData, stage: int = 1
 	for index: int in range(sequence.size()):
 		if token != _network_attack_token or not is_instance_valid(self) or not is_inside_tree():
 			return
-		set_attack_char_index(sequence[index])
+		## ★步号必须一并传（2026-11-04 用户实测「多人模式主机与客户端都不显示武器动作图」）：
+		## 单机由 `PlayerMeleeAttackState._set_attack_frame()` 传 seq_idx，武器单体动作图
+		## 才能按「前摇/挥动/后摇」选列（见 WeaponData.melee_weapon_sprite_seq_cols）。
+		## 联机表现此前只传 char_idx → `_current_weapon_seq_idx` 恒为 -1 →
+		## `get_melee_weapon_sprite_col()` 返回 -1 → 武器叠层永远隐藏（两端一致）。
+		set_attack_char_index(sequence[index], index)
 		if index == impact_index:
 			var scene_tree := get_tree()
 			if not scene_tree:
@@ -1865,6 +1870,17 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 	if tree and tree.current_scene:
 		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
 	_play_sound(hurt_sound)
+
+
+## 联机表现接口（NetworkWorld.item_use_presentation）：Host 代本机结算消耗品后，
+## 使用表现（音效 / 全屏闪光）由**本端**补播。
+##
+## 【为什么需要这条通道（2026-11-04）】Client 按 3/4 只提交请求，本地 `use_healing_item()`
+## 直接 return；Host 代为 `apply_item_effects()` 时 `_play_item_use_feedback` 里
+## 「不是本机操控的玩家 → return」的闸门又把表现掐掉 → 客户端**全程无音效、无闪光**。
+## 这里仍复用同一个 `_play_item_use_feedback`：它自带的闸门正好只放行本机玩家。
+func play_network_item_use_feedback(item: ItemData) -> void:
+	_play_item_use_feedback(item)
 
 
 ## 当前应恢复的常驻染色（受击闪白/受伤红闪结束后回到这里，而不是一律白色）。

@@ -66,9 +66,13 @@ func _ready() -> void:
 	player._facing = 0
 	player.set_attack_char_index(seq[1], 1)
 	_check("朝下 z_index", player.weapon_sprite.z_index, 1)
+	## 「朝上画到身后」是**数据开关**（WeaponData.melee_weapon_sprite_behind_on_up 默认 false）：
+	## 用例必须自己置位，否则断言的是数据里从未开启的行为。2026-11-04 补上。
+	wd.melee_weapon_sprite_behind_on_up = true
 	player._facing = 3
 	player.set_attack_char_index(seq[1], 1)
 	_check("朝上 z_index", player.weapon_sprite.z_index, -1)
+	wd.melee_weapon_sprite_behind_on_up = false
 
 	print("=== 5) 显式绑定表：未列出的步号 → 隐藏 ===")
 	wd.melee_weapon_sprite_seq_cols = {1: 0, 2: 1, 3: 2}
@@ -117,6 +121,20 @@ func _ready() -> void:
 	dedicated.melee_weapon_sprite_force = true
 	player.set_attack_char_index(dedicated.get_melee_attack_char_sequence()[1], 1)
 	_check("visible", player.weapon_sprite.visible, true)
+
+	print("=== 11) 联机攻击表现必须透传步号（2026-11-04 用户实测：多人两端都不显示） ===")
+	player.exit_weapon_mode()
+	var net_wd: WeaponData = (load(BASE_WEAPON) as WeaponData).duplicate()
+	net_wd.melee_weapon_sprite = load(SHEET)
+	net_wd.melee_weapon_sprite_seq_cols = {}
+	net_wd.melee_weapon_sprite_force = true
+	player.enter_weapon_mode(net_wd)
+	player.play_network_attack_presentation(net_wd, 1)
+	for _i: int in range(3):
+		await get_tree().process_frame
+	## 帧时长可能是 0（tres 未配）→ 3 帧内可能已推进到第 N 步；关键是**不再是 -1**。
+	_check("联机攻击步号已透传（>=0）", int(player._current_weapon_seq_idx) >= 0, true)
+	_check("联机攻击首帧 weapon_sprite.visible", player.weapon_sprite.visible, true)
 
 	print("\n失败 %d 项" % _fail)
 	await get_tree().process_frame

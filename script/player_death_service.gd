@@ -92,6 +92,13 @@ func _apply_network_death_state() -> void:
 	_p._shove_mode = false
 	_p._shove_texture = null
 	_clear_weapon_pose()
+	## ★联机死亡/倒地音效（2026-11-04 用户实测「多人模式有些音效不播」）：
+	## `network_controlled` 实体的 `_die()` 在这里就 return，走不到单机那条
+	## `_play_sound(death_sound)`；而 Client 的死亡是经快照 `apply_network_health_state`
+	## 直接进本函数 —— 于是**两端、所有人**的死亡/倒地都没有声音。
+	## `play_sound` → `Global.play_player_sfx`：本机玩家恒满音量，远端玩家按 2D 距离衰减。
+	## 幂等由调用点保证（`_die()` 只走一次；快照侧有 `not _is_dying` 闸门）。
+	_p._play_sound(_p.death_sound)
 	if _p.animation_timer:
 		_p.animation_timer.stop()
 	var tex: Texture2D = _p.death_texture if _p.death_texture else _p.walk_texture

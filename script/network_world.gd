@@ -3250,6 +3250,43 @@ func player_hurt_presentation(peer_id: int, damage: float, position: Vector2) ->
 			print("[NetworkWorld] CLIENT_PLAYER_HURT_PRESENTATION peer=%d damage=%.1f" % [peer_id, damage])
 
 
+## Host：把消耗品使用表现转发给**使用者本人**的 Client（2026-11-04）。
+## 资源仍按 id 由接收端本地解析（联机铁律：远端包只带 id）。
+func _announce_item_use(peer_id: int, item: ItemData, kind: String) -> void:
+	if item == null:
+		return
+	_send_to_ready_clients(&"item_use_presentation", [peer_id, item.item_id, kind])
+
+
+## Client：消耗品使用表现（使用音效 + 全屏闪光）。
+## 只在**使用者本人**的机器上播 —— 队友用喷雾不该闪自己的屏，也不该盖住自己的音效。
+@rpc("authority", "call_remote", "reliable")
+func item_use_presentation(peer_id: int, item_id: String, kind: String) -> void:
+	if net.is_host or _scene_transitioning or peer_id != int(net.my_peer_id):
+		return
+	var node := _player_node(_players.get(peer_id, {}))
+	if not is_instance_valid(node) or not node.has_method("play_network_item_use_feedback"):
+		return
+	var item: ItemData = _resolve_network_consumable(item_id, kind, node)
+	if item == null:
+		return
+	node.call("play_network_item_use_feedback", item)
+	print("[NetworkWorld] CLIENT_ITEM_USE peer=%d item=%s kind=%s" % [peer_id, item_id, kind])
+
+
+## 消耗品 id → 本地 ItemData（资源不过网）。
+## 优先取该玩家**镜像座位上仍持有的那一格**：Host 刚扣减、快照尚未到达时，
+## 它是唯一还能拿到 `use_sound` 的来源；已被快照清空则回退白名单表。
+func _resolve_network_consumable(item_id: String, kind: String, node: Node) -> ItemData:
+	var state: PlayerState = Players.get_state_for_entity(node)
+	if state != null:
+		var held: ItemData = state.healing_item if kind == "healing" else state.support_item
+		if held != null and held.item_id == item_id:
+			return held
+	var table: Dictionary = NETWORK_HEALINGS if kind == "healing" else NETWORK_SUPPORTS
+	return table.get(item_id) as ItemData
+
+
 @rpc("authority", "call_remote", "reliable")
 func enemy_hurt_presentation(entity_id: int, damage: float, position: Vector2, is_headshot: bool,
 		backstab: bool = false) -> void:
@@ -4803,6 +4840,10 @@ func _try_host_use_healing(peer_id: int) -> void:
 		return
 	if node.has_method("apply_item_effects"):
 		node.call("apply_item_effects", used)
+	## ★使用表现回传（2026-11-04）：Host 代远程玩家结算时，`_play_item_use_feedback`
+	## 只对「本机操控的玩家」生效 → Client 端此前**完全没有音效/闪光**。
+	## 必须在下面的快照之前发（接收端要靠镜像座位上仍在的那一格解析 use_sound）。
+	_announce_item_use(peer_id, used, "healing")
 	# 看护被动与章节统计与单机同规则（player.gd 的同一对入口）。
 	if node.has_method("apply_nursing_passive"):
 		node.call("apply_nursing_passive", used)
@@ -4857,6 +4898,9 @@ func _try_host_use_support(peer_id: int) -> void:
 		return
 	if node.has_method("apply_item_effects"):
 		node.call("apply_item_effects", used)
+	## 使用表现回传（2026-11-04，同 _try_host_use_healing）：Host 端闸门会掐掉
+	## 非本机玩家的表现，Client 按 4 用鎮痛剤/アドレナリン 时听不到使用音效。
+	_announce_item_use(peer_id, used, "support")
 	_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 	## 辅助品槽已空：立刻可靠回灌，Client HUD 不必等最多 2 秒的周期重同步。
 	_broadcast_reliable_world_snapshot()
@@ -4919,6 +4963,8 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		return
 	if player.global_position.distance_to(pickup.global_position) > 40.0:
 		return
+	## 拾取音效的定位点（2026-11-04）：拾取物随后会被 queue_free，先把坐标留好。
+	var pickup_position: Vector2 = pickup.global_position
 	## ★地图预摆补给点（2026-10-12）：Host 权威提交时标记该点已消耗（走 quest_flags 广播
 	## → 两端持久化，防死亡重载/读档复活）。动态掉落（敌人掉落/玩家丢弃）无此 key，跳过。
 	var map_key: String = str(pickup.get("map_source_key"))
@@ -4931,6 +4977,9 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		if not pickup.call("_do_pickup"):
 			return
 		_pickups.erase(pickup_id)
+		## 拾取音：Host 侧已由 `_do_pickup` 播过（healing_pickup 内部同一个入口），
+		## 这里只补广播给 Client（2026-11-04）。
+		_announce_pickup_sfx(pickup_id, pickup_position)
 		_send_pickup_snapshot_to_ready_clients()
 		## 消耗品库存不在高频热包里 → 立刻补一次可靠世界快照，Client HUD 的
 		## 「治疗品 / 辅助品」提示不用等最多 2 秒的周期重同步。
@@ -4957,6 +5006,10 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		pickup.queue_free()
 		if not map_key.is_empty():
 			Global.mark_map_pickup_consumed(map_key)
+		## 拾取音（2026-11-04）：武器/投掷物走 Host 权威事务时此前**两端都没有声音**
+		## （单机的 pickup_sound 只在 weapon_pickup/healing_pickup 的 _do_pickup 里播）。
+		_play_pickup_sfx(throwable, pickup_position)
+		_announce_pickup_sfx(pickup_id, pickup_position)
 		_send_pickup_snapshot_to_ready_clients()
 		## 投掷物数量（×N）同理立刻回灌，避免 HUD 短暂显示旧数量。
 		_broadcast_reliable_world_snapshot()
@@ -4997,9 +5050,65 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	## ★地图预摆武器补给点：Host 权威提交时标记已消耗（同上，防重载复活）。
 	if not map_key.is_empty():
 		Global.mark_map_pickup_consumed(map_key)
+	## 拾取音（2026-11-04）：同投掷物分支 —— 单机在 weapon_pickup._do_pickup 里播，
+	## 联机走本权威事务，此前 Host 与 Client 都没有声音。
+	_play_pickup_sfx(weapon, pickup_position)
+	_announce_pickup_sfx(pickup_id, pickup_position)
 	# 拾取是一个不可拆分的权威事务：装备/弹匣变化与地面掉落物变化必须在同一条可靠 RPC 中抵达 Client。
 	_send_pickup_snapshot_to_ready_clients()
 	print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d weapon=%s" % [peer_id, pickup_id, weapon.item_id])
+
+
+## ── 拾取音效（2026-11-04 补齐）──
+##
+## 【为什么需要】联机拾取是 Host 权威事务：Client 只提交 `pickup_request`，本地不跑
+## `weapon_pickup._do_pickup` / `healing_pickup._do_pickup`，那条路径里的
+## `Global.play_pickup_sfx()` 自然不会执行；Host 侧的 `_try_host_pickup` 又是手写的
+## 事务（只有治疗品借道 `_do_pickup` 才响）→ 结果：
+##   · 武器 / 投掷物：Host 与 Client **两端都没有**拾取音；
+##   · 治疗品：只有 Host 响，真正捡东西的 Client 听不到。
+##
+## 【资源不过网】Host 直接读拾取物上的 `weapon_data` / `item`；Client 收到 pickup_id 后
+## 读**自己那份同 id 的拾取物**（掉落物快照先于本 RPC 建立），两端用同一份 .tres。
+func _play_pickup_sfx(item: ItemData, position: Vector2) -> void:
+	var stream: AudioStream = null
+	var pitch: float = 1.0
+	if item != null:
+		stream = item.pickup_sound
+		pitch = maxf(item.pickup_sound_pitch, 0.01)
+	if stream == null and not Global.default_pickup_sfx_path.is_empty():
+		stream = load(Global.default_pickup_sfx_path) as AudioStream
+	if stream == null:
+		return
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	## 世界坐标定位（同 2026-10-20 口径）：远端队友的拾取音随距离衰减，声源=掉落点。
+	Global.play_sfx_managed(stream, scene, true, pitch, position)
+
+
+## Host：把本次拾取音广播给所有 Client（必须在拾取物快照之前发 —— 接收端要靠
+## `_pickups[pickup_id]` 解析音效资源）。
+func _announce_pickup_sfx(pickup_id: int, position: Vector2) -> void:
+	_send_to_ready_clients(&"pickup_sfx_presentation", [pickup_id, position])
+
+
+## Client：拾取音（拾取者本人与队友都听得到，按掉落点做距离衰减）。
+@rpc("authority", "call_remote", "reliable")
+func pickup_sfx_presentation(pickup_id: int, position: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	## `_pickups` 里可能留着已释放对象 —— 先 is_instance_valid 再 as（同 _build_pickup_snapshot）。
+	var pickup_value: Variant = _pickups.get(pickup_id)
+	var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
+	var item: ItemData = null
+	if is_instance_valid(pickup):
+		item = pickup.get("weapon_data") as WeaponData
+		if item == null:
+			item = pickup.get("item") as ItemData
+	_play_pickup_sfx(item, position)
+	print("[NetworkWorld] CLIENT_PICKUP_SFX pickup=%d item=%s" % [
+		pickup_id, item.item_id if item != null else "default"])
 
 
 func _spawn_host_dropped_weapon(weapon: WeaponData, player: Node2D, state: PlayerState) -> void:
