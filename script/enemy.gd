@@ -191,9 +191,9 @@ var variant_rage_discover_pitch: float = 1.0         ## 狂暴吼叫音调（Zom
 ## この状態で１０秒ほど走り回されると倒れてしまう」——逼玩家占位、边打边走的核心谜题。
 ## 0 = 该变体禁用力竭。
 var variant_rage_exhaust_seconds: float = 0.0
-var variant_rage_exhaust_down_seconds: float = 3.5  ## 力竭倒地时长（秒），起身时变回普通形态
+var variant_rage_exhaust_down_seconds: float = 1.0  ## 力竭倒地时长（秒），起身直接换回普通形态（2026-11-04 改 1 秒）
 var _rage: bool = false                         ## 当前是否处于狂暴（クリムゾンヘッド）形态
-var _rage_move_accum: float = 0.0               ## 狂暴态累计移动时间（秒）
+var _rage_elapsed: float = 0.0                 ## 狂暴态累计时间（秒），达到阈值就倒地
 var _rage_exhaust_target: float = 0.0           ## 本次狂暴的力竭阈值（含 ±抖动，防同批同时倒）
 var _exhausted: bool = false                    ## 是否处于力竭倒地
 var _base_walk_texture: Texture2D = null        ## 变体注入前的普通行走图（set_rage(false) 恢复用）
@@ -1036,11 +1036,15 @@ func _process(delta: float) -> void:
 	# 属性状态（炎/雷/氷）更新：燃烧掉血、感电/冻结计时与褪色
 	_update_element_status(delta)
 
-	# 狂暴力竭计时（クリムゾンヘッド）：只累计「实际在跑」的时间 —— 被玩家放风筝
-	# 才会累，站着围殴不算。达到阈值切 Exhausted（倒地）。
-	if _rage and not _exhausted and _rage_exhaust_target > 0.0 and _moving:
-		_rage_move_accum += delta
-		if _rage_move_accum >= _rage_exhaust_target:
+	# 狂暴力竭计时（クリムゾンヘッド）：狂暴持续达到阈值（默认 10 秒）→ 切 Exhausted（倒地 1 秒）。
+	# ★2026-11-04 用户实测「现在不会倒了」：旧实现**只累计 `_moving`**（真在跑才算），
+	#   而尸潮里十几只挤在玩家身边基本都在 Attack 状态（moving=false）→ 永远攒不到 10 秒，
+	#   峰值结束时又被 set_rage(false) 清零 → 从头到尾看不到一只倒下。
+	#   现改为按**狂暴持续时间**计：手册写「跑约 10 秒」，那是放风筝时的上限描述；
+	#   实际玩法里围殴同样是消耗，只算移动会让这个机制在真实尸潮里几乎不可触发。
+	if _rage and not _exhausted and _rage_exhaust_target > 0.0:
+		_rage_elapsed += delta
+		if _rage_elapsed >= _rage_exhaust_target:
 			_enter_exhausted()
 
 	# 防守战锁定维持：目标倒下则改锁、被视野轮询抢走则夺回（未锁定时是空操作）
@@ -2840,7 +2844,7 @@ func set_rage(on: bool) -> void:
 			_play_pool(variant_rage_discover_sound_pool, variant_rage_discover_sound,
 				variant_rage_discover_pitch if variant_rage_discover_pitch > 0.0 else 1.0)  ## 狂暴化瞬间的吼叫
 		# 力竭阈值重置并加 ±20% 抖动：同批狂暴的丧尸不会整整齐齐一起倒
-		_rage_move_accum = 0.0
+		_rage_elapsed = 0.0
 		_rage_exhaust_target = (
 			variant_rage_exhaust_seconds * randf_range(0.85, 1.2)
 			if variant_rage_exhaust_seconds > 0.0 else 0.0
@@ -2851,7 +2855,7 @@ func set_rage(on: bool) -> void:
 			move_speed = _base_move_speed
 		if variant_rage_attack_damage > 0.0:
 			attack_damage = _base_attack_damage
-		_rage_move_accum = 0.0
+		_rage_elapsed = 0.0
 		_rage_exhaust_target = 0.0
 	_refresh_sprite()
 

@@ -207,6 +207,10 @@ const OCCLUDER_SEGMENTS: int = 12
 const OCCLUDER_NEAR_DISTANCE: float = 24.0
 const OCCLUDER_FADE_DISTANCE: float = 40.0
 var _time: float = 0.0
+## 已应用的「遮挡/质量」设置快照；变化时才重写灯属性（见 _sync_quality_settings）。
+var _quality_key: String = ""
+## 人物拖影当前是否处于「已整体隐藏」状态（关掉开关后只隐藏一次，不每帧刷）。
+var _shadows_hidden: bool = false
 var _flash_left: float = 0.0
 var _flash_total: float = 0.0
 var _flash_strength: float = 0.0
@@ -352,9 +356,40 @@ func _process(delta: float) -> void:
 		return
 	_time += delta
 	var zoom: float = maxf(get_viewport().get_canvas_transform().get_scale().x, 0.001)
+	_sync_quality_settings()
 	_refresh_builtin(delta, zoom)
-	_update_character_shadows(zoom)
+	## ★人物拖影开关（2026-11-04 用户需求，手机卡顿）：整段跳过 —— 它是本文件单帧最贵的一项
+	## （每个角色每帧遍历全部灯光挑最亮的一盏，再写一堆着色器参数）。
+	if Global.char_shadows:
+		_update_character_shadows(zoom)
+		if _shadows_hidden:
+			_shadows_hidden = false
+	elif not _shadows_hidden:
+		_hide_all_shadows()
+		_shadows_hidden = true
 	_update_flash(delta)
+
+
+## 把「遮挡 / 影子质量」两项全局设置同步到所有灯。
+## 只在设置变化时写一遍：`shadow_filter` / `shadow_filter_smooth` 每帧重写 32 盏灯
+## （60fps → 每秒近 4000 次属性写）没有任何意义，pure overhead。
+func _sync_quality_settings() -> void:
+	var occl_on: bool = Global.light_occluders
+	var quality: int = clampi(Global.shadow_quality, 0, 2)
+	var key: String = "%s/%d" % [str(occl_on), quality]
+	if key == _quality_key:
+		return
+	_quality_key = key
+	var smooth: float = shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
+	if quality <= 0:
+		smooth = 0.0
+	for rec: LightRecord in _records:
+		var l: PointLight2D = rec.light
+		if l == null or not is_instance_valid(l):
+			continue
+		l.shadow_enabled = rec.occlude and occl_on
+		l.shadow_filter = quality
+		l.shadow_filter_smooth = smooth
 
 
 ## 内置模式每帧：推进闪烁、同步 PointLight2D 的位置/半径/颜色/亮度。
@@ -362,6 +397,10 @@ func _process(delta: float) -> void:
 func _refresh_builtin(delta: float, zoom: float) -> void:
 	var live: Array = []
 	var mult: float = glow_strength / GLOW_BASE * LIGHT_ENERGY_SCALE
+	## ★视野外剔除（2026-11-04）：大图里同时存在的火海/路灯可能有十几盏，
+	## 光池完全在画面外时它照不到任何可见像素，却照样每帧走一遍属性写入 + 参与光照渲染。
+	## 这里按「视野矩形外扩光池半径」判一次，不在范围内就只保持位置、跳过其余属性。
+	var view_world: Rect2 = _view_world_rect()
 	for rec: LightRecord in _records:
 		if not is_instance_valid(rec.source) or not rec.source.is_inside_tree():
 			_drop_light(rec)
@@ -377,6 +416,12 @@ func _refresh_builtin(delta: float, zoom: float) -> void:
 		var sa: float = _source_alpha(rec)
 		rec.alpha = sa
 		var world_radius: float = maxf(rec.radius / zoom, 8.0)
+		## 视野外：只同步位置（下次进画面时不用先跳一下），其余属性全部省掉。
+		if not view_world.grow(world_radius).has_point(rec.source.global_position):
+			if l.visible:
+				l.visible = false
+				l.global_position = rec.source.global_position
+			continue
 		## 淡出时让光池一起收拢（FADE_RADIUS_SHRINK）：只缩半径，中心亮度仍由 alpha 决定。
 		## 纯亮度衰减会留下一个「又大又暗」的圆盘，肉眼读作「灯还没关」，尾巴很长。
 		var pool: float = lerpf(1.0 - FADE_RADIUS_SHRINK, 1.0, sa)
@@ -385,13 +430,27 @@ func _refresh_builtin(delta: float, zoom: float) -> void:
 		## 亮度还要乘光源（含父链）的透明度：SignalVisibilityNode 的淡出是 modulate:a → 0，
 		## 不跟着衰减就会「贴图慢慢暗、灯一直亮到最后一帧突然灭」。
 		l.energy = maxf(rec.intensity * rec.value * mult, 0.0) * sa
-		l.shadow_enabled = rec.occlude
-		l.shadow_filter = shadow_filter_quality
-		l.shadow_filter_smooth = shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
+		## 遮挡开关 + 滤波参数由 `_sync_quality_settings()` 在设置变化时统一写，
+		## 这里只同步「本盏灯自己的 occlude 位」—— `register_light` 可以中途改它。
+		if l.shadow_enabled != (rec.occlude and Global.light_occluders):
+			l.shadow_enabled = rec.occlude and Global.light_occluders
 		## ★光源节点被隐藏（含父链）时不能发光（2026-10-28 用户实测「一开始隐藏的灯还亮着」）：
 		## PointLight2D 是本层自己建的子节点，**不随光源节点显隐**，只能在这里判定。
 		l.visible = _source_visible(rec) and l.energy > 0.001
 	_records = live
+
+
+## 当前可视区域对应的**世界坐标**矩形（由相机 transform 反推）。
+## 只用于灯光剔重（见 `_refresh_builtin`），精度要求不高。
+func _view_world_rect() -> Rect2:
+	var vp: Viewport = get_viewport()
+	if vp == null:
+		return Rect2()
+	var inv: Transform2D = vp.get_canvas_transform().affine_inverse()
+	var r: Rect2 = vp.get_visible_rect()
+	var p0: Vector2 = inv * r.position
+	var p1: Vector2 = inv * (r.position + r.size)
+	return Rect2(p0, p1 - p0).abs()
 
 
 ## 光源节点的可见性（含整条父链）。SignalVisibilityNode 这类包装层隐藏时，
@@ -429,9 +488,10 @@ func _ensure_light(rec: LightRecord) -> void:
 	l.blend_mode = Light2D.BLEND_MODE_ADD
 	l.range_item_cull_mask = LIGHT_CULL_MASK
 	l.shadow_item_cull_mask = SHADOW_CULL_MASK
-	l.shadow_enabled = rec.occlude
-	l.shadow_filter = shadow_filter_quality
-	l.shadow_filter_smooth = shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
+	l.shadow_enabled = rec.occlude and Global.light_occluders
+	l.shadow_filter = clampi(Global.shadow_quality, 0, 2)
+	l.shadow_filter_smooth = 0.0 if Global.shadow_quality <= 0 \
+			else shadow_smooth * clampf(shadow_softness, 0.0, 2.0)
 	l.height = rec.light_height
 	_builtin_root.add_child(l)
 	rec.light = l
@@ -718,6 +778,15 @@ func _update_flash(delta: float) -> void:
 ## 闪烁推进：随机游走（低频）+ 正弦抖动（高频），两者都乘 flicker 幅度。
 ## 模式只影响"什么时候重掷目标值"和"要不要叠正弦"，平滑本身始终走低通，避免硬跳。
 func _advance_flicker(rec: LightRecord, delta: float) -> void:
+	## ★「灯光静态」全局开关（2026-11-04 用户需求）：直接钉成满亮度，不再重掷/插值。
+	## 省掉的是每盏灯每帧的随机数 + 指数平滑 + 写 `energy`；画面也更稳，
+	## 对光敏感或手机发热的玩家可以直接关掉闪烁。
+	if Global.light_static:
+		rec.value = 1.0
+		rec.cur = 0.0
+		rec.target = 0.0
+		rec.step_left = 0.0
+		return
 	if rec.flicker <= 0.0:
 		rec.value = 1.0
 		rec.cur = 0.0

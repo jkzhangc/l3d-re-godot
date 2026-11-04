@@ -139,11 +139,15 @@ var _settings_bar_fill: Array[ColorRect] = []
 ## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**，
 ##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式",
+		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
 	return out
+## 菜单窗口与画布上下边的最小留白（像素）。窗口太高时按它夹紧纵向位置，见 `_create_menu_window`。
+const WINDOW_TOP_MARGIN: float = 8.0
+const WINDOW_BOTTOM_MARGIN: float = 8.0
 ## 设置页窗口尺寸（2026-09-14）：音量条/数值标签比菜单项宽，进设置时窗口加宽、退出还原
 const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(520, 336)
 
@@ -259,7 +263,14 @@ const CHANGELOG_FONT_SIZE: int = 24
 
 ## ⚠ CHANGELOG_VERSION_TEXT 是「本版已看过」的判据（`Global.changelog_seen_version`）：
 ## 改了它 → 玩家下次启动会**自动弹一次**更新日志。所以每次发版必须换新字符串。
-const CHANGELOG_BODY := """【修复】
+const CHANGELOG_BODY := """【新增】
+· 设置里新增四项灯光 / 画面选项：灯光闪烁（动态 / 静态）、人物影子、遮挡阴影、
+  影子质量（低 / 中 / 高）。手机一开灯就卡的话，把「人物影子」「遮挡阴影」关掉、
+  把影子质量调到低，会明显顺很多；想让画面更稳也可以把灯光设成「静态」
+· 狂暴丧尸跑一阵（约 10 秒）会力竭趴下 1 秒，然后变回普通丧尸接着追；
+  以前围殴时它永远不会累（只算"真在跑"的时间），现在站着打也算消耗
+
+【修复】
 · 弹药数字、右下角按键提示、存档成功的提示等文字，有时会变成别的字
   （数字变字母、中文变成别的字，还时好时坏）—— 已修好
 · 小夫 / 静香捡起 M202 四联火箭、便携式地对空导弹后会整个变成大雄；
@@ -271,6 +282,7 @@ const CHANGELOG_BODY := """【修复】
 · 联机里替换武器会换错格子（举着第 1 格却换掉第 2 格）—— 已和单机统一
 · 联机投掷瞄准时不能调距离、不能原地转身 —— 已和单机一致
 · 玩家昵称、联机大厅的提示文字字号不规整、字发虚 —— 已调清晰
+· 标题画面设置项变多后，最后一行「返回」被挤出屏幕外 —— 已修
 """
 
 
@@ -763,10 +775,7 @@ func _create_menu_window() -> void:
 	## 纵向 = 画布居中 + `window_y_offset`。menu_y_offset(tscn 里 = 268) 是**配合 6 项菜单**
 	## 调出来的：窗口高 364 时顶部落在 566、**底边钉在 930**（与旧的 300 高 / offset 300 完全同一条底边），
 	## 于是"窗口变高但底边不动"= 整体向上长，不会顶出 960 的画布底部。
-	win.position = Vector2(
-		(get_viewport_rect().size.x - window_size.x) / 2.0,
-		(960.0 - window_size.y) / 2.0 + window_y_offset
-	)
+	win.position = _menu_window_position(window_size)
 	win.size = window_size
 
 	# 窗口底图/九宫格框：节点化（2026-09-15），视觉元素在 title_screen.tscn 里，
@@ -1120,15 +1129,25 @@ const COLLECTION_MENU := preload("res://script/ui/collection_menu.gd")
 # 设置面板
 # ═══════════════════════════════════════
 
+## 菜单窗口的唯一定位入口：水平居中 + `window_y_offset`，纵向再**夹紧到可视野内**。
+##
+## ★2026-11-04：旧公式 `(960 - h)/2 + offset` 在窗口变高时是**上下对称长**的
+## （顶边上移 h/2、底边下移 h/2）。设置页加到 11 行（584 高）时底边跑到 1040，
+## 最后一行「返回」被画布切掉。底边钉回可视野内即可：
+## 主菜单（364 高）算出 566 < 588，位置**分毫不变**。
+## ⚠ 进设置与退设置两条路必须同源，否则窗口会跳。
+func _menu_window_position(size: Vector2) -> Vector2:
+	var y: float = (960.0 - size.y) / 2.0 + window_y_offset
+	y = clampf(y, WINDOW_TOP_MARGIN, 960.0 - size.y - WINDOW_BOTTOM_MARGIN)
+	return Vector2((get_viewport_rect().size.x - size.x) / 2.0, y)
+
+
 func _apply_window_size(s: Vector2) -> void:
 	## 运行时改窗口尺寸（设置页加宽 / 退出还原）：窗口、RM 底图、九宫格框同步，
 	## 并按新尺寸重新居中。
 	window_size = s
 	var win: Control = $MenuWindow
-	win.position = Vector2(
-		(get_viewport_rect().size.x - s.x) / 2.0,
-		(960.0 - s.y) / 2.0 + window_y_offset
-	)
+	win.position = _menu_window_position(s)
 	win.size = s
 	if _window_bg:
 		_window_bg.size = s
@@ -1237,6 +1256,26 @@ func _build_settings_items() -> void:
 				Global.pickup_hold_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(pick_label)
 			_settings_value_labels.append(pick_label)
+		elif text == "灯光闪烁":
+			var ls_label := _make_menu_gradient_label(
+				Global.light_static_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(ls_label)
+			_settings_value_labels.append(ls_label)
+		elif text == "人物影子":
+			var cs_label := _make_menu_gradient_label(
+				Global.on_off_label(Global.char_shadows), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(cs_label)
+			_settings_value_labels.append(cs_label)
+		elif text == "遮挡阴影":
+			var oc_label := _make_menu_gradient_label(
+				Global.on_off_label(Global.light_occluders), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(oc_label)
+			_settings_value_labels.append(oc_label)
+		elif text == "影子质量":
+			var sq_label := _make_menu_gradient_label(
+				Global.shadow_quality_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(sq_label)
+			_settings_value_labels.append(sq_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -1318,6 +1357,18 @@ func _handle_settings_input(event: InputEvent) -> void:
 				if pick_idx >= 0 and pick_idx < _settings_value_labels.size() \
 						and _settings_value_labels[pick_idx]:
 					_settings_value_labels[pick_idx].text = Global.pickup_hold_label()
+			"灯光闪烁":
+				Global.set_light_static(not Global.light_static)
+				_set_settings_value(items, "灯光闪烁", Global.light_static_label())
+			"人物影子":
+				Global.set_char_shadows(not Global.char_shadows)
+				_set_settings_value(items, "人物影子", Global.on_off_label(Global.char_shadows))
+			"遮挡阴影":
+				Global.set_light_occluders(not Global.light_occluders)
+				_set_settings_value(items, "遮挡阴影", Global.on_off_label(Global.light_occluders))
+			"影子质量":
+				Global.cycle_shadow_quality(1)
+				_set_settings_value(items, "影子质量", Global.shadow_quality_label())
 			"按键布局":
 				_enter_touch_layout_edit()
 			"返回":
@@ -1342,6 +1393,18 @@ func _handle_settings_input(event: InputEvent) -> void:
 			_update_settings_volume_display(1)
 		"界面字体":  # 左右 = 上一个 / 下一个
 			_cycle_ui_font(-1 if delta_vol < 0 else 1)
+		"影子质量":  # 左右 = 降一档 / 升一档
+			Global.cycle_shadow_quality(-1 if delta_vol < 0 else 1)
+			_set_settings_value(items, "影子质量", Global.shadow_quality_label())
+		"灯光闪烁":
+			Global.set_light_static(not Global.light_static)
+			_set_settings_value(items, "灯光闪烁", Global.light_static_label())
+		"人物影子":
+			Global.set_char_shadows(not Global.char_shadows)
+			_set_settings_value(items, "人物影子", Global.on_off_label(Global.char_shadows))
+		"遮挡阴影":
+			Global.set_light_occluders(not Global.light_occluders)
+			_set_settings_value(items, "遮挡阴影", Global.on_off_label(Global.light_occluders))
 
 
 ## ── 按键布局调整（2026-09-30，仅移动端）──
@@ -1365,6 +1428,13 @@ func _on_touch_layout_edit_finished(_saved: bool) -> void:
 	_clear_settings_ui()
 	_build_settings_items()
 	_refresh_settings_cursor()
+
+
+## 按**项名**刷新某一行右侧的值文本（不写死序号：项数会随平台/版本变）。
+func _set_settings_value(items: Array[String], item_text: String, value_text: String) -> void:
+	var idx: int = items.find(item_text)
+	if idx >= 0 and idx < _settings_value_labels.size() and _settings_value_labels[idx]:
+		_settings_value_labels[idx].text = value_text
 
 
 ## 循环切换界面字体并刷新该行显示（Global 会广播 font_changed → 本窗口重排）。

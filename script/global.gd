@@ -55,6 +55,40 @@ var pickup_hold_mode: bool = false
 ## config.json 里**没有**该键时按平台取默认；玩家在设置里改过就以配置为准。
 var show_action_hints: bool = true
 
+## ── 灯光 / 影子（2026-11-04 用户需求：手机端开灯时卡顿）──────────────────
+## 四项都由 `NightOverlay` 每帧读取，改完立即生效（不用重开地图）。
+##
+## ① 灯光静态：true = 所有灯不再闪烁（火苗/坏灯管的明暗抖动全部停止）。
+##    省的是每帧对每盏灯重掷目标值 + 写 `PointLight2D.energy`（32 盏 × 60fps 的常量开销），
+##    顺带让画面更"稳"，对光敏感 / 手机发热的玩家更友好。
+var light_static: bool = false
+## ② 人物影子：整组角色拖影（`NightShadow` 剪影精灵 + 羽化着色器）的总开关。
+##    这是夜景里**单帧最贵**的一项：每个角色每帧都要遍历全部灯光挑"最亮的那盏"，
+##    再把剪影按距离拉长、写一堆着色器参数。手机卡顿首推先关这个。
+var char_shadows: bool = true
+## ③ 遮挡效果：墙体 / 家具 / 光源被挡住时的投影（`PointLight2D.shadow_enabled`）。
+##    关掉等于每盏灯都不再生成阴影贴图 —— 手机上通常是最立竿见影的一项，
+##    代价是光会"穿墙"照进隔壁房间（小地图/窄走廊尤其明显）。
+var light_occluders: bool = true
+## ④ 影子质量：0 = 低（无滤波，最快）/ 1 = 中（PCF5）/ 2 = 高（PCF13，最软最慢）。
+##    只影响**遮挡投影**的滤波与柔化半径；人物拖影的柔化另有 `shadow_softness`。
+var shadow_quality: int = 1
+
+
+## 影子质量档位的显示文案（设置界面用）。
+func shadow_quality_label() -> String:
+	return ["低", "中", "高"][clampi(shadow_quality, 0, 2)]
+
+
+## 灯光静态的显示文案。
+func light_static_label() -> String:
+	return "静态" if light_static else "动态"
+
+
+## 「开 / 关」通用文案（影子 / 遮挡这类纯开关）。
+func on_off_label(on: bool) -> String:
+	return "开" if on else "关"
+
 ## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
 ## 【2026-10-08 拆分】逻辑已抽到 `script/touch_layout_service.gd`（TouchLayoutService），
 ## 这里只保留**同名转发门面 + 属性代理** → 外部（menu_controller / title_screen /
@@ -1510,6 +1544,10 @@ func _apply_config_file(path: String) -> void:
 	facing_lock_mode = int(cfg.get("facing_lock_mode", facing_lock_mode))
 	pickup_hold_mode = bool(cfg.get("pickup_hold_mode", pickup_hold_mode))
 	show_action_hints = bool(cfg.get("show_action_hints", not is_mobile_platform()))
+	light_static = bool(cfg.get("light_static", light_static))
+	char_shadows = bool(cfg.get("char_shadows", char_shadows))
+	light_occluders = bool(cfg.get("light_occluders", light_occluders))
+	shadow_quality = clampi(int(cfg.get("shadow_quality", shadow_quality)), 0, 2)
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 	## ★空串视为"未设置"，不覆盖 —— 否则随包的旧 config.json（或手机上的空值）会把
@@ -1541,6 +1579,10 @@ func save_config() -> void:
 		"facing_lock_mode": facing_lock_mode,
 		"pickup_hold_mode": pickup_hold_mode,
 		"show_action_hints": show_action_hints,
+		"light_static": light_static,
+		"char_shadows": char_shadows,
+		"light_occluders": light_occluders,
+		"shadow_quality": shadow_quality,
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
 		"master_server_url": master_server_url,
@@ -1770,6 +1812,35 @@ func set_pickup_hold_mode(on: bool) -> void:
 ## 设置页显示用文本。
 func pickup_hold_label() -> String:
 	return "按住" if pickup_hold_mode else "点击一下"
+
+
+## ── 灯光 / 影子设置的写入口（2026-11-04）──
+## 全部立即写盘并**即时生效**：NightOverlay 每帧读这些字段，不需要重开地图。
+func set_light_static(on: bool) -> void:
+	light_static = on
+	save_config()
+
+
+func set_char_shadows(on: bool) -> void:
+	char_shadows = on
+	save_config()
+
+
+func set_light_occluders(on: bool) -> void:
+	light_occluders = on
+	save_config()
+
+
+## 设置影子质量档位（0 低 / 1 中 / 2 高）。
+func set_shadow_quality(quality: int) -> void:
+	shadow_quality = clampi(quality, 0, 2)
+	save_config()
+
+
+## 按方向循环切换影子质量（设置页左右键用）。delta = ±1。
+func cycle_shadow_quality(delta: int) -> void:
+	shadow_quality = posmod(shadow_quality + delta, 3)
+	save_config()
 
 
 ## 右下角智能按键提示开关（持久化到 config.json）。

@@ -22,7 +22,8 @@ const MENU_ITEMS: Array[String] = ["继续游戏", "设置", "返回标题画面
 ##   所以 0~2（音量 / 固定朝向）的序号在任何平台上都不变。
 ## 「BGS音量」（2026-10-23）固定为第 3 项：环境音独立音量，与音乐/音效互不干扰。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量", "拾取方式", "智能提示"]
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "BGS音量", "拾取方式", "智能提示",
+		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -410,6 +411,22 @@ func _build_settings_items() -> void:
 			var hint_label := _make_gl(Global.action_hints_label(), Vector2(BAR_X, pos_y), 24)
 			_menu_panel.add_child(hint_label)
 			_settings_value_labels.append(hint_label)
+		elif text == "灯光闪烁":
+			var ls_label := _make_gl(Global.light_static_label(), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(ls_label)
+			_settings_value_labels.append(ls_label)
+		elif text == "人物影子":
+			var cs_label := _make_gl(Global.on_off_label(Global.char_shadows), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(cs_label)
+			_settings_value_labels.append(cs_label)
+		elif text == "遮挡阴影":
+			var oc_label := _make_gl(Global.on_off_label(Global.light_occluders), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(oc_label)
+			_settings_value_labels.append(oc_label)
+		elif text == "影子质量":
+			var sq_label := _make_gl(Global.shadow_quality_label(), Vector2(BAR_X, pos_y), 24)
+			_menu_panel.add_child(sq_label)
+			_settings_value_labels.append(sq_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -490,6 +507,18 @@ func _handle_settings_input(event: InputEvent) -> bool:
 				if hint_idx >= 0 and hint_idx < _settings_value_labels.size() \
 						and _settings_value_labels[hint_idx]:
 					_settings_value_labels[hint_idx].text = Global.action_hints_label()
+			"灯光闪烁":
+				Global.set_light_static(not Global.light_static)
+				_set_settings_value(items, "灯光闪烁", Global.light_static_label())
+			"人物影子":
+				Global.set_char_shadows(not Global.char_shadows)
+				_set_settings_value(items, "人物影子", Global.on_off_label(Global.char_shadows))
+			"遮挡阴影":
+				Global.set_light_occluders(not Global.light_occluders)
+				_set_settings_value(items, "遮挡阴影", Global.on_off_label(Global.light_occluders))
+			"影子质量":
+				Global.cycle_shadow_quality(1)
+				_set_settings_value(items, "影子质量", Global.shadow_quality_label())
 			"返回":
 				_exit_settings()
 		return true
@@ -513,7 +542,26 @@ func _handle_settings_input(event: InputEvent) -> bool:
 		"BGS音量":
 			Global.set_bgs_volume(clampi(Global.bgs_volume + delta_vol, 0, 100))
 			_update_volume_display(3)
+		"影子质量":
+			Global.cycle_shadow_quality(-1 if delta_vol < 0 else 1)
+			_set_settings_value(items, "影子质量", Global.shadow_quality_label())
+		"灯光闪烁":
+			Global.set_light_static(not Global.light_static)
+			_set_settings_value(items, "灯光闪烁", Global.light_static_label())
+		"人物影子":
+			Global.set_char_shadows(not Global.char_shadows)
+			_set_settings_value(items, "人物影子", Global.on_off_label(Global.char_shadows))
+		"遮挡阴影":
+			Global.set_light_occluders(not Global.light_occluders)
+			_set_settings_value(items, "遮挡阴影", Global.on_off_label(Global.light_occluders))
 	return true
+
+
+## 按**项名**刷新某一行右侧的值文本（不写死序号：项数会随平台/版本变）。
+func _set_settings_value(items: Array[String], item_text: String, value_text: String) -> void:
+	var idx: int = items.find(item_text)
+	if idx >= 0 and idx < _settings_value_labels.size() and _settings_value_labels[idx]:
+		_settings_value_labels[idx].text = value_text
 
 
 ## ── 按键布局调整（2026-09-30，仅移动端）──

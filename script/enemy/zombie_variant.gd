@@ -50,7 +50,7 @@ extends Resource
 ## 0 = 该变体禁用力竭。
 @export var rage_exhaust_seconds: float = 10.0
 ## 力竭倒地时长（秒）。倒地期间不能行动，起身时变回普通形态。
-@export var rage_exhaust_down_seconds: float = 3.5
+@export var rage_exhaust_down_seconds: float = 1.0
 
 @export_group("音效")
 ## 普通状态的发现/低吼音效。留空则沿用敌人自身 discover_sound。
