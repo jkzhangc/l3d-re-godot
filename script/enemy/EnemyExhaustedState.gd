@@ -43,6 +43,12 @@ func enter() -> void:
 	var enemy: Node2D = character
 	enemy.velocity = Vector2.ZERO
 	enemy.update_moving(false)
+	## ★必须停掉行走动画 timer（2026-11-04 用户实测「倒下的行走图只显示一瞬间」）：
+	## `_on_animation_timer_timeout` → `_refresh_sprite()` 会按 `walk_char_index`(0) 重画
+	## **站立帧**，把下面刚设好的倒地帧覆盖掉 —— 约 0.12s 后就站起来，剩下 0.9 秒一直站着。
+	## 与攻击 / 吐酸 / 吞人等「固定帧」状态同款处理：进入停表、退出恢复。
+	if enemy.animation_timer:
+		enemy.animation_timer.stop()
 	var down: float = enemy.variant_rage_exhaust_down_seconds
 	_down_timer = down if down > 0.0 else DOWN_SECONDS
 	_rage_at_enter = enemy._rage
@@ -51,6 +57,9 @@ func enter() -> void:
 
 func exit() -> void:
 	character.velocity = Vector2.ZERO
+	## 恢复行走动画（不重启的话，起身后 Chase/Attack 的踏步动画会变成"平移"）。
+	if character.animation_timer:
+		character.animation_timer.start()
 
 
 func process_update(delta: float) -> void:

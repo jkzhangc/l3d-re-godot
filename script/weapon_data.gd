@@ -89,9 +89,12 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
 @export var gunshot_range: float = 500.0         ## 枪声传播范围（像素）。0=静音武器（近战），>0=开火时范围内敌人会被惊动
-## 推击音效。默认「打撃3」（2026-11-04 用户指定）：推击是空手/枪托都能做的动作，
-## 因此**不按武器区分**，所有武器共用一个默认打击音；tres 可逐武器覆盖。
-@export var shove_sound: AudioStream = preload("res://sound/(効果音)打撃3.ogg")
+## 推击**动作**音效（挥空也响）。默认「回避2」（2026-11-04 用户指定）。
+## 推击是空手/枪托都能做的动作，因此**不按武器区分**，所有武器共用一个默认值；tres 可逐个覆盖。
+@export var shove_sound: AudioStream = preload("res://sound/回避2.ogg")
+## 推击**推中敌人**时的击中音（挥空不响）。默认「打撃3」（2026-11-04 用户指定）。
+## 与上面的 `shove_sound` 分工：那是起手/挥击声，这条只有真正命中了才播。
+@export var shove_hit_sound: AudioStream = preload("res://sound/(効果音)打撃3.ogg")
 
 
 @export_group("装填/装弹")

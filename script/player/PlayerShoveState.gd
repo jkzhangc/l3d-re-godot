@@ -107,7 +107,7 @@ func process_update(delta: float) -> void:
 		# 在命中索引发射判定区域
 		if not _hit_done and _seq_idx == _wd.shove_hit_at_sequence_idx:
 			_create_shove_hitbox()
-			# 播放推击音效
+			# 推击**动作**音效（挥空也响）。推中敌人的击中音在 `_check_shove_hits` 里播。
 			if _wd.shove_sound:
 				_play_attack_sound(_wd.shove_sound)
 
@@ -196,6 +196,10 @@ func _check_shove_hits() -> void:
 
 	if hit_any:
 		_hit_done = true
+		## 推中敌人的击中音（2026-11-04 用户口径：`shove_sound` 是**动作**音，起手就响；
+		## 真正推到人的「打撃3」是另一条 `shove_hit_sound`）—— 挥空不该响这一声。
+		if _wd.shove_hit_sound:
+			_play_attack_sound(_wd.shove_hit_sound)
 		# 溅射击退：命中目标周围的敌人也受影响（仅一级，不连锁）
 		_apply_splash_knockback(hit_ids)
 

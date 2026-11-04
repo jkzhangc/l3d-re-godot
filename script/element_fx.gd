@@ -39,7 +39,8 @@ const HIT_SOUNDS: Dictionary = {
 ## 典型场景就是**普通远程武器**（element = NONE）。音调 1.5 见 `resolve_hit_pitch()`。
 ## 放在这里而不是 `WeaponData.hit_sound` 的导出默认值上，是因为后者一旦非空就会
 ## 抢在属性表前面（`resolve_hit` 是「数据优先」），火/雷/冰/酸的专属击中音会被整体覆盖。
-const DEFAULT_HIT_SOUND: AudioStream = preload("res://sound/殴る.ogg")
+## 音色：飞刀直击用的同一记「切り裂く」（2026-11-04 用户从「殴る」改回）。
+const DEFAULT_HIT_SOUND: AudioStream = preload("res://sound/切り裂く.ogg")
 const DEFAULT_HIT_SOUND_PITCH: float = 1.5
 
 

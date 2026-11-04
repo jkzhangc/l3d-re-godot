@@ -12,8 +12,9 @@ extends Node
 
 const PISTOL := preload("res://object/weapon_pistol.tres")
 const ELEMENT_FX := preload("res://script/element_fx.gd")
-const DEFAULT_SHOVE := "res://sound/(効果音)打撃3.ogg"
-const DEFAULT_HIT := "res://sound/殴る.ogg"
+const DEFAULT_SHOVE := "res://sound/回避2.ogg"
+const DEFAULT_SHOVE_HIT := "res://sound/(効果音)打撃3.ogg"
+const DEFAULT_HIT := "res://sound/切り裂く.ogg"
 
 var _fail := 0
 
@@ -45,8 +46,9 @@ func _ready() -> void:
 	var wd: WeaponData = PISTOL
 	_check("测试武器存在", wd != null, true)
 
-	print("=== 1) 推击音效默认值 ===")
-	_check("shove_sound 路径", _path_of(wd.shove_sound), DEFAULT_SHOVE)
+	print("=== 1) 推击音效默认值（动作音 / 命中音分开） ===")
+	_check("shove_sound（起手动作音）", _path_of(wd.shove_sound), DEFAULT_SHOVE)
+	_check("shove_hit_sound（推中敌人）", _path_of(wd.shove_hit_sound), DEFAULT_SHOVE_HIT)
 
 	print("=== 2) 推击逐帧时长 ===")
 	_check("shove_frame_durations 条目数", wd.shove_frame_durations.size(), 3)
@@ -81,6 +83,8 @@ func _ready() -> void:
 	var shove_state := _read("res://script/player/PlayerShoveState.gd")
 	_check("状态机用 get_shove_frame_duration", shove_state.contains("_wd.get_shove_frame_duration("), true)
 	_check("状态机已无统一时长旧写法", shove_state.contains("_timer = _wd.shove_frame_duration"), false)
+	_check("命中音在命中分支播（不是起手就响）",
+			shove_state.contains("if _wd.shove_hit_sound:"), true)
 	var player_src := _read("res://script/player.gd")
 	_check("联机表现用 get_shove_frame_duration",
 			player_src.contains("wd.get_shove_frame_duration(index)"), true)
@@ -89,6 +93,8 @@ func _ready() -> void:
 			world_src.contains("wd.get_shove_total_duration()"), true)
 	_check("Host 命中延迟用 get_shove_hit_delay", world_src.contains("wd.get_shove_hit_delay()"), true)
 	_check("客户端命中音走 ELEMENT_FX", world_src.contains("ELEMENT_FX.resolve_hit("), true)
+	_check("联机推击命中音有广播 RPC",
+			world_src.contains("func shove_hit_sfx_presentation("), true)
 
 	print("\n失败 %d 项" % _fail)
 	await get_tree().process_frame

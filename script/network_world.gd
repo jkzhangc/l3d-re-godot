@@ -2238,6 +2238,14 @@ func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2)
 			hit_enemies[enemy_id] = true
 			enemy.take_damage(0.0, wd.shove_knockback_force, facing, false, wd.shove_knockback_duration, 0.0, int(Time.get_ticks_msec()))
 			print("[NetworkWorld] HOST_SHOVE_HIT enemy=%s" % enemy.name)
+	## 推中敌人的击中音（2026-11-04）：`wd.shove_sound`（起手动作音）已由
+	## `play_network_shove_presentation` 在命中帧两端各播一次，这里补的是**真正推到人**
+	## 那一声「打撃3」—— Host 本地播一次 + 广播给 Client（挥空不响）。
+	if not hit_enemies.is_empty() and wd.shove_hit_sound:
+		var shove_scene: Node = get_tree().current_scene
+		if shove_scene != null:
+			Global.play_sfx_managed(wd.shove_hit_sound, shove_scene, true, 1.0, center)
+		_send_to_ready_clients(&"shove_hit_sfx_presentation", [wd.item_id, center])
 	if hit_enemies.is_empty() or wd.shove_splash_radius <= 0.0:
 		return
 	for enemy_entry: Dictionary in _enemies.values():
@@ -2836,6 +2844,24 @@ func shove_presentation(peer_id: int, weapon_id: String) -> void:
 	var wd := _get_network_weapon_data_by_id(weapon_id)
 	if is_instance_valid(node) and wd:
 		node.play_network_shove_presentation(wd)
+
+
+## Client：推击**推中敌人**的击中音（2026-11-04）。
+## 起手的动作音（`shove_sound`）由 `shove_presentation` 的表现协程两端各播一次；
+## 这一条只有 Host 判定「真的碰到了」才发，挥空不会有。
+@rpc("authority", "call_remote", "reliable")
+func shove_hit_sfx_presentation(weapon_id: String, position: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if wd == null or wd.shove_hit_sound == null:
+		return
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	## 世界坐标定位：声源=推击判定框中心（与 Host 侧本地播放同一位置）。
+	Global.play_sfx_managed(wd.shove_hit_sound, scene, true, 1.0, position)
+	print("[NetworkWorld] CLIENT_SHOVE_HIT_SFX weapon=%s" % weapon_id)
 
 
 @rpc("authority", "call_remote", "reliable")
