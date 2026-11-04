@@ -1047,7 +1047,9 @@ func _add_wip_notice() -> void:
 	notice.name = "WipNotice"
 	notice.text = "※ 联机模式仍有 bug 在处理 —— 遇到问题请到交流群反馈，我们会尽快修。"
 	notice.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	notice.add_theme_font_size_override("font_size", 15)
+	## ★2026-11-04：15 → 12（12 的整倍铁律）。像素字体 12px 基底，15 号 = 1.25 倍非整数
+	## 缩放栅格化，笔画粗细不匀、边缘发虚。要小字就用 12。
+	notice.add_theme_font_size_override("font_size", 12)
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	Global.apply_text_shadow(notice)
 	vbox.add_child(notice)

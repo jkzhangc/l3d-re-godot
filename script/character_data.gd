@@ -247,6 +247,8 @@ func get_shove_walk_texture(weapon_state_name: String) -> Texture2D:
 
 ## 检查该角色是否可以使用指定武器
 ## wd: WeaponData 资源
+## 两道关：① Inspector 里的主/副武器白名单（非空即启用）
+##         ② **必须画了这把武器的行走图** —— 见 has_weapon_walk_art()
 func can_use_weapon(wd: WeaponData) -> bool:
 	if not wd:
 		return false
@@ -255,9 +257,29 @@ func can_use_weapon(wd: WeaponData) -> bool:
 		restrictions = allowed_primary_weapons
 	else:
 		restrictions = allowed_secondary_weapons
-	if restrictions.is_empty():
+	if not restrictions.is_empty() and not restrictions.has(wd.item_id):
+		return false
+	return has_weapon_walk_art(wd)
+
+
+## 本角色是否画了这把武器的**行走图**（2026-11-04 用户定稿口径）。
+##
+## 【为什么用「有没有图」当可用性判据】
+## 角色举起武器时用的是**角色专属**的武器行走图（`weapon_walk_textures[状态名]`）；
+## 没有时渲染会回退 `WeaponData.weapon_walk_texture` —— 那张图是**按大雄画的**，
+## 于是小夫捡起 M202 四联火箭会整只变成大雄（玩家实测）。与其猜一张「近似的图」，
+## 不如直接不允许拾取：**没画 = 不许拿**。
+##
+## 例外：武器自带的是「通用近战身体」（文件名带 近战 / 近接）时，四个角色共用同一张，
+## 这是设计如此（近战武器基本都靠这张图），不能一刀切禁掉。
+func has_weapon_walk_art(wd: WeaponData) -> bool:
+	if wd == null:
 		return true
-	return restrictions.has(wd.item_id)
+	if wd.weapon_state_name.is_empty():
+		return true
+	if get_weapon_walk_texture(wd.weapon_state_name) != null:
+		return true
+	return wd.is_generic_melee_body(wd.weapon_walk_texture)
 
 
 ## 稳定数据键：优先 character_id，留空回退 tres 文件名（character_nobita.tres → nobita）。

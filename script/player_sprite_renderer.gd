@@ -28,7 +28,15 @@ const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
 
+## ★2026-11-04「小夫捡 M202 变成大雄」的处理口径（用户定稿）：
+## **角色没有该武器的专属行走图，就不允许他捡这把武器** —— 判定在
+## `CharacterData.can_use_weapon()`（拾取 / 联机 Host 校验共用）。所以正常游戏流程里
+## 这里不会走到「回退武器默认图」那一层；保留 `_warn_missing_body()` 只是为了让
+## 旧存档 / 开发工具 / 未来新增武器这类漏网情况在日志里留痕，而不是悄悄变成别人。
+
 var _p: Node = null
+## 已提醒过的「角色/武器状态」组合（缺失专属图时只 warn 一次，避免每帧刷日志）。
+static var _missing_body_warned: Dictionary = {}
 
 
 func _init(player: Node) -> void:
@@ -143,14 +151,31 @@ func _refresh_weapon_overlay() -> void:
 ## 角色当前拿这把武器时的行走图（角色专属 > 武器默认；都没有 → null）。
 ## 抽出成函数是为了让「角色本体贴图」和「要不要叠武器动作图」用**同一个**取值口径，
 ## 否则一边查 CharacterData、一边查 WeaponData，判断「是否通用近战身体」会走岔。
+## ⚠ 正常情况下不会走到「武器默认」这一层 —— 没有专属图的武器会被
+## `CharacterData.can_use_weapon()` 挡在拾取之前（2026-11-04 用户定稿）。
 func _weapon_body_texture(wd: WeaponData) -> Texture2D:
 	if wd == null:
 		return null
-	if _p.current_character:
-		var tex: Texture2D = _p.current_character.get_weapon_walk_texture(wd.weapon_state_name)
+	var cd: CharacterData = _p.current_character
+	if cd:
+		var tex: Texture2D = cd.get_weapon_walk_texture(wd.weapon_state_name)
 		if tex:
 			return tex
+	if not wd.weapon_state_name.is_empty():
+		_warn_missing_body(cd, wd)
 	return wd.weapon_walk_texture
+
+
+## 角色没有该武器状态的专属图、只能回退武器默认图时，**每个（角色, 状态）只提醒一次**。
+## 这类缺失在画面上的表现是「换个角色捡同一把枪，人变成了大雄」—— 不报错很难发现。
+## 正常流程已被 `CharacterData.can_use_weapon()` 拦住（捡不起来），这里只兜旧存档/开发工具。
+func _warn_missing_body(cd: CharacterData, wd: WeaponData) -> void:
+	var key: String = "%s/%s" % [cd.get_character_key() if cd else "<无角色>", wd.weapon_state_name]
+	if _missing_body_warned.has(key):
+		return
+	_missing_body_warned[key] = true
+	push_warning("[精灵] %s 没有 %s（%s）的武器行走图，已回退武器默认图（通常是のび太）—— 会显示成别人；该武器本应禁止此人拾取。" % [
+		cd.character_name if cd else "<无角色>", wd.weapon_state_name, wd.item_id])
 
 
 ## ── 武器攻击行走图（2026-10-26）──

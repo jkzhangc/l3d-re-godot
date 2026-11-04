@@ -21,6 +21,8 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 ## 玩家精灵帧为 48×64、原点在脚底（Sprite2D 位于 y=-16），头顶约在 y=-48。
 const BAR_OFFSET := Vector2(-32.0, -56.0)
 const LABEL_OFFSET := Vector2(-48.0, -74.0)
+## 昵称字号：像素字体 12px 基底，**只能取 12 的整倍**（旧值 9 = 0.75 倍缩放，笔画被削）。
+const NAME_FONT_SIZE: int = 12
 
 var _label: Label
 var _hp_bar: TextureProgressBar
@@ -49,7 +51,10 @@ func _ready() -> void:
 	_label.position = LABEL_OFFSET
 	_label.size = Vector2(96.0, 16.0)
 	_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_label.add_theme_font_size_override("font_size", 9)
+	## ★2026-11-04：9 → 12。像素字体是 12px 基底，9 号等于按 0.75 缩放栅格化 ——
+	## 笔画被削掉一半，昵称看起来像糊成一团的乱码（用户反馈「字体出问题」的常见现场）。
+	## 字号铁律：只能是 12 的整倍，要小就是 12。
+	_label.add_theme_font_size_override("font_size", NAME_FONT_SIZE)
 	_label.add_theme_color_override("font_color", Color.WHITE)
 	_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	_label.add_theme_constant_override("outline_size", 3)
