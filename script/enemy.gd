@@ -1005,6 +1005,13 @@ func _process(delta: float) -> void:
 	# 覆盖步行/跑步/狂暴所有换速点；动作表激活期 timer 已停，此处只改数值无副作用。
 	if animation_timer:
 		animation_timer.wait_time = _current_anim_frame_duration()
+	## ★「在移动却没有踏步动画」自愈（2026-11-04 用户实测：狂暴解除后有个别丧尸平移）：
+	## 行走动画**完全由 AnimationTimer 驱动**，任何一个状态 / 联机分支把它停掉后忘了恢复，
+	## 表现就是「整张贴图平移」。这里只在「确实在移动 + 不在动作表 + timer 已停」时拉起：
+	##   · 动作表期间（攻击/突进/张嘴）的正常停表不受影响（has_action_texture 为真时不碰）；
+	##   · 本行在 `network_presentation_only` 早退**之前**，Host 与 Client 一并覆盖。
+	if _moving and animation_timer and animation_timer.is_stopped() and not has_action_texture():
+		animation_timer.start()
 	## ★卡墙自救（2026-10-02 用户实测「敌人会把其他敌人挤进墙里/屋顶里」）：
 	## 与 `Player._rescue_if_stuck()` 同构。必须在 `network_presentation_only`
 	## 早退**之前**调用 —— 远端镜像实体由快照定位、不需要自救，权威侧才需要。
@@ -2857,6 +2864,9 @@ func set_rage(on: bool) -> void:
 			attack_damage = _base_attack_damage
 		_rage_elapsed = 0.0
 		_rage_exhaust_target = 0.0
+	## 换形态 = 整张贴图替换：踏步相位归零，立刻按新图重画一帧。
+	## 不归零的话会沿用上一形态停在的那个 `_anim_step`，换图后第一帧看起来像"卡住"。
+	_anim_step = 0
 	_refresh_sprite()
 
 
