@@ -82,6 +82,12 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 
 @export_group("音效")
 @export var attack_sound: AudioStream = null    ## 攻击音效（远程/近战共用）
+## 攻击音效的增益（dB）。0 = 原样，负值压低。
+## 【为什么需要】音效素材来自不同来源、响度天生不齐：冲锋枪/步枪共用的
+## `csol-m4a1_shoot1.ogg` 实测峰值 **+5.3dB（已削顶）**、RMS −6.9dB，比手枪（−16.4）
+## 和霰弹枪（−14.3）高 6~10dB → 一开火就把别的音效盖住（2026-11-04 用户实测）。
+## 用本字段逐条配平，不去改音频文件本身。
+@export_range(-24.0, 6.0, 0.5) var attack_sound_volume_db: float = 0.0
 ## 空弹音效：弹夹为空**且没有备弹可装**时扣扳机播放（2026-09-30 用户指定默认值；
 ## 有备弹的情况现在会**自动换弹**，不再空放）。tres 可逐武器覆盖。
 @export var empty_fire_sound: AudioStream = preload("res://sound/リロード.ogg")

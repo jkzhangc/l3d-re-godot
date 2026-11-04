@@ -96,6 +96,21 @@ func _ready() -> void:
 	_check("联机推击命中音有广播 RPC",
 			world_src.contains("func shove_hit_sfx_presentation("), true)
 
+	print("=== 7) 枪声响度配平（2026-11-04：m4a1 素材比别的响 6~10dB） ===")
+	var smg: WeaponData = load("res://object/weapon_smg.tres") as WeaponData
+	var rifle: WeaponData = load("res://object/weapon_rifle.tres") as WeaponData
+	var mg: WeaponData = load("res://object/weapon_mg_01.tres") as WeaponData
+	var pistol: WeaponData = load("res://object/weapon_pistol.tres") as WeaponData
+	_check("冲锋枪 attack_sound_volume_db", smg.attack_sound_volume_db, -8.0)
+	_check("步枪 attack_sound_volume_db", rifle.attack_sound_volume_db, -8.0)
+	_check("轻机枪 attack_sound_volume_db", mg.attack_sound_volume_db, -8.0)
+	_check("手枪保持默认 0dB", pistol.attack_sound_volume_db, 0.0)
+	var ranged_state := _read("res://script/player/PlayerRangedAttackState.gd")
+	_check("远程攻击音带增益",
+			ranged_state.contains("_play_attack_sound(_wd.attack_sound, _wd.attack_sound_volume_db)"), true)
+	_check("联机攻击表现带同一增益",
+			player_src.contains("_play_network_sfx(wd.attack_sound, wd.attack_sound_volume_db)"), true)
+
 	print("\n失败 %d 项" % _fail)
 	await get_tree().process_frame
 	get_tree().quit(1 if _fail > 0 else 0)

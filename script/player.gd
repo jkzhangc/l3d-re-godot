@@ -1323,7 +1323,9 @@ func _run_network_attack_presentation(token: int, wd: WeaponData, stage: int = 1
 				## 枪声/挥击音挂在本玩家节点上并做距离衰减（2026-10-20）：
 				## 联机时其他玩家开火由本机表现协程播放，旧实现挂 current_scene（非定位）
 				## 导致「远处队友开枪和贴脸一样响」。单机/本机玩家仍恒满音量。
-				_play_network_sfx(wd.attack_sound)
+				## 响度按武器的 `attack_sound_volume_db` 配平（2026-11-04：冲锋枪/步枪那条
+				## m4a1 素材比别的响 6~10dB，会把其他音效盖住）。
+				_play_network_sfx(wd.attack_sound, wd.attack_sound_volume_db)
 			var effect_scene := wd.get_attack_effect_anim(facing)
 			if effect_scene and scene:
 				## 特效偏移（2026-09-23 迁移）：改由武器数据按角色提供，与子弹偏移同构。
@@ -2412,8 +2414,8 @@ func _play_sound(stream: AudioStream) -> void:
 ## 联机表现专用音效入口（装填/攻击后/推击等）。与单机同一套 SFX 管理器与并发上限，
 ## 用**调用当刻**的节点自身作宿主：协程里 await 之后缓存的 SceneTree 可能已失效，
 ## 而本节点只要仍在树内就是合法宿主（2026-09-24 联机装填静音修复一并收口）。
-func _play_network_sfx(stream: AudioStream) -> void:
-	_sfx.play_network_sfx(stream)
+func _play_network_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
+	_sfx.play_network_sfx(stream, volume_db)
 
 
 func _play_music(stream: AudioStream) -> void:

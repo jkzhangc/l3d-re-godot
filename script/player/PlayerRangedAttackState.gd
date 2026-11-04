@@ -240,7 +240,7 @@ func _fire_bullet() -> void:
 		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, effect_offset)
 
 	if _wd.attack_sound:
-		_play_attack_sound(_wd.attack_sound)
+		_play_attack_sound(_wd.attack_sound, _wd.attack_sound_volume_db)
 
 	# 枪声惊动范围内敌人
 	if _wd.gunshot_range > 0.0:
@@ -310,8 +310,9 @@ func _try_auto_reload() -> bool:
 	return true
 
 
-func _play_attack_sound(stream: AudioStream) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene)
+func _play_attack_sound(stream: AudioStream, volume_db: float = 0.0) -> void:
+	Global.play_sfx_managed(stream, character.get_tree().current_scene,
+		false, 1.0, Vector2.INF, volume_db)
 
 
 func _get_weapon() -> WeaponData:

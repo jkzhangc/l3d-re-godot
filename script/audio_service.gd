@@ -114,8 +114,10 @@ func set_bgs_volume(pct: int) -> void:
 ## `at_position`：世界坐标定位点（默认 Vector2.INF = 用 parent 自身位置）。
 ## 供「播放当刻就要消失」的宿主（子弹命中/投掷物爆炸）使用 —— 播放器挂场景、
 ## 声源钉在该点，既不会被宿主 queue_free 截断，也不会跟着已消失的物体跑。
+## `volume_db`：本条音效的增益（0 = 原样）。素材响度天生不齐时用它逐条配平，
+## 见 `WeaponData.attack_sound_volume_db`（冲锋枪/步枪那条 m4a1 峰值 +5.3dB，比别人高 6~10dB）。
 func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0,
-		at_position: Vector2 = Vector2.INF) -> void:
+		at_position: Vector2 = Vector2.INF, volume_db: float = 0.0) -> void:
 	if not stream:
 		return
 
@@ -166,6 +168,7 @@ func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = fals
 	player.bus = "SFX"
 	player.autoplay = true
 	player.pitch_scale = pitch  ## 每音效音调（2026-09-15：敌人各音效可独立设调）
+	player.volume_db = volume_db  ## 每条音效的增益补偿（0 = 原样；响度配平用）
 	var cb: Callable = func():
 		arr.erase(player)
 		player.queue_free()
@@ -187,13 +190,14 @@ func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = fals
 ##
 ## 是否本地玩家由 player 节点的 `network_local_player` 字段判定（player.gd 在
 ## Host/Client 两侧都会正确写入）；节点没有该字段时按本地处理。
-func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0) -> void:
+func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0,
+		volume_db: float = 0.0) -> void:
 	if not stream or player_node == null or not is_instance_valid(player_node):
 		return
 	var positional: bool = false
 	if _is_online_session():
 		positional = player_node.get("network_local_player") != true
-	play_sfx_managed(stream, player_node, positional, pitch)
+	play_sfx_managed(stream, player_node, positional, pitch, Vector2.INF, volume_db)
 
 
 ## 播放界面窗口音效（2026-09-15）。kind = "cursor" | "confirm" | "cancel"；

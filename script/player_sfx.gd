@@ -27,10 +27,11 @@ func play_sound(stream: AudioStream) -> void:
 ## 联机表现专用音效入口（装填/攻击后/推击等）。与单机同一套 SFX 管理器与并发上限，
 ## 用**调用当刻**的节点自身作宿主：协程里 await 之后缓存的 SceneTree 可能已失效，
 ## 而本节点只要仍在树内就是合法宿主（2026-09-24 联机装填静音修复一并收口）。
-func play_network_sfx(stream: AudioStream) -> void:
+## `volume_db`：逐条增益（响度配平用，见 `WeaponData.attack_sound_volume_db`）。
+func play_network_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
 	if not stream or not _p.is_inside_tree():
 		return
-	Global.play_player_sfx(stream, _p)
+	Global.play_player_sfx(stream, _p, 1.0, volume_db)
 
 
 ## 播放替换式音乐（挂在 player 节点下的 DeathMusicPlayer）。再次调用会先停掉旧实例。

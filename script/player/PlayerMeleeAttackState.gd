@@ -156,7 +156,7 @@ func process_update(delta: float) -> void:
 				VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, effect_offset)
 			# 播放攻击音效
 			if _wd.attack_sound:
-				_play_attack_sound(_wd.attack_sound)
+				_play_attack_sound(_wd.attack_sound, _wd.attack_sound_volume_db)
 
 
 func physics_update(delta: float) -> void:
@@ -500,8 +500,9 @@ func _try_continue_attack() -> bool:
 	return false
 
 
-func _play_attack_sound(stream: AudioStream) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene)
+func _play_attack_sound(stream: AudioStream, volume_db: float = 0.0) -> void:
+	Global.play_sfx_managed(stream, character.get_tree().current_scene,
+		false, 1.0, Vector2.INF, volume_db)
 
 
 func _get_weapon() -> WeaponData:

@@ -1693,18 +1693,19 @@ func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
 		_audio_service.play_pickup_sfx(override, pitch)
 
 
-## 播放音效（带并发限制 + voice stealing）。pos/positional/at_position 语义见 AudioService。
+## 播放音效（带并发限制 + voice stealing）。pos/positional/at_position/volume_db 语义见 AudioService。
 func play_sfx_managed(stream: AudioStream, parent: Node, positional: bool = false, pitch: float = 1.0,
-		at_position: Vector2 = Vector2.INF) -> void:
+		at_position: Vector2 = Vector2.INF, volume_db: float = 0.0) -> void:
 	if _audio_service != null:
-		_audio_service.play_sfx_managed(stream, parent, positional, pitch, at_position)
+		_audio_service.play_sfx_managed(stream, parent, positional, pitch, at_position, volume_db)
 
 
 ## 播放玩家音效：单机/联机同一入口。联机中「非本机玩家」的声音自动走 2D 定位，
 ## 按与本地玩家的距离衰减（详见 AudioService.play_player_sfx）。
-func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0) -> void:
+func play_player_sfx(stream: AudioStream, player_node: Node, pitch: float = 1.0,
+		volume_db: float = 0.0) -> void:
 	if _audio_service != null:
-		_audio_service.play_player_sfx(stream, player_node, pitch)
+		_audio_service.play_player_sfx(stream, player_node, pitch, volume_db)
 
 
 ## 播放界面窗口音效。kind = "cursor" | "confirm" | "cancel"。

@@ -71,6 +71,7 @@ critical_rate = 20.0
 critical_damage = 1.8
 fire_mode = 1
 attack_sound = ExtResource("1_2b1o8")
+attack_sound_volume_db = -8.0
 empty_fire_sound = ExtResource("4_tk8ak")
 raise_sound = ExtResource("5_5vlxl")
 lower_sound = ExtResource("5_5vlxl")
