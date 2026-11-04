@@ -427,7 +427,8 @@ func _hit(target: Node2D) -> void:
 	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(_hit_sound, element)
 	if hit_sfx:
 		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true,
-			ELEMENT_FX.resolve_hit_pitch(_hit_sound, element), damageable.global_position)
+			ELEMENT_FX.resolve_hit_pitch(_hit_sound, element), damageable.global_position,
+			ELEMENT_FX.resolve_hit_volume_db(_hit_sound, element))
 
 	print("[子弹] 击中: %s | 伤害=%d | 爆头=%s | 穿透剩余=%d" % [damageable.name, int(final_damage), str(is_headshot), penetration - _hits + 1])
 

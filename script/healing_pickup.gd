@@ -209,8 +209,12 @@ func can_use_function_key() -> bool:
 	var state: PlayerState = Players.get_state_for_entity(_player_ref)
 	## ★已持有投掷物 → 按 D 替换（2026-11-02 用户口径）：这条**占用**功能键，
 	## 存档点必须让路（旧实现返回 false 且替换走确定键 → 按 D 没反应、存档反而弹出来）。
+	## ★2026-11-04 用户实测「投掷物还是替换不了」：这里曾额外要求 `not player_in_weapon_state`，
+	## 而本作玩家**绝大多数时间都举着枪** → 站到投掷物上按 D 毫无反应。D 只在
+	## `local_player_is_throwing()`（投掷物已举起/瞄准）时被减格键占用，上面已经拦过了，
+	## 武器状态不该再挡 —— 移除该条件。
 	if state != null and item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null:
-		return not bool(_player_ref.get("player_in_weapon_state"))
+		return true
 	## 拾取即用的物品（草药/矿泉水）：拾取者数值已满 → `_do_pickup` 会把它留在地上，
 	## 按 D 等于白按 → 不挡存档（与下面喷雾满仓同一条口径）。
 	if item.uses_on_pickup():
@@ -244,11 +248,8 @@ func _healing_storage_full(state: PlayerState) -> bool:
 func _update_keycap_hint() -> void:
 	var state: PlayerState = Players.get_state_for_entity(_player_ref) if is_instance_valid(_player_ref) else null
 	var show: bool = _player_in_range and is_instance_valid(_player_ref) and _needs_key_press(state)
-	## 投掷物替换在武器/瞄准状态下不响应（D 是减格键）→ 键帽跟着藏，不骗人按。
-	if show and item != null and item.item_type == ItemData.ItemType.THROWABLE \
-			and state != null and state.throwable != null \
-			and bool(_player_ref.get("player_in_weapon_state")):
-		show = false
+	## 投掷物替换在瞄准状态下不响应（D 是减格键）→ 键帽跟着藏，不骗人按。
+	## ★2026-11-04：武器状态不再挡替换，故不再据此隐藏键帽（用户实测「举枪时看不见可替换提示」）。
 	if show and (network_presentation_only or (_is_online_network_pickup() and network_pickup_id <= 0)):
 		show = false
 	if show:
@@ -371,10 +372,9 @@ func _request_network_pickup() -> void:
 ## 2026-11-02 起：投掷物替换也统一按**功能键(D)**（旧「确定键」路径已废 —— 按确定键会先举起
 ## 投掷物进入武器状态，`player_in_weapon_state` 守卫永远先绊住自己，替换根本触发不了）。
 func _process_network_hold(delta: float, throwable_replacement: bool) -> bool:
-	## 玩家正在武器/投掷物举起/瞄准状态时不触发替换（此时 D 是「投掷减格键」，见 Players）。
-	if throwable_replacement and _player_ref.get("player_in_weapon_state"):
-		_hold_timer = 0.0
-		return false
+	## ★2026-11-04：这里原先还有一道 `throwable_replacement and player_in_weapon_state → return`
+	## 的闸门，与单机同款问题 —— 玩家举着武器就永远换不了投掷物。已删除：
+	## 「D 被减格键占用」只发生在投掷物举起/瞄准（下面 `local_player_is_throwing()`）。
 	var action: String = "功能键"
 	## 点击模式（默认，2026-10-26）：按一下就提交请求，不累积进度。
 	if not PickupInteraction.is_hold_mode():
@@ -429,20 +429,17 @@ func _process_pickup(delta: float) -> bool:
 	if not state:
 		return false
 
-	# 投掷物且已持有 → 按功能键(D)替换（2026-11-02：旧「确定键」按法会被
-	# player_in_weapon_state 守卫绊死 —— 按确定键的那一帧玩家先进武器状态，替换永远不触发）；
-	# 其余默认自动拾取，需要按功能键(D) 时（物品数据开关 / 节点开关）改走按住流程（进度环提示，避免路过误拾）
+	# 投掷物且已持有 → 按功能键(D)替换。
+	# ★2026-11-04 用户实测「投掷物还是替换不了」：旧实现这里有一道
+	# `player_in_weapon_state` 早退 —— 而本作玩家绝大多数时间举着武器，
+	# 等于「站在投掷物上按 D 永远没反应」。D 只在投掷物已举起/瞄准时被减格键占用，
+	# 那道闸在下面 `_process_hold` 里已经用 `local_player_is_throwing()` 表达过，这里删掉。
 	var throwable_replacement: bool = item.item_type == ItemData.ItemType.THROWABLE and state.throwable != null
 	if not throwable_replacement:
 		if not _need_function_key():
 			_do_pickup()
 			return false
 		return _process_hold(delta, false)
-
-	# 玩家正在武器/投掷物举起/瞄准状态，不触发替换（此时 D 是「投掷减格键」）
-	if _player_ref.get("player_in_weapon_state"):
-		_hold_timer = 0.0
-		return false
 	return _process_hold(delta, true)
 
 

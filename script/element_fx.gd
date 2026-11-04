@@ -36,12 +36,19 @@ const HIT_SOUNDS: Dictionary = {
 }
 
 ## 通用默认击中音（2026-11-04 用户指定）：数据没配、属性也没有专属音时用它 ——
-## 典型场景就是**普通远程武器**（element = NONE）。音调 1.5 见 `resolve_hit_pitch()`。
+## 典型场景就是**普通远程武器**（element = NONE）。
 ## 放在这里而不是 `WeaponData.hit_sound` 的导出默认值上，是因为后者一旦非空就会
 ## 抢在属性表前面（`resolve_hit` 是「数据优先」），火/雷/冰/酸的专属击中音会被整体覆盖。
-## 音色：飞刀直击用的同一记「切り裂く」（2026-11-04 用户从「殴る」改回）。
+## 音色：飞刀直击用的同一记「切り裂く」；音调 2026-11-04 由 1.5 改回 **1.0**（用户口径），
+## 响度单独抬 +5dB（该素材 peak −5.9dB / RMS −18.3dB，本身就比别的命中音小）。
 const DEFAULT_HIT_SOUND: AudioStream = preload("res://sound/切り裂く.ogg")
-const DEFAULT_HIT_SOUND_PITCH: float = 1.5
+const DEFAULT_HIT_SOUND_PITCH: float = 1.0
+const DEFAULT_HIT_SOUND_VOLUME_DB: float = 5.0
+## 其余命中音（武器自定义 hit_sound / 火雷冰酸 属性音）的统一增益。
+## 【为什么需要】这些素材的 peak 普遍已经 0dBFS（しびれ1 = 0.0、ナイフ = +1.1），
+## 但 RMS 只有 −16 ~ −19dB —— 短促又薄，混在枪声里几乎听不见（2026-11-04 用户实测）。
+## 取 +3dB 是「明显变清楚」与「不把小素材推爆」的折中；再高只能靠重做素材。
+const HIT_SOUND_VOLUME_DB: float = 3.0
 
 
 ## 该属性的默认爆炸音（NONE / 表外 → null）。
@@ -68,9 +75,15 @@ static func resolve_hit(explicit: AudioStream, element: int) -> AudioStream:
 	return by_element if by_element != null else DEFAULT_HIT_SOUND
 
 
-## 与 `resolve_hit` 配套的音调：只有落到**通用默认**那一层才是 1.5，
-## 武器自定义音效 / 属性专属音效一律保持原调（1.0）。
-static func resolve_hit_pitch(explicit: AudioStream, element: int) -> float:
-	if explicit != null or hit_sound(element) != null:
-		return 1.0
+## 与 `resolve_hit` 配套的音调：命中音一律原调（2026-11-04 用户口径，默认音也从 1.5 改回 1.0）。
+static func resolve_hit_pitch(_explicit: AudioStream, _element: int) -> float:
 	return DEFAULT_HIT_SOUND_PITCH
+
+
+## 与 `resolve_hit` 配套的增益（dB）：
+##   · 落到「通用默认」那一层（普通武器）→ +5dB，因为切り裂く素材本身小 5dB；
+##   · 武器自定义音 / 属性专属音 → +3dB 统一抬一档（素材 peak 已满、RMS 偏薄）。
+static func resolve_hit_volume_db(explicit: AudioStream, element: int) -> float:
+	if explicit != null or hit_sound(element) != null:
+		return HIT_SOUND_VOLUME_DB
+	return DEFAULT_HIT_SOUND_VOLUME_DB

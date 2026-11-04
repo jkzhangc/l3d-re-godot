@@ -84,6 +84,7 @@ weapon_state_name = "Shotgun"
 weapon_walk_texture = ExtResource("8_sw0ir")
 weapon_raise_frame_durations = Array[float]([0.05, 0.05])
 attack_sound = ExtResource("1_outme")
+attack_sound_volume_db = -2.5
 empty_fire_sound = ExtResource("4_juw25")
 raise_sound = ExtResource("5_5xpys")
 lower_sound = ExtResource("5_5xpys")

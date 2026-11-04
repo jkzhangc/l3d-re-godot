@@ -2663,7 +2663,8 @@ func bullet_hit_effect(position: Vector2, weapon_id: String, bullet_index: int, 
 	if hit_sfx:
 		## 世界坐标定位（2026-10-20）：远端队友的命中音随距离衰减，声源=命中点。
 		Global.play_sfx_managed(hit_sfx, scene, true,
-			ELEMENT_FX.resolve_hit_pitch(wd.hit_sound, wd.element), position)
+			ELEMENT_FX.resolve_hit_pitch(wd.hit_sound, wd.element), position,
+			ELEMENT_FX.resolve_hit_volume_db(wd.hit_sound, wd.element))
 	print("[NetworkWorld] CLIENT_BULLET_HIT_EFFECT weapon=%s index=%d follow=%d pos=(%.0f, %.0f)" % [
 		weapon_id, bullet_index, follow_entity_id, position.x, position.y])
 

@@ -23,6 +23,8 @@ extends State
 
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
+## 命中音增益（与子弹共用同一张表：普通命中音统一 +3dB，见 element_fx.gd）。
+const ELEMENT_FX := preload("res://script/element_fx.gd")
 ## 调试可视化节点（TAB 开关打开时才创建；见该脚本头部的「为什么单独开节点」）。
 const DebugRegion := preload("res://script/debug_attack_region.gd")
 
@@ -343,7 +345,7 @@ func _check_melee_hits() -> void:
 					fx_offset = body.hurt_effect_offset
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, fx_offset)
 			if _wd.hit_sound:
-				_play_attack_sound(_wd.hit_sound)
+				_play_attack_sound(_wd.hit_sound, ELEMENT_FX.HIT_SOUND_VOLUME_DB)
 			print("[小刀] 击中 body: %s | 伤害=%d | 爆头=%s" % [body.name, int(damage), str(_is_headshot)])
 			hit_any = true
 		else:
@@ -371,7 +373,7 @@ func _check_melee_hits() -> void:
 					fx_offset2 = parent.hurt_effect_offset
 				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, fx_offset2)
 			if _wd.hit_sound:
-				_play_attack_sound(_wd.hit_sound)
+				_play_attack_sound(_wd.hit_sound, ELEMENT_FX.HIT_SOUND_VOLUME_DB)
 			print("[小刀] 击中 area: %s | 伤害=%d | 爆头=%s" % [parent.name, int(damage), str(_is_headshot)])
 			hit_any = true
 
