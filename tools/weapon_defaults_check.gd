@@ -73,14 +73,14 @@ func _ready() -> void:
 	print("=== 5) 远程命中音三级回退 ===")
 	_check("无数据 + 无属性 → 通用默认", _path_of(ELEMENT_FX.resolve_hit(null, 0)), DEFAULT_HIT)
 	_check("默认命中音音调 = 1.0（2026-11-04 用户口径）", ELEMENT_FX.resolve_hit_pitch(null, 0), 1.0)
-	_check("默认命中音增益 +5dB", ELEMENT_FX.resolve_hit_volume_db(null, 0), 5.0)
+	_check("默认命中音增益 +7dB", ELEMENT_FX.resolve_hit_volume_db(null, 0), 7.0)
 	_check("无数据 + 火属性 → 炎2", _path_of(ELEMENT_FX.resolve_hit(null, WeaponData.Element.FIRE)), "res://sound/炎2.ogg")
 	_check("无数据 + 火属性 → 音调 1.0", ELEMENT_FX.resolve_hit_pitch(null, WeaponData.Element.FIRE), 1.0)
-	_check("属性命中音增益 +3dB", ELEMENT_FX.resolve_hit_volume_db(null, WeaponData.Element.FIRE), 3.0)
+	_check("属性命中音增益 +5dB", ELEMENT_FX.resolve_hit_volume_db(null, WeaponData.Element.FIRE), 5.0)
 	var explicit: AudioStream = load("res://sound/チャキッ.ogg") as AudioStream
 	_check("数据优先（显式）", ELEMENT_FX.resolve_hit(explicit, 0) == explicit, true)
 	_check("数据优先 → 音调 1.0", ELEMENT_FX.resolve_hit_pitch(explicit, 0), 1.0)
-	_check("自定义命中音增益 +3dB", ELEMENT_FX.resolve_hit_volume_db(explicit, 0), 3.0)
+	_check("自定义命中音增益 +5dB", ELEMENT_FX.resolve_hit_volume_db(explicit, 0), 5.0)
 
 	print("=== 6) 逐帧接口接线（源码闸门） ===")
 	var shove_state := _read("res://script/player/PlayerShoveState.gd")
@@ -98,6 +98,10 @@ func _ready() -> void:
 	_check("客户端命中音走 ELEMENT_FX", world_src.contains("ELEMENT_FX.resolve_hit("), true)
 	_check("联机推击命中音有广播 RPC",
 			world_src.contains("func shove_hit_sfx_presentation("), true)
+	_check("联机近战命中音有广播 RPC",
+			world_src.contains("func melee_hit_sfx_presentation("), true)
+	_check("近战命中音在命中分支播（不是挥空也响）",
+			world_src.contains("_play_host_melee_hit_sfx(node, wd, second)"), true)
 
 	print("=== 7) 枪声响度配平（2026-11-04：m4a1 素材比别的响 6~10dB） ===")
 	var smg: WeaponData = load("res://object/weapon_smg.tres") as WeaponData

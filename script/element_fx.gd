@@ -43,12 +43,14 @@ const HIT_SOUNDS: Dictionary = {
 ## 响度单独抬 +5dB（该素材 peak −5.9dB / RMS −18.3dB，本身就比别的命中音小）。
 const DEFAULT_HIT_SOUND: AudioStream = preload("res://sound/切り裂く.ogg")
 const DEFAULT_HIT_SOUND_PITCH: float = 1.0
-const DEFAULT_HIT_SOUND_VOLUME_DB: float = 5.0
+## 2026-11-05 用户反馈「再调高 2dB」：5 → 7。
+## ⚠ 峰值已顶到 +1.1dB（素材 peak −5.9）—— 瞬态轻微削顶可接受；若要更响只能重做素材。
+const DEFAULT_HIT_SOUND_VOLUME_DB: float = 7.0
 ## 其余命中音（武器自定义 hit_sound / 火雷冰酸 属性音）的统一增益。
 ## 【为什么需要】这些素材的 peak 普遍已经 0dBFS（しびれ1 = 0.0、ナイフ = +1.1），
 ## 但 RMS 只有 −16 ~ −19dB —— 短促又薄，混在枪声里几乎听不见（2026-11-04 用户实测）。
-## 取 +3dB 是「明显变清楚」与「不把小素材推爆」的折中；再高只能靠重做素材。
-const HIT_SOUND_VOLUME_DB: float = 3.0
+## 2026-11-05 用户口径「再调高 2dB」：3 → 5。再高只能重做素材。
+const HIT_SOUND_VOLUME_DB: float = 5.0
 
 
 ## 该属性的默认爆炸音（NONE / 表外 → null）。

@@ -2425,6 +2425,53 @@ func _schedule_host_melee_hit(node: CharacterBody2D, wd: WeaponData, is_headshot
 		hits = _perform_host_melee_attack(node, wd, is_headshot, second)
 	if hits == 0:
 		print("[NetworkWorld] HOST_MELEE_WHIFF weapon=%s stage=%d extra_frames=%d" % [wd.item_id, stage, extra])
+	else:
+		## 命中音（2026-11-05）：联机近战不走 PlayerMeleeAttackState，旧实现只结算伤害 ——
+		## 两端都没有「打中」那一声，近战打起来是哑的。这里补 Host 本地播放 + 广播。
+		_play_host_melee_hit_sfx(node, wd, second)
+
+
+## 近战判定框中心（与 `_perform_host_melee_attack` 的 query.transform 同一算法）。
+func _melee_center(node: CharacterBody2D, wd: WeaponData, second: bool) -> Vector2:
+	var forward: float = wd.get_melee_attack2_range_forward_offset() if second else wd.melee_range_forward_offset
+	return node.global_position + node.get_facing_vector() * forward
+
+
+## 近战命中音的统一播放（Host 与 Client 共用；资源按 weapon_id 本地解析，不过网）。
+func _play_melee_hit_sfx(wd: WeaponData, position: Vector2) -> void:
+	if wd == null:
+		return
+	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(wd.hit_sound, wd.element)
+	if hit_sfx == null:
+		return
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	Global.play_sfx_managed(hit_sfx, scene, true,
+		ELEMENT_FX.resolve_hit_pitch(wd.hit_sound, wd.element), position,
+		ELEMENT_FX.resolve_hit_volume_db(wd.hit_sound, wd.element))
+
+
+## Host：近战命中的「打中」音 —— 本地播一次 + 广播给 Client。
+## 世界坐标定位（同 2026-10-20 口径）：远端队友的近战命中音随距离衰减，声源=判定框中心。
+func _play_host_melee_hit_sfx(node: CharacterBody2D, wd: WeaponData, second: bool) -> void:
+	if wd == null:
+		return
+	var center: Vector2 = _melee_center(node, wd, second)
+	_play_melee_hit_sfx(wd, center)
+	_send_to_ready_clients(&"melee_hit_sfx_presentation", [wd.item_id, center])
+
+
+## Client：远端玩家近战命中的「打中」音（资源按 id 解析，与 Host 同一套增益/音调）。
+@rpc("authority", "call_remote", "reliable")
+func melee_hit_sfx_presentation(weapon_id: String, position: Vector2) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var wd := _get_network_weapon_data_by_id(weapon_id)
+	if wd == null:
+		return
+	_play_melee_hit_sfx(wd, position)
+	print("[NetworkWorld] CLIENT_MELEE_HIT_SFX weapon=%s" % weapon_id)
 
 
 ## 返回本次命中数（0 = 挥空）。调用方据此决定是否在小窗口内重查（见 _schedule_host_melee_hit）。
