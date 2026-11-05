@@ -14,6 +14,8 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://qxkfpymtjsk6" path="res://art/Weapon/A武器セット１２.png" id="12_fro3o"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_fjvgb"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="15_fgry1"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="16_r8eng"]
 [ext_resource type="Texture2D" uid="uid://by87oelk05wry" path="res://art/Ui/装備アイコンアサルトライフル４.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_fjvgb"]

@@ -12,6 +12,7 @@
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_vlnu6"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_ysum3"]
 [ext_resource type="Texture2D" uid="uid://tbcifsi5nk4r" path="res://art/Weapon/A武器セット５.png" id="9_ysum3"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="12_6enr3"]
 
 [sub_resource type="Resource" id="Resource_vlnu6"]
 script = ExtResource("8_ysum3")

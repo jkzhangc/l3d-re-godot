@@ -15,6 +15,8 @@
 [ext_resource type="Texture2D" uid="uid://e2006ll0v8eo" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="9_q7ktf"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="10_2eh8r"]
 [ext_resource type="Texture2D" uid="uid://6cd0ij2e034" path="res://art/Weapon/A武器セット４.png" id="13_xruco"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="16_1ga71"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="17_ejh6k"]
 [ext_resource type="Texture2D" uid="uid://by1ngs7mnk8sj" path="res://art/Ui/装備アイコンアンチマテリアルライフル.png" id="icon"]
 
 [sub_resource type="Resource" id="Resource_sniper1"]

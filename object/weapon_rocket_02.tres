@@ -13,6 +13,8 @@
 [ext_resource type="Texture2D" uid="uid://i7d8ninm0l3c" path="res://art/Characters/のび太セットRPG7.png" id="10"]
 [ext_resource type="Texture2D" uid="uid://c6mufmlgssema" path="res://art/Weapon/[2K-VX]-A武器セット４.png" id="11"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="11_4ooyv"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="13_7cc13"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="14_dvnud"]
 
 [sub_resource type="Resource" id="Resource_rk1"]
 script = ExtResource("2")

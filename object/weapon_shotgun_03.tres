@@ -15,6 +15,8 @@
 [ext_resource type="Texture2D" uid="uid://8jboe6oqq3pi" path="res://art/Characters/のび太セットショットガン.png" id="8_sw0ir"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="14_fwhge"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="17_lpyhg"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="18_jibgn"]
 [ext_resource type="Texture2D" uid="uid://ba51m20q0tee5" path="res://art/Ui/装備アイコンショットガン３.png" id="icon"]
 [ext_resource type="Texture2D" uid="uid://ddi2lqjarsikf" path="res://art/Weapon/[2K-VX]-A武器オブジェクト.png" id="pickup_tex"]
 

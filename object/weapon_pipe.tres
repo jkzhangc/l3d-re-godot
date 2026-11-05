@@ -13,6 +13,8 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="8_sfxhf"]
 [ext_resource type="Texture2D" uid="uid://dwyjyjwk0ve33" path="res://art/Characters/のび太セット近接武器２.png" id="11_3j4qm"]
 [ext_resource type="Texture2D" uid="uid://cqmnwxbhnmwut" path="res://art/Characters/のび太セット近接武器.png" id="11_31djo"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="12_qi6ar"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="13_yjfjs"]
 
 [sub_resource type="Resource" id="Resource_sfxhf"]
 script = ExtResource("8_sfxhf")

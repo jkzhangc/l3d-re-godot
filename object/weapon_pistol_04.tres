@@ -13,6 +13,8 @@
 [ext_resource type="PackedScene" uid="uid://kcg3fphs4qer" path="res://anim/anim_effect_hit.tscn" id="8_kl6un"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_kl6un"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="15_qj8lg"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="16_d0kjv"]
 [ext_resource type="Texture2D" uid="uid://b42gqx5fh8tk0" path="res://art/Ui/装備アイコンハンドガン８.png" id="icon"]
 [ext_resource type="Texture2D" uid="uid://bunpswvp134ux" path="res://art/Weapon/[2K-VX]-A武器セット１.png" id="pickup_tex"]
 

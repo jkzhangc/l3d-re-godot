@@ -13,6 +13,8 @@
 [ext_resource type="Texture2D" uid="uid://bd8hrw38wkv37" path="res://art/Characters/のび太セットマグナム.png" id="9"]
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_7663u"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="15_n1m1y"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="16_nhk0y"]
 [ext_resource type="Texture2D" uid="uid://besgsj4eo73rp" path="res://art/Ui/装備アイコンマグナム.png" id="icon"]
 [ext_resource type="Texture2D" uid="uid://bb6m0rlww24k" path="res://art/Weapon/[2K-VX]-A武器セット３.png" id="pickup_tex"]
 

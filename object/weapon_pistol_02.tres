@@ -14,6 +14,8 @@
 [ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="9wspawn"]
 [ext_resource type="Texture2D" uid="uid://bunpswvp134ux" path="res://art/Weapon/[2K-VX]-A武器セット１.png" id="12_kccvc"]
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="13_kl6un"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="15_udyqw"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="16_vjo52"]
 [ext_resource type="Texture2D" uid="uid://d0m6auyr6ncv1" path="res://art/Ui/装備アイコンハンドガン３.png" id="icon"]
 
 [sub_resource type="Resource" id="AEO_pistol_01_bigg"]

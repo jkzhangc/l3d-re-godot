@@ -12,6 +12,8 @@
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="8_kquoi"]
 [ext_resource type="Texture2D" uid="uid://dqj56lownjv2x" path="res://art/Weapon/A武器セット７.png" id="9_cwjfx"]
 [ext_resource type="Texture2D" uid="uid://cqmnwxbhnmwut" path="res://art/Characters/のび太セット近接武器.png" id="10_oe700"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="12_k4yya"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="13_fluqn"]
 
 [sub_resource type="Resource" id="Resource_kquoi"]
 script = ExtResource("8_cwjfx")
