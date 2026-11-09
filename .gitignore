@@ -92,3 +92,6 @@ release/l3d_error_log.txt
 export_presets.cfg
 # 导出预设的手改备份
 export_presets.cfg.bak
+
+# 发行压缩包（构建产物，不入库）
+release/*.7z

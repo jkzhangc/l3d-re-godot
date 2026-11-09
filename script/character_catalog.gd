@@ -16,11 +16,14 @@ const DEFAULT_CHARACTER_PATH := "res://object/character_nobita.tres"
 const BIGG_CHARACTER_PATH := "res://object/character_bigg.tres"
 
 ## 保持固定顺序：主角在前，随后是已正式接入的可选角色。
+## 2026-11-09 新增安雄（`yasuo`，原作说明书 §6「グレネード安雄」）——
+## 安全屋台词表里早有 `yasuo` 的全部条目，实装后自动生效，不需要改台词数据。
 const _CORE_CHARACTER_RESOURCES := [
 	preload("res://object/character_nobita.tres"),
 	preload("res://object/character_bigg.tres"),
 	preload("res://object/character_suneo.tres"),
 	preload("res://object/character_shizuka.tres"),
+	preload("res://object/character_anyu.tres"),
 ]
 
 

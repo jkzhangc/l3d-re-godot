@@ -18,8 +18,8 @@ extends RefCounted
 ##   "b" = 接着说的下一步行动/出发   → 按确定键翻到**第 2 屏**，再按一次关闭
 ## 触发**只有一个时机**（进入安全屋），两屏由窗口内部翻页完成 —— 见 `pages_for()`。
 ##
-## 【角色 id】本作已实装 4 人：nobita / shizuka / suneo / bigg。
-##   另 6 名原作可操作角色（dekisugi / sakuya / kenji / yasuo / sena / sasha）
+## 【角色 id】本作已实装 5 人：nobita / shizuka / suneo / bigg / yasuo（安雄，2026-11-09 接入）。
+##   另 5 名原作可操作角色（dekisugi / sakuya / kenji / sena / sasha）
 ##   台词一并保留 —— 将来实装时可零成本接入；未实装角色不会出现在本作队伍里，
 ##   所以取不到台词时**保持安静**（不显示窗口），符合「角色专有台词」的口径。
 ##

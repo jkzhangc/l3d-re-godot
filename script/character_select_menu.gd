@@ -147,8 +147,15 @@ func _get_icon_sheet_for(cd: CharacterData) -> Texture2D:
 
 func _make_select_frame_texture(sheet: Texture2D) -> AtlasTexture:
 	## 图标表自带的白色选中框（整格 48x64 裁切，与头像格 1:1 对齐）
+	## ★2026-11-09：选中框是**默认图标表**里的 UI 素材，不在角色自己的行走图里。
+	## 角色用 `select_icon_sheet` 换图（如安雄只有行走图、没有专属图标表）时，
+	## 若仍从该角色的图里按 3,4 裁切，切出来的是某一帧行走图而不是白框 → 选中框变成"重影人"。
+	## 所以这里固定从默认图标表取；默认表加载失败才退回传入的图。
+	var base: Texture2D = load(icon_sheet_path) as Texture2D
+	if base == null:
+		base = sheet
 	var at := AtlasTexture.new()
-	at.atlas = sheet
+	at.atlas = base
 	at.filter_clip = true
 	at.region = Rect2(SELECT_FRAME_COL * FRAME_W, SELECT_FRAME_ROW * FRAME_H, FRAME_W, FRAME_H)
 	return at

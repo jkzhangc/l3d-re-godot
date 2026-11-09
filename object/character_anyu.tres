@@ -1,0 +1,50 @@
+[gd_resource type="Resource" script_class="CharacterData" format=3]
+
+[ext_resource type="Script" path="res://script/character_data.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://bdc3krj7liaib" path="res://art/Characters/[2K-VX]-安雄セット.png" id="t_base"]
+[ext_resource type="Texture2D" uid="uid://dhdg2gdgohbde" path="res://art/Characters/[2K-VX]-安雄セットハンドガン.png" id="t_pistol"]
+[ext_resource type="Texture2D" uid="uid://che4xtkerv82b" path="res://art/Characters/[2K-VX]-安雄セットサブマシンガン.png" id="t_smg"]
+[ext_resource type="Texture2D" uid="uid://lrv86n6mca3n" path="res://art/Characters/[2K-VX]-安雄セットアサルトライフル.png" id="t_rifle"]
+[ext_resource type="Texture2D" uid="uid://q7dr2r0xdnc8" path="res://art/Characters/[2K-VX]-安雄セットショットガン.png" id="t_shotgun"]
+[ext_resource type="Texture2D" uid="uid://cxol8ldav5epu" path="res://art/Characters/安雄セットシグマ砲.png" id="t_sigma"]
+[ext_resource type="Texture2D" uid="uid://b408818jqyuhu" path="res://art/Characters/安雄セットRPG7.png" id="t_rpg7"]
+[ext_resource type="Texture2D" uid="uid://ipv84vnvfajp" path="res://art/Characters/安雄セットロケットランチャー.png" id="t_rocket"]
+[ext_resource type="Texture2D" uid="uid://csx2ci2dd1khe" path="res://art/Characters/安雄セットスティンガー.png" id="t_stinger"]
+[ext_resource type="Texture2D" uid="uid://3l538hbicb0e" path="res://art/Characters/安雄セットアルテミス.png" id="t_artemis"]
+[ext_resource type="Texture2D" uid="uid://dgknaj2smysy7" path="res://art/Characters/安雄セット素手.png" id="t_fist"]
+[ext_resource type="AudioStream" uid="uid://ddoioejewg28u" path="res://sound/安雄_被弾１.ogg" id="s_hurt"]
+[ext_resource type="AudioStream" uid="uid://3q37fw34mv4k" path="res://sound/安雄_やられ.ogg" id="s_death"]
+[ext_resource type="AudioStream" uid="uid://b71emnj0d11fn" path="res://sound/安雄_カウンター.ogg" id="s_counter"]
+
+[resource]
+script = ExtResource("1")
+character_name = "安雄"
+character_id = "yasuo"
+max_hp = 190
+max_mp = 30
+max_tp = 100
+base_attack = 14
+base_defense = 3
+mp_growth = 3
+walk_texture = ExtResource("t_base")
+death_texture = ExtResource("t_base")
+death_char_index = 6
+weapon_walk_textures = {
+"Bowgun": ExtResource("t_artemis"),
+"Launcher": ExtResource("t_sigma"),
+"Melee": ExtResource("t_fist"),
+"Pistol": ExtResource("t_pistol"),
+"RLauncher": ExtResource("t_rpg7"),
+"RLauncher2": ExtResource("t_rocket"),
+"Rifle": ExtResource("t_rifle"),
+"Shotgun": ExtResource("t_shotgun"),
+"Smg": ExtResource("t_smg"),
+"Stinger": ExtResource("t_stinger")
+}
+select_icon_sheet = ExtResource("t_base")
+select_icon_index = 0
+select_icon_direction = 0
+hurt_sound = ExtResource("s_hurt")
+death_sound = ExtResource("s_death")
+counter_sound = ExtResource("s_counter")
+demolition = true
