@@ -48,9 +48,8 @@ weapon_walk_textures = {
 "Smg": ExtResource("t_smg"),
 "Stinger": ExtResource("t_stinger")
 }
-select_icon_sheet = ExtResource("t_base")
-select_icon_index = 0
-select_icon_direction = 0
+select_icon_index = 2
+select_icon_direction = 1
 hurt_sound = ExtResource("s_hurt")
 death_sound = ExtResource("s_death")
 counter_sound = ExtResource("s_counter")

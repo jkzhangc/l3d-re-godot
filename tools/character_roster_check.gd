@@ -56,6 +56,10 @@ func _ready() -> void:
 		_check("self_blast_immune = true（自爆无效）", anyu.self_blast_immune, true)
 		_check("portrait 非空", anyu.portrait != null, true)
 		_check("portrait_index = 4", anyu.portrait_index, 4)
+		## 选人图标：用默认图标表的 R2-3（红帽子+绿衣 = 安雄），不拿自己的行走图顶。
+		_check("select_icon_sheet 为空（用默认图标表）", anyu.select_icon_sheet == null, true)
+		_check("select_icon_index = 2", anyu.select_icon_index, 2)
+		_check("select_icon_direction = 1", anyu.select_icon_direction, 1)
 
 	print("=== 3) 白名单里不能出现「没图的武器」 ===")
 	var weapon_paths: Array[String] = []
