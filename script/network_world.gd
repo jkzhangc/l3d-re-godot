@@ -2973,11 +2973,19 @@ func _try_host_awaken(peer_id: int) -> void:
 	if not node.is_weapon_mode_active():
 		return
 	var cd: CharacterData = node.get("current_character") as CharacterData
-	if cd == null or cd.awaken_type == "none":
+	if cd == null:
+		return
+	## 安雄魂（2026-11-09）与覚醒共用这颗键：安雄的 awaken_type 是 none，但可发动魂。
+	var soul: bool = cd.yasuo_soul
+	if cd.awaken_type == "none" and not soul:
 		return
 	if state.current_tp <= 0:
 		return
 	if not node._activate_awaken_core():
+		return
+	if soul:
+		## 魂没有金色染色/持续消耗，不需要 awaken_presentation 广播。
+		print("[NetworkWorld] HOST_YASUO_SOUL peer=%d tp=%d" % [peer_id, state.current_tp])
 		return
 	_awaken_active_peers[peer_id] = true
 	_send_to_ready_clients(&"awaken_presentation", [peer_id, true])

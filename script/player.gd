@@ -311,6 +311,12 @@ const AWAKEN_HITSTUN_SEC: float = SpecialAction.AWAKEN_HITSTUN_SEC            ##
 var _awaken_active: bool = false            ## 覚醒发动中（集中射撃）
 var _awaken_tint_applied: bool = false      ## 觉醒金色染色是否已上（还原时区分 Heat 染色）
 
+# ── 安雄魂（原作 §6「グレネード安雄」：TP10 · 下次受伤=1 · 可换人传递）──
+## 状态挂在**玩家实体**上而不是 CharacterData：`refresh_after_switch()` 只换角色数据、
+## 实体不重建 → 换人后这条仍然生效，对应说明书的「可换人传递」。
+const SOUL_TP_COST: int = 10
+var _soul_shield: bool = false              ## 安雄魂待消耗（下一次受伤固定为 1）
+
 ## 搓招方向输入缓冲
 const MOTION_DIRS: Array[String] = SpecialAction.MOTION_DIRS
 const MOTION_BUFFER_MAX: int = SpecialAction.MOTION_BUFFER_MAX
@@ -1769,8 +1775,16 @@ func _update_burn_status(delta: float) -> void:
 		BurnEffect.detach(self)
 
 
-func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, causes_heat: bool = false, source_owner: Node = null, source_is_player_origin: bool = false) -> void:
+func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is_headshot: bool = false, _knockback_stun: float = 0.0, _hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, causes_heat: bool = false, source_owner: Node = null, source_is_player_origin: bool = false, is_explosion: bool = false) -> void:
 	if _is_dying or not HitResolver.is_damage_authority():
+		return
+
+	## ★自爆无效体质（安雄，原作 §6）：**自己打出的爆炸**不伤自己。
+	## 只认「爆炸 + 来源是自己」—— 队友的爆炸、敌人的爆炸照常结算。
+	## 放在所有去重/见切之前：连伤害源冷却都不该被这次无效命中占用。
+	if is_explosion and current_character != null and current_character.self_blast_immune \
+			and source_owner == self:
+		print("[安雄] 自爆无效：自己的爆炸被体质抵消")
 		return
 
 	var online: bool = HitResolver.is_online_session()
@@ -1807,6 +1821,12 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	## 后面的 Heat / 削り / Push / 元素负效果要照常生效（原作说明书明确这点）。
 	if is_painkiller_active():
 		damage = 0.0
+	## ★安雄魂（2026-11-09）：下一次受到的伤害固定为 1，用完即消。
+	## 放在減免/鎮痛剤之后、ガッツ之前 —— 镇痛期间伤害已经是 0，不该白吃这条。
+	if _soul_shield and damage > 0.0:
+		_soul_shield = false
+		damage = 1.0
+		print("[安雄魂] 本次伤害固定为 1（已消耗）")
 	var hp_before: float = current_hp
 	# ── ガッツ（原作 system.html ◆ガッツ）：HP≥2 时任何攻击保底 1 HP 不死（Heat 中停止）──
 	if damage > 0.0 and not is_heat_active() and current_hp >= 2.0 and damage >= current_hp:
@@ -2218,6 +2238,29 @@ func try_activate_awaken() -> bool:
 
 func is_awaken_active() -> bool:
 	return _special_action.is_awaken_active()
+
+
+## 安雄魂是否处于待发动状态（HUD / 调试用）。
+func has_soul_shield() -> bool:
+	return _soul_shield
+
+
+## 安雄魂发动：消耗 TP10，**下一次受到的伤害固定为 1**（一次性）。
+## 与「覚醒」共用同一颗键（構え中按覚醒键）—— 安雄没有覚醒，`_activate_awaken_core()`
+## 按角色分流到这里。已经挂着时不重复发动（不白扣 TP）。
+func activate_soul_shield() -> bool:
+	if _is_dying or _soul_shield:
+		return false
+	if current_character == null or not current_character.yasuo_soul:
+		return false
+	var state: PlayerState = Players.get_state_for_entity(self)
+	if state == null or state.current_tp < SOUL_TP_COST:
+		print("[安雄魂] TP 不足（需要 %d，当前 %d）" % [SOUL_TP_COST, state.current_tp if state else 0])
+		return false
+	state.change_tp(-SOUL_TP_COST)
+	_soul_shield = true
+	print("[安雄魂] 发动！TP -%d，下一次受到的伤害固定为 1（换人后仍然有效）" % SOUL_TP_COST)
+	return true
 
 
 ## 持续型 SA 是否生效（静香蹲下 / 大雄感覚向上）。角色切换管理器用它阻止 SA 中切人。

@@ -46,12 +46,16 @@ func _ready() -> void:
 			anyu = cd
 	_check("找到安雄", anyu != null, true)
 	if anyu != null:
-		for state: String in ["Pistol", "Smg", "Rifle", "Shotgun", "Launcher", "RLauncher", "RLauncher2", "Stinger", "Bowgun", "Melee"]:
+		for state: String in ["Pistol", "Smg", "Rifle", "Shotgun", "Launcher", "RLauncher", "RLauncher2", "Stinger", "Bowgun", "Melee", "Melee_LR"]:
 			_check("有 %s 图" % state, anyu.get_weapon_walk_texture(state) != null, true)
 		_check("手枪可用（有图）", anyu.has_weapon_walk_art(load("res://object/weapon_pistol.tres")), true)
 		_check("马格南不可用（无图）", anyu.has_weapon_walk_art(load("res://object/weapon_magnum.tres")), false)
 		_check("RPG 可用（有图）", anyu.has_weapon_walk_art(load("res://object/weapon_rocket_launcher.tres")), true)
 		_check("demolition = true（说明书：デモリション）", anyu.demolition, true)
+		_check("yasuo_soul = true（安雄魂）", anyu.yasuo_soul, true)
+		_check("self_blast_immune = true（自爆无效）", anyu.self_blast_immune, true)
+		_check("portrait 非空", anyu.portrait != null, true)
+		_check("portrait_index = 4", anyu.portrait_index, 4)
 
 	print("=== 3) 白名单里不能出现「没图的武器」 ===")
 	var weapon_paths: Array[String] = []

@@ -558,7 +558,9 @@ func _explode() -> void:
 				continue
 			var pdir: Vector2 = (pl.global_position - center).normalized() if pl.global_position != center else Vector2.UP
 			# 自爆保留原伤害；队友友伤统一由 Player.take_damage 最终入口处理。
-			pl.take_damage(damage, applied_force, pdir, false, 0.3, 0.2, _source_id, element, false, _shooter, _source_is_player_origin)
+			## 末位 is_explosion=true：安雄「自爆无效体质」按这个标志 + 来源判定免疫
+			## （Player.take_damage 里判 source_owner == self）。
+			pl.take_damage(damage, applied_force, pdir, false, 0.3, 0.2, _source_id, element, false, _shooter, _source_is_player_origin, true)
 
 	## 可爆破墙体（blast_wall）：与投掷物爆炸同一入口
 	for w: Node in get_tree().get_nodes_in_group("blast_wall"):

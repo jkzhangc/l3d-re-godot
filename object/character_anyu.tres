@@ -15,6 +15,8 @@
 [ext_resource type="AudioStream" uid="uid://ddoioejewg28u" path="res://sound/安雄_被弾１.ogg" id="s_hurt"]
 [ext_resource type="AudioStream" uid="uid://3q37fw34mv4k" path="res://sound/安雄_やられ.ogg" id="s_death"]
 [ext_resource type="AudioStream" uid="uid://b71emnj0d11fn" path="res://sound/安雄_カウンター.ogg" id="s_counter"]
+[ext_resource type="Texture2D" uid="uid://s0l7celv6bsn" path="res://art/Characters/安雄セット暴徒鎮圧用シールド.png" id="t_shield"]
+[ext_resource type="Texture2D" path="res://art/Face/現代元.png" id="t_face"]
 
 [resource]
 script = ExtResource("1")
@@ -29,10 +31,15 @@ mp_growth = 3
 walk_texture = ExtResource("t_base")
 death_texture = ExtResource("t_base")
 death_char_index = 6
+portrait = ExtResource("t_face")
+portrait_index = 4
+portrait_grid_cols = 4
+portrait_grid_rows = 4
 weapon_walk_textures = {
 "Bowgun": ExtResource("t_artemis"),
 "Launcher": ExtResource("t_sigma"),
 "Melee": ExtResource("t_fist"),
+"Melee_LR": ExtResource("t_shield"),
 "Pistol": ExtResource("t_pistol"),
 "RLauncher": ExtResource("t_rpg7"),
 "RLauncher2": ExtResource("t_rocket"),
@@ -48,3 +55,5 @@ hurt_sound = ExtResource("s_hurt")
 death_sound = ExtResource("s_death")
 counter_sound = ExtResource("s_counter")
 demolition = true
+yasuo_soul = true
+self_blast_immune = true
