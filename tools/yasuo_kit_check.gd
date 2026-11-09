@@ -96,6 +96,18 @@ func _ready() -> void:
 	_check("安雄头像非空", (ANYU as CharacterData).portrait != null, true)
 	_check("安雄头像索引 4", (ANYU as CharacterData).portrait_index, 4)
 
+	print("=== 6) 没有跑步图 → 跑步沿用步行图与同一角色格 ===")
+	_check("安雄确实没配 run_texture", (ANYU as CharacterData).run_texture == null, true)
+	player.set("current_character", anyu)
+	player.call("_apply_current_character_data", anyu)
+	_check("run_texture == walk_texture", player.get("run_texture") == player.get("walk_texture"), true)
+	_check("run_char_index == walk_char_index",
+			int(player.get("run_char_index")), int(player.get("walk_char_index")))
+	player.set("current_character", nobita)
+	player.call("_apply_current_character_data", nobita)
+	_check("有跑步图的角色仍用专属图（大雄）",
+			player.get("run_texture") != player.get("walk_texture"), true)
+
 	player.queue_free()
 	other.queue_free()
 	print("\n失败 %d 项" % _fail)

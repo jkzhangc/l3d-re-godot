@@ -1665,9 +1665,13 @@ func _apply_current_character_data(cd: CharacterData) -> void:
 	walk_texture = NormalMaps.canvas(cd.walk_texture)
 	walk_char_index = cd.walk_char_index
 	walk_frame_duration = cd.walk_frame_duration
-	run_texture = NormalMaps.canvas(cd.run_texture) if cd.run_texture else walk_texture
-	run_char_index = cd.run_char_index
-	run_frame_duration = cd.run_frame_duration
+	## ★2026-11-09 安雄：没画跑步图 → 跑步**继续用步行图**，且角色格必须跟步行一致。
+	## 旧写法只回退贴图、不回退索引：`run_char_index` 默认 1，会指到行走表上的
+	## **另一个角色格** → 一跑起来整个人就换掉（用户实测「不要换其他行走图」）。
+	var has_run_sheet: bool = cd.run_texture != null
+	run_texture = NormalMaps.canvas(cd.run_texture) if has_run_sheet else walk_texture
+	run_char_index = cd.run_char_index if has_run_sheet else cd.walk_char_index
+	run_frame_duration = cd.run_frame_duration if has_run_sheet else cd.walk_frame_duration
 	death_texture = NormalMaps.canvas(cd.death_texture) if cd.death_texture else walk_texture
 	death_char_index = cd.death_char_index
 	max_hp = float(cd.get_effective_max_hp())
