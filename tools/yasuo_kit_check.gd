@@ -96,7 +96,32 @@ func _ready() -> void:
 	_check("安雄头像非空", (ANYU as CharacterData).portrait != null, true)
 	_check("安雄头像索引 4", (ANYU as CharacterData).portrait_index, 4)
 
-	print("=== 6) 没有跑步图 → 跑步沿用步行图与同一角色格 ===")
+	print("=== 6) buff 列表（HUD 数据源） ===")
+	player.set("current_character", anyu)
+	if state != null:
+		state.current_tp = 10
+	player.call("activate_soul_shield")
+	var buffs: Array = player.call("get_active_buffs")
+	_check("发动后列表非空", buffs.size() >= 1, true)
+	var soul_entry: Dictionary = {}
+	for b: Dictionary in buffs:
+		if String(b.get("id", "")) == "yasuo_soul":
+			soul_entry = b
+	_check("含 yasuo_soul", not soul_entry.is_empty(), true)
+	_check("文案 = 安雄魂", String(soul_entry.get("label", "")), "安雄魂")
+	_check("常驻（remain < 0）", float(soul_entry.get("remain", 0.0)) < 0.0, true)
+	_check("不是负面", bool(soul_entry.get("debuff", true)), false)
+	## 快照 → 回填 的另一端（联机 Client 走这条路）
+	var snap: Array = player.call("get_buff_snapshot")
+	_check("快照含 1 条", snap.size(), 1)
+	player.call("apply_network_buffs", snap)
+	player.set("network_controlled", true)
+	player.set("network_local_player", false)
+	var remote: Array = player.call("get_active_buffs")
+	_check("镜像端也能读出同一条", remote.size() >= 1, true)
+	player.set("network_controlled", false)
+
+	print("=== 7) 没有跑步图 → 跑步沿用步行图与同一角色格 ===")
 	_check("安雄确实没配 run_texture", (ANYU as CharacterData).run_texture == null, true)
 	player.set("current_character", anyu)
 	player.call("_apply_current_character_data", anyu)

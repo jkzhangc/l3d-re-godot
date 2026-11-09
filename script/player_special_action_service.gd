@@ -43,6 +43,12 @@ const AWAKEN_TP_DRAIN_PER_SEC: float = 5.0
 const AWAKEN_DAMAGE_MULT: float = 1.5
 ## 覚醒：即死对 Boss 无效 → 改为伤害 ×1.5（原作必殺对 Boss 同规则）
 const AWAKEN_BOSS_DAMAGE_MULT: float = 1.5
+
+## ── 通用发动音（2026-11-09 用户要求，技能/觉醒各一条，与角色解耦）──
+## SA 技能：技能数据没配 `sa_sound` 时用它兜底。
+const GENERIC_SA_SOUND: AudioStream = preload("res://sound/迷彩発動.ogg")
+## 覚醒（集中射撃等）：发动成功时播放。
+const AWAKEN_ACTIVATE_SOUND: AudioStream = preload("res://sound/(効果音)パワーアップ.ogg")
 ## 覚醒：怯み时长（Boss 吃怯み不吃即死）
 const AWAKEN_HITSTUN_SEC: float = 0.8
 
@@ -127,6 +133,10 @@ func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 	if skill.sa_sound:
 		var scene: Node = _p.get_tree().current_scene if _p.get_tree() else null
 		Global.play_sfx_managed(skill.sa_sound, scene)
+	else:
+		## 通用 SA 发动音（2026-11-09 用户要求）：技能自己没配 sa_sound 时兜底，
+		## 保证「按了 SA 一定有反馈」。要换音色改这一行常量即可。
+		Global.play_player_sfx(GENERIC_SA_SOUND, _p)
 	match skill.skill_type:
 		SkillData.SkillType.SA_SEEKER:
 			# のび太「感覚向上」：持续时间内敌方攻击完全见切（无伤）
@@ -327,6 +337,8 @@ func _activate_awaken_core() -> bool:
 	if _p.sprite:
 		_p.sprite.modulate = Color(1.9, 1.7, 0.9)
 		_p._awaken_tint_applied = true
+	## 通用觉醒发动音（2026-11-09 用户要求）：响度已按素材实测配过，与角色无关。
+	Global.play_player_sfx(AWAKEN_ACTIVATE_SOUND, _p)
 	print("[覚醒] 集中射撃発動！TP 每秒 -%d、射撃威力 ×%.1f、即死・怯み（Boss 免疫即死）" % [
 		int(AWAKEN_TP_DRAIN_PER_SEC), AWAKEN_DAMAGE_MULT])
 	return true

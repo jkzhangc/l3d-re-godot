@@ -554,6 +554,8 @@ func _physics_process(delta: float) -> void:
 	if net.is_host:
 		_capture_host_input(inputs_frozen)
 		_simulate_host_players(delta)
+		## buff 显示同步（2026-11-09）：集合变化才发，倒计时由 Client 本地递减。
+		_sync_host_buffs()
 		# Host 权威推进顺序：先 reconcile 倒地表现与流血（可能把玩家转成真死亡），
 		# 再推进救援（只认仍在流血期内的倒地目标），最后检测团灭与到时重启。
 		_update_host_downed(delta)
@@ -2992,6 +2994,47 @@ func _try_host_awaken(peer_id: int) -> void:
 	print("[NetworkWorld] HOST_AWAKEN peer=%d tp=%d" % [peer_id, state.current_tp])
 
 
+## Host：玩家 buff 集合变化时广播（2026-11-09）。
+## 只发「id + 层数」的变化签名 —— 倒计时不逐帧同步，Client 收到后用本地时钟往下扣
+## （见 `Player._buffs_from_network`），否则每帧几十字节的 remain 抖动纯属浪费。
+var _host_buff_signature: Dictionary = {}   ## peer_id → String
+
+
+func _sync_host_buffs() -> void:
+	if not net.is_host:
+		return
+	var targets: Array = _active_client_peer_ids()
+	if targets.is_empty():
+		return
+	for peer_id: int in _players.keys():
+		var entry: Dictionary = _players[peer_id]
+		var node := _player_node(entry)
+		if not is_instance_valid(node) or not node.has_method("get_buff_snapshot"):
+			continue
+		var snap: Array = node.call("get_buff_snapshot")
+		var parts: PackedStringArray = PackedStringArray()
+		for e: Variant in snap:
+			if e is Array and (e as Array).size() >= 3:
+				parts.append("%s:%d" % [String((e as Array)[0]), int((e as Array)[2])])
+		var sig: String = ",".join(parts)
+		if String(_host_buff_signature.get(peer_id, "")) == sig:
+			continue
+		_host_buff_signature[peer_id] = sig
+		for target_id: int in targets:
+			buff_presentation.rpc_id(target_id, peer_id, snap)
+
+
+## Client：收到 Host 的 buff 快照 → 挂到对应玩家镜像上，HUD 直接读。
+@rpc("authority", "call_remote", "reliable")
+func buff_presentation(peer_id: int, buffs: Array) -> void:
+	if net.is_host or _scene_transitioning:
+		return
+	var entry: Dictionary = _players.get(peer_id, {})
+	var node := _player_node(entry)
+	if is_instance_valid(node) and node.has_method("apply_network_buffs"):
+		node.call("apply_network_buffs", buffs)
+
+
 ## Host：player._deactivate_awaken 的统一解除出口（TP 耗尽/死亡/放下武器）调用。
 ## 单机（无 NetworkWorld 节点）或 Client 端为 no-op。
 func announce_player_awaken(node: Node2D, active: bool) -> void:
@@ -4251,6 +4294,9 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
 			state.character_path = str(public_state.get("character_path", ""))
 		if apply_dynamic:
 			state.current_hp = float(public_state.get("hp", state.current_hp))
+			## buff 快照随公开状态下发（2026-11-09）：中途加入/重连时一次拿全。
+			if public_state.has("buffs") and node.has_method("apply_network_buffs"):
+				node.call("apply_network_buffs", public_state.get("buffs"))
 			state.position = _packet_position(public_state)
 			state.facing = int(public_state.get("facing", state.facing))
 			var snapshot_locked: bool = bool(public_state.get("facing_locked", false))
@@ -6016,6 +6062,9 @@ func _public_state(peer_id: int) -> Dictionary:
 		"moving": bool(entry.get("moving", false)),
 		"walking": bool(entry.get("walking", false)),
 		"weapon_id": weapon.item_id if weapon else "",
+		## 生效中的 buff/状态（2026-11-09）：随可靠公开状态一起下发，中途加入的 Client
+		## 也能一次拿全；之后的变化由 `buff_presentation` 推送。
+		"buffs": node.call("get_buff_snapshot") if is_instance_valid(node) and node.has_method("get_buff_snapshot") else [],
 		"primary_weapon_id": _weapon_id_for_slot(state, "primary"),
 		"secondary_weapon_id": _weapon_id_for_slot(state, "secondary"),
 		"active_weapon_slot": state.active_weapon_slot if state else "primary",

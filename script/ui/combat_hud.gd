@@ -74,6 +74,8 @@ const SPRAY_TEXTS: Array[Texture2D] = [
 @onready var throwable_icon: TextureRect = $ThrowableIcon
 @onready var throwable_count_label: Label = $ThrowableCountLabel
 @onready var support_icon: TextureRect = $SupportIcon
+## 血条右侧的 buff/状态列表（场景节点，见 scene/ui/buff_bar.tscn）。
+@onready var buff_bar: Control = $BuffBar
 
 var _last_tp: int = -1
 ## ── 每帧刷新脏检查缓存（2026-10-08 性能）──
@@ -196,9 +198,23 @@ func refresh() -> void:
 	_update_spray()
 	_update_weapons()
 	_update_consumables()
+	_update_buffs()
 	_update_remote_bars()
 	_update_action_hints()
 	_force_refresh = false
+
+
+## 血条右侧的 buff/状态列表（2026-11-09）。
+## 数据源只有 `Player.get_active_buffs()` 一个出口：本机用实时字段，
+## 联机 Client 用 Host 快照（见 player.gd 的 buff 区段），这里不关心两端差异。
+func _update_buffs() -> void:
+	if buff_bar == null or not buff_bar.has_method("refresh"):
+		return
+	var player: Node2D = Players.get_local_entity()
+	if player == null or not is_instance_valid(player) or not player.has_method("get_active_buffs"):
+		buff_bar.call("refresh", [])
+		return
+	buff_bar.call("refresh", player.call("get_active_buffs"))
 
 
 func _update_hp() -> void:

@@ -315,6 +315,8 @@ var _awaken_tint_applied: bool = false      ## 觉醒金色染色是否已上（
 ## 状态挂在**玩家实体**上而不是 CharacterData：`refresh_after_switch()` 只换角色数据、
 ## 实体不重建 → 换人后这条仍然生效，对应说明书的「可换人传递」。
 const SOUL_TP_COST: int = 10
+## 安雄魂发动音（角色专属喊声）。换成通用音效只需改这一行。
+const SOUL_ACTIVATE_SOUND: AudioStream = preload("res://sound/安雄_必殺.ogg")
 var _soul_shield: bool = false              ## 安雄魂待消耗（下一次受伤固定为 1）
 
 ## 搓招方向输入缓冲
@@ -2160,6 +2162,112 @@ func is_painkiller_active() -> bool:
 	return Time.get_ticks_msec() < _painkiller_until_msec
 
 
+# ═══════════════════════════════════════
+# Buff 展示（HUD 右侧，2026-11-09）
+# ═══════════════════════════════════════
+## 状态 id 的显示文案。HUD 只认 id，文案集中在这里，加新 buff 时**只加一行**。
+## ⚠ 图标接口：条目里的 `icon` 字段留空就用文字；将来有图标表时在这里补 Texture2D。
+const BUFF_LABELS: Dictionary = {
+	"yasuo_soul": "安雄魂",
+	"awaken": "觉醒·集中射击",
+	"painkiller": "鎮痛剤",
+	"adrenaline": "アドレナリン",
+	"burning": "燃烧",
+	"heat": "Heat",
+}
+## 负面状态（HUD 用红色显示）。
+const BUFF_DEBUFFS: Array[String] = ["burning", "heat"]
+
+## 联机镜像（Client 上代表远端玩家的实体）：Host 快照下发的 buff 列表。
+## 每项 `[id, remain, stacks]`，remain < 0 表示无倒计时；配合到达时刻本地递减。
+var _network_buffs: Array = []
+var _network_buffs_at_msec: int = 0
+
+## 当前生效的全部 buff/状态（供 HUD 显示）。统一出口，本机与远端镜像都走这里。
+## 返回每项：{id:String, label:String, remain:float(<0=常驻), stacks:int, debuff:bool, icon:Texture2D}
+func get_active_buffs() -> Array[Dictionary]:
+	## 联机 Client：伤害/用药都由 Host 结算，本地 `_soul_shield` / `_painkiller_until_msec`
+	## 这些字段**不会**被写 → 必须用 Host 快照，否则客户端 HUD 永远空。
+	## 远端玩家的镜像实体（network_controlled 且非本机）同样只能读快照。
+	if (network_controlled and not network_local_player) or _client_trusts_network_buffs():
+		return _buffs_from_network()
+	return _local_buffs()
+
+
+## 本机是不是「Client 域」：在线且不是 Host。
+func _client_trusts_network_buffs() -> bool:
+	var n: Node = get_node_or_null("/root/Net")
+	if n == null or not n.has_method("is_online_session"):
+		return false
+	return bool(n.call("is_online_session")) and not bool(n.get("is_host"))
+
+
+func _local_buffs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _soul_shield:
+		out.append(_make_buff("yasuo_soul", -1.0))
+	if _awaken_active:
+		out.append(_make_buff("awaken", -1.0))
+	var now: int = Time.get_ticks_msec()
+	var pk: float = float(_painkiller_until_msec - now) / 1000.0
+	if pk > 0.0:
+		out.append(_make_buff("painkiller", pk))
+	var ad: float = float(_adrenaline_until_msec - now) / 1000.0
+	if ad > 0.0:
+		out.append(_make_buff("adrenaline", ad))
+	if _burning_time > 0.0:
+		out.append(_make_buff("burning", _burning_time))
+	if _heat_time > 0.0:
+		out.append(_make_buff("heat", _heat_time))
+	return out
+
+
+func _make_buff(id: String, remain: float, stacks: int = 1) -> Dictionary:
+	return {
+		"id": id,
+		"label": String(BUFF_LABELS.get(id, id)),
+		"remain": remain,
+		"stacks": maxi(1, stacks),
+		"debuff": id in BUFF_DEBUFFS,
+		"icon": null,   ## 图标接口：有素材时在这里塞 Texture2D，HUD 自动换成图标
+	}
+
+
+## 本机权威侧（Host / 单机）打包成快照：`[id, remain, stacks]`。
+func get_buff_snapshot() -> Array:
+	var out: Array = []
+	for b: Dictionary in get_active_buffs():
+		out.append([String(b["id"]), float(b["remain"]), int(b["stacks"])])
+	return out
+
+
+## Client 收到 Host 快照后调用：存下来，并记下到达时刻用于本地倒计时。
+func apply_network_buffs(raw: Variant) -> void:
+	_network_buffs = raw if raw is Array else []
+	_network_buffs_at_msec = Time.get_ticks_msec()
+
+
+func _buffs_from_network() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _network_buffs.is_empty():
+		return out
+	## 快照每 100~200ms 一份，期间按本地时间把 remain 扣掉，进度条文字才不是跳变的。
+	var elapsed: float = float(Time.get_ticks_msec() - _network_buffs_at_msec) / 1000.0
+	for entry: Variant in _network_buffs:
+		if not (entry is Array) or (entry as Array).size() < 2:
+			continue
+		var arr: Array = entry
+		var id: String = String(arr[0])
+		var remain: float = float(arr[1])
+		var stacks: int = int(arr[2]) if arr.size() > 2 else 1
+		if remain > 0.0:
+			remain = maxf(0.0, remain - elapsed)
+			if remain <= 0.0001:
+				continue
+		out.append(_make_buff(id, remain, stacks))
+	return out
+
+
 ## 回复 TP（技能点）。供物品使用效果与自动回复共用。
 func restore_tp(amount: int) -> void:
 	if amount <= 0:
@@ -2263,6 +2371,10 @@ func activate_soul_shield() -> bool:
 		return false
 	state.change_tp(-SOUL_TP_COST)
 	_soul_shield = true
+	## 发动反馈（2026-11-09 用户要求）：安雄专属喊声 + 一圈金色闪光。
+	## 音效走玩家音效入口（联机远端按距离衰减）；闪光走 Global 的全屏短暂叠色。
+	Global.play_player_sfx(SOUL_ACTIVATE_SOUND, self)
+	Global.flash_screen(Color(1.0, 0.86, 0.45, 0.55), 0.22)
 	print("[安雄魂] 发动！TP -%d，下一次受到的伤害固定为 1（换人后仍然有效）" % SOUL_TP_COST)
 	return true
 

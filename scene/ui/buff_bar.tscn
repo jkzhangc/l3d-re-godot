@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://script/ui/buff_bar.gd" id="1_bar"]
+[ext_resource type="PackedScene" path="res://scene/ui/buff_entry.tscn" id="2_entry"]
+
+[node name="BuffBar" type="VBoxContainer"]
+theme_override_constants/separation = 2
+mouse_filter = 2
+script = ExtResource("1_bar")
+
+[node name="Template" parent="." instance=ExtResource("2_entry")]
+visible = false
+layout_mode = 2

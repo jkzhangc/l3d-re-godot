@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://bg50kuqqrps3p" path="res://script/gradient_label.gd" id="6_aeqfj"]
 [ext_resource type="Texture2D" uid="uid://dhrwaa8eq6kaj" path="res://art/Ui/ＨＰバー.png" id="7_remote"]
 [ext_resource type="Texture2D" uid="uid://bxqo4nx3wkjq6" path="res://art/Ui/ＨＰメーター.png" id="8_remote"]
+[ext_resource type="PackedScene" path="res://scene/ui/buff_bar.tscn" id="9_buffbar"]
 
 [sub_resource type="StyleBoxFlat" id="HoldoutPanel"]
 bg_color = Color(0, 0, 0, 0.55)
@@ -60,6 +61,13 @@ offset_bottom = 6.0
 scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("2_5nspm")
+
+[node name="BuffBar" parent="." instance=ExtResource("9_buffbar")]
+offset_left = 440.0
+offset_top = 78.0
+offset_right = 760.0
+offset_bottom = 246.0
+mouse_filter = 2
 
 [node name="SprayCount" type="TextureRect" parent="." unique_id=306595916]
 offset_left = 318.0
