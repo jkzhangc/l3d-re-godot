@@ -225,6 +225,35 @@ func _ready() -> void:
 		timed.call("enter_safehouse")
 		_check("安全屋停表", bool(timed.get("running")), false)
 
+		## ★死亡复活回归（2026-11-10 用户实测「复活后倒计时不见了」）：
+		## 死回安全屋再回到**同一张图**时，`ChapterStats.ensure_chapter()` 会 early-return
+		## （chapter_scene 没变 → 不调 begin_chapter）→ TimedChallenge 收不到通知、
+		## running 一直 false。修法是 GameInit 每次进图显式再通知一次。
+		var left_over: float = float(timed.get("remaining"))
+		ChapterStats.ensure_chapter(STREET)
+		_check_true("ensure_chapter 对同一关不重开章节",
+			String(ChapterStats.chapter_scene) == STREET)
+		timed.call("on_level_entered", STREET)
+		_check("回到同一关：倒计时恢复", bool(timed.get("running")), true)
+		_check_near("恢复后的余额 = 离开时的余额", float(timed.get("remaining")), left_over)
+		_check("回到同一关不重复计进度", int(timed.get("levels_entered")), 1)
+
+		## 同一关被通知两次（begin_chapter + GameInit）不能重置连杀
+		timed.call("on_enemy_killed")
+		var combo_before_dup: int = int(timed.get("combo"))
+		timed.call("on_level_entered", STREET)
+		_check("重复通知不重置连杀", int(timed.get("combo")), combo_before_dup)
+
+		## 源码级：GameInit 必须保留这条显式通知（删了就会静默复发）
+		var gi_src: String = ""
+		if FileAccess.file_exists("res://script/game_init.gd"):
+			var gf := FileAccess.open("res://script/game_init.gd", FileAccess.READ)
+			if gf != null:
+				gi_src = gf.get_as_text()
+				gf.close()
+		_check_true("GameInit 显式通知 TimedChallenge", gi_src.contains("on_level_entered"))
+
+		timed.call("enter_safehouse")
 		timed.call("on_level_entered", SCHOOL)
 		_check_near("换关拿新预算", float(timed.get("remaining")), 300.0)
 		_check("到达关卡数 2", int(timed.get("levels_entered")), 2)

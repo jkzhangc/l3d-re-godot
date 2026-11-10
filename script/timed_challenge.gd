@@ -180,6 +180,10 @@ func on_level_entered(scene_path: String) -> void:
 	if timed_out:
 		## 已经判负、正在等玩家按键回标题：别再把表打起来。
 		return
+	## 同一个关卡可能被通知两次（`ChapterStats.begin_chapter` + `GameInit` 的显式调用），
+	## 已经在走表就什么都不做 —— 否则连杀与开局横幅会被重置。
+	if running and scene_path == level_path:
+		return
 	var limit: float = limit_for(scene_path)
 	if not _level_remaining.has(scene_path):
 		_level_remaining[scene_path] = limit

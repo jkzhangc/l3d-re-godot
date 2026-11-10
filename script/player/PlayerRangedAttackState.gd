@@ -21,6 +21,13 @@ var _timer: float = 0.0
 var _fired: bool = false
 var _post_attack_active: bool = false  ## 是否正在播放攻击后动画
 var _wait_frames: int = 0              ## 攻击完成后等待帧计数器（fire rate 控制）
+## 本次开火动作**开始时**弹夹里的弹数。
+## ★为什么需要它（2026-11-10 用户实测「换完弹被攻击，子弹没出但弹夹少了」）：
+##   「削り」（酸 / Heat 攻击命中）会在攻击动画**播放中途**直接扣弹夹（`_apply_attrition`，
+##   每次 -2）。对 1 发弹夹的榴弹炮 / 火箭筒来说，这一下必然把弹夹清零，于是开火帧
+##   `current <= 0` → 静默 return：子弹没出来，弹夹却少了 —— 玩家看到的就是「攻击被吞」。
+##   有了这个快照，「动作开始时还有弹」就视为**已上膛**，开火帧照常发射（不再扣弹）。
+var _ammo_at_attack_start: int = 0
 
 ## 锁定打击（便携式地对空导弹）运行时节点，见 script/lock_on_strike.gd
 const LOCK_ON_STRIKE := preload("res://script/lock_on_strike.gd")
@@ -58,6 +65,8 @@ func enter() -> void:
 	_fired = false
 	_post_attack_active = false
 	_wait_frames = 0
+	## 记下「动作开始时」的弹数：削り 会在动画中途清空弹夹，见字段注释。
+	_ammo_at_attack_start = get_player_state().get_magazine_ammo(_wd.item_id)
 
 	# 确保武器模式开启（上一个武器状态 exit 时可能关闭了）
 	character.enter_weapon_mode(_wd)
@@ -154,7 +163,9 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 func _fire_bullet() -> void:
 	# 消耗弹夹内子弹；备弹可无限，但弹夹仍然会空
 	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
-	if current <= 0:
+	## ★开火帧弹夹为空、但**动作开始时还有弹** → 这一发已上膛，照常发射（见 `_ammo_at_attack_start`）。
+	var chambered: bool = _ammo_at_attack_start > 0
+	if current <= 0 and not chambered:
 		print("[手枪] 弹夹为空！咔嚓——")
 		return
 	var bullet_count: int = _wd.bullet_list.size()
@@ -229,7 +240,7 @@ func _fire_bullet() -> void:
 	## 原来是先扣弹再生成子弹；一旦生成过程中途异常中止（受击硬直/参数为空等），
 	## 弹药已经扣掉、子弹却没有 —— 玩家看到的就是"空扣一发"。
 	## 现在先造子弹，全部落地后才扣弹；中途异常中止就不会损失弹药。
-	get_player_state().set_magazine_ammo(_wd.item_id, current - 1)
+	get_player_state().set_magazine_ammo(_wd.item_id, maxi(0, current - 1))
 	# 播放开枪音效（只播一次，不是每颗子弹都播）
 	# 播放开枪特效
 	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)
@@ -288,6 +299,8 @@ func _restart_attack() -> void:
 	_timer = _wd.get_attack_frame_duration(_seq_idx)
 	_fired = false
 	_post_attack_active = false
+	## 连发 / 缓冲补发的每一轮都要重新记快照，否则削り 之后会一直"免费续一发"。
+	_ammo_at_attack_start = get_player_state().get_magazine_ammo(_wd.item_id)
 	_set_attack_frame(_seq_idx)
 
 

@@ -72,6 +72,14 @@ func _ready() -> void:
 			var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 			if chapter_stats and chapter_stats.has_method("ensure_chapter"):
 				chapter_stats.ensure_chapter(scene_path)
+			## ★限时挑战（2026-11-10 用户实测「死亡复活后倒计时不见了」）：
+			## `ensure_chapter()` 对**同一张图**会 early-return（章节计时不重开），
+			## 所以「死回安全屋 → 再进同一关」时 `begin_chapter` 根本不会再调 →
+			## TimedChallenge 收不到通知、`running` 一直是 false → 倒计时消失。
+			## 这里显式再通知一次（on_level_entered 对同一关重复调用是幂等的）。
+			var timed: Node = get_node_or_null("/root/TimedChallenge")
+			if timed != null and timed.has_method("on_level_entered"):
+				timed.call("on_level_entered", scene_path)
 	var state: PlayerState = Players.get_active_state()
 	print("[GameInit] 初始化完成 | debug=%s | HP=%.0f | team=%d | checkpoint=%s" % [
 		Global.debug_enabled, state.current_hp, Global.get_team_size(),
