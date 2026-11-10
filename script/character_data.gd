@@ -164,9 +164,10 @@ class_name CharacterData extends Resource
 @export var demolition: bool = false
 ## 怪力（かいりき）：近战武器攻击后无硬直（跳过攻击后动画）。
 @export var kairiki: bool = false
-## 安雄魂（原作 §6「グレネード安雄」）：TP10 发动，**下一次受到的伤害固定为 1**。
+## 安雄魂（原作 §6「グレネード安雄」）：TP10 发动，**5 秒内每次受到的伤害固定为 1**；
+## 生效中可再发动，每次 +5 秒（时长叠加，HUD 显示 ×N）。
 ## 发动键与「覚醒」共用（構え中按覚醒键）：安雄没有覚醒，同一颗键走这条分支。
-## 说明书「可换人传递」→ 状态挂在**玩家实体**上（`Player._soul_shield`），换座位不丢。
+## 说明书「可换人传递」→ 状态挂在**玩家实体**上（`Player._soul_shield_until_msec`），换座位不丢。
 @export var yasuo_soul: bool = false
 ## 自爆无效体质（原作 §6）：**自己打出的爆炸**（榴弹 / 火箭 / 手雷）不伤自己。
 ## 只免疫「爆炸 + 来源是自己」，队友的爆炸照样会伤 —— 与原作「零距离爆破战术」一致。

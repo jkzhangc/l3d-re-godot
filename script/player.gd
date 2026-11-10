@@ -311,13 +311,21 @@ const AWAKEN_HITSTUN_SEC: float = SpecialAction.AWAKEN_HITSTUN_SEC            ##
 var _awaken_active: bool = false            ## 覚醒发动中（集中射撃）
 var _awaken_tint_applied: bool = false      ## 觉醒金色染色是否已上（还原时区分 Heat 染色）
 
-# ── 安雄魂（原作 §6「グレネード安雄」：TP10 · 下次受伤=1 · 可换人传递）──
+# ── 安雄魂（原作 §6「グレネード安雄」：TP10 · 可换人传递）──
 ## 状态挂在**玩家实体**上而不是 CharacterData：`refresh_after_switch()` 只换角色数据、
 ## 实体不重建 → 换人后这条仍然生效，对应说明书的「可换人传递」。
+##
+## ★2026-11-10 改版（用户定）：从「一次性挡下一次伤害」改成**时间制**——
+##   TP10 发动 → SOUL_DURATION_SEC 秒内**每一次**受到的伤害都固定为 1；
+##   生效中再发动一次就再 +5 秒（时长叠加，`_soul_stacks` 记层数给 HUD 显示）；
+##   受伤本身**不再**取消状态。
+##   改版原因：一次性版本在尸潮里一进场就被杂兵蹭掉，玩家反馈「有点鸡肋」。
 const SOUL_TP_COST: int = 10
+const SOUL_DURATION_SEC: float = 5.0
 ## 安雄魂发动音（角色专属喊声）。换成通用音效只需改这一行。
 const SOUL_ACTIVATE_SOUND: AudioStream = preload("res://sound/安雄_必殺.ogg")
-var _soul_shield: bool = false              ## 安雄魂待消耗（下一次受伤固定为 1）
+var _soul_shield_until_msec: int = 0        ## 安雄魂截止时刻（> now 即生效）
+var _soul_stacks: int = 0                   ## 叠了几层（= 连续发动次数），只用于显示
 
 ## 搓招方向输入缓冲
 const MOTION_DIRS: Array[String] = SpecialAction.MOTION_DIRS
@@ -1827,12 +1835,11 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 	## 后面的 Heat / 削り / Push / 元素负效果要照常生效（原作说明书明确这点）。
 	if is_painkiller_active():
 		damage = 0.0
-	## ★安雄魂（2026-11-09）：下一次受到的伤害固定为 1，用完即消。
+	## ★安雄魂（2026-11-10 改版）：生效期间**每一次**受到的伤害都固定为 1，受伤不再取消状态。
 	## 放在減免/鎮痛剤之后、ガッツ之前 —— 镇痛期间伤害已经是 0，不该白吃这条。
-	if _soul_shield and damage > 0.0:
-		_soul_shield = false
+	if is_soul_shield_active() and damage > 0.0:
 		damage = 1.0
-		print("[安雄魂] 本次伤害固定为 1（已消耗）")
+		print("[安雄魂] 本次伤害固定为 1（剩余 %.1fs）" % _soul_remain_sec())
 	var hp_before: float = current_hp
 	# ── ガッツ（原作 system.html ◆ガッツ）：HP≥2 时任何攻击保底 1 HP 不死（Heat 中停止）──
 	if damage > 0.0 and not is_heat_active() and current_hp >= 2.0 and damage >= current_hp:
@@ -2191,7 +2198,7 @@ var _network_buffs_at_msec: int = 0
 ## 当前生效的全部 buff/状态（供 HUD 显示）。统一出口，本机与远端镜像都走这里。
 ## 返回每项：{id:String, label:String, remain:float(<0=常驻), stacks:int, debuff:bool, icon:Texture2D}
 func get_active_buffs() -> Array[Dictionary]:
-	## 联机 Client：伤害/用药都由 Host 结算，本地 `_soul_shield` / `_painkiller_until_msec`
+	## 联机 Client：伤害/用药都由 Host 结算，本地 `_soul_shield_until_msec` / `_painkiller_until_msec`
 	## 这些字段**不会**被写 → 必须用 Host 快照，否则客户端 HUD 永远空。
 	## 远端玩家的镜像实体（network_controlled 且非本机）同样只能读快照。
 	if (network_controlled and not network_local_player) or _client_trusts_network_buffs():
@@ -2209,8 +2216,10 @@ func _client_trusts_network_buffs() -> bool:
 
 func _local_buffs() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	if _soul_shield:
-		out.append(_make_buff("yasuo_soul", -1.0))
+	## 安雄魂：时间制之后带倒计时；`stacks` = 叠了几层，HUD 会显示 ×N。
+	var soul: float = _soul_remain_sec()
+	if soul > 0.0:
+		out.append(_make_buff("yasuo_soul", soul, _soul_stacks))
 	if _awaken_active:
 		out.append(_make_buff("awaken", -1.0))
 	var now: int = Time.get_ticks_msec()
@@ -2357,16 +2366,27 @@ func is_awaken_active() -> bool:
 	return _special_action.is_awaken_active()
 
 
-## 安雄魂是否处于待发动状态（HUD / 调试用）。
+## 安雄魂是否生效中（HUD / 调试用）。
 func has_soul_shield() -> bool:
-	return _soul_shield
+	return is_soul_shield_active()
 
 
-## 安雄魂发动：消耗 TP10，**下一次受到的伤害固定为 1**（一次性）。
+func is_soul_shield_active() -> bool:
+	return Time.get_ticks_msec() < _soul_shield_until_msec
+
+
+## 安雄魂剩余秒数（未生效返回 0）。
+func _soul_remain_sec() -> float:
+	return maxf(0.0, float(_soul_shield_until_msec - Time.get_ticks_msec()) / 1000.0)
+
+
+## 安雄魂发动：消耗 TP10，把截止时刻往后推 SOUL_DURATION_SEC 秒。
+## · 未生效 → 从此刻起算，层数归 1；
+## · 生效中 → 在原截止时刻上继续加 5 秒（时长叠加），层数 +1 —— **允许**重复发动，TP 照扣。
 ## 与「覚醒」共用同一颗键（構え中按覚醒键）—— 安雄没有覚醒，`_activate_awaken_core()`
-## 按角色分流到这里。已经挂着时不重复发动（不白扣 TP）。
+## 按角色分流到这里。
 func activate_soul_shield() -> bool:
-	if _is_dying or _soul_shield:
+	if _is_dying:
 		return false
 	if current_character == null or not current_character.yasuo_soul:
 		return false
@@ -2375,12 +2395,19 @@ func activate_soul_shield() -> bool:
 		print("[安雄魂] TP 不足（需要 %d，当前 %d）" % [SOUL_TP_COST, state.current_tp if state else 0])
 		return false
 	state.change_tp(-SOUL_TP_COST)
-	_soul_shield = true
+	var now: int = Time.get_ticks_msec()
+	if not is_soul_shield_active():
+		## 已过期（或首次发动）：从此刻重新起算，层数从头数。
+		_soul_shield_until_msec = now
+		_soul_stacks = 0
+	_soul_shield_until_msec += int(SOUL_DURATION_SEC * 1000.0)
+	_soul_stacks += 1
 	## 发动反馈（2026-11-09 用户要求）：安雄专属喊声 + 一圈金色闪光。
 	## 音效走玩家音效入口（联机远端按距离衰减）；闪光走 Global 的全屏短暂叠色。
 	Global.play_player_sfx(SOUL_ACTIVATE_SOUND, self)
 	Global.flash_screen(Color(1.0, 0.86, 0.45, 0.55), 0.22)
-	print("[安雄魂] 发动！TP -%d，下一次受到的伤害固定为 1（换人后仍然有效）" % SOUL_TP_COST)
+	print("[安雄魂] 发动！TP -%d，%.1f 秒内每次受伤固定为 1（第 %d 层，换人后仍然有效）" % [
+		SOUL_TP_COST, _soul_remain_sec(), _soul_stacks])
 	return true
 
 

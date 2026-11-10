@@ -322,8 +322,9 @@ func try_activate_awaken() -> bool:
 func _activate_awaken_core() -> bool:
 	if _p._awaken_active or _p._is_dying:
 		return false
-	## ★安雄魂（2026-11-09）：同一颗「覚醒键」的另一条分支 —— 安雄没有觉醒，
-	## 按下去换的是 TP10 的「下次受伤=1」（见 Player.activate_soul_shield）。
+	## ★安雄魂（2026-11-10 改版）：同一颗「覚醒键」的另一条分支 —— 安雄没有觉醒，
+	## 按下去换的是 TP10 的「5 秒内每次受伤=1，可再发动叠加时长」
+	## （见 Player.activate_soul_shield）。
 	if _p.current_character != null and _p.current_character.yasuo_soul:
 		return _p.activate_soul_shield()
 	if _p.current_character == null or _p.current_character.awaken_type == "none":

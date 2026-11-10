@@ -6,7 +6,7 @@
 script = ExtResource("1")
 skill_id = "yasuo_soul"
 skill_name = "安雄魂"
-description = "（安雄，TP10）举枪中按觉醒键：下一次受到的伤害固定为 1，换人保留。"
+description = "（安雄，TP10）举枪中按觉醒键：5 秒内受伤固定为 1，可再发动叠加。"
 tp_cost = 10
 cooldown = 1.0
 command_trigger = "覚醒键"

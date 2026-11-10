@@ -825,8 +825,8 @@ func _push_skill_hints(out: Array, state: PlayerState, include_awaken: bool) -> 
 		if String(character.awaken_type) != "none":
 			_push_hint(out, &"覚醒键", "觉醒技能")
 		elif character.yasuo_soul:
-			## 安雄没有觉醒，同一颗键换的是「安雄魂」（TP10 · 下次受伤=1）。
-			_push_hint(out, &"覚醒键", "安雄魂（TP10 · 下次受伤=1）")
+			## 安雄没有觉醒，同一颗键换的是「安雄魂」（TP10 · 5 秒内每次受伤=1）。
+			_push_hint(out, &"覚醒键", "安雄魂（TP10 · 5 秒受伤=1）")
 
 
 ## 角色技能表里 command_trigger = "SA键" 的那一条（没有则 null）。
