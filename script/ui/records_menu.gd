@@ -3,8 +3,8 @@ extends Control
 ## ── 架构定位 ──
 ## 系统：记录一览（竞速记录 / 总游玩统计）｜ 层：表现（Control，代码构建、无 tscn）
 ## 联机：不涉及（纯本地资料）
-## 职责：两页只读报表 —— `page = 0` 竞速记录（最佳成绩 + 最近若干局），
-##       `page = 1` 总游玩统计（仿 L4D2 的总览）。
+## 职责：三页只读报表 —— `page = 0` 竞速记录、`page = 1` 总游玩统计（仿 L4D2 总览）、
+##       `page = 2` 限时挑战记录（到达关卡 / 用时 / 连杀）。
 ## 依赖：Global.speedrun_records / Global.play_stats（都在 config.json 里，跨存档保留）
 ##
 ## 【操作】↑↓ 滚动（记录多时）· 取消/Esc 返回 · 鼠标滚轮翻页
@@ -32,7 +32,7 @@ const COLOR_ACCENT := Color(0.98, 0.84, 0.42)
 const COLOR_GOOD := Color(0.72, 0.95, 0.72)
 const COLOR_BAD := Color(1.0, 0.62, 0.55)
 
-## 0 = 竞速记录；1 = 总游玩统计。由调用方在 add_child 之前赋值。
+## 0 = 竞速记录；1 = 总游玩统计；2 = 限时挑战记录。由调用方在 add_child 之前赋值。
 var page: int = 0
 
 var _panel: Control = null
@@ -88,7 +88,7 @@ func _build() -> void:
 	_panel = _build_window((vp - PANEL_SIZE) * 0.5, PANEL_SIZE)
 	var content_w: float = PANEL_SIZE.x - PAD * 2.0
 
-	var title := _make_label("竞 速 记 录" if page == 0 else "游 玩 统 计", FONT_TITLE)
+	var title := _make_label(_title_text(), FONT_TITLE)
 	title.position = Vector2(PAD, 12)
 	title.size = Vector2(content_w, 44)
 	title.modulate = COLOR_TITLE
@@ -121,10 +121,13 @@ func _build() -> void:
 	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	clip.add_child(_body)
 
-	if page == 0:
-		_build_speedrun()
-	else:
-		_build_stats()
+	match page:
+		0:
+			_build_speedrun()
+		2:
+			_build_timed()
+		_:
+			_build_stats()
 
 	var hint := _make_label(_hint_text(), FONT_BODY)
 	hint.position = Vector2(PAD, PANEL_SIZE.y - HINT_H + 4.0)
@@ -133,10 +136,23 @@ func _build() -> void:
 	_panel.add_child(hint)
 
 
+func _title_text() -> String:
+	match page:
+		0:
+			return "竞 速 记 录"
+		2:
+			return "限 时 挑 战 记 录"
+		_:
+			return "游 玩 统 计"
+
+
 func _subtitle_text() -> String:
 	if page == 0:
 		var n: int = Global.speedrun_records.size()
 		return "共 %d 条（最多保留 %d 条）" % [n, Global.SPEEDRUN_RECORD_CAP]
+	if page == 2:
+		var m: int = Global.timed_records.size()
+		return "共 %d 条（最多保留 %d 条）" % [m, Global.TIMED_RECORD_CAP]
 	return "全部模式累计"
 
 
@@ -200,6 +216,74 @@ func _build_speedrun() -> void:
 			int(r.get("kills", 0)),
 		], COLOR_BODY if cleared else COLOR_MUTED, y)
 	_content_h = y
+
+
+# ── 限时挑战记录 ──
+## 限时挑战的「成绩」不是用时越短越好，而是**到达关卡数越深越好**；
+## 同深度才比用时（活得久 = 打得稳）。所以这一页的最佳成绩按「关卡数 → 用时」排序，
+## 明细里也把「到达 N 关」放在最前面。
+
+func _build_timed() -> void:
+	var y: float = 0.0
+	var records: Array = Global.timed_records
+	if records.is_empty():
+		y = _add_line("还没有限时挑战记录。", COLOR_BODY, y)
+		y = _add_line("从「开始游戏 → 限时挑战」开一局：每张关卡都有倒计时，", COLOR_MUTED, y)
+		y = _add_line("击杀敌人能换时间，倒计时归零即失败。", COLOR_MUTED, y)
+		_content_h = y
+		return
+
+	y = _add_line("── 最佳成绩 ──", COLOR_ACCENT, y)
+	var seen: Array[String] = []
+	for row: Variant in records:
+		if not (row is Dictionary):
+			continue
+		var cid: String = str((row as Dictionary).get("campaign_id", ""))
+		if cid in seen:
+			continue
+		seen.append(cid)
+		var best: Dictionary = Global.timed_best_for(cid)
+		if best.is_empty():
+			continue
+		var cleared: bool = bool(best.get("cleared", false))
+		y = _add_line("%s　%s　到达 %d 关　用时 %s" % [
+			str(best.get("campaign", "?")),
+			_timed_result_text(best),
+			int(best.get("levels", 0)),
+			Global.format_run_time(float(best.get("seconds", 0.0)))],
+			COLOR_GOOD if cleared else COLOR_BODY, y)
+
+	y += LINE_H * 0.4
+	y = _add_line("── 最近记录 ──", COLOR_ACCENT, y)
+	var shown: int = 0
+	for row: Variant in records:
+		if not (row is Dictionary):
+			continue
+		if shown >= 10:
+			break
+		shown += 1
+		var r: Dictionary = row
+		var cleared: bool = bool(r.get("cleared", false))
+		var diff_name: String = ["简单", "普通", "困难", "专家"][clampi(int(r.get("difficulty", 0)), 0, 3)]
+		y = _add_line("%d. %s · %s · %s　%d 关　%s　连杀 %d" % [
+			shown,
+			str(r.get("campaign", "?")),
+			diff_name,
+			_timed_result_text(r),
+			int(r.get("levels", 0)),
+			Global.format_run_time(float(r.get("seconds", 0.0))),
+			int(r.get("best_combo", 0)),
+		], COLOR_BODY if cleared else COLOR_MUTED, y)
+	_content_h = y
+
+
+## 一局的结局：通关 / 时间到 / 中途退出（不是所有未通关都是时间到）。
+func _timed_result_text(r: Dictionary) -> String:
+	if bool(r.get("cleared", false)):
+		return "通关"
+	if bool(r.get("timed_out", false)):
+		return "时间到"
+	return "中途退出"
 
 
 # ── 总游玩统计 ──

@@ -121,21 +121,29 @@ func cycle_blood_color(delta: int) -> void:
 # ═══════════════════════════════════════
 # 游戏模式 / 竞速与游玩记录（2026-11-10 用户需求）
 # ═══════════════════════════════════════
-## 单人玩法的模式。0 = 标准模式（原玩法），1 = 计时竞速。
+## 单人玩法的模式。0 = 标准模式（原玩法），1 = 计时竞速，2 = 限时挑战。
 ## 由「开始游戏 → 游戏模式」选择写入；**不落 config**（每局重选，继续游戏按标准处理）。
 var run_mode: int = 0
 const RUN_MODE_STANDARD: int = 0
 const RUN_MODE_SPEEDRUN: int = 1
-const RUN_MODE_NAMES: Array[String] = ["标准模式", "计时竞速"]
+const RUN_MODE_TIMED: int = 2
+const RUN_MODE_NAMES: Array[String] = ["标准模式", "计时竞速", "限时挑战"]
 const RUN_MODE_DESCS: Array[String] = [
 	"原汁原味的玩法：尸潮、补给、安全屋推进。没有计时压力，慢慢打。",
 	"HUD 中下方常驻计时器，整局一直在走。每次通关（或中途放弃）都会留下一条记录："
 	+ "用时、死亡次数、击杀数 —— 想刷成绩就从头再开一局。",
+	"每张关卡都有固定时限（安全屋不计时），倒计时归零即挑战失败。"
+	+ "击杀敌人换时间：普通击杀 +0.1 秒，连杀每满 10 人再加 0.5 / 1.0 / 1.5 秒……"
+	+ "通关或失败都会留下记录。",
 ]
 
 ## 竞速记录：**只记竞速模式**，最新在前，最多保留 30 条。
 ## 每项 {campaign, campaign_id, mode, difficulty, cleared, seconds, deaths, kills, at}
 var speedrun_records: Array = []
+## 限时挑战记录：只记限时挑战模式，最新在前，最多 30 条。
+## 每项 {campaign, campaign_id, difficulty, cleared, timed_out, seconds, kills, deaths,
+##       levels, best_combo, at}
+var timed_records: Array = []
 ## 总游玩统计（两种模式都累计，仿 L4D2 的总览页）。
 ## {runs, clears, seconds, kills, headshots, deaths, damage_dealt, damage_taken, healing_items}
 var play_stats: Dictionary = {}
@@ -144,6 +152,7 @@ var play_stats: Dictionary = {}
 var _run_active: bool = false
 var _run_recorded: bool = true
 const SPEEDRUN_RECORD_CAP: int = 30
+const TIMED_RECORD_CAP: int = 30
 
 
 func run_mode_name() -> String:
@@ -154,10 +163,25 @@ func is_speedrun() -> bool:
 	return run_mode == RUN_MODE_SPEEDRUN
 
 
+func is_timed_challenge() -> bool:
+	return run_mode == RUN_MODE_TIMED
+
+
+## 本局不允许存档（竞速 / 限时挑战）：存档点节点在场景里自移除，见 `save_point.gd`。
+## ★口径：只挡**手动存档点**。安全屋里那份内存 checkpoint 照旧存在 ——
+##   它是死亡复活的锚点（不写磁盘），不算「存档」。
+func is_no_save_mode() -> bool:
+	return is_speedrun() or is_timed_challenge()
+
+
 ## 新局开始（init_new_game 调）：登记本局，供结束时报账。
 func begin_run() -> void:
 	_run_active = true
 	_run_recorded = false
+	## 限时挑战的时间银行随新局清零（上一局的剩余时间不能带进这一局）。
+	var tc: Node = get_node_or_null("/root/TimedChallenge")
+	if tc != null and tc.has_method("reset"):
+		tc.call("reset")
 
 
 ## 本局结束（ED 通关 = cleared=true；回标题中途放弃 = false）。
@@ -198,12 +222,38 @@ func finish_run(cleared: bool) -> void:
 	play_stats["damage_taken"] = float(play_stats["damage_taken"]) + dmg_taken
 	play_stats["healing_items"] = int(play_stats["healing_items"]) + heals
 
-	if run_mode == RUN_MODE_SPEEDRUN:
-		var campaign_name: String = ""
-		var campaign_id: String = ""
-		if selected_campaign != null:
-			campaign_name = selected_campaign.campaign_name
-			campaign_id = selected_campaign.campaign_id
+	var campaign_name: String = ""
+	var campaign_id: String = ""
+	if selected_campaign != null:
+		campaign_name = selected_campaign.campaign_name
+		campaign_id = selected_campaign.campaign_id
+
+	if run_mode == RUN_MODE_TIMED:
+		## 限时挑战的额外字段来自 TimedChallenge（必须**先**取快照再 reset）。
+		var snap: Dictionary = {}
+		var tc: Node = get_node_or_null("/root/TimedChallenge")
+		if tc != null and tc.has_method("snapshot"):
+			snap = tc.call("snapshot") as Dictionary
+		timed_records.push_front({
+			"campaign": campaign_name,
+			"campaign_id": campaign_id,
+			"difficulty": selected_difficulty,
+			"cleared": cleared,
+			"timed_out": bool(snap.get("timed_out", false)),
+			"seconds": snappedf(seconds, 0.1),
+			"kills": kills,
+			"deaths": deaths,
+			## 到达过的非安全屋关卡数（= 进度）与最长连杀。
+			"levels": int(snap.get("levels", 0)),
+			"best_combo": int(snap.get("best_combo", 0)),
+			"at": Time.get_datetime_string_from_system(false, true).replace("T", " "),
+		})
+		if timed_records.size() > TIMED_RECORD_CAP:
+			timed_records.resize(TIMED_RECORD_CAP)
+		print("[记录] 限时挑战本局结束：通关=%s 时间到=%s 到达 %d 关 用时 %.1fs" % [
+			str(cleared), str(bool(snap.get("timed_out", false))),
+			int(snap.get("levels", 0)), seconds])
+	elif run_mode == RUN_MODE_SPEEDRUN:
 		speedrun_records.push_front({
 			"campaign": campaign_name,
 			"campaign_id": campaign_id,
@@ -219,6 +269,10 @@ func finish_run(cleared: bool) -> void:
 		print("[记录] 竞速本局结束：通关=%s 用时=%.1fs 死亡=%d" % [str(cleared), seconds, deaths])
 	else:
 		print("[记录] 标准本局结束：通关=%s 用时=%.1fs" % [str(cleared), seconds])
+	## 本局到此为止：限时挑战的倒计时必须停（ED 不是地图场景，没人会去停它）。
+	var tc_stop: Node = get_node_or_null("/root/TimedChallenge")
+	if tc_stop != null and tc_stop.has_method("stop"):
+		tc_stop.call("stop")
 	save_config()
 
 
@@ -246,6 +300,36 @@ func speedrun_best_for(campaign_id: String) -> Dictionary:
 		if best.is_empty() or float(r.get("seconds", 0.0)) < float(best.get("seconds", 0.0)):
 			best = r
 	return best
+
+
+## 限时挑战的「最好成绩」：先看是否通关，再看到达关卡数（深 = 好），再比用时短。
+func timed_best_for(campaign_id: String) -> Dictionary:
+	var best: Dictionary = {}
+	for row: Variant in timed_records:
+		if not (row is Dictionary):
+			continue
+		var r: Dictionary = row
+		if campaign_id != "" and str(r.get("campaign_id", "")) != campaign_id:
+			continue
+		if best.is_empty() or _timed_row_better(r, best):
+			best = r
+	return best
+
+
+func _timed_row_better(a: Dictionary, b: Dictionary) -> bool:
+	if bool(a.get("cleared", false)) != bool(b.get("cleared", false)):
+		return bool(a.get("cleared", false))
+	var la: int = int(a.get("levels", 0))
+	var lb: int = int(b.get("levels", 0))
+	if la != lb:
+		return la > lb
+	return float(a.get("seconds", 0.0)) > float(b.get("seconds", 0.0))
+
+
+## 关卡限时的紧凑写法（横幅用）：4:00 / 12:30 —— 不带十分之一秒，读着更干净。
+static func format_limit_time(seconds: float) -> String:
+	var total: int = int(round(maxf(0.0, seconds)))
+	return "%d:%02d" % [total / 60, total % 60]
 
 
 ## 时长格式化：01:23.4（不足 1 小时） / 1:02:03（超过 1 小时）。
@@ -1033,6 +1117,10 @@ func go_to_title_screen() -> void:
 	finish_run(false)
 	## 模式不跨局：回标题后回到标准模式，下次从「开始游戏」重选。
 	run_mode = RUN_MODE_STANDARD
+	## 限时挑战的时间银行也一并清掉（finish_run 已经取过快照，这里只是收尾）。
+	var tc: Node = get_node_or_null("/root/TimedChallenge")
+	if tc != null and tc.has_method("reset"):
+		tc.call("reset")
 	var net: Node = get_node_or_null("/root/Net")
 	if net != null and net.has_method("leave"):
 		net.leave()
@@ -1736,6 +1824,9 @@ func _apply_config_file(path: String) -> void:
 	var cfg_records: Variant = cfg.get("speedrun_records", null)
 	if cfg_records is Array:
 		speedrun_records = (cfg_records as Array).duplicate(true)
+	var cfg_timed: Variant = cfg.get("timed_records", null)
+	if cfg_timed is Array:
+		timed_records = (cfg_timed as Array).duplicate(true)
 	var cfg_stats: Variant = cfg.get("play_stats", null)
 	if cfg_stats is Dictionary:
 		play_stats = (cfg_stats as Dictionary).duplicate(true)
@@ -1777,6 +1868,7 @@ func save_config() -> void:
 		"blood_enabled": blood_enabled,
 		"blood_color_option": blood_color_option,
 		"speedrun_records": speedrun_records.duplicate(true),
+		"timed_records": timed_records.duplicate(true),
 		"play_stats": play_stats.duplicate(true),
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,

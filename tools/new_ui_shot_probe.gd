@@ -17,6 +17,8 @@ var _backup_stats: Dictionary = {}
 
 
 func _ready() -> void:
+	## 挑战失败页会把 tree 暂停；本探针必须继续跑才能截图。
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	_backup_records = Global.speedrun_records.duplicate(true)
 	_backup_stats = Global.play_stats.duplicate(true)
@@ -27,6 +29,12 @@ func _ready() -> void:
 	for i in range(6):
 		await get_tree().process_frame
 	_save("game_mode.png")
+	## 第三项（限时挑战）的说明最长，单独出一张确认没压到底部提示
+	mode.set("_cursor", 2)
+	mode.call("_refresh")
+	for i in range(4):
+		await get_tree().process_frame
+	_save("game_mode_timed.png")
 	mode.queue_free()
 	await get_tree().process_frame
 
@@ -41,7 +49,16 @@ func _ready() -> void:
 		"runs": 12, "clears": 7, "seconds": 11520, "kills": 4231, "headshots": 912,
 		"deaths": 23, "damage_dealt": 1234567.0, "damage_taken": 456789.0, "healing_items": 88,
 	}
-	for page: int in [0, 1]:
+	## 限时挑战记录：塞两局（一局时间到、一局通关）
+	Global.timed_records = [
+		{"campaign": "突袭", "campaign_id": "assault", "difficulty": 1, "cleared": true,
+			"timed_out": false, "seconds": 2260.0, "kills": 512, "deaths": 3,
+			"levels": 9, "best_combo": 37, "at": "2026-11-10 14:40:00"},
+		{"campaign": "夜行猎手", "campaign_id": "night_hunter", "difficulty": 2, "cleared": false,
+			"timed_out": true, "seconds": 1180.0, "kills": 264, "deaths": 4,
+			"levels": 4, "best_combo": 21, "at": "2026-11-10 13:10:00"},
+	]
+	for page: int in [0, 1, 2]:
 		var menu: Control = RECORDS_MENU.new()
 		menu.set("page", page)
 		add_child(menu)
@@ -53,6 +70,7 @@ func _ready() -> void:
 
 	Global.speedrun_records = _backup_records
 	Global.play_stats = _backup_stats
+	Global.timed_records = []
 
 	## ③ 标题画面设置页
 	var packed: PackedScene = load(TITLE_SCENE) as PackedScene
@@ -98,6 +116,41 @@ func _ready() -> void:
 	Global.run_mode = Global.RUN_MODE_STANDARD
 	if cs != null and cs.has_method("stop_campaign_clock"):
 		cs.call("stop_campaign_clock")
+
+	## ⑥ 限时挑战 HUD：倒计时 + 连杀 + 开局横幅
+	Global.run_mode = Global.RUN_MODE_TIMED
+	var timed: Node = get_node_or_null("/root/TimedChallenge")
+	if timed != null and packed_hud != null:
+		timed.call("reset")
+		timed.call("on_level_entered", "res://scene/maps/突袭-第一关-街道.tscn")
+		for i in range(8):
+			timed.call("on_enemy_killed")
+		var hud2: Node = packed_hud.instantiate()
+		add_child(hud2)
+		for i in range(12):
+			await get_tree().process_frame
+		_save("hud_timed.png")
+		## 低电量：剩余 8 秒 → 数字转红
+		timed.call("advance_time", 232.0)
+		for i in range(4):
+			await get_tree().process_frame
+		_save("hud_timed_urgent.png")
+		hud2.queue_free()
+		await get_tree().process_frame
+		timed.call("reset")
+	Global.run_mode = Global.RUN_MODE_STANDARD
+
+	## ⑦ 挑战失败页
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var fail: Control = (load("res://script/ui/challenge_fail.gd") as GDScript).new()
+	layer.add_child(fail)
+	for i in range(6):
+		await get_tree().process_frame
+	_save("challenge_fail.png")
+	get_tree().paused = false
+	layer.queue_free()
+	await get_tree().process_frame
 
 	print("=== 截图目录：%s ===" % ProjectSettings.globalize_path(OUT_DIR))
 	get_tree().quit(0)

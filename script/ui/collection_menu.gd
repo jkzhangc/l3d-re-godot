@@ -911,7 +911,7 @@ func _trait_line(cd: CharacterData) -> String:
 	if cd.spray_plus_one:
 		parts.append("スプレー+1（喷雾上限 +1）")
 	if cd.commando:
-		parts.append("コマンドー（重武器无硬直）")
+		parts.append("コマンドー（机枪/霰弹/马格南 打完不播收枪动作）")
 	if cd.kairiki:
 		parts.append("怪力（近战无硬直）")
 	if cd.self_blast_immune:

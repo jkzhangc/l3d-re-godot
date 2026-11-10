@@ -96,10 +96,19 @@ var _last_support_item: ItemData = null
 ## 背包指示（仅小夫显示「背包 1/2」；普通角色隐藏）。
 var _backpack_label: Label = null
 
-## 竞速计时器（2026-11-10）：只在「计时竞速」模式显示，HUD 中下方常驻。
+## 计时器（2026-11-10）：竞速正计时 / 限时挑战倒计时，HUD 中下方常驻。
 ## 用代码建节点 —— HUD 场景被 30+ 张地图共用，为一行字去改 tscn 不划算。
 var _run_timer_label: Label = null
 var _last_run_timer_text: String = ""
+## 限时挑战专用：上方横幅（本关限时 / 加时规则）与下方连杀计数。
+var _run_banner_label: Label = null
+var _run_combo_label: Label = null
+var _last_run_banner_text: String = ""
+var _last_run_combo_text: String = ""
+
+const COLOR_TIMER := Color(0.98, 0.96, 0.86)
+const COLOR_TIMER_WARN := Color(1.0, 0.80, 0.35)     ## 剩余 ≤ 30s
+const COLOR_TIMER_URGENT := Color(1.0, 0.42, 0.36)   ## 剩余 ≤ 10s
 ## 首次刷新强制应用：场景里的图标节点预置了占位纹理（非空），若首帧缓存恰为 null 且当前值
 ## 也是 null，脏检查会判定"未变"而跳过 → 占位图残留（显示 bug）。首刷绕过所有脏检查。
 var _force_refresh: bool = true
@@ -210,16 +219,25 @@ func refresh() -> void:
 	_force_refresh = false
 
 
-## 竞速计时器：`Global.run_mode == 计时竞速` 时显示本局墙钟（ChapterStats 的战役计时）。
-## 计时口径与 ED 的「通关时长」同源：安全屋/关卡/过图都算，菜单与结算页停表。
+## 计时器总入口：竞速 = 正计时（ChapterStats 战役墙钟，与 ED 通关时长同源）；
+## 限时挑战 = 倒计时（TimedChallenge 的关卡余额）+ 连杀/横幅。
+## 其余模式整块隐藏（节点建了也只隐藏，省一次重建）。
 func _update_run_timer() -> void:
-	if not Global.is_speedrun():
-		if _run_timer_label != null and is_instance_valid(_run_timer_label) and _run_timer_label.visible:
-			_run_timer_label.visible = false
+	var speedrun: bool = Global.is_speedrun()
+	var timed: bool = Global.is_timed_challenge()
+	if not speedrun and not timed:
+		_set_run_labels_visible(false)
 		return
 	_ensure_run_timer()
 	if _run_timer_label == null:
 		return
+	if timed:
+		_update_timed_timer()
+		return
+	## ── 计时竞速 ──
+	_set_run_labels_visible(true)
+	_run_banner_label.visible = false
+	_run_combo_label.visible = false
 	var stats: Node = get_node_or_null("/root/ChapterStats")
 	if stats == null:
 		return
@@ -227,31 +245,88 @@ func _update_run_timer() -> void:
 	if text != _last_run_timer_text:
 		_last_run_timer_text = text
 		_run_timer_label.text = text
-	_run_timer_label.visible = true
+	_run_timer_label.modulate = COLOR_TIMER
+
+
+## ── 限时挑战 ──
+## 读数全部来自 `TimedChallenge`：安全屋里 `running == false` → 整块收起
+## （安全屋不计时，留着 0.0 的倒计时只会让人以为马上要死）。
+func _update_timed_timer() -> void:
+	var tc: Node = get_node_or_null("/root/TimedChallenge")
+	if tc == null:
+		_set_run_labels_visible(false)
+		return
+	var run: bool = bool(tc.get("running"))
+	_run_timer_label.visible = run
+	if run:
+		var remain: float = float(tc.get("remaining"))
+		var text: String = Global.format_run_time(remain)
+		if text != _last_run_timer_text:
+			_last_run_timer_text = text
+			_run_timer_label.text = text
+		if remain <= 10.0:
+			_run_timer_label.modulate = COLOR_TIMER_URGENT
+		elif remain <= 30.0:
+			_run_timer_label.modulate = COLOR_TIMER_WARN
+		else:
+			_run_timer_label.modulate = COLOR_TIMER
+
+	## 连杀：≥2 才显示（1 连杀没有信息量）；刚加时的一瞬间把 +Xs 也写在同一行。
+	var combo: int = int(tc.get("combo"))
+	var combo_text: String = ""
+	if run and combo >= 2:
+		combo_text = "连杀 %d" % combo
+		if float(tc.get("last_bonus_age")) < 1.2:
+			combo_text += "　+%.1fs" % float(tc.get("last_bonus"))
+	if combo_text != _last_run_combo_text:
+		_last_run_combo_text = combo_text
+		_run_combo_label.text = combo_text
+	_run_combo_label.visible = not combo_text.is_empty()
+
+	## 开局横幅：本关限时 + 加时规则（`TimedChallenge.banner_text()` 到点自己变空）。
+	var banner: String = str(tc.call("banner_text")) if tc.has_method("banner_text") else ""
+	if banner != _last_run_banner_text:
+		_last_run_banner_text = banner
+		_run_banner_label.text = banner
+	_run_banner_label.visible = run and not banner.is_empty()
+
+
+func _set_run_labels_visible(on: bool) -> void:
+	for lbl: Label in [_run_timer_label, _run_banner_label, _run_combo_label]:
+		if lbl != null and is_instance_valid(lbl) and lbl.visible != on:
+			lbl.visible = on
 
 
 func _ensure_run_timer() -> void:
 	if _run_timer_label != null and is_instance_valid(_run_timer_label):
 		return
+	_run_timer_label = _make_run_label("RunTimer", 48, -190.0, -130.0, COLOR_TIMER)
+	_run_banner_label = _make_run_label("RunBanner", 24, -232.0, -200.0, COLOR_TIMER_WARN)
+	_run_combo_label = _make_run_label("RunCombo", 24, -128.0, -96.0, COLOR_TIMER_WARN)
+
+
+## 底部中央的一行计时文字。锚在底部中央：手机端逻辑画布会横向加宽，绝对坐标会跑偏。
+func _make_run_label(node_name: String, font_size: int, top: float, bottom: float,
+		color: Color) -> Label:
 	var lbl := Label.new()
-	lbl.name = "RunTimer"
+	lbl.name = node_name
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	## 锚在底部中央：手机端逻辑画布会横向加宽，绝对坐标会跑偏。
 	lbl.anchor_left = 0.5
 	lbl.anchor_right = 0.5
 	lbl.anchor_top = 1.0
 	lbl.anchor_bottom = 1.0
 	lbl.offset_left = -260.0
 	lbl.offset_right = 260.0
-	lbl.offset_top = -190.0
-	lbl.offset_bottom = -130.0
-	lbl.modulate = Color(0.98, 0.96, 0.86)
-	Global.apply_ui_font(lbl, 48)
+	lbl.offset_top = top
+	lbl.offset_bottom = bottom
+	lbl.modulate = color
+	lbl.visible = false
+	Global.apply_ui_font(lbl, font_size)
 	Global.apply_text_shadow(lbl)
 	_apply_crisp_font(lbl)
 	add_child(lbl)
-	_run_timer_label = lbl
+	return lbl
 
 
 ## 血条右侧的 buff/状态列表（2026-11-09）。

@@ -1,17 +1,19 @@
 extends Node
 
-## 竞速记录 / 游玩统计 / 游戏模式 / 血腥和谐 的回归检查（2026-11-10）。
+## 竞速记录 / 游玩统计 / 限时挑战 / 游戏模式 / 血腥和谐 的回归检查（2026-11-10）。
 ## 用法：godot --headless --path . res://tools/records_check.tscn
 ##
 ## 守五件事：
 ##  1. `Global.format_run_time` 的两种口径（<1h 与 >=1h）；
 ##  2. 一局结束会记账：竞速模式写一条记录、两种模式都累计总统计；重复调用不重复记；
 ##  3. 竞速记录 / 游玩统计两页都能建出来（有数据 / 空数据两种情况）；
-##  4. 游戏模式菜单能建出来，两个选项都在；
-##  5. 血效识别 + 血液颜色设置能挂上重上色材质。
+##  4. 游戏模式菜单能建出来，三个选项都在；
+##  5. 血效识别 + 血液颜色设置能挂上重上色材质；
+##  6. 限时挑战：关卡时限查表、击杀加时（含连杀台阶）、重进同一关不刷新、
+##     安全屋停表、时间到判负、记账字段、记录页能建出来。
 ##
 ## ⚠ 本检查会调用 `Global.finish_run()`，它会 `save_config()`。所以先备份
-##    `speedrun_records` / `play_stats` 两个字段，跑完原样写回 —— 不动玩家真实记录。
+##    `speedrun_records` / `timed_records` / `play_stats`，跑完原样写回 —— 不动玩家真实记录。
 
 const RECORDS_MENU := preload("res://script/ui/records_menu.gd")
 const MODE_MENU := preload("res://script/ui/game_mode_menu.gd")
@@ -26,6 +28,15 @@ func _check(label: String, got, want) -> void:
 		return
 	_fail += 1
 	print("  FAIL %s = %s（期望 %s）" % [label, str(got), str(want)])
+
+
+## 浮点断言：加时 0.1 这类值不能按位比较（240.1 与 240.0+0.1 末位可能不同）。
+func _check_near(label: String, got: float, want: float, eps: float = 0.0001) -> void:
+	if absf(got - want) <= eps:
+		print("  OK   %s = %.4f" % [label, got])
+		return
+	_fail += 1
+	print("  FAIL %s = %.4f（期望 %.4f）" % [label, got, want])
 
 
 func _check_true(label: String, cond: bool, detail: String = "") -> void:
@@ -49,6 +60,7 @@ func _ready() -> void:
 
 	print("=== 2) 一局结束记账 ===")
 	var backup_records: Array = Global.speedrun_records.duplicate(true)
+	var backup_timed: Array = Global.timed_records.duplicate(true)
 	var backup_stats: Dictionary = Global.play_stats.duplicate(true)
 	Global.speedrun_records.clear()
 	Global.play_stats = {}
@@ -119,10 +131,13 @@ func _ready() -> void:
 	for i in range(3):
 		await get_tree().process_frame
 	var item_labels: Array = mode_menu.get("_item_labels")
-	_check("两个模式选项", item_labels.size(), 2)
+	_check("三个模式选项", item_labels.size(), 3)
 	_check("第一项 = 标准模式", str((item_labels[0] as Label).text), "标准模式")
 	_check("第二项 = 计时竞速", str((item_labels[1] as Label).text), "计时竞速")
+	_check("第三项 = 限时挑战", str((item_labels[2] as Label).text), "限时挑战")
 	_check_true("模式说明非空", str(Global.RUN_MODE_DESCS[0]).length() > 10)
+	## 三行选项 + 4 行说明不能压到底部提示：面板高度是硬编码的，加项时必须复核。
+	_check_true("模式面板放得下三行", float(mode_menu.get("PANEL_SIZE").y) >= 520.0)
 	mode_menu.queue_free()
 	await get_tree().process_frame
 
@@ -156,8 +171,115 @@ func _ready() -> void:
 	Global.blood_enabled = old_enabled
 	Global.blood_color_option = old_color
 
+	print("=== 6) 限时挑战 ===")
+	var timed: Node = get_node_or_null("/root/TimedChallenge")
+	_check_true("TimedChallenge 自动加载存在", timed != null)
+	if timed != null:
+		timed.set("fail_ui_enabled", false)   ## 别让「挑战失败」界面把测试进程暂停住
+		Global.run_mode = Global.RUN_MODE_TIMED
+		_check_true("限时挑战 = 无存档模式", Global.is_no_save_mode())
+		Global.run_mode = Global.RUN_MODE_SPEEDRUN
+		_check_true("竞速也是无存档模式", Global.is_no_save_mode())
+		Global.run_mode = Global.RUN_MODE_STANDARD
+		_check_true("标准模式可以存档", not Global.is_no_save_mode())
+		Global.run_mode = Global.RUN_MODE_TIMED
+
+		_check("街道时限", TimedChallenge.limit_for("res://scene/maps/突袭-第一关-街道.tscn"), 240.0)
+		_check("学校内部时限", TimedChallenge.limit_for("res://scene/maps/突袭-第二关-学校内部.tscn"), 300.0)
+		_check("公园入口优先于公园", TimedChallenge.limit_for("res://scene/maps/夜行猎手-第二关-公园入口.tscn"), 120.0)
+		_check("未知关卡兜底", TimedChallenge.limit_for("res://scene/maps/测试-敌人试验场.tscn"), 180.0)
+		_check_true("安全屋可识别",
+			TimedChallenge.is_safe_house_scene("res://scene/maps/突袭-第一关-开头安全屋-户外.tscn"))
+		_check_true("街道不是安全屋",
+			not TimedChallenge.is_safe_house_scene("res://scene/maps/突袭-第一关-街道.tscn"))
+
+		const STREET := "res://scene/maps/突袭-第一关-街道.tscn"
+		const SCHOOL := "res://scene/maps/突袭-第二关-学校内部.tscn"
+		Global.begin_run()   ## 会把 TimedChallenge 一并 reset
+		timed.call("on_level_entered", STREET)
+		_check_near("开局余额 = 本关时限", float(timed.get("remaining")), 240.0)
+		_check("开局在走表", bool(timed.get("running")), true)
+		_check("到达关卡数 1", int(timed.get("levels_entered")), 1)
+
+		timed.call("on_enemy_killed")
+		_check_near("单杀 +0.1s", float(timed.get("remaining")), 240.1)
+		for i: int in range(9):
+			timed.call("on_enemy_killed")
+		## 第 10 杀：9 次基础加时（0.9）+ 10 连杀台阶（+0.5）
+		_check_near("10 连杀共 +1.5s", float(timed.get("remaining")), 241.5)
+		_check("连杀计数 10", int(timed.get("combo")), 10)
+		_check("最长连杀 10", int(timed.get("best_combo")), 10)
+
+		timed.call("advance_time", 3.5)   ## 超过 3 秒连杀窗口
+		_check("连杀窗口过期归零", int(timed.get("combo")), 0)
+		_check_near("扣时生效", float(timed.get("remaining")), 238.0)
+
+		var before: float = float(timed.get("remaining"))
+		timed.call("on_level_entered", STREET)
+		_check_near("重进同一关不刷新余额", float(timed.get("remaining")), before)
+		_check("重进不重复计关卡", int(timed.get("levels_entered")), 1)
+
+		timed.call("enter_safehouse")
+		_check("安全屋停表", bool(timed.get("running")), false)
+
+		timed.call("on_level_entered", SCHOOL)
+		_check_near("换关拿新预算", float(timed.get("remaining")), 300.0)
+		_check("到达关卡数 2", int(timed.get("levels_entered")), 2)
+
+		timed.call("advance_time", 9999.0)
+		_check("时间到判负", bool(timed.get("timed_out")), true)
+		_check("时间到即停表", bool(timed.get("running")), false)
+		_check_near("剩余归零", float(timed.get("remaining")), 0.0)
+
+		## 记账：刚才这局（2 关 + 时间到）要原样写进 timed_records
+		Global.timed_records.clear()
+		Global.finish_run(false)
+		_check("限时挑战写一条记录", Global.timed_records.size(), 1)
+		if Global.timed_records.size() == 1:
+			var tr: Dictionary = Global.timed_records[0]
+			_check("记录：时间到", bool(tr.get("timed_out", false)), true)
+			_check("记录：到达 2 关", int(tr.get("levels", 0)), 2)
+			_check("记录：最长连杀 10", int(tr.get("best_combo", 0)), 10)
+			_check("记录：未通关", bool(tr.get("cleared", true)), false)
+		## finish_run 里必须把表停掉 —— 否则制作人名单（ED）期间倒计时还在跑，
+		## 跑到底会在名单上冒出「时间到」。
+		_check("结算后停表", bool(timed.get("running")), false)
+
+		## 最佳成绩：通关的一局要压过「到达更深但没通关」的一局
+		Global.timed_records.push_front({
+			"campaign": "突袭", "campaign_id": "assault", "difficulty": 1,
+			"cleared": true, "timed_out": false, "seconds": 900.0,
+			"kills": 90, "deaths": 1, "levels": 2, "best_combo": 12, "at": "",
+		})
+		var best: Dictionary = Global.timed_best_for("assault")
+		_check("最佳成绩优先通关", bool(best.get("cleared", false)), true)
+
+		var page2: Control = RECORDS_MENU.new()
+		page2.set("page", 2)
+		add_child(page2)
+		for i in range(3):
+			await get_tree().process_frame
+		_check_true("限时挑战记录页有文字", _count_labels(page2) >= 5, "%d 行" % _count_labels(page2))
+		page2.queue_free()
+		await get_tree().process_frame
+
+		var saved_timed: Array = Global.timed_records.duplicate(true)
+		Global.timed_records.clear()
+		var page2_empty: Control = RECORDS_MENU.new()
+		page2_empty.set("page", 2)
+		add_child(page2_empty)
+		await get_tree().process_frame
+		_check_true("空限时记录页也能开", _count_labels(page2_empty) >= 3)
+		page2_empty.queue_free()
+		Global.timed_records = saved_timed
+		await get_tree().process_frame
+
+		timed.call("reset")
+		Global.run_mode = Global.RUN_MODE_STANDARD
+
 	## 还原玩家真实记录（本检查期间写进 config 的测试数据）
 	Global.speedrun_records = backup_records
+	Global.timed_records = backup_timed
 	Global.play_stats = backup_stats
 	Global.save_config()
 

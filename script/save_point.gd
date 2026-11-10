@@ -118,6 +118,14 @@ func _ready() -> void:
 		queue_free()
 		return
 
+	## ★竞速 / 限时挑战也不给存档（2026-11-10 用户需求）：这两种模式讲究一口气打穿，
+	## 中途存档等于作弊；与联机同款处理 —— **直接移除节点**（不是隐藏），
+	## 碰撞体、提示文字、交互轮询一并消失，玩家看不到也点不到。
+	if Global.is_no_save_mode():
+		print("[存档点] %s 模式不提供存档，已移除" % Global.run_mode_name())
+		queue_free()
+		return
+
 	_ensure_children()
 	_ensure_collision()
 	_refresh_sprite()

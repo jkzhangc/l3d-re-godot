@@ -81,6 +81,10 @@ func begin_chapter(scene_path: String, display_title: String = "") -> void:
 	_campaign_clock_running = true   ## 从标题/菜单回到关卡 → 继续走表
 	_clock_last_msec = 0             ## 换图/读盘的空白不计入
 	print("[ChapterStats] 开始章节: %s" % scene_path)
+	## 限时挑战（2026-11-10）：换图的唯一入口在这里，交给 TimedChallenge 发本关预算。
+	var timed: Node = get_node_or_null("/root/TimedChallenge")
+	if timed != null and timed.has_method("on_level_entered"):
+		timed.call("on_level_entered", scene_path)
 
 
 func ensure_chapter(scene_path: String) -> void:
@@ -126,6 +130,11 @@ func record_kill(seat_index: int, headshot: bool = false) -> void:
 	camp["kills"] = int(camp["kills"]) + 1
 	if headshot:
 		camp["headshots"] = int(camp["headshots"]) + 1
+	## 限时挑战（2026-11-10）：击杀换时间。本函数是**所有击杀的唯一漏斗**
+	## （子弹 bullet.gd / 近战 PlayerMeleeAttackState 都走这里），所以加时也挂在这里。
+	var timed: Node = get_node_or_null("/root/TimedChallenge")
+	if timed != null and timed.has_method("on_enemy_killed"):
+		timed.call("on_enemy_killed")
 
 
 func record_healing_item(seat_index: int) -> void:

@@ -63,6 +63,10 @@ func _ready() -> void:
 		var scene_path: String = get_tree().current_scene.scene_file_path
 		if "安全屋" in scene_path or "safe" in scene_path.to_lower():
 			Global.capture_checkpoint()
+			## 限时挑战：安全屋不计时（停表 + 收起 HUD 计数），回关卡时接着那关的余额。
+			var timed: Node = get_node_or_null("/root/TimedChallenge")
+			if timed != null and timed.has_method("enter_safehouse"):
+				timed.call("enter_safehouse")
 			print("[GameInit] 安全屋自动存档: %s" % scene_path)
 		else:
 			var chapter_stats: Node = get_node_or_null("/root/ChapterStats")

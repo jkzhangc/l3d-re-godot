@@ -3,7 +3,7 @@ extends Control
 ## ── 架构定位 ──
 ## 系统：游戏模式选择 ｜ 层：表现（Control，代码构建、无 tscn；标题画面叠加打开）
 ## 联机：不涉及（单人流程专用；联机大厅不走这里）
-## 职责：单人「开始游戏」后的第一道选择：标准模式 / 计时竞速。
+## 职责：单人「开始游戏」后的第一道选择：标准模式 / 计时竞速 / 限时挑战。
 ##       选择结果写 `Global.run_mode`，随后进入战役选择。
 ## 依赖：Global（run_mode / 字体 / 音效 / 触摸层）
 ##
@@ -21,7 +21,8 @@ const CAMPAIGN_SCENE := "res://scene/campaign_select.tscn"
 const FONT_TITLE: int = 36
 const FONT_BODY: int = 24
 
-const PANEL_SIZE := Vector2(880.0, 460.0)
+## 三个模式各占一行（56px）；说明最多 4 行 + 「当前：」一行，留 180px 才不压到底部提示。
+const PANEL_SIZE := Vector2(880.0, 560.0)
 const PAD: float = 28.0
 const ROW_TOP: float = 112.0
 const ROW_H: float = 56.0
@@ -133,7 +134,7 @@ func _build() -> void:
 
 	_desc_root = Control.new()
 	_desc_root.position = Vector2(PAD, ROW_TOP + Global.RUN_MODE_NAMES.size() * ROW_H + 16.0)
-	_desc_root.size = Vector2(content_w, 150.0)
+	_desc_root.size = Vector2(content_w, 180.0)
 	_desc_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(_desc_root)
 
