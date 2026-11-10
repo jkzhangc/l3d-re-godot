@@ -196,13 +196,16 @@ func _ready() -> void:
 		const STREET := "res://scene/maps/突袭-第一关-街道.tscn"
 		const SCHOOL := "res://scene/maps/突袭-第二关-学校内部.tscn"
 		Global.begin_run()   ## 会把 TimedChallenge 一并 reset
-		timed.call("on_level_entered", STREET)
+		## ★走真实入口：`ChapterStats.begin_chapter` 是换图的唯一钩子 ——
+		##   直接调 TimedChallenge 会漏检「钩子忘了接」这种最要命的接线错误。
+		ChapterStats.begin_chapter(STREET)
 		_check_near("开局余额 = 本关时限", float(timed.get("remaining")), 240.0)
 		_check("开局在走表", bool(timed.get("running")), true)
 		_check("到达关卡数 1", int(timed.get("levels_entered")), 1)
 
-		timed.call("on_enemy_killed")
-		_check_near("单杀 +0.1s", float(timed.get("remaining")), 240.1)
+		## 同样走真实入口：`record_kill` 是所有击杀（子弹 / 近战）的唯一漏斗。
+		ChapterStats.record_kill(0, false)
+		_check_near("单杀 +0.1s（经 record_kill 钩子）", float(timed.get("remaining")), 240.1)
 		for i: int in range(9):
 			timed.call("on_enemy_killed")
 		## 第 10 杀：9 次基础加时（0.9）+ 10 连杀台阶（+0.5）
