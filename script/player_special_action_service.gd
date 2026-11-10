@@ -36,6 +36,10 @@ const HEAT_DURATION: float = 6.0
 const ATTRITION_AMMO: int = 2
 ## 削り：耐久每次 -8
 const ATTRITION_DURABILITY: float = 8.0
+## 削り 飘字颜色（橙）：与受击红、治疗绿区分，避免被当成伤害数字。
+const ATTRITION_HINT_COLOR := Color(1.0, 0.68, 0.28)
+## 伤害数字（飘字）脚本。项目里跨文件引用统一走 preload 常量，不依赖 class_name 缓存。
+const DAMAGE_NUMBER := preload("res://script/damage_number.gd")
 
 ## 覚醒：发动中 TP 缓慢消耗（原作「徐々にTPを消費」）
 const AWAKEN_TP_DRAIN_PER_SEC: float = 5.0
@@ -459,17 +463,34 @@ func _apply_attrition() -> void:
 		var after: int = maxi(0, before - ATTRITION_AMMO)
 		state.set_magazine_ammo(wd.item_id, after)
 		print("[削り] %s 弹夹 %d → %d" % [wd.item_name, before, after])
+		## 反馈（2026-11-10 用户需求）：只在**真的扣掉**时飘字 ——
+		## 没有这条玩家只会看到弹夹莫名变少，以为是攻击被吞了（本次真实回访）。
+		_spawn_attrition_hint("弹夹 -%d" % (before - after))
 	elif wd.max_durability > 0.0:
 		var before_d: float = state.get_weapon_durability(wd.item_id, wd.max_durability)
 		var after_d: float = maxf(0.0, before_d - ATTRITION_DURABILITY)
 		state.set_weapon_durability(wd.item_id, after_d)
 		print("[削り] %s 耐久 %.0f → %.0f" % [wd.item_name, before_d, after_d])
+		_spawn_attrition_hint("耐久 -%d" % int(round(before_d - after_d)))
 		if after_d <= 0.0:
 			state.unequip_slot(state.active_weapon_slot)
 			_p._weapon_mode = false
 			_p.player_in_weapon_state = false
 			_p._refresh_sprite()
 			print("[削り] %s 耐久耗尽，武器损坏！" % wd.item_name)
+			_spawn_attrition_hint("武器损坏！")
+
+
+## 削り 的世界飘字（橙色，走 DamageNumber 的共享层）。
+## 为什么用「弹夹 -2 / 耐久 -8」而不是纯数字：纯数字会被当成伤害，
+## 而这其实是**自己**挨了酸/热攻击后武器被腐蚀，两个概念必须能一眼分开。
+## 联机口径：`_apply_attrition()` 只在权威侧跑（单机 / Host），所以飘字也只在那一端出现。
+func _spawn_attrition_hint(text: String) -> void:
+	var tree: SceneTree = _p.get_tree()
+	if tree == null or tree.current_scene == null:
+		return
+	DAMAGE_NUMBER.spawn(_p.global_position + Vector2(0, -6), 0.0, tree.current_scene,
+		1, ATTRITION_HINT_COLOR, text)
 
 
 ## SA 状态每帧维护：发动输入、しゃがみ持续（按住延长 + TP 消耗）、超时结束。

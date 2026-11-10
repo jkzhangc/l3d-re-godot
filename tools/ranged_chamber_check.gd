@@ -8,6 +8,9 @@ extends Node2D
 ## 修法：开火动作**开始时**记一份弹数快照（`_ammo_at_attack_start`）；
 ##       开火帧弹夹为 0 但快照 > 0 → 这一发已上膛，照常发射（不再扣弹）。
 ##
+## 附：削り 的**反馈**（2026-11-10 用户需求）—— 扣弹夹 / 扣耐久 / 武器损坏都要飘字，
+##     否则玩家只会看到弹夹莫名变少，误以为是攻击被吞。
+##
 ## 运行：godot --headless --path . res://tools/ranged_chamber_check.tscn
 
 const PLAYER_SCENE := preload("res://object/player.tscn")
@@ -83,7 +86,19 @@ func _ready() -> void:
 	atk.call("_fire_bullet")
 	_check("动作开始时就没弹 → 不发空枪", _count_bullets() == before)
 
-	## ④ 源码级：快照必须在 enter / _restart_attack 两处都刷新
+	## ④ 削り 反馈：酸攻击命中要飘「弹夹 -N」，弹夹已空则不飘
+	state.set_magazine_ammo(LAUNCHER.item_id, 3)
+	var hints_before: int = _count_hint("弹夹")
+	player.take_damage(3.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.ACID)
+	_check("酸攻击确实削掉弹夹（3 → 1）", state.get_magazine_ammo(LAUNCHER.item_id) == 1)
+	_check("★削り 有飘字反馈（弹夹 -2）", _count_hint("弹夹") > hints_before)
+
+	state.set_magazine_ammo(LAUNCHER.item_id, 0)
+	var hints_empty: int = _count_hint("弹夹")
+	player.take_damage(3.0, 0.0, Vector2.ZERO, false, 0.0, 0.0, 0, WeaponData.Element.ACID)
+	_check("弹夹已空时不飘字（没有扣就没有提示）", _count_hint("弹夹") == hints_empty)
+
+	## ⑤ 源码级：快照必须在 enter / _restart_attack 两处都刷新
 	var src: String = _read("res://script/player/PlayerRangedAttackState.gd")
 	var enter_body: String = src.split("func enter()")[1].split("\nfunc ")[0] if src.contains("func enter()") else ""
 	var restart_body: String = src.split("func _restart_attack()")[1].split("\nfunc ")[0] \
@@ -93,6 +108,15 @@ func _ready() -> void:
 		restart_body.contains("_ammo_at_attack_start ="))
 
 	_finish()
+
+
+## 统计当前场上「含指定文字的飘字」数量（DamageNumber 会 join "damage_number" 组）。
+func _count_hint(keyword: String) -> int:
+	var n: int = 0
+	for node: Node in get_tree().get_nodes_in_group("damage_number"):
+		if String(node.get("text_override")).contains(keyword):
+			n += 1
+	return n
 
 
 func _count_bullets() -> int:
