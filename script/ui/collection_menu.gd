@@ -3,8 +3,10 @@ extends Control
 ## ── 架构定位 ──
 ## 系统：收藏馆 ｜ 层：表现（Control，**代码构建、无 tscn**；由标题画面叠加打开）
 ## 联机：不涉及（纯本地查看）
-## 职责：物品收藏馆 —— 分类页签 + 图标网格 + 右侧详情；未获得的条目显示「剪影 + ???」。
-## 依赖：ItemCatalogData（条目总表）、Global（字体 / 音效 / collection_ids / 触摸层）
+## 职责：物品收藏馆 + 角色图鉴 + 状态图鉴 —— 分类页签 + 图标网格 + 右侧详情；
+##       物品页未获得的条目显示「剪影 + ???」，角色/状态页是资料，恒为可见。
+## 依赖：ItemCatalogData（物品总表）、CharacterCatalog / CharacterProfileData（角色）、
+##       StatusCatalogData（状态）、Global（字体 / 音效 / collection_ids / 触摸层）
 ##
 ## 【为什么代码构建】条目 52 项、分类数随数据变，手写 tscn 的锚点/字体/Theme 三处都易错；
 ## 与「成就一览」「存档槽位」同款做法：`add_child` 叠加、关闭即销毁。
@@ -21,6 +23,10 @@ extends Control
 signal closed
 
 const CATALOG := preload("res://script/item_catalog_data.gd")
+## 角色 / 状态的资料表同样用 preload：界面不依赖 global class 缓存，
+## 新增数据脚本不必等编辑器重扫就能跑（与 CATALOG 同款）。
+const STATUS_CATALOG := preload("res://script/status_catalog_data.gd")
+const PROFILE_CATALOG := preload("res://script/character_profile_data.gd")
 
 # ── 窗口皮肤（与存档 / 成就窗口同一套）──
 const WINDOW_BG_PATH := "res://art/System/Window background color.png"
@@ -51,16 +57,37 @@ const DETAIL_GAP: float = 28.0
 const LINE_H: float = 32.0          ## 详情正文行高（24px 字号）
 
 ## 分类顺序与页签短名（详情里仍显示完整分类名）。
+## ★2026-11-10：「角色」「状态」是**资料页**，不参与收藏进度（不是捡到才算的东西）。
+## 页签从 5 个变 7 个后，单个页签宽度只剩约 167px —— 所以页签只写短名，
+## 每个分类的「已收集 x/y」挪到网格下方的页码行，避免长标签互相挤成一片。
+const CHARACTER_GROUP := "角色"
+const STATUS_GROUP := "状态"
 const GROUP_ORDER: Array[String] = [
+	CHARACTER_GROUP, STATUS_GROUP,
 	"主武器（远程）", "副武器 / 近战", "治疗品", "辅助品", "投掷物",
 ]
 const GROUP_LABELS := {
+	CHARACTER_GROUP: "角色",
+	STATUS_GROUP: "状态",
 	"主武器（远程）": "主武器",
 	"副武器 / 近战": "近战",
 	"治疗品": "治疗品",
 	"辅助品": "辅助品",
 	"投掷物": "投掷物",
 }
+
+## 角色页大立绘边长：`portrait_texture()` 裁出来是 96×96，×2 整数放大才是像素锐利。
+const PORTRAIT_SIZE: float = 192.0
+## 角色页正文行高。物品详情用 32（条目文字少、宽松好看）；角色页要塞下
+## 简介 + 反击 + 武器 + 特性 + 技能五块，24px 字号配 30px 行高既不透风也不越界。
+const CHAR_LINE_H: float = 30.0
+
+## 详情区配色（与 HUD 状态栏同款语义：正面偏青、负面偏红）。
+const COLOR_ACCENT := Color(0.98, 0.84, 0.42)
+const COLOR_BODY := Color(0.86, 0.84, 0.78)
+const COLOR_MUTED := Color(0.62, 0.60, 0.56)
+const COLOR_POSITIVE := Color(0.62, 0.86, 1.0)
+const COLOR_NEGATIVE := Color(1.0, 0.55, 0.5)
 
 var _groups: Array[String] = []
 var _entries: Dictionary = {}       ## group -> Array[Dictionary]
@@ -87,6 +114,10 @@ var _hint: Label = null
 
 ## .tres 缓存（path -> Resource）。条目只有 52 个，打开时懒加载一次即可。
 var _res_cache: Dictionary = {}
+
+## 角色页数据（懒加载一次；`_char_by_key` 键 = CharacterData.get_character_key()）。
+var _characters: Array[CharacterData] = []
+var _char_by_key: Dictionary = {}
 
 
 func _ready() -> void:
@@ -133,7 +164,27 @@ func _touch_layer() -> Node:
 # ═══════════════════════════════════════
 
 func _collect_entries() -> void:
+	_groups.clear()
+	_entries.clear()
+	_sel.clear()
+	## 资料页排在物品前面：「收藏馆」打开时先看到角色与状态，再往下才是收集品。
+	var chars: Array[Dictionary] = _character_entries()
+	if not chars.is_empty():
+		_groups.append(CHARACTER_GROUP)
+		_entries[CHARACTER_GROUP] = chars
+		_sel[CHARACTER_GROUP] = 0
+	var statuses: Array[Dictionary] = STATUS_CATALOG.all_entries()
+	if not statuses.is_empty():
+		## 状态表本身不带 `group` 字段（它的分类写在 `kind` 里），这里补上页签名 ——
+		## `_is_unlocked()` 按 group 判定「资料页恒可见」，缺了会全被当成未收集。
+		for e: Dictionary in statuses:
+			e["group"] = STATUS_GROUP
+		_groups.append(STATUS_GROUP)
+		_entries[STATUS_GROUP] = statuses
+		_sel[STATUS_GROUP] = 0
 	for g: String in GROUP_ORDER:
+		if g == CHARACTER_GROUP or g == STATUS_GROUP:
+			continue
 		var list: Array = CATALOG.by_group(g)
 		if list.is_empty():
 			continue
@@ -148,6 +199,33 @@ func _collect_entries() -> void:
 		_groups.append(g)
 		_entries[g] = CATALOG.by_group(g)
 		_sel[g] = 0
+
+
+## 角色页条目：顺序与角色选择一致（CharacterCatalog 固定顺序）。
+func _character_entries() -> Array[Dictionary]:
+	_load_characters()
+	var out: Array[Dictionary] = []
+	for cd: CharacterData in _characters:
+		out.append({
+			"id": cd.get_character_key(),
+			"name": cd.character_name,
+			"group": CHARACTER_GROUP,
+			"path": cd.resource_path,
+		})
+	return out
+
+
+func _load_characters() -> void:
+	if not _characters.is_empty():
+		return
+	_characters = CharacterCatalog.load_available_characters()
+	for cd: CharacterData in _characters:
+		_char_by_key[cd.get_character_key()] = cd
+
+
+func _character_for(e: Dictionary) -> CharacterData:
+	_load_characters()
+	return _char_by_key.get(str(e.get("id", "")), null) as CharacterData
 
 
 func _current_group() -> String:
@@ -169,7 +247,14 @@ func _current_index() -> int:
 	return int(_sel.get(g, 0))
 
 
+## 资料页（角色 / 状态）没有「未获得」这回事：角色本来就能选，状态是要写给玩家看的。
+func _is_progress_group(g: String) -> bool:
+	return g != CHARACTER_GROUP and g != STATUS_GROUP
+
+
 func _is_unlocked(e: Dictionary) -> bool:
+	if not _is_progress_group(str(e.get("group", ""))):
+		return true
 	var g: Node = get_node_or_null("/root/Global")
 	if g != null and g.has_method("has_collected"):
 		return bool(g.call("has_collected", str(e.get("id", ""))))
@@ -186,6 +271,13 @@ func _entry_res(e: Dictionary) -> Resource:
 
 
 func _entry_icon(e: Dictionary) -> Texture2D:
+	var group: String = str(e.get("group", ""))
+	if group == CHARACTER_GROUP:
+		var cd: CharacterData = _character_for(e)
+		return cd.portrait_texture() if cd != null else null
+	if group == STATUS_GROUP:
+		## 状态没有官方图标素材 → 格子里画「＋/－」符号块（见 _build_cell）。
+		return null
 	var res: Resource = _entry_res(e)
 	if res == null:
 		return null
@@ -319,6 +411,9 @@ func _build() -> void:
 	_detail_root.position = Vector2(detail_x, BODY_TOP)
 	_detail_root.size = Vector2(DETAIL_W, body_h)
 	_detail_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	## 资料页（角色/状态）的文案长度由数据表决定，极端情况可能顶到窗口下沿；
+	## 裁掉比让它画到底部提示行上要好（物品页本来就在这个高度内）。
+	_detail_root.clip_contents = true
 	_panel.add_child(_detail_root)
 
 	# 详情与网格之间的竖线
@@ -404,13 +499,10 @@ func _refresh_tabs() -> void:
 		if i >= _groups.size():
 			continue
 		var g: String = _groups[i]
-		var list: Array = _entries.get(g, [])
-		var got: int = 0
-		for e: Dictionary in list:
-			if _is_unlocked(e):
-				got += 1
+		## ★页签只写短名：7 个页签每个约 167px，带「x/y」会和邻居挤成一团；
+		## 分类内的收集进度改到网格下方的页码行显示（见 _refresh_page_label）。
 		var short_name: String = str(GROUP_LABELS.get(g, g))
-		_tab_labels[i].text = "%s %d/%d" % [short_name, got, list.size()]
+		_tab_labels[i].text = short_name
 		var active: bool = (i == _tab_idx)
 		_tab_labels[i].modulate = Color(1, 0.97, 0.88) if active else Color(0.60, 0.58, 0.54)
 		_tab_underlines[i].color = Color(1, 1, 1, 0.85) if active else Color(1, 1, 1, 0.0)
@@ -470,6 +562,10 @@ func _build_cell(e: Dictionary, idx: int) -> Control:
 			## 剪影：纯黑乘算（透明度保留 → 只剩形状）
 			pic.modulate = Color(0.05, 0.05, 0.07, 1.0)
 		cell.add_child(pic)
+	elif str(e.get("group", "")) == STATUS_GROUP:
+		## 状态页没有图标素材：画一块正/负色的符号砖，和 HUD 的红青口径一致。
+		cell.add_child(_make_glyph_box(e, Vector2(ICON_W, ICON_H),
+			Vector2((CELL_W - ICON_W) * 0.5, 6.0)))
 	else:
 		var q := _make_label("?", FONT_TITLE)
 		q.position = Vector2(0, 16)
@@ -530,6 +626,13 @@ func _refresh_page_label() -> void:
 		suffix += " ▲"
 	if _scroll_row + _rows_visible < total_rows:
 		suffix += " ▼"
+	if _is_progress_group(_current_group()):
+		var got: int = 0
+		for e: Dictionary in _current_entries():
+			if _is_unlocked(e):
+				got += 1
+		_page_label.text = "共 %d 项 · 已收集 %d%s" % [total, got, suffix]
+		return
 	_page_label.text = "共 %d 项%s" % [total, suffix]
 
 
@@ -537,13 +640,24 @@ func _refresh_page_label() -> void:
 # 详情
 # ═══════════════════════════════════════
 
+## 详情区分派：角色 / 状态是资料页，走各自的版式；其余仍是物品详情。
 func _refresh_detail() -> void:
 	if _detail_root == null:
 		return
 	for old: Node in _detail_root.get_children():
 		_detail_root.remove_child(old)
 		old.queue_free()
+	match _current_group():
+		CHARACTER_GROUP:
+			_refresh_character_detail()
+			return
+		STATUS_GROUP:
+			_refresh_status_detail()
+			return
+	_refresh_item_detail()
 
+
+func _refresh_item_detail() -> void:
 	var list: Array = _current_entries()
 	var idx: int = _current_index()
 	if idx < 0 or idx >= list.size():
@@ -617,6 +731,349 @@ func _refresh_detail() -> void:
 			lbl.modulate = Color(0.96, 0.90, 0.70)
 			_detail_root.add_child(lbl)
 			y += LINE_H
+
+
+# ═══════════════════════════════════════
+# 详情 · 角色页
+# ═══════════════════════════════════════
+
+## 角色页版式：左上大立绘 + 右栏名号/定位/基础值，下面依次是简介、见切反击、
+## 可装备武器、特性（被动）与技能（SA / 特技 / 觉醒）。
+## 数值与武器全部实时取 `CharacterData`，不手抄 —— .tres 一改这里立刻跟上。
+func _refresh_character_detail() -> void:
+	var list: Array = _current_entries()
+	var idx: int = _current_index()
+	if idx < 0 or idx >= list.size():
+		return
+	var cd: CharacterData = _character_for(list[idx])
+	if cd == null:
+		return
+
+	var y: float = 0.0
+	var portrait: Texture2D = cd.portrait_texture()
+	if portrait != null:
+		var pic := TextureRect.new()
+		pic.texture = portrait
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		## 96px 的头像格 ×2 = 192px：整数倍 + 最近邻采样才不糊。
+		pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		pic.size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_detail_root.add_child(pic)
+		y = PORTRAIT_SIZE + 8.0
+
+	# ── 右栏：名号 / 定位 / 基础值 ──
+	var col_x: float = PORTRAIT_SIZE + 12.0
+	var col_w: float = DETAIL_W - col_x
+	## 主名用**中文短名**（大雄/胖虎/小夫/静香/安雄）：右栏只有 156px，
+	## 日文全名（「ジャイ」）用 36 号必然顶出窗口，「大雄」四个字刚好放得下。
+	## 原文名放在下面那行（与安全屋台词同一套短名口径），两边都交代清楚。
+	var short_name: String = str(Global.CHARACTER_NAME_SHORT.get(cd.character_name, cd.character_name))
+	_put_detail_label("「%s」" % short_name, Vector2(col_x, 0), Vector2(col_w, 44),
+		FONT_TITLE, Color(0.98, 0.96, 0.88))
+
+	var profile: Dictionary = PROFILE_CATALOG.profile_for(cd.get_character_key())
+	var tagline: String = str(profile.get("tagline", "")).strip_edges()
+	## 副标题逐行给：原文名与定位各自成行 —— 拼成「のび太 · 万能型」会在
+	## 156px 的窄栏里把「万能型」拆成「万 / 能型」，很难看。
+	var subs: Array[String] = []
+	if short_name != cd.character_name:
+		subs.append(cd.character_name)
+	if not tagline.is_empty():
+		subs.append(tagline)
+	var ty: float = 46.0
+	for sub: String in subs:
+		for line: String in _wrap_text(sub, col_w, FONT_BODY):
+			_put_detail_label(line, Vector2(col_x, ty), Vector2(col_w, 26), FONT_BODY, COLOR_ACCENT)
+			ty += 26.0
+
+	var stats: Array[String] = [
+		"HP %d" % cd.get_effective_max_hp(),
+		"攻击 %d" % cd.get_effective_attack(),
+		"防御 %d" % cd.get_effective_defense(),
+	]
+	if absf(cd.base_speed - 1.0) > 0.001:
+		stats.append("移速 ×%.2f" % cd.base_speed)
+	var sy: float = maxf(ty + 4.0, 84.0)
+	for s: String in stats:
+		_put_detail_label(s, Vector2(col_x, sy), Vector2(col_w, 26), FONT_BODY, COLOR_BODY)
+		sy += 26.0
+
+	# ── 简介 ──
+	var bio: String = str(profile.get("bio", "")).strip_edges()
+	if bio.is_empty():
+		bio = "（暂无介绍）"
+	y = _put_detail_paragraph(bio, COLOR_BODY, y, FONT_BODY, CHAR_LINE_H)
+
+	# ── 见切反击 / 可用武器 / 特性（合成一段，特性为空时整行不出现）──
+	y += 2.0
+	y = _put_detail_paragraph(_counter_line(cd), COLOR_BODY, y, FONT_BODY, CHAR_LINE_H)
+	y += 2.0
+	y = _put_detail_paragraph(_weapon_line(cd), COLOR_BODY, y, FONT_BODY, CHAR_LINE_H)
+	var trait_text: String = _trait_line(cd)
+	if not trait_text.is_empty():
+		y += 2.0
+		y = _put_detail_paragraph(trait_text, COLOR_POSITIVE, y, FONT_BODY, CHAR_LINE_H)
+
+	# ── 技能（SA / 特技 / 觉醒）──
+	for line: String in _skill_lines(cd):
+		y += 2.0
+		y = _put_detail_paragraph(line, COLOR_ACCENT, y, FONT_BODY, CHAR_LINE_H)
+
+
+func _counter_line(cd: CharacterData) -> String:
+	match String(cd.counter_type):
+		"punch":
+			return "见切反击：拳打（×2 + 推开）"
+		"heavy":
+			return "见切反击：强打（×3 + 大推）"
+		"issen":
+			return "见切反击：一闪（×6 + 超推，50% 秒杀）"
+		_:
+			return "见切反击：无（仍可免伤）"
+
+
+## 可装备武器。真判据是 `CharacterData.can_use_weapon()`（白名单 **且** 画过持枪行走图），
+## 所以不能只抄 `allowed_*_weapons` —— 安雄两个白名单都是空的，实际只拿得了
+## 他画过动作的那几类；反过来，白名单里列了的武器也未必真有图。
+## 展示按「类别」归并（二十多把枪逐个列会把详情撑爆），顺序跟随物品总表。
+func _weapon_line(cd: CharacterData) -> String:
+	var primary: Array[String] = []
+	var secondary: Array[String] = []
+	for e: Dictionary in CATALOG.collection_entries():
+		var group: String = str(e.get("group", ""))
+		if group != "主武器（远程）" and group != "副武器 / 近战":
+			continue
+		var wd: WeaponData = _entry_res(e) as WeaponData
+		if wd == null or not cd.can_use_weapon(wd):
+			continue
+		## ★按武器自身的 slot 归并，不按目录分组：手枪/马格南在收藏馆里算「远程」，
+		## 但 `weapon_slot = SECONDARY`，只能进副武器格（`can_use_weapon` 也按 slot 查白名单）。
+		var cat: String = _weapon_category(wd)
+		var bucket: Array[String] = primary if wd.weapon_slot == WeaponData.WeaponSlot.PRIMARY else secondary
+		if cat not in bucket:
+			bucket.append(cat)
+	var parts: Array[String] = []
+	if not primary.is_empty():
+		parts.append("主武器 %s" % "·".join(primary))
+	if not secondary.is_empty():
+		parts.append("副武器 %s" % "·".join(secondary))
+	if parts.is_empty():
+		return "可装备武器：无"
+	return "可装备武器：%s" % " ｜ ".join(parts)
+
+
+## 武器分类：先按 item_id 前缀（比 weapon_state_name 更贴玩家认知 ——
+## mg_01 / at_rifle_01 与步枪共用同一张持枪图，但玩家看到的仍是机枪与反器材枪），
+## 没匹配到再按武器状态名归到近战大类。
+const WEAPON_ID_PREFIX_ZH: Array[Dictionary] = [
+	{"prefix": "at_rifle_", "name": "反器材枪"},
+	{"prefix": "launcher_", "name": "榴弹"},
+	{"prefix": "magnum_", "name": "马格南"},
+	{"prefix": "pistol_", "name": "手枪"},
+	{"prefix": "shotgun_", "name": "霰弹枪"},
+	{"prefix": "sniper_", "name": "狙击枪"},
+	{"prefix": "rocket_", "name": "火箭"},
+	{"prefix": "bowgun_", "name": "弩"},
+	{"prefix": "rifle_", "name": "步枪"},
+	{"prefix": "smg_", "name": "冲锋枪"},
+	{"prefix": "mg_", "name": "机枪"},
+]
+
+func _weapon_category(wd: WeaponData) -> String:
+	for row: Dictionary in WEAPON_ID_PREFIX_ZH:
+		if wd.item_id.begins_with(str(row["prefix"])):
+			return str(row["name"])
+	match wd.weapon_state_name:
+		"Knife", "CombatKnife", "Uchigatana":
+			return "刀"
+		"Bat", "Pipe", "Shovel":
+			return "钝器"
+		"Sledgehammer", "FireAxe":
+			return "重击"
+		"Frypan":
+			return "平底锅"
+		"Knuckles":
+			return "拳套"
+	return wd.item_name
+
+
+## 已实装的被动/体质，**合成一段**（每条独立成段会把详情区顶穿）。
+## 故意只列真正接进玩法的字段 —— `demolition`（投掷无硬直）目前只有数据、
+## 没有结算点，写进图鉴等于骗玩家。
+func _trait_line(cd: CharacterData) -> String:
+	var parts: Array[String] = []
+	if cd.backpack_count >= 2:
+		parts.append("双背包（SA 切背包）")
+	if cd.nursing:
+		parts.append("看护（治疗品全队回血）")
+	if cd.spray_plus_one:
+		parts.append("スプレー+1（喷雾上限 +1）")
+	if cd.commando:
+		parts.append("コマンドー（重武器无硬直）")
+	if cd.kairiki:
+		parts.append("怪力（近战无硬直）")
+	if cd.self_blast_immune:
+		parts.append("自爆无效（自己的爆炸不伤自己）")
+	if parts.is_empty():
+		return ""
+	return "特性：%s" % "｜".join(parts)
+
+
+## 技能：SA 技能 / 其他主动技（安雄魂挂在觉醒键上）/ 觉醒，一条一句。
+func _skill_lines(cd: CharacterData) -> Array[String]:
+	var out: Array[String] = []
+	for skill: SkillData in cd.skills:
+		if skill == null:
+			continue
+		var sname: String = skill.skill_name.strip_edges()
+		if sname.is_empty() or sname.contains("测试"):
+			continue
+		var kind: String = "SA" if String(skill.command_trigger).strip_edges() == "SA键" else "特技"
+		## 描述里可能直接写了「觉醒键」（数据表是静态文本）：按当前平台换成实际键名，
+		## 手机没有这颗键时 _awaken_key_name() 原样返回「觉醒键」，替换等于没发生。
+		var desc: String = _resolve_key_hint(skill.description.strip_edges()).replace(
+			"觉醒键", _awaken_key_name())
+		var split: Dictionary = _split_skill_prefix(desc)
+		var cost: String = str(split.get("cost", ""))
+		var body: String = str(split.get("body", desc))
+		var head: String = "%s·%s%s" % [kind, sname, cost]
+		if body.is_empty():
+			out.append(head)
+		else:
+			out.append("%s —— %s" % [head, body])
+	if String(cd.awaken_type) == "concentrated_fire":
+		out.append("觉醒·集中射击 —— 举枪中按%s：威力 ×1.5，子弹即死（Boss 免疫），每秒 -5 TP。" % _awaken_key_name())
+	## 没有觉醒的角色不写「觉醒：无」—— 资料页高度很紧，这句话对角色的卖点没有增量。
+	return out
+
+
+## 技能描述开头的「（のび太 SA，TP10）」是给选人界面看的（那里要立刻知道是谁的技能）。
+## 收藏馆里角色名就写在标题上，这段既冗余又长 —— 只把 TP 消耗摘出来挂到技能名后面，
+## 剩下的正文照旧。没有这种前缀时原样返回。
+func _split_skill_prefix(desc: String) -> Dictionary:
+	if not desc.begins_with("（"):
+		return {}
+	var close: int = desc.find("）")
+	if close < 0 or close > 24:
+		return {}
+	var inner: String = desc.substr(1, close - 1)
+	var body: String = desc.substr(close + 1).strip_edges()
+	var cost: String = ""
+	var at: int = inner.find("TP")
+	if at >= 0:
+		var digits: String = ""
+		for i: int in range(at + 2, inner.length()):
+			var ch: String = inner[i]
+			if ch < "0" or ch > "9":
+				break
+			digits += ch
+		if not digits.is_empty():
+			cost = "（TP%s）" % digits
+	return {"cost": cost, "body": body}
+
+
+func _awaken_key_name() -> String:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("has_key_hint") and bool(g.call("has_key_hint", &"覚醒键")):
+		return str(g.call("key_hint", &"覚醒键"))
+	return "觉醒键"
+
+
+# ═══════════════════════════════════════
+# 详情 · 状态页
+# ═══════════════════════════════════════
+
+## 状态页版式：顶部符号砖 + 名称 + 分类 + 效果 / 获得方式 / 备注。
+func _refresh_status_detail() -> void:
+	var list: Array = _current_entries()
+	var idx: int = _current_index()
+	if idx < 0 or idx >= list.size():
+		return
+	var e: Dictionary = list[idx]
+	var debuff: bool = bool(e.get("debuff", false))
+	var accent: Color = COLOR_NEGATIVE if debuff else COLOR_POSITIVE
+
+	_detail_root.add_child(_make_glyph_box(e, Vector2(ICON_W, ICON_H),
+		Vector2((DETAIL_W - ICON_W) * 0.5, 0)))
+	var y: float = ICON_H + 12.0
+	_put_detail_label(str(e.get("name", "?")), Vector2(0, y), Vector2(DETAIL_W, 44),
+		FONT_TITLE, Color(0.98, 0.96, 0.88))
+	y += 48.0
+	var hud_text: String = "状态栏显示" if bool(e.get("hud", false)) else "不占状态栏"
+	_put_detail_label("%s ｜ %s" % [str(e.get("kind", "")), hud_text],
+		Vector2(0, y), Vector2(DETAIL_W, 30), FONT_BODY, accent)
+	y += 38.0
+
+	var sep := ColorRect.new()
+	sep.color = Color(0.55, 0.50, 0.42, 0.55)
+	sep.position = Vector2(0, y)
+	sep.size = Vector2(DETAIL_W, 1)
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_root.add_child(sep)
+	y += 12.0
+
+	y = _put_detail_paragraph("效果：%s" % _resolve_key_hint(str(e.get("effect", ""))), COLOR_BODY, y)
+	y += 8.0
+	y = _put_detail_paragraph("获得：%s" % _resolve_key_hint(str(e.get("obtain", ""))), COLOR_ACCENT, y)
+	var remark: String = _resolve_key_hint(str(e.get("remark", ""))).strip_edges()
+	if not remark.is_empty():
+		y += 8.0
+		y = _put_detail_paragraph("备注：%s" % remark, COLOR_MUTED, y)
+
+
+## 数据表里的 `{觉醒键}` 占位符 → 当前平台的实际键名。
+## 手机触摸层没有这颗键时退化为「觉醒键」三个字，不教玩家按一个不存在的键。
+func _resolve_key_hint(text: String) -> String:
+	if not text.contains("{觉醒键}"):
+		return text
+	return text.replace("{觉醒键}", _awaken_key_name())
+
+
+## 详情区一行文字（不折行；宽度由调用方保证）。
+func _put_detail_label(text: String, pos: Vector2, box: Vector2, size: int, color: Color) -> void:
+	var lbl := _make_label(text, size)
+	lbl.position = pos
+	lbl.size = box
+	lbl.modulate = color
+	_detail_root.add_child(lbl)
+
+
+## 详情区一段自动折行的文字，返回下一行的起点 y。
+func _put_detail_paragraph(text: String, color: Color, y: float,
+		size: int = FONT_BODY, line_h: float = LINE_H) -> float:
+	for line: String in _wrap_text(text, DETAIL_W - 4.0, size):
+		_put_detail_label(line, Vector2(0, y), Vector2(DETAIL_W, line_h), size, color)
+		y += line_h
+	return y
+
+
+## 状态页的「符号砖」：没有官方图标素材，就用 + / - / = 配正负面配色（与 HUD 红/青同源）。
+## 被动用 `=`：既不是增益也不是负效果，写成 `+` 会让人以为能吃到 buff。
+func _make_glyph_box(e: Dictionary, box_size: Vector2, pos: Vector2) -> Control:
+	var debuff: bool = bool(e.get("debuff", false))
+	var accent: Color = COLOR_NEGATIVE if debuff else COLOR_POSITIVE
+	## 被动（毅力）既不是增益也不是负效果 → 用「=」，别和正面状态的「+」混淆。
+	var passive: bool = str(e.get("kind", "")) == "被动"
+	var box := Panel.new()
+	box.position = pos
+	box.size = box_size
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(accent.r, accent.g, accent.b, 0.12)
+	sb.border_color = Color(accent.r, accent.g, accent.b, 0.65)
+	sb.set_border_width_all(1)
+	box.add_theme_stylebox_override("panel", sb)
+	var mark: String = "=" if passive else ("-" if debuff else "+")
+	var glyph := _make_label(mark, FONT_TITLE)
+	glyph.position = Vector2.ZERO
+	glyph.size = box_size
+	glyph.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	glyph.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	glyph.modulate = accent
+	box.add_child(glyph)
+	return box
 
 
 ## 按分类挑可读的数值（全部走 `Resource.get()` 鸭子读取，不依赖具体子类）。
@@ -828,27 +1285,75 @@ func _make_label(text: String, size: int) -> Label:
 	return l
 
 
-## 按像素宽逐字折行（与 title_screen 的折行同款；像素字体宽度必须实测，不能按字数估）。
+## 按像素宽折行（像素字体宽度必须实测，不能按字数估）。
+## ★2026-11-10：从「逐字折」升级为「ASCII 单词整块 + 行首禁则」——
+##   逐字折会把 TP10 / Boss / M82 拦腰截断（「TP1」/「0）」），窄栏里特别难看。
+##   `NO_LINE_START` 里的闭合标点不单独起行，宁可让上一行略微超宽一个字。
+const NO_LINE_START := "）】》」』〕］｝、，。！？；：,.!?;:%％"
+
 func _wrap_text(text: String, max_w: float, size: int) -> Array[String]:
 	var out: Array[String] = []
-	var font: Font = null
-	var g: Node = get_node_or_null("/root/Global")
-	if g != null and g.has_method("get_ui_font"):
-		font = g.call("get_ui_font") as Font
-	if font == null:
-		font = ThemeDB.fallback_font
+	var font := _ui_font()
 	var current: String = ""
-	for i: int in text.length():
-		var ch: String = text[i]
-		if ch == "\n":
+	for chunk: String in _wrap_chunks(text):
+		if chunk == "\n":
 			out.append(current)
 			current = ""
 			continue
-		if current.is_empty() or font.get_string_size(current + ch, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= max_w:
-			current += ch
-		else:
-			out.append(current)
-			current = ch
+		if current.is_empty():
+			if chunk == " ":
+				continue
+			current = chunk
+			continue
+		if font.get_string_size(current + chunk, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= max_w:
+			current += chunk
+			continue
+		if chunk.length() == 1 and NO_LINE_START.contains(chunk):
+			current += chunk
+			continue
+		out.append(current)
+		current = chunk
 	if not current.is_empty():
 		out.append(current)
 	return out
+
+
+func _ui_font() -> Font:
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("get_ui_font"):
+		var f: Font = g.call("get_ui_font") as Font
+		if f != null:
+			return f
+	return ThemeDB.fallback_font
+
+
+## 切块：连续 ASCII 字母/数字（含 + - . / _ ×）算一个整块，其余逐字。
+## 这样「TP10」「×1.5」「M82」「スプレー+1」不会被拆到两行。
+func _wrap_chunks(text: String) -> Array[String]:
+	var out: Array[String] = []
+	var i: int = 0
+	var n: int = text.length()
+	while i < n:
+		var ch: String = text[i]
+		if ch == "\n":
+			out.append("\n")
+			i += 1
+			continue
+		if _is_word_char(ch):
+			var start: int = i
+			while i < n and _is_word_char(text[i]):
+				i += 1
+			out.append(text.substr(start, i - start))
+			continue
+		out.append(ch)
+		i += 1
+	return out
+
+
+func _is_word_char(ch: String) -> bool:
+	if ch.length() != 1:
+		return false
+	var c: int = ch.unicode_at(0)
+	if (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or (c >= 97 and c <= 122):
+		return true
+	return ch in ["+", "-", ".", "/", "_", "×"]

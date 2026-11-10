@@ -408,28 +408,40 @@ func _get_weapon_compat_text(cd: CharacterData) -> String:
 	return "武器: %s" % ", ".join(parts)
 
 
-## 技能行：取角色 SA 技能（跳过测试占位），格式 = 「名」描述
+## 技能行：列出角色的全部技能（跳过测试占位）。
+## ★2026-11-10：不再只认 SA —— 安雄没有 SA，他挂在同一颗觉醒键上的是「安雄魂」
+## （`command_trigger = "覚醒键"`）。旧写法只筛 SA 技能，他的技能行会永远显示「——」。
 func _get_skills_text(cd: CharacterData) -> String:
 	var parts: Array[String] = []
-	for skill: Resource in cd.skills:
+	for skill: SkillData in cd.skills:
 		if skill == null:
 			continue
-		var sname: String = str(skill.get("skill_name"))
+		var sname: String = skill.skill_name.strip_edges()
 		if sname.is_empty() or sname.contains("测试"):
 			continue
-		var desc: String = str(skill.get("description"))
-		## 2026-09-15 用户要求：SA 介绍显示完整（信息窗内容区约 1120px）。
-		## 2026-11-02：SkillLabel 开启 autowrap_width=1120 —— 超长 SA 描述自动折行，
+		var desc: String = _localize_keys(skill.description.strip_edges())
+		## 2026-09-15 用户要求：介绍显示完整（信息窗内容区约 1120px）。
+		## 2026-11-02：SkillLabel 开启 autowrap_width=1120 —— 超长描述自动折行，
 		## 不再画到窗口外面；折行高度由 `_reflow_info_rows()` 用来下移觉醒行。
 		parts.append(sname if desc.is_empty() else "%s: %s" % [sname, desc])
 	if parts.is_empty():
-		return "SA 技能: ——"
-	return "SA 技能: %s" % "；".join(parts)
+		return "技能: ——"
+	return "技能: %s" % "；".join(parts)
+
+
+## 技能描述里可能直接写了「觉醒键」（数据是静态文本）：按平台换成实际键名。
+## 手机触摸层没有这颗键 → `has_key_hint` 为假，原样保留，不教玩家按不存在的键。
+func _localize_keys(text: String) -> String:
+	if not text.contains("觉醒键") or not Global.has_key_hint(&"覚醒键"):
+		return text
+	return text.replace("觉醒键", Global.key_hint(&"覚醒键"))
 
 
 ## 觉醒行（角色专属；当前仅のび太=集中射撃）
 ## ★键名按平台取（2026-09-30 用户需求）：手机触摸层没有觉醒按钮 →
 ## 不写键名（写「空格」等于教玩家按一个不存在的键）。
+## ★2026-11-10：安雄没有觉醒，同一颗键走「安雄魂」（技能行已给出效果），
+## 这里只交代「觉醒 = 无」以及那颗键的去向，别再显示成「——」。
 func _get_awaken_text(cd: CharacterData) -> String:
 	match String(cd.get("awaken_type")):
 		"concentrated_fire":
@@ -438,6 +450,10 @@ func _get_awaken_text(cd: CharacterData) -> String:
 				cast = "%s发动，" % Global.key_hint(&"覚醒键")
 			return "觉醒: 集中射撃——%s威力×1.5、子弹即死（Boss 免疫）" % cast
 		_:
+			if cd.yasuo_soul:
+				if Global.has_key_hint(&"覚醒键"):
+					return "觉醒: 无（安雄没有觉醒；%s 改发安雄魂）" % Global.key_hint(&"覚醒键")
+				return "觉醒: 无（安雄没有觉醒，那颗键改发安雄魂）"
 			return "觉醒: ——"
 
 

@@ -803,7 +803,10 @@ func _collect_action_hints() -> Array:
 	_push_hint(out, &"推击键", "推击")
 	_push_consumable_hints(out, state)
 	if _can_switch_character():
-		_push_hint(out, &"切换角色键", "切换角色")
+		## 过热中按切人会被 CharacterSwitchManager 拦掉（原作「キャラチェンジ不可」），
+		## 提示里直接说明原因，别让玩家以为按键坏了。
+		var heat: bool = player.has_method("is_heat_active") and bool(player.call("is_heat_active"))
+		_push_hint(out, &"切换角色键", "过热中 · 不能换人" if heat else "切换角色")
 	return out
 
 

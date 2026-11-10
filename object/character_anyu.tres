@@ -17,6 +17,7 @@
 [ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-安雄セットショットガン.png" id="t_shotgun"]
 [ext_resource type="Texture2D" path="res://art/Characters/[2K-VX]-安雄セットサブマシンガン.png" id="t_smg"]
 [ext_resource type="Texture2D" path="res://art/Characters/安雄セットスティンガー.png" id="t_stinger"]
+[ext_resource type="Resource" path="res://object/skill_yasuo_soul.tres" id="s_soul"]
 
 [resource]
 script = ExtResource("1")
@@ -47,6 +48,7 @@ weapon_walk_textures = {
 }
 select_icon_index = 2
 select_icon_direction = 1
+skills = Array[ExtResource("7_k3llj")]([ExtResource("s_soul")])
 hurt_sound = ExtResource("s_hurt")
 death_sound = ExtResource("s_death")
 counter_sound = ExtResource("s_counter")

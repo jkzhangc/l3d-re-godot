@@ -2167,13 +2167,18 @@ func is_painkiller_active() -> bool:
 # ═══════════════════════════════════════
 ## 状态 id 的显示文案。HUD 只认 id，文案集中在这里，加新 buff 时**只加一行**。
 ## ⚠ 图标接口：条目里的 `icon` 字段留空就用文字；将来有图标表时在这里补 Texture2D。
+## ★命名口径（2026-11-10 用户定）：HUD 一律中文，不写英文/片假名。
+## 道具名以 `object/item_*.tres` 的中文 `item_name` 为准（镇痛剂 / 肾上腺素），
+## Heat 按原作「ヒート」的消耗状态译为「过热」（与火属性 DoT「燃烧」区分）。
 const BUFF_LABELS: Dictionary = {
 	"yasuo_soul": "安雄魂",
 	"awaken": "觉醒·集中射击",
-	"painkiller": "鎮痛剤",
-	"adrenaline": "アドレナリン",
+	"painkiller": "镇痛剂",
+	"adrenaline": "肾上腺素",
 	"burning": "燃烧",
-	"heat": "Heat",
+	## 过热的三条负面里「不能换人」最容易让人以为按坏了（原作「キャラチェンジ不可」），
+	## 直接在状态栏的短名里点出来 —— 图鉴与选人界面写不下这层因果。
+	"heat": "过热·禁换人",
 }
 ## 负面状态（HUD 用红色显示）。
 const BUFF_DEBUFFS: Array[String] = ["burning", "heat"]
