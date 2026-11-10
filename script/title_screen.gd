@@ -26,7 +26,7 @@ const MENU_ITEMS: Array[String] = [
 ]
 ## 「其他」二级菜单（6 项，含返回）。
 const OTHER_ITEMS: Array[String] = [
-	"操作说明", "成就", "设置", "更新日志", "退出游戏", "返回",
+	"操作说明", "成就", "设置", "竞速记录", "游玩统计", "更新日志", "退出游戏", "返回",
 ]
 const WINDOW_TITLE: String = "のび太的求生之路"
 
@@ -140,7 +140,7 @@ var _settings_bar_fill: Array[ColorRect] = []
 ##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
 func _settings_items() -> Array[String]:
 	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式",
-		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量"]
+		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量", "血液颜色", "血液特效"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -284,6 +284,17 @@ const CHANGELOG_BODY := """【v0.45 · 新增】
   不再是一个空的「——」
 · 「过热」期间不能换人是原作设定（说明书写着「キャラチェンジ不可」），
   不是按键坏了 —— 状态栏会直接标成「过热·禁换人」，操作提示也会写明原因
+· 「开始游戏」前多了一步「游戏模式」：
+  · 标准模式 —— 原来的玩法，没有计时压力
+  · 计时竞速 —— 屏幕中下方常驻计时器，整局一直在走；每局结束（通关或中途放弃）
+    都会留下记录：用时、死亡次数、击杀数
+· 标题「其他」里多了两份报表：
+  · 竞速记录 —— 每个战役的最佳成绩，以及最近 10 局的明细
+  · 游玩统计 —— 总游玩时长、局数、通关率、击杀 / 爆头 / 死亡、造成与承受伤害
+· 给想直播的玩家加了两个开关（设置页最下面）：
+  · 血液颜色 —— 红 / 绿 / 紫 / 灰，默认红；只改「喷血」这类血效，
+    枪口火光、爆炸、酸液都不受影响
+  · 血液特效 —— 直接关掉喷血动画
 · SA 技能和觉醒发动都有音效了（以前按下去只有画面变化，没有声音）
 
 【v0.45 · 修复】
@@ -646,6 +657,11 @@ func _input(event: InputEvent) -> void:
 	# ── 收藏馆叠加层（2026-10-23）：同上，按键全交给收藏馆自己处理 ──
 	if _collection_overlay != null:
 		return
+	# ── 游戏模式 / 记录报表叠加层（2026-11-10）：同上 ──
+	if _mode_overlay != null:
+		return
+	if _records_overlay != null:
+		return
 	# ── F1 更新日志（2026-09-17）：打开时吞掉全部菜单输入，F1/Esc/确定键关闭 ──
 	var f1_pressed: bool = event is InputEventKey and event.pressed and not event.echo \
 			and (event as InputEventKey).keycode == KEY_F1
@@ -1001,6 +1017,10 @@ func _confirm() -> void:
 			_open_achievements()
 		"设置":
 			_enter_settings()
+		"竞速记录":
+			_open_records(0)
+		"游玩统计":
+			_open_records(1)
 		"更新日志":
 			## 确定音效已在 _input 里播过 → 这里不再重复。
 			_open_update_log(false)
@@ -1093,6 +1113,8 @@ func _close_achievements() -> void:
 # 收藏馆（2026-10-23）
 # ═══════════════════════════════════════
 var _collection_overlay: Control = null
+var _mode_overlay: Control = null
+var _records_overlay: Control = null
 
 
 ## 打开收藏馆（叠加在标题之上；关闭后销毁）。
@@ -1172,6 +1194,10 @@ const SAVE_SLOT_MENU := preload("res://script/ui/save_slot_menu.gd")
 const ACHIEVEMENTS_MENU := preload("res://script/ui/achievements_menu.gd")
 ## 收藏馆页脚本（同上：preload，不用 class_name）。
 const COLLECTION_MENU := preload("res://script/ui/collection_menu.gd")
+## 游戏模式选择（2026-11-10）：单人选战役之前的一道选择，代码构建叠加层。
+const GAME_MODE_MENU := preload("res://script/ui/game_mode_menu.gd")
+## 竞速记录 / 游玩统计（2026-11-10）：同一个报表页，用 page 区分。
+const RECORDS_MENU := preload("res://script/ui/records_menu.gd")
 
 
 # ═══════════════════════════════════════
@@ -1325,6 +1351,17 @@ func _build_settings_items() -> void:
 				Global.shadow_quality_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(sq_label)
 			_settings_value_labels.append(sq_label)
+		elif text == "血液颜色":
+			## 直播和谐（2026-11-10）：只改「血」类特效的色相，不动枪口/爆炸/酸液。
+			var bc_label := _make_menu_gradient_label(
+				Global.blood_color_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(bc_label)
+			_settings_value_labels.append(bc_label)
+		elif text == "血液特效":
+			var bf_label := _make_menu_gradient_label(
+				Global.on_off_label(Global.blood_enabled), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(bf_label)
+			_settings_value_labels.append(bf_label)
 		elif i == items.size() - 2 and Global.is_mobile_platform():
 			# 按键布局（2026-09-30，仅移动端）：显示「默认 / 自定义」，
 			# 确定键 → 进入触摸层的拖动调整模式（见 _enter_touch_layout_edit）。
@@ -1418,6 +1455,12 @@ func _handle_settings_input(event: InputEvent) -> void:
 			"影子质量":
 				Global.cycle_shadow_quality(1)
 				_set_settings_value(items, "影子质量", Global.shadow_quality_label())
+			"血液颜色":
+				Global.cycle_blood_color(1)
+				_set_settings_value(items, "血液颜色", Global.blood_color_label())
+			"血液特效":
+				Global.set_blood_enabled(not Global.blood_enabled)
+				_set_settings_value(items, "血液特效", Global.on_off_label(Global.blood_enabled))
 			"按键布局":
 				_enter_touch_layout_edit()
 			"返回":
@@ -1445,6 +1488,12 @@ func _handle_settings_input(event: InputEvent) -> void:
 		"影子质量":  # 左右 = 降一档 / 升一档
 			Global.cycle_shadow_quality(-1 if delta_vol < 0 else 1)
 			_set_settings_value(items, "影子质量", Global.shadow_quality_label())
+		"血液颜色":  # 左右 = 上一种 / 下一种
+			Global.cycle_blood_color(-1 if delta_vol < 0 else 1)
+			_set_settings_value(items, "血液颜色", Global.blood_color_label())
+		"血液特效":
+			Global.set_blood_enabled(not Global.blood_enabled)
+			_set_settings_value(items, "血液特效", Global.on_off_label(Global.blood_enabled))
 		"灯光闪烁":
 			Global.set_light_static(not Global.light_static)
 			_set_settings_value(items, "灯光闪烁", Global.light_static_label())
@@ -1541,10 +1590,39 @@ func _go_to_network_lobby() -> void:
 		printerr("[标题画面] 大厅场景切换失败: %s (err=%d)" % [lobby_scene, err])
 
 func _go_to_campaign_select() -> void:
-	print("[标题画面] 开始游戏 → 战役选择")
-	var err: Error = get_tree().change_scene_to_file(campaign_select_scene)
-	if err != OK:
-		printerr("[标题画面] 场景切换失败: %s (err=%d)" % [campaign_select_scene, err])
+	## 2026-11-10 用户需求：单人选战役之前先选「游戏模式」（标准 / 计时竞速）。
+	## 模式只影响表现与记账（计时器、竞速记录），战役/难度/角色流程完全不变。
+	print("[标题画面] 开始游戏 → 游戏模式")
+	if _mode_overlay != null:
+		return
+	_mode_overlay = GAME_MODE_MENU.new()
+	add_child(_mode_overlay)
+	_mode_overlay.connect("closed", _close_mode_menu)
+
+
+func _close_mode_menu() -> void:
+	if _mode_overlay == null:
+		return
+	_mode_overlay.queue_free()
+	_mode_overlay = null
+
+
+## 竞速记录（page=0）/ 游玩统计（page=1）。
+func _open_records(page: int) -> void:
+	if _records_overlay != null:
+		return
+	var menu: Control = RECORDS_MENU.new()
+	menu.set("page", page)
+	_records_overlay = menu
+	add_child(menu)
+	menu.connect("closed", _close_records)
+
+
+func _close_records() -> void:
+	if _records_overlay == null:
+		return
+	_records_overlay.queue_free()
+	_records_overlay = null
 
 
 func _quit_game() -> void:

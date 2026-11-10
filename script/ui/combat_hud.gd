@@ -95,6 +95,11 @@ var _last_throwable_count: int = -1
 var _last_support_item: ItemData = null
 ## 背包指示（仅小夫显示「背包 1/2」；普通角色隐藏）。
 var _backpack_label: Label = null
+
+## 竞速计时器（2026-11-10）：只在「计时竞速」模式显示，HUD 中下方常驻。
+## 用代码建节点 —— HUD 场景被 30+ 张地图共用，为一行字去改 tscn 不划算。
+var _run_timer_label: Label = null
+var _last_run_timer_text: String = ""
 ## 首次刷新强制应用：场景里的图标节点预置了占位纹理（非空），若首帧缓存恰为 null 且当前值
 ## 也是 null，脏检查会判定"未变"而跳过 → 占位图残留（显示 bug）。首刷绕过所有脏检查。
 var _force_refresh: bool = true
@@ -190,6 +195,7 @@ func _on_global_font_changed(_font_path: String) -> void:
 func _process(delta: float) -> void:
 	refresh()
 	_tick_holdout(delta)
+	_update_run_timer()
 
 
 func refresh() -> void:
@@ -202,6 +208,50 @@ func refresh() -> void:
 	_update_remote_bars()
 	_update_action_hints()
 	_force_refresh = false
+
+
+## 竞速计时器：`Global.run_mode == 计时竞速` 时显示本局墙钟（ChapterStats 的战役计时）。
+## 计时口径与 ED 的「通关时长」同源：安全屋/关卡/过图都算，菜单与结算页停表。
+func _update_run_timer() -> void:
+	if not Global.is_speedrun():
+		if _run_timer_label != null and is_instance_valid(_run_timer_label) and _run_timer_label.visible:
+			_run_timer_label.visible = false
+		return
+	_ensure_run_timer()
+	if _run_timer_label == null:
+		return
+	var stats: Node = get_node_or_null("/root/ChapterStats")
+	if stats == null:
+		return
+	var text: String = Global.format_run_time(float(stats.call("get_campaign_elapsed_seconds")))
+	if text != _last_run_timer_text:
+		_last_run_timer_text = text
+		_run_timer_label.text = text
+	_run_timer_label.visible = true
+
+
+func _ensure_run_timer() -> void:
+	if _run_timer_label != null and is_instance_valid(_run_timer_label):
+		return
+	var lbl := Label.new()
+	lbl.name = "RunTimer"
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	## 锚在底部中央：手机端逻辑画布会横向加宽，绝对坐标会跑偏。
+	lbl.anchor_left = 0.5
+	lbl.anchor_right = 0.5
+	lbl.anchor_top = 1.0
+	lbl.anchor_bottom = 1.0
+	lbl.offset_left = -260.0
+	lbl.offset_right = 260.0
+	lbl.offset_top = -190.0
+	lbl.offset_bottom = -130.0
+	lbl.modulate = Color(0.98, 0.96, 0.86)
+	Global.apply_ui_font(lbl, 48)
+	Global.apply_text_shadow(lbl)
+	_apply_crisp_font(lbl)
+	add_child(lbl)
+	_run_timer_label = lbl
 
 
 ## 血条右侧的 buff/状态列表（2026-11-09）。

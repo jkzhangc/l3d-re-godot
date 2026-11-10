@@ -77,10 +77,54 @@ var _cell_size: Vector2 = Vector2(192, 192)
 var _playing: bool = false
 var _is_multi: bool = false          ## 是否多精灵模式
 
+## 血效重上色着色器（2026-11-10）：只给「血」类动画用，见 `_apply_blood_censor()`。
+const BLOOD_SHADER := preload("res://shader/blood_recolor.gdshader")
+## 血效重上色材质（非血效 / 红色 / 关闭时为 null）。
+var _blood_material: ShaderMaterial = null
+
+
+## 这张动画是不是血效：按素材文件名判断（`血＋.png` / `血しぶき.png` / `血(大).png` …）。
+## 用文件名而不是逐张登记，是因为 art/Animations/ 下的血素材还会继续增加。
+static func is_blood_texture(tex: Texture2D) -> bool:
+	return tex != null and tex.resource_path.get_file().contains("血")
+
+
+## 血腥和谐（2026-11-10，直播用）：
+##   · 关掉「血液特效」→ 整条血效不显示（连染色都省了）；
+##   · 选了非红色 → 挂 hue 重映射材质，红血改成绿/紫或去色。
+## 只作用于血效动画，枪口/爆炸/酸液不受影响。
+func _apply_blood_censor() -> void:
+	if not is_blood_texture(texture):
+		return
+	if not Global.blood_enabled:
+		visible = false
+		set_process(false)
+		set_physics_process(false)
+		return
+	var opt: int = Global.blood_color_option
+	if opt <= 0:
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = BLOOD_SHADER
+	_blood_material = mat
+	match opt:
+		1:      ## 绿血
+			mat.set_shader_parameter("hue_shift", 1.0 / 3.0)
+		2:      ## 紫血
+			mat.set_shader_parameter("hue_shift", 0.78)
+		_:      ## 灰（去色）
+			mat.set_shader_parameter("saturation_scale", 0.0)
+			mat.set_shader_parameter("value_scale", 0.85)
+	material = mat
+
 
 func _ready() -> void:
 	if not texture:
 		push_warning("VXAnimSprite: 未设置 texture，跳过初始化")
+		return
+
+	_apply_blood_censor()
+	if not visible:
 		return
 
 	# 确保 _sprites 是此实例独有的数组（避免 Godot 4 类级数组共享问题）
@@ -224,6 +268,11 @@ func _create_sprite() -> Sprite2D:
 	s.texture = texture
 	s.centered = centered
 	s.region_enabled = true
+	## 关键：CanvasItem 的 material **不会**自动传给子节点（Godot 4 要显式 use_parent_material）。
+	## 血效重上色材质挂在本节点上，子 Sprite 不打开这一位的话颜色完全不会变 —— 实测踩过。
+	## ★只在「有血效材质」时打开：普通特效里有加算/减算混合的帧，那类帧必须用自己的材质，
+	##   开了 use_parent_material 会把混合模式一并盖掉（枪口火光/爆炸会变样）。
+	s.use_parent_material = _blood_material != null
 	add_child(s)
 	return s
 
@@ -242,10 +291,13 @@ func _apply_cell_to_sprite(s: Sprite2D, pattern: int, offset: Vector2, sc: Vecto
 	match blend:
 		1:  # Additive
 			s.material = _get_additive_material()
+			s.use_parent_material = false
 		2:  # Subtractive
 			s.material = _get_subtractive_material()
+			s.use_parent_material = false
 		_:  # Normal
 			s.material = null
+			s.use_parent_material = _blood_material != null
 
 
 var _add_mat: CanvasItemMaterial = null
@@ -352,6 +404,10 @@ static func from_scene(packed: PackedScene, offset_override: Vector2 = Vector2.Z
 static func play_scene(packed: PackedScene, pos: Vector2, parent: Node, fps: float = 10.0, follow: Node2D = null, offset_override: Vector2 = Vector2.ZERO, tone: Color = Color(1, 1, 1, 1)) -> VXAnimSprite:
 	var anim := from_scene(packed, offset_override)
 	if not anim:
+		return null
+	## 血腥和谐：关掉血液特效时血效根本不生成（比生成后隐藏省一次计时器与节点）。
+	if not Global.blood_enabled and is_blood_texture(anim.texture):
+		anim.queue_free()
 		return null
 	anim.tone = tone
 	anim.global_position = pos

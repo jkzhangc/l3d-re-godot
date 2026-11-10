@@ -89,6 +89,185 @@ func light_static_label() -> String:
 func on_off_label(on: bool) -> String:
 	return "开" if on else "关"
 
+
+# ── 画面和谐（2026-11-10 用户需求：有玩家要直播，血腥画面播不了）──
+## 血液特效总开关。关 = 「血」类动画根本不生成（见 `VXAnimSprite.play_scene`）。
+## 只影响血液，不影响枪口 / 爆炸 / 酸液等其他特效。
+var blood_enabled: bool = true
+## 血液颜色：0 = 红（原色）/ 1 = 绿 / 2 = 紫 / 3 = 灰。
+## 实现是色相重映射着色器（`shader/blood_recolor.gdshader`）—— 纯乘法做不到红→绿。
+var blood_color_option: int = 0
+const BLOOD_COLOR_NAMES: Array[String] = ["红", "绿", "紫", "灰"]
+
+
+func blood_color_label() -> String:
+	return BLOOD_COLOR_NAMES[clampi(blood_color_option, 0, BLOOD_COLOR_NAMES.size() - 1)]
+
+
+func set_blood_enabled(on: bool) -> void:
+	blood_enabled = on
+	save_config()
+
+
+func set_blood_color_option(v: int) -> void:
+	blood_color_option = clampi(v, 0, BLOOD_COLOR_NAMES.size() - 1)
+	save_config()
+
+
+func cycle_blood_color(delta: int) -> void:
+	set_blood_color_option(posmod(blood_color_option + delta, BLOOD_COLOR_NAMES.size()))
+
+
+# ═══════════════════════════════════════
+# 游戏模式 / 竞速与游玩记录（2026-11-10 用户需求）
+# ═══════════════════════════════════════
+## 单人玩法的模式。0 = 标准模式（原玩法），1 = 计时竞速。
+## 由「开始游戏 → 游戏模式」选择写入；**不落 config**（每局重选，继续游戏按标准处理）。
+var run_mode: int = 0
+const RUN_MODE_STANDARD: int = 0
+const RUN_MODE_SPEEDRUN: int = 1
+const RUN_MODE_NAMES: Array[String] = ["标准模式", "计时竞速"]
+const RUN_MODE_DESCS: Array[String] = [
+	"原汁原味的玩法：尸潮、补给、安全屋推进。没有计时压力，慢慢打。",
+	"HUD 中下方常驻计时器，整局一直在走。每次通关（或中途放弃）都会留下一条记录："
+	+ "用时、死亡次数、击杀数 —— 想刷成绩就从头再开一局。",
+]
+
+## 竞速记录：**只记竞速模式**，最新在前，最多保留 30 条。
+## 每项 {campaign, campaign_id, mode, difficulty, cleared, seconds, deaths, kills, at}
+var speedrun_records: Array = []
+## 总游玩统计（两种模式都累计，仿 L4D2 的总览页）。
+## {runs, clears, seconds, kills, headshots, deaths, damage_dealt, damage_taken, healing_items}
+var play_stats: Dictionary = {}
+
+## 本局是否正在进行 / 是否已经记过账（防「ED 记一次、回标题又记一次」）。
+var _run_active: bool = false
+var _run_recorded: bool = true
+const SPEEDRUN_RECORD_CAP: int = 30
+
+
+func run_mode_name() -> String:
+	return RUN_MODE_NAMES[clampi(run_mode, 0, RUN_MODE_NAMES.size() - 1)]
+
+
+func is_speedrun() -> bool:
+	return run_mode == RUN_MODE_SPEEDRUN
+
+
+## 新局开始（init_new_game 调）：登记本局，供结束时报账。
+func begin_run() -> void:
+	_run_active = true
+	_run_recorded = false
+
+
+## 本局结束（ED 通关 = cleared=true；回标题中途放弃 = false）。
+## 幂等：同一局重复调用只记一次。
+func finish_run(cleared: bool) -> void:
+	if not _run_active or _run_recorded:
+		return
+	_run_recorded = true
+	_run_active = false
+
+	var seconds: float = 0.0
+	var kills: int = 0
+	var headshots: int = 0
+	var deaths: int = 0
+	var dmg_dealt: float = 0.0
+	var dmg_taken: float = 0.0
+	var heals: int = 0
+	var stats: Node = get_node_or_null("/root/ChapterStats")
+	if stats != null:
+		seconds = float(stats.call("get_campaign_elapsed_seconds"))
+		var t: Dictionary = stats.call("get_campaign_totals")
+		kills = int(t.get("kills", 0))
+		headshots = int(t.get("headshots", 0))
+		deaths = int(t.get("deaths", 0))
+		dmg_dealt = float(t.get("damage_dealt", 0.0))
+		dmg_taken = float(t.get("damage_taken", 0.0))
+		heals = int(t.get("healing_items", 0))
+
+	_ensure_play_stats()
+	play_stats["runs"] = int(play_stats["runs"]) + 1
+	if cleared:
+		play_stats["clears"] = int(play_stats["clears"]) + 1
+	play_stats["seconds"] = int(play_stats["seconds"]) + int(round(seconds))
+	play_stats["kills"] = int(play_stats["kills"]) + kills
+	play_stats["headshots"] = int(play_stats["headshots"]) + headshots
+	play_stats["deaths"] = int(play_stats["deaths"]) + deaths
+	play_stats["damage_dealt"] = float(play_stats["damage_dealt"]) + dmg_dealt
+	play_stats["damage_taken"] = float(play_stats["damage_taken"]) + dmg_taken
+	play_stats["healing_items"] = int(play_stats["healing_items"]) + heals
+
+	if run_mode == RUN_MODE_SPEEDRUN:
+		var campaign_name: String = ""
+		var campaign_id: String = ""
+		if selected_campaign != null:
+			campaign_name = selected_campaign.campaign_name
+			campaign_id = selected_campaign.campaign_id
+		speedrun_records.push_front({
+			"campaign": campaign_name,
+			"campaign_id": campaign_id,
+			"difficulty": selected_difficulty,
+			"cleared": cleared,
+			"seconds": snappedf(seconds, 0.1),
+			"deaths": deaths,
+			"kills": kills,
+			"at": Time.get_datetime_string_from_system(false, true).replace("T", " "),
+		})
+		if speedrun_records.size() > SPEEDRUN_RECORD_CAP:
+			speedrun_records.resize(SPEEDRUN_RECORD_CAP)
+		print("[记录] 竞速本局结束：通关=%s 用时=%.1fs 死亡=%d" % [str(cleared), seconds, deaths])
+	else:
+		print("[记录] 标准本局结束：通关=%s 用时=%.1fs" % [str(cleared), seconds])
+	save_config()
+
+
+func _ensure_play_stats() -> void:
+	const TEMPLATE: Dictionary = {
+		"runs": 0, "clears": 0, "seconds": 0, "kills": 0, "headshots": 0,
+		"deaths": 0, "damage_dealt": 0.0, "damage_taken": 0.0, "healing_items": 0,
+	}
+	for key: Variant in TEMPLATE.keys():
+		if not play_stats.has(key):
+			play_stats[key] = TEMPLATE[key]
+
+
+## 竞速记录的「最好成绩」：按战役取用时最短的通关记录（没有则空）。
+func speedrun_best_for(campaign_id: String) -> Dictionary:
+	var best: Dictionary = {}
+	for row: Variant in speedrun_records:
+		if not (row is Dictionary):
+			continue
+		var r: Dictionary = row
+		if not bool(r.get("cleared", false)):
+			continue
+		if campaign_id != "" and str(r.get("campaign_id", "")) != campaign_id:
+			continue
+		if best.is_empty() or float(r.get("seconds", 0.0)) < float(best.get("seconds", 0.0)):
+			best = r
+	return best
+
+
+## 时长格式化：01:23.4（不足 1 小时） / 1:02:03（超过 1 小时）。
+static func format_run_time(seconds: float) -> String:
+	var s: float = maxf(0.0, seconds)
+	if s >= 3600.0:
+		var h: int = int(s) / 3600
+		var m: int = (int(s) % 3600) / 60
+		var sec: int = int(s) % 60
+		return "%d:%02d:%02d" % [h, m, sec]
+	var mm: int = int(s) / 60
+	return "%02d:%04.1f" % [mm, s - float(mm * 60)]
+
+
+## 总游玩时长的可读写法（统计页用）：3 小时 12 分 / 12 分。
+static func format_total_playtime(seconds: int) -> String:
+	var h: int = seconds / 3600
+	var m: int = (seconds % 3600) / 60
+	if h > 0:
+		return "%d 小时 %02d 分" % [h, m]
+	return "%d 分" % m
+
 ## ── 触摸布局（手机端自由拖动按键 / 摇杆位置）2026-09-30 用户需求 ──
 ## 【2026-10-08 拆分】逻辑已抽到 `script/touch_layout_service.gd`（TouchLayoutService），
 ## 这里只保留**同名转发门面 + 属性代理** → 外部（menu_controller / title_screen /
@@ -850,6 +1029,10 @@ const TITLE_SCENE_PATH: String = "res://scene/title_screen.tscn"
 
 func go_to_title_screen() -> void:
 	get_tree().paused = false
+	## 竞速 / 总统计：中途回标题 = 本局结束（未通关）。幂等，已记过账（ED）不会再记。
+	finish_run(false)
+	## 模式不跨局：回标题后回到标准模式，下次从「开始游戏」重选。
+	run_mode = RUN_MODE_STANDARD
 	var net: Node = get_node_or_null("/root/Net")
 	if net != null and net.has_method("leave"):
 		net.leave()
@@ -1548,6 +1731,14 @@ func _apply_config_file(path: String) -> void:
 	char_shadows = bool(cfg.get("char_shadows", char_shadows))
 	light_occluders = bool(cfg.get("light_occluders", light_occluders))
 	shadow_quality = clampi(int(cfg.get("shadow_quality", shadow_quality)), 0, 2)
+	blood_enabled = bool(cfg.get("blood_enabled", blood_enabled))
+	blood_color_option = clampi(int(cfg.get("blood_color_option", blood_color_option)), 0, 3)
+	var cfg_records: Variant = cfg.get("speedrun_records", null)
+	if cfg_records is Array:
+		speedrun_records = (cfg_records as Array).duplicate(true)
+	var cfg_stats: Variant = cfg.get("play_stats", null)
+	if cfg_stats is Dictionary:
+		play_stats = (cfg_stats as Dictionary).duplicate(true)
 	font_option = clampi(int(cfg.get("font_option", font_option)), 0, FONT_OPTION_PATHS.size() - 1)
 	changelog_seen_version = str(cfg.get("changelog_seen_version", changelog_seen_version))
 	## ★空串视为"未设置"，不覆盖 —— 否则随包的旧 config.json（或手机上的空值）会把
@@ -1583,6 +1774,10 @@ func save_config() -> void:
 		"char_shadows": char_shadows,
 		"light_occluders": light_occluders,
 		"shadow_quality": shadow_quality,
+		"blood_enabled": blood_enabled,
+		"blood_color_option": blood_color_option,
+		"speedrun_records": speedrun_records.duplicate(true),
+		"play_stats": play_stats.duplicate(true),
 		"font_option": font_option,
 		"changelog_seen_version": changelog_seen_version,
 		"master_server_url": master_server_url,
@@ -1942,6 +2137,8 @@ func init_new_game() -> void:
 	var chapter_stats: Node = get_node_or_null("/root/ChapterStats")
 	if chapter_stats and chapter_stats.has_method("reset_campaign"):
 		chapter_stats.reset_campaign()
+	## 竞速 / 总统计（2026-11-10）：本局从这里开始记账，ED 或回标题时结算。
+	begin_run()
 	## 本局尸潮曲目：**开局抽一次**（一局固定一首，见 `horde_music_track`）。
 	## 池子归 Director 管（它会按 DirectorConfig 解析），所以抽签入口也在它那儿。
 	var director: Node = get_node_or_null("/root/Director")

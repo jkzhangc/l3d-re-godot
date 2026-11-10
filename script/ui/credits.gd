@@ -111,6 +111,10 @@ func _ready() -> void:
 	var clock_holder: Node = get_node_or_null("/root/ChapterStats")
 	if clock_holder != null and clock_holder.has_method("stop_campaign_clock"):
 		clock_holder.call("stop_campaign_clock")
+	## 竞速 / 总统计结算（2026-11-10）：ED = 本局通关。停表之后再读，拿到的就是定格值。
+	var g_node: Node = get_node_or_null("/root/Global")
+	if g_node != null and g_node.has_method("finish_run"):
+		g_node.call("finish_run", true)
 
 	var black: ColorRect = ColorRect.new()
 	black.color = Color.BLACK
