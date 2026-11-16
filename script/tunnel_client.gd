@@ -102,6 +102,16 @@ var _outgoing_write_remaining: int = 0
 var _next_outgoing_client: int = 0
 var _register_accum: float = 0.0
 
+## @trace NET-LAT-P2：worker独占socket；门面只在主线程派发连接事件，业务RPC仍由Net执行。
+const IO_WORKER := preload("res://script/tunnel_io_worker.gd")
+var threaded_io_enabled: bool = false  # 原型先显式开启；低帧率应用RTT未证明稳定收益。
+var _io_worker: RefCounted = null
+var _io_generation: int = 0
+var _session_server_host: String = ""
+var _exiting: bool = false
+var _last_io_stats: Dictionary = {}
+var _max_event_dispatch_usec: int = 0
+
 
 ## ★必须**永不暂停**（2026-10-12 实测：进安全屋客户端 SERVER_DISCONNECTED 的根因）：
 ## 章节完成页会 `get_tree().paused = true`（chapter_summary.gd），而本节点是 autoload，
@@ -112,6 +122,11 @@ var _register_accum: float = 0.0
 ## paused 时 `_process` 计数为 0、设 ALWAYS（枚举值 3）后照常。
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# 仅本机诊断开关：保留原主线程路径做A/B对照，不改线上帧协议。
+	if "--net-tunnel-threaded-io" in OS.get_cmdline_user_args():
+		threaded_io_enabled = true
+	if "--net-tunnel-main-thread" in OS.get_cmdline_user_args():
+		threaded_io_enabled = false
 
 
 # ═════════════════════════════ 对外接口 ═════════════════════════════
@@ -140,13 +155,25 @@ func setup(server_host: String, server_port: int = TUNNEL_TCP_PORT) -> void:
 
 ## 连接中继并注册隧道。game_port 是本机 ENet Host 监听的端口。
 func start(game_port: int) -> void:
+	if _exiting:
+		return  # 退出树期间的closed回调不能启动一个再也没有_process回收的新worker。
 	if _server_host.is_empty():
 		tunnel_failed.emit("未配置隧道服务地址")
 		return
 	if _state == "connecting" or _state == "awaiting_registered" or _state == "registered":
 		push_warning("[TunnelClient] 已在运行中，忽略重复 start()")
 		return
+	if _io_worker != null:
+		_shutdown_io_worker()
 	_game_port = game_port
+	_session_server_host = _server_host
+	_public_port = 0
+	_tunnel_id = ""
+	_last_io_stats.clear()
+	_max_event_dispatch_usec = 0
+	if threaded_io_enabled:
+		_start_io_worker()
+		return
 	_clear_send_queue()
 	_recv_buffer.clear()
 	_register_accum = 0.0
@@ -172,6 +199,13 @@ func start(game_port: int) -> void:
 
 ## 释放隧道（发 RELEASE → 断开 TCP → 清理 per-client socket）。
 func stop() -> void:
+	if _io_worker != null:
+		var was_io_registered: bool = _state == "registered"
+		_shutdown_io_worker()
+		_state = "closed"
+		if was_io_registered:
+			tunnel_closed.emit()
+		return
 	if _state == "registered" and _tcp != null:
 		_send_message(MSG_RELEASE, PackedByteArray())
 	if _tcp != null:
@@ -187,7 +221,7 @@ func stop() -> void:
 
 
 func get_public_address() -> String:
-	return _server_host
+	return _session_server_host if not _session_server_host.is_empty() else _server_host
 
 
 func get_public_port() -> int:
@@ -201,6 +235,9 @@ func is_active() -> bool:
 # ═════════════════════════════ _process 轮询 ═════════════════════════════
 
 func _process(delta: float) -> void:
+	if _io_worker != null:
+		_drain_io_events()
+		return
 	if _state == "idle" or _state == "closed" or _tcp == null:
 		return
 
@@ -259,6 +296,9 @@ func _process(delta: float) -> void:
 
 ## 只搬字节，不调用Multiplayer.poll或游戏节点，允许Net在轮询前调用。
 func pump_incoming() -> void:
+	if _io_worker != null:
+		_drain_io_events()
+		return
 	if _incoming_pumping or _tcp == null or (_state != "awaiting_registered" and _state != "registered"):
 		return
 	_incoming_pumping = true
@@ -288,6 +328,8 @@ func pump_incoming() -> void:
 
 
 func pump_outgoing() -> void:
+	if _io_worker != null:
+		return  # ENet已flush进localhost UDP，由独占socket的worker收走。
 	if _outgoing_pumping or _tcp == null or (_state != "registered" and _state != "awaiting_registered"):
 		return
 	_outgoing_pumping = true
@@ -309,6 +351,13 @@ func _note_pump_duration(started_usec: int) -> void:
 
 
 func get_transport_stats() -> Dictionary:
+	if _io_worker != null:
+		var snapshot: Dictionary = _io_worker.get_stats()
+		snapshot["state"] = _state
+		snapshot["max_event_dispatch_usec"] = _max_event_dispatch_usec
+		return snapshot
+	if not _last_io_stats.is_empty():
+		return _last_io_stats.duplicate(true)
 	var age: int = 0
 	if not _send_queue.is_empty():
 		age = maxi(0, Time.get_ticks_msec() - int(_send_queue[0]["queued_msec"]))
@@ -316,7 +365,75 @@ func get_transport_stats() -> Dictionary:
 		"send_queue_peak_bytes": _send_queue_peak_bytes, "send_queue_age_msec": age,
 		"send_partial_writes": _send_partial_writes, "bytes_sent": _bytes_sent,
 		"bytes_received": _bytes_received, "recv_buffer_bytes": _recv_buffer.size(),
-		"last_pump_usec": _last_pump_usec, "max_pump_usec": _max_pump_usec}
+		"last_pump_usec": _last_pump_usec, "max_pump_usec": _max_pump_usec,
+		"threaded_io": false, "thread_running": false}
+
+
+func _start_io_worker() -> void:
+	_io_generation += 1
+	_state = "connecting"
+	_public_port = 0
+	_tunnel_id = ""
+	_io_worker = IO_WORKER.new()
+	var error: Error = _io_worker.start({"server_host": _server_host, "server_port": _server_port,
+		"game_port": _game_port, "protocol": Net.PROTOCOL_VERSION,
+		"game_version": str(ProjectSettings.get_setting("application/config/version", "")),
+		"connect_timeout": connect_timeout})
+	if error != OK:
+		_shutdown_io_worker()
+		_state = "closed"
+		tunnel_failed.emit("无法启动隧道收发线程：%s" % error_string(error))
+		return
+	print("[TunnelClient] 独立I/O连接中继 %s:%d" % [_server_host, _server_port])
+
+
+func _shutdown_io_worker() -> void:
+	_io_generation += 1
+	if _io_worker == null:
+		return
+	var worker: RefCounted = _io_worker
+	_io_worker = null
+	worker.stop()
+	_last_io_stats = worker.get_stats()
+	_last_io_stats["state"] = "closed"
+	_last_io_stats["max_event_dispatch_usec"] = _max_event_dispatch_usec
+	_recv_buffer.clear()
+	_clear_send_queue()
+
+
+func _drain_io_events() -> void:
+	if _io_worker == null:
+		return
+	var generation: int = _io_generation
+	var worker: RefCounted = _io_worker
+	# 对外保留连接阶段可观测性；registered只能由事件推进，确保ready信号不遗漏。
+	var status: Dictionary = worker.get_stats()
+	if _state == "connecting" and str(status.get("state", "")) == "awaiting_registered":
+		_state = "awaiting_registered"
+	var events: Array[Dictionary] = worker.drain_events()
+	for event: Dictionary in events:
+		# 信号回调可能立即stop/start；旧会话剩余事件不得污染新会话。
+		if generation != _io_generation or worker != _io_worker:
+			return
+		_max_event_dispatch_usec = maxi(_max_event_dispatch_usec,
+			Time.get_ticks_usec() - int(event.get("queued_usec", Time.get_ticks_usec())))
+		match str(event.get("type", "")):
+			"registered":
+				_tunnel_id = str(event.get("tunnel_id", ""))
+				_public_port = int(event.get("public_port", 0))
+				_state = "registered"
+				print("[TunnelClient] 独立I/O就绪：公网端口 %d" % _public_port)
+				tunnel_ready.emit(_session_server_host, _public_port)
+			"failed", "closed":
+				var was_registered: bool = _state == "registered"
+				var reason: String = str(event.get("reason", "隧道关闭"))
+				_shutdown_io_worker()
+				_state = "closed"
+				if was_registered:
+					tunnel_closed.emit()
+				else:
+					tunnel_failed.emit(reason)
+				return
 
 
 # ═════════════════════════════ 协议收发 ═════════════════════════════
@@ -459,7 +576,7 @@ func _handle_registered(payload: PackedByteArray) -> void:
 		return
 	_state = "registered"
 	print("[TunnelClient] 隧道就绪：公网端口 %d（ID %s）" % [_public_port, _tunnel_id])
-	tunnel_ready.emit(_server_host, _public_port)
+	tunnel_ready.emit(_session_server_host, _public_port)
 
 
 ## 中继 → 本机游戏：收到的 payload = [2字节 clientId (BE)][原始 UDP 数据]
@@ -572,5 +689,6 @@ func _cleanup_clients() -> void:
 
 
 func _exit_tree() -> void:
-	if _tcp != null:
+	_exiting = true
+	if _tcp != null or _io_worker != null:
 		stop()
