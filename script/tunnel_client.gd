@@ -61,6 +61,14 @@ const MAX_PACKET_SIZE := 1500
 ## 大 length 会让 `_recv_buffer` 无限增长（服务端同款漏洞实测灌 5MB 涨 5MB）。
 ## 合法帧最大 = [2字节 clientId] + UDP 数据(≤1500) 或 REGISTERED 的小 JSON，均 < 8KB。
 const MAX_FRAME_SIZE := 8192
+## @trace NET-LAT-P1：限制应用累计队列与每次泵送工作量，不任意丢弃ENet数据报。
+const MAX_SEND_QUEUE_BYTES := 512 * 1024
+const MAX_SEND_QUEUE_AGE_MSEC := 2000
+const MAX_RECV_BUFFER_BYTES := 512 * 1024
+const MAX_READ_BYTES_PER_PUMP := 128 * 1024
+const MAX_WRITE_BYTES_PER_PUMP := 128 * 1024
+const MAX_MESSAGES_PER_PUMP := 256
+const PUMP_BUDGET_USEC := 2000
 
 var _tcp: StreamPeerTCP = null
 var _server_host: String = ""
@@ -79,6 +87,20 @@ var connect_timeout: float = CONNECT_TIMEOUT
 ## clientId(int) → { "socket": PacketPeerUDP, "last_seen": float(Time.get_ticks_msec) }
 var _clients: Dictionary = {}
 var _idle_check_accum: float = 0.0
+var _send_queue: Array[Dictionary] = []
+var _send_queue_bytes: int = 0
+var _send_queue_peak_bytes: int = 0
+var _send_partial_writes: int = 0
+var _bytes_sent: int = 0
+var _bytes_received: int = 0
+var _last_pump_usec: int = 0
+var _max_pump_usec: int = 0
+var _incoming_pumping: bool = false
+var _outgoing_pumping: bool = false
+var _outgoing_deadline_usec: int = 0
+var _outgoing_write_remaining: int = 0
+var _next_outgoing_client: int = 0
+var _register_accum: float = 0.0
 
 
 ## ★必须**永不暂停**（2026-10-12 实测：进安全屋客户端 SERVER_DISCONNECTED 的根因）：
@@ -118,13 +140,25 @@ func setup(server_host: String, server_port: int = TUNNEL_TCP_PORT) -> void:
 
 ## 连接中继并注册隧道。game_port 是本机 ENet Host 监听的端口。
 func start(game_port: int) -> void:
-	_game_port = game_port
 	if _server_host.is_empty():
 		tunnel_failed.emit("未配置隧道服务地址")
 		return
-	if _state == "connecting" or _state == "registered":
+	if _state == "connecting" or _state == "awaiting_registered" or _state == "registered":
 		push_warning("[TunnelClient] 已在运行中，忽略重复 start()")
 		return
+	_game_port = game_port
+	_clear_send_queue()
+	_recv_buffer.clear()
+	_register_accum = 0.0
+	_next_outgoing_client = 0
+	_send_queue_peak_bytes = 0
+	_send_partial_writes = 0
+	_bytes_sent = 0
+	_bytes_received = 0
+	_last_pump_usec = 0
+	_max_pump_usec = 0
+	_keepalive_accum = 0.0
+	_idle_check_accum = 0.0
 	_tcp = StreamPeerTCP.new()
 	_state = "connecting"
 	_connect_accum = 0.0
@@ -145,6 +179,7 @@ func stop() -> void:
 		_tcp = null
 	_cleanup_clients()
 	_recv_buffer.clear()
+	_clear_send_queue()
 	var was_registered := _state == "registered"
 	_state = "closed"
 	if was_registered:
@@ -184,8 +219,8 @@ func _process(delta: float) -> void:
 			## 因此忽早忽晚，主机就用「过时输入」推进权威位置，回头再把本地预测玩家拽回去
 			## —— 观感正是"移动有果冻质感、偶尔回弹"。关掉后每个包立即发出，抖动显著收敛。
 			_tcp.set_no_delay(true)
-			_send_register()
 			_state = "awaiting_registered"
+			_send_register()
 			return
 		## ★ 自控连接超时（见 CONNECT_TIMEOUT 注释）：引擎在本机实测要 30s 才暴露失败，
 		## 且"地址填错"与"被丢包"同相 → 这里主动计时，到点即失败，让 UI 能给出可操作反馈。
@@ -196,23 +231,18 @@ func _process(delta: float) -> void:
 
 	if _state != "awaiting_registered" and _state != "registered":
 		return
-
-	# ── 读 TCP 入站 ──
-	var avail := _tcp.get_available_bytes()
-	if avail > 0:
-		var result := _tcp.get_data(avail)
-		if result[0] == OK:
-			_recv_buffer.append_array(result[1])
-			_process_messages()
-		else:
-			_handle_disconnect("TCP 读数据失败")
+	if _state == "awaiting_registered":
+		_register_accum += delta
+		if _register_accum >= connect_timeout:
+			_handle_disconnect("中继注册响应超时（%.0fs）" % connect_timeout)
 			return
+
+	# Net在每个物理/渲染阶段前后泵送；本回调保留独立连接/超时/保活的兜底。
+	pump_incoming()
+	pump_outgoing()
 
 	if _state != "registered":
 		return
-
-	# ── 转发 本机游戏 → 中继（轮询 per-client socket 的出站包）──
-	_poll_game_outgoing()
 
 	# ── keepalive ──
 	_keepalive_accum += delta
@@ -227,6 +257,68 @@ func _process(delta: float) -> void:
 		_cleanup_idle_clients()
 
 
+## 只搬字节，不调用Multiplayer.poll或游戏节点，允许Net在轮询前调用。
+func pump_incoming() -> void:
+	if _incoming_pumping or _tcp == null or (_state != "awaiting_registered" and _state != "registered"):
+		return
+	_incoming_pumping = true
+	var started: int = Time.get_ticks_usec()
+	_tcp.poll()
+	if _tcp.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		_incoming_pumping = false
+		_handle_disconnect("TCP 连接已关闭")
+		return
+	var avail: int = mini(_tcp.get_available_bytes(), MAX_READ_BYTES_PER_PUMP)
+	if avail > 0:
+		var result: Array = _tcp.get_partial_data(avail)
+		if int(result[0]) != OK:
+			_incoming_pumping = false
+			_handle_disconnect("TCP 读数据失败")
+			return
+		var data: PackedByteArray = result[1]
+		_bytes_received += data.size()
+		_recv_buffer.append_array(data)
+		if _recv_buffer.size() > MAX_RECV_BUFFER_BYTES:
+			_incoming_pumping = false
+			_handle_disconnect("隧道入站积压超限")
+			return
+	_process_messages()
+	_note_pump_duration(started)
+	_incoming_pumping = false
+
+
+func pump_outgoing() -> void:
+	if _outgoing_pumping or _tcp == null or (_state != "registered" and _state != "awaiting_registered"):
+		return
+	_outgoing_pumping = true
+	var started: int = Time.get_ticks_usec()
+	_outgoing_deadline_usec = started + PUMP_BUDGET_USEC
+	_outgoing_write_remaining = MAX_WRITE_BYTES_PER_PUMP
+	_flush_send_queue()
+	if _state == "registered" and _tcp != null:
+		_poll_game_outgoing()
+		_flush_send_queue()
+	_note_pump_duration(started)
+	_outgoing_deadline_usec = 0
+	_outgoing_pumping = false
+
+
+func _note_pump_duration(started_usec: int) -> void:
+	_last_pump_usec = Time.get_ticks_usec() - started_usec
+	_max_pump_usec = maxi(_max_pump_usec, _last_pump_usec)
+
+
+func get_transport_stats() -> Dictionary:
+	var age: int = 0
+	if not _send_queue.is_empty():
+		age = maxi(0, Time.get_ticks_msec() - int(_send_queue[0]["queued_msec"]))
+	return {"state": _state, "send_queue_bytes": _send_queue_bytes,
+		"send_queue_peak_bytes": _send_queue_peak_bytes, "send_queue_age_msec": age,
+		"send_partial_writes": _send_partial_writes, "bytes_sent": _bytes_sent,
+		"bytes_received": _bytes_received, "recv_buffer_bytes": _recv_buffer.size(),
+		"last_pump_usec": _last_pump_usec, "max_pump_usec": _max_pump_usec}
+
+
 # ═════════════════════════════ 协议收发 ═════════════════════════════
 
 func _send_register() -> void:
@@ -239,8 +331,7 @@ func _send_register() -> void:
 
 
 ## 发送一条消息：[4字节大端长度][1字节类型][载荷]
-## ⚠ 一次 `put_data` 发整帧，不拆成「先头后体」两次：两次写会变成两个 TCP 段
-## （关闭 Nagle 后各自立即发出），每包多一个段的协议开销，也让接收端多一次组帧。
+## 帧头/体先组为一帧，再部分写；发送偏移跨泵送保留，不阻塞、不重发已写字节。
 func _send_message(type: int, payload: PackedByteArray) -> void:
 	if _tcp == null:
 		return
@@ -253,12 +344,76 @@ func _send_message(type: int, payload: PackedByteArray) -> void:
 		type,
 	])
 	frame.append_array(payload)
-	_tcp.put_data(frame)
+	if _send_queue_bytes + frame.size() > MAX_SEND_QUEUE_BYTES:
+		_handle_disconnect("隧道发送积压超限，请检查网络或降低联机负载")
+		return
+	_send_queue.append({"frame": frame, "offset": 0, "queued_msec": Time.get_ticks_msec()})
+	_send_queue_bytes += frame.size()
+	_send_queue_peak_bytes = maxi(_send_queue_peak_bytes, _send_queue_bytes)
+	# 出站批处理只在泵送结束flush，避免每个UDP包重复耗尽工作预算。
+	if not _outgoing_pumping:
+		_flush_send_queue()
+
+
+func _flush_send_queue() -> void:
+	if _tcp == null or _send_queue.is_empty():
+		return
+	var started: int = Time.get_ticks_usec()
+	var deadline: int = _outgoing_deadline_usec if _outgoing_pumping else started + PUMP_BUDGET_USEC
+	var byte_budget: int = _outgoing_write_remaining if _outgoing_pumping else MAX_WRITE_BYTES_PER_PUMP
+	var written: int = 0
+	while not _send_queue.is_empty() and _tcp != null:
+		var item: Dictionary = _send_queue[0]
+		if Time.get_ticks_msec() - int(item["queued_msec"]) > MAX_SEND_QUEUE_AGE_MSEC:
+			_handle_disconnect("隧道发送队列长时间未排空")
+			return
+		if written >= byte_budget or Time.get_ticks_usec() >= deadline:
+			return
+		var frame: PackedByteArray = item["frame"]
+		var offset: int = int(item["offset"])
+		var end: int = mini(frame.size(), offset + byte_budget - written)
+		var result: Array = _write_tcp_chunk(frame.slice(offset, end))
+		if int(result[0]) != OK:
+			_handle_disconnect("TCP 写数据失败：%s" % error_string(int(result[0])))
+			return
+		var sent: int = int(result[1])
+		if sent < 0 or sent > end - offset:
+			_handle_disconnect("TCP 部分写返回非法长度")
+			return
+		if sent < end - offset:
+			_send_partial_writes += 1
+		if sent == 0:
+			return
+		item["offset"] = offset + sent
+		_send_queue_bytes -= sent
+		_bytes_sent += sent
+		written += sent
+		if _outgoing_pumping:
+			_outgoing_write_remaining -= sent
+		if int(item["offset"]) >= frame.size():
+			_send_queue.pop_front()
+		else:
+			_send_queue[0] = item
+
+
+## 窄I/O边界便于用部分写/慢读替身覆盖，生产仍只使用同一TCP对象。
+func _write_tcp_chunk(data: PackedByteArray) -> Array:
+	return _tcp.put_partial_data(data)
+
+
+func _clear_send_queue() -> void:
+	_send_queue.clear()
+	_send_queue_bytes = 0
 
 
 ## 从 _recv_buffer 解析完整消息。
 func _process_messages() -> void:
+	var started: int = Time.get_ticks_usec()
+	var processed: int = 0
 	while _recv_buffer.size() >= 4:
+		if processed >= MAX_MESSAGES_PER_PUMP or Time.get_ticks_usec() - started >= PUMP_BUDGET_USEC:
+			return
+		processed += 1
 		var length := (_recv_buffer[0] << 24) | (_recv_buffer[1] << 16) | (_recv_buffer[2] << 8) | _recv_buffer[3]
 		if length < 1:
 			## 跳过空消息
@@ -274,6 +429,8 @@ func _process_messages() -> void:
 		var payload := _recv_buffer.slice(5, 4 + length)
 		_recv_buffer = _recv_buffer.slice(4 + length)
 		_handle_message(type, payload)
+		if _state == "closed":
+			return
 
 
 func _handle_message(type: int, payload: PackedByteArray) -> void:
@@ -332,18 +489,30 @@ func _handle_relay_to_host(payload: PackedByteArray) -> void:
 
 	_clients[client_id]["last_seen"] = Time.get_ticks_msec()
 	var socket: PacketPeerUDP = _clients[client_id]["socket"]
-	socket.put_packet(data)
+	var err: Error = socket.put_packet(data)
+	if err != OK:
+		_handle_disconnect("隧道投递本机UDP失败：%s" % error_string(err))
 
 
 ## 轮询所有 per-client socket，把游戏回包通过 TCP 发回中继。
 func _poll_game_outgoing() -> void:
 	if _clients.is_empty():
 		return
-	for client_id: int in _clients.keys():
+	var started: int = Time.get_ticks_usec()
+	var deadline: int = _outgoing_deadline_usec if _outgoing_pumping else started + PUMP_BUDGET_USEC
+	var client_ids: Array = _clients.keys()
+	var start_index: int = _next_outgoing_client % client_ids.size()
+	# 每轮换起点，且在开始处理当前peer前推进游标；预算耗尽时下轮轮到后续玩家。
+	for step: int in range(client_ids.size()):
+		var index: int = (start_index + step) % client_ids.size()
+		_next_outgoing_client = (index + 1) % client_ids.size()
+		var client_id: int = int(client_ids[index])
 		var client: Dictionary = _clients[client_id]
 		var socket: PacketPeerUDP = client["socket"]
 		var count := 0
 		while socket.get_available_packet_count() > 0 and count < MAX_OUTGOING_PER_CLIENT:
+			if Time.get_ticks_usec() >= deadline or _send_queue_bytes >= MAX_SEND_QUEUE_BYTES - MAX_PACKET_SIZE - 7:
+				return
 			var data := socket.get_packet()
 			if socket.get_packet_error() != OK:
 				break
@@ -356,6 +525,8 @@ func _poll_game_outgoing() -> void:
 			payload.append(client_id & 0xFF)
 			payload.append_array(data)
 			_send_message(MSG_RELAY_FROM_HOST, payload)
+			if _tcp == null or _state != "registered":
+				return
 			count += 1
 
 
@@ -370,6 +541,7 @@ func _handle_disconnect(reason: String) -> void:
 	var was_registered := _state == "registered"
 	_state = "closed"
 	_recv_buffer.clear()
+	_clear_send_queue()
 	if was_registered:
 		tunnel_closed.emit()
 	else:
@@ -400,5 +572,5 @@ func _cleanup_clients() -> void:
 
 
 func _exit_tree() -> void:
-	if _state == "registered" or _state == "connecting":
+	if _tcp != null:
 		stop()

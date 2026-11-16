@@ -341,8 +341,9 @@ var _last_enemy_hot_epoch: int = -1
 ## 同版本下已接收的敌人分片序号；分片必须共享版本但序号各不相同，否则只有第一片生效。
 var _enemy_hot_epoch_chunks: Dictionary = {}
 var _last_reliable_world_epoch: int = -1
-## Client 已应用到实体的最新动态版本；比它旧的包仍可补低频数据，但不能改位置/血量。
-var _last_dynamic_epoch: int = -1
+## Host 版本仍全局递增；Client 按实体流独立比较，避免不同 channel 互相淘汰。
+## 比本流水位旧的可靠包仍可补低频数据，但不能改动态状态或按旧列表删实体。
+var _last_dynamic_epochs: Dictionary = {&"player": -1, &"enemy": -1, &"pickup": -1}
 var _input_accumulator := 0.0
 var _scene_path := ""
 var _players_parent: Node = null
@@ -3873,12 +3874,14 @@ func world_snapshot(snapshot_epoch: int, player_states: Array, enemy_states: Arr
 	_last_reliable_world_epoch = snapshot_epoch
 	## 可靠包保证送达但不保证"比热包新"：若它在热包之后才到，动态字段已过期。
 	## 低频数据（昵称/装备/库存/实体成员）仍照常应用，位置与血量交给更新的热包。
-	var dynamic_ok: bool = _accept_dynamic_epoch(snapshot_epoch)
-	## 过期包也不能收敛实体列表：它构建于更早时刻，按它删除"快照里没有"的实体会把
-	## 之后新刷的敌人/玩家误删到下一次可靠重同步。过期包只补充身份/库存等低频数据。
-	_apply_client_snapshot(player_states, dynamic_ok, dynamic_ok)
-	_apply_client_enemy_snapshot(enemy_states, dynamic_ok, dynamic_ok)
-	if dynamic_ok:
+	var player_ok: bool = _accept_dynamic_epoch(snapshot_epoch, &"player")
+	var enemy_ok: bool = _accept_dynamic_epoch(snapshot_epoch, &"enemy")
+	var pickup_ok: bool = _accept_dynamic_epoch(snapshot_epoch, &"pickup")
+	## 各流分别决定动态应用与列表收敛：旧玩家/敌人列表只能补低频数据，
+	## 不能因另一条流更新而漏掉本流新状态，也不能用本流旧列表删新实体。
+	_apply_client_snapshot(player_states, player_ok, player_ok)
+	_apply_client_enemy_snapshot(enemy_states, enemy_ok, enemy_ok)
+	if pickup_ok:
 		# 掉落物列表按"不在包内即销毁"收敛；过期包同样不能拿旧列表删新建的掉落物。
 		_apply_client_pickup_snapshot(pickup_states)
 	# 回归观测（仅回归会话）：掉落物包明细，便于定位掉落物同步类问题。
@@ -3926,7 +3929,7 @@ func player_snapshot(snapshot_epoch: int, chunk_index: int, enemy_states: Array)
 		_last_enemy_hot_epoch = snapshot_epoch
 		_enemy_hot_epoch_chunks.clear()
 	_enemy_hot_epoch_chunks[chunk_index] = true
-	if not _accept_dynamic_epoch(snapshot_epoch):
+	if not _accept_dynamic_epoch(snapshot_epoch, &"enemy"):
 		return
 	_apply_client_enemy_snapshot(enemy_states, false)
 
@@ -3936,16 +3939,17 @@ func player_position_snapshot(snapshot_epoch: int, player_states: Array) -> void
 	if net.is_host or snapshot_epoch <= _last_player_hot_epoch:
 		return
 	_last_player_hot_epoch = snapshot_epoch
-	if not _accept_dynamic_epoch(snapshot_epoch):
+	if not _accept_dynamic_epoch(snapshot_epoch, &"player"):
 		return
 	_apply_client_snapshot(player_states, false)
 
 
-## 跨流比较动态状态新旧：同一版本允许（可靠包与同轮分片），更旧的一律不动实体。
-func _accept_dynamic_epoch(snapshot_epoch: int) -> bool:
-	if snapshot_epoch < _last_dynamic_epoch:
+## 只比较本流动态状态：同版本允许可靠包与同轮分片，重复热包由各自入口拒绝。
+## 默认 player 保留单参数直调入口；生产调用均显式指定实体流。
+func _accept_dynamic_epoch(snapshot_epoch: int, stream: StringName = &"player") -> bool:
+	if snapshot_epoch < int(_last_dynamic_epochs.get(stream, -1)):
 		return false
-	_last_dynamic_epoch = snapshot_epoch
+	_last_dynamic_epochs[stream] = snapshot_epoch
 	return true
 
 
@@ -4042,22 +4046,35 @@ func loading_complete() -> void:
 
 
 func _send_reliable_world_snapshot(peer_id: int) -> void:
-	if not net.is_host or peer_id <= 1:
+	if not net.is_host or _scene_transitioning or peer_id <= 1:
 		return
 	# 可靠全量也占用同一个版本号：构建即代表"当前最新状态"，
 	# 因此它一定比此前发出的热包新，而之后的热包一定比它新。
 	_snapshot_epoch += 1
-	world_snapshot.rpc_id(peer_id, _snapshot_epoch, _build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
-	_auto_world_snapshot_sent_count += 1
-	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
+	_send_world_snapshot_payload(peer_id, _snapshot_epoch,
+		_build_snapshot(), _build_enemy_snapshot(false), _build_pickup_snapshot())
 
 
 func _broadcast_reliable_world_snapshot() -> void:
-	if not net.is_host:
+	if not net.is_host or _scene_transitioning:
 		return
-	for peer_id: int in _ready_client_peers.keys():
-		if net.get_peer_ids().has(peer_id):
-			_send_reliable_world_snapshot(peer_id)
+	var targets: Array = _active_client_peer_ids()
+	if targets.is_empty():
+		return
+	_snapshot_epoch += 1
+	var player_states: Array = _build_snapshot()
+	var enemy_states: Array = _build_enemy_snapshot(false)
+	var pickup_states: Array = _build_pickup_snapshot()
+	for peer_id: int in targets:
+		_send_world_snapshot_payload(peer_id, _snapshot_epoch, player_states, enemy_states, pickup_states)
+
+
+## 单目标初始化与多目标广播共用发送边界；广播传入同一轮已构建的数据，不按 peer 重建。
+func _send_world_snapshot_payload(peer_id: int, snapshot_epoch: int,
+		player_states: Array, enemy_states: Array, pickup_states: Array) -> void:
+	world_snapshot.rpc_id(peer_id, snapshot_epoch, player_states, enemy_states, pickup_states)
+	_auto_world_snapshot_sent_count += 1
+	print("[NetworkWorld] WORLD_SNAPSHOT_SENT peer=%d enemies=%d" % [peer_id, _enemies.size()])
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -5389,9 +5406,10 @@ func pickup_snapshot(snapshot_epoch: int, player_states: Array, pickup_states: A
 		return
 	# 与 Host 的 _try_host_pickup() 同包发送，先收敛装备/弹匣，再更新掉落物。
 	# 库存/装备字段不受动态版本门控；位置与血量只接受不旧于当前实体的版本。
-	var dynamic_ok: bool = _accept_dynamic_epoch(snapshot_epoch)
-	_apply_client_snapshot(player_states, false, dynamic_ok)
-	if dynamic_ok:
+	var player_ok: bool = _accept_dynamic_epoch(snapshot_epoch, &"player")
+	var pickup_ok: bool = _accept_dynamic_epoch(snapshot_epoch, &"pickup")
+	_apply_client_snapshot(player_states, false, player_ok)
+	if pickup_ok:
 		_apply_client_pickup_snapshot(pickup_states)
 
 

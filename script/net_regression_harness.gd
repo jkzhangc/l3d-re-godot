@@ -8,6 +8,71 @@ extends "res://script/network_world.gd"
 
 # ---------------------------------------------------------------- Automated smoke input
 
+## 测试前置只由Host建立；客户端仍走生产按键→请求→物理命中→快照观察链路。
+var _auto_melee_fixture_id: int = 0
+var _auto_melee_fixture_hp: float = -1.0
+## 显式RPC输入测试时统一持续上行源，避免普通60Hz零按键包在下一帧覆盖测试方向。
+## 本地预测仍无按键；因此客户端朝向必须从Host快照收敛，而非本地预测假通过。
+var _auto_input_override: Variant = null
+
+
+func _capture_client_input(delta: float, blocked: bool = false) -> void:
+	if _auto_input_override == null:
+		super._capture_client_input(delta, blocked)
+	elif _client_ready_to_send():
+		submit_input.rpc_id(1, Vector2.ZERO if blocked else (_auto_input_override as Vector2), false)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func auto_prepare_melee_fixture() -> void:
+	if not net.is_host or _get_network_primary_loadout_weapon() == null:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	var entry: Dictionary = _players.get(sender, {})
+	var player := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if not is_instance_valid(player) or state == null or state.get_active_weapon() != NETWORK_KNIFE:
+		return
+	var target := ENEMY_SCENE.instantiate() as CharacterBody2D
+	target.name = "AutoMeleeFixture"
+	_players_parent.add_child(target)
+	# 仅固定测试目标的AI/位移；禁process默认会把碰撞体移出物理空间，须明确保留。
+	target.disable_mode = CollisionObject2D.DISABLE_MODE_KEEP_ACTIVE
+	target.process_mode = Node.PROCESS_MODE_DISABLED
+	target.collision_mask = 0
+	# 不抬高Host专属max_hp：镜像按普通敌人上限clamp，1000→100会伪装成受伤。
+	target.current_hp = target.max_hp
+	target.global_position = _melee_center(player, NETWORK_KNIFE, false)
+	_register_untracked_host_enemies()
+	var target_id: int = int(target.network_entity_id)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	if not is_inside_tree() or not is_instance_valid(target) or not net.has_network():
+		return
+	_broadcast_reliable_world_snapshot()
+	auto_melee_fixture_ready.rpc_id(sender, target_id, target.current_hp)
+
+
+@rpc("authority", "call_remote", "reliable")
+func auto_melee_fixture_ready(entity_id: int, hp: float) -> void:
+	if not net.is_host:
+		_auto_melee_fixture_id = entity_id
+		_auto_melee_fixture_hp = hp
+
+
+func _finish_host_world_initialization() -> void:
+	super._finish_host_world_initialization()
+	# 安全屋掉落是随机表，不保证有白名单投掷物；测试明确放一件标准手雷。
+	if net.is_host and "--net-test-throwable-pickup" in OS.get_cmdline_user_args():
+		for peer_id: int in net.get_peer_ids():
+			if peer_id <= 1:
+				continue
+			var player := _player_node(_players.get(peer_id, {}))
+			if is_instance_valid(player):
+				_spawn_host_dropped_throwable(NETWORK_GRENADE,
+					player.global_position + Vector2(56.0, 0.0), player.global_position)
+		_broadcast_reliable_world_snapshot()
+
 ## 受控双端回归：生产安全门仍只接受真实本地按键请求；此逻辑只在显式无头测试参数下运行。
 func _is_auto_multi_disconnect_test() -> bool:
 	return "--net-test-multi-disconnect" in OS.get_cmdline_user_args()
@@ -721,21 +786,24 @@ func _run_auto_client_feature_test() -> void:
 	var test_direction := Vector2.RIGHT if locked_facing != Vector2.RIGHT else Vector2.LEFT
 	# The test uses explicit state requests rather than toggle so an inherited
 	# scene/animation lock state cannot invert the assertion.
+	_auto_input_override = Vector2.ZERO
 	facing_lock_request.rpc_id(1, false, true)
-	await get_tree().create_timer(0.12).timeout
-	submit_input.rpc_id(1, test_direction, false)
-	await get_tree().create_timer(0.20).timeout
+	deadline = Time.get_ticks_msec() + 2000
+	while not local_node.is_facing_locked() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.02).timeout
+	_auto_input_override = test_direction
+	await get_tree().create_timer(0.25).timeout
 	var facing_after_lock: Vector2 = local_node.get_facing_vector()
 	var stayed_locked: bool = facing_after_lock.is_equal_approx(locked_facing)
 	var lock_state_synced: bool = local_node.is_facing_locked()
 	facing_lock_request.rpc_id(1, false, false)
-	await get_tree().create_timer(0.12).timeout
-	## 同一方向输入需要跨过新的Host输入过期保护；持续提交两拍，避免把
-	## 回归结果取在单个unreliable输入包的边界上。
-	submit_input.rpc_id(1, test_direction, false)
-	await get_tree().create_timer(0.08).timeout
-	submit_input.rpc_id(1, test_direction, false)
-	await get_tree().create_timer(0.20).timeout
+	deadline = Time.get_ticks_msec() + 2000
+	while Time.get_ticks_msec() < deadline:
+		if not local_node.is_facing_locked() and local_node.get_facing_vector().is_equal_approx(test_direction):
+			break
+		await get_tree().create_timer(0.02).timeout
+	_auto_input_override = null
+	submit_input.rpc_id(1, Vector2.ZERO, false)
 	var facing_after_unlock: Vector2 = local_node.get_facing_vector()
 	var unlocked_turns: bool = facing_after_unlock.is_equal_approx(test_direction)
 	var unlock_state_synced: bool = not local_node.is_facing_locked()
@@ -1228,9 +1296,23 @@ func _run_auto_client_input_test() -> void:
 	if not knife_switched:
 		printerr("[NetworkWorld] AUTO_CLIENT_KNIFE_SWITCH_FAILED slot=%s" % [state.active_weapon_slot if state else "<none>"])
 
+	_auto_melee_fixture_id = 0
+	_auto_melee_fixture_hp = -1.0
+	auto_prepare_melee_fixture.rpc_id(1)
+	deadline = Time.get_ticks_msec() + 4000
+	while Time.get_ticks_msec() < deadline:
+		if _auto_melee_fixture_id > 0 and _get_client_enemy_hp_map().has(_auto_melee_fixture_id):
+			break
+		await get_tree().create_timer(0.05).timeout
+	var fixture_hp_map: Dictionary = _get_client_enemy_hp_map()
+	if _auto_melee_fixture_id <= 0 or not fixture_hp_map.has(_auto_melee_fixture_id) or not is_equal_approx(float(fixture_hp_map.get(_auto_melee_fixture_id, -1.0)), _auto_melee_fixture_hp):
+		printerr("[NetworkWorld] AUTO_CLIENT_KNIFE_FIXTURE_FAILED missing_or_mismatched_authoritative_target")
+		net.leave()
+		get_tree().quit(1)
+		return
+
 	# 小刀命中必须通过 Host 的物理查询和敌人权威 take_damage() 产生；客户端只通过敌人快照观察 HP 变化。
-	# 按 entity_id 跟踪同一只敌人的 hp——总和分析会被 Director scatter 新刷的敌人抬高（假红）。
-	var enemy_hp_map_before := _get_client_enemy_hp_map()
+	# 仅比较经Host确认、与镜像初始HP一致的同一目标；总HP只作日志，不能作通过判据。
 	var enemy_hp_before: float = _get_client_live_enemy_hp_total()
 	_auto_client_fire_confirmed = false
 	_auto_client_bullet_seen = false
@@ -1242,30 +1324,18 @@ func _run_auto_client_input_test() -> void:
 	deadline = Time.get_ticks_msec() + 6000
 	var melee_damage_seen := false
 	var enemy_hp_after := enemy_hp_before
-	## 逐帧差分（2026-09-23 稳定化）：原先只比对「攻击前已存在」的 enemy_id —— 若这一刀
-	## 砍中的是 Director 在这段时间新刷出的敌人，HP 确实掉了却判不出来（实测假红）。
-	## 改为比对相邻两次采样的**同名**敌人：新刷敌人首帧即进入两张表，其后掉血可被捕捉；
-	## 而 scatter 只会抬高总和、不会造成同一 id 掉血，所以不会引入假绿。
-	var hp_map_prev := enemy_hp_map_before
-	## 兜底再挥：敌人可能在逼近后又挪开，导致这一刀落空。窗口内允许补挥若干次
-	## （仍走正常输入链路），避免把「用例运气」当成回归结论。
-	## 2026-09-23 第三轮：补挥次数 1 → 4、窗口 3s → 6s，并在窗口内**持续贴身**
-	## （客户端成为刷怪锚点后身边的怪一直在换，贴身一次不等于下一刀还在范围内）。
+	# 从相同权威基线观察固定目标的真实下降；不接受首次镜像HP钳制伪装成受伤。
+	# 请求/动作若暂被举枪过渡挡住，仍允许通过生产按键补挥，不直接调用伤害入口。
 	var reswings := 0
 	var next_swing_at := Time.get_ticks_msec() + 1200
 	while Time.get_ticks_msec() < deadline:
 		enemy_hp_after = _get_client_live_enemy_hp_total()
 		var hp_map_after := _get_client_enemy_hp_map()
-		for enemy_key: int in hp_map_after.keys():
-			if not hp_map_prev.has(enemy_key):
-				continue
-			if float(hp_map_after[enemy_key]) <= float(hp_map_prev[enemy_key]) - NETWORK_KNIFE.get_effective_damage() + 0.1:
-				melee_damage_seen = true
-				break
-		hp_map_prev = hp_map_after
+		if hp_map_after.has(_auto_melee_fixture_id):
+			melee_damage_seen = float(hp_map_after[_auto_melee_fixture_id]) <= _auto_melee_fixture_hp - NETWORK_KNIFE.get_effective_damage() + 0.1
 		if melee_damage_seen:
 			break
-		_auto_client_steer_toward_nearest_enemy()
+		# 固定Host布置的真实敌人，不能再追Director随机生成的另一只目标。
 		if _auto_client_fire_confirmed and reswings < 4 and Time.get_ticks_msec() >= next_swing_at:
 			reswings += 1
 			next_swing_at = Time.get_ticks_msec() + 1200
@@ -1343,7 +1413,8 @@ func _run_auto_client_pickup_test() -> void:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED source=%s node=%s state=%s primary=%s" % [is_instance_valid(source), is_instance_valid(node), state != null, primary_weapon.item_id])
 		return
 	var target_weapon := NETWORK_PISTOL
-	var target_slot := target_weapon.get_slot_key()
+	# 2026-11-03 起两槽均满时替换当前举起槽；用生产规则建立断言，不沿用武器默认槽。
+	var target_slot := state.resolve_weapon_slot(target_weapon)
 	var old_weapon := state.get_equipped_weapon(target_slot)
 	if not old_weapon or old_weapon.item_id == target_weapon.item_id:
 		printerr("[NetworkWorld] AUTO_CLIENT_PICKUP_SETUP_FAILED slot=%s old_weapon=%s" % [target_slot, old_weapon.item_id if old_weapon else "<none>"])
@@ -1440,23 +1511,30 @@ func _run_auto_client_throwable_pickup_test() -> void:
 	if not request_enabled:
 		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_REQUEST_DISABLED pickup=%d presentation_only=%s" % [source_id, source.get("network_presentation_only")])
 		return
-	# 通过生产输入移动，让 Host 的距离校验覆盖真实 Client -> Host 路径。
-	var travel_delta := source_position - node.global_position
-	if absf(travel_delta.x) > 8.0:
-		Input.action_press("右" if travel_delta.x > 0.0 else "左")
-		deadline = Time.get_ticks_msec() + 5000
-		while Time.get_ticks_msec() < deadline and absf(source_position.x - node.global_position.x) > 16.0:
-			await get_tree().create_timer(0.05).timeout
-		Input.action_release("右" if travel_delta.x > 0.0 else "左")
-	travel_delta = source_position - node.global_position
-	if absf(travel_delta.y) > 8.0:
-		Input.action_press("下" if travel_delta.y > 0.0 else "上")
-		deadline = Time.get_ticks_msec() + 3000
-		while Time.get_ticks_msec() < deadline and absf(source_position.y - node.global_position.y) > 16.0:
-			await get_tree().create_timer(0.05).timeout
-		Input.action_release("下" if travel_delta.y > 0.0 else "上")
+	# 闭环双轴走位：固定初始方向可能越过目标后仍向外走，且逐轴16px不等于总距离16px。
+	# 保留生产移动/Host距离校验；28px测试圈小于生产40px曾因28.09px误报。
+	deadline = Time.get_ticks_msec() + 6000
+	var held_actions: Array[String] = []
+	while Time.get_ticks_msec() < deadline and node.global_position.distance_to(source_position) > 18.0:
+		var travel_delta: Vector2 = source_position - node.global_position
+		var wanted: Array[String] = []
+		if absf(travel_delta.x) > 6.0:
+			wanted.append("右" if travel_delta.x > 0.0 else "左")
+		if absf(travel_delta.y) > 6.0:
+			wanted.append("下" if travel_delta.y > 0.0 else "上")
+		for action: String in held_actions.duplicate():
+			if not wanted.has(action):
+				Input.action_release(action)
+				held_actions.erase(action)
+		for action: String in wanted:
+			if not held_actions.has(action):
+				Input.action_press(action)
+				held_actions.append(action)
+		await get_tree().create_timer(0.05).timeout
+	for action: String in held_actions:
+		Input.action_release(action)
 	await get_tree().create_timer(0.08).timeout
-	var in_range := node.global_position.distance_to(source_position) <= 28.0
+	var in_range := node.global_position.distance_to(source_position) <= 40.0
 	if not in_range:
 		printerr("[NetworkWorld] AUTO_CLIENT_THROWABLE_PICKUP_MOVE_FAILED player=%s source=%s" % [node.global_position, source_position])
 		return

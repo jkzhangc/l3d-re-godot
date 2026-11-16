@@ -54,6 +54,9 @@ const MAX_FRAME_SIZE = 8192;
  * @param {number} [opts.portStart] UDP 公网端口池起始
  * @param {number} [opts.portEnd] UDP 公网端口池结束
  * @param {number} [opts.maxTunnelsPerIp] 每来源 IP 的并发隧道上限（默认 8，防端口池耗尽 DoS）
+ * @param {number} [opts.maxQueuedFrames] 每连接待写应用帧上限，默认 256（可为 0）
+ * @param {number} [opts.maxQueuedBytes] 每连接待写应用字节上限，默认 1 MiB（含帧头，可为 0）
+ * @param {number} [opts.maxPendingBytes] 每连接应用队列 + TCP writableLength 硬预算，默认 2 MiB
  * @param {() => number} [opts.now] 注入时间函数（便于测试）
  */
 export class TunnelRelay {
@@ -66,6 +69,26 @@ export class TunnelRelay {
     //   独自刷满仅 27 个的公网端口池。默认 8 远高于正常玩家用量（每人 1 个），不会误伤
     //   NAT 后同 IP 的少数玩家；真要 DoS 需多个 IP，成本抬高。
     this.maxTunnelsPerIp = opts.maxTunnelsPerIp || 8;
+    this.maxQueuedFrames = opts.maxQueuedFrames ?? 256;
+    this.maxQueuedBytes = opts.maxQueuedBytes ?? 1024 * 1024;
+    this.maxPendingBytes = opts.maxPendingBytes ?? 2 * 1024 * 1024;
+    for (const key of ['maxQueuedFrames', 'maxQueuedBytes', 'maxPendingBytes']) {
+      if (!Number.isSafeInteger(this[key]) || this[key] < 0) {
+        throw new RangeError(`${key} 必须为非负安全整数`);
+      }
+    }
+    this._sendSockets = new Set();
+    this._sendStats = {
+      tcpAcceptedFrames: 0,
+      tcpAcceptedBytes: 0,
+      backpressureEvents: 0,
+      drainEvents: 0,
+      sendOverflowDisconnects: 0,
+      writeErrors: 0,
+      peakQueuedFrames: 0,
+      peakQueuedBytes: 0,
+      peakPendingBytes: 0,
+    };
     this._now = opts.now || (() => Date.now());
 
     this.availablePorts = new Set();
@@ -107,6 +130,7 @@ export class TunnelRelay {
         this._destroyTunnel(tunnel, 'server_shutdown');
       }
       this.tunnels.clear();
+      for (const socket of this._sendSockets) this._closeConnection(socket, 'server_shutdown');
       if (this.tcpServer) {
         this.tcpServer.close(() => resolve());
         this.tcpServer = null;
@@ -119,11 +143,28 @@ export class TunnelRelay {
   getStats() {
     let totalClients = 0;
     for (const t of this.tunnels.values()) totalClients += t.clients.size;
+    let queuedFrames = 0;
+    let queuedBytes = 0;
+    let writableBytes = 0;
+    let backpressuredConnections = 0;
+    for (const socket of this._sendSockets) {
+      const state = socket._sendState;
+      queuedFrames += state.queue.length;
+      queuedBytes += state.queuedBytes;
+      writableBytes += socket.writableLength || 0;
+      if (state.blocked) backpressuredConnections++;
+    }
     return {
       activeTunnels: this.tunnels.size,
       availablePorts: this.availablePorts.size,
       totalPorts: this.portEnd - this.portStart + 1,
       totalClients,
+      queuedFrames,
+      queuedBytes,
+      writableBytes,
+      pendingBytes: queuedBytes + writableBytes,
+      backpressuredConnections,
+      ...this._sendStats,
     };
   }
 
@@ -136,17 +177,19 @@ export class TunnelRelay {
     socket.setNoDelay(true);
     socket._recvBuf = Buffer.alloc(0);
     socket._tunnel = null;
+    this._initSendState(socket);
     // 记录来源 IP，供「每 IP 并发隧道上限」使用（见 maxTunnelsPerIp）。
     socket._remoteIp = (socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
 
     socket.on('data', (data) => {
+      if (socket._sendState.closed) return;
       socket._recvBuf = Buffer.concat([socket._recvBuf, data]);
-      while (socket._recvBuf.length >= 4) {
+      while (!socket._sendState.closed && socket._recvBuf.length >= 4) {
         const msgLen = socket._recvBuf.readUInt32BE(0);
         // ★ 帧长越界 → 视为协议违规（伪造帧头），立即断开并释放端口，避免缓冲被灌爆。
         if (msgLen < 1 || msgLen > MAX_FRAME_SIZE) {
           console.warn(`[tunnel-relay] 帧长越界（${msgLen}B），断开该连接`);
-          socket.destroy();
+          this._closeConnection(socket, 'invalid_frame');
           return;
         }
         if (socket._recvBuf.length < 4 + msgLen) break;
@@ -156,20 +199,16 @@ export class TunnelRelay {
       }
     });
 
-    socket.on('close', () => {
-      if (socket._tunnel) {
-        this._destroyTunnel(socket._tunnel, 'host_disconnect');
-        socket._tunnel = null;
-      }
-    });
+    socket.on('close', () => this._closeConnection(socket, 'host_disconnect'));
 
     socket.on('error', (err) => {
       console.error('[tunnel-relay] TCP error:', err.message);
+      this._closeConnection(socket, 'host_error');
     });
   }
 
   _handleMessage(socket, msgBuf) {
-    if (msgBuf.length < 1) return;
+    if (socket._sendState?.closed || socket._sendState?.ending || socket.destroyed || msgBuf.length < 1) return;
     const type = msgBuf[0];
     const payload = msgBuf.subarray(1);
 
@@ -208,17 +247,23 @@ export class TunnelRelay {
     if (owned >= this.maxTunnelsPerIp) {
       this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'too_many_tunnels' }));
       console.warn(`[tunnel-relay] ${ip} 并发隧道已达上限 ${this.maxTunnelsPerIp}，拒绝注册`);
-      socket.end();
+      this._endAfterFlush(socket);
       return;
     }
     if (this.availablePorts.size === 0) {
       this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'no_available_ports' }));
-      socket.end();
+      this._endAfterFlush(socket);
       return;
     }
 
-    let info = {};
-    try { info = JSON.parse(payload.toString('utf8')); } catch (_) { /* ignore */ }
+    let info;
+    try { info = JSON.parse(payload.toString('utf8')); } catch (_) { info = null; }
+    // 先校验再占端口：JSON null/数组/标量不能进入字段读取，避免回调异常与端口泄漏。
+    if (info === null || typeof info !== 'object' || Array.isArray(info)) {
+      this._sendMsg(socket, MSG_ERROR, JSON.stringify({ message: 'invalid_register' }));
+      this._endAfterFlush(socket);
+      return;
+    }
 
     const port = this.availablePorts.values().next().value;
     this.availablePorts.delete(port);
@@ -249,14 +294,15 @@ export class TunnelRelay {
     });
     tunnel.udpSocket = udp;
 
-    this._sendMsg(socket, MSG_REGISTERED, JSON.stringify({
+    if (this._sendMsg(socket, MSG_REGISTERED, JSON.stringify({
       tunnelId: tunnel.id,
       tunnelPort: port,
-    }));
+    })) === false) return;
     console.log(`[tunnel-relay] Tunnel ${tunnel.id} registered → port ${port}`);
   }
 
   _handleUdpMessage(tunnel, msg, rinfo) {
+    if (tunnel.destroyed || tunnel.hostSocket.destroyed || tunnel.hostSocket._sendState?.closed) return;
     const addrKey = `${rinfo.address}:${rinfo.port}`;
     let clientId = tunnel.addrToClientId.get(addrKey);
     if (clientId === undefined) {
@@ -324,23 +370,121 @@ export class TunnelRelay {
 
   // ───────────────────────── 协议工具 ─────────────────────────
 
-  _sendMsg(socket, type, data) {
-    let payload;
-    if (typeof data === 'string') {
-      payload = Buffer.concat([Buffer.from([type]), Buffer.from(data, 'utf8')]);
-    } else if (Buffer.isBuffer(data)) {
-      payload = Buffer.concat([Buffer.from([type]), data]);
-    } else {
-      payload = Buffer.from([type]);
+  _initSendState(socket) {
+    if (socket._sendState) return socket._sendState;
+    const state = { queue: [], queuedBytes: 0, blocked: false, closed: false };
+    state.onDrain = () => {
+      if (state.closed || !state.blocked) return;
+      this._sendStats.drainEvents++;
+      state.blocked = false;
+      while (!state.closed && !state.blocked && state.queue.length > 0) {
+        const frame = state.queue.shift();
+        state.queuedBytes -= frame.length;
+        if (!this._writeFrame(socket, frame)) return;
+      }
+      if (state.ending && !state.closed && state.queue.length === 0) socket.end();
+    };
+    socket._sendState = state;
+    this._sendSockets.add(socket);
+    socket.on?.('drain', state.onDrain);
+    return state;
+  }
+
+  _endAfterFlush(socket) {
+    const state = socket._sendState;
+    if (state.closed) return;
+    state.ending = true;
+    if (state.queue.length === 0) socket.end();
+  }
+
+  _observePending(socket) {
+    const state = socket._sendState;
+    const pendingBytes = state.queuedBytes + (socket.writableLength || 0);
+    // 峰值为单连接历史最大值；getStats 中当前值为所有连接之和。
+    this._sendStats.peakQueuedFrames = Math.max(this._sendStats.peakQueuedFrames, state.queue.length);
+    this._sendStats.peakQueuedBytes = Math.max(this._sendStats.peakQueuedBytes, state.queuedBytes);
+    this._sendStats.peakPendingBytes = Math.max(this._sendStats.peakPendingBytes, pendingBytes);
+    return pendingBytes;
+  }
+
+  _sendOverflow(socket) {
+    this._sendStats.sendOverflowDisconnects++;
+    console.warn('[tunnel-relay] 发送积压超过硬预算，断开并释放隧道');
+    this._closeConnection(socket, 'send_overflow');
+    return false;
+  }
+
+  _writeFrame(socket, frame) {
+    let writable;
+    try {
+      writable = socket.write(frame);
+    } catch (err) {
+      this._sendStats.writeErrors++;
+      console.error('[tunnel-relay] TCP write error:', err.message);
+      this._closeConnection(socket, 'write_error');
+      return false;
     }
-    const header = Buffer.allocUnsafe(4);
-    header.writeUInt32BE(payload.length, 0);
-    socket.write(Buffer.concat([header, payload]));
+    // false 表示整帧已被 Node 接纳，不是部分帧失败；只能排队后续帧，绝不重发此帧。
+    this._sendStats.tcpAcceptedFrames++;
+    this._sendStats.tcpAcceptedBytes += frame.length;
+    if (writable === false) {
+      socket._sendState.blocked = true;
+      this._sendStats.backpressureEvents++;
+    }
+    if (this._observePending(socket) > this.maxPendingBytes) return this._sendOverflow(socket);
+    return true;
+  }
+
+  _sendMsg(socket, type, data) {
+    const state = this._initSendState(socket);
+    if (state.closed || socket.destroyed || socket.writableEnded) {
+      this._closeConnection(socket, 'socket_unwritable');
+      return false;
+    }
+    const dataBytes = typeof data === 'string' ? Buffer.byteLength(data, 'utf8')
+      : Buffer.isBuffer(data) ? data.length : 0;
+    const frameBytes = 5 + dataBytes;
+    if (state.queuedBytes + (socket.writableLength || 0) + frameBytes > this.maxPendingBytes) {
+      return this._sendOverflow(socket);
+    }
+    if (state.blocked) {
+      if (state.queue.length + 1 > this.maxQueuedFrames || state.queuedBytes + frameBytes > this.maxQueuedBytes) {
+        return this._sendOverflow(socket);
+      }
+      state.queue.push(encodeMessage(type, data));
+      state.queuedBytes += frameBytes;
+      this._observePending(socket);
+      return true;
+    }
+    return this._writeFrame(socket, encodeMessage(type, data));
   }
 
   // ───────────────────────── 生命周期 ─────────────────────────
 
+  _closeConnection(socket, reason) {
+    const state = socket._sendState;
+    if (state) {
+      state.closed = true;
+      state.queue.length = 0;
+      state.queuedBytes = 0;
+      state.blocked = false;
+      socket.removeListener?.('drain', state.onDrain);
+    }
+    this._sendSockets.delete(socket);
+    socket._recvBuf = Buffer.alloc(0);
+    if (socket._tunnel) this._destroyTunnel(socket._tunnel, reason);
+    if (!socket.destroyed) socket.destroy();
+  }
+
   _destroyTunnel(tunnel, reason) {
+    if (tunnel.destroyed) return;
+    tunnel.destroyed = true;
+    if (tunnel.hostSocket._tunnel === tunnel) tunnel.hostSocket._tunnel = null;
+    // 释放即结束此 TCP 会话，避免残留帧流入同连接上重新注册的隧道。
+    this._closeConnection(tunnel.hostSocket, reason);
+    tunnel.clients.clear();
+    tunnel.addrToClientId.clear();
+    tunnel.freeClientIds.length = 0;
     if (tunnel.udpSocket) {
       try { tunnel.udpSocket.close(); } catch (_) { /* already closed */ }
       tunnel.udpSocket = null;

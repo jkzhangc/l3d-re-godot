@@ -15,6 +15,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import net from 'node:net';
 import dgram from 'node:dgram';
+import { EventEmitter } from 'node:events';
 import { TunnelRelay, MSG, encodeMessage } from '../src/tunnel_relay.js';
 
 const TCP_PORT = 10090;
@@ -68,6 +69,57 @@ function udpRecv(sock, timeoutMs = 2000) {
       resolve({ msg, rinfo });
     });
   });
+}
+
+// 以 Node write 语义模拟部分底层发送：整帧只接纳一次，未发送字节保留在 writableLength。
+function createControlledSocket(relay, results = []) {
+  const socket = new EventEmitter();
+  socket.writes = [];
+  socket.writableLength = 0;
+  socket.destroyed = false;
+  socket.destroyCalls = 0;
+  socket.setNoDelay = (value) => { socket.noDelay = value; };
+  socket.write = (frame) => {
+    socket.writes.push(Buffer.from(frame));
+    const result = results.shift();
+    if (result === false) socket.writableLength += frame.length;
+    return result;
+  };
+  socket.end = () => { socket.writableEnded = true; };
+  socket.destroy = () => {
+    socket.destroyCalls++;
+    socket.destroyed = true;
+    socket.writableLength = 0;
+    socket.emit('close');
+  };
+  relay._handleConnection(socket);
+  return socket;
+}
+
+function attachControlledTunnel(relay, socket) {
+  const port = relay.availablePorts.values().next().value;
+  let closeCalls = 0;
+  const tunnel = {
+    id: 'controlled', port, hostSocket: socket,
+    udpSocket: { close: () => { closeCalls++; } },
+    clients: new Map(), addrToClientId: new Map(),
+    nextClientId: 1, freeClientIds: [], lastKeepalive: 1,
+  };
+  socket._tunnel = tunnel;
+  relay.availablePorts.delete(port);
+  relay.tunnels.set(tunnel.id, tunnel);
+  return { tunnel, getCloseCalls: () => closeCalls };
+}
+
+function assertSendClean(relay, socket) {
+  const stats = relay.getStats();
+  for (const key of ['queuedFrames', 'queuedBytes', 'writableBytes', 'pendingBytes', 'backpressuredConnections']) {
+    assert.strictEqual(stats[key], 0, `${key} 应清零`);
+  }
+  assert.strictEqual(socket._sendState.queue.length, 0);
+  assert.strictEqual(socket._sendState.queuedBytes, 0);
+  assert.strictEqual(socket.listenerCount('drain'), 0);
+  assert.strictEqual(relay._sendSockets.size, 0);
 }
 
 describe('TunnelRelay', () => {
@@ -430,5 +482,210 @@ describe('TunnelRelay', () => {
       '不同源端口被登记为不同 clientId（端口漂移 = 新会话）');
     c1.close(); c2.close();
     host.end();
+  });
+});
+
+describe('TunnelRelay 发送背压', () => {
+  test('非法注册JSON不抛异常、不占UDP端口，按协议返回错误并结束', () => {
+    for (const payload of ['null', '[]', '123', '"scalar"', '{broken']) {
+      const relay = new TunnelRelay();
+      const socket = createControlledSocket(relay);
+      const ports = relay.availablePorts.size;
+      assert.doesNotThrow(() => socket.emit('data', encodeMessage(MSG.REGISTER, payload)));
+      assert.strictEqual(relay.tunnels.size, 0);
+      assert.strictEqual(relay.availablePorts.size, ports);
+      assert.strictEqual(socket.writableEnded, true);
+      const frame = socket.writes[0];
+      assert.strictEqual(frame[4], MSG.ERROR);
+      assert.strictEqual(JSON.parse(frame.subarray(5).toString()).message, 'invalid_register');
+      socket.destroy();
+      assertSendClean(relay, socket);
+    }
+  });
+
+  test('write 返回 undefined 的正常 stub 兼容，协议及字节统计不变', () => {
+    const relay = new TunnelRelay();
+    const socket = createControlledSocket(relay);
+    for (const data of [undefined, '中文', Buffer.from([0, 255])]) {
+      assert.strictEqual(relay._sendMsg(socket, MSG.RELAY_TO_HOST, data), true);
+      assert.deepStrictEqual(socket.writes.at(-1), encodeMessage(MSG.RELAY_TO_HOST, data));
+    }
+    assert.strictEqual(socket.noDelay, true);
+    const stats = relay.getStats();
+    assert.strictEqual(stats.tcpAcceptedFrames, 3);
+    assert.strictEqual(stats.tcpAcceptedBytes, socket.writes.reduce((n, frame) => n + frame.length, 0));
+    assert.strictEqual(stats.backpressureEvents, 0);
+    assert.strictEqual(stats.queuedFrames, 0);
+    socket.destroy();
+    assertSendClean(relay, socket);
+  });
+
+  test('部分底层写入后等待 drain，连续背压按序恢复且不重复接纳已写帧', () => {
+    const relay = new TunnelRelay();
+    const socket = createControlledSocket(relay, [false, false, undefined]);
+    const payloads = ['first', 'second', 'third'];
+    const frames = payloads.map(data => encodeMessage(MSG.ERROR, data));
+    for (const data of payloads) assert.strictEqual(relay._sendMsg(socket, MSG.ERROR, data), true);
+    assert.strictEqual(socket.writes.length, 1);
+    let stats = relay.getStats();
+    assert.strictEqual(stats.queuedFrames, 2);
+    assert.strictEqual(stats.queuedBytes, frames[1].length + frames[2].length);
+    assert.strictEqual(stats.writableBytes, frames[0].length);
+    assert.strictEqual(stats.pendingBytes, frames.reduce((n, frame) => n + frame.length, 0));
+    assert.strictEqual(stats.backpressuredConnections, 1);
+    assert.strictEqual(stats.peakQueuedFrames, 2);
+    assert.strictEqual(stats.peakQueuedBytes, stats.queuedBytes);
+    assert.strictEqual(stats.peakPendingBytes, stats.pendingBytes);
+
+    socket.writableLength -= 3;
+    assert.strictEqual(relay.getStats().writableBytes, frames[0].length - 3);
+    assert.strictEqual(socket.writes.length, 1, '部分完成不能触发重发或提前发送后续帧');
+    socket.writableLength = 0;
+    socket.emit('drain');
+    assert.strictEqual(socket.writes.length, 2, '第二帧再次 false 后必须停止');
+    assert.strictEqual(relay.getStats().queuedFrames, 1);
+    socket.writableLength = 0;
+    socket.emit('drain');
+    socket.emit('drain');
+    assert.deepStrictEqual(socket.writes, frames, '整帧按序且恰好写一次');
+    stats = relay.getStats();
+    assert.strictEqual(stats.tcpAcceptedFrames, 3);
+    assert.strictEqual(stats.tcpAcceptedBytes, frames.reduce((n, frame) => n + frame.length, 0));
+    assert.strictEqual(stats.queuedBytes, 0);
+    assert.strictEqual(stats.pendingBytes, 0);
+    assert.strictEqual(stats.backpressuredConnections, 0);
+    assert.strictEqual(stats.backpressureEvents, 2);
+    assert.strictEqual(stats.drainEvents, 2);
+    socket.destroy();
+    assertSendClean(relay, socket);
+    assert.strictEqual(relay.getStats().backpressureEvents, 2, '累计观测不随清理丢失');
+  });
+
+  for (const [label, opts] of [
+    ['帧数', { maxQueuedFrames: 2 }],
+    ['应用字节', { maxQueuedBytes: 18 }],
+    ['总待写字节', { maxPendingBytes: 27 }],
+  ]) {
+    test(`${label}预算：等于上限可接纳，持续 UDP 超限立即断连释放且不假成功`, () => {
+      const relay = new TunnelRelay(opts);
+      const socket = createControlledSocket(relay, [false]);
+      const { tunnel, getCloseCalls } = attachControlledTunnel(relay, socket);
+      const rinfo = { address: '127.0.0.1', port: 50000 };
+      // 每个 UDP 帧 4B 长度 + 1B 类型 + 2B clientId + 2B 数据 = 9B。
+      for (let i = 0; i < 3; i++) relay._handleUdpMessage(tunnel, Buffer.from('AB'), rinfo);
+      assert.strictEqual(relay.getStats().queuedFrames, 2);
+      assert.strictEqual(relay.getStats().queuedBytes, 18);
+      assert.strictEqual(relay.getStats().pendingBytes, 27);
+      relay._handleUdpMessage(tunnel, Buffer.from('CD'), rinfo);
+      assert.strictEqual(socket.destroyed, true);
+      assert.strictEqual(relay.getStats().activeTunnels, 0);
+      assert.strictEqual(relay.getStats().availablePorts, relay.getStats().totalPorts);
+      assert.strictEqual(relay.getStats().totalClients, 0);
+      assert.strictEqual(relay.getStats().sendOverflowDisconnects, 1);
+      assert.strictEqual(getCloseCalls(), 1);
+      assert.strictEqual(tunnel.clients.size, 0);
+      assert.strictEqual(tunnel.addrToClientId.size, 0);
+      assert.strictEqual(socket._tunnel, null);
+      for (let i = 0; i < 100; i++) relay._handleUdpMessage(tunnel, Buffer.from('late'), rinfo);
+      socket.emit('drain');
+      assert.strictEqual(socket.writes.length, 1, '销毁后晚到 UDP/drain 不得继续写或入队');
+      assert.strictEqual(relay._sendMsg(socket, MSG.KEEPALIVE), false);
+      assert.strictEqual(socket.destroyCalls, 1);
+      assertSendClean(relay, socket);
+    });
+  }
+
+  test('无背压时单帧已超过总预算也拒绝，零队列预算不允许额外入队', () => {
+    const relay = new TunnelRelay({ maxPendingBytes: 5 });
+    const socket = createControlledSocket(relay);
+    assert.strictEqual(relay._sendMsg(socket, MSG.ERROR, 'X'), false);
+    assert.strictEqual(socket.writes.length, 0);
+    assert.strictEqual(relay.getStats().tcpAcceptedFrames, 0);
+    assert.strictEqual(relay.getStats().sendOverflowDisconnects, 1);
+    assertSendClean(relay, socket);
+
+    const relay2 = new TunnelRelay({ maxQueuedFrames: 0, maxQueuedBytes: 0 });
+    const socket2 = createControlledSocket(relay2, [false]);
+    assert.strictEqual(relay2._sendMsg(socket2, MSG.KEEPALIVE), true);
+    assert.strictEqual(relay2._sendMsg(socket2, MSG.KEEPALIVE), false);
+    assert.strictEqual(socket2.writes.length, 1);
+    assertSendClean(relay2, socket2);
+  });
+
+  for (const reason of ['release', 'close', 'error', 'write_throw', 'timeout', 'stop']) {
+    test(`${reason} 清理队列、UDP、映射和监听器，重复清理及晚到 drain 无副作用`, async () => {
+      const relay = new TunnelRelay({ now: () => 200000 });
+      const socket = createControlledSocket(relay, [false]);
+      const { tunnel, getCloseCalls } = attachControlledTunnel(relay, socket);
+      relay._handleUdpMessage(tunnel, Buffer.from('first'), { address: '127.0.0.1', port: 50001 });
+      relay._sendMsg(socket, MSG.KEEPALIVE);
+      assert.strictEqual(relay.getStats().queuedFrames, 1);
+      socket._recvBuf = Buffer.from([0, 0]);
+      const lateDrain = socket._sendState.onDrain;
+      if (reason === 'release') {
+        const released = Buffer.concat([encodeMessage(MSG.RELEASE), encodeMessage(MSG.REGISTER, '{}')]);
+        socket._recvBuf = released.subarray(0, 2);
+        socket.emit('data', released.subarray(2));
+      } else if (reason === 'close') socket.destroy();
+      else if (reason === 'error') socket.emit('error', new Error('测试连接错误'));
+      else if (reason === 'write_throw') {
+        socket.write = () => { throw new Error('测试写错误'); };
+        socket.writableLength = 0;
+        socket.emit('drain');
+      } else if (reason === 'timeout') relay._sweep();
+      else await relay.stop();
+      lateDrain();
+      socket.emit('close');
+      relay._destroyTunnel(tunnel, 'again');
+      assert.strictEqual(getCloseCalls(), 1);
+      assert.strictEqual(socket.destroyCalls, 1);
+      assert.strictEqual(socket._tunnel, null);
+      assert.strictEqual(socket._recvBuf.length, 0);
+      assert.strictEqual(relay.getStats().activeTunnels, 0);
+      assert.strictEqual(relay.getStats().availablePorts, relay.getStats().totalPorts);
+      assert.strictEqual(socket.writes.length, 1);
+      assert.strictEqual(relay.getStats().writeErrors, reason === 'write_throw' ? 1 : 0);
+      assertSendClean(relay, socket);
+    });
+  }
+
+  test('分片帧头/载荷和粘包跨背压恢复仍按 TCP framing 解析', () => {
+    let now = 10;
+    const relay = new TunnelRelay({ now: () => now });
+    const socket = createControlledSocket(relay, [false]);
+    const { tunnel } = attachControlledTunnel(relay, socket);
+    const frames = [encodeMessage(MSG.RELAY_TO_HOST, Buffer.from([0, 1, 2, 3])), encodeMessage(MSG.KEEPALIVE)];
+    relay._sendMsg(socket, MSG.RELAY_TO_HOST, Buffer.from([0, 1, 2, 3]));
+    relay._sendMsg(socket, MSG.KEEPALIVE);
+    const received = [];
+    const receiverRelay = new TunnelRelay();
+    const peer = createControlledSocket(receiverRelay);
+    receiverRelay._handleMessage = (_socket, frame) => received.push(Buffer.from(frame));
+    const first = socket.writes[0];
+    peer.emit('data', first.subarray(0, 2));
+    assert.strictEqual(received.length, 0);
+    peer.emit('data', first.subarray(2, 6));
+    assert.strictEqual(received.length, 0);
+    socket.writableLength = 0;
+    socket.emit('drain');
+    peer.emit('data', Buffer.concat([first.subarray(6), socket.writes[1]]));
+    assert.deepStrictEqual(received, frames.map(frame => frame.subarray(4)));
+    assert.strictEqual(peer._recvBuf.length, 0);
+
+    now = 99;
+    const keepalive = encodeMessage(MSG.KEEPALIVE);
+    socket.emit('data', keepalive.subarray(0, 3));
+    assert.strictEqual(tunnel.lastKeepalive, 1);
+    socket.emit('data', keepalive.subarray(3));
+    assert.strictEqual(tunnel.lastKeepalive, 99);
+    socket.destroy(); peer.destroy();
+  });
+
+  test('配置上限必须有限且为非负安全整数', () => {
+    for (const key of ['maxQueuedFrames', 'maxQueuedBytes', 'maxPendingBytes']) {
+      for (const value of [-1, NaN, Infinity, 1.5, '10']) {
+        assert.throws(() => new TunnelRelay({ [key]: value }), RangeError);
+      }
+    }
   });
 });

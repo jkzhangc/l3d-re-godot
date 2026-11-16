@@ -18,7 +18,8 @@ extends Node
 ##    的顺序规避 RPC 仍指向已释放 NetworkWorld 节点的竞态；
 ## 5. _session_player_states 在换图期间保存 Host 权威 PlayerState。具体玩家、敌人和掉落物的
 ##    生命周期、输入和快照均在场景内的 NetworkWorld 中处理；
-## 6. 文件末尾的「网络延迟显示」区块：自测 RTT（ENet 无公开延迟接口）+ 左下角常驻 HUD。
+## 6. 文件末尾的「网络延迟显示」区块：应用RPC RTT + ENet连接统计 + 左下角常驻HUD。
+## 7. 网络会话期间统一接管poll：每阶段先隧道入站再派发RPC，阶段末flush再隧道出站。
 ##
 ## 本脚本不模拟战斗，也不相信客户端给出的资源或角色数据；它只维护联机会话的连接级事实。
 
@@ -106,8 +107,26 @@ var _scene_transition_serial: int = 0
 var _session_player_states: Dictionary = {} # peer_id -> PlayerState
 var _signals_connected := false
 
+## @trace NET-LAT-P1：所有SceneMultiplayer派发仍在主线程；纯传输按物理/渲染两阶段排空。
+const TRANSPORT_TAIL := preload("res://script/network_transport_tail.gd")
+var _transport_tail: Node = null
+var _tunnel_transport: Node = null
+var _transport_pump_active: bool = false
+var _transport_polling: bool = false
+var _saved_multiplayer_poll: bool = true
+var _transport_polls: int = 0
+var _transport_last_poll_usec: int = 0
+var _transport_max_poll_usec: int = 0
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	process_priority = -10000
+	process_physics_priority = -10000
+	_transport_tail = TRANSPORT_TAIL.new()
+	_transport_tail.name = "TransportTail"
+	_transport_tail.setup(self)
+	add_child(_transport_tail)
+	call_deferred("_cache_tunnel_transport")
 	# 【回归专用】--net-test-difficulty=N（D2 难度一致性用例）：autoload 启动期覆盖
 	# 难度，早于 lobby 的 start_game（难度随开局 RPC 广播）。用法：Host 传目标值，
 	# Client 传不同的本地预置值 —— 进图后 Client 断言被 B1 同步覆写为 Host 值，
@@ -171,6 +190,7 @@ func host_game(port: int = DEFAULT_PORT) -> Error:
 	_player_character_paths = {my_peer_id: _get_default_character_path()}
 	_session_player_states.clear()
 	_connect_multiplayer_signals()
+	_start_transport_pump()
 	player_list_changed.emit()
 	print("[Net] HOST listening port=%d peer_id=%d protocol=%s" % [port, my_peer_id, PROTOCOL_VERSION])
 	if upnp_enabled:
@@ -191,12 +211,14 @@ func join_game(address: String, port: int = DEFAULT_PORT) -> Error:
 	handshake_ok = false
 	_session_player_states.clear()
 	_connect_multiplayer_signals()
+	_start_transport_pump()
 	print("[Net] CLIENT connecting %s:%d" % [address, port])
 	return OK
 
 ## 无论连接处于“正在连线 / 已握手 / 已进图”哪一阶段，都将其还原为离线状态。
 ## 同时清理跨图 PlayerState，避免下一次会话继承上一次 Host 的权威运行时数据。
 func leave() -> void:
+	_stop_transport_pump()
 	_disconnect_multiplayer_signals()
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer = null
@@ -218,6 +240,7 @@ func leave() -> void:
 	## 延迟测量一并复位：新会话要重新量，不能沿用上一局残留的数值/界面。
 	rtt_ms = -1
 	rtt_smooth_ms = -1
+	_rtt_samples.clear()
 	_peer_rtt_ms.clear()
 	_ping_accum = 0.0
 	if _ping_layer != null and is_instance_valid(_ping_layer):
@@ -291,6 +314,7 @@ func _reap_finished_upnp_threads() -> void:
 			_upnp_threads.remove_at(index)
 
 func _exit_tree() -> void:
+	_stop_transport_pump()
 	for thread: Thread in _upnp_threads:
 		# started 且已结束 → 直接回收；仍在运行 → 等待收尾（UPnP 调用自带超时）。
 		if thread.is_started():
@@ -821,8 +845,9 @@ func _sanitize_name(value: String) -> String:
 # 网络延迟显示（左下角，2026-09-30 用户需求）
 # ═══════════════════════════════════════
 ##
-## 【为什么要自己量】`ENetMultiplayerPeer` / `MultiplayerPeer` **没有公开的延迟读取接口**
-## （GDScript 侧拿不到 ENet 的对等端 RTT），所以用一对 RPC 自测往返时间。
+## 【测量口径】RPC往返包含应用调度与可靠队列；ENet连接RTT可另从
+## ENetMultiplayerPeer.get_peer(id).get_statistic(PEER_ROUND_TRIP_TIME)读取。
+## 两者都不是单独到云端的线路ping。保留现有HUD口径，诊断接口并列输出。
 ##
 ## 【协议】非主机每 `PING_INTERVAL` 秒发一次：
 ##     `net_ping(本机单调毫秒, 我上一次测到的 RTT)`
@@ -857,9 +882,91 @@ const RTT_EMA_ALPHA: float = 0.25
 var _ping_accum: float = 0.0
 var _ping_layer: CanvasLayer = null
 var _ping_label: Label = null
+var _rtt_samples: Array[int] = []
+const RTT_SAMPLE_LIMIT: int = 120
+
+
+func get_network_diagnostics() -> Dictionary:
+	var samples: Array[int] = _rtt_samples.duplicate()
+	samples.sort()
+	var connections: Dictionary = {}
+	if has_network():
+		var peer: ENetMultiplayerPeer = multiplayer.multiplayer_peer as ENetMultiplayerPeer
+		if peer != null:
+			for peer_id: int in multiplayer.get_peers():
+				var remote: ENetPacketPeer = peer.get_peer(peer_id)
+				if remote != null:
+					connections[peer_id] = {
+						"rtt_msec": remote.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME),
+						"rtt_variance": remote.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME_VARIANCE),
+						"packet_loss": remote.get_statistic(ENetPacketPeer.PEER_PACKET_LOSS) / float(ENetPacketPeer.PACKET_LOSS_SCALE)}
+	return {"rpc_rtt_msec": rtt_ms, "rpc_ema_msec": rtt_smooth_ms,
+		"rpc_samples": samples.size(),
+		"rpc_p50_msec": samples[samples.size() / 2] if not samples.is_empty() else -1,
+		"rpc_p95_msec": samples[maxi(0, ceili(samples.size() * 0.95) - 1)] if not samples.is_empty() else -1,
+		"enet_connections": connections, "pump_active": _transport_pump_active,
+		"pump_polls": _transport_polls, "last_poll_usec": _transport_last_poll_usec,
+		"max_poll_usec": _transport_max_poll_usec}
+
+
+func _cache_tunnel_transport() -> void:
+	_tunnel_transport = get_node_or_null("/root/Tunnel")
+
+
+func _start_transport_pump() -> void:
+	if _transport_pump_active:
+		return
+	_saved_multiplayer_poll = get_tree().multiplayer_poll
+	get_tree().multiplayer_poll = false
+	_transport_pump_active = true
+	_transport_polls = 0
+	_transport_max_poll_usec = 0
+	_cache_tunnel_transport()
+
+
+func _stop_transport_pump() -> void:
+	if not _transport_pump_active:
+		return
+	_transport_pump_active = false
+	if is_inside_tree():
+		get_tree().multiplayer_poll = _saved_multiplayer_poll
+
+
+func _poll_transport() -> void:
+	if not _transport_pump_active or _transport_polling:
+		return
+	_transport_polling = true
+	var started: int = Time.get_ticks_usec()
+	if is_instance_valid(_tunnel_transport):
+		_tunnel_transport.pump_incoming()
+	if has_network():
+		var err: Error = multiplayer.poll()
+		if err != OK:
+			push_warning("[Net] Multiplayer poll failed: %s" % error_string(err))
+	_transport_last_poll_usec = Time.get_ticks_usec() - started
+	_transport_max_poll_usec = maxi(_transport_max_poll_usec, _transport_last_poll_usec)
+	_transport_polls += 1
+	_transport_polling = false
+
+
+## ENet flush不派发RPC；可在业务回调后调用，不产生嵌套权威模拟。
+func flush_transport() -> void:
+	if not _transport_pump_active:
+		return
+	if has_network():
+		var peer: ENetMultiplayerPeer = multiplayer.multiplayer_peer as ENetMultiplayerPeer
+		if peer != null and peer.host != null:
+			peer.host.flush()
+	if is_instance_valid(_tunnel_transport):
+		_tunnel_transport.pump_outgoing()
+
+
+func _physics_process(_delta: float) -> void:
+	_poll_transport()
 
 
 func _process(delta: float) -> void:
+	_poll_transport()
 	_update_ping(delta)
 
 
@@ -929,6 +1036,9 @@ func net_ping(sent_msec: int, sender_rtt_ms: int) -> void:
 @rpc("authority", "call_remote", "reliable")
 func net_pong(sent_msec: int) -> void:
 	rtt_ms = maxi(0, int(Time.get_ticks_msec()) - sent_msec)
+	_rtt_samples.append(rtt_ms)
+	if _rtt_samples.size() > RTT_SAMPLE_LIMIT:
+		_rtt_samples.pop_front()
 	if rtt_smooth_ms < 0:
 		rtt_smooth_ms = rtt_ms
 	else:
