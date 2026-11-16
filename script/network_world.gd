@@ -4799,6 +4799,7 @@ func _build_pickup_snapshot() -> Array:
 			"magazine_ammo": magazine_ammo,
 			"char_idx": char_idx,
 			"direction": direction,
+			"require_function_key": bool(pickup.get("require_function_key")),
 		}
 		packets.append(packet)
 	packets.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["pickup_id"]) < int(b["pickup_id"]))
@@ -5452,8 +5453,21 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 		var pickup_id: int = int(packet.get("pickup_id", 0))
 		if pickup_id <= 0:
 			continue
-		seen[pickup_id] = true
 		var pickup_kind := str(packet.get("pickup_kind", "weapon"))
+		# 先解析固定白名单，再认领/创建节点。未知资源不得留下模板默认武器幽灵。
+		var weapon: WeaponData = null
+		var ground_item: ItemData = null
+		match pickup_kind:
+			"weapon":
+				weapon = _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
+			"throwable":
+				ground_item = _get_network_throwable_data_by_id(str(packet.get("item_id", "")))
+			"healing":
+				# 线上旧协议把 HEALING/SUPPORT 都编码为 healing，必须联合查受信任表。
+				ground_item = Whitelist.ground_item_by_id(str(packet.get("item_id", "")))
+		if weapon == null and ground_item == null:
+			continue
+		seen[pickup_id] = true
 		# ⚠ 取值必须先判 is_instance_valid 再 as Node2D（对已释放对象做 as 会抛错）。
 		var pickup_value: Variant = _pickups.get(pickup_id)
 		var pickup: Node2D = (pickup_value as Node2D) if is_instance_valid(pickup_value) else null
@@ -5492,23 +5506,10 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				(parent if parent else get_tree().current_scene).add_child(pickup)
 			_pickups[pickup_id] = pickup
 		claimed[pickup.get_instance_id()] = pickup_id
-		if pickup_kind == "throwable":
-			var throwable := _get_network_throwable_data_by_id(str(packet.get("item_id", "")))
-			if not throwable:
-				continue
+		if ground_item != null:
 			pickup.set("weapon_data", null)
-			pickup.set("item", throwable)
-		elif pickup_kind == "healing":
-			# D2 实测修复：治疗品镜像重建（与投掷物同款白名单解析）。
-			var healing := NETWORK_HEALINGS.get(str(packet.get("item_id", ""))) as ItemData
-			if not healing:
-				continue
-			pickup.set("weapon_data", null)
-			pickup.set("item", healing)
+			pickup.set("item", ground_item)
 		else:
-			var weapon := _get_network_weapon_data_by_id(str(packet.get("weapon_id", "")))
-			if not weapon:
-				continue
 			pickup.set("item", null)
 			# 地面显示参数统一走 WeaponData（与 Host 生成侧同款，2026-09-13 约定）：
 			# 旧实现只设 texture/char_idx/direction，pickup_animated / step_frames /
@@ -5517,6 +5518,7 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			## 两个字段约定一致：**-1 = 未携带**（拣取时回退武器数据的初始值），0 = 确实是 0。
 			pickup.set("pickup_reserve_ammo", int(packet.get("reserve_ammo", -1)))
 			pickup.set("pickup_magazine_ammo", int(packet.get("magazine_ammo", -1)))
+		pickup.set("require_function_key", bool(packet.get("require_function_key", false)))
 		pickup.global_position = _packet_position(packet)
 		pickup.call("_refresh_sprite")
 		# 武器拾取由 WeaponPickup 的客户端交互逻辑处理；投掷物与治疗品必须允许本地

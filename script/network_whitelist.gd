@@ -28,10 +28,12 @@ extends RefCounted
 ## Client 看不见、预摆的 Client 本地私拿（Host 权威域无感知）→ 倒地时无喷雾可用。
 ## ⚠ 2026-10-24：`object/item_pills.tres` 已按用户要求删除（原作说明书里没有该物品），
 ## 这里仍在 preload 它 → `network_world.gd` 整份编译失败（preload 不存在的资源是硬错误）。
-## 删除「药品」条目；治疗品同步目前只保留喷雾（救急箱等新治疗品按需再加）。
+## 删除「药品」条目；治疗品同步覆盖现有喷雾与救急箱。
 const NETWORK_SPRAY: ItemData = preload("res://object/item_first_aid_spray.tres")
+const NETWORK_AID_BOX: ItemData = preload("res://object/item_aid_box.tres")
 const NETWORK_HEALINGS: Dictionary = {
 	"first_aid_spray": NETWORK_SPRAY,
+	"aid_box_01": NETWORK_AID_BOX,
 }
 
 ## 辅助品白名单（2026-11-02）：辅助品此前**完全不在联机同步范围** ——
@@ -40,9 +42,13 @@ const NETWORK_HEALINGS: Dictionary = {
 ## Client 只从本表解析资源（联机铁律：远端包只带 id，绝不 load 任意路径）。
 const NETWORK_PAINKILLER: ItemData = preload("res://object/item_painkiller.tres")
 const NETWORK_ADRENALINE: ItemData = preload("res://object/item_adrenaline.tres")
+const NETWORK_GREENHERBS: ItemData = preload("res://object/item_greenherbs.tres")
+const NETWORK_MINERALWATER: ItemData = preload("res://object/item_mineralwater.tres")
 const NETWORK_SUPPORTS: Dictionary = {
 	"painkiller_01": NETWORK_PAINKILLER,
 	"adrenaline_01": NETWORK_ADRENALINE,
+	"greenherbs_01": NETWORK_GREENHERBS,
+	"mineralwater_01": NETWORK_MINERALWATER,
 }
 
 
@@ -67,6 +73,30 @@ const NETWORK_LAUNCHER_ICE: WeaponData = preload("res://object/weapon_launcher_i
 const NETWORK_LAUNCHER_THUNDER: WeaponData = preload("res://object/weapon_launcher_thunder.tres")
 const NETWORK_FRYSPAN: WeaponData = preload("res://object/weapon_frypan.tres")
 const NETWORK_BAT: WeaponData = preload("res://object/weapon_metal_bat.tres")
+const NETWORK_AT_RIFLE: WeaponData = preload("res://object/weapon_at_rifle_01.tres")
+const NETWORK_LAUNCHER_02: WeaponData = preload("res://object/weapon_launcher_02.tres")
+const NETWORK_MAGNUM_02: WeaponData = preload("res://object/weapon_magnum_02.tres")
+const NETWORK_MAGNUM_03: WeaponData = preload("res://object/weapon_magnum_03.tres")
+const NETWORK_MG: WeaponData = preload("res://object/weapon_mg_01.tres")
+const NETWORK_PISTOL_02: WeaponData = preload("res://object/weapon_pistol_02.tres")
+const NETWORK_PISTOL_03: WeaponData = preload("res://object/weapon_pistol_03.tres")
+const NETWORK_PISTOL_04: WeaponData = preload("res://object/weapon_pistol_04.tres")
+const NETWORK_RIFLE_02: WeaponData = preload("res://object/weapon_rifle_02.tres")
+const NETWORK_RIFLE_03: WeaponData = preload("res://object/weapon_rifle_03.tres")
+const NETWORK_ROCKET_02: WeaponData = preload("res://object/weapon_rocket_02.tres")
+const NETWORK_SHOTGUN_02: WeaponData = preload("res://object/weapon_shotgun_02.tres")
+const NETWORK_SHOTGUN_03: WeaponData = preload("res://object/weapon_shotgun_03.tres")
+const NETWORK_SMG_02: WeaponData = preload("res://object/weapon_smg_02.tres")
+const NETWORK_SMG_03: WeaponData = preload("res://object/weapon_smg_03.tres")
+const NETWORK_SNIPER_02: WeaponData = preload("res://object/weapon_sniper_02.tres")
+const NETWORK_SNIPER_03: WeaponData = preload("res://object/weapon_sniper_03.tres")
+const NETWORK_COMBAT_KNIFE: WeaponData = preload("res://object/weapon_combat_knife.tres")
+const NETWORK_FIRE_AXE: WeaponData = preload("res://object/weapon_fire_axe.tres")
+const NETWORK_KNUCKLES: WeaponData = preload("res://object/weapon_knuckles.tres")
+const NETWORK_PIPE: WeaponData = preload("res://object/weapon_pipe.tres")
+const NETWORK_SHOVEL: WeaponData = preload("res://object/weapon_shovel.tres")
+const NETWORK_SLEDGEHAMMER: WeaponData = preload("res://object/weapon_sledgehammer.tres")
+const NETWORK_UCHIGATANA: WeaponData = preload("res://object/weapon_uchigatana.tres")
 
 ## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
 const NETWORK_WEAPONS: Dictionary = {
@@ -86,6 +116,30 @@ const NETWORK_WEAPONS: Dictionary = {
 	"launcher_thunder_01": NETWORK_LAUNCHER_THUNDER,
 	"frypan_01": NETWORK_FRYSPAN,
 	"bat_01": NETWORK_BAT,
+	"at_rifle_01": NETWORK_AT_RIFLE,
+	"launcher_02": NETWORK_LAUNCHER_02,
+	"magnum_02": NETWORK_MAGNUM_02,
+	"magnum_03": NETWORK_MAGNUM_03,
+	"mg_01": NETWORK_MG,
+	"pistol_02": NETWORK_PISTOL_02,
+	"pistol_03": NETWORK_PISTOL_03,
+	"pistol_04": NETWORK_PISTOL_04,
+	"rifle_02": NETWORK_RIFLE_02,
+	"rifle_03": NETWORK_RIFLE_03,
+	"rocket_02": NETWORK_ROCKET_02,
+	"shotgun_02": NETWORK_SHOTGUN_02,
+	"shotgun_03": NETWORK_SHOTGUN_03,
+	"smg_02": NETWORK_SMG_02,
+	"smg_03": NETWORK_SMG_03,
+	"sniper_02": NETWORK_SNIPER_02,
+	"sniper_03": NETWORK_SNIPER_03,
+	"combat_knife": NETWORK_COMBAT_KNIFE,
+	"fire_axe": NETWORK_FIRE_AXE,
+	"knuckles": NETWORK_KNUCKLES,
+	"pipe": NETWORK_PIPE,
+	"shovel": NETWORK_SHOVEL,
+	"sledgehammer": NETWORK_SLEDGEHAMMER,
+	"uchigatana": NETWORK_UCHIGATANA,
 }
 
 
@@ -96,12 +150,22 @@ const NETWORK_WEAPONS: Dictionary = {
 const NETWORK_GRENADE: ThrowableData = preload("res://object/item_grenade.tres")
 const NETWORK_MOLOTOV: ThrowableData = preload("res://object/item_molotov.tres")
 const NETWORK_FLASH: ThrowableData = preload("res://object/throwable_flash.tres")
+const NETWORK_ACID_BOTTLE: ThrowableData = preload("res://object/item_acid_bottle.tres")
+const NETWORK_BOLT_GRENADE: ThrowableData = preload("res://object/item_bolt_grenade.tres")
+const NETWORK_DYNAMITE: ThrowableData = preload("res://object/throwable_dynamite.tres")
+const NETWORK_NITROGEN: ThrowableData = preload("res://object/item_nitrogen.tres")
+const NETWORK_THROWING_KNIFE: ThrowableData = preload("res://object/item_throwing_knife.tres")
 
 ## 投掷物同样必须由 Host 的固定白名单解析；客户端 RPC 绝不能指定资源或伤害。
 const NETWORK_THROWABLES: Dictionary = {
 	"grenade_01": NETWORK_GRENADE,
 	"molotov_01": NETWORK_MOLOTOV,
 	"flash_01": NETWORK_FLASH,
+	"acid_bottle_01": NETWORK_ACID_BOTTLE,
+	"bolt_grenade_01": NETWORK_BOLT_GRENADE,
+	"dynamite_01": NETWORK_DYNAMITE,
+	"nitrogen_01": NETWORK_NITROGEN,
+	"throwing_knife_01": NETWORK_THROWING_KNIFE,
 }
 
 
@@ -187,6 +251,14 @@ static func weapon_by_id(weapon_id: String) -> WeaponData:
 ## 按 item_id 取投掷物资源；不在白名单返回 null。
 static func throwable_by_id(item_id: String) -> ThrowableData:
 	return NETWORK_THROWABLES.get(item_id) as ThrowableData
+
+
+## 地面 healing 类镜像依次查治疗品、辅助品；不在白名单返回 null。
+static func ground_item_by_id(item_id: String) -> ItemData:
+	var healing: ItemData = NETWORK_HEALINGS.get(item_id) as ItemData
+	if healing != null:
+		return healing
+	return NETWORK_SUPPORTS.get(item_id) as ItemData
 
 
 ## 按 special_id 取特感资源；空 id / 不在白名单返回 null。
