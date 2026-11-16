@@ -198,6 +198,33 @@ func _test_lifecycle() -> void:
 		and tail.process_priority > 0 and tail.process_physics_priority > 0,
 		"出站收尾在业务后，两阶段都不随暂停停止")
 	var before: int = int(net.get_network_diagnostics()["pump_polls"])
+	net.reset_transport_trace()
+	net._poll_transport(0)
+	net._poll_transport(1)
+	net.flush_transport()
+	var trace: Dictionary = net.take_transport_trace()
+	var phases: Array[int] = []
+	for row: PackedInt64Array in trace["rows"]:
+		phases.append(int(row[0]))
+	_check(phases == [0, 1, 2] and int(trace["dropped"]) == 0, "诊断阶段记录区分physics/render poll及flush")
+	var calls: int = int(net.get_network_diagnostics()["pump_polls"])
+	net.poll_transport_render_tail()
+	_check(int(net.get_network_diagnostics()["pump_polls"]) == calls, "晚poll默认关闭，生产派发频率不变")
+	net._late_render_poll_enabled = true
+	net.reset_transport_trace()
+	net.poll_transport_render_tail()
+	trace = net.take_transport_trace()
+	_check(trace["rows"].size() == 1 and int(trace["rows"][0][0]) == 3,
+		"显式实验晚poll记录独立phase，take关闭记录")
+	net._late_render_poll_enabled = false
+	net._poll_transport(0)
+	_check(net.take_transport_trace()["rows"].is_empty(), "关闭采样后不产生新trace行")
+	net.reset_transport_trace()
+	net._transport_trace_rows.resize(net.TRANSPORT_TRACE_MAX_ROWS)
+	net._record_transport_trace(0, Time.get_ticks_usec())
+	trace = net.take_transport_trace()
+	_check(trace["rows"].size() == net.TRANSPORT_TRACE_MAX_ROWS and int(trace["dropped"]) == 1,
+		"trace有界，超限明确计数不扩大采样数组")
 	tree.paused = true
 	await tree.process_frame
 	await tree.process_frame

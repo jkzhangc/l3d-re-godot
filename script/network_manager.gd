@@ -117,11 +117,19 @@ var _saved_multiplayer_poll: bool = true
 var _transport_polls: int = 0
 var _transport_last_poll_usec: int = 0
 var _transport_max_poll_usec: int = 0
+## @trace NET-LAT-P3：诊断显式启用的有界阶段记录；默认无逐帧数组分配。
+const TRANSPORT_TRACE_MAX_ROWS: int = 20000
+var _transport_trace_enabled: bool = false
+var _transport_trace_rows: Array[PackedInt64Array] = []
+var _transport_trace_dropped: int = 0
+var _late_render_poll_enabled: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	process_priority = -10000
 	process_physics_priority = -10000
+	# 仅在测到阶段间隙后供A/B诊断；默认不增加业务RPC派发机会。
+	_late_render_poll_enabled = "--net-phase-late-render-poll" in OS.get_cmdline_user_args()
 	_transport_tail = TRANSPORT_TAIL.new()
 	_transport_tail.name = "TransportTail"
 	_transport_tail.setup(self)
@@ -928,11 +936,41 @@ func _stop_transport_pump() -> void:
 	if not _transport_pump_active:
 		return
 	_transport_pump_active = false
+	_transport_trace_enabled = false  # 下一次会话不得继承上局诊断采样开关。
 	if is_inside_tree():
 		get_tree().multiplayer_poll = _saved_multiplayer_poll
 
 
-func _poll_transport() -> void:
+## phase 0=physics前部poll，1=render前部poll，2=flush，3=诊断render尾部poll。
+func reset_transport_trace(enabled: bool = true) -> void:
+	_transport_trace_enabled = enabled
+	_transport_trace_rows.clear()
+	_transport_trace_dropped = 0
+
+
+func take_transport_trace() -> Dictionary:
+	_transport_trace_enabled = false
+	var rows: Array[PackedInt64Array] = _transport_trace_rows
+	_transport_trace_rows = []
+	return {"rows": rows, "dropped": _transport_trace_dropped, "clock": "local_monotonic_usec"}
+
+
+func _record_transport_trace(phase: int, started: int) -> void:
+	if not _transport_trace_enabled:
+		return
+	if _transport_trace_rows.size() >= TRANSPORT_TRACE_MAX_ROWS:
+		_transport_trace_dropped += 1
+		return
+	_transport_trace_rows.append(PackedInt64Array([phase, started, Time.get_ticks_usec() - started]))
+
+
+## 实验入口只在render业务尾部调用，不在权威模拟中途派发；默认关闭。
+func poll_transport_render_tail() -> void:
+	if _late_render_poll_enabled:
+		_poll_transport(3)
+
+
+func _poll_transport(phase: int = 0) -> void:
 	if not _transport_pump_active or _transport_polling:
 		return
 	_transport_polling = true
@@ -946,6 +984,7 @@ func _poll_transport() -> void:
 	_transport_last_poll_usec = Time.get_ticks_usec() - started
 	_transport_max_poll_usec = maxi(_transport_max_poll_usec, _transport_last_poll_usec)
 	_transport_polls += 1
+	_record_transport_trace(phase, started)
 	_transport_polling = false
 
 
@@ -953,12 +992,14 @@ func _poll_transport() -> void:
 func flush_transport() -> void:
 	if not _transport_pump_active:
 		return
+	var traced_start: int = Time.get_ticks_usec() if _transport_trace_enabled else 0
 	if has_network():
 		var peer: ENetMultiplayerPeer = multiplayer.multiplayer_peer as ENetMultiplayerPeer
 		if peer != null and peer.host != null:
 			peer.host.flush()
 	if is_instance_valid(_tunnel_transport):
 		_tunnel_transport.pump_outgoing()
+	_record_transport_trace(2, traced_start)
 
 
 func _physics_process(_delta: float) -> void:
@@ -966,7 +1007,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func _process(delta: float) -> void:
-	_poll_transport()
+	_poll_transport(1)
 	_update_ping(delta)
 
 
