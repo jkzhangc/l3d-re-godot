@@ -174,7 +174,7 @@ func apply_text_style(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
 	var ratio: float = float(_host.get("ui_text_outline_ratio"))
 	if ratio > 0.0:
 		lbl.add_theme_color_override("font_outline_color", Color(_host.get("text_outline_color")))
-		lbl.add_theme_constant_override("outline_size", maxi(1, int(round(float(size) * ratio))))
+		lbl.add_theme_constant_override("outline_size", mini(12, maxi(1, int(round(float(size) * ratio)))))
 	else:
 		lbl.remove_theme_color_override("font_outline_color")
 		lbl.remove_theme_constant_override("outline_size")

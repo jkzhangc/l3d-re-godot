@@ -364,7 +364,7 @@ func _outline_size() -> int:
 		ratio = float(g.get("ui_text_outline_ratio"))
 	if ratio <= 0.0:
 		return 0
-	return maxi(1, int(round(float(text_font_size) * ratio)))
+	return mini(12, maxi(1, int(round(float(text_font_size) * ratio))))
 
 
 ## 白色系判定：色表 index 0（纯白）才套渐变；红/黄/绿等语义色保持纯色。

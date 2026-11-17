@@ -557,6 +557,7 @@ const CHARACTER_NAME_SHORT: Dictionary = {
 @export var text_color_row: int = 0
 @export var text_bold: bool = false
 @export var text_outline: bool = false
+## 2026-11-17 用户定稿：描边用**纯黑**（深蓝那版看不出边，已改回）。
 @export var text_outline_color: Color = Color.BLACK
 @export var text_outline_width: float = 1.0
 @export var text_shadow: bool = true
@@ -578,9 +579,9 @@ const CHARACTER_NAME_SHORT: Dictionary = {
 @export_range(0.2, 1.0, 0.01) var ui_text_gradient_bottom_scale: float = 0.65
 ## 从文本块高度的多少比例开始往底部色过渡（0.35 = 上面 35% 保持纯白）。
 @export_range(0.0, 1.0, 0.05) var ui_text_gradient_pivot: float = 0.35
-## 描边粗细 = 字号 × 本系数（24px→3、36px→4、48px→6）。设为 0 = 不加描边。
-## 2026-11-17 首版 0.10 实机偏细（1080p 抓帧几乎看不出黑边），按参考图调到 0.12。
-@export_range(0.0, 0.3, 0.01) var ui_text_outline_ratio: float = 0.12
+## 描边粗细 = 字号 × 本系数（24px→7、36px→10、48px→13，上限 12px）。设 0 = 不加描边。
+## 0.10 → 0.12 → 0.20 仍偏细；2026-11-17 深夜按用户要求提到 0.28（并要求改回纯黑）。
+@export_range(0.0, 0.5, 0.01) var ui_text_outline_ratio: float = 0.28
 
 
 # ═══════════════════════════════════════

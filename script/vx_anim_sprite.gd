@@ -424,3 +424,53 @@ static func play_scene(packed: PackedScene, pos: Vector2, parent: Node, fps: flo
 		return anim
 	parent.add_child(anim)
 	return anim
+
+
+# ═══════════════════════════════════════
+# 编辑器支持（2026-11-17）
+# ═══════════════════════════════════════
+## 以下四个是给 `scene/anim_editor.tscn` 可视化编辑器用的最小接口：
+## 播放仍然走原来的 Timer，不改变运行时行为。
+
+## 跳到序列中的第 idx 帧并立即重绘（暂停状态同样生效）。越界自动收敛。
+func seek_sequence(idx: int) -> void:
+	if _total_frames <= 0:
+		return
+	_seq_idx = clampi(idx, 0, _total_frames - 1)
+	_update_frame()
+	if _timer != null:
+		_timer.wait_time = _get_current_duration()
+
+
+## 当前序列帧号（播放中由计时器推进）。
+func current_sequence_index() -> int:
+	return _seq_idx
+
+
+## 序列总帧数。
+func sequence_length() -> int:
+	return _total_frames
+
+
+## 是否正在播放。
+func is_playing() -> bool:
+	return _playing
+
+
+## 暂停 / 继续播放（不影响 looping / auto_free）。
+func set_playing(on: bool) -> void:
+	_playing = on
+	if _timer == null:
+		return
+	if on:
+		_timer.wait_time = _get_current_duration()
+		_timer.start()
+	else:
+		_timer.stop()
+
+
+## 从第 0 帧重新播放。
+func restart_playback() -> void:
+	_seq_idx = 0
+	_update_frame()
+	set_playing(true)
