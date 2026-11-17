@@ -901,7 +901,12 @@ func get_network_diagnostics() -> Dictionary:
 	if has_network():
 		var peer: ENetMultiplayerPeer = multiplayer.multiplayer_peer as ENetMultiplayerPeer
 		if peer != null:
-			for peer_id: int in multiplayer.get_peers():
+			# Client的SceneMultiplayer列表包含经Host中转的其它玩家，但ENet只直连Host。
+			# 对那些逻辑peer调用get_peer会报错；仅查询实际拥有的传输连接。
+			var transport_ids: PackedInt32Array = multiplayer.get_peers() if is_host else PackedInt32Array()
+			if not is_host and peer.get_connection_status() == MultiplayerPeer.CONNECTION_CONNECTED:
+				transport_ids.append(1)
+			for peer_id: int in transport_ids:
 				var remote: ENetPacketPeer = peer.get_peer(peer_id)
 				if remote != null:
 					connections[peer_id] = {
