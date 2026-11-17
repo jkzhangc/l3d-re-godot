@@ -137,6 +137,108 @@ func apply_ui_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 		lbl.add_theme_font_override("font", font)
 	var s: int = maxi(UI_FONT_BASE_SIZE, int(round(float(size) / float(UI_FONT_BASE_SIZE))) * UI_FONT_BASE_SIZE)
 	lbl.add_theme_font_size_override("font_size", s)
+	## 2026-11-17：统一套「渐变 + 描边」文字样式（全 UI 含 HUD）。
+	## 放在这里是因为 68 处 UI 都经本函数取字体 —— 单点接入才不会漏。
+	apply_text_style(lbl, s)
+
+
+# ═══════════════════════════════════════
+# 界面文字样式：纵向渐变填充 + 黑色描边（2026-11-17）
+# ═══════════════════════════════════════
+
+const UI_TEXT_GRADIENT_SHADER: Shader = preload("res://shader/ui_text_gradient.gdshader")
+
+
+## 给 Label 套全局文字样式：白色系文字 → 顶部白到底部淡蓝的渐变；非白色系（红/黄/绿等
+## 语义色）保持纯色，只补描边。返回是否套了渐变（供调试/测试断言）。
+##
+## 【为什么只对白色系生效】色表里显式配色的文字承载语义（危险红、状态黄），
+## 强行染成蓝白会让玩家读不出状态；描边是纯装饰，可以全员统一。
+func apply_text_style(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
+	if lbl == null or _host == null:
+		return false
+	if not bool(_host.get("ui_text_gradient_enabled")):
+		return false
+	## GradientLabel 内部的三个 Label 由它自己管（阴影/填充各用各的材质），这里必须跳过，
+	## 否则会把阴影层也刷成渐变、给填充层重复加描边。
+	var parent := lbl.get_parent()
+	if parent != null and parent.get_script() != null:
+		var ppath: String = str(parent.get_script().get("resource_path"))
+		if ppath.ends_with("gradient_label.gd"):
+			return false
+	## 已有非本系统的材质 → 不碰（避免覆盖别人的效果）。
+	var current := lbl.material as ShaderMaterial
+	if lbl.material != null and (current == null or current.shader != UI_TEXT_GRADIENT_SHADER):
+		return false
+
+	var ratio: float = float(_host.get("ui_text_outline_ratio"))
+	if ratio > 0.0:
+		lbl.add_theme_color_override("font_outline_color", Color(_host.get("text_outline_color")))
+		lbl.add_theme_constant_override("outline_size", maxi(1, int(round(float(size) * ratio))))
+	else:
+		lbl.remove_theme_color_override("font_outline_color")
+		lbl.remove_theme_constant_override("outline_size")
+
+	var base: Color = lbl.get_theme_color("font_color")
+	## 近黑色 / 全透明 → 是场景自带的「阴影副本」或占位 Label，不能再加描边
+	## （黑底再加黑边只会把阴影糊成一坨），也不套渐变。
+	if base.a <= 0.05 or (base.r < 0.12 and base.g < 0.12 and base.b < 0.12):
+		if current != null:
+			lbl.material = null
+		lbl.remove_theme_color_override("font_outline_color")
+		lbl.remove_theme_constant_override("outline_size")
+		return false
+	if not _is_whiteish(base):
+		## 语义色：撤掉可能残留的渐变材质，保持纯色。
+		if current != null:
+			lbl.material = null
+		return false
+	lbl.add_theme_color_override("font_color", Color.WHITE)
+	var mat := _ensure_gradient_material(lbl)
+	if mat == null:
+		return false
+	mat.set_shader_parameter("top_color", Color(_host.get("ui_text_gradient_top_color")))
+	mat.set_shader_parameter("bottom_color", Color(_host.call("get_ui_text_gradient_bottom",
+		Color(_host.get("ui_text_gradient_top_color")))))
+	mat.set_shader_parameter("pivot", float(_host.get("ui_text_gradient_pivot")))
+	mat.set_shader_parameter("text_height", _measure_text_height(lbl, size))
+	return true
+
+
+## 该标签当前是否套着本系统的渐变材质。
+func has_text_style(lbl: Label) -> bool:
+	if lbl == null:
+		return false
+	var mat := lbl.material as ShaderMaterial
+	return mat != null and mat.shader == UI_TEXT_GRADIENT_SHADER
+
+
+func _ensure_gradient_material(lbl: Label) -> ShaderMaterial:
+	var mat := lbl.material as ShaderMaterial
+	if mat != null and mat.shader == UI_TEXT_GRADIENT_SHADER:
+		return mat
+	mat = ShaderMaterial.new()
+	mat.shader = UI_TEXT_GRADIENT_SHADER
+	lbl.material = mat
+	return mat
+
+
+## 文本块高度（像素）：按实际行数累加行高，供着色器把 VERTEX.y 归一化。
+## 拿不到行度量时退回「字号 × 1.3」（单行标签的常态）。
+func _measure_text_height(lbl: Label, size: int) -> float:
+	var lines: int = maxi(1, lbl.get_line_count())
+	var h: float = 0.0
+	for i: int in range(lines):
+		h += lbl.get_line_height(i)
+	if h <= 0.0:
+		h = float(size) * 1.3
+	return maxf(h, float(size))
+
+
+## 白色系判定：三个通道都足够亮才套渐变（色表 index 0 即纯白）。
+func _is_whiteish(c: Color) -> bool:
+	return c.r >= 0.9 and c.g >= 0.9 and c.b >= 0.9
+
 
 
 ## 根 Theme：让**未显式指定字体**的控件（Label/Button/RichTextLabel…）也拿到界面字体。

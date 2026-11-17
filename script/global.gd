@@ -563,6 +563,26 @@ const CHARACTER_NAME_SHORT: Dictionary = {
 @export var text_shadow_color: Color = Color(0, 0, 0, 1)
 @export var text_shadow_offset: Vector2 = Vector2(2, 2)
 
+@export_group("界面文字样式（渐变 + 描边，2026-11-17）")
+## 全局文字样式：顶部白 → 底部淡蓝的纵向渐变 + 黑色描边（参考图风格）。
+## 落地在两个唯一入口：
+##   · `GradientLabel`（菜单/标题/剧情等自绘文字节点）
+##   · `Global.apply_ui_font()` / `apply_hint_font()`（原生 Label 的统一字体入口）
+## ⚠ **只对「白色系」文字生效**：色表里显式配了红/黄/绿等语义色时保持纯色（只加描边），
+##   否则会把「危险/状态色」统一染成蓝白，丢掉信息。
+@export var ui_text_gradient_enabled: bool = true
+@export var ui_text_gradient_top_color: Color = Color(1, 1, 1, 1)
+## 渐变底部色 = 顶部色（= 字体自身颜色）× 本系数（2026-11-17 用户定稿：
+## 不要固定蓝，用「字体颜色的深色」）。白色文字 → 灰白；将来若给彩色文字套渐变，
+## 也会自动得到同色系的深色，不会串色。
+@export_range(0.2, 1.0, 0.01) var ui_text_gradient_bottom_scale: float = 0.65
+## 从文本块高度的多少比例开始往底部色过渡（0.35 = 上面 35% 保持纯白）。
+@export_range(0.0, 1.0, 0.05) var ui_text_gradient_pivot: float = 0.35
+## 描边粗细 = 字号 × 本系数（24px→3、36px→4、48px→6）。设为 0 = 不加描边。
+## 2026-11-17 首版 0.10 实机偏细（1080p 抓帧几乎看不出黑边），按参考图调到 0.12。
+@export_range(0.0, 0.3, 0.01) var ui_text_outline_ratio: float = 0.12
+
+
 # ═══════════════════════════════════════
 # 文字资源缓存（避免重复 Image.load_from_file）
 # ═══════════════════════════════════════
@@ -721,6 +741,85 @@ func apply_ui_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 ## 兼容旧名（2026-09-17 起各玩法节点调用）：等价 apply_ui_font。
 func apply_hint_font(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> void:
 	apply_ui_font(lbl, size)
+
+
+## 显式给一个 Label 套「渐变 + 描边」样式（2026-11-17）。
+## apply_ui_font 已经会自动调用它；这个转发是给「不走 apply_ui_font 但也要同款样式」的
+## 少数场景（例如运行时自建、只设了 font_size 的提示标签）。返回是否套了渐变。
+func style_ui_text(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
+	if _font_service == null:
+		return false
+	return _font_service.apply_text_style(lbl, size)
+
+
+## 渐变底部色：字体颜色（= 顶部色）压暗一档。
+## 单独成函数是为了让 GradientLabel 与 FontService 用**同一套**派生规则，
+## 不会出现「菜单文字白→灰、HUD 文字白→蓝」这种两套色。
+func get_ui_text_gradient_bottom(top: Color) -> Color:
+	return Color(
+		clampf(top.r * ui_text_gradient_bottom_scale, 0.0, 1.0),
+		clampf(top.g * ui_text_gradient_bottom_scale, 0.0, 1.0),
+		clampf(top.b * ui_text_gradient_bottom_scale, 0.0, 1.0),
+		top.a)
+
+
+## ── 全 UI 文字样式：扫全树（2026-11-17）──
+## 【为什么需要扫树】UI 文字有三条来源：
+##   ① GradientLabel（自绘文字，自己处理）；
+##   ② 走 apply_ui_font() 的 Label（入口已套好）；
+##   ③ **场景里直接摆 / 代码里自建的 Label**（标题菜单、HUD 的 Time/HP/TP…）——
+##      它们只吃根 Theme，没有任何统一入口。
+## ③ 占 UI 文字的多数，所以用 node_added 兜住：新节点延迟一帧再套（让调用方先把
+## font_size / font_color 设完），启动时再递归扫一遍已有的树。
+func _setup_ui_text_style() -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	if not tree.node_added.is_connected(_on_ui_node_added):
+		tree.node_added.connect(_on_ui_node_added)
+	call_deferred("_style_ui_text_tree")
+
+
+func _on_ui_node_added(node: Node) -> void:
+	if node is Label:
+		call_deferred("_style_ui_label", node)
+
+
+func _style_ui_label(lbl: Label) -> void:
+	if not is_instance_valid(lbl) or not lbl.is_inside_tree():
+		return
+	var size: int = int(lbl.get_theme_font_size("font_size"))
+	if size <= 0:
+		return
+	## 同字号只套一次：样式会改主题覆盖 → 可能再次触发 minimum_size_changed，
+	## 用「上次套用的字号」当幂等闸门，避免自激循环。
+	if int(lbl.get_meta("ui_text_style_size", -1)) == size:
+		return
+	lbl.set_meta("ui_text_style_size", size)
+	style_ui_text(lbl, size)
+	## 字号在创建后才被改的标签（HUD 的 TP/弹药等）→ 尺寸变化时按新字号重套。
+	## 用 meta 标记只连一次（带 bind 的 Callable 无法用无 bind 的 is_connected 判重）。
+	if not lbl.has_meta("ui_text_style_hooked"):
+		lbl.set_meta("ui_text_style_hooked", true)
+		lbl.minimum_size_changed.connect(_on_label_min_size_changed.bind(lbl))
+
+
+func _on_label_min_size_changed(lbl: Label) -> void:
+	call_deferred("_style_ui_label", lbl)
+
+
+func _style_ui_text_tree() -> void:
+	var tree := get_tree()
+	if tree == null or tree.root == null:
+		return
+	_style_ui_text_recursive(tree.root)
+
+
+func _style_ui_text_recursive(node: Node) -> void:
+	if node is Label:
+		_style_ui_label(node)
+	for child: Node in node.get_children():
+		_style_ui_text_recursive(child)
 
 
 ## 根 Theme：让**未显式指定字体**的控件（Label/Button/RichTextLabel…）也拿到界面字体。
@@ -996,6 +1095,8 @@ func _ready() -> void:
 	## 报错捕获与报错界面（2026-10-02 用户需求）——放最后：字体/主题都已就绪，
 	## 之后引擎打出的任何错误都会进日志文件，并能弹报错界面。
 	_setup_error_capture()
+	## 界面文字样式（2026-11-17）：全 UI 的渐变 + 描边。
+	_setup_ui_text_style()
 
 
 ## ── 报错捕获（2026-10-02）──

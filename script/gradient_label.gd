@@ -24,6 +24,9 @@ const DEFAULT_SHADOW: bool = false
 const DEFAULT_SHADOW_COLOR: Color = Color(0, 0, 0, 1)  ## 实心黑影（用户 2026-09-11 参考图定稿）
 const DEFAULT_SHADOW_OFFSET: Vector2 = Vector2(2, 2)
 
+## 渐变填充着色器（2026-11-17）：顶部白 → 底部淡蓝，描边层靠「乘顶点色」保持纯黑。
+const TEXT_GRADIENT_SHADER: Shader = preload("res://shader/ui_text_gradient.gdshader")
+
 # ═══════════════════════════════════════
 # 核心属性
 # ═══════════════════════════════════════
@@ -83,6 +86,13 @@ const DEFAULT_SHADOW_OFFSET: Vector2 = Vector2(2, 2)
 @export var outline: bool = DEFAULT_OUTLINE:
 	set(v):
 		outline = v
+		_request_render()
+
+## 是否套「渐变填充」（2026-11-17）。默认跟随全局；单独关掉可让某个标签保持纯色
+## （例：HUD 的 TP 数值按用户要求不要渐变、不要描边）。
+@export var gradient: bool = true:
+	set(v):
+		gradient = v
 		_request_render()
 
 @export var outline_color: Color = DEFAULT_OUTLINE_COLOR:
@@ -292,6 +302,8 @@ func _load_resources() -> void:
 ## （用户 2026-09-11 实测反馈），故不再渲染；bold 属性保留只为兼容旧场景与调用方。
 func _render_plain() -> void:
 	var base_color := _sample_color()
+	## 2026-11-17：全局「渐变 + 描边」。只对白色系文字生效（语义色保持纯色，只加描边）。
+	var gradient_on: bool = _gradient_enabled() and _is_whiteish(base_color)
 
 	# 阴影（实心黑，永不描边）
 	if shadow:
@@ -303,7 +315,8 @@ func _render_plain() -> void:
 
 	_label_bold.hide()
 
-	_configure_label(_label_main, base_color, outline)
+	_configure_label(_label_main, Color.WHITE if gradient_on else base_color, outline or gradient_on)
+	_apply_gradient_material(_label_main, gradient_on)
 	_label_main.position = Vector2.ZERO
 	_label_main.show()
 
@@ -323,10 +336,65 @@ func _configure_label(lbl: Label, col: Color, apply_outline: bool) -> void:
 		lbl.autowrap_mode = TextServer.AUTOWRAP_OFF
 	if apply_outline:
 		lbl.add_theme_color_override("font_outline_color", outline_color)
-		lbl.add_theme_constant_override("outline_size", maxi(2, text_font_size / 8))
+		var osz := _outline_size()
+		if osz > 0:
+			lbl.add_theme_constant_override("outline_size", osz)
+		else:
+			lbl.remove_theme_constant_override("outline_size")
 	else:
 		lbl.remove_theme_color_override("font_outline_color")
 		lbl.remove_theme_constant_override("outline_size")
+
+
+## ── 渐变 + 描边（2026-11-17）──
+## 全局总开关与参数都在 Global 的「界面文字样式」组里；本节点只负责套用。
+func _gradient_enabled() -> bool:
+	if not gradient:
+		return false
+	var g := _get_global()
+	return g != null and bool(g.get("ui_text_gradient_enabled"))
+
+
+## 描边粗细：字号 × Global.ui_text_outline_ratio（24px→2、36px→4、48px→5）。
+## 返回 0 表示不加描边。
+func _outline_size() -> int:
+	var ratio := 0.125
+	var g := _get_global()
+	if g != null:
+		ratio = float(g.get("ui_text_outline_ratio"))
+	if ratio <= 0.0:
+		return 0
+	return maxi(1, int(round(float(text_font_size) * ratio)))
+
+
+## 白色系判定：色表 index 0（纯白）才套渐变；红/黄/绿等语义色保持纯色。
+static func _is_whiteish(c: Color) -> bool:
+	return c.r >= 0.9 and c.g >= 0.9 and c.b >= 0.9
+
+
+## 给填充层挂/摘渐变材质。描边由同一个 Label 的 font_outline_color 绘制：
+## 顶点色是纯黑，着色器里 `渐变 × 顶点色` 结果仍为黑，所以描边不会被染色。
+func _apply_gradient_material(lbl: Label, on: bool) -> void:
+	var mat := lbl.material as ShaderMaterial
+	if not on:
+		if mat != null and mat.shader == TEXT_GRADIENT_SHADER:
+			lbl.material = null
+		return
+	if mat == null or mat.shader != TEXT_GRADIENT_SHADER:
+		mat = ShaderMaterial.new()
+		mat.shader = TEXT_GRADIENT_SHADER
+		lbl.material = mat
+	var g := _get_global()
+	if g == null:
+		return
+	mat.set_shader_parameter("top_color", Color(g.get("ui_text_gradient_top_color")))
+	mat.set_shader_parameter("bottom_color", Color(g.call("get_ui_text_gradient_bottom",
+		Color(g.get("ui_text_gradient_top_color")))))
+	mat.set_shader_parameter("pivot", float(g.get("ui_text_gradient_pivot")))
+	## 文本块高度：行高 × 行数（autowrap 时按实际折行数）。
+	var line_h: float = _font.get_height(text_font_size) if _font else float(text_font_size) * 1.3
+	var lines: int = maxi(1, lbl.get_line_count())
+	mat.set_shader_parameter("text_height", maxf(line_h * float(lines), float(text_font_size)))
 
 
 func _update_size_from_labels() -> void:
@@ -395,6 +463,10 @@ static func style_plain_label(lbl: Label, color_img: Image, color_index: int, co
 		var g := _get_global()
 		if g:
 			g.apply_text_shadow(lbl)
+	## 2026-11-17：与 GradientLabel 同款的「渐变 + 描边」。
+	var g2 := _get_global()
+	if g2 and g2.has_method("style_ui_text"):
+		g2.call("style_ui_text", lbl, font_size)
 
 
 ## static 方法里取 Global autoload（编辑器 @tool 分支下可能不存在 → 返回 null）

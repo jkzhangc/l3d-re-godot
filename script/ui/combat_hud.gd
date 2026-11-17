@@ -374,6 +374,9 @@ func _configure_tp_label() -> void:
 	tp_label.shadow_color = Color(0, 0, 0, 1)
 	tp_label.shadow_offset = Vector2(2, 2)
 	tp_label.outline = false
+	## ★2026-11-17 用户要求：TP 数值保持原样（不要渐变、不要描边）。
+	## 其余 UI 文字统一走「渐变 + 描边」，这里单独关掉。
+	tp_label.gradient = false
 
 
 func _update_tp() -> void:
