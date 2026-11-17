@@ -100,6 +100,19 @@ class_name CharacterData extends Resource
 @export var allowed_primary_weapons: Array[String] = []
 ## 允许使用的副武器 item_id 列表。空数组=所有副武器允许
 @export var allowed_secondary_weapons: Array[String] = []
+## ★武器锁定（2026-11-17 用户需求）：true = 该角色的武器**不可丢弃、也不可被拾取物替换**。
+## 用于「专属武器」角色（哆啦A梦的空气炮）。与上面的白名单互补：
+##   白名单管「能拿什么」，本开关管「现有武器能不能动」。
+## 落地：player_death_service / network_world 的「丢弃全部武器」直接跳过；
+##       weapon_pickup 的形状提示与长按进度都不出现（等价于「不能拿」）。
+@export var weapon_locked: bool = false
+
+@export_group("空手（槽位无武器）")
+## 空手举拳时使用的行走图精灵表。
+## 布局与武器行走图完全一致：4 方向 × 角色格 × 3 帧；char_idx 与指虎同口径
+## （举起/放下 = 1，攻击 = 4→5→5，见 `object/player_fists.tres`）。
+## 留空 → 回退 `weapon_walk_textures["Fists"]` → 再回退武器自带通用近战图。
+@export var fist_walk_texture: Texture2D
 
 @export_group("推击行走图")
 ## 角色通用的推击行走图精灵表（武器 shove_walk_texture 和 shove_walk_textures 都为空时回退到这里）
@@ -251,6 +264,14 @@ func get_shove_walk_texture(weapon_state_name: String) -> Texture2D:
 	if shove_walk_textures.has(weapon_state_name):
 		return shove_walk_textures[weapon_state_name] as Texture2D
 	return shove_walk_texture
+
+
+## 空手（拳）的行走图：专用字段优先，其次 weapon_walk_textures["Fists"]。
+## 返回 null = 未配 → 调用方回退 `player_fists.tres` 的通用近战图。
+func get_fist_walk_texture() -> Texture2D:
+	if fist_walk_texture != null:
+		return fist_walk_texture
+	return get_weapon_walk_texture("Fists")
 
 
 ## 检查该角色是否可以使用指定武器

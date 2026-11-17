@@ -2049,11 +2049,13 @@ func _try_host_weapon_switch(peer_id: int, slot: String) -> void:
 	var state := entry.get("state") as PlayerState
 	if not is_instance_valid(node) or not state or node.current_hp <= 0.0 or _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
 		return
-	var wd: WeaponData = state.get_equipped_weapon(slot)
-	if not wd or wd.weapon_state_name.is_empty():
-		return
+	## ★空槽位 = 空手举拳（2026-11-17）：先切槽位，再由 get_active_weapon() 派生拳套。
+	## 与单机 PlayerGroundState/_RangedState/_MeleeState 的 _try_raise_weapon 同一口径。
 	var previous_slot: String = state.active_weapon_slot
 	state.active_weapon_slot = slot
+	var wd: WeaponData = state.get_active_weapon()
+	if not wd or wd.weapon_state_name.is_empty():
+		return
 	if not node.is_weapon_mode_active():
 		## 未举枪 → 举起（走与「举起放下武器键」同一条过渡链，保持表现一致）
 		_begin_host_weapon_transition(peer_id, node, wd, true)
@@ -2293,10 +2295,13 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 	_last_attack_stage[attack_key] = combo_stage
 
 	if wd.is_ranged:
-		if wd.magazine_capacity <= 0 or wd.bullet_list.is_empty():
+		if wd.bullet_list.is_empty():
 			return
+		## ★弹夹容量 0 = 无弹夹武器（空气炮，2026-11-17）：不查弹、不扣弹、不自动换弹。
+		## 旧实现 `magazine_capacity <= 0 → return` 会让这类武器在联机里永远打不出来。
+		var uses_magazine: bool = wd.magazine_capacity > 0
 		var current := state.get_magazine_ammo(wd.item_id)
-		if current <= 0:
+		if uses_magazine and current <= 0:
 			# ★自动换弹（2026-09-30 用户需求）：弹夹空但**还有备弹**（无限备弹武器恒成立）
 			# → 不再空放一枪，直接接装填，省掉手动按装填键。与单机
 			# PlayerPistolAttackState._try_auto_reload 同一规则（两端手感必须一致）。
@@ -2322,10 +2327,12 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 				Global.play_player_sfx(wd.empty_fire_sound, node)
 				_send_to_ready_clients(&"empty_fire_presentation", [peer_id, wd.item_id])
 			return
-		state.set_magazine_ammo(wd.item_id, current - 1)
+		if uses_magazine:
+			state.set_magazine_ammo(wd.item_id, current - 1)
 		_sync_state_from_node(peer_id, node, bool(entry.get("moving", false)), bool(entry.get("walking", false)))
 		node.play_network_attack_presentation(wd)
-		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, current - 1, 1])
+		## 无弹夹武器传 -1（与近战同口径：客户端不要写弹夹）。
+		_send_to_ready_clients(&"attack_presentation", [peer_id, wd.item_id, (current - 1) if uses_magazine else -1, 1])
 		var bullet_index := 0
 		for bd: BulletData in wd.bullet_list:
 			## 锁定打击子弹不飞行：Host 选目标 + 结算，Client 只复刻准星与爆点表现。
@@ -2336,7 +2343,8 @@ func _try_host_attack(peer_id: int, claimed_position: Variant = null) -> void:
 			bullet_index += 1
 		if wd.gunshot_range > 0.0:
 			_alert_host_enemies(node, wd.gunshot_range)
-		print("[NetworkWorld] HOST_FIRE peer=%d ammo=%d bullets=%d" % [peer_id, current - 1, wd.bullet_list.size()])
+		print("[NetworkWorld] HOST_FIRE peer=%d ammo=%d bullets=%d" % [
+			peer_id, (current - 1) if uses_magazine else -1, wd.bullet_list.size()])
 		return
 
 	var is_headshot := wd.critical_rate > 0.0 and randf() * 100.0 < wd.critical_rate
@@ -2921,7 +2929,13 @@ func weapon_transition_presentation(peer_id: int, weapon_id: String, raising: bo
 		return
 	var entry: Dictionary = _players[peer_id]
 	var node := _player_node(entry)
-	var wd := _get_network_weapon_data_by_id(weapon_id)
+	## 空手拳击（2026-11-17）：拳是派生虚拟武器，**不进白名单**（进白名单就会被
+	## `_apply_client_weapon_snapshot` 当普通武器写进槽位）。这里按固定常量解析。
+	var wd: WeaponData
+	if PlayerState.is_fists_id(weapon_id):
+		wd = PlayerState.get_fists_weapon()
+	else:
+		wd = _get_network_weapon_data_by_id(weapon_id)
 	if is_instance_valid(node) and wd:
 		_weapon_transition_state[peer_id] = "raising" if raising else "lowering"
 		node.play_network_weapon_transition(wd, raising)
@@ -3704,6 +3718,17 @@ func attack_presentation(peer_id: int, weapon_id: String, magazine_ammo: int, st
 	var node := _player_node(entry)
 	var state := entry.get("state") as PlayerState
 	if not state or not is_instance_valid(node):
+		return
+	## ★空手拳击（2026-11-17）：必须**先拦**再走装备快照 —— 快照会用 weapon_id 覆盖
+	## `equipment["primary"]`，把 "fists" 当成真武器写进槽位（拳本应从空槽派生）。
+	## 激活槽由 Host 的公开快照同步，这里直接按固定常量播表现即可。
+	if PlayerState.is_fists_id(weapon_id):
+		var fists: WeaponData = PlayerState.get_fists_weapon()
+		if fists:
+			node.play_network_attack_presentation(fists, stage)
+			if peer_id == int(net.my_peer_id):
+				_auto_client_fire_confirmed = true
+				_auto_client_attack_weapon_id = fists.item_id
 		return
 	var wd := _apply_client_weapon_snapshot(state, node, {
 		"primary_weapon_id": weapon_id,
@@ -5173,6 +5198,11 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 		_broadcast_reliable_world_snapshot()
 		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d throwable=%s" % [peer_id, pickup_id, throwable.item_id])
 		return
+	if state.character and state.character.weapon_locked:
+		## ★武器锁定（2026-11-17）：专属武器角色（哆啦A梦）拒绝一切武器拾取/替换。
+		## Client 侧 `weapon_pickup._player_can_use()` 已经不出提示，这里是权威兜底
+		## （防止伪造的 pickup_request）。
+		return
 	if state.character and not state.character.can_use_weapon(weapon):
 		return
 	## ★2026-11-03 用户实测「联机里替换武器还是按主/副武器默认槽走」：
@@ -5350,6 +5380,12 @@ func _try_host_drop_all(peer_id: int) -> void:
 	if not is_instance_valid(player) or not state or player.current_hp <= 0.0:
 		return
 	if _is_host_combat_busy(peer_id) or _is_host_throwable_held(peer_id):
+		return
+	## ★武器锁定（2026-11-17）：专属武器角色（哆啦A梦）的武器不可丢出。
+	## 必须在**Host 权威侧**拦：Client 只提交意图，真正的掉落实体由这里生成。
+	if state.character != null and state.character.weapon_locked:
+		print("[NetworkWorld] HOST_DROP_ALL 被武器锁定拒绝 peer=%d character=%s" % [
+			peer_id, state.get_character_name()])
 		return
 	var dropped: int = 0
 	for slot: String in ["primary", "secondary"]:

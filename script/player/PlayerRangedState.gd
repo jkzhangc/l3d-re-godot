@@ -222,9 +222,12 @@ func _can_hold_fire_now() -> bool:
 
 
 func _try_raise_weapon(slot: String) -> void:
-	var wd: WeaponData = get_player_state().get_equipped_weapon(slot)
+	## 先切槽位再取武器：槽位为空时 `get_active_weapon()` 会派生返回虚拟拳套
+	## （空手举拳，2026-11-17），于是「举着枪按 2 而第 2 格是空的」= 换成举拳。
+	var ps: PlayerState = get_player_state()
+	ps.active_weapon_slot = slot
+	var wd: WeaponData = ps.get_active_weapon()
 	if not wd or wd.weapon_state_name.is_empty():
 		return
-	get_player_state().active_weapon_slot = slot
 	# 目标槽位可能是近战武器 → 路由按该武器类型决定，而非本地硬编码。
 	transition_requested.emit(wd.get_state_node_name())

@@ -26,6 +26,7 @@
 [ext_resource type="Texture2D" uid="uid://btv2w3mg3jk6p" path="res://art/Characters/ジャイアンセットロケットランチャー.png" id="23_slksw"]
 [ext_resource type="Texture2D" uid="uid://b2qwpws4prfi5" path="res://art/Characters/ジャイアンセット近接武器.png" id="31_melee"]
 [ext_resource type="Texture2D" uid="uid://1kaxd4ullxn7" path="res://art/Characters/ジャイアンセットスティンガー.png" id="32_stinger"]
+[ext_resource type="Texture2D" path="res://art/Characters/ジャイアンセット素手.png" id="t_fist"]
 
 [resource]
 script = ExtResource("5_lxnma")
@@ -42,6 +43,7 @@ walk_texture = ExtResource("7_yottv")
 run_texture = ExtResource("4_lxnma")
 death_texture = ExtResource("7_yottv")
 death_char_index = 5
+fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "Bat": ExtResource("18_bat"),
 "Bowgun": ExtResource("17_bg"),

@@ -27,12 +27,13 @@ func _check(label: String, got, want) -> void:
 func _ready() -> void:
 	await get_tree().process_frame
 	var chars: Array[CharacterData] = CATALOG.load_available_characters()
-	_check("角色数量", chars.size(), 5)
+	_check("角色数量", chars.size(), 6)
 
 	var ids: Array[String] = []
 	for cd: CharacterData in chars:
 		ids.append(cd.character_id)
 	_check("含安雄 yasuo", ids.has("yasuo"), true)
+	_check("含哆啦A梦 doraemon", ids.has("doraemon"), true)
 	print("  · 名册: %s" % str(ids))
 
 	print("=== 1) 每个角色都有行走图 ===")
@@ -85,6 +86,10 @@ func _ready() -> void:
 		all_allowed.append_array(cd.allowed_primary_weapons)
 		all_allowed.append_array(cd.allowed_secondary_weapons)
 		for wid: String in all_allowed:
+			## 「拳」是空槽位派生的虚拟武器（object/player_fists.tres，非 weapon_* 前缀），
+			## 不在武器表扫描范围内，也不该被它判定为「不存在」。
+			if wid == "fists":
+				continue
 			var wd: WeaponData = by_id.get(wid)
 			if wd == null:
 				bad.append(wid + "(不存在)")
@@ -93,6 +98,20 @@ func _ready() -> void:
 		_check("%s 白名单均可拿" % cd.character_id, bad.is_empty(), true)
 		if not bad.is_empty():
 			print("       → %s" % str(bad))
+
+	print("=== 3b) 哆啦A梦：专属武器 + 锁定 + 拳击图 ===")
+	var dora: CharacterData = null
+	for cd: CharacterData in chars:
+		if cd.character_id == "doraemon":
+			dora = cd
+	_check("找到哆啦A梦", dora != null, true)
+	if dora != null:
+		_check("初始武器 = air_cannon", dora.initial_weapon != null and dora.initial_weapon.item_id == "air_cannon", true)
+		_check("武器锁定开启", dora.weapon_locked, true)
+		_check("拳击行走图非空", dora.fist_walk_texture != null, true)
+		_check("空气炮有图（AirCannon）", dora.get_weapon_walk_texture("AirCannon") != null, true)
+		_check("空气炮可拿", dora.has_weapon_walk_art(dora.initial_weapon), true)
+		_check("不能拿手枪", dora.can_use_weapon(load("res://object/weapon_pistol.tres")), false)
 
 	print("=== 4) 安雄安全屋台词覆盖 ===")
 	var missing: Array[String] = []

@@ -17,6 +17,7 @@
 [ext_resource type="Texture2D" uid="uid://cpi3fiuuxsxqm" path="res://art/Characters/静香セットRPG7.png" id="14"]
 [ext_resource type="Texture2D" uid="uid://bb2hq3pfv2acy" path="res://art/Characters/静香セットフライパン.png" id="16_fp"]
 [ext_resource type="Texture2D" uid="uid://svyxru106sob" path="res://art/Characters/静香セットボウガン.png" id="17_bg"]
+[ext_resource type="Texture2D" path="res://art/Characters/静香セット素手.png" id="t_fist"]
 
 [resource]
 script = ExtResource("1")
@@ -34,6 +35,7 @@ walk_texture = ExtResource("2")
 run_texture = ExtResource("3")
 death_texture = ExtResource("2")
 death_char_index = 5
+fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "Bowgun": ExtResource("17_bg"),
 "Frypan": ExtResource("16_fp"),

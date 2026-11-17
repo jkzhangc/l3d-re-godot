@@ -382,6 +382,11 @@ func _drop_all_weapons_locally() -> void:
 	var state: PlayerState = Players.get_state_for_entity(_p)
 	if not state:
 		return
+	## ★武器锁定（2026-11-17）：专属武器角色（哆啦A梦）的武器不可丢出。
+	## 判断放在最前：连"mark_auto_picked / 收起武器模式"都不该发生 —— 按 E 应当完全无副作用。
+	if state.character != null and state.character.weapon_locked:
+		print("[玩家] %s 的武器已锁定，无法丢弃" % state.get_character_name())
+		return
 	var dropped: int = 0
 	for slot: String in ["primary", "secondary"]:
 		var wd: WeaponData = state.get_equipped_weapon(slot)

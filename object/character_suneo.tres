@@ -19,6 +19,7 @@
 [ext_resource type="Texture2D" uid="uid://c4vksa42kaglk" path="res://art/Characters/スネ夫セットRPG7.png" id="15_rk"]
 [ext_resource type="Texture2D" uid="uid://bm7he88cp62qy" path="res://art/Characters/スネ夫セットフライパン.png" id="16_fp"]
 [ext_resource type="Texture2D" uid="uid://cy6j7llp7b51c" path="res://art/Characters/スネ夫セットボウガン.png" id="17_bg"]
+[ext_resource type="Texture2D" path="res://art/Characters/スネ夫セット素手.png" id="t_fist"]
 
 [resource]
 script = ExtResource("1")
@@ -36,6 +37,7 @@ walk_texture = ExtResource("2")
 run_texture = ExtResource("3")
 death_texture = ExtResource("2")
 death_char_index = 6
+fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "Bowgun": ExtResource("17_bg"),
 "Frypan": ExtResource("16_fp"),

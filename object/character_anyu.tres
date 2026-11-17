@@ -33,6 +33,7 @@ portrait_index = 4
 walk_texture = ExtResource("t_base")
 death_texture = ExtResource("t_base")
 death_char_index = 6
+fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "Bowgun": ExtResource("t_artemis"),
 "Launcher": ExtResource("t_base"),

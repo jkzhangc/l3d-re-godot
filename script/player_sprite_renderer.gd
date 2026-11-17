@@ -27,6 +27,9 @@ const DIRECTIONS: int = 4
 const WALK_SEQUENCE: Array[int] = [1, 0, 1, 2]
 const STAND_FRAME: int = 1
 const DIR_ROWS: Array[int] = [0, 1, 2, 3]
+## 空手拳击的虚拟武器 id（见 `object/player_fists.tres` / `PlayerState.FISTS_WEAPON`）。
+## 这里用字面量而不是引用 PlayerState：渲染层不该依赖玩法数据类，避免循环引用。
+const FISTS_ITEM_ID := "fists"
 
 ## ★2026-11-04「小夫捡 M202 变成大雄」的处理口径（用户定稿）：
 ## **角色没有该武器的专属行走图，就不允许他捡这把武器** —— 判定在
@@ -158,6 +161,12 @@ func _weapon_body_texture(wd: WeaponData) -> Texture2D:
 		return null
 	var cd: CharacterData = _p.current_character
 	if cd:
+		## 空手拳击（2026-11-17）：拳不是可拾取武器，各角色自带的「素手」表
+		## 统一走 CharacterData.fist_walk_texture（char_idx 与指虎同口径）。
+		if wd.item_id == FISTS_ITEM_ID:
+			var fist_tex: Texture2D = cd.get_fist_walk_texture()
+			if fist_tex:
+				return fist_tex
 		var tex: Texture2D = cd.get_weapon_walk_texture(wd.weapon_state_name)
 		if tex:
 			return tex

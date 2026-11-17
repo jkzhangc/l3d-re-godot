@@ -162,10 +162,13 @@ func _set_post_attack_frame(seq_idx: int) -> void:
 
 func _fire_bullet() -> void:
 	# 消耗弹夹内子弹；备弹可无限，但弹夹仍然会空
+	## ★弹夹容量 0 = **无弹夹武器**（空气炮等，2026-11-17）：不查弹、不扣弹。
+	## 旧实现无条件按「弹夹为 0 → 空响」处理，容量 0 的远程武器永远打不出子弹。
+	var uses_magazine: bool = _wd.magazine_capacity > 0
 	var current: int = get_player_state().get_magazine_ammo(_wd.item_id)
 	## ★开火帧弹夹为空、但**动作开始时还有弹** → 这一发已上膛，照常发射（见 `_ammo_at_attack_start`）。
 	var chambered: bool = _ammo_at_attack_start > 0
-	if current <= 0 and not chambered:
+	if uses_magazine and current <= 0 and not chambered:
 		print("[手枪] 弹夹为空！咔嚓——")
 		return
 	var bullet_count: int = _wd.bullet_list.size()
@@ -240,7 +243,10 @@ func _fire_bullet() -> void:
 	## 原来是先扣弹再生成子弹；一旦生成过程中途异常中止（受击硬直/参数为空等），
 	## 弹药已经扣掉、子弹却没有 —— 玩家看到的就是"空扣一发"。
 	## 现在先造子弹，全部落地后才扣弹；中途异常中止就不会损失弹药。
-	get_player_state().set_magazine_ammo(_wd.item_id, maxi(0, current - 1))
+	## ★无弹夹武器（容量 0，如空气炮）不写弹药表 —— 避免在 PlayerState 里
+	##   留下无意义的 0 记录，也让 HUD/存档的弹药字段保持干净。
+	if uses_magazine:
+		get_player_state().set_magazine_ammo(_wd.item_id, maxi(0, current - 1))
 	# 播放开枪音效（只播一次，不是每颗子弹都播）
 	# 播放开枪特效
 	var effect_scene: PackedScene = _wd.get_attack_effect_anim(character.facing)

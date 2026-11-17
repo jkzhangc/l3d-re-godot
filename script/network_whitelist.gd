@@ -97,6 +97,10 @@ const NETWORK_PIPE: WeaponData = preload("res://object/weapon_pipe.tres")
 const NETWORK_SHOVEL: WeaponData = preload("res://object/weapon_shovel.tres")
 const NETWORK_SLEDGEHAMMER: WeaponData = preload("res://object/weapon_sledgehammer.tres")
 const NETWORK_UCHIGATANA: WeaponData = preload("res://object/weapon_uchigatana.tres")
+## 哆啦A梦的专属武器（2026-11-17）：无弹夹 + 爆炸弹，Client 需要按 id 解析
+## 攻击/爆炸表现与子弹参数。⚠ 空手拳击的「拳」**故意不在本表** ——
+## 它不是可装备道具，而是「槽位为空」的派生结果，见 PlayerState.FISTS_WEAPON。
+const NETWORK_AIR_CANNON: WeaponData = preload("res://object/weapon_air_cannon.tres")
 
 ## 联机武器必须从 Host 固定白名单解析，绝不根据客户端输入动态 load() 资源。
 const NETWORK_WEAPONS: Dictionary = {
@@ -140,6 +144,7 @@ const NETWORK_WEAPONS: Dictionary = {
 	"shovel": NETWORK_SHOVEL,
 	"sledgehammer": NETWORK_SLEDGEHAMMER,
 	"uchigatana": NETWORK_UCHIGATANA,
+	"air_cannon": NETWORK_AIR_CANNON,
 }
 
 

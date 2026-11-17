@@ -9,6 +9,7 @@ class_name ItemCatalogData extends RefCounted
 ## ⚠ 本文件由 `tools/gen_item_catalog.py` 生成，**别手改** —— 改完 object/*.tres 重跑生成器。
 
 const ENTRIES: Array[Dictionary] = [
+	{"id": "air_cannon", "name": "空气炮", "group": "主武器（远程）", "path": "res://object/weapon_air_cannon.tres"},
 	{"id": "at_rifle_01", "name": "巴雷特 M82", "group": "主武器（远程）", "path": "res://object/weapon_at_rifle_01.tres"},
 	{"id": "bowgun_01", "name": "十字弩", "group": "主武器（远程）", "path": "res://object/weapon_bowgun.tres"},
 	{"id": "launcher_01", "name": "榴弹发射器", "group": "主武器（远程）", "path": "res://object/weapon_grenade_launcher.tres"},
@@ -59,7 +60,7 @@ const ENTRIES: Array[Dictionary] = [
 	{"id": "bolt_grenade_01", "name": "ボルトグレネード", "group": "投掷物", "path": "res://object/item_bolt_grenade.tres"},
 	{"id": "dynamite_01", "name": "炸药", "group": "投掷物", "path": "res://object/throwable_dynamite.tres"},
 	{"id": "flash_01", "name": "闪光弹", "group": "投掷物", "path": "res://object/throwable_flash.tres"},
-	{"id": "grenade_01", "name": "手雷", "group": "投掷物", "path": "res://object/item_grenade.tres"},
+	{"id": "grenade_01", "name": "手榴弹", "group": "投掷物", "path": "res://object/item_grenade.tres"},
 	{"id": "molotov_01", "name": "燃烧瓶", "group": "投掷物", "path": "res://object/item_molotov.tres"},
 	{"id": "nitrogen_01", "name": "液体窒素ボトル", "group": "投掷物", "path": "res://object/item_nitrogen.tres"},
 	{"id": "throwing_knife_01", "name": "スローイングナイフ", "group": "投掷物", "path": "res://object/item_throwing_knife.tres"},

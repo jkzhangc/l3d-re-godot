@@ -597,13 +597,17 @@ func _can_auto_take() -> bool:
 	return auto_pickup_armed(get_tree(), _player_ref)
 
 
-## 本角色是否可使用本拾取物武器（角色 allowed 列表）。玩家无效时放行（保持旧行为）。
+## 本角色是否可使用本拾取物武器（角色 allowed 列表 + 武器锁定）。玩家无效时放行（保持旧行为）。
 func _player_can_use() -> bool:
 	if not weapon_data:
 		return true
 	var pc: CharacterData = _player_ref.get("current_character") if is_instance_valid(_player_ref) else null
 	if pc == null:
 		return true
+	## ★武器锁定（2026-11-17）：专属武器角色（哆啦A梦）不可拾取/替换任何地面武器 ——
+	## 连「头顶 D 键帽」都不该出现，所以判据放在这里（提示与长按进度共用本函数）。
+	if pc.weapon_locked:
+		return false
 	return pc.can_use_weapon(weapon_data)
 
 
@@ -880,6 +884,10 @@ func _do_pickup() -> void:
 
 	# 检查当前角色是否可以使用此武器
 	var player_character: CharacterData = state.character
+	if player_character and player_character.weapon_locked:
+		print("[拾取] 角色 %s 武器已锁定，无法拾取 %s" % [player_character.character_name, weapon_data.item_name])
+		_hold_timer = 0.0
+		return
 	if player_character and not player_character.can_use_weapon(weapon_data):
 		print("[拾取] 角色 %s 无法使用 %s，拾取拒绝" % [player_character.character_name, weapon_data.item_name])
 		_hold_timer = 0.0

@@ -21,6 +21,24 @@ class_name PlayerState extends RefCounted
 ## 角色未配置 initial_weapon 时的统一出生武器。
 const DEFAULT_INITIAL_WEAPON := preload("res://object/weapon_pistol.tres")
 
+## 「空槽位 = 空手拳击」的**虚拟武器**（2026-11-17 用户需求）。
+## 它不是可拾取道具、永不进入 equipment / 存档 / 背包；只在当前槽位为空时由
+## `get_active_weapon()` 派生返回，让举起/放下/攻击/推击全部复用现成的近战链路。
+## ⚠ 文件名刻意是 `player_fists.tres`（非 weapon_*）：物品目录生成器按前缀扫描，
+##   用 player_ 前缀可避免「拳」被塞进收藏馆/掉落表。
+const FISTS_WEAPON := preload("res://object/player_fists.tres")
+const FISTS_ITEM_ID := "fists"
+
+
+## 取虚拟拳套（联机表现层按 id 解析时用；**不要**把它加进武器白名单，
+## 否则远端包里的 "fists" 会被当普通武器写进槽位）。
+static func get_fists_weapon() -> WeaponData:
+	return FISTS_WEAPON
+
+
+static func is_fists_id(item_id: String) -> bool:
+	return item_id == FISTS_ITEM_ID
+
 # ═══════════════════════════════════════
 # 角色与生命
 # ═══════════════════════════════════════
@@ -120,7 +138,9 @@ func init_from_character(cd: CharacterData, source_path: String = "") -> void:
 		var slot := weapon.get_slot_key()
 		equipment[slot] = weapon
 		active_weapon_slot = slot
-		if weapon.is_ranged:
+		## 容量 0 的远程武器（空气炮这类无弹夹武器）不写弹药表 —— 写了只会留下
+		## 一条恒为 0 的记录，还会让「空仓姿态」判定误以为打空了。
+		if weapon.is_ranged and weapon.magazine_capacity > 0:
 			set_magazine_ammo(weapon.item_id, weapon.magazine_capacity)
 			# 初始备弹（D2 实测反馈：开局武器备弹全是 0）：initial_reserve_ammo
 			# 之前只在「从地面拾取该武器」时发放（weapon_pickup），开局直接装备的
@@ -180,8 +200,20 @@ func get_character_name() -> String:
 # 武器装备管理（迁自 global.gd:447-490）
 # ═══════════════════════════════════════
 
+## 当前举着的武器。**槽位为空 → 返回虚拟拳套**（空手拳击，2026-11-17）。
+##
+## 【为什么放在这里派生，而不是让各状态自己判空】
+## 举起/放下、近战攻击判定、推击、联机攻击表现全部读这一个入口；任何一处改成
+## 「空手也能……」都会分叉。派生返回「拳」后，空手与拿指虎走的是同一条链路，
+## 动画、伤害、背刺、成就全部零改动。
+##
+## 【为什么 get_equipped_weapon 不跟着改】装备槽必须保持「空就是空」——
+## HUD 空槽图标、拾取落点、存档序列化、联机快照都按真实装备判定。
 func get_active_weapon() -> WeaponData:
-	return equipment.get(active_weapon_slot) as WeaponData
+	var wd: WeaponData = equipment.get(active_weapon_slot) as WeaponData
+	if wd == null:
+		return FISTS_WEAPON
+	return wd
 
 
 func get_equipped_weapon(slot: String) -> WeaponData:

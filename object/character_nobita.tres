@@ -28,6 +28,7 @@
 [ext_resource type="Texture2D" path="res://art/Characters/[VX-2K]-のび太セット狙击枪1.png" id="29_snp"]
 [ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战1.png" id="31_melee"]
 [ext_resource type="Texture2D" path="res://art/Characters/のび太セットスティンガー.png" id="32_stinger"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット素手.png" id="t_fist"]
 
 [resource]
 script = ExtResource("1")
@@ -43,6 +44,7 @@ walk_texture = ExtResource("1_8a3k1")
 run_texture = ExtResource("2_dd21q")
 death_texture = ExtResource("1_8a3k1")
 death_char_index = 6
+fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "Bowgun": ExtResource("23_bg"),
 "CombatKnife": ExtResource("20_knife"),

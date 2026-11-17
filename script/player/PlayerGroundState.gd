@@ -62,12 +62,15 @@ func _try_weapon_state() -> void:
 		transition_requested.emit(wd.get_state_node_name())
 
 
-## 直接举起指定槽位的武器（槽位无武器/无状态名则忽略）。
+## 直接举起指定槽位的武器（槽位为空 → 空手举拳，2026-11-17 用户需求）。
+## ★必须**先切槽位再取武器**：`get_active_weapon()` 在槽位为空时派生返回虚拟拳套，
+## 所以「按 1 而第 1 格没武器」= 把激活槽切到第 1 格并举拳，而不是静默无反应。
 func _try_raise_weapon(slot: String) -> void:
-	var wd: WeaponData = get_player_state().get_equipped_weapon(slot)
+	var ps: PlayerState = get_player_state()
+	ps.active_weapon_slot = slot
+	var wd: WeaponData = ps.get_active_weapon()
 	if not wd or wd.weapon_state_name.is_empty():
 		return
-	get_player_state().active_weapon_slot = slot
 	transition_requested.emit(wd.get_state_node_name())
 
 

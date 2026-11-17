@@ -44,8 +44,12 @@ const AMMO_FONT_FALLBACK_PATH: String = "res://art/System/DotGothic16-Regular.tt
 ## 需要「加兜底链 / 加变体」时用 `FontVariation` —— 它只包装 `base_font`，自己不持有图集。
 ## 铁律：本工程**禁止再使用 `FontFile.duplicate()`**。
 
-const SPRAY_TEXTS: Array[Texture2D] = [
-	preload("res://art/Ui/回復薬×０.png"),
+## 空武器槽图标（2026-11-17 用户需求）：槽位没有武器时显示这个占位图，
+## 让玩家一眼看出「这一格是空的」（此前是整块隐藏，看不出格子存在）。
+## 素材与武器图标同为 160×92，节点 scale=2 不用改。
+const EMPTY_SLOT_ICON: Texture2D = preload("res://art/Ui/装備アイコン.png")
+
+const SPRAY_TEXTS: Array[Texture2D] = [	preload("res://art/Ui/回復薬×０.png"),
 	preload("res://art/Ui/回復薬×１.png"),
 	preload("res://art/Ui/回復薬×２.png"),
 	preload("res://art/Ui/回復薬×３.png"),
@@ -406,17 +410,20 @@ func _update_weapons() -> void:
 		if primary and primary.icon:
 			primary_icon.texture = primary.icon
 			primary_icon.size = primary.icon.get_size()
-			primary_icon.visible = true
 		else:
-			primary_icon.visible = false
+			## 空槽也显示占位框（2026-11-17）：不再整块隐藏。
+			primary_icon.texture = EMPTY_SLOT_ICON
+			primary_icon.size = EMPTY_SLOT_ICON.get_size()
+		primary_icon.visible = true
 	if secondary_icon and (_force_refresh or secondary != _last_secondary_weapon):
 		_last_secondary_weapon = secondary
 		if secondary and secondary.icon:
 			secondary_icon.texture = secondary.icon
 			secondary_icon.size = secondary.icon.get_size()
-			secondary_icon.visible = true
 		else:
-			secondary_icon.visible = false
+			secondary_icon.texture = EMPTY_SLOT_ICON
+			secondary_icon.size = EMPTY_SLOT_ICON.get_size()
+		secondary_icon.visible = true
 	_update_ammo_label(primary_ammo_label, primary, state, true)
 	_update_ammo_label(secondary_ammo_label, secondary, state, false)
 	_update_backpack_label(state)
@@ -909,7 +916,10 @@ func _collect_action_hints() -> Array:
 			slot_key = _action_key_text(&"主武器键")
 		var combined: String = down_key if slot_key.is_empty() else "%s / %s" % [down_key, slot_key]
 		if not combined.is_empty():
-			out.append([combined, "放下武器"])
+			## 空槽举起的是拳头（2026-11-17）→ 文案跟着叫「放下拳」。
+			var holding_fist: bool = state != null \
+				and state.get_equipped_weapon(String(state.active_weapon_slot)) == null
+			out.append([combined, "放下拳" if holding_fist else "放下武器"])
 		_push_hint(out, &"确定键", "攻击")
 		if _active_weapon_needs_reload(state):
 			_push_hint(out, &"装填键", "装填")
@@ -919,10 +929,12 @@ func _collect_action_hints() -> Array:
 		return out
 	## ── 未举枪（地面态）：能做的都在这里 ──
 	var slot: String = _preferred_weapon_slot(state)
+	## 该槽位没武器 → 举起来的是拳头（2026-11-17），提示别写成「举起武器」。
+	var unarmed: bool = state == null or state.get_equipped_weapon(slot) == null
 	if slot == "secondary":
-		_push_hint(out, &"副武器键", "举起第 2 格武器")
+		_push_hint(out, &"副武器键", "空手 · 举拳" if unarmed else "举起第 2 格武器")
 	elif slot == "primary":
-		_push_hint(out, &"主武器键", "举起第 1 格武器")
+		_push_hint(out, &"主武器键", "空手 · 举拳" if unarmed else "举起第 1 格武器")
 	## 觉醒只能在举枪（構え）中发动 → 地面态不传它。
 	_push_skill_hints(out, state, false)
 	_push_hint(out, &"推击键", "推击")
@@ -1008,6 +1020,7 @@ func _action_key_text(action: StringName) -> String:
 
 
 ## 优先提示哪一个武器槽：主武器优先，没有再提示副武器。
+## 两格都空也返回 "primary"（2026-11-17）：空槽现在能举拳，必须给玩家「按 1 出拳」的提示。
 func _preferred_weapon_slot(state: PlayerState) -> String:
 	if state == null:
 		return ""
@@ -1015,7 +1028,7 @@ func _preferred_weapon_slot(state: PlayerState) -> String:
 		return "primary"
 	if state.get_equipped_weapon("secondary") != null:
 		return "secondary"
-	return ""
+	return "primary"
 
 
 ## 当前举着的武器槽（"primary" / "secondary"）；取不到返回 ""。

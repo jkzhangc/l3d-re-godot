@@ -382,6 +382,9 @@ const WEAPON_ID_ZH: Dictionary = {
 	"launcher_01": "榴弹发射器",
 	"rocket_01": "火箭筒（RPG-7）",
 	"knife_01": "小刀",
+	## 2026-11-17：哆啦A梦专属武器（锁定不可换）
+	"air_cannon": "空气炮",
+	"fists": "拳",
 }
 
 

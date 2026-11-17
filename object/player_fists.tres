@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="Texture2D" path="res://art/Characters/のび太セット近战.png" id="2"]
+[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="3"]
+[ext_resource type="AudioStream" path="res://sound/(効果音)打撃3.ogg" id="4"]
+[ext_resource type="PackedScene" path="res://anim/anim_effect_hit.tscn" id="5"]
+
+[resource]
+script = ExtResource("1")
+attack_power = 40
+attack_speed = 1.3
+weapon_state_name = "Fists"
+weapon_walk_texture = ExtResource("2")
+weapon_raise_char_sequence = Array[int]([1])
+weapon_raise_frame_durations = Array[float]([0.1])
+is_ranged = false
+weapon_slot = 1
+attack_sound = ExtResource("3")
+hit_sound = ExtResource("4")
+gunshot_range = 0.0
+hit_effect_anim = ExtResource("5")
+attack_char_sequence = Array[int]([3, 4, 5, 2])
+melee_attack_char_sequence = Array[int]([4, 5, 5])
+melee_attack_frame_durations = Array[float]([0.14, 0.09, 0.17])
+melee_range_size = Vector2(32, 32)
+melee_range_forward_offset = 24.0
+melee_hit_at_sequence_idx = 1
+item_id = "fists"
+item_name = "拳"
+item_type = 3
+description = "空槽位时自动摆出的空手格斗姿态。伤害最低，但没有弹药与耐久限制。"
+sell_price = 0
+max_stack = 1
