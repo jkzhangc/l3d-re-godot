@@ -188,11 +188,11 @@ def check_godot_adapter(stats, clients):
     return failures
 
 
-def run_case(index, profile, clients, count, seed, output, adapter_mode='node'):
+def run_case(index, profile, clients, count, seed, output, adapter_mode='node', delay_ms=4, fps=60):
     host_port = 28160 + index
     children = {}
     result = {'profile': profile, 'seed': seed, 'clients': clients, 'count': count,
-              'adapter': adapter_mode,
+              'adapter': adapter_mode, 'delay_ms': delay_ms, 'fps': fps,
               'scope': 'localhost real ENet/World through authenticated UDP carrier; no public path'}
     try:
         # Each Godot child gets its own log; concurrent default user:// log rotation can collide.
@@ -200,13 +200,13 @@ def run_case(index, profile, clients, count, seed, output, adapter_mode='node'):
             log = output.parent / f'{output.stem}_{index}_{profile}_{role}_engine.log'
             return BASE[:4] + ['--log-file', str(log)] + BASE[4:]
         host = Child(engine_command('host') + [f'--udp-lab-role=host', f'--udp-lab-port={host_port}',
-            f'--udp-lab-clients={clients}', f'--udp-lab-count={count}', '--udp-lab-fps=60'], 'UDP_GAME_HOST_READY')
+            f'--udp-lab-clients={clients}', f'--udp-lab-count={count}', f'--udp-lab-fps={fps}'], 'UDP_GAME_HOST_READY')
         children['host'] = host
         host.ready(15)
         loss = {'clean': 0, 'loss1': 0.01, 'loss5': 0.05, 'outage': 0.01}[profile]
         bridge_args = ['node', str(ROOT / 'tools/network_udp_enet_proxy.mjs'),
             f'--host-port={host_port}', f'--clients={clients}', f'--seed={seed}', f'--loss={loss}',
-            '--delay-ms=4', '--jitter-ms=' + ('0' if profile == 'clean' else '10'),
+            f'--delay-ms={delay_ms}', '--jitter-ms=' + ('0' if profile == 'clean' else '10'),
             '--duplicate=' + ('0' if profile == 'clean' else '0.02')]
         if adapter_mode == 'godot':
             bridge_args += ['--external-host=1']
@@ -233,7 +233,7 @@ def run_case(index, profile, clients, count, seed, output, adapter_mode='node'):
         for i, port in enumerate(endpoint['ports']):
             children[f'client{i}'] = Child(engine_command(f'client{i}') + ['--udp-lab-role=client',
                 f'--udp-lab-port={port}', f'--udp-lab-index={i}', f'--udp-lab-clients={clients}',
-                f'--udp-lab-count={count}', '--udp-lab-fps=60'], 'UDP_GAME_CLIENT_RESULT ')
+                f'--udp-lab-count={count}', f'--udp-lab-fps={fps}'], 'UDP_GAME_CLIENT_RESULT ')
         host.proc.wait(timeout=110)
         for name, child in children.items():
             if name.startswith('client'):
@@ -313,11 +313,17 @@ def main():
     parser.add_argument('--clients', type=int, choices=[1, 2, 3], default=2)
     parser.add_argument('--adapter', choices=['node', 'godot'], default='node')
     parser.add_argument('--count', type=int, default=150)
+    parser.add_argument('--delay-ms', type=int, default=4)
+    parser.add_argument('--fps', type=int, default=60)
     parser.add_argument('--seed', type=int, default=31)
     parser.add_argument('--label', required=True)
     args = parser.parse_args()
     if not 20 <= args.count <= 300:
         parser.error('count must be 20..300')
+    if not 0 <= args.delay_ms <= 50:
+        parser.error('delay-ms must be 0..50')
+    if not 30 <= args.fps <= 240:
+        parser.error('fps must be 30..240')
     if not args.label or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in args.label):
         parser.error('label must be a simple ASCII identifier')
     output = ROOT / '.workbuddy/tmp' / f'network_udp_lab_{args.label}.json'
@@ -330,7 +336,8 @@ def main():
     cases, error = [], None
     try:
         for index, profile in enumerate(args.profiles):
-            cases.append(run_case(index, profile, args.clients, args.count, args.seed, output, args.adapter))
+            cases.append(run_case(index, profile, args.clients, args.count, args.seed, output,
+                args.adapter, args.delay_ms, args.fps))
     except Exception as exc:
         error = repr(exc)
         raise
