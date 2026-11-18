@@ -46,18 +46,39 @@ def load_animations(path: str) -> list[dict]:
         at = item.attributes
         name = str(at.get("@name") or "").strip()
         frames = at.get("@frames") or []
-        pats: list[int] = []
+        cells_per_frame: list[list[dict]] = []
         for fr in frames:
             cd = fr.attributes.get("@cell_data")
             raw = getattr(cd, "_private_data", b"") if cd is not None else b""
-            pats.append(struct.unpack_from("<h", raw, TABLE_HEADER)[0] if len(raw) > TABLE_HEADER else -1)
+            cells_per_frame.append(_decode_cells(raw))
         out.append({
             "id": int(at.get("@id") or 0),
             "name": name,
             "sheet1": str(at.get("@animation1_name") or ""),
             "sheet2": str(at.get("@animation2_name") or ""),
             "frame_max": int(at.get("@frame_max") or 0),
-            "patterns": pats[: int(at.get("@frame_max") or 0)],
+            "frames": cells_per_frame[: int(at.get("@frame_max") or 0)],
+        })
+    return out
+
+
+def _decode_cells(raw: bytes) -> list[dict]:
+    """RPG::Table：x=同一帧里的第几个 cell，y=字段（8 个）。
+
+    字段顺序（VX Ace，逐字节验证）：pattern, x, y, zoom(100=原始), angle, flip, opacity(255), blend
+    """
+    if len(raw) < TABLE_HEADER:
+        return []
+    dim, xs, ys, zs, cnt = struct.unpack_from("<5I", raw, 0)
+    if dim != 2 or xs <= 0 or ys < 8:
+        return []
+    vals = struct.unpack_from("<%dh" % cnt, raw, TABLE_HEADER)
+    out = []
+    for x in range(xs):
+        f = [vals[y * xs + x] for y in range(8)]
+        out.append({
+            "pattern": f[0], "x": f[1], "y": f[2], "zoom": f[3],
+            "angle": f[4], "flip": f[5], "opacity": f[6], "blend": f[7],
         })
     return out
 
@@ -69,63 +90,96 @@ def safe(name: str) -> str:
     return name.strip() or "anim"
 
 
-def write_tscn(path: str, texture_res: str, seq: list[int], fps: float, h_frames: int = 5) -> None:
-    text = (
-        '[gd_scene load_steps=3 format=3]\n\n'
-        '[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]\n'
-        '[ext_resource type="Texture2D" path="%s" id="2_sheet"]\n\n'
-        '[node name="AnimEdit" type="Node2D"]\n'
-        'script = ExtResource("1_sprite")\n'
-        'texture = ExtResource("2_sheet")\n'
-        'h_frames = %d\n'
-        'fps = %g\n'
-        'frame_sequence = Array[int]([%s])\n'
-    ) % (texture_res, h_frames, fps, ", ".join(str(x) for x in seq))
+def write_scene(path: str, texture_res: str, frames: list[list[dict]], fps: float,
+                h_frames: int = 5) -> None:
+    """写多格场景：每帧的每个 cell 变成一条 VXAnimCellData 子资源。"""
+    flat: list[tuple[int, dict]] = []
+    for fi, cs in enumerate(frames):
+        for c in cs:
+            flat.append((fi, c))
+    lines: list[str] = ["[gd_scene format=3]", ""]
+    lines.append('[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]')
+    lines.append('[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="2_cell"]')
+    lines.append('[ext_resource type="Texture2D" path="%s" id="3_sheet"]' % texture_res)
+    lines.append("")
+    ids: list[str] = []
+    for i, (fi, c) in enumerate(flat):
+        rid = "cell_%d" % i
+        ids.append(rid)
+        zoom = (c.get("zoom", 100) or 100) / 100.0
+        lines.append('[sub_resource type="Resource" id="%s"]' % rid)
+        lines.append('script = ExtResource("2_cell")')
+        lines.append("frame_idx = %d" % fi)
+        lines.append("pattern = %d" % max(0, int(c.get("pattern", 0))))
+        lines.append("offset = Vector2(%d, %d)" % (int(c.get("x", 0)), int(c.get("y", 0))))
+        lines.append("scale = Vector2(%s, %s)" % (_num(zoom), _num(zoom)))
+        lines.append("rotation_deg = %s" % _num(float(c.get("angle", 0))))
+        lines.append("opacity = %s" % _num(float(c.get("opacity", 255)) / 255.0))
+        lines.append("blend_mode = %d" % int(c.get("blend", 0)))
+        if int(c.get("flip", 0)) != 0:
+            lines.append("flip_h = true")
+        lines.append("")
+    seq = ", ".join(str(i) for i in range(len(frames)))
+    lines.append('[node name="AnimEdit" type="Node2D"]')
+    lines.append('script = ExtResource("1_sprite")')
+    lines.append('texture = ExtResource("3_sheet")')
+    lines.append("h_frames = %d" % h_frames)
+    lines.append("fps = %s" % _num(fps))
+    lines.append("frame_sequence = Array[int]([%s])" % seq)
+    if ids:
+        lines.append('cell_data = Array[ExtResource("2_cell")]([%s])'
+                     % ", ".join('SubResource("%s")' % r for r in ids))
+    lines.append("")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
+        f.write("\n".join(lines))
+
+
+def _num(v: float) -> str:
+    if abs(v - round(v)) < 1e-6:
+        return str(int(round(v)))
+    return ("%.4f" % v).rstrip("0").rstrip(".")
 
 
 def convert(data: str, out_dir: str, art_dir: str, fps: float, prefix: str,
             dry_run: bool, force: bool) -> int:
     anims = load_animations(data)
     print("读到 %d 条动画" % len(anims))
-    made = 0
-    skipped = 0
-    missing = 0
-    used_names: set[str] = set()
+    made = skipped = missing = 0
     used_names: set[str] = set()
     for a in anims:
-        if not a["name"] or a["frame_max"] <= 0 or not a["patterns"]:
+        frames = a["frames"]
+        if not a["name"] or a["frame_max"] <= 0 or not frames:
             skipped += 1
             continue
-        pats = a["patterns"]
-        has1 = any(0 <= p < 100 for p in pats)
-        has2 = any(p >= 100 for p in pats)
-        if has1 and a["sheet1"]:
-            sheet = a["sheet1"]
-            seq = [p if p < 100 else -1 for p in pats]
-        elif has2 and a["sheet2"]:
-            sheet = a["sheet2"]
-            seq = [p - 100 if p >= 100 else -1 for p in pats]
-        else:
+        n1 = sum(1 for fr in frames for c in fr if 0 <= c["pattern"] < 100)
+        n2 = sum(1 for fr in frames for c in fr if c["pattern"] >= 100)
+        if n1 == 0 and n2 == 0:
             skipped += 1
             continue
-        ## 混合双表：>=100 的帧退回上一个有效图案（运行时单纹理做不到两表叠加）
-        fixed: list[int] = []
-        last = -1
-        mixed = False
-        for p in seq:
-            if p < 0:
-                mixed = True
-                p = last if last >= 0 else 0
-            fixed.append(p)
-            last = p
-        if mixed:
-            print("  [警告] %s：双表混合，>=100 的帧退回上一图案" % a["name"])
+        if n1 and n2:
+            print("  [警告] %s：双表 %d/%d 个 cell，只保留用得多的那张表" % (a["name"], n1, n2))
+        use_second = n2 > n1
+        sheet = a["sheet2"] if use_second else a["sheet1"]
+        if not sheet:
+            skipped += 1
+            continue
+        mapped: list[list[dict]] = []
+        for fr in frames:
+            cs = []
+            for c in fr:
+                p = c["pattern"]
+                if use_second:
+                    if p < 100:
+                        continue
+                    p -= 100
+                else:
+                    if p >= 100:
+                        continue
+                cs.append(dict(c, pattern=p))
+            mapped.append(cs)
         if not os.path.exists(os.path.join(art_dir, sheet + ".png")):
             missing += 1
-        ## 重名动画（VX 里允许同名）用 id 区分，避免互相覆盖。
         base = safe(a["name"])
         if base in used_names:
             base = "%s_%d" % (base, a["id"])
@@ -134,9 +188,10 @@ def convert(data: str, out_dir: str, art_dir: str, fps: float, prefix: str,
         if os.path.exists(dst) and not force:
             skipped += 1
             continue
-        print("  [导出] %-20s 帧=%-3d 表=%s" % (a["name"], a["frame_max"], sheet))
+        total_cells = sum(len(fr) for fr in mapped)
+        print("  [导出] %-20s 帧=%-3d cell=%-3d 表=%s" % (a["name"], len(mapped), total_cells, sheet))
         if not dry_run:
-            write_tscn(dst, "res://art/Animations/%s.png" % sheet, fixed, fps)
+            write_scene(dst, "res://art/Animations/%s.png" % sheet, mapped, fps)
         made += 1
     print("\n完成：导出 %d，跳过 %d，其中素材缺失 %d%s"
           % (made, skipped, missing, "（dry-run）" if dry_run else ""))
