@@ -31,6 +31,18 @@ class_name VXAnimSprite extends Node2D
 # ═══════════════════════════════════════
 # 导出参数
 # ═══════════════════════════════════════
+## 显示层级（2026-11-18）：特效要能选「压住玩家」还是「垫在角色下面」。
+## 角色/敌人固定 z_index = 1（见 enemy.gd / player），名牌 30，黑幕 90。
+enum ZLayer { BELOW_CHARACTERS = 0, WITH_CHARACTERS = 1, ABOVE_CHARACTERS = 2 }
+const Z_INDEX_BELOW := 0
+const Z_INDEX_WITH := 1
+const Z_INDEX_ABOVE := 3
+
+@export var z_layer: ZLayer = ZLayer.WITH_CHARACTERS:
+	set(v):
+		z_layer = v
+		_apply_z_layer()
+
 @export var texture: Texture2D            ## VX Ace 动画精灵表（pattern 0..99）
 ## 第二张精灵表（2026-11-18）：VX Ace 的动画可以有 animation1 / animation2 两张表，
 ## cell.pattern >= 100 表示「用第二张表的第 (pattern-100) 格」。为空时退回单表。
@@ -122,6 +134,7 @@ func _apply_blood_censor() -> void:
 
 
 func _ready() -> void:
+	_apply_z_layer()
 	if not texture:
 		push_warning("VXAnimSprite: 未设置 texture，跳过初始化")
 		return
@@ -161,6 +174,18 @@ func _ready() -> void:
 	add_child(_timer)
 	_timer.start()
 	_playing = true
+
+
+## 把 z_layer 落到 z_index：0=角色下层、1=与角色同层、3=角色上层。
+## 保留 3 而不是 2，是为了以后在角色层和特效上层之间还能插别的层。
+func _apply_z_layer() -> void:
+	match z_layer:
+		ZLayer.BELOW_CHARACTERS:
+			z_index = Z_INDEX_BELOW
+		ZLayer.ABOVE_CHARACTERS:
+			z_index = Z_INDEX_ABOVE
+		_:
+			z_index = Z_INDEX_WITH
 
 
 func _calc_v_frames(tex_h: int) -> int:

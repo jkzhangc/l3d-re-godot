@@ -84,6 +84,7 @@ var _armed_pattern: int = 0
 ## 精灵表当前显示的是第二张表（pattern 需要 +100）
 var _sheet2: bool = false
 var _sheet2_check: CheckBox
+var _z_option: OptionButton
 var _preview_dragging: bool = false
 var _preview_drag_start: Vector2 = Vector2.ZERO
 var _preview_drag_origin: Vector2 = Vector2.ZERO
@@ -287,6 +288,20 @@ func _build_props() -> Control:
 	_tex_label.add_theme_color_override("font_color", C_MUTED)
 	_tex_label.clip_text = true
 	_tex_label.custom_minimum_size = Vector2(110, 0)
+	pgrid.add_child(_label("层级"))
+	_z_option = OptionButton.new()
+	_z_option.add_item("角色下层")
+	_z_option.add_item("与角色同层")
+	_z_option.add_item("角色上层")
+	_z_option.item_selected.connect(func(idx: int) -> void:
+		if _data == null:
+			return
+		_data.z_layer = idx
+		_dirty = true
+		_update_title())
+	pgrid.add_child(_z_option)
+	pgrid.add_child(_label(""))
+
 	pgrid.add_child(_label("贴图"))
 	pgrid.add_child(_tex_label)
 	pgrid.add_child(_button("选择贴图…", _on_pick_texture))
@@ -672,6 +687,8 @@ func _pull_data_to_ui() -> void:
 	_scale_y.set_value_no_signal(_data.animation_scale.y)
 	_rot_spin.set_value_no_signal(_data.animation_rotation)
 	_fps_spin.set_value_no_signal(clampf(_data.fps, 0.1, 120.0))
+	if _z_option != null:
+		_z_option.select(clampi(int(_data.z_layer), 0, 2))
 	_tex_label.text = _data.texture.resource_path.get_file() if _data.texture != null else "（未设置）"
 	_sheet.texture = _data.texture
 	_sheet.h_frames = maxi(1, _data.h_frames)
