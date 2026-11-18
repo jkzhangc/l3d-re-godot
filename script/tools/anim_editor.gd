@@ -431,20 +431,31 @@ func _build_right() -> Control:
 
 func _scan_files() -> void:
 	_file_paths.clear()
-	var dir := DirAccess.open(ANIM_DIR)
-	if dir != null:
-		dir.list_dir_begin()
-		var fn := dir.get_next()
-		while not fn.is_empty():
-			if fn.ends_with(".tscn") and not dir.current_is_dir():
-				_file_paths.append("%s/%s" % [ANIM_DIR, fn])
-			fn = dir.get_next()
-		dir.list_dir_end()
+	## 递归扫描：导入工具会把成批动画放进 anim/ 的子目录（如 anim/_rvdata_某工程/），
+	## 只扫一层会「看不到新导出的动画」。
+	_walk_anim_dir(ANIM_DIR)
 	_file_paths.sort()
 	_file_option.clear()
 	for p: String in _file_paths:
-		_file_option.add_item(p.get_file())
+		## 下拉框显示相对 anim/ 的路径，子目录里的同名文件才分得清。
+		_file_option.add_item(p.replace(ANIM_DIR + "/", ""))
 	_select_file_in_option()
+
+
+func _walk_anim_dir(dir_path: String) -> void:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return
+	dir.list_dir_begin()
+	var fn: String = dir.get_next()
+	while not fn.is_empty():
+		if dir.current_is_dir():
+			if not fn.begins_with("."):
+				_walk_anim_dir(dir_path + "/" + fn)
+		elif fn.ends_with(".tscn"):
+			_file_paths.append(dir_path + "/" + fn)
+		fn = dir.get_next()
+	dir.list_dir_end()
 
 
 func _on_rescan() -> void:
