@@ -89,7 +89,8 @@ def detect_anim_dir(project: str) -> str:
 
 
 def convert(src: str, out_dir: str, art_dir: str, cols: int, fps: float,
-            only: list[str], prefix: str, force: bool, dry_run: bool) -> int:
+            only: list[str], prefix: str, force: bool, dry_run: bool,
+            no_copy: bool = False) -> int:
     if not os.path.isdir(src):
         print("[ERROR] 目录不存在：%s" % src)
         return 2
@@ -120,10 +121,13 @@ def convert(src: str, out_dir: str, art_dir: str, cols: int, fps: float,
         if dry_run:
             made += 1
             continue
-        os.makedirs(art_dir, exist_ok=True)
         dst_png = os.path.join(art_dir, fn)
-        if not os.path.exists(dst_png):
-            shutil.copy2(os.path.join(src, fn), dst_png)
+        if not no_copy:
+            os.makedirs(art_dir, exist_ok=True)
+            if not os.path.exists(dst_png):
+                shutil.copy2(os.path.join(src, fn), dst_png)
+        elif not os.path.exists(dst_png):
+            print("  [缺图] %s 不在 art/Animations（仍会生成 tscn，运行时会缺贴图）" % fn)
         write_tscn(dst_tscn, "res://art/Animations/%s" % fn, list(range(total)), fps, real_cols)
         made += 1
     print("\n完成：导出 %d，跳过 %d%s" % (made, skipped, "（dry-run）" if dry_run else ""))
@@ -184,6 +188,7 @@ def main() -> int:
     ap.add_argument("--prefix", default="anim_", help="输出文件名前缀")
     ap.add_argument("--force", action="store_true", help="覆盖已存在的 tscn")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-copy", action="store_true", help="不复制 PNG（素材已在工程里时用）")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     if args.selftest:
@@ -201,7 +206,7 @@ def main() -> int:
         return 2
     only = [x for x in args.only.split(",") if x]
     return convert(src, args.out, args.art, args.cols, args.fps, only, args.prefix,
-                   args.force, args.dry_run)
+                   args.force, args.dry_run, args.no_copy)
 
 
 if __name__ == "__main__":
