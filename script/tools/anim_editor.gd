@@ -81,6 +81,9 @@ var _dur_spin: SpinBox
 var _overlay
 var _multi_check: CheckBox
 var _armed_pattern: int = 0
+## 精灵表当前显示的是第二张表（pattern 需要 +100）
+var _sheet2: bool = false
+var _sheet2_check: CheckBox
 var _preview_dragging: bool = false
 var _preview_drag_start: Vector2 = Vector2.ZERO
 var _preview_drag_origin: Vector2 = Vector2.ZERO
@@ -186,6 +189,13 @@ func _build_left() -> Control:
 	cap.text = "精灵表 · 左键把当前帧换成这一格（滚轮缩放）"
 	cap.add_theme_color_override("font_color", C_MUTED)
 	v.add_child(cap)
+
+	_sheet2_check = CheckBox.new()
+	_sheet2_check.text = "第二张表（pattern ≥ 100）"
+	_sheet2_check.tooltip_text = "VX Ace 动画可以有 animation1 / animation2 两张表；勾上后点格子得到 100+ 的图案索引"
+	_sheet2_check.disabled = true
+	_sheet2_check.toggled.connect(_on_sheet2_toggled)
+	v.add_child(_sheet2_check)
 
 	_sheet = SHEET_VIEW_SCRIPT.new()
 	_sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -651,6 +661,11 @@ func _pull_data_to_ui() -> void:
 	_sheet.h_frames = maxi(1, _data.h_frames)
 	_sheet.v_frames = maxi(0, _data.v_frames)
 	_sheet.zoom = 1.0
+	_sheet2 = false
+	if _sheet2_check != null:
+		_sheet2_check.set_pressed_no_signal(false)
+		_sheet2_check.disabled = _data.texture2 == null
+		_sheet2_check.text = "第二张表（pattern ≥ 100）" if _data.texture2 != null else "第二张表（未设置）"
 	if not _data.frame_sequence.is_empty():
 		_armed_pattern = _data.frame_sequence[0]
 	_sheet.refresh()
@@ -689,7 +704,12 @@ func _sync_frame_display() -> void:
 		active = _data.frame_sequence[_sel_frame]
 	var multi: bool = _multi_check != null and _multi_check.button_pressed
 	## 多格模式下「这一帧」是若干 cell 的组合，没有单一图案可高亮 → 只亮待放置图案。
-	_sheet.active_pattern = -1 if multi else active
+	var active_local: int = active
+	if _sheet2:
+		active_local = active - 100 if active >= 100 else -1
+	elif active >= 100:
+		active_local = -1
+	_sheet.active_pattern = -1 if multi else active_local
 	_sheet.armed_pattern = _armed_pattern if multi else -1
 	_sheet.refresh()
 	_refresh_strip()
@@ -700,6 +720,14 @@ func _sync_frame_display() -> void:
 # ═══════════════════════════════════════
 # 精灵表交互
 # ═══════════════════════════════════════
+func _on_sheet2_toggled(on: bool) -> void:
+	_sheet2 = on
+	if _data != null:
+		_sheet.texture = _data.texture2 if on else _data.texture
+	_sheet.refresh()
+	_set_status("当前精灵表：%s" % ("第二张（pattern = 100 + 格子号）" if on else "第一张（pattern = 格子号）"))
+
+
 func _set_zoom(z: float) -> void:
 	_sheet.zoom = clampf(z, 0.25, 6.0)
 	_sheet.refresh()
@@ -712,16 +740,17 @@ func _on_sheet_pattern_clicked(pattern: int) -> void:
 		_on_rebuild_sequence()
 		if _data.frame_sequence.is_empty():
 			return
-	_armed_pattern = pattern
+	var real_pattern: int = pattern + (100 if _sheet2 else 0)
+	_armed_pattern = real_pattern
 	_sheet.armed_pattern = pattern
 	_sheet.refresh()
 	if _multi_check != null and _multi_check.button_pressed:
 		if _cells_of_frame().is_empty():
 			_on_overlay_empty_clicked(Vector2(_preview_viewport.size) * 0.5)
 		else:
-			_set_status("已选中图案 %d：在预览里点空白处放置（右键可放置/取消）" % pattern)
+			_set_status("已选中图案 %d：在预览里点空白处放置（右键可放置/取消）" % real_pattern)
 		return
-	_set_pattern_of_current(pattern)
+	_set_pattern_of_current(real_pattern)
 	_sync_frame_params_ui()
 
 

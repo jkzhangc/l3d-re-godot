@@ -33,6 +33,9 @@ var _file_path: String = ""
 
 ## 缓存的纹理和参数（target 可能不在场景树中）
 var _texture: Texture2D = null
+var _texture2: Texture2D = null
+var _edit_sheet2: bool = false
+var _sheet2_cb: CheckBox = null
 var _h_frames: int = 5
 var _v_frames: int = 0
 var _cell_size: Vector2 = Vector2(192, 192)
@@ -128,6 +131,7 @@ func _read_from_target() -> void:
 	if not _target:
 		return
 	_texture = _target.texture
+	_texture2 = _target.texture2
 	_h_frames = _target.h_frames
 	_v_frames = _target.v_frames
 	_frame_sequence = _target.frame_sequence.duplicate()
@@ -180,6 +184,7 @@ func _apply_params_to_target() -> void:
 	if not _target:
 		return
 	_target.texture = _texture
+	_target.texture2 = _texture2
 	_target.h_frames = _h_frames
 	_target.fps = float(_fps_spin.value) if _fps_spin else 10.0
 	_target.looping = _loop_btn.button_pressed if _loop_btn else false
@@ -312,6 +317,24 @@ func _build_ui() -> void:
 	var cb_mode: Callable = func(idx: int): _on_mode_changed(idx)
 	_mode_option.item_selected.connect(cb_mode)
 	_toolbar.add_child(_mode_option)
+
+	_sheet2_cb = CheckBox.new()
+	_sheet2_cb.text = "表2"
+	_sheet2_cb.tooltip_text = "勾上后：格子视图显示第二张表，点格子写入 pattern+100"
+	_sheet2_cb.disabled = _texture2 == null
+	_sheet2_cb.button_pressed = _edit_sheet2
+	_sheet2_cb.toggled.connect(func(on: bool) -> void:
+		_edit_sheet2 = on
+		_sync_sheet_view()
+		_sprite_view.queue_redraw())
+	_toolbar.add_child(_sheet2_cb)
+
+	var pick2 := Button.new()
+	pick2.text = "选表2…"
+	pick2.flat = true
+	pick2.tooltip_text = "为这条动画指定第二张精灵表（VX Ace 的 animation2）"
+	pick2.pressed.connect(func() -> void: _pick_texture2())
+	_toolbar.add_child(pick2)
 
 	var sep_auto := ColorRect.new()
 	sep_auto.color = Color(1, 1, 1, 0.15)
@@ -680,7 +703,7 @@ func _sync_sheet_view() -> void:
 	## 将面板状态同步到 VXAnimSheetView
 	if not _sprite_view:
 		return
-	_sprite_view.sheet_texture = _texture
+	_sprite_view.sheet_texture = _texture2 if _edit_sheet2 else _texture
 	_sprite_view.sheet_h_frames = _h_frames
 	_sprite_view.sheet_v_frames = _v_frames
 	_sprite_view.sheet_cell_size = _cell_size
@@ -695,7 +718,33 @@ func _sync_sheet_view() -> void:
 # 帧序列编辑
 # ═══════════════════════════════════════
 
+func _pick_texture2() -> void:
+	if not editor_interface:
+		return
+	var fd := EditorFileDialog.new()
+	fd.file_mode = EditorFileDialog.FILE_MODE_OPEN_FILE
+	fd.access = EditorFileDialog.ACCESS_RESOURCES
+	fd.add_filter("*.png", "PNG")
+	fd.title = "选择第二张精灵表（animation2）"
+	fd.file_selected.connect(func(path: String) -> void:
+		_texture2 = load(path) as Texture2D
+		if _target:
+			_target.texture2 = _texture2
+		if _sheet2_cb:
+			_sheet2_cb.disabled = _texture2 == null
+			_sheet2_cb.set_pressed_no_signal(_texture2 != null)
+		_edit_sheet2 = _texture2 != null
+		_sync_sheet_view()
+		_sprite_view.queue_redraw()
+		fd.queue_free())
+	fd.canceled.connect(func() -> void: fd.queue_free())
+	editor_interface.get_base_control().add_child(fd)
+	fd.popup_centered_ratio(0.6)
+
+
 func _on_cell_clicked(pattern: int) -> void:
+	if _edit_sheet2:
+		pattern += 100
 	## 左键点击格子：
 	##   不在序列中 → 追加到末尾
 	##   已在序列中 → 选中第一个出现位置（不删除）

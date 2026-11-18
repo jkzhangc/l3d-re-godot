@@ -31,7 +31,10 @@ class_name VXAnimSprite extends Node2D
 # ═══════════════════════════════════════
 # 导出参数
 # ═══════════════════════════════════════
-@export var texture: Texture2D            ## VX Ace 动画精灵表
+@export var texture: Texture2D            ## VX Ace 动画精灵表（pattern 0..99）
+## 第二张精灵表（2026-11-18）：VX Ace 的动画可以有 animation1 / animation2 两张表，
+## cell.pattern >= 100 表示「用第二张表的第 (pattern-100) 格」。为空时退回单表。
+@export var texture2: Texture2D
 @export var h_frames: int = 5             ## 列数（VX Ace 标准 = 5）
 @export var v_frames: int = 0             ## 行数（0 = 根据纹理高度自动计算）
 @export var fps: float = 10.0             ## 播放速度（帧/秒），frame_durations 为空时使用
@@ -94,7 +97,7 @@ static func is_blood_texture(tex: Texture2D) -> bool:
 ##   · 选了非红色 → 挂 hue 重映射材质，红血改成绿/紫或去色。
 ## 只作用于血效动画，枪口/爆炸/酸液不受影响。
 func _apply_blood_censor() -> void:
-	if not is_blood_texture(texture):
+	if not is_blood_texture(texture) and not is_blood_texture(texture2):
 		return
 	if not Global.blood_enabled:
 		visible = false
@@ -226,6 +229,30 @@ func _update_frame() -> void:
 		_update_single()
 
 
+## pattern → 用哪张表（>=100 且存在第二张表时用第二张）
+func texture_for_pattern(pattern: int) -> Texture2D:
+	if pattern >= 100 and texture2 != null:
+		return texture2
+	return texture
+
+
+## pattern → 该表内的格子索引
+func local_pattern(pattern: int) -> int:
+	if pattern >= 100 and texture2 != null:
+		return pattern - 100
+	return pattern
+
+
+## 某张表的格子尺寸（两张表理论上都是 5×N 的 192 格，但宽高可能不同，按表算更稳）
+func cell_size_of(tex: Texture2D) -> Vector2:
+	if tex == null:
+		return _cell_size
+	var w: float = float(tex.get_width())
+	var h: float = float(tex.get_height())
+	var rows: int = v_frames if v_frames > 0 else maxi(1, int(ceil(h / 192.0)))
+	return Vector2(w / float(maxi(1, h_frames)), h / float(maxi(1, rows)))
+
+
 func _update_single() -> void:
 	## 单精灵模式：只显示一个格子，位置 = 帧偏移
 	var cell_idx: int = _get_cell_index()
@@ -279,9 +306,15 @@ func _create_sprite() -> Sprite2D:
 
 func _apply_cell_to_sprite(s: Sprite2D, pattern: int, offset: Vector2, sc: Vector2, rot: float, op: float, blend: int, flip: bool) -> void:
 	s.visible = true
-	var col: int = pattern % h_frames
-	var row: int = pattern / h_frames
-	s.region_rect = Rect2(col * _cell_size.x, row * _cell_size.y, _cell_size.x, _cell_size.y)
+	## 双表支持：pattern >= 100 → 第二张表（见 texture_for_pattern）
+	var tex: Texture2D = texture_for_pattern(pattern)
+	if s.texture != tex:
+		s.texture = tex
+	var lp: int = local_pattern(pattern)
+	var cs: Vector2 = cell_size_of(tex)
+	var col: int = lp % h_frames
+	var row: int = lp / h_frames
+	s.region_rect = Rect2(col * cs.x, row * cs.y, cs.x, cs.y)
 	s.position = offset
 	s.scale = sc
 	s.rotation_degrees = rot

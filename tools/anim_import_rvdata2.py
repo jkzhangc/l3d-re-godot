@@ -90,8 +90,8 @@ def safe(name: str) -> str:
     return name.strip() or "anim"
 
 
-def write_scene(path: str, texture_res: str, frames: list[list[dict]], fps: float,
-                h_frames: int = 5) -> None:
+def write_scene(path: str, texture_res: str, texture2_res: str, frames: list[list[dict]],
+                fps: float, h_frames: int = 5) -> None:
     """写多格场景：每帧的每个 cell 变成一条 VXAnimCellData 子资源。"""
     flat: list[tuple[int, dict]] = []
     for fi, cs in enumerate(frames):
@@ -101,6 +101,8 @@ def write_scene(path: str, texture_res: str, frames: list[list[dict]], fps: floa
     lines.append('[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]')
     lines.append('[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="2_cell"]')
     lines.append('[ext_resource type="Texture2D" path="%s" id="3_sheet"]' % texture_res)
+    if texture2_res:
+        lines.append('[ext_resource type="Texture2D" path="%s" id="4_sheet2"]' % texture2_res)
     lines.append("")
     ids: list[str] = []
     for i, (fi, c) in enumerate(flat):
@@ -123,6 +125,8 @@ def write_scene(path: str, texture_res: str, frames: list[list[dict]], fps: floa
     lines.append('[node name="AnimEdit" type="Node2D"]')
     lines.append('script = ExtResource("1_sprite")')
     lines.append('texture = ExtResource("3_sheet")')
+    if texture2_res:
+        lines.append('texture2 = ExtResource("4_sheet2")')
     lines.append("h_frames = %d" % h_frames)
     lines.append("fps = %s" % _num(fps))
     lines.append("frame_sequence = Array[int]([%s])" % seq)
@@ -157,29 +161,23 @@ def convert(data: str, out_dir: str, art_dir: str, fps: float, prefix: str,
         if n1 == 0 and n2 == 0:
             skipped += 1
             continue
-        if n1 and n2:
-            print("  [警告] %s：双表 %d/%d 个 cell，只保留用得多的那张表" % (a["name"], n1, n2))
-        use_second = n2 > n1
-        sheet = a["sheet2"] if use_second else a["sheet1"]
+        ## 双表：pattern 原样保留，运行时按 >=100 分发到 texture2（见 VXAnimSprite）。
+        ## 只有「第一张表为空」时才把第二张表降级成主表（pattern -100）。
+        if not a["sheet1"] and a["sheet2"]:
+            sheet = a["sheet2"]
+            sheet2 = ""
+            mapped = [[dict(c, pattern=c["pattern"] - 100) for c in fr if c["pattern"] >= 100]
+                      for fr in frames]
+        else:
+            sheet = a["sheet1"]
+            sheet2 = a["sheet2"] if n2 > 0 else ""
+            mapped = frames
         if not sheet:
             skipped += 1
             continue
-        mapped: list[list[dict]] = []
-        for fr in frames:
-            cs = []
-            for c in fr:
-                p = c["pattern"]
-                if use_second:
-                    if p < 100:
-                        continue
-                    p -= 100
-                else:
-                    if p >= 100:
-                        continue
-                cs.append(dict(c, pattern=p))
-            mapped.append(cs)
-        if not os.path.exists(os.path.join(art_dir, sheet + ".png")):
-            missing += 1
+        for sh in (sheet, sheet2):
+            if sh and not os.path.exists(os.path.join(art_dir, sh + ".png")):
+                missing += 1
         base = safe(a["name"])
         if base in used_names:
             base = "%s_%d" % (base, a["id"])
@@ -189,9 +187,11 @@ def convert(data: str, out_dir: str, art_dir: str, fps: float, prefix: str,
             skipped += 1
             continue
         total_cells = sum(len(fr) for fr in mapped)
-        print("  [导出] %-20s 帧=%-3d cell=%-3d 表=%s" % (a["name"], len(mapped), total_cells, sheet))
+        print("  [导出] %-20s 帧=%-3d cell=%-3d 表=%s%s" % (
+            a["name"], len(mapped), total_cells, sheet, ("+" + sheet2) if sheet2 else ""))
         if not dry_run:
-            write_scene(dst, "res://art/Animations/%s.png" % sheet, mapped, fps)
+            write_scene(dst, "res://art/Animations/%s.png" % sheet,
+                        ("res://art/Animations/%s.png" % sheet2) if sheet2 else "", mapped, fps)
         made += 1
     print("\n完成：导出 %d，跳过 %d，其中素材缺失 %d%s"
           % (made, skipped, missing, "（dry-run）" if dry_run else ""))
