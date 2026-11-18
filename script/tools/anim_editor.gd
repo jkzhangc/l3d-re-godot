@@ -93,7 +93,15 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_ui()
 	_scan_files()
-	if not _file_paths.is_empty():
+	## 允许命令行指定要打开的动画：godot --path . res://scene/anim_editor.tscn -- <res://...tscn>
+	var start := ""
+	for a in OS.get_cmdline_user_args():
+		if a.ends_with(".tscn"):
+			start = a
+			break
+	if not start.is_empty():
+		_load_file(start)
+	elif not _file_paths.is_empty():
 		_load_file(_file_paths[0])
 
 
@@ -149,20 +157,25 @@ func _build_top_bar() -> Control:
 	_title.text = "动画编辑器"
 	_title.add_theme_color_override("font_color", C_ACCENT)
 	_title.add_theme_font_size_override("font_size", 20)
-	_title.custom_minimum_size = Vector2(104, 0)
+	_title.custom_minimum_size = Vector2(128, 0)
 	h.add_child(_title)
 
 	_file_option = OptionButton.new()
-	_file_option.custom_minimum_size = Vector2(280, 0)
+	## 不按最长条目撑宽（子目录路径很长，会把标题挤出屏幕）
+	## clip_text + 固定最小宽：否则 OptionButton 会按最长条目（子目录长路径）撑到 400+，
+	## 把标题挤没。裁剪后由 min 宽度决定。
+	_file_option.fit_to_longest_item = false
+	_file_option.clip_text = true
+	_file_option.custom_minimum_size = Vector2(320, 0)
 	_file_option.item_selected.connect(_on_file_option_selected)
 	h.add_child(_file_option)
 
 	h.add_child(_vsep())
 	h.add_child(_button("新建", _on_new))
 	h.add_child(_button("保存", _on_save))
-	h.add_child(_button("另存为", _on_save_as))
-	h.add_child(_button("重新加载", _on_reload))
-	h.add_child(_button("重新扫描", _on_rescan))
+	h.add_child(_button("另存", _on_save_as))
+	h.add_child(_button("重载", _on_reload))
+	h.add_child(_button("扫描", _on_rescan))
 
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -171,6 +184,9 @@ func _build_top_bar() -> Control:
 	_status = Label.new()
 	_status.add_theme_color_override("font_color", C_MUTED)
 	_status.add_theme_font_size_override("font_size", 14)
+	## 状态栏吃掉剩余宽度并允许裁剪：否则长路径会把标题挤到文件下拉框底下。
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_status.clip_text = true
 	h.add_child(_status)
 	return bar
 
@@ -839,6 +855,8 @@ func _refresh_strip() -> void:
 	if _strip == null:
 		return
 	_strip.sheet = _data.texture if _data != null else null
+	_strip.sheet2 = _data.texture2 if _data != null else null
+	_strip.cells = _data.cell_data if _data != null else []
 	_strip.h_frames = maxi(1, _data.h_frames) if _data != null else 5
 	_strip.v_frames = maxi(0, _data.v_frames) if _data != null else 0
 	_strip.sequence = _data.frame_sequence.duplicate() if _data != null else []

@@ -14,6 +14,8 @@ signal frame_menu_requested(idx: int, screen_pos: Vector2)
 const THUMB := 58.0
 const GAP := 6.0
 const PAD := 6.0
+## 缩略图覆盖的世界范围（以动画原点为中心，VX 的帧视图约 544×416，这里取 384 兼顾细节）
+const WORLD_VIEW := 384.0
 
 const C_BG := Color(0.075, 0.075, 0.085, 1.0)
 const C_CELL_BG := Color(0.12, 0.12, 0.14, 1.0)
@@ -24,6 +26,10 @@ const C_TEXT := Color(1, 1, 1, 0.75)
 const C_DROP := Color(0.35, 0.75, 1.0, 1.0)
 
 var sheet: Texture2D = null
+## 第二张表（pattern >= 100 的 cell 用它）
+var sheet2: Texture2D = null
+## 全部 cell（VXAnimCellData）；多格动画按帧号取用，缩略图才能画出真实画面
+var cells: Array = []
 var h_frames: int = 5
 var v_frames: int = 0
 var sequence: Array[int] = []
@@ -75,7 +81,7 @@ func _draw() -> void:
 	for i: int in range(sequence.size()):
 		var r := _slot_rect(i)
 		draw_rect(r, C_CELL_BG, true)
-		draw_texture_region(sequence[i], r)
+		_draw_frame(r, i)
 		var border: Color = C_BORDER
 		var width: float = 1.0
 		if i == selected:
@@ -89,6 +95,36 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, C_TEXT)
 		if _dragging and i == _drag_to and _drag_from >= 0:
 			draw_rect(Rect2(r.position + Vector2(-3, 0), Vector2(3, r.size.y)), C_DROP, true)
+
+
+## 画一帧：多格动画按 cells 合成；没有 cell 时退回「单图案」。
+func _draw_frame(r: Rect2, seq_idx: int) -> void:
+	var key: int = sequence[seq_idx]
+	var drawn := 0
+	for cd in cells:
+		if cd.frame_idx != key:
+			continue
+		_draw_cell(r, int(cd.pattern), cd.offset, cd.scale, cd.opacity)
+		drawn += 1
+	if drawn == 0:
+		draw_texture_region(key, r)
+
+
+func _draw_cell(r: Rect2, pattern: int, offset: Vector2, sc: Vector2, opacity: float) -> void:
+	var tex: Texture2D = sheet2 if (pattern >= 100 and sheet2 != null) else sheet
+	if tex == null:
+		return
+	var local: int = pattern - 100 if (pattern >= 100 and sheet2 != null) else pattern
+	var ts := Vector2(tex.get_size())
+	var rows: int = v_frames if v_frames > 0 else maxi(1, int(ceil(ts.y / 192.0)))
+	var cell := Vector2(ts.x / float(maxi(1, h_frames)), ts.y / float(rows))
+	var col: int = local % maxi(1, h_frames)
+	var row: int = local / maxi(1, h_frames)
+	var src := Rect2(float(col) * cell.x, float(row) * cell.y, cell.x, cell.y)
+	var s: float = THUMB / WORLD_VIEW
+	var size: Vector2 = cell * sc * s
+	var pos: Vector2 = r.position + r.size * 0.5 + offset * s - size * 0.5
+	draw_texture_rect_region(tex, Rect2(pos, size), src, Color(1, 1, 1, clampf(opacity, 0.0, 1.0)))
 
 
 func draw_texture_region(pattern: int, into: Rect2) -> void:
