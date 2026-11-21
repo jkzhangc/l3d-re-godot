@@ -6,54 +6,36 @@ const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
 ## 系统：终章 ED 编排 ｜ 层：玩法（CanvasLayer，按需创建）
 ## 联机：单机完整流程；联机由 Host 驱动，进名单时走 request_scene_change 带上 Client。
 ## 职责：黑屏淡出 → **战役总结**（2026-09-14 用户定稿改序）→ ED BGM 起播 + 角色结局
-##       对话（每条 5 秒）→ 滚动名单场景。ED BGM 由本节点持有，压进名单连续播放，
-##       名单结束/跳过时由 credits 回调 stop_ending_music() 收尾。
+##       对话（安全屋同款窗口，逐角色按确定键翻页）→ 滚动名单场景。ED BGM 由本节点持有，
+##       压进名单连续播放，名单结束/跳过时由 credits 回调 stop_ending_music() 收尾。
 ## 依赖：Global（字体/阴影）、Players（座位→角色）、chapter_summary.tscn、credits.tscn。
 ##
-## 台词出处：E:/15.L3D/Map0022.lmu（テンプラED）事件文本；中译为本项目自译
-## （原作简体中文版文本未能取得，找到官方中文文案后可直接替换下方字符串）。
-## 我方四人阵容有专属台词；其余角色回退共通台词（「大家，快点上电车！」）。
-## 角色日文名→中文显示名走 Global.CHARACTER_NAME_ZH（与 credits 战报共用）。
+## 台词出处：原作 ED 地图 `E:/15.L3D/Map0021.lmu`（突袭·电车）、`Map0023.lmu`
+## （夜行猎手·直升机），事件 `#121` 第 1 页；**逐字取自简体中文地图记录**，不再自译。
+## 表现与安全屋台词一致：每个**存活座位**的角色依次出一段台词窗口，
+## A 批（结局感想）→ B 批（登车/起飞/启动）两页；多人模式各端只显示本端存活角色。
+## 与安全屋的区别：安全屋每批只显示**当前玩家角色**的一条；ED 把队伍里所有存活角色
+## 按原作 ED 顺序依次全部展示一遍。完整对照见 `docs/07-原作参考/原作ED台词数据.md`。
 
 const SUMMARY_SCENE := "res://scene/ui/chapter_summary.tscn"
 const CREDITS_SCENE := "res://scene/ui/credits.tscn"
+const SAFEHOUSE_DIALOGUE_SCENE := "res://scene/ui/safehouse_dialogue.tscn"
 const ED_MUSIC_PATH := "res://music/l3d_ed.mp3"
 ## 成就弹窗脚本（**运行时 load，不用 class_name** —— 本项目 `class_name` 不跨文件的教训）
 const EARNED_SCRIPT := preload("res://script/ui/achievements_earned.gd")
-## 2026-09-14 用户定稿：每条话语固定显示 5 秒
-const DIALOGUE_SECONDS_PER_LINE: float = 5.0
-
-## 原作台词（按 CharacterData.character_name 匹配；键 = 日文角色名）。
-## 中文为自译，注释保留原文以便回溯校对。
-const DIALOGUE_BY_NAME: Dictionary = {
-	"のび太": "不用靠哆啦A梦，\n我也能靠自己的力量做到！",
-	# ドラえもんに頼らなくたって、僕ひとりの力でやれるんだ！
-	"ジャイアン": "真不争气！\n你连一只都杀不了吗！？",
-	## 别名：character_bigg.tres 的 character_name 是「ジャイ」（见 global.gd 同名注释）。
-	"ジャイ": "真不争气！\n你连一只都杀不了吗！？",
-	# だらしねえな！俺ひとりも殺せないのかよ！？
-	"静香": "太好了！我们成功了！",
-	# やった！　やったんだわ！
-	"スネ夫": "该不会我其实是最强的吧？\n嘻嘻嘻嘻。",
-	# 僕ちゃんって、もしかして最強だったりして！　ウフフフフ。
-	"聖奈": "原来神明真的存在啊。",
-	# 神様って本当にいたんですね。
-	"健治": "咿呀嗷————！\n我还活着！混蛋们！！",
-	# イヤッホオオオイ！生きてるぜ！　コンチクショー！！
-	"出木杉": "没想到自己的生存能力这么高，\n连我自己都大吃一惊。",
-	# こんなにサバイバル能力が高かったなんて、自分でも知らなかったよ。
-	"安雄": "我是手雷安雄！\n给我记住了！",
-	# 俺がグレネード安雄だ！おぼえてろよ！
-	"サーシャ": "本以为这次死定了，\n不过我的坏运气也真是厉害呢——。",
-	# 今度こそ死んだと思ったけど、私の悪運も大したもんだねー。
-	"咲夜": "没用的。\n今天的我，感觉根本不会死！",
-	# 無駄よ。今日の私は死ぬ気がしないわ！
-}
+## 兜底文案（台词窗口场景加载失败时才用；正常走 ED 数据层）
 const DIALOGUE_FALLBACK := "大家，快点上电车！"
-# みんな、早く電車に乗るんだ！
+const DIALOGUE_SECONDS_PER_LINE: float = 5.0
+## ED 台词数据层：内置默认 + user://ed_dialogue.json 覆盖 + 创意工坊运行时注册。
+## 数据/校验/隔离都在 ed_dialogue_data.gd 内，本文件只消费 lines_for()/order_for()。
+const ED_DATA := preload("res://script/ed_dialogue_data.gd")
 
 ## 黑屏淡出时长（HoldoutMachine 注入）
 var fade_seconds: float = 1.5
+## 当前战役 id（"assault" / "night_hunter" / …），决定 B 批台词
+var _campaign_id: String = ""
+## 防止「台词窗口关闭」与兜底计时重复进名单
+var _credits_started: bool = false
 
 var _rect: ColorRect
 var _dialogue_label: Label
@@ -116,6 +98,7 @@ func start() -> void:
 			var cd: Variant = g.get("selected_campaign")
 			if cd is CampaignData:
 				campaign_id = str((cd as CampaignData).campaign_id)
+	_campaign_id = campaign_id
 	ACHIEVEMENTS.finish_campaign(Players.all_entities(true).size(), campaign_id)
 	# 黑幕淡出前先清场：触发 ED 前残留的伤害数字飘字（layer 100 > 黑幕 90）会
 	# 压在黑幕和总结页上直到切场景——直接全清。
@@ -250,29 +233,97 @@ func stop_ending_music() -> void:
 	queue_free()
 
 
-## 角色结局对话：每个存活/已确认座位一条（按角色名取台词中译），逐条展示 5 秒。
+## 角色结局对话：按原作 ED 顺序取**存活座位**的角色；
+## 每个角色两页（A 批结局感想 → B 批登车/起飞/启动），用安全屋同款台词窗口展示。
+## 数据来自 ED_DATA（内置默认 + user:// 覆盖 + 创意工坊注册），这里只负责取人与播放。
 func _show_dialogue() -> void:
-	var lines: Array[String] = []
+	var entries: Array[Dictionary] = _build_dialogue_entries()
+	if entries.is_empty():
+		entries.append({"lines": [DIALOGUE_FALLBACK], "speaker": "", "portrait": null})
+	_play_dialogue_entries(entries)
+
+
+## 存活座位 → { 日文角色名: PlayerState }（同一角色只取一次）。
+## `ジャイ` 归一到 `ジャイアン`：character_bigg.tres 用短名，ED 表按原作写全名。
+func _alive_characters() -> Dictionary:
+	var out: Dictionary = {}
 	var players: Node = get_node_or_null("/root/Players")
+	if players == null:
+		return out
+	for i: int in players.seat_count():
+		var st: PlayerState = players.get_seat(i)
+		if st == null or st.character == null or not st.is_alive():
+			continue
+		var name: String = st.character.character_name
+		if name == "ジャイ":
+			name = "ジャイアン"
+		if not out.has(name):
+			out[name] = st
+	return out
+
+
+func _build_dialogue_entries() -> Array[Dictionary]:
+	var alive: Dictionary = _alive_characters()
+	var table: Dictionary = ED_DATA.lines_for(_campaign_id)
+	var entries: Array[Dictionary] = []
+	for jp: String in ED_DATA.order_for(_campaign_id):
+		if not alive.has(jp):
+			continue
+		var st: PlayerState = alive[jp]
+		var speaker: String = _short_name(jp)
+		var portrait: Texture2D = st.character.portrait_texture() if st.character != null else null
+		var item: Dictionary = table.get(jp, {})
+		var a: Array = item.get("a", [])
+		if not a.is_empty():
+			entries.append({"lines": a, "speaker": speaker, "portrait": portrait})
+		var b: Array = item.get("b", [])
+		if not b.is_empty():
+			entries.append({"lines": b, "speaker": speaker, "portrait": portrait})
+	return entries
+
+
+func _short_name(jp: String) -> String:
 	var g: Node = get_node_or_null("/root/Global")
-	if players:
-		for i: int in players.seat_count():
-			var st: PlayerState = players.get_seat(i)
-			if st == null or st.character == null:
-				continue
-			if not st.is_alive():
-				continue
-			var name: String = st.character.character_name
-			var display: String = name
-			if g and g.get("CHARACTER_NAME_ZH") is Dictionary:
-				display = (g.CHARACTER_NAME_ZH as Dictionary).get(name, name)
-			var line: String = DIALOGUE_BY_NAME.get(name, DIALOGUE_FALLBACK)
-			var entry: String = "%s「%s」" % [display, line.replace("\n", "」\n　「")]
-			if not lines.has(entry):
-				lines.append(entry)
+	if g != null and g.get("CHARACTER_NAME_SHORT") is Dictionary:
+		return str((g.CHARACTER_NAME_SHORT as Dictionary).get(jp, jp))
+	return jp
+
+
+## 用安全屋同款台词窗口播放；场景缺失/打开失败时退回居中文字兜底。
+func _play_dialogue_entries(entries: Array[Dictionary]) -> void:
+	var packed: PackedScene = load(SAFEHOUSE_DIALOGUE_SCENE) as PackedScene
+	if packed == null:
+		_play_dialogue_fallback(entries)
+		return
+	var dlg: Node = packed.instantiate()
+	## 压在本层（90）之上；summary=100、credits=95 —— 台词段在两者之间。
+	dlg.set("layer", 96)
+	## 场景树此刻是暂停的，必须 ALWAYS 才能收到「确定键」
+	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
+	## 不限页数（最多 2×座位 页），否则 open_mixed_pages 会裁到默认 3 页
+	dlg.set("max_pages", 0)
+	add_child(dlg)
+	if dlg.has_signal("dialogue_closed"):
+		dlg.connect("dialogue_closed", _go_credits)
+	if dlg.has_method("open_mixed_pages"):
+		dlg.call("open_mixed_pages", entries)
+		if dlg.has_method("is_open") and not bool(dlg.call("is_open")):
+			dlg.queue_free()
+			_play_dialogue_fallback(entries)
+	else:
+		dlg.queue_free()
+		_play_dialogue_fallback(entries)
+
+
+## 兜底：台词窗口不可用时，退回旧的居中文字（每条 5 秒）。
+func _play_dialogue_fallback(entries: Array[Dictionary]) -> void:
+	var lines: Array[String] = []
+	for e: Dictionary in entries:
+		var speaker: String = str(e.get("speaker", ""))
+		var body: String = "\n".join(PackedStringArray(e.get("lines", [])))
+		lines.append(body if speaker.is_empty() else "%s\n%s" % [speaker, body])
 	if lines.is_empty():
 		lines.append(DIALOGUE_FALLBACK)
-
 	_show_dialogue_line(lines, 0)
 
 
@@ -295,6 +346,10 @@ func _show_dialogue_line(lines: Array[String], idx: int) -> void:
 
 ## 对话完毕 → 进滚动名单场景。
 func _go_credits() -> void:
+	## 窗口关闭信号与兜底计时都可能触发，只放行一次。
+	if _credits_started:
+		return
+	_credits_started = true
 	_dialogue_label.visible = false
 	# 解除冻结：名单是独立 UI 场景，需要自己的 _process 驱动滚动
 	get_tree().paused = false
