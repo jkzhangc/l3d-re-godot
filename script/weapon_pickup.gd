@@ -502,6 +502,9 @@ func _process(delta: float) -> void:
 		# 编辑器也跑踏步动画（2026-09-13 用户反馈：编辑器里不显示踏步动画）
 		_process_step_animation(delta)
 		return
+	## 持桶时拾取物不响应（D 留给放下；拾取判定见 can_use_function_key）
+	if Players.local_player_is_carrying_oil_barrel():
+		return
 	# 指示器每帧无条件刷新（2026-09-13 残留修复）：进度环淡入淡出不再依赖各分支
 	# 自觉调用 —— 旧实现个别提前 return 路径会冻结 alpha，圆环以低透明度残留。
 	var holding: bool = false
@@ -821,6 +824,9 @@ func _can_hold_pickup() -> bool:
 ## 玩家在范围内 + 角色能用 + 同点堆叠仲裁胜出 + 不在倒地队友救援之下。
 func can_use_function_key() -> bool:
 	if Engine.is_editor_hint():
+		return false
+	## 持桶时 D 只用于放下油桶（2026-11-21）
+	if Players.local_player_is_carrying_oil_barrel():
 		return false
 	if _is_online_network_pickup() and (network_pickup_id <= 0 or network_presentation_only):
 		return false

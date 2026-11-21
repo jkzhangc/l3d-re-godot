@@ -77,6 +77,8 @@ var throwable: ThrowableData = null
 ## 投掷物槽叠数：普通投掷物恒为 1（扔一次清槽）；炸药类可叠（拾取点一次性给 15）。
 ## throwable 为空时无意义；序列化/copy/联机快照都随槽位走。
 var throwable_count: int = 0
+## 油桶搬运（2026-11-21）：持有时武器收起、不能开火；随存档/联机快照同步。
+var carried_oil_barrel: bool = false
 var inventory: Array = []
 
 # ═══════════════════════════════════════
@@ -544,6 +546,7 @@ func clone() -> PlayerState:
 	c.support_item = support_item
 	c.throwable = throwable
 	c.throwable_count = throwable_count
+	c.carried_oil_barrel = carried_oil_barrel
 	c.inventory = inventory.duplicate()
 	c.facing = facing
 	c.position = position
@@ -596,6 +599,7 @@ func to_dict() -> Dictionary:
 		"support_item": ItemCodec.to_dict(support_item) if support_item else {},
 		"throwable": ItemCodec.to_dict(throwable) if throwable else {},
 		"throwable_count": throwable_count,
+		"carried_oil_barrel": carried_oil_barrel,
 		"inventory": inv,
 		"facing": facing,
 		"position_x": position.x,
@@ -658,6 +662,7 @@ func from_dict(d: Dictionary) -> void:
 	throwable = ItemCodec.from_dict_or_null(td) as ThrowableData
 	# JSON 往返整数会变 float，强制回 int；旧存档无该字段时按「有槽位即 1 个」兜底
 	throwable_count = int(d.get("throwable_count", 1 if throwable else 0))
+	carried_oil_barrel = bool(d.get("carried_oil_barrel", false))
 
 	inventory = []
 	for elem: Variant in d.get("inventory", []):

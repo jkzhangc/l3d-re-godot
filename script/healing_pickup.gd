@@ -149,6 +149,9 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
+	## 持桶时拾取物不响应（D 留给放下；拾取判定见 can_use_function_key）
+	if Players.local_player_is_carrying_oil_barrel():
+		return
 	# 踏步动画（仅行走图模式下生效）
 	if item and item.pickup_texture and item.pickup_animated:
 		var frames: Array[int] = item.pickup_step_frames
@@ -195,6 +198,9 @@ func _need_function_key() -> bool:
 ##   · 已持有投掷物时按 D 替换（2026-11-02 用户口径，原先走确定键）→ 占用，存档让路。
 func can_use_function_key() -> bool:
 	if Engine.is_editor_hint():
+		return false
+	## 持桶时 D 只用于放下油桶（2026-11-21）
+	if Players.local_player_is_carrying_oil_barrel():
 		return false
 	if not _player_in_range or not is_instance_valid(_player_ref) or item == null:
 		return false

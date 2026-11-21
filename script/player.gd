@@ -1000,10 +1000,77 @@ func clear_fire_buffer() -> void:
 ## READY 状态的开火入口：本帧刚按下优先；否则看缓冲。
 ## 同一帧刚按下时清掉缓冲，避免一次按键被兑现两次。
 func consume_fire_input() -> bool:
+	## 油桶搬运（2026-11-21）：持桶时武器已强制收起，任何开火输入都不兑现。
+	if is_carrying_oil_barrel():
+		_fire_buffer_until_msec = 0
+		return false
 	if Input.is_action_just_pressed("确定键"):
 		_fire_buffer_until_msec = 0
 		return true
 	return consume_buffered_fire()
+
+
+## ── 油桶搬运（2026-11-21）──
+## 持桶 = 双手占用：强制收枪、不能开火/举枪/投掷；再按 D 放下。
+func is_carrying_oil_barrel() -> bool:
+	var st: PlayerState = Players.get_state_for_entity(self)
+	return st != null and st.carried_oil_barrel
+
+
+func apply_oil_barrel_carry(carrying: bool) -> void:
+	var st: PlayerState = Players.get_state_for_entity(self)
+	if st != null:
+		st.carried_oil_barrel = carrying
+	if carrying:
+		clear_fire_buffer()
+		var sm: Node = get_node_or_null("StateMachine")
+		if sm != null and sm.has_method("request_state"):
+			sm.call("request_state", "Idle")
+
+
+## 放下油桶（单机/Host 直接落地；Client 发请求给 Host 代结算）。
+func drop_oil_barrel() -> void:
+	var st: PlayerState = Players.get_state_for_entity(self)
+	if st == null or not st.carried_oil_barrel:
+		return
+	var net: Node = get_node_or_null("/root/Net")
+	var online: bool = net != null and net.has_method("is_online_session") and bool(net.is_online_session())
+	var drop_position: Vector2 = global_position + Vector2(0, 18)
+	if online:
+		var world: Node = _find_network_world_for_barrel()
+		if world != null and world.has_method("request_oil_barrel_drop"):
+			world.call("request_oil_barrel_drop", drop_position)
+			return
+	_apply_drop_local(drop_position)
+
+
+## Host / 单机：清状态 + 在附近生成一个新油桶。
+func _apply_drop_local(drop_position: Vector2) -> void:
+	var st: PlayerState = Players.get_state_for_entity(self)
+	if st == null:
+		return
+	st.carried_oil_barrel = false
+	var packed: PackedScene = load("res://object/oil_barrel.tscn") as PackedScene
+	if packed == null:
+		push_warning("[Player] 油桶场景缺失，放下失败")
+		return
+	var barrel: Node2D = packed.instantiate() as Node2D
+	var scene: Node = get_tree().current_scene
+	var parent: Node = scene.find_child("GroundLayer", true, false) if scene != null else null
+	if parent == null:
+		parent = scene if scene != null else get_parent()
+	parent.add_child(barrel)
+	barrel.global_position = drop_position
+	var world: Node = _find_network_world_for_barrel()
+	if world != null and world.has_method("register_oil_barrel_node"):
+		world.call("register_oil_barrel_node", barrel)
+
+
+func _find_network_world_for_barrel() -> Node:
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return null
+	return scene.find_child("NetworkWorld", true, false)
 
 
 func enter_weapon_mode(wd: WeaponData) -> void:

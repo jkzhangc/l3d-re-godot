@@ -42,6 +42,8 @@ const SPOT_RESOLVER := preload("res://script/director/spawn_spot_resolver.gd")
 ## 命中判据工具（preload 常量，不用 class_name —— 见该文件头说明）。
 const HitResolver := preload("res://script/hit_resolver.gd")
 const HEALING_PICKUP_SCENE: PackedScene = preload("res://object/healing_pickup.tscn")
+## 油桶掉落物（2026-11-21）：独立于 ItemData 的搬运物，掉落物快照 kind = "oil"
+const OIL_BARREL_SCENE: PackedScene = preload("res://object/oil_barrel.tscn")
 ## 地图弹药补给节点类型白名单：上行只收节点路径，不能接受客户端指定补给量或资源。
 const AMMO_SUPPLY_SCRIPT := preload("res://script/ammo_supply.gd")
 ## 互动开关（派生自 MoveNode）。2026-10-31：补齐它在联机下的 Host 权威通道（E1）。
@@ -2762,7 +2764,7 @@ func weapon_switch_request(slot: String) -> void:
 ## 完全是静默无反应（用户实测「多人下打完防守战就没然后了」）。
 ## Host 收到后照旧走 broadcast_campaign_ending → 所有端一起重放演出。
 @rpc("any_peer", "call_remote", "reliable")
-func holdout_ending_request() -> void:
+func holdout_ending_request(center: Vector2 = Vector2.INF, radius: float = -1.0) -> void:
 	if not net.is_host:
 		return
 	var sender := multiplayer.get_remote_sender_id()
@@ -2770,8 +2772,88 @@ func holdout_ending_request() -> void:
 		return
 	for machine: Node in get_tree().get_nodes_in_group("holdout_machine"):
 		if machine.has_method("start_ending_from_peer"):
-			machine.call("start_ending_from_peer")
+			machine.call("start_ending_from_peer", center, radius)
 			return
+
+
+## ── 无限尸潮（2026-11-21）──
+## 阶段/剩余时间由 Host 广播（unreliable，0.5s 一次）；强度变化走 reliable。
+signal infinite_horde_state_received(phase: int, remaining: float)
+signal infinite_horde_intensity_received(count_mult: float, interval_mult: float)
+
+
+func broadcast_infinite_horde_state(phase: int, remaining: float) -> void:
+	if net.is_host:
+		infinite_horde_state.rpc(phase, remaining)
+
+
+@rpc("authority", "call_remote", "unreliable")
+func infinite_horde_state(phase: int, remaining: float) -> void:
+	infinite_horde_state_received.emit(phase, remaining)
+
+
+func broadcast_infinite_horde_intensity(count_mult: float, interval_mult: float) -> void:
+	if net.is_host:
+		infinite_horde_intensity.rpc(count_mult, interval_mult)
+
+
+@rpc("authority", "call_remote", "reliable")
+func infinite_horde_intensity(count_mult: float, interval_mult: float) -> void:
+	infinite_horde_intensity_received.emit(count_mult, interval_mult)
+
+
+## ── 油桶容器（2026-11-21）──
+## 交付请求 Host 权威校验（距离 + 是否真的持桶）；计数/装满状态广播给全体。
+signal oil_container_state_received(node_path: NodePath, count: int, filled: bool)
+
+
+func request_oil_container_deposit(node_path: NodePath) -> void:
+	if _scene_transitioning or not is_instance_valid(net) or not net.is_online_session():
+		return
+	if net.is_host:
+		_host_oil_container_deposit(int(net.my_peer_id), node_path)
+	elif _client_ready_to_send():
+		oil_container_deposit_request.rpc_id(1, node_path)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func oil_container_deposit_request(node_path: NodePath) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_host_oil_container_deposit(sender, node_path)
+
+
+func _host_oil_container_deposit(peer_id: int, node_path: NodePath) -> void:
+	if not _players.has(peer_id):
+		return
+	var root: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
+	var container: Node = root.get_node_or_null(node_path) if root != null else null
+	if container == null or not container.has_method("host_accept_barrel"):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var player := _player_node(entry)
+	var state := entry.get("state") as PlayerState
+	if state == null or not state.carried_oil_barrel or not is_instance_valid(player):
+		return
+	if player.global_position.distance_to((container as Node2D).global_position) > 120.0:
+		return
+	state.carried_oil_barrel = false
+	if player.has_method("apply_oil_barrel_carry"):
+		player.call("apply_oil_barrel_carry", false)
+	container.call("host_accept_barrel")
+	_broadcast_reliable_world_snapshot()
+
+
+func broadcast_oil_container_state(node_path: NodePath, count: int, filled: bool) -> void:
+	if net.is_host:
+		oil_container_state.rpc(node_path, count, filled)
+
+
+@rpc("authority", "call_remote", "reliable")
+func oil_container_state(node_path: NodePath, count: int, filled: bool) -> void:
+	oil_container_state_received.emit(node_path, count, filled)
 
 
 ## Client → Host：请求开启防守战（2026-10-12 用户需求：客户端也能开启防守战）。
@@ -4424,6 +4506,12 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
 		var backpack_index := int(public_state.get("backpack_index", -1))
 		if backpack_index >= 0:
 			state.backpack_index = clampi(backpack_index, 0, 1)
+		# 油桶搬运（2026-11-21）：Host 权威标志收敛到 Client 域；变化时同步收枪/解禁表现。
+		var carrying_oil := bool(public_state.get("carried_oil_barrel", false))
+		if state.carried_oil_barrel != carrying_oil:
+			state.carried_oil_barrel = carrying_oil
+			if is_instance_valid(node) and node.has_method("apply_oil_barrel_carry"):
+				node.call("apply_oil_barrel_carry", carrying_oil)
 		# 投掷物剩余数量：Host 权威值直接覆盖（与备弹/喷雾同款幂等收敛）。
 		var throwable_count := int(public_state.get("throwable_count", -1))
 		if throwable_count >= 0:
@@ -4809,15 +4897,19 @@ func _build_pickup_snapshot() -> Array:
 		var pickup_kind := "weapon" if weapon else \
 				"throwable" if item and item.item_type == ItemData.ItemType.THROWABLE else \
 				"healing" if item and (item.item_type == ItemData.ItemType.HEALING
-					or item.item_type == ItemData.ItemType.SUPPORT) else ""
+					or item.item_type == ItemData.ItemType.SUPPORT) else \
+				"oil" if bool(pickup.get("is_oil_barrel")) else ""
 		if pickup_kind.is_empty():
 			continue
+		var is_oil: bool = pickup_kind == "oil"
 		var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 		## -1 = 未携带（Client 侧同样按这个约定回退初始备弹）
 		var reserve_ammo := int(pickup.get("pickup_reserve_ammo")) if weapon else -1
 		var magazine_ammo := int(pickup.get("pickup_magazine_ammo")) if weapon else -1
-		var char_idx := int(pickup.get("pickup_char_idx")) if weapon else item.pickup_char_idx
-		var direction := int(pickup.get("pickup_direction")) if weapon else item.pickup_direction
+		var char_idx := int(pickup.get("pickup_char_idx")) if weapon else \
+				(int(pickup.get("char_index")) if is_oil else item.pickup_char_idx)
+		var direction := int(pickup.get("pickup_direction")) if weapon else \
+				(int(pickup.get("direction")) if is_oil else item.pickup_direction)
 		var packet := {
 			"pickup_id": pickup_id,
 			"pickup_kind": pickup_kind,
@@ -4850,6 +4942,57 @@ func pickup_request(pickup_id: int, claimed_position: Variant = null) -> void:
 	var sender: int = multiplayer.get_remote_sender_id()
 	if sender > 1:
 		_try_host_pickup(sender, pickup_id, claimed_position)
+
+
+## ── 油桶放下（2026-11-21）──
+## Client → Host：Host 清持桶标志、在请求位置落地一个真实油桶，并走掉落物快照同步。
+func request_oil_barrel_drop(position: Vector2) -> void:
+	if _scene_transitioning or not is_instance_valid(net) or not net.is_online_session():
+		return
+	if net.is_host:
+		_host_drop_oil_barrel(int(net.my_peer_id), position)
+	elif _client_ready_to_send():
+		oil_barrel_drop_request.rpc_id(1, position)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func oil_barrel_drop_request(position: Vector2) -> void:
+	if not net.is_host or _scene_transitioning:
+		return
+	var sender: int = multiplayer.get_remote_sender_id()
+	if sender > 1:
+		_host_drop_oil_barrel(sender, position)
+
+
+func _host_drop_oil_barrel(peer_id: int, position: Vector2) -> void:
+	if not _players.has(peer_id):
+		return
+	var entry: Dictionary = _players[peer_id]
+	var state := entry.get("state") as PlayerState
+	if state == null or not state.carried_oil_barrel:
+		return
+	state.carried_oil_barrel = false
+	var barrel := OIL_BARREL_SCENE.instantiate() as Node2D
+	var root: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
+	var parent: Node = root.find_child("GroundLayer", true, false) if root != null else null
+	if parent == null:
+		parent = root
+	if parent == null:
+		return
+	parent.add_child(barrel)
+	barrel.global_position = position
+	_register_host_pickup(barrel)
+	_send_pickup_snapshot_to_ready_clients()
+	_broadcast_reliable_world_snapshot()
+
+
+## Host / 单机放下后由 Player 调用：确保新油桶进入掉落物表并立刻同步。
+func register_oil_barrel_node(node: Node2D) -> void:
+	if not is_instance_valid(node):
+		return
+	if net.is_host:
+		_register_host_pickup(node)
+		_send_pickup_snapshot_to_ready_clients()
 
 
 # ---------------------------------------------------------------- 地图弹药补给（Host 权威事务）
@@ -5146,8 +5289,10 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	var healing := pickup.get("item") as ItemData if is_instance_valid(pickup) else null
 	var is_healing_pickup: bool = healing != null and (healing.item_type == ItemData.ItemType.HEALING
 		or healing.item_type == ItemData.ItemType.SUPPORT)
+	## 油桶（2026-11-21）：不是 ItemData，靠脚本字段识别
+	var oil_barrel: bool = bool(pickup.get("is_oil_barrel")) if is_instance_valid(pickup) else false
 	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state \
-			or (not weapon and not throwable and not is_healing_pickup):
+			or (not weapon and not throwable and not is_healing_pickup and not oil_barrel):
 		return
 	if player.global_position.distance_to(pickup.global_position) > 40.0:
 		return
@@ -5156,6 +5301,26 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	## ★地图预摆补给点（2026-10-12）：Host 权威提交时标记该点已消耗（走 quest_flags 广播
 	## → 两端持久化，防死亡重载/读档复活）。动态掉落（敌人掉落/玩家丢弃）无此 key，跳过。
 	var map_key: String = str(pickup.get("map_source_key"))
+	## 油桶拾取（2026-11-21）：Host 权威置持桶标志 → 移除地面物 → 广播表现与快照。
+	if oil_barrel:
+		if state.carried_oil_barrel:
+			return
+		state.carried_oil_barrel = true
+		if player.has_method("apply_oil_barrel_carry"):
+			player.call("apply_oil_barrel_carry", true)
+		_pickups.erase(pickup_id)
+		if pickup.has_method("disable_network_pickup"):
+			pickup.call("disable_network_pickup")
+		pickup.queue_free()
+		if not map_key.is_empty():
+			Global.mark_map_pickup_consumed(map_key)
+		var oil_sfx: AudioStream = pickup.get("pickup_sound") as AudioStream
+		if oil_sfx != null:
+			Global.play_sfx_managed(oil_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()))
+		_send_pickup_snapshot_to_ready_clients()
+		_broadcast_reliable_world_snapshot()
+		print("[NetworkWorld] HOST_PICKUP peer=%d pickup=%d oil_barrel" % [peer_id, pickup_id])
+		return
 	if is_healing_pickup:
 		# D2 实测修复：治疗品（喷雾/药品）Host 权威拾取事务。复用 healing_pickup
 		# 的 _do_pickup（**自己座位**持有/上限判定都在其中；2026-09-24 用户定稿取消
@@ -5495,6 +5660,7 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 		if pickup_id <= 0:
 			continue
 		var pickup_kind := str(packet.get("pickup_kind", "weapon"))
+		var is_oil: bool = pickup_kind == "oil"
 		# 先解析固定白名单，再认领/创建节点。未知资源不得留下模板默认武器幽灵。
 		var weapon: WeaponData = null
 		var ground_item: ItemData = null
@@ -5506,7 +5672,7 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			"healing":
 				# 线上旧协议把 HEALING/SUPPORT 都编码为 healing，必须联合查受信任表。
 				ground_item = Whitelist.ground_item_by_id(str(packet.get("item_id", "")))
-		if weapon == null and ground_item == null:
+		if weapon == null and ground_item == null and not is_oil:
 			continue
 		seen[pickup_id] = true
 		# ⚠ 取值必须先判 is_instance_valid 再 as Node2D（对已释放对象做 as 会抛错）。
@@ -5529,7 +5695,9 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				# 用武器默认贴图与默认踏步帧 (012) 渲染（看着就是"武器掉落物"），且随后
 				# `configure_network_pickup(id, true)` 把它标成武器 → **客户端拾取判定失败**。
 				# healing_pickup.tscn 才是 ItemData 家族（含 THROWABLE + HEALING/SUPPORT）的通用载体。
-				pickup = (PICKUP_SCENE if pickup_kind == "weapon" else HEALING_PICKUP_SCENE).instantiate() as Node2D
+				var mirror_scene: PackedScene = OIL_BARREL_SCENE if is_oil else \
+						(PICKUP_SCENE if pickup_kind == "weapon" else HEALING_PICKUP_SCENE)
+				pickup = mirror_scene.instantiate() as Node2D
 				# ★ 必须改成唯一名（2026-09-23 审计实测）：镜像若沿用场景根名（WeaponPickup /
 				# HealingPickup）直接挂进 GroundLayer，就会**占用与地图节点相同的 scene_path
 				# 命名空间** —— 随后另一个 pickup_id 的包带着真正的地图路径（如
@@ -5547,7 +5715,13 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				(parent if parent else MAP_SCENE_QUERY.get_map_root(get_tree())).add_child(pickup)
 			_pickups[pickup_id] = pickup
 		claimed[pickup.get_instance_id()] = pickup_id
-		if ground_item != null:
+		if is_oil:
+			## 油桶：无 ItemData/WeaponData，只回填外观索引；贴图由地图节点的导出字段决定
+			pickup.set("weapon_data", null)
+			pickup.set("item", null)
+			pickup.set("char_index", int(packet.get("char_idx", 0)))
+			pickup.set("direction", int(packet.get("direction", 0)))
+		elif ground_item != null:
 			pickup.set("weapon_data", null)
 			pickup.set("item", ground_item)
 		else:
@@ -6162,6 +6336,8 @@ func _public_state(peer_id: int) -> Dictionary:
 		# 当前背包序号（スネ夫专用）：Client HUD 的「背包 x/2」需要它；
 		# 武器本身已按当前背包同步，这里只补显示用的索引。
 		"backpack_index": state.backpack_index if state else 0,
+		## 油桶搬运（2026-11-21，尾部追加）：Client 的开火闸门与 HUD 提示依赖它。
+		"carried_oil_barrel": state.carried_oil_barrel if state else false,
 	}
 
 

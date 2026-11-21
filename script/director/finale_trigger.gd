@@ -39,6 +39,8 @@ const COLLISION_SHAPE_NODE: String = "Shape"
 const COLLISION_LAYER: int = 33
 
 const CAMPAIGN_ENDING := preload("res://script/director/campaign_ending.gd")
+## 撤离前的「存活玩家到齐」判定（与 HoldoutMachine 共用）
+const EVAC_GATE := preload("res://script/director/evac_gate.gd")
 
 @export_group("外观（VX 行走图）")
 @export var walk_texture: Texture2D:
@@ -82,6 +84,12 @@ const CAMPAIGN_ENDING := preload("res://script/director/campaign_ending.gd")
 ## 本机兜底时播放的音效（有机器时以机器上的 `ending_sound` 为准）。
 @export var ending_sound: AudioStream
 
+@export_group("撤离条件（联机）")
+## 联机时要求**所有存活玩家**都在 `gather_radius` 内才能起 ED（单机不检查）。
+## 2026-11-21 用户确认：倒地/死亡玩家不阻塞，只要求存活的到齐。
+@export var require_all_alive_near: bool = true
+@export_range(8.0, 512.0, 1.0) var gather_radius: float = 96.0
+
 @export_group("碰撞")
 ## 是否生成实体碰撞盒（默认开：列车门 / 铁门这类东西不该能穿过去）。
 @export var collision_enabled: bool = true
@@ -96,6 +104,10 @@ var _facing_index: int = 0
 var _facing_timer: float = 0.0
 var _can_trigger: bool = false
 var _triggered: bool = false
+## 撤离到齐状态（每帧刷新；单机恒 ready）
+var _evac_near: int = 0
+var _evac_total: int = 0
+var _evac_ready: bool = true
 
 
 func _ready() -> void:
@@ -127,6 +139,7 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return  ## 编辑器里只播动画，不碰 Players / 交互
 	_check_player_proximity()
+	_refresh_evac_state()
 	_update_label()
 
 
@@ -139,6 +152,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("确定键"):
 		## 与传送点 / 安全门一致：UI 先消费按键，不会隔着菜单误触发。
 		get_viewport().set_input_as_handled()
+		if not _evac_ready:
+			return   ## 联机还有存活队友没到 → 提示已显示，按键不生效
 		trigger()
 
 
@@ -150,12 +165,18 @@ func _unhandled_input(event: InputEvent) -> void:
 func trigger() -> void:
 	if one_shot and _triggered:
 		return
+	## 程序化调用也守同一道门（联机存活队友未到齐 → 不开 ED）
+	_refresh_evac_state()
+	if not _evac_ready:
+		return
 	_triggered = true
 	_hide_label()
 	var machine: Node = _resolve_machine()
 	if machine != null and machine.has_method("start_finale_ending"):
 		print("[FinaleTrigger] %s → 交给防守机器 %s 起 ED" % [name, machine.name])
-		machine.call("start_finale_ending")
+		## 把触发点与半径一起交给机器：Host 端按**这个位置**校验全员到齐，
+		## 而不是按机器自己的位置（触发器可能离机器很远）。
+		machine.call("start_finale_ending", global_position, gather_radius)
 		return
 	_start_local_ending()
 
@@ -318,15 +339,30 @@ func _local_player() -> Node2D:
 	return Players.nearest_entity_to(global_position)
 
 
+## 联机撤离条件：只统计**存活**玩家；单机 / 关掉开关 → 恒 ready。
+func _refresh_evac_state() -> void:
+	if not _is_online_session() or not require_all_alive_near:
+		_evac_near = 1
+		_evac_total = 1
+		_evac_ready = true
+		return
+	var c: Dictionary = EVAC_GATE.counts(global_position, gather_radius)
+	_evac_near = int(c["near"])
+	_evac_total = int(c["total"])
+	_evac_ready = _evac_total > 0 and _evac_near >= _evac_total
+
+
 func _update_label() -> void:
 	if _label == null:
 		return
 	var show: bool = _can_trigger and not _triggered and is_visible_in_tree()
-	if _label.visible == show:
-		return
 	_label.visible = show
-	if show:
+	if not show:
+		return
+	if _evac_ready:
 		_label.text = interact_label
+	else:
+		_label.text = "%s（等待队友 %d/%d）" % [interact_label, _evac_near, _evac_total]
 
 
 func _hide_label() -> void:

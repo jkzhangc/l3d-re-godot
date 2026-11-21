@@ -12,10 +12,10 @@ const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
 ##
 ## 台词出处：原作 ED 地图 `E:/15.L3D/Map0021.lmu`（突袭·电车）、`Map0023.lmu`
 ## （夜行猎手·直升机），事件 `#121` 第 1 页；**逐字取自简体中文地图记录**，不再自译。
-## 表现与安全屋台词一致：每个**存活座位**的角色依次出一段台词窗口，
-## A 批（结局感想）→ B 批（登车/起飞/启动）两页；多人模式各端只显示本端存活角色。
-## 与安全屋的区别：安全屋每批只显示**当前玩家角色**的一条；ED 把队伍里所有存活角色
-## 按原作 ED 顺序依次全部展示一遍。完整对照见 `docs/07-原作参考/原作ED台词数据.md`。
+## 表现与安全屋台词一致：A 批（结局感想）按原作 ED 顺序展示**全部存活角色**；
+## B 批（登车/起飞/启动）按安全屋初始台词的口径**随机挑一个存活角色**播放。
+## 多人模式各端只显示本端存活角色。
+## 完整对照见 `docs/07-原作参考/原作ED台词数据.md`。
 
 const SUMMARY_SCENE := "res://scene/ui/chapter_summary.tscn"
 const CREDITS_SCENE := "res://scene/ui/credits.tscn"
@@ -266,6 +266,7 @@ func _build_dialogue_entries() -> Array[Dictionary]:
 	var alive: Dictionary = _alive_characters()
 	var table: Dictionary = ED_DATA.lines_for(_campaign_id)
 	var entries: Array[Dictionary] = []
+	var b_candidates: Array[String] = []
 	for jp: String in ED_DATA.order_for(_campaign_id):
 		if not alive.has(jp):
 			continue
@@ -276,9 +277,19 @@ func _build_dialogue_entries() -> Array[Dictionary]:
 		var a: Array = item.get("a", [])
 		if not a.is_empty():
 			entries.append({"lines": a, "speaker": speaker, "portrait": portrait})
-		var b: Array = item.get("b", [])
-		if not b.is_empty():
-			entries.append({"lines": b, "speaker": speaker, "portrait": portrait})
+		if not (item.get("b", []) as Array).is_empty():
+			b_candidates.append(jp)
+	## B 批（登车/起飞/启动）与安全屋初始台词同语义：只随机播**一个存活角色**的那条，
+	## 不是每个角色都播。A 批仍按 ED 顺序展示全部存活角色。
+	if not b_candidates.is_empty():
+		var pick: String = b_candidates[randi_range(0, b_candidates.size() - 1)]
+		var st_b: PlayerState = alive[pick]
+		var portrait_b: Texture2D = st_b.character.portrait_texture() if st_b.character != null else null
+		entries.append({
+			"lines": (table.get(pick, {}) as Dictionary).get("b", []),
+			"speaker": _short_name(pick),
+			"portrait": portrait_b,
+		})
 	return entries
 
 

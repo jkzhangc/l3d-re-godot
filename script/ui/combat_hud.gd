@@ -931,6 +931,10 @@ func _collect_action_hints() -> Array:
 		_push_hint(out, &"推击键", "推击")
 		return out
 	## ── 未举枪（地面态）：能做的都在这里 ──
+	## 持桶（2026-11-21）：双手占用，只提示放下；武器/技能提示全部让位。
+	if player.has_method("is_carrying_oil_barrel") and bool(player.call("is_carrying_oil_barrel")):
+		_push_hint(out, &"功能键", "放下油桶")
+		return out
 	var slot: String = _preferred_weapon_slot(state)
 	## 该槽位没武器 → 举起来的是拳头（2026-11-17），提示别写成「举起武器」。
 	var unarmed: bool = state == null or state.get_equipped_weapon(slot) == null

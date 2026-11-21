@@ -11,6 +11,9 @@ extends Control
 
 signal closed
 
+## RM2K3 窗口皮（与安全屋台词框 / 操作说明 / 战役选择同款，2026-11-21 统一）
+const RM_WINDOW := preload("res://script/ui/rm_window.gd")
+
 ## ★ 2026-10-02 加宽 920 → 1080：24px 字号下「名字 + 条件 + 进度」三列在 920 里挤不开，
 ## 长名字会压到条件列上。现在三列各自独立占位，名字再长也只在**自己那一列**内截断。
 ## ── 面板尺寸 ──
@@ -56,21 +59,23 @@ func _build() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 
-	var panel := ColorRect.new()
-	panel.color = Color(0.10, 0.09, 0.08, 0.96)
+	var panel := Control.new()
+	panel.name = "Panel"
 	panel.size = Vector2(PANEL_W, PANEL_H)
 	panel.position = ((get_viewport_rect().size - panel.size) * 0.5).floor()
 	add_child(panel)
+	## 2026-11-21 统一窗口皮：底图 + 20px 九宫格边框
+	RM_WINDOW.apply(panel)
 
 	var title := _make_label("成  就", FONT_TITLE)
-	title.position = Vector2(0, 18)
+	title.position = Vector2(0, 24)
 	title.size = Vector2(PANEL_W, 32)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(title)
 
 	var count := _make_label("已达成 %d / %d" % [ACHIEVEMENTS.unlocked_count(), ACHIEVEMENTS.CATALOG.size()],
 		FONT_BODY)
-	count.position = Vector2(PANEL_W - STATE_W - COL_PAD, 20)
+	count.position = Vector2(PANEL_W - STATE_W - COL_PAD, 26)
 	count.size = Vector2(STATE_W, 30)
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	count.modulate = Color(0.80, 0.78, 0.72)
@@ -78,11 +83,11 @@ func _build() -> void:
 
 	var sep := ColorRect.new()
 	sep.color = Color(0.55, 0.50, 0.42, 0.7)
-	sep.position = Vector2(28, 60)
+	sep.position = Vector2(28, 66)
 	sep.size = Vector2(PANEL_W - 56, 1)
 	panel.add_child(sep)
 
-	var y: float = 74.0
+	var y: float = 80.0
 	for e: Dictionary in ACHIEVEMENTS.CATALOG:
 		var id: String = str(e.get("id", ""))
 		var ok: bool = ACHIEVEMENTS.is_unlocked_any(id)

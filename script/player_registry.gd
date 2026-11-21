@@ -491,6 +491,16 @@ func local_player_is_throwing() -> bool:
 	return is_instance_valid(p) and p.get("in_throwable_state") == true
 
 
+## 本机玩家是否正搬着油桶（2026-11-21）：拾取物据此主动让路，
+## 功能键(D)在持桶时只用于「放下」。
+func local_player_is_carrying_oil_barrel() -> bool:
+	var p: Node2D = get_local_entity()
+	if p == null or not is_instance_valid(p):
+		return false
+	var st: PlayerState = get_state_for_entity(p)
+	return st != null and st.carried_oil_barrel
+
+
 ## 本客户端操控的玩家实体。替代全部 _find_player()。
 ## 未注册时回退到 group("player") 扫描（兼容 _ready() 时序竞争）。
 func get_local_entity() -> Node2D:

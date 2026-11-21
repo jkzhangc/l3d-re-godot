@@ -11,6 +11,9 @@ extends Control
 
 signal finished
 
+## RM2K3 窗口皮（与安全屋台词框 / 操作说明 / 战役选择同款，2026-11-21 统一）
+const RM_WINDOW := preload("res://script/ui/rm_window.gd")
+
 ## 停留时长（秒）——用户要求 3 秒
 const HOLD_SECONDS: float = 3.0
 const PANEL_W: float = 640.0
@@ -91,42 +94,30 @@ func _build() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
-	var panel := ColorRect.new()
-	panel.color = Color(0.10, 0.09, 0.08, 0.96)
+	var panel := Control.new()
+	panel.name = "Panel"
 	panel.size = Vector2(PANEL_W, panel_h)
 	panel.position = ((get_viewport_rect().size - panel.size) * 0.5).floor()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(panel)
-
-	## RM 风格的双线内框
-	var frame := ColorRect.new()
-	frame.color = Color(0.55, 0.50, 0.42, 1.0)
-	frame.position = Vector2(4, 4)
-	frame.size = panel.size - Vector2(8, 8)
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var inner := ColorRect.new()
-	inner.color = panel.color
-	inner.position = Vector2(3, 3)
-	inner.size = frame.size - Vector2(6, 6)
-	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	frame.add_child(inner)
-	panel.add_child(frame)
+	## 2026-11-21 统一窗口皮：底图 + 20px 九宫格边框（不再用 ColorRect 双线框）
+	RM_WINDOW.apply(panel)
 
 	var title := _make_label("成 就 达 成", FONT_TITLE)
-	title.position = Vector2(0, 18)
+	title.position = Vector2(0, 24)
 	title.size = Vector2(PANEL_W, 32)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	panel.add_child(title)
 
 	var sep := ColorRect.new()
 	sep.color = Color(0.55, 0.50, 0.42, 0.7)
-	sep.position = Vector2(28, 60)
+	sep.position = Vector2(28, 64)
 	sep.size = Vector2(PANEL_W - 56, 1)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sep)
 
 	## 逐条列出（每条两行：名称+归属 / 说明）
-	var y: float = 76.0
+	var y: float = 80.0
 	for rec: Dictionary in pending:
 		if y > panel_h - 70.0:
 			break                       ## 面板放不下就截断（一次通关最多 7 条，正常够用）

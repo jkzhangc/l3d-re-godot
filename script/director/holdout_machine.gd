@@ -39,6 +39,8 @@ const DIRECTIONS: int = 4
 const WALK := preload("res://script/vx_walk_sheet.gd")
 ## 提示文字统一渲染层（不被角色/图块遮挡、不吃夜图暗度），见 script/ui/hint_text_layer.gd
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
+## 撤离前的「存活玩家到齐」判定（与 FinaleTrigger 共用）
+const EVAC_GATE := preload("res://script/director/evac_gate.gd")
 
 ## 机器碰撞体（32×32 正方形，居中于节点原点）
 const COLLISION_NODE: String = "Collision"
@@ -194,6 +196,10 @@ enum KillFilter { ALL = 0, TANK = 1 }
 ## 确认进入列车时播放的音效（与黑屏淡出同时；留空=不播）
 @export var ending_sound: AudioStream
 @export_range(0.5, 6.0, 0.1) var ending_fade_seconds: float = 1.5   ## 黑屏淡出时长（秒）
+## 联机撤离条件（2026-11-21）：所有**存活**玩家都在 `ending_gather_radius` 内才允许起 ED。
+## 单机不检查；FinaleTrigger 会把自己的触发点传进来，按触发点判定。
+@export var require_all_alive_near_for_ending: bool = true
+@export_range(8.0, 512.0, 1.0) var ending_gather_radius: float = 96.0
 ## 防守战**正常打完**后是否保持"导演挂起"，不再恢复常规编排（2026-09-28 用户需求）。
 ## 默认 false = 老行为（打完 → `set_director_suspended(false)`，节奏/常规刷怪从喘息重新开始）。
 ## 开启后：打完不再恢复 → PacingController / SpawnManager / FrontSpawner / AmbientZone 全部保持冻结，
@@ -252,6 +258,9 @@ var _ending_local_started: bool = false   ## 本端是否已经真正起了 ED �
 var _can_interact: bool = false
 ## 提示 Label 的缓存（2026-10-28）：提示文字会被搬到 HintTextLayer，之后按名字查不到。
 var _hint_label: Label = null
+## 撤离到齐的临时提示（联机队友没到齐时显示 2 秒，之后恢复正常文案）
+var _gate_hint_until_msec: int = 0
+var _gate_hint_text: String = ""
 var _step_index: int = 0
 var _step_timer: float = 0.0
 var _facing_index: int = 0
@@ -423,14 +432,14 @@ func _process(delta: float) -> void:
 ## 终章 ED（用户 2026-09-13）：防守完成后再交互 →
 ## 播 ending_sound → 黑屏淡出 → 角色对话 → 战役总结 → 滚动名单 → 标题。
 ## 编排细节在 CampaignEnding（script/director/campaign_ending.gd）。
-func _start_ending() -> void:
+func _start_ending(center: Vector2 = Vector2.INF, radius: float = -1.0) -> void:
 	if _ending_started:
 		return
 	## 联机 Client：本地按键**不**自起 ED（两端各起一份会时序分叉），改为**请求 Host**。
 	## ⚠ 旧实现在这里先 `_ending_started = true` 再 return —— 客户端按了键既不产生任何动静，
 	## 还把自己后续的请求路径一起封死（用户实测「多人下打完防守战就没然后了」）。
 	if _is_network_client():
-		request_remote_ending()
+		request_remote_ending(center, radius)
 		return
 	_ending_started = true
 	## Host（联机）：把「进 ED」广播给所有 Client（2026-09-26 用户实测根因见下）。
@@ -442,12 +451,31 @@ func _start_ending() -> void:
 
 ## 客户端按键 → 请求 Host 起 ED（Host 权威；演出由 Host 经 broadcast_campaign_ending
 ## 广播给所有端重放）。Host 端的 `_ending_started` 幂等闸保证连点/多人同时按只起一次。
-func request_remote_ending() -> void:
+func request_remote_ending(center: Vector2 = Vector2.INF, radius: float = -1.0) -> void:
 	var world: Node = _find_network_world()
 	if world != null and world.has_method("holdout_ending_request"):
-		world.call("holdout_ending_request")
+		world.call("holdout_ending_request", center, radius)
 	else:
 		push_warning("[HoldoutMachine] 联机 Client 请求进 ED，但找不到 NetworkWorld（请求未发出）")
+
+
+## 联机撤离条件：所有**存活**玩家到齐（单机恒通过）。
+## center = Vector2.INF 时用本机位置；radius <= 0 时用 ending_gather_radius。
+func _ending_gate_ok(center: Vector2 = Vector2.INF, radius: float = -1.0) -> bool:
+	if not _is_online_session() or not require_all_alive_near_for_ending:
+		return true
+	var at: Vector2 = global_position if center == Vector2.INF else center
+	var r: float = ending_gather_radius if radius <= 0.0 else radius
+	var counts: Dictionary = EVAC_GATE.counts(at, r)
+	var near: int = int(counts["near"])
+	var total: int = int(counts["total"])
+	if total > 0 and near >= total:
+		return true
+	_gate_hint_text = "等待队友到齐（%d/%d）" % [near, total]
+	_gate_hint_until_msec = Time.get_ticks_msec() + 2000
+	_update_label()
+	print("[HoldoutMachine] 撤离条件未满足：存活队友未到齐 (%d/%d)" % [near, total])
+	return false
 
 
 ## 客户端按键 → 请求 Host 权威启动防守战（2026-10-12 用户需求）。
@@ -468,18 +496,22 @@ func start_from_peer() -> void:
 
 
 ## Host 收到客户端「进 ED」请求后调用：由主机权威地起 ED 并广播。
-func start_ending_from_peer() -> void:
+func start_ending_from_peer(center: Vector2 = Vector2.INF, radius: float = -1.0) -> void:
 	if _is_network_client():
 		return  ## 只认 Host 端；客户端再怎么被调也不本地起 ED
-	_start_ending()
+	if not _ending_gate_ok(center, radius):
+		return
+	_start_ending(center, radius)
 
 
 ## 场景里独立摆放的结局触发器（`script/director/finale_trigger.gd`）用它起 ED。
 ## 与「防守完成后再与本机交互」走**同一条路径**：联机 Client 会转成向 Host 请求，
 ## Host 广播给全体 —— 两端时序不分叉。本方法不做 `ending_enabled` 门槛判断：
 ## 摆下触发器的作者意图已经足够明确。
-func start_finale_ending() -> void:
-	_start_ending()
+func start_finale_ending(center: Vector2 = Vector2.INF, radius: float = -1.0) -> void:
+	if not _ending_gate_ok(center, radius):
+		return
+	_start_ending(center, radius)
 
 
 ## Client 收到 Host 的「终章 ED 启动」广播：重放同一段本地演出
@@ -679,6 +711,11 @@ func can_use_function_key() -> bool:
 func _update_label() -> void:
 	var label: Label = _hint_label
 	if label == null or not is_instance_valid(label):
+		return
+	## 撤离到齐的临时提示优先（2 秒），之后恢复常规文案
+	if Time.get_ticks_msec() < _gate_hint_until_msec:
+		label.text = _gate_hint_text
+		label.visible = true
 		return
 
 	## ★`_remote_active` 供 Client 用（客户端 `_active` 恒 false，进行态经广播镜像）。

@@ -25,6 +25,14 @@ const PlayerInput := preload("res://script/player_input.gd")
 ## 消费地面状态共有的武器/消耗品/投掷输入。
 ## 返回 true 表示已请求状态切换（调用方应立即 return，不再处理移动输入）。
 func _consume_common_inputs() -> bool:
+	## 油桶搬运（2026-11-21）：持桶时双手占用 —— 武器/消耗品输入一律忽略，
+	## 功能键(D)只用于「放下」。拾取物脚本已由 registry 的持桶闸门主动让路。
+	var carrying_state: PlayerState = get_player_state()
+	if carrying_state != null and carrying_state.carried_oil_barrel:
+		if Input.is_action_just_pressed("功能键") and character.has_method("drop_oil_barrel"):
+			character.call("drop_oil_barrel")
+		return false
+
 	# 直接举起武器
 	if PlayerInput.pressed_item_key(PlayerInput.ACTION_PRIMARY_WEAPON):
 		_try_raise_weapon("primary")
@@ -57,6 +65,8 @@ func _consume_common_inputs() -> bool:
 ## 路由走 `get_state_node_name()`（远程 "Ranged" / 近战 "Melee"），不再是 weapon_state_name
 ## （后者保留给外观/被动查询，见 WeaponData.get_state_node_name 的说明）。
 func _try_weapon_state() -> void:
+	if get_player_state().carried_oil_barrel:
+		return
 	var wd: WeaponData = get_player_state().get_active_weapon()
 	if wd and not wd.weapon_state_name.is_empty():
 		transition_requested.emit(wd.get_state_node_name())
@@ -67,6 +77,8 @@ func _try_weapon_state() -> void:
 ## 所以「按 1 而第 1 格没武器」= 把激活槽切到第 1 格并举拳，而不是静默无反应。
 func _try_raise_weapon(slot: String) -> void:
 	var ps: PlayerState = get_player_state()
+	if ps.carried_oil_barrel:
+		return
 	ps.active_weapon_slot = slot
 	var wd: WeaponData = ps.get_active_weapon()
 	if not wd or wd.weapon_state_name.is_empty():
@@ -76,5 +88,7 @@ func _try_raise_weapon(slot: String) -> void:
 
 ## 进入投掷物状态（未持有投掷物则忽略）。
 func _try_throwable() -> void:
+	if get_player_state().carried_oil_barrel:
+		return
 	if get_player_state().throwable:
 		transition_requested.emit("Throwable")

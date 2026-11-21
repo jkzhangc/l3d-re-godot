@@ -139,7 +139,7 @@ var _settings_bar_fill: Array[ColorRect] = []
 ## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**，
 ##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式",
+	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式", "智能提示",
 		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量", "血液颜色", "血液特效"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
@@ -1350,6 +1350,12 @@ func _build_settings_items() -> void:
 				Global.pickup_hold_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(pick_label)
 			_settings_value_labels.append(pick_label)
+		elif text == "智能提示":
+			# 右下角操作提示开关（2026-11-21 与游戏内设置同步）
+			var ah_label := _make_menu_gradient_label(
+				Global.action_hints_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
+			win.add_child(ah_label)
+			_settings_value_labels.append(ah_label)
 		elif text == "灯光闪烁":
 			var ls_label := _make_menu_gradient_label(
 				Global.light_static_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
@@ -1462,6 +1468,9 @@ func _handle_settings_input(event: InputEvent) -> void:
 				if pick_idx >= 0 and pick_idx < _settings_value_labels.size() \
 						and _settings_value_labels[pick_idx]:
 					_settings_value_labels[pick_idx].text = Global.pickup_hold_label()
+			"智能提示":
+				Global.set_show_action_hints(not Global.show_action_hints)
+				_set_settings_value(items, "智能提示", Global.action_hints_label())
 			"灯光闪烁":
 				Global.set_light_static(not Global.light_static)
 				_set_settings_value(items, "灯光闪烁", Global.light_static_label())
@@ -1519,6 +1528,9 @@ func _handle_settings_input(event: InputEvent) -> void:
 		"人物影子":
 			Global.set_char_shadows(not Global.char_shadows)
 			_set_settings_value(items, "人物影子", Global.on_off_label(Global.char_shadows))
+		"智能提示":
+			Global.set_show_action_hints(not Global.show_action_hints)
+			_set_settings_value(items, "智能提示", Global.action_hints_label())
 		"遮挡阴影":
 			Global.set_light_occluders(not Global.light_occluders)
 			_set_settings_value(items, "遮挡阴影", Global.on_off_label(Global.light_occluders))
