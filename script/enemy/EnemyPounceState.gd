@@ -1,5 +1,7 @@
 class_name EnemyPounceState extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：Host 权威结算命中；Client 靠 transform 快照跟随移动、靠 visual_char_index
@@ -234,4 +236,4 @@ func _do_pounce_hit(enemy: Node2D, player: Node2D) -> void:
 	if enemy.attack_effect_anim:
 		var efollow: Node2D = player if enemy.attack_effect_follow else null
 		VXAnimSprite.play_scene(enemy.attack_effect_anim, player.global_position,
-			enemy.get_tree().current_scene, 10.0, efollow, enemy.attack_effect_offset_override)
+			MAP_SCENE_QUERY.get_map_root(enemy.get_tree()), 10.0, efollow, enemy.attack_effect_offset_override)

@@ -70,7 +70,7 @@ func _check_path(label: String, is_headshot: bool, settle_frames: int) -> void:
 
 	_check(e.get_parent() == _ground,
 		"%s：尸体落在 GroundLayer（实际父节点 = %s）" % [label, _parent_name(e)])
-	_check(e.z_index == 0, "%s：z_index = 0（实际 %d）" % [label, e.z_index])
+	_check(e.z_index == 1, "%s：z_index = 1（实际 %d）" % [label, e.z_index])
 	var moved: float = (e.global_position - at_death).length()
 	_check(moved < 0.01, "%s：reparent 不产生位移（%.4f px）" % [label, moved])
 	_check_below_units(e, label)
@@ -88,15 +88,15 @@ func _check_client_death() -> void:
 
 	_check(e.get_parent() == _ground,
 		"Client 表现死亡：尸体落在 GroundLayer（实际父节点 = %s）" % _parent_name(e))
-	_check(e.z_index == 0, "Client 表现死亡：z_index = 0（实际 %d）" % e.z_index)
+	_check(e.z_index == 1, "Client 表现死亡：z_index = 1（实际 %d）" % e.z_index)
 	_check_below_units(e, "Client 表现死亡")
 	e.queue_free()
 	await get_tree().physics_frame
 
 
-## 规则本体：尸体的「有效 z」必须低于所有活体单位（z_as_relative 时 = 父链 z 累加）。
-## 单位（player.tscn / enemy.tscn / teammate_standin.tscn）都是 z_index = 1，
-## 尸体被摆到 GroundLayer 且 z=0 → 有效 z 为 0，天然低于单位。
+## 当前规则（enemy.gd::_reparent_corpse_to_ground，2026-09-17）：尸体 z=1，
+## 压过上层 z=0 图块；与活体有效 z 相同时，由 GroundLayer 早于 DecorLayer 的
+## 同父树序保证贴地。不能恢复旧 z=0 断言，否则会要求尸体沉回地面遮挡里。
 func _check_below_units(corpse: CanvasItem, label: String) -> void:
 	var refs: Array[Dictionary] = [
 		{"name": "玩家", "node": _scene.find_child("Player", true, false) as CanvasItem},
@@ -107,8 +107,13 @@ func _check_below_units(corpse: CanvasItem, label: String) -> void:
 		if other == null or not is_instance_valid(other):
 			_check(false, "%s：找不到参照单位 %s" % [label, ref["name"]])
 			continue
-		_check(_effective_z(corpse) < _effective_z(other),
-			"%s：有效 z 低于%s（%d < %d）" % [label, ref["name"], _effective_z(corpse), _effective_z(other)])
+		var corpse_z: int = _effective_z(corpse)
+		var unit_z: int = _effective_z(other)
+		var earlier_branch: bool = corpse.get_parent() == _ground and _decor.is_ancestor_of(other) \
+			and _ground.get_parent() == _decor.get_parent() and _ground.get_index() < _decor.get_index() \
+			and not _ground.y_sort_enabled
+		_check(corpse_z < unit_z or (corpse_z == unit_z and earlier_branch),
+			"%s：画在%s之下（尸体z=%d，单位z=%d，贴地分支先绘制=%s）" % [label, ref["name"], corpse_z, unit_z, earlier_branch])
 		if ref["name"] == "活着的敌人":
 			other.queue_free()
 

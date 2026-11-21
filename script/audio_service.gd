@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：音频服务 ｜ 层：服务类（RefCounted，由 Global 持有）
 ## 联机：纯本机表现，与联机无关
@@ -238,7 +240,7 @@ func play_pickup_sfx(override: AudioStream = null, pitch: float = 1.0) -> void:
 		return
 	var scene: Node = null
 	if _host != null and _host.get_tree() != null:
-		scene = _host.get_tree().current_scene
+		scene = MAP_SCENE_QUERY.get_map_root(_host.get_tree())
 	if scene == null:
 		scene = _host
 	play_sfx_managed(stream, scene, false, maxf(pitch, 0.01))

@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家实体 ｜ 层：玩法（CharacterBody2D）
 ## 联机：Host 权威 / Client 表现
@@ -874,8 +876,8 @@ func apply_network_health_state(new_hp: float, is_dead: bool, play_feedback: boo
 		var damage := previous_hp - current_hp
 		_play_hit_feedback(Color.RED)
 		var tree := get_tree()
-		if tree and tree.current_scene:
-			DamageNumber.spawn(global_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
+		if tree and MAP_SCENE_QUERY.get_map_root(tree):
+			DamageNumber.spawn(global_position, damage, MAP_SCENE_QUERY.get_map_root(tree), 0, Color(1.0, 0.25, 0.2))
 		_play_sound(hurt_sound)
 
 
@@ -1334,7 +1336,7 @@ func _run_network_attack_presentation(token: int, wd: WeaponData, stage: int = 1
 			var scene_tree := get_tree()
 			if not scene_tree:
 				return
-			var scene := scene_tree.current_scene
+			var scene: Node = MAP_SCENE_QUERY.get_map_root(scene_tree)
 			if wd.attack_sound:
 				## 枪声/挥击音挂在本玩家节点上并做距离衰减（2026-10-20）：
 				## 联机时其他玩家开火由本机表现协程播放，旧实现挂 current_scene（非定位）
@@ -1776,8 +1778,8 @@ func _update_burn_status(delta: float) -> void:
 		current_hp = maxf(0.0, current_hp - burn_damage)
 		# 橙色伤害数字：灼烧掉血无红闪/音效，靠数字让"持续掉血"可见
 		var burn_tree := get_tree()
-		if burn_tree and burn_tree.current_scene:
-			DamageNumber.spawn(global_position, burn_damage, burn_tree.current_scene, 0, Color(1.0, 0.55, 0.2))
+		if burn_tree and MAP_SCENE_QUERY.get_map_root(burn_tree):
+			DamageNumber.spawn(global_position, burn_damage, MAP_SCENE_QUERY.get_map_root(burn_tree), 0, Color(1.0, 0.55, 0.2))
 		# 与 take_damage 同款座位 HP 同步；烧死走正常死亡流程（喷雾救人→切人/真死）
 		var burn_state: PlayerState = Players.get_state_for_entity(self)
 		if burn_state:
@@ -1876,8 +1878,8 @@ func take_damage(damage: float, _knockback_force: float, direction: Vector2, _is
 
 	# 弹出伤害数字（红色调，表示玩家受伤）
 	var tree := get_tree()
-	if tree and tree.current_scene:
-		DamageNumber.spawn(global_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		DamageNumber.spawn(global_position, damage, MAP_SCENE_QUERY.get_map_root(tree), 0, Color(1.0, 0.25, 0.2))
 
 	# 播放受伤音效
 	_play_sound(hurt_sound)
@@ -1902,8 +1904,8 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 		return
 	_play_hit_feedback(Color.RED)
 	var tree := get_tree()
-	if tree and tree.current_scene:
-		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, Color(1.0, 0.25, 0.2))
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		DamageNumber.spawn(impact_position, damage, MAP_SCENE_QUERY.get_map_root(tree), 0, Color(1.0, 0.25, 0.2))
 	_play_sound(hurt_sound)
 
 
@@ -2014,7 +2016,7 @@ func _submit_network_healing_use() -> bool:
 	if bool(net.get("is_host")):
 		return false
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree else null
 	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_healing_use"):
 		world.call("request_healing_use")
@@ -2032,7 +2034,7 @@ func _submit_network_support_use() -> bool:
 	if bool(net.get("is_host")):
 		return false
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree else null
 	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_support_use"):
 		world.call("request_support_use")

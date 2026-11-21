@@ -16,6 +16,8 @@ extends SceneTree
 
 ## RM2K3 Block A（水面）每帧时长（秒），与 export_map.py 的 BLOCK_A_DURATION 一致
 const BLOCK_A_DURATION := 0.3
+# @trace SCENE-003
+const SCENE_TEMPLATE = preload("res://script/map_restore/map_scene_template.gd")
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -64,35 +66,12 @@ func _init() -> void:
 	# 重新加载，确保 PackedScene 保存外置 TileSet 引用。
 	var saved_lower := ResourceLoader.load(lower_tileset_path) as TileSet
 	var saved_upper := ResourceLoader.load(upper_tileset_path) as TileSet
-	var root := Node2D.new()
-	root.name = "Map%04d" % int(data.map_id)
-	var ground := TileMapLayer.new()
-	ground.name = "GroundLayer"
-	ground.tile_set = saved_lower
-	root.add_child(ground)
-	ground.owner = root
-	var decor := Node2D.new()
-	decor.name = "DecorLayer"
-	decor.y_sort_enabled = true
-	root.add_child(decor)
-	decor.owner = root
-	var spawn := Node2D.new()
-	spawn.name = "PlayerSpawn"
-	spawn.position = Vector2(int(data.width) * int(data.tile_size) / 2, int(data.height) * int(data.tile_size) / 2)
-	decor.add_child(spawn)
-	spawn.owner = root
-	var player_scene := load("res://object/player.tscn") as PackedScene
-	if player_scene:
-		var player := player_scene.instantiate()
-		player.name = "Player"
-		spawn.add_child(player)
-		player.owner = root
-	var upper := TileMapLayer.new()
-	upper.name = "UpperLayer"
-	upper.y_sort_enabled = true
-	upper.tile_set = saved_upper
-	root.add_child(upper)
-	upper.owner = root
+	var root: Node2D = SCENE_TEMPLATE.create_map(data, saved_lower, saved_upper)
+	if root == null:
+		quit(7)
+		return
+	var ground: TileMapLayer = root.get_node("GroundLayer") as TileMapLayer
+	var upper: TileMapLayer = root.get_node("UpperLayer") as TileMapLayer
 	var lower_tiles: Dictionary = data.lower_tiles
 	var upper_tiles: Dictionary = data.upper_tiles
 	var ground_count := 0
@@ -109,13 +88,6 @@ func _init() -> void:
 			var uc: Array = upper_tiles[upper_key]
 			upper.set_cell(pos, 0, Vector2i(int(uc[0]), int(uc[1])))
 			upper_count += 1
-	var camera := Camera2D.new()
-	camera.name = "Camera2D"
-	camera.position = spawn.position
-	camera.limit_right = int(data.width) * int(data.tile_size)
-	camera.limit_bottom = int(data.height) * int(data.tile_size)
-	root.add_child(camera)
-	camera.owner = root
 	var packed := PackedScene.new()
 	if packed.pack(root) != OK:
 		push_error("场景打包失败")

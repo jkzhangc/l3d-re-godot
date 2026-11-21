@@ -1,5 +1,7 @@
 extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家状态机 ｜ 层：玩法（State）
 ## 联机：仅单机/Host 生成权威子弹
@@ -208,7 +210,7 @@ func _fire_bullet() -> void:
 				continue
 			var strike: Node2D = LOCK_ON_STRIKE.new()
 			strike.setup(bd, _wd, character, damage, awaken or bd.instant_kill, targets)
-			character.get_tree().current_scene.add_child(strike)
+			MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(strike)
 			fired_any = true
 			continue
 
@@ -232,7 +234,7 @@ func _fire_bullet() -> void:
 		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
 
 		# 添加到场景树
-		character.get_tree().current_scene.add_child(bullet)
+		MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(bullet)
 		fired_any = true
 
 	## 一颗都没发出去（锁定打击没锁到目标）→ 不扣弹、不播开枪音效/特效。
@@ -254,7 +256,7 @@ func _fire_bullet() -> void:
 		## 特效偏移（2026-09-23 迁移）：按键改为武器数据（键=角色 id），与子弹偏移同构。
 		var effect_offset: Vector2 = _wd.get_attack_effect_offset(character.current_character, character.facing, _wd.attack_effect_offset_override)
 		var follow: Node2D = character if _wd.attack_effect_follow else null
-		VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, effect_offset)
+		VXAnimSprite.play_scene(effect_scene, character.global_position, MAP_SCENE_QUERY.get_map_root(character.get_tree()), 10.0, follow, effect_offset)
 
 	if _wd.attack_sound:
 		_play_attack_sound(_wd.attack_sound, _wd.attack_sound_volume_db)
@@ -330,7 +332,7 @@ func _try_auto_reload() -> bool:
 
 
 func _play_attack_sound(stream: AudioStream, volume_db: float = 0.0) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene,
+	Global.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(character.get_tree()),
 		false, 1.0, Vector2.INF, volume_db)
 
 

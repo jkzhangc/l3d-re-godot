@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人实体 ｜ 层：玩法（CharacterBody2D）
 ## 联机：Host 权威 / Client 表现
@@ -562,9 +564,9 @@ func announce_tongue(facing: int) -> void:
 	if not Net.is_host or network_entity_id <= 0:
 		return
 	var tree := get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
-	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld")
+	var world: Node = MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld")
 	if world != null and world.has_method("announce_enemy_tongue"):
 		world.call("announce_enemy_tongue", self, facing)
 
@@ -595,7 +597,7 @@ func play_network_tongue_presentation(facing: int) -> void:
 		anim.set("follow_target", self)
 		anim.set("follow_enabled", true)
 		anim.global_position = global_position
-		var parent: Node = get_tree().current_scene if get_tree() != null else get_parent()
+		var parent: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() != null else get_parent()
 		if parent != null:
 			parent.add_child(anim)
 			played = true
@@ -1123,7 +1125,7 @@ func _update_water_state() -> void:
 		if g and g.has_method("play_sfx_managed"):
 			var tree: SceneTree = get_tree()
 			if tree:
-				g.play_sfx_managed(stream, tree.current_scene)
+				g.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(tree))
 	## 立即重画（上/下半身拆分由 EnemySpriteRenderer 负责）
 	_refresh_sprite()
 
@@ -1187,8 +1189,8 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 		var damage := previous_hp - current_hp
 		_play_hit_feedback(Color.RED)
 		var tree := get_tree()
-		if tree and tree.current_scene:
-			DamageNumber.spawn(global_position + hurt_effect_offset, damage, tree.current_scene)
+		if tree and MAP_SCENE_QUERY.get_map_root(tree):
+			DamageNumber.spawn(global_position + hurt_effect_offset, damage, MAP_SCENE_QUERY.get_map_root(tree))
 		_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 	_facing = clampi(new_facing, FaceDir.DOWN, FaceDir.UP)
 	_network_headshot_death = is_headshot
@@ -1737,9 +1739,9 @@ func _apply_frontal_resist(damage: float, direction: Vector2) -> float:
 			## 2026-09-16 用户实测反馈：只有闪白时玩家以为"打不死/枪坏了"。
 			_play_pool(frontal_block_sound_pool, frontal_block_sound, frontal_block_sound_pitch)
 			var tree := get_tree()
-			if tree and tree.current_scene:
+			if tree and MAP_SCENE_QUERY.get_map_root(tree):
 				DamageNumber.spawn(global_position + hurt_effect_offset, 0.0,
-					tree.current_scene, 0, Color(1.0, 0.95, 0.6), "無効")
+					MAP_SCENE_QUERY.get_map_root(tree), 0, Color(1.0, 0.95, 0.6), "無効")
 			## 联机：整段表现必须一起转发（0 伤害走不了伤害通道，见 network_block_applied 注释）。
 			network_block_applied.emit(global_position + hurt_effect_offset)
 		print("[敵人] 正面抗性: %d → %d（扇区 ±%d°）" % [int(before), int(damage), int(frontal_arc_degrees)])
@@ -1878,11 +1880,11 @@ func take_damage(damage: float, knockback_force: float, direction: Vector2, is_h
 	# 弹出伤害数字（0 伤害如推击不弹出）
 	if damage > 0.0:
 		var tree := get_tree()
-		if tree and tree.current_scene:
+		if tree and MAP_SCENE_QUERY.get_map_root(tree):
 			## 颜色优先级：背刺（紫）> 爆头（黄）> 普通（白）
 			var dmg_color: Color = BACKSTAB_DMG_COLOR if backstab_hit \
 				else (Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE)
-			DamageNumber.spawn(global_position + hurt_effect_offset, damage, tree.current_scene, 0, dmg_color)
+			DamageNumber.spawn(global_position + hurt_effect_offset, damage, MAP_SCENE_QUERY.get_map_root(tree), 0, dmg_color)
 
 	# 播放受伤音效（0 伤害不播放）
 	if damage > 0.0:
@@ -2012,11 +2014,11 @@ func play_network_hurt_presentation(damage: float, impact_position: Vector2 = gl
 		return
 	_play_hit_feedback(Color.RED)
 	var tree := get_tree()
-	if tree and tree.current_scene:
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
 		## 颜色优先级同 take_damage：背刺（紫）> 爆头（黄）> 普通（白）
 		var dmg_color := BACKSTAB_DMG_COLOR if backstab \
 			else (Color(1.0, 0.85, 0.2) if is_headshot else Color.WHITE)
-		DamageNumber.spawn(impact_position, damage, tree.current_scene, 0, dmg_color)
+		DamageNumber.spawn(impact_position, damage, MAP_SCENE_QUERY.get_map_root(tree), 0, dmg_color)
 	_play_pool(hurt_sound_pool, hurt_sound, hurt_sound_pitch)
 
 
@@ -2026,8 +2028,8 @@ func play_network_block_presentation(impact_position: Vector2 = global_position)
 	_play_hit_feedback(Color(1.0, 0.95, 0.6, 1.0), 0.08)
 	_play_pool(frontal_block_sound_pool, frontal_block_sound, frontal_block_sound_pitch)
 	var tree := get_tree()
-	if tree and tree.current_scene:
-		DamageNumber.spawn(impact_position, 0.0, tree.current_scene, 0,
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		DamageNumber.spawn(impact_position, 0.0, MAP_SCENE_QUERY.get_map_root(tree), 0,
 			Color(1.0, 0.95, 0.6), "無効")
 
 
@@ -2282,9 +2284,9 @@ func _update_element_status(delta: float) -> void:
 				## 因此权威侧必须自己播；镜像侧**不播**（否则它会同时收到快照差与本次表现 → 弹两个）。
 				_play_hit_feedback(BURN_HIT_FLASH_COLOR, 0.12)
 				var burn_tree := get_tree()
-				if burn_tree and burn_tree.current_scene:
+				if burn_tree and MAP_SCENE_QUERY.get_map_root(burn_tree):
 					DamageNumber.spawn(global_position + hurt_effect_offset, tick_damage,
-						burn_tree.current_scene, 0, BURN_HIT_FLASH_COLOR)
+						MAP_SCENE_QUERY.get_map_root(burn_tree), 0, BURN_HIT_FLASH_COLOR)
 				if current_hp <= 0.0:
 					_die(false)
 					return
@@ -2336,9 +2338,9 @@ func _clear_element_tint() -> void:
 ## 尸体 reparent 到 GroundLayer（物理回调里不能直接改树，走 deferred）。
 func _reparent_to_ground_layer() -> void:
 	var tree := get_tree()
-	if not tree or not tree.current_scene or not is_inside_tree():
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree) or not is_inside_tree():
 		return
-	var ground: Node = tree.current_scene.find_child("GroundLayer", true, false)
+	var ground: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("GroundLayer", true, false)
 	if not ground or get_parent() == ground:
 		return
 	var gp := global_position
@@ -2753,8 +2755,8 @@ func _announce_network_action(tex_key: String, char_idx: int, active: bool) -> v
 	if not Net.is_host or network_entity_id <= 0:
 		return
 	var tree := get_tree()
-	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld") \
-			if tree != null and tree.current_scene != null else null
+	var world: Node = MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld") \
+			if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null else null
 	if world != null and world.has_method("announce_enemy_action"):
 		world.call("announce_enemy_action", self, tex_key, char_idx, active)
 
@@ -2787,8 +2789,8 @@ func _announce_network_sfx(stream: AudioStream, pitch: float) -> void:
 	if sfx_key == "":
 		return
 	var tree := get_tree()
-	var world: Node = tree.current_scene.get_node_or_null("NetworkWorld") \
-			if tree != null and tree.current_scene != null else null
+	var world: Node = MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld") \
+			if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null else null
 	if world != null and world.has_method("announce_enemy_sfx"):
 		world.call("announce_enemy_sfx", self, sfx_key, pitch, int(ref.get("index", -1)))
 

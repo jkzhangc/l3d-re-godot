@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：交互输入仲裁 ｜ 层：工具（RefCounted，纯判定）
 ## 联机：不涉及（存档点在联机会话里自移除；本判定只读本机状态）
@@ -28,7 +30,7 @@ static func has_priority_interaction(tree: SceneTree, except: Node) -> bool:
 	## 会对**同一按下**再弹菜单。帧号闸门补上这条缝。）
 	if pickup_key_used_this_frame():
 		return true
-	var scene: Node = tree.current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree)
 	if scene == null:
 		return false
 	## owned = false：运行时动态生成的节点（掉落物 / 刷出的机器）没有 owner，同样要参与判定。

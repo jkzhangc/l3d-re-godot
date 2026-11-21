@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：防守战 ｜ 层：玩法（Node，一次性演出器，挂在被生成的敌人身上）
 ## 联机：仅单机 / Host 播放；Client 的镜像实体靠快照插值跟随（不需要也不允许本地播放）
@@ -186,4 +188,4 @@ func _play_sound(stream: AudioStream) -> void:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return
-	g.play_sfx_managed(stream, tree.current_scene)
+	g.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(tree))

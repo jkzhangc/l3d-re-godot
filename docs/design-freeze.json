@@ -1,0 +1,19 @@
+{
+  "version": 4,
+  "status": "frozen",
+  "frozenAt": "2026-11-21",
+  "project": "L3D RE",
+  "scope": "2026-11-21用户明确授权：首批兼容查询、常驻GameSession/MapHost、公共UI和相机生命周期、既有地图及2K模板迁移、全部验收与已有改动审查后提交推送",
+  "excluded": ["改变存档、机关和ready使用的源地图身份与相对路径语义", "改变Host权威或网络协议", "旧存档路径键重写", "修改地图内机关和点位的相对路径"],
+  "items": [
+    {"id": "SCENE-004", "type": "level", "name": "GameSession/MapHost持有地图、公共HUD菜单和相机；引擎current_scene为Session，业务MapLocator保留当前源地图身份", "confirmed": true},
+    {"id": "SCENE-005", "type": "level", "name": "迁移所有现役地图和2K模板为内容场景并保留F6直接调试及旧地图相对路径", "confirmed": true},
+    {"id": "FLOW-002", "type": "level", "name": "会话切图、同图重载、读档复活与退出完整收口，保留Net静默ACK/commit/flush和逐图NetworkWorld", "confirmed": true},
+    {"id": "FLOW-003", "type": "level", "name": "生成图双端、旧图回归、真实导出和画面验收，审查后提交推送全部用户改动", "confirmed": true},
+    {"id": "SCENE-001", "type": "level", "name": "显式地图上下文与旧地图局部回退，保持现有地图身份", "confirmed": true},
+    {"id": "SCENE-002", "type": "level", "name": "GameInit、Director、Boss 与 NetworkWorld 共用角色容器查询，保留旧宿主接口", "confirmed": true},
+    {"id": "SCENE-003", "type": "level", "name": "2K转Godot真实生成模板声明地图契约、出生标记与直接排序的玩家，保持整图可运行", "confirmed": true},
+    {"id": "FLOW-001", "type": "level", "name": "旧图与生成图契约、生成器和初始化回归验证，不改变切图与存档行为", "confirmed": true},
+    {"id": "NET-LAT-P1", "type": "platform", "name": "既有网络尾部poll/flush阶段收尾", "confirmed": true, "scope": "历史条目登记，不属于本批网络改造授权", "source": "docs/05-联机/互联网联机模式策划方案.md §14：2026-11-16用户确认后实施；script/network_transport_tail.gd 已有同名trace"}
+  ]
+}

@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：玩法（Node，子模块，由 Director 创建）
 ## 联机：仅单机/Host（Client 的 `Director._process` 早退，本模块不运行）
@@ -159,7 +161,7 @@ func _resolve_exit() -> void:
 	var scene: Node = _scene
 	if scene == null or not is_instance_valid(scene):
 		var tree: SceneTree = get_tree()
-		scene = tree.current_scene if tree != null else null
+		scene = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	if scene == null:
 		return
 	var best_pos: Vector2 = Vector2.ZERO

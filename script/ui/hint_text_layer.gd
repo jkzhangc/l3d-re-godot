@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：世界提示文字 ｜ 层：表现（CanvasLayer）
 ## 联机：纯本地表现，各端自行换算屏幕坐标，零同步
@@ -76,7 +78,7 @@ static func _ensure_overlay() -> Variant:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	if tree == null:
 		return null
-	var scene: Node = tree.current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree)
 	## 已创建但还在 deferred 入树途中也要直接复用（否则会重复建层）。
 	## 但**属于上一张图的旧层必须丢弃**：换图瞬间旧层还 valid（queue_free 要等帧末），
 	## 新图的提示若挂进去会随旧场景一起被释放 → 文字永久不显示。

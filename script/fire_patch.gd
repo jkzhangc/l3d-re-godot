@@ -1,5 +1,7 @@
 class_name FirePatch extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：燃烧区域 ｜ 层：玩法（Node2D）
 ## 联机：Host 结算周期伤害
@@ -141,7 +143,7 @@ func _build_fire() -> void:
 ## 本节点在场景根下、火苗用 z=4 盖住一切；液面必须相反：压在角色(z=1)之下、
 ## 地面图块之上。GroundLayer 没有 y_sort，子节点 z=0 正好是这个层级。
 func _build_acid_pool() -> void:
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	var host: Node = scene.find_child("GroundLayer", true, false)

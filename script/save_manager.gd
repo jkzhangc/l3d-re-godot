@@ -1,5 +1,7 @@
 class_name SaveManager extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：存档系统 ｜ 层：数据（RefCounted）
 ## 联机：仅单机 / Host 侧使用（存档点节点在联机会话里自移除，见 save_point.gd）
@@ -95,8 +97,8 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 	DirAccess.make_dir_recursive_absolute(SAVE_DIR)
 
 	var scene_path: String = ""
-	if Global.get_tree() and Global.get_tree().current_scene:
-		scene_path = Global.get_tree().current_scene.scene_file_path
+	if Global.get_tree() and MAP_SCENE_QUERY.get_map_root(Global.get_tree()):
+		scene_path = MAP_SCENE_QUERY.get_map_root(Global.get_tree()).scene_file_path
 
 	var seat_dicts: Array = []
 	for s: PlayerState in Players.seats:

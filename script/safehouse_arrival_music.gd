@@ -1,5 +1,7 @@
 class_name SafehouseArrivalMusic extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：音频表现 ｜ 层：表现（Node）
 ## 联机：不涉及
@@ -19,10 +21,17 @@ func _ready() -> void:
 	call_deferred("_start_when_ready")
 
 
+func _exit_tree() -> void:
+	if is_instance_valid(_player):
+		_player.stop()
+		_player.stream = null
+	_player = null
+
+
 func _start_when_ready() -> void:
 	if not arrival_music:
 		return
-	var summary: ChapterSummary = get_tree().current_scene.find_child("ChapterSummary", true, false) as ChapterSummary
+	var summary: ChapterSummary = MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("ChapterSummary", true, false) as ChapterSummary
 	if wait_for_chapter_summary and summary and summary.visible:
 		summary.summary_finished.connect(_play_arrival_music, CONNECT_ONE_SHOT)
 		return

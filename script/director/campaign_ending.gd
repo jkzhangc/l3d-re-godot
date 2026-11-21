@@ -1,5 +1,7 @@
 class_name CampaignEnding extends CanvasLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：终章 ED 编排 ｜ 层：玩法（CanvasLayer，按需创建）
 ## 联机：单机完整流程；联机由 Host 驱动，进名单时走 request_scene_change 带上 Client。
@@ -106,8 +108,8 @@ func start() -> void:
 	## 查不到再退回 Global.selected_campaign。
 	var campaign_id: String = ""
 	var tree: SceneTree = get_tree()
-	if tree != null and tree.current_scene != null:
-		campaign_id = CampaignData.campaign_id_for_scene(tree.current_scene.scene_file_path)
+	if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
+		campaign_id = CampaignData.campaign_id_for_scene(MAP_SCENE_QUERY.get_map_root(tree).scene_file_path)
 	if campaign_id.is_empty():
 		var g: Node = get_node_or_null("/root/Global")
 		if g != null:

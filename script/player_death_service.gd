@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家死亡系统 + 武器丢弃 ｜ 层：服务类（RefCounted，由 player 持有）
 ## 联机：Host 权威裁决（联机死亡先走倒地表现，生死由 NetworkWorld 决定）；丢弃武器联机走 Host 事务
@@ -157,8 +159,8 @@ func _die() -> void:
 		# 无喷雾才落进倒地/真死亡裁决。
 		if _try_auto_spray_revive():
 			# 伤害信号已在本帧把 entry["downed"] 置 true（先于 _die），必须清除。
-			var world: Node = _p.get_tree().current_scene.find_child("NetworkWorld", true, false) \
-					if _p.get_tree() and _p.get_tree().current_scene else null
+			var world: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree()).find_child("NetworkWorld", true, false) \
+					if _p.get_tree() and MAP_SCENE_QUERY.get_map_root(_p.get_tree()) else null
 			if world and world.has_method("notify_player_revived"):
 				world.call("notify_player_revived", _p)
 			return
@@ -259,8 +261,8 @@ func _create_fade_overlay() -> void:
 	cl.add_child(_p._death_fade_overlay)
 
 	var tree: SceneTree = _p.get_tree()
-	if tree and tree.current_scene:
-		tree.current_scene.add_child(cl)
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		MAP_SCENE_QUERY.get_map_root(tree).add_child(cl)
 		_p._death_fade_timer = 0.0
 		_p._death_phase = 1
 
@@ -329,16 +331,11 @@ func _reload_from_save() -> void:
 		return
 	## 2026-10-30：死亡复活也是场景加载，亮加载画面；新图 GameInit 会收起。
 	Global.show_loading_screen()
-	if not safehouse.is_empty() and safehouse != tree.current_scene.scene_file_path:
-		# 不在安全屋 → 切回安全屋场景
-		var err := tree.change_scene_to_file(safehouse)
-		if err != OK:
-			printerr("[玩家] 无法切回安全屋: %s (err=%d)" % [safehouse, err])
-			Global.hide_loading_screen()
-			tree.reload_current_scene()
-	else:
-		# 已在安全屋死亡 → 直接重载
-		tree.reload_current_scene()
+	var target: String = safehouse if not safehouse.is_empty() else MAP_SCENE_QUERY.get_map_root(tree).scene_file_path
+	var err: Error = Global.loading_change_scene(target)
+	if err != OK:
+		printerr("[玩家] 无法恢复地图: %s (err=%d)" % [target, err])
+		Global.hide_loading_screen()
 
 
 ## 复活/队伍诊断（2026-09-16）：逐席位打印「角色 + HP」，
@@ -364,7 +361,7 @@ func _log_team_state(tag: String) -> void:
 func request_drop_all_weapons() -> void:
 	if _p._is_dying or _p.network_downed:
 		return
-	var scene: Node = _p.get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree())
 	var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
 	var net: Node = _p.get_node_or_null("/root/Net")
 	var online: bool = net != null and net.has_method("is_online_session") and bool(net.is_online_session())

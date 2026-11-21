@@ -37,6 +37,29 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 > ⚠ `convert_map.bat` 保持**纯 ASCII**：cmd.exe 按 OEM 代码页解析批处理，UTF-8 中文会乱码，
 > 行尾前导字节还可能吞掉换行符把下一行粘成命令。脚本用 `chcp 65001` 让 Python 的中文输出可读。
 
+## 地图场景模板（2026-11-21 更新）
+
+`convert_map.bat` 的第 3 步仍调用 `script/map_restore/map_tilemap_generator.gd`；场景骨架现集中在 `script/map_restore/map_scene_template.gd`，不要在多个生成入口维护重复模板。
+
+| 部分 | 新生成结构 |
+|---|---|
+| 地图根 | 挂 `script/map/map_context.gd`，声明 `map_id` 与容器/边界路径 |
+| 图块 | GroundLayer / DecorLayer / UpperLayer；地面、上层保持各自原 TileSet |
+| 活体 | 内容图不保存玩家；会话把玩家直接创建到 DecorLayer，参与 Y 排序 |
+| 出生标记 | 根下独立 `PlayerSpawn(Marker2D)`；修改此标记即可调整默认出生位 |
+| 相机 | MapContext 保存边界、缩放与跟随参数；会话复用 `camera_follow.gd` 并逐图重绑 |
+| 公共装配 | GameSession 持有 Menu、CombatHUD 和相机；GameInit 每次入图创建一次 |
+
+当前输出为纯内容地图；直接 F6 运行时 MapContext 自动接入会话。生产加载采用 `GameSession/MapHost`，引擎当前场景是会话，业务通过 MapLocator 取源地图。存档键、随机补给键和机关 RPC 相对路径保持原地图口径，现有联机权威及 ready 协议不变。不要在模板中重新放入公共 UI 或预置玩家；TileSet 的增量复用逻辑保持不变。
+
+从项目根可运行零第三方 Python 依赖的模板端到端检查：
+
+```bash
+python tools/test_map_scene_template.py
+```
+
+检查真实生成、TileSet 增量重跑不改文件，以及生成地图启动后的玩家注册、HUD 和镜头跟随；预期末行 `MAP_SCENE_TEMPLATE_E2E: PASS`。测试仅在 `.workbuddy/tmp/` 下创建独立输出，不覆盖正式地图或用户存档。Godot 路径不同可传 `--godot`。
+
 ## 当前编码约定
 
 下层 ID 分区（EasyRPG `map_data.h`，**权威**）：

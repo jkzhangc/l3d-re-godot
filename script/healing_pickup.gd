@@ -1,6 +1,8 @@
 @tool
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：补给掉落物 ｜ 层：玩法（Node2D）
 ## 联机：Client 请求 / Host 校验提交
@@ -356,7 +358,7 @@ func _request_network_pickup() -> void:
 	_network_pickup_request_pending = true
 	_network_request_msec = Time.get_ticks_msec()
 	_hold_timer = 0.0
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_pickup"):
 		# 带本机位置上报（滞后补偿，同 weapon_pickup）。
@@ -575,7 +577,7 @@ func _drop_old_throwable(body: Node2D, state: PlayerState) -> void:
 	drop.item = old
 	var parent: Node = get_parent()
 	if not parent:
-		parent = get_tree().current_scene
+		parent = MAP_SCENE_QUERY.get_map_root(get_tree())
 	parent.add_child(drop)
 	## 落点与武器掉落统一（2026-09-23）：沿朝向推远 + 与已有掉落物避让 —— 否则旧投掷物
 	## 掉在脚下会被自己的自动拾取立刻捡回（同「丢下的武器又被捡回」问题）。

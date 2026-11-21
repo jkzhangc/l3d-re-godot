@@ -1,0 +1,563 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]
+[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="2_cell"]
+[ext_resource type="Texture2D" path="res://art/Animations/酸だー！.png" id="3_sheet"]
+
+[sub_resource type="Resource" id="cell_0"]
+script = ExtResource("2_cell")
+frame_idx = 0
+pattern = 0
+offset = Vector2(-80, -64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_1"]
+script = ExtResource("2_cell")
+frame_idx = 0
+pattern = 0
+offset = Vector2(64, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_2"]
+script = ExtResource("2_cell")
+frame_idx = 0
+pattern = 2
+offset = Vector2(-80, 24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_3"]
+script = ExtResource("2_cell")
+frame_idx = 0
+pattern = 2
+offset = Vector2(64, 64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_4"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 1
+offset = Vector2(-80, -64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_5"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 1
+offset = Vector2(64, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_6"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 3
+offset = Vector2(-80, 24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_7"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 3
+offset = Vector2(64, 64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_8"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 0
+offset = Vector2(-112, -56)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_9"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 0
+offset = Vector2(80, 0)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_10"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 2
+offset = Vector2(-112, 32)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_11"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 3
+offset = Vector2(72, 80)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_12"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 1
+offset = Vector2(-112, -56)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_13"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 1
+offset = Vector2(80, 0)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_14"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 2
+offset = Vector2(-112, 32)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_15"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 3
+offset = Vector2(72, 80)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_16"]
+script = ExtResource("2_cell")
+frame_idx = 4
+pattern = 0
+offset = Vector2(-8, -152)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_17"]
+script = ExtResource("2_cell")
+frame_idx = 5
+pattern = 0
+offset = Vector2(-8, -152)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_18"]
+script = ExtResource("2_cell")
+frame_idx = 5
+pattern = 0
+offset = Vector2(-8, 40)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_19"]
+script = ExtResource("2_cell")
+frame_idx = 6
+pattern = 0
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_20"]
+script = ExtResource("2_cell")
+frame_idx = 6
+pattern = 0
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_21"]
+script = ExtResource("2_cell")
+frame_idx = 6
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_22"]
+script = ExtResource("2_cell")
+frame_idx = 6
+pattern = 2
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_23"]
+script = ExtResource("2_cell")
+frame_idx = 7
+pattern = 1
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_24"]
+script = ExtResource("2_cell")
+frame_idx = 7
+pattern = 1
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_25"]
+script = ExtResource("2_cell")
+frame_idx = 7
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_26"]
+script = ExtResource("2_cell")
+frame_idx = 7
+pattern = 3
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_27"]
+script = ExtResource("2_cell")
+frame_idx = 8
+pattern = 0
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_28"]
+script = ExtResource("2_cell")
+frame_idx = 8
+pattern = 0
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_29"]
+script = ExtResource("2_cell")
+frame_idx = 8
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_30"]
+script = ExtResource("2_cell")
+frame_idx = 8
+pattern = 2
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_31"]
+script = ExtResource("2_cell")
+frame_idx = 9
+pattern = 1
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_32"]
+script = ExtResource("2_cell")
+frame_idx = 9
+pattern = 1
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_33"]
+script = ExtResource("2_cell")
+frame_idx = 9
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_34"]
+script = ExtResource("2_cell")
+frame_idx = 9
+pattern = 3
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_35"]
+script = ExtResource("2_cell")
+frame_idx = 10
+pattern = 0
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_36"]
+script = ExtResource("2_cell")
+frame_idx = 10
+pattern = 0
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_37"]
+script = ExtResource("2_cell")
+frame_idx = 10
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_38"]
+script = ExtResource("2_cell")
+frame_idx = 10
+pattern = 2
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_39"]
+script = ExtResource("2_cell")
+frame_idx = 11
+pattern = 1
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_40"]
+script = ExtResource("2_cell")
+frame_idx = 11
+pattern = 1
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_41"]
+script = ExtResource("2_cell")
+frame_idx = 11
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_42"]
+script = ExtResource("2_cell")
+frame_idx = 11
+pattern = 3
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_43"]
+script = ExtResource("2_cell")
+frame_idx = 12
+pattern = 0
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_44"]
+script = ExtResource("2_cell")
+frame_idx = 12
+pattern = 0
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_45"]
+script = ExtResource("2_cell")
+frame_idx = 12
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_46"]
+script = ExtResource("2_cell")
+frame_idx = 12
+pattern = 2
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_47"]
+script = ExtResource("2_cell")
+frame_idx = 13
+pattern = 1
+offset = Vector2(-8, -120)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_48"]
+script = ExtResource("2_cell")
+frame_idx = 13
+pattern = 1
+offset = Vector2(-8, 72)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_49"]
+script = ExtResource("2_cell")
+frame_idx = 13
+pattern = 5
+offset = Vector2(-8, 160)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_50"]
+script = ExtResource("2_cell")
+frame_idx = 13
+pattern = 3
+offset = Vector2(-8, 144)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_51"]
+script = ExtResource("2_cell")
+frame_idx = 14
+pattern = 0
+offset = Vector2(0, -32)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_52"]
+script = ExtResource("2_cell")
+frame_idx = 15
+pattern = 1
+offset = Vector2(0, -32)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_53"]
+script = ExtResource("2_cell")
+frame_idx = 17
+pattern = 0
+offset = Vector2(0, 64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[sub_resource type="Resource" id="cell_54"]
+script = ExtResource("2_cell")
+frame_idx = 18
+pattern = 1
+offset = Vector2(0, 64)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 1
+
+[node name="AnimEdit" type="Node2D"]
+script = ExtResource("1_sprite")
+texture = ExtResource("3_sheet")
+h_frames = 5
+fps = 20
+frame_sequence = Array[int]([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+cell_data = Array[ExtResource("2_cell")]([SubResource("cell_0"), SubResource("cell_1"), SubResource("cell_2"), SubResource("cell_3"), SubResource("cell_4"), SubResource("cell_5"), SubResource("cell_6"), SubResource("cell_7"), SubResource("cell_8"), SubResource("cell_9"), SubResource("cell_10"), SubResource("cell_11"), SubResource("cell_12"), SubResource("cell_13"), SubResource("cell_14"), SubResource("cell_15"), SubResource("cell_16"), SubResource("cell_17"), SubResource("cell_18"), SubResource("cell_19"), SubResource("cell_20"), SubResource("cell_21"), SubResource("cell_22"), SubResource("cell_23"), SubResource("cell_24"), SubResource("cell_25"), SubResource("cell_26"), SubResource("cell_27"), SubResource("cell_28"), SubResource("cell_29"), SubResource("cell_30"), SubResource("cell_31"), SubResource("cell_32"), SubResource("cell_33"), SubResource("cell_34"), SubResource("cell_35"), SubResource("cell_36"), SubResource("cell_37"), SubResource("cell_38"), SubResource("cell_39"), SubResource("cell_40"), SubResource("cell_41"), SubResource("cell_42"), SubResource("cell_43"), SubResource("cell_44"), SubResource("cell_45"), SubResource("cell_46"), SubResource("cell_47"), SubResource("cell_48"), SubResource("cell_49"), SubResource("cell_50"), SubResource("cell_51"), SubResource("cell_52"), SubResource("cell_53"), SubResource("cell_54")])

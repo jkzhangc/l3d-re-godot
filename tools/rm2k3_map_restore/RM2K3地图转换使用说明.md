@@ -75,7 +75,15 @@ godot --headless --path . --script res://script/map_restore/map_tilemap_generato
 - `tres/MapXXXX_upper_tileset.tres`：上层专用 TileSet。
 - `scene/maps_auto/MapXXXX_auto.tscn`：真实可编辑 TileMapLayer 场景。
 
-场景中 `GroundLayer` 只引用 lower TileSet，`UpperLayer` 只引用 upper TileSet；`DecorLayer` 留给玩家、事件和装饰，不写入恢复图块。
+场景中 `GroundLayer` 只引用 lower TileSet，`UpperLayer` 只引用 upper TileSet；`DecorLayer` 不写入恢复图块，用作活体与物件的 Y 排序域。
+
+### 场景骨架（2026-11-21）
+
+骨架由 `script/map_restore/map_scene_template.gd` 统一生成，地图根挂 `MapContext` 声明地图标识、排序容器与相机参数。模板只保存地图内容和根下独立 `PlayerSpawn(Marker2D)`，玩家由会话在运行时直接创建到 DecorLayer。修改默认出生位只需移动标记；存档或入口落点仍由原有流程优先应用，不会被标记覆盖。
+
+公共跟随相机、Menu 和 CombatHUD 由常驻 GameSession 持有并跨图复用，GameInit 每次入图仅创建一份。直接 F6 运行地图会自动装配会话；正常加载使用 GameSession/MapHost，业务地图身份通过 MapLocator 查询。原命令参数、逐格恢复、TileSet 增量复用和原地图持久键保持不变。现役地图已完成一次性内容迁移，但转换命令不会重生成 `scene/maps/` 手工地图；生成目录下场景仍是可覆盖派生产物，人工修改前应另存。
+
+模板端到端校验可从项目根运行 `python tools/test_map_scene_template.py`，预期 `MAP_SCENE_TEMPLATE_E2E: PASS`；它只在 `.workbuddy/tmp/` 下写隔离测试产物，不覆盖正式地图、TileSet、配置或玩家存档。
 
 ## 图块编码
 

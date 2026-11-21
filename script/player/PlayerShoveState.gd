@@ -1,5 +1,7 @@
 extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家状态机 ｜ 层：玩法（State）
 ## 联机：Client 只请求，Host 结算
@@ -150,7 +152,7 @@ func _create_shove_hitbox() -> void:
 	var offset: Vector2 = character.get_facing_vector() * _wd.shove_range_forward_offset
 	_hitbox.global_position = character.global_position + offset
 
-	character.get_tree().current_scene.add_child(_hitbox)
+	MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(_hitbox)
 	print("[推击] 判定区域已创建 | 偏移=%s | 大小=%s" % [offset, _wd.shove_range_size])
 
 
@@ -280,7 +282,7 @@ func _spawn_debug_region() -> void:
 		return
 	_debug_region = DebugRegion.new()
 	_debug_region.name = "ShoveDebugRegion"
-	character.get_tree().current_scene.add_child(_debug_region)
+	MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(_debug_region)
 	_update_debug_region()
 
 
@@ -308,7 +310,7 @@ func _free_debug_region() -> void:
 
 
 func _play_attack_sound(stream: AudioStream) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene)
+	Global.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(character.get_tree()))
 
 
 func _get_weapon() -> WeaponData:

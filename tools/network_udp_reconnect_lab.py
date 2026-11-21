@@ -4,15 +4,13 @@ production credential exchange, NAT rebinding, TCP fallback, or public 20ms late
 """
 from __future__ import annotations
 import argparse
-import hashlib
 import json
 import os
 import secrets
-import shutil
 import time
-from pathlib import Path
 from network_udp_enet_lab import (ROOT, ENGINE, Child, check_godot_adapter, control_command,
-                                  parse_result, start_godot_adapter)
+                                  parse_result, read_optional_config, resolve_godot,
+                                  restore_config, start_godot_adapter)
 
 
 def wait_status(endpoint, token, predicate, timeout=20):
@@ -30,19 +28,21 @@ def wait_status(endpoint, token, predicate, timeout=20):
     raise TimeoutError(f'probe status deadline; last={last}')
 
 
-def run_case(output, clients, count, seed, loss):
+def run_case(output, clients, count, seed, loss, godot=None):
     children, endpoints, status = {}, {}, {}
     token = secrets.token_hex(24)
     env = dict(os.environ, UDP_LAB_RE_CONTROL_TOKEN=token)
     result = {'clients': clients, 'count': count, 'seed': seed, 'loss': loss,
               'scope': 'localhost Godot codec worker + real production lobby ENet reconnect',
-              'ok': False, 'epochs': [], 'stale_injection': None}
+              'ok': False, 'reliability_ok': False, 'epochs': [], 'stale_injection': None,
+              'stability_evaluated_as': 'observational_no_latency_budget',
+              'reconnect_observation': {}}
     bridge = adapter = None
     adapter_ready = adapter_token = None
 
     def spawn_probe(role, port, index=0):
         name = role if role == 'host' else f'client{index}'
-        child = Child([ENGINE, '--headless', '--path', str(ROOT), '--log-file',
+        child = Child([godot or ENGINE, '--headless', '--path', str(ROOT), '--log-file',
             str(output.parent / f'{output.stem}_{name}_engine.log'), '--script',
             'res://tools/network_udp_reconnect_probe.gd', '--', f'--udp-re-role={role}',
             f'--udp-re-port={port}', f'--udp-re-index={index}', f'--udp-re-clients={clients}'],
@@ -59,7 +59,7 @@ def run_case(output, clients, count, seed, loss):
         children[f'bridge{epoch}'] = lab
         ready = lab.ready(10)
         worker, worker_ready, worker_token = start_godot_adapter(
-            lab, children, output, f'adapter{epoch}')
+            lab, children, output, f'adapter{epoch}', godot=godot)
         return lab, ready, worker, worker_ready, worker_token
 
     def close_carrier(lab, worker, ready, worker_token):
@@ -107,9 +107,11 @@ def run_case(output, clients, count, seed, loss):
                 break
             # Retain old authenticated packets only in memory, not evidence logs.
             bridge.command({'type': 'export-replay'})
-            old_packets = bridge.private_messages.get(timeout=5)['packets']
+            old_packets = bridge.wait_private(timeout=5)['packets']
             if len(old_packets) != clients:
                 raise RuntimeError('old authenticated packet capture incomplete')
+            # 控制器自身单调时钟；分开记录离开/旧peer清理与全新握手阶段，不冒称自动重连耗时。
+            dropped_started = time.monotonic()
             for i in range(clients):
                 response = control_command(endpoints[f'client{i}']['control_port'], token,
                     {'type': 'drop', 'request_id': f'drop{i}'}, wait_reply=True)
@@ -119,6 +121,7 @@ def run_case(output, clients, count, seed, loss):
             host_dropped = wait_status(endpoints['host'], token,
                 lambda s: len(s.get('names', {})) == 1, timeout=25)
             result['old_host_ids_removed'] = all(str(i) not in host_dropped['names'] for i in initial_ids)
+            result['reconnect_observation']['leave_and_old_peer_cleanup_ms'] = (time.monotonic() - dropped_started) * 1000
             result['carrier_epoch1'] = close_carrier(bridge, adapter, adapter_ready, adapter_token)
             bridge, ready, adapter, adapter_ready, adapter_token = start_carrier(2, host_port)
             # Inject old valid packets via NEW trusted source sockets at the NEW worker.
@@ -141,6 +144,7 @@ def run_case(output, clients, count, seed, loss):
                     and s.get('accepted_packets', -1) == 0 for s in stats.get('sessions', []))}
             if not result['stale_injection']['no_forward']:
                 raise RuntimeError('old session packet forwarded to new ENet backend')
+            join_started = time.monotonic()
             for i, port in enumerate(ready['ports']):
                 response = control_command(endpoints[f'client{i}']['control_port'], token,
                     {'type': 'join', 'request_id': f'join{i}', 'port': port, 'epoch': 2}, wait_reply=True)
@@ -149,6 +153,8 @@ def run_case(output, clients, count, seed, loss):
             wait_status(endpoints['host'], token, lambda s: len(s.get('names', {})) == clients + 1)
             fresh_ids = [wait_status(endpoints[f'client{i}'], token,
                 lambda s: s.get('connected') is True)['peer_id'] for i in range(clients)]
+            result['reconnect_observation']['new_join_and_hello_ms'] = (time.monotonic() - join_started) * 1000
+            result['reconnect_observation']['scope'] = 'controller_local_elapsed_lobby_not_automatic_recovery_or_world_resume'
             result['peer_ids_changed'] = all(a != b for a, b in zip(initial_ids, fresh_ids))
             result['initial_ids'], result['fresh_ids'] = initial_ids, fresh_ids
             if not result['peer_ids_changed'] or not result['old_host_ids_removed']:
@@ -164,11 +170,13 @@ def run_case(output, clients, count, seed, loss):
         result['probe_results'] = {name: parse_result(child, 'UDP_RE_RESULT ')
             for name, child in children.items() if name == 'host' or name.startswith('client')}
         result['exit_codes'] = {name: child.proc.returncode for name, child in children.items()}
+        result['child_failures'] = {name: child.failures for name, child in children.items() if child.failures}
         result['engine_errors'] = [line for child in children.values() for line in child.lines
             if 'SCRIPT ERROR' in line or 'Parse Error' in line
             or (line.startswith('ERROR:') and 'resources still in use at exit' not in line)]
         result['ok'] = (all(v == 0 for v in result['exit_codes'].values())
-            and not result['engine_errors'] and all(s.get('ok') is True for s in result['probe_results'].values())
+            and not result['engine_errors'] and not result['child_failures']
+            and all(s.get('ok') is True for s in result['probe_results'].values())
             and result['peer_ids_changed'] and result['old_host_ids_removed']
             and result['stale_injection']['no_forward'])
         adapter_gate = {}
@@ -179,6 +187,7 @@ def run_case(output, clients, count, seed, loss):
                 adapter_gate[key].append(f"bridge.ioErrors={carrier['bridge']['totals']['ioErrors']}")
             result['ok'] = result['ok'] and not adapter_gate[key]
         result['godot_adapter_gate'] = adapter_gate
+        result['reliability_ok'] = result['ok']
         if not result['ok']:
             raise RuntimeError('strict reconnect gate failed')
         return result
@@ -194,6 +203,7 @@ def run_case(output, clients, count, seed, loss):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--godot', help='Godot 可执行文件；也可通过 GODOT_BIN/GODOT 或 PATH 指定')
     parser.add_argument('--clients', type=int, choices=[1, 2, 3], default=2)
     parser.add_argument('--count', type=int, default=30)
     parser.add_argument('--seed', type=int, default=31)
@@ -204,26 +214,25 @@ def main():
         parser.error('count20..100/loss0..0.05 required')
     if not args.label or any(c not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for c in args.label):
         parser.error('label must be ASCII identifier')
+    try:
+        godot = resolve_godot(args.godot)
+    except ValueError as exc:
+        parser.error(str(exc))
     output = ROOT / '.workbuddy/tmp' / f'network_udp_reconnect_{args.label}.json'
+    output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists() or any(output.parent.glob(output.stem + '_*')):
         parser.error('label already has evidence')
     config = ROOT / 'config.json'
-    before = config.read_bytes()
-    backup = output.with_name('.' + output.stem + '_config_backup.json')
-    shutil.copy2(config, backup)
+    before = read_optional_config(config)
     result = {}
     try:
-        result = run_case(output, args.clients, args.count, args.seed, args.loss)
+        result = run_case(output, args.clients, args.count, args.seed, args.loss, godot=godot)
     finally:
-        unchanged = config.read_bytes() == before
-        if not unchanged:
-            shutil.copy2(backup, config)
-        result.update(config_unchanged_during_run=unchanged,
-            config_preserved=config.read_bytes() == before,
-            config_sha256=hashlib.sha256(before).hexdigest())
+        config_status = restore_config(config, before)
+        result.update(config_status)
         output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
         print('UDP_RECONNECT_OUTPUT', output, 'ok=', result.get('ok', False), flush=True)
-        if not unchanged:
+        if not config_status['config_unchanged_during_run']:
             raise RuntimeError('config was modified; restored, run rejected')
 
 

@@ -1,5 +1,7 @@
 class_name EnemyRocket extends Area2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人攻击 ｜ 层：玩法（Area2D 投射物）
 ## 联机：Host 生成权威弹（结算爆炸伤害）；Client 经 enemy_rocket_presentation RPC 生成
@@ -136,7 +138,7 @@ func _damage_players_in_radius() -> void:
 func _play_explosion_effect() -> void:
 	if explosion_effect == null:
 		return
-	var parent: Node = get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if parent == null:
 		return
 	VXAnimSprite.play_scene(explosion_effect, global_position, parent)

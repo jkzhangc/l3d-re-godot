@@ -1,5 +1,7 @@
 class_name EnemyTongueState extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：仅 Host 执行；特效是本地表现（Client 不跑 AI 状态机，舌头动画不跨端）
@@ -179,7 +181,7 @@ func _play_tongue_effect(enemy: Node2D) -> bool:
 	anim.set("follow_target", enemy)
 	anim.set("follow_enabled", true)
 	anim.global_position = enemy.global_position
-	var parent: Node = enemy.get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(enemy.get_tree())
 	if parent == null:
 		parent = enemy.get_parent()
 	if parent == null:

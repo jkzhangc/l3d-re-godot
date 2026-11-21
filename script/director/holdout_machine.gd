@@ -1,6 +1,8 @@
 @tool
 class_name HoldoutMachine extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：玩法（Node2D, @tool）
 ## 联机：仅单机/Host 启动，结果广播
@@ -503,7 +505,7 @@ func _begin_ending(fade_seconds_value: float) -> void:
 		if node is CampaignEnding:
 			(node as CampaignEnding).stop_ending_music()
 	if ending_sound:
-		Global.play_sfx_managed(ending_sound, get_tree().current_scene)
+		Global.play_sfx_managed(ending_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	var ending: CampaignEnding = CampaignEnding.new()
 	ending.fade_seconds = fade_seconds_value
 	# 挂 root：本节点可能藏在"列车门"子树下，且后续场景切换会释放本节点
@@ -773,7 +775,7 @@ func trigger() -> void:
 	# BGM 不在预备阶段播（用户 2026-09-13）：移到 _begin_active() 正式开始时。
 	# 预备音效（用户 2026-09-13 新增）：预备倒计时开始时响一声。
 	if prepare_sound:
-		Global.play_sfx_managed(prepare_sound, get_tree().current_scene)
+		Global.play_sfx_managed(prepare_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	_update_label()
 	# 冻结常规导演编排（尸潮节奏/常规刷怪），防止尸潮 BGM 与防守战 BGM 叠加、
 	# 尸潮刷怪/狂暴干扰防守战；防守战自身刷怪走 EventManager 剧本事件管线不受影响。
@@ -979,7 +981,7 @@ func _play_alert_sound_once() -> void:
 		return
 	_alert_played = true
 	if alert_sound and not _is_network_client():
-		Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+		Global.play_sfx_managed(alert_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 
 
 func _begin_settle() -> void:
@@ -1072,7 +1074,7 @@ func _play_finish_sound_once() -> void:
 		return
 	## 走 Global 的托管播放器（与 prepare_sound / alert_sound / ending_sound 同一入口，
 	## 受全局音效音量与并发上限管理），不另建 AudioStreamPlayer。
-	Global.play_sfx_managed(finish_sound, get_tree().current_scene)
+	Global.play_sfx_managed(finish_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 
 
 ## 播放「场景里的音频节点」（2026-10-27 用户需求）：与 `finish_sound` 各自独立，可同时配。
@@ -1171,8 +1173,8 @@ func _collect_spawn_points() -> Array:
 	_collect_spawn_points_recursive(self, out)
 	if out.is_empty():
 		var tree: SceneTree = get_tree()
-		if tree != null and tree.current_scene != null:
-			_collect_spawn_points_recursive(tree.current_scene, out)
+		if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
+			_collect_spawn_points_recursive(MAP_SCENE_QUERY.get_map_root(tree), out)
 	_warn_points_in_no_spawn(out)
 	return out
 
@@ -1325,17 +1327,17 @@ func apply_remote_holdout_state(phase: int, remaining: float, total: float, toke
 	if phase == Phase.PREPARE and not _remote_prepare_played:
 		_remote_prepare_played = true
 		if prepare_sound:
-			Global.play_sfx_managed(prepare_sound, get_tree().current_scene)
+			Global.play_sfx_managed(prepare_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	## ★预警提前（2026-10-28）：与 Host 同口径 —— PREPARE 剩余 <= alert_lead_time 就响。
 	## 周期包 500ms 一次，2 秒窗口内必然落到一个包；ACTIVE 分支保留为兜底。
 	if phase == Phase.PREPARE and not _remote_alert_played and remaining <= alert_lead_time:
 		_remote_alert_played = true
 		if alert_sound:
-			Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+			Global.play_sfx_managed(alert_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	if phase == Phase.ACTIVE and not _remote_alert_played:
 		_remote_alert_played = true
 		if alert_sound:
-			Global.play_sfx_managed(alert_sound, get_tree().current_scene)
+			Global.play_sfx_managed(alert_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	_remote_phase = phase
 	if phase <= 0:
 		## ★结束哨兵：必须**记住是哪一场结束了**（2026-09-26）——
@@ -1421,7 +1423,7 @@ func _find_network_world() -> Node:
 	var tree := get_tree()
 	if not tree:
 		return null
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	if not scene:
 		return null
 	return scene.find_child("NetworkWorld", true, false)
@@ -1497,7 +1499,7 @@ func _resolve_node(path: NodePath) -> Node:
 	if node:
 		return node
 
-	var scene: Node = get_tree().current_scene if get_tree() else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if scene:
 		node = scene.get_node_or_null(path)
 		if node:
@@ -1598,7 +1600,7 @@ func _create_one_teleport_point(cfg: HoldoutTeleportConfig, index: int) -> void:
 	# 与机器同父级 → 继承同一图层的 z 排序
 	var parent: Node = get_parent()
 	if not parent:
-		parent = get_tree().current_scene
+		parent = MAP_SCENE_QUERY.get_map_root(get_tree())
 	parent.add_child(tp)
 	tp.global_position = spawn_pos
 	# start_hidden 必须在 add_child 之后设置，否则会被 _ready 之后的状态覆盖

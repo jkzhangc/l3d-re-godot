@@ -62,12 +62,11 @@ scale = Vector2(2, 2)
 mouse_filter = 2
 texture = ExtResource("2_5nspm")
 
-[node name="BuffBar" parent="." instance=ExtResource("9_buffbar")]
+[node name="BuffBar" parent="." unique_id=1000445140 instance=ExtResource("9_buffbar")]
 offset_left = 440.0
 offset_top = 78.0
 offset_right = 760.0
 offset_bottom = 246.0
-mouse_filter = 2
 
 [node name="SprayCount" type="TextureRect" parent="." unique_id=306595916]
 offset_left = 318.0
@@ -250,8 +249,7 @@ theme_override_font_sizes/font_size = 24
 text = "2P"
 vertical_alignment = 1
 
-[node name="ActionHints" type="PanelContainer" parent="."]
-visible = false
+[node name="ActionHints" type="PanelContainer" parent="." unique_id=614761025]
 anchors_preset = 3
 anchor_left = 1.0
 anchor_top = 1.0
@@ -266,24 +264,24 @@ grow_vertical = 0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("HintsPanel")
 
-[node name="Margin" type="MarginContainer" parent="ActionHints"]
+[node name="Margin" type="MarginContainer" parent="ActionHints" unique_id=760618777]
 layout_mode = 2
 theme_override_constants/margin_left = 14
 theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 14
 theme_override_constants/margin_bottom = 10
 
-[node name="VBox" type="VBoxContainer" parent="ActionHints/Margin"]
+[node name="VBox" type="VBoxContainer" parent="ActionHints/Margin" unique_id=1555157039]
 layout_mode = 2
 theme_override_constants/separation = 4
 alignment = 2
 
-[node name="Row1" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row1" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=1771441795]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row1"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row1" unique_id=1802096343]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -294,7 +292,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "1"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row1"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row1" unique_id=1127721261]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -304,12 +302,12 @@ theme_override_font_sizes/font_size = 36
 text = "举起主武器"
 vertical_alignment = 1
 
-[node name="Row2" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row2" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=684288801]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row2"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row2" unique_id=64488593]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -320,7 +318,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "Z"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row2"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row2" unique_id=1840612164]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -330,12 +328,12 @@ theme_override_font_sizes/font_size = 36
 text = "攻击"
 vertical_alignment = 1
 
-[node name="Row3" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row3" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=436670170]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row3"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row3" unique_id=1220111646]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -346,7 +344,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "X"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row3"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row3" unique_id=472142086]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -356,12 +354,12 @@ theme_override_font_sizes/font_size = 36
 text = "固定朝向"
 vertical_alignment = 1
 
-[node name="Row4" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row4" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=1663890618]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row4"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row4" unique_id=2085921135]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -372,7 +370,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "A"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row4"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row4" unique_id=109188699]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -382,12 +380,12 @@ theme_override_font_sizes/font_size = 36
 text = "装填"
 vertical_alignment = 1
 
-[node name="Row5" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row5" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=1795171145]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row5"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row5" unique_id=776523544]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -398,7 +396,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "A"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row5"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row5" unique_id=478678028]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -408,12 +406,12 @@ theme_override_font_sizes/font_size = 36
 text = "装填"
 vertical_alignment = 1
 
-[node name="Row6" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row6" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=339545412]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row6"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row6" unique_id=729507567]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -424,7 +422,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "A"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row6"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row6" unique_id=1583186895]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -434,12 +432,12 @@ theme_override_font_sizes/font_size = 36
 text = "装填"
 vertical_alignment = 1
 
-[node name="Row7" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row7" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=1042982728]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row7"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row7" unique_id=1333002551]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -450,7 +448,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "A"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row7"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row7" unique_id=1748259590]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -460,12 +458,12 @@ theme_override_font_sizes/font_size = 36
 text = "装填"
 vertical_alignment = 1
 
-[node name="Row8" type="HBoxContainer" parent="ActionHints/Margin/VBox"]
+[node name="Row8" type="HBoxContainer" parent="ActionHints/Margin/VBox" unique_id=1080827055]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 2
 
-[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row8"]
+[node name="Key" type="Label" parent="ActionHints/Margin/VBox/Row8" unique_id=716269753]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)
@@ -476,7 +474,7 @@ theme_override_styles/normal = SubResource("HintsKey")
 text = "A"
 vertical_alignment = 1
 
-[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row8"]
+[node name="Text" type="Label" parent="ActionHints/Margin/VBox/Row8" unique_id=763693132]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_shadow_color = Color(0, 0, 0, 1)

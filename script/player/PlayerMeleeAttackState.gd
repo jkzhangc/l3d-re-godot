@@ -1,5 +1,7 @@
 extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家状态机 ｜ 层：玩法（State）
 ## 联机：仅单机/Host 结算近战
@@ -155,7 +157,7 @@ func process_update(delta: float) -> void:
 				## 特效偏移（2026-09-23 迁移）：按键改为武器数据（键=角色 id），与子弹偏移同构。
 				var effect_offset: Vector2 = _wd.get_attack_effect_offset(character.current_character, character.facing, _wd.attack_effect_offset_override)
 				var follow: Node2D = character if _wd.attack_effect_follow else null
-				VXAnimSprite.play_scene(effect_scene, character.global_position, character.get_tree().current_scene, 10.0, follow, effect_offset)
+				VXAnimSprite.play_scene(effect_scene, character.global_position, MAP_SCENE_QUERY.get_map_root(character.get_tree()), 10.0, follow, effect_offset)
 			# 播放攻击音效
 			if _wd.attack_sound:
 				_play_attack_sound(_wd.attack_sound, _wd.attack_sound_volume_db)
@@ -299,7 +301,7 @@ func _create_melee_hitbox() -> void:
 	var offset: Vector2 = _get_melee_offset()
 	_hitbox.global_position = character.global_position + offset
 
-	character.get_tree().current_scene.add_child(_hitbox)
+	MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(_hitbox)
 	print("[小刀] 近战判定区域已创建 | 段=%d | 偏移=%s | 大小=%s" % [_stage, offset, _hitbox_size()])
 
 
@@ -343,7 +345,7 @@ func _check_melee_hits() -> void:
 				var fx_offset: Vector2 = _wd.hit_effect_offset_override
 				if fx_offset == Vector2.ZERO and "hurt_effect_offset" in body:
 					fx_offset = body.hurt_effect_offset
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, character.get_tree().current_scene, 10.0, hf, fx_offset)
+				VXAnimSprite.play_scene(_wd.hit_effect_anim, body.global_position, MAP_SCENE_QUERY.get_map_root(character.get_tree()), 10.0, hf, fx_offset)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound, ELEMENT_FX.HIT_SOUND_VOLUME_DB)
 			print("[小刀] 击中 body: %s | 伤害=%d | 爆头=%s" % [body.name, int(damage), str(_is_headshot)])
@@ -371,7 +373,7 @@ func _check_melee_hits() -> void:
 				var fx_offset2: Vector2 = _wd.hit_effect_offset_override
 				if fx_offset2 == Vector2.ZERO and "hurt_effect_offset" in parent:
 					fx_offset2 = parent.hurt_effect_offset
-				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, character.get_tree().current_scene, 10.0, hf2, fx_offset2)
+				VXAnimSprite.play_scene(_wd.hit_effect_anim, parent.global_position, MAP_SCENE_QUERY.get_map_root(character.get_tree()), 10.0, hf2, fx_offset2)
 			if _wd.hit_sound:
 				_play_attack_sound(_wd.hit_sound, ELEMENT_FX.HIT_SOUND_VOLUME_DB)
 			print("[小刀] 击中 area: %s | 伤害=%d | 爆头=%s" % [parent.name, int(damage), str(_is_headshot)])
@@ -437,7 +439,7 @@ func _spawn_debug_region() -> void:
 		return
 	_debug_region = DebugRegion.new()
 	_debug_region.name = "MeleeDebugRegion"
-	character.get_tree().current_scene.add_child(_debug_region)
+	MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(_debug_region)
 	_update_debug_region()
 
 
@@ -503,7 +505,7 @@ func _try_continue_attack() -> bool:
 
 
 func _play_attack_sound(stream: AudioStream, volume_db: float = 0.0) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene,
+	Global.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(character.get_tree()),
 		false, 1.0, Vector2.INF, volume_db)
 
 

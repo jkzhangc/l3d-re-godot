@@ -1,5 +1,10 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
+# @trace SCENE-002
+const MAP_LOCATOR = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：启动装配 ｜ 层：单例（关卡场景根节点脚本）
 ## 联机：联机会话改走 NetworkWorld 分支
@@ -42,8 +47,8 @@ func _ready() -> void:
 		## 初始化 → started_msec 恒 0 → 章节总结的「用时」主机与客户端都显示 00:00。
 		## 安全屋沿用单机口径（不重置章节计时）；其余场景两端各起一份本地计时（误差 <1s，
 		## 结算只读本端值，无需额外同步）。
-		if get_tree() and get_tree().current_scene:
-			var mp_path: String = get_tree().current_scene.scene_file_path
+		if get_tree() and MAP_SCENE_QUERY.get_map_root(get_tree()):
+			var mp_path: String = MAP_SCENE_QUERY.get_map_root(get_tree()).scene_file_path
 			if not ("安全屋" in mp_path or "safe" in mp_path.to_lower()):
 				var mp_stats: Node = get_node_or_null("/root/ChapterStats")
 				if mp_stats and mp_stats.has_method("ensure_chapter"):
@@ -59,8 +64,8 @@ func _ready() -> void:
 		Global.capture_checkpoint()
 		print("[GameInit] 读档进图：已建立死亡锚点")
 	# 安全屋场景加载时自动存档（确保死亡后回到这里时的状态一致）
-	if get_tree() and get_tree().current_scene:
-		var scene_path: String = get_tree().current_scene.scene_file_path
+	if get_tree() and MAP_SCENE_QUERY.get_map_root(get_tree()):
+		var scene_path: String = MAP_SCENE_QUERY.get_map_root(get_tree()).scene_file_path
 		if "安全屋" in scene_path or "safe" in scene_path.to_lower():
 			Global.capture_checkpoint()
 			## 限时挑战：安全屋不计时（停表 + 收起 HUD 计数），回关卡时接着那关的余额。
@@ -115,22 +120,22 @@ func _watch_loading_screen_online() -> void:
 
 func _apply_pending_arrival() -> void:
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
-	var arrival := Global.consume_pending_arrival(tree.current_scene.scene_file_path)
+	var arrival := Global.consume_pending_arrival(MAP_SCENE_QUERY.get_map_root(tree).scene_file_path)
 	if arrival.is_empty():
 		return
 	var arrival_id: String = str(arrival.get("id", ""))
 	var arrival_position: Variant = ArrivalResolver.resolve(
-		tree.current_scene, arrival_id, arrival.get("position")
+		MAP_SCENE_QUERY.get_map_root(tree), arrival_id, arrival.get("position")
 	)
 	if not arrival_position is Vector2:
 		return
 	## ★防卡死兜底（2026-10-05）：落点若压在存档点的 32×32 实体碰撞里（旧档存的正是
 	## 存档点中心），先移出存档点矩形；再走 SpawnSpotResolver 避墙。新档存的是玩家站位，
 	## 通常直接返回原坐标。详见 _resolve_safe_arrival。
-	var safe_position: Vector2 = _resolve_safe_arrival(tree.current_scene as Node2D, arrival_position as Vector2)
-	var player := _find_preplaced_player(tree.current_scene)
+	var safe_position: Vector2 = _resolve_safe_arrival(MAP_SCENE_QUERY.get_map_root(tree) as Node2D, arrival_position as Vector2)
+	var player := _find_preplaced_player(MAP_SCENE_QUERY.get_map_root(tree))
 	if not player:
 		push_warning("[GameInit] 找不到预置 Player，无法应用入口 ID: %s" % arrival_id)
 		return
@@ -168,15 +173,7 @@ func _verify_arrival_next_frame(player: CharacterBody2D, expected: Vector2, arri
 ## 因此：先按分组找（运行时/联机的正常路径），找不到再退回**地图约定路径**
 ## 「PlayerSpawn 下的 Player 节点」——所有地图的预置玩家都是这个名字。
 func _find_preplaced_player(scene: Node) -> CharacterBody2D:
-	for node: Node in scene.get_tree().get_nodes_in_group("player"):
-		if node is CharacterBody2D:
-			return node as CharacterBody2D
-	## 兜底：场景内名为 "Player" 的 CharacterBody2D（不含 PlayerSpawn —— find_child 是精确匹配）。
-	if scene != null:
-		var preplaced: Node = scene.find_child("Player", true, false)
-		if preplaced is CharacterBody2D:
-			return preplaced as CharacterBody2D
-	return null
+	return MAP_LOCATOR.find_preplaced_player(scene)
 
 
 ## ── 读档 / 传送落点防卡死（2026-10-05 用户反馈）──
@@ -219,9 +216,9 @@ func _start_network_world() -> void:
 func _create_network_world() -> void:
 	## Phase 1 联机只启用 Host 权威移动世界；跳过单机存档、队友切换和 Director 初始化。
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
-	if tree.current_scene.get_node_or_null("NetworkWorld"):
+	if MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld"):
 		return
 	# 【回归专用】--net-test-host-scene-delay-ms=N：延迟创建 NetworkWorld，模拟
 	# "Host 加载缓慢、Client 的 scene-ready 报告先于 Host 世界就绪到达"的竞态，
@@ -233,7 +230,7 @@ func _create_network_world() -> void:
 				print("[GameInit] AUTO_SLOWHOST 模拟 Host 场景延迟 %.2fs" % delay_sec)
 				await tree.create_timer(delay_sec).timeout
 			break
-	if not is_inside_tree() or not tree.current_scene:
+	if not is_inside_tree() or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
 	## 仅当命令行含 `--net-test` 前缀参数（无头回归）时才加载 harness 子类；
 	## 正式游戏路径始终使用生产脚本，绝不触碰回归脚手架。
@@ -244,7 +241,7 @@ func _create_network_world() -> void:
 			break
 	var world: Node = (load(world_script_path) as GDScript).new()
 	world.name = "NetworkWorld"
-	tree.current_scene.add_child(world)
+	MAP_SCENE_QUERY.get_map_root(tree).add_child(world)
 	print("[GameInit] 已进入 Phase 1 Host 权威联机世界")
 
 ## ── 安全屋台词（2026-09-28 用户需求；2026-10-30 改为双页随机角色）──
@@ -263,9 +260,9 @@ func _spawn_safehouse_dialogue() -> void:
 	if DisplayServer.get_name() == "headless":
 		return
 	var tree: SceneTree = get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
-	var key: String = SAFEHOUSE_DIALOGUE_DATA.key_for_scene(tree.current_scene.scene_file_path)
+	var key: String = SAFEHOUSE_DIALOGUE_DATA.key_for_scene(MAP_SCENE_QUERY.get_map_root(tree).scene_file_path)
 	if key.is_empty():
 		return
 	## ★已看过就不再重放（2026-10-05）：读档进安全屋时，若存档前已看过本图台词则跳过。
@@ -274,7 +271,7 @@ func _spawn_safehouse_dialogue() -> void:
 	## 总结页还开着就先等它关闭再说话（否则台词会被总结页盖住）。
 	## ★时机只有一个：原作里 A 批（刚进安全屋）与 B 批（接着说）是**同一段对话的连续两页**，
 	##   由窗口内部按确定键翻页完成，不再是两个独立的触发时机。
-	var summary: Node = tree.current_scene.find_child("ChapterSummary", true, false)
+	var summary: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("ChapterSummary", true, false)
 	if summary != null and summary.visible and summary.has_signal("summary_finished"):
 		summary.summary_finished.connect(
 			func() -> void: _open_safehouse_dialogue(key), CONNECT_ONE_SHOT)
@@ -284,7 +281,7 @@ func _spawn_safehouse_dialogue() -> void:
 
 func _open_safehouse_dialogue(key: String) -> void:
 	var tree: SceneTree = get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
 	var net: Node = get_node_or_null("/root/Net")
 	var online: bool = net != null and net.has_method("is_online_session") \
@@ -385,7 +382,7 @@ func _character_by_id(id: String, pool: Array[CharacterData]) -> CharacterData:
 ## 没有第 3 批的图，`lines_for(key, id_c, "c")` 返回空 → 不会多出一页。
 func _show_safehouse_dialogue(key: String, id_a: String, id_b: String, id_c: String) -> void:
 	var tree: SceneTree = get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
 	if not SAFEHOUSE_DIALOGUE_DATA.has_key(key):
 		return
@@ -418,7 +415,7 @@ func _show_safehouse_dialogue(key: String, id_a: String, id_b: String, id_c: Str
 	## ★只在「确实要显示」时标记已看过（角色无台词不记，避免误抑制后续正常台词）。
 	Global.mark_safehouse_dialogue_seen(key)
 	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
-	tree.current_scene.add_child(dlg)
+	MAP_SCENE_QUERY.get_map_root(tree).add_child(dlg)
 	dlg.call("open_mixed_pages", entries)
 	print("[GameInit] 安全屋台词：%s（页1=%s / 页2=%s，%d 页）" % [
 		key, id_a, id_b, entries.size()])
@@ -450,9 +447,9 @@ func _resolve_local_character() -> CharacterData:
 func _spawn_switch_manager() -> void:
 	## 如果队伍 > 1人且场景中不存在，自动创建 CharacterSwitchManager
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
-	var existing: Node = tree.current_scene.find_child("CharacterSwitchManager", true, false)
+	var existing: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("CharacterSwitchManager", true, false)
 	if existing:
 		return
 	var script_path := "res://script/character_switch_manager.gd"
@@ -463,7 +460,7 @@ func _spawn_switch_manager() -> void:
 	mgr.set_script(mgr_script)
 	mgr.name = "CharacterSwitchManager"
 	# 延迟添加，避免在场景初始化期间 add_child
-	tree.current_scene.call_deferred("add_child", mgr)
+	MAP_SCENE_QUERY.get_map_root(tree).call_deferred("add_child", mgr)
 	var log_cb: Callable = func(): print("[GameInit] CharacterSwitchManager 已创建 team=%d" % Global.get_team_size())
 	log_cb.call_deferred()
 
@@ -490,13 +487,10 @@ func _align_actor_layers() -> void:
 	if tree == null:
 		return
 	var net: Node = get_node_or_null("/root/Net")
-	var players: Array[Node] = tree.get_nodes_in_group("player")
-	if players.is_empty():
-		return
-	var player := players[0] as Node2D
+	var player: Node2D = _find_preplaced_player(MAP_LOCATOR.get_map_root(tree))
 	if player == null or not is_instance_valid(player):
 		return
-	var decor := _find_decor_container(tree.root)
+	var decor := _find_decor_container(MAP_LOCATOR.get_map_root(tree))
 	if decor == null or player.get_parent() == decor:
 		return
 	var old_parent := player.get_parent()
@@ -528,10 +522,4 @@ func _align_actor_layers() -> void:
 
 
 func _find_decor_container(node: Node) -> Node:
-	if node is Node2D and "decor" in node.name.to_lower():
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_decor_container(child)
-		if found:
-			return found
-	return null
+	return MAP_LOCATOR.find_actor_container(node)

@@ -3,19 +3,14 @@
 [ext_resource type="Texture2D" uid="uid://bfujfcdj2n625" path="res://art/Panorama/夜空1.png" id="1_1ogbp"]
 [ext_resource type="AudioStream" uid="uid://dopmxyo675a1x" path="res://sound/(効果音)ヘリ.ogg" id="1_2miaw"]
 [ext_resource type="TileSet" uid="uid://b2yw2keuvvubc" path="res://tres/Map0011_lower_tileset.tres" id="1_iycie"]
-[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_w4mkd"]
 [ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="3_h4kab"]
 [ext_resource type="TileSet" uid="uid://c0uw23l65qijw" path="res://tres/Map0011_upper_tileset.tres" id="3_iaosh"]
 [ext_resource type="Texture2D" uid="uid://brc5ldb1n0udt" path="res://art/misc/[2K-VX]-cps_obj01.png" id="4_5j824"]
-[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="4_n77q7"]
-[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="5_ijnhl"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="5_rbq3v"]
-[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="6_g1hy5"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="6_o5kda"]
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="7_g1hy5"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_ucs4y"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="8_8e8ov"]
-[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="9_ggl6r"]
 [ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="9_t1bqm"]
 [ext_resource type="Resource" uid="uid://b2dwgd3813nqv" path="res://object/weapon_knife.tres" id="10_8stet"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="11_xptog"]
@@ -60,13 +55,13 @@
 [ext_resource type="Resource" uid="uid://1kco17h3mitp" path="res://object/weapon_fire_axe.tres" id="64"]
 [ext_resource type="Resource" uid="uid://htaax3n8fscn" path="res://object/weapon_uchigatana.tres" id="65"]
 [ext_resource type="Resource" uid="uid://bbf6nlf1av85w" path="res://object/weapon_sledgehammer.tres" id="66"]
-[ext_resource type="Resource" uid="uid://ctqod5yy31y7j" path="res://object/item_painkiller.tres" id="cw1"]
-[ext_resource type="Resource" uid="uid://u0luef5osvt4" path="res://object/item_adrenaline.tres" id="cw2"]
+[ext_resource type="Resource" uid="uid://dnis6jovgvl42" path="res://object/item_painkiller.tres" id="cw1"]
+[ext_resource type="Resource" uid="uid://dwpujg63smy5e" path="res://object/item_adrenaline.tres" id="cw2"]
 [ext_resource type="Resource" uid="uid://bip17yw6uvt73" path="res://object/item_acid_bottle.tres" id="cw3"]
 [ext_resource type="Resource" uid="uid://c0aukikk6ru08" path="res://object/item_bolt_grenade.tres" id="cw4"]
 [ext_resource type="Resource" uid="uid://bgdxoiog7xa8f" path="res://object/item_nitrogen.tres" id="cw5"]
 [ext_resource type="Resource" uid="uid://c05b7iuwbt8ov" path="res://object/item_throwing_knife.tres" id="cw6"]
-[ext_resource type="Resource" uid="uid://8mf8cqpqwwr7" path="res://object/item_aid_box.tres" id="cw7"]
+[ext_resource type="Resource" uid="uid://dvsecs3l1tglc" path="res://object/item_aid_box.tres" id="cw7"]
 [ext_resource type="Resource" uid="uid://ca12vm5oxp7k1" path="res://object/throwable_dynamite.tres" id="cw12"]
 [ext_resource type="Resource" uid="uid://bbflshgr4n2x" path="res://object/throwable_flash.tres" id="cw13"]
 [ext_resource type="Resource" uid="uid://500yougot5hs" path="res://object/weapon_pistol_02.tres" id="nw1"]
@@ -80,6 +75,8 @@
 [ext_resource type="Resource" uid="uid://jm88weoi4nm4" path="res://object/weapon_shotgun_03.tres" id="nw10"]
 [ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
 [ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
+
+[ext_resource type="Script" path="res://script/map/map_context.gd" id="map_context_session"]
 
 [sub_resource type="Resource" id="Resource_jsjni"]
 script = ExtResource("7_ucs4y")
@@ -136,6 +133,13 @@ weights = Array[float]([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0011" type="Node2D" unique_id=766384468]
+script = ExtResource("map_context_session")
+map_id = "夜行猎手-第一关-开头安全屋"
+player_spawn_path = NodePath("DecorLayer/PlayerSpawn")
+camera_boundary_paths = Array[NodePath]([NodePath("GroundLayer")])
+director_config_path = NodePath("DirectorConfig")
+camera_follow_speed = 6.0
+camera_bounds_margin = 0.0
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=858279366]
 stream = ExtResource("1_2miaw")
@@ -159,10 +163,8 @@ tile_set = ExtResource("1_iycie")
 [node name="DecorLayer" type="Node2D" parent="." unique_id=321177190]
 y_sort_enabled = true
 
-[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=739642505]
+[node name="PlayerSpawn" type="Marker2D" parent="DecorLayer" unique_id=739642505]
 position = Vector2(368, 432)
-
-[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_w4mkd")]
 
 [node name="TeleportPoint2" type="Node2D" parent="DecorLayer" unique_id=1282481265]
 position = Vector2(688, 616)
@@ -264,24 +266,10 @@ position = Vector2(272, 384)
 [node name="AmmoSupply" parent="UpperLayer" unique_id=1610466722 instance=ExtResource("23_6gl1x")]
 position = Vector2(312, 400)
 
-[node name="Camera2D2" type="Camera2D" parent="." unique_id=1956996784]
-zoom = Vector2(2, 2)
-script = ExtResource("4_n77q7")
-follow_speed = 6.0
-bounds_margin = 0.0
-bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-
 [node name="SafehouseArrivalMusic" type="Node" parent="." unique_id=561911847]
 script = ExtResource("7_g1hy5")
 arrival_music = ExtResource("19_1ogbp")
 wait_for_chapter_summary = false
-
-[node name="Menu" parent="." unique_id=666371119 instance=ExtResource("5_ijnhl")]
-
-[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("6_g1hy5")]
-
-[node name="GameInit" type="Node" parent="." unique_id=1299451149]
-script = ExtResource("9_ggl6r")
 
 [node name="NightOverlay" type="Node2D" parent="." unique_id=91757001]
 script = ExtResource("28_rbq3v")

@@ -1,5 +1,6 @@
 extends "res://script/network_world.gd"
 
+
 ## --net-test 无头回归专用子类：仅在命令行带 `--net-test` 前缀参数时由 game_init 实例化，
 ## 生产环境永远不会加载它。此文件从 network_world.gd 原样搬出全部自动回归编排代码
 ## （_is_auto_* 谓词覆写、_run_auto_* 协程、测试助手与 3 个 multi_disconnect_* RPC），
@@ -923,7 +924,7 @@ func _run_auto_host_appearance_test() -> void:
 		await get_tree().create_timer(0.10).timeout
 	if not is_instance_valid(self) or _scene_transitioning or not net.is_host:
 		return
-	var decor := get_tree().current_scene.find_child("DecorLayer", true, false) as Node2D
+	var decor := MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("DecorLayer", true, false) as Node2D
 	var player := get_tree().get_first_node_in_group("player") as Node2D
 	if decor == null or player == null:
 		printerr("[NetworkWorld] AUTO_APPEARANCE_HOST_FAILED missing_decor_or_player")
@@ -1040,7 +1041,7 @@ func _run_auto_client_appearance_test() -> void:
 	var mirror_seen: bool = _auto_client_enemy_acid_spits > 0
 	deadline = Time.get_ticks_msec() + 12000
 	while Time.get_ticks_msec() < deadline and not mirror_seen:
-		for child: Node in get_tree().current_scene.get_children():
+		for child: Node in MAP_SCENE_QUERY.get_map_root(get_tree()).get_children():
 			if child is EnemyAcidSpit and child.get("_authoritative") == false:
 				mirror_seen = true
 				break
@@ -1064,9 +1065,9 @@ func _is_auto_safe_door_test_scene() -> bool:
 
 
 func _get_auto_safe_door() -> Node2D:
-	if not get_tree().current_scene:
+	if not MAP_SCENE_QUERY.get_map_root(get_tree()):
 		return null
-	var door := get_tree().current_scene.find_child("SafeDoor", true, false) as Node2D
+	var door := MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("SafeDoor", true, false) as Node2D
 	return door if is_instance_valid(door) and door.has_method("get_network_door_key") else null
 
 

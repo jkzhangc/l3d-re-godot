@@ -1,5 +1,7 @@
 class_name NightOverlay extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：夜间视界 ｜ 层：表现（世界 canvas 内的 Node2D，**不是 CanvasLayer**）
 ## 联机：表现层，各端自行渲染（不联网）
@@ -865,7 +867,7 @@ static func find_any(node: Node) -> NightOverlay:
 	var by_group: Node = tree.get_first_node_in_group(GROUP)
 	if by_group is NightOverlay:
 		return by_group as NightOverlay
-	return find_in_scene(tree.current_scene)
+	return find_in_scene(MAP_SCENE_QUERY.get_map_root(tree))
 
 
 ## 按 darkness 值同步 overlay 存在性：<=0 移除，>0 创建并设置。

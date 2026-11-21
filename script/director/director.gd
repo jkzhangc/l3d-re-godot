@@ -1,5 +1,10 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
+# @trace SCENE-002
+const MAP_LOCATOR = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：单例（autoload: Director）
 ## 联机：仅单机/Host 运行
@@ -210,7 +215,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _toggle_night_debug() -> void:
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	if NightOverlay.find_in_scene(scene):
@@ -309,7 +314,19 @@ func _ready() -> void:
 	print("[Director] initialized (Phase 4)")
 
 
+## Autoload退出时不再等待淡出，解除流引用以释放MP3播放实例。
+func _exit_tree() -> void:
+	if _calm_tween != null and _calm_tween.is_valid():
+		_calm_tween.kill()
+	_calm_tween = null
+	for music_player: AudioStreamPlayer in [_calm_music_player, _horde_music_player, _boss_music_player]:
+		if is_instance_valid(music_player):
+			music_player.stop()
+			music_player.stream = null
+
+
 func _process(delta: float) -> void:
+
 	# 联机采用 Host 权威：Host 继续运行导演并生成实体，Client 只接收 NetworkWorld 快照。
 	if _is_network_client_session():
 		return
@@ -987,7 +1004,7 @@ func _play_horde_alert() -> void:
 	var stream: AudioStream = current_config.horde_alert_sound if current_config else null
 	if not stream:
 		return
-	var scene: Node = get_tree().current_scene if get_tree() != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() != null else null
 	if scene == null:
 		return
 	Global.play_sfx_managed(stream, scene)
@@ -1084,7 +1101,7 @@ func _announce_music(music_key: String, active: bool, track_index: int = -1) -> 
 	var tree := get_tree()
 	if tree == null:
 		return
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	if scene == null:
 		return
 	var world: Node = scene.find_child("NetworkWorld", true, false)
@@ -1591,7 +1608,7 @@ var _zone_cache: Array[SpawnZone] = []
 
 func _refresh_zone_cache() -> void:
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	var scene_id: int = scene.get_instance_id() if scene != null else 0
 	if scene_id == _zone_cache_scene_id:
 		return
@@ -1739,7 +1756,7 @@ func _can_deal_boss() -> bool:
 	if not _is_spawn_map():
 		return false
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	if scene != null and _scene_is_safe_room(scene):
 		return false
 	return true
@@ -2211,8 +2228,8 @@ func _is_spawn_map() -> bool:
 		_last_spawn_verdict = 1 if verdict else 0
 		var sp: String = ""
 		var t: SceneTree = get_tree()
-		if t and t.current_scene:
-			sp = t.current_scene.scene_file_path
+		if t and MAP_SCENE_QUERY.get_map_root(t):
+			sp = MAP_SCENE_QUERY.get_map_root(t).scene_file_path
 		print("[Director] 生成图判定: %s | 场景=%s | auto_spawn=%s | 安全屋黑名单=%s" % [
 			"允许生成" if verdict else "禁止生成（安全屋/静默图）",
 			sp.get_file(), str(auto_spawn_enabled), str(safe_room_keywords)])
@@ -2221,9 +2238,9 @@ func _is_spawn_map() -> bool:
 
 func _evaluate_spawn_map() -> bool:
 	var tree: SceneTree = get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return false
-	var scene_path_raw: String = tree.current_scene.scene_file_path
+	var scene_path_raw: String = MAP_SCENE_QUERY.get_map_root(tree).scene_file_path
 	if scene_path_raw == _spawn_map_cache_path:
 		return _spawn_map_cache_verdict
 	var verdict: bool = _evaluate_spawn_map_uncached(scene_path_raw)
@@ -2288,7 +2305,7 @@ func _check_scene_change() -> void:
 	var tree: SceneTree = get_tree()
 	if not tree:
 		return
-	var scene: Node = tree.current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree)
 	if scene == _last_scene:
 		return
 	_last_scene = scene
@@ -2665,7 +2682,7 @@ func _apply_config(cfg: DirectorConfig) -> void:
 		progress_tracker.set("enabled", progress_enabled)
 		progress_tracker.set("route_length_override", progress_length_px)
 		## 重新起算：本图配置的参考路程要在"解析出口"之前生效
-		progress_tracker.call("reset_for_scene", get_tree().current_scene if get_tree() else null)
+		progress_tracker.call("reset_for_scene", MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null)
 		_sync_progress_to_intensity(true)
 	_zombie_pool = cfg.zombie_pool if not cfg.zombie_pool.is_empty() else DEFAULT_ZOMBIE_POOL
 	# ── 特感池与节奏：地图不配 special_pool 就完全不刷（向后兼容）──
@@ -2679,7 +2696,7 @@ func _apply_config(cfg: DirectorConfig) -> void:
 	_special_cooldown_left = 0.0
 	# ── 夜间视界（Night Hunter）：night_darkness>0 时在场景根挂 NightOverlay ──
 	# 安全屋等 spawn_enabled=false 的场景也生效——夜是场景属性，与刷怪无关。
-	NightOverlay.apply_darkness(get_tree().current_scene, cfg.night_darkness)
+	NightOverlay.apply_darkness(MAP_SCENE_QUERY.get_map_root(get_tree()), cfg.night_darkness)
 	# ── Boss / Tank 编排参数 ──
 	tank_enabled = cfg.tank_enabled
 	_tank_data = cfg.tank_data if cfg.tank_data != null else load(DEFAULT_TANK_PATH)
@@ -2987,19 +3004,11 @@ func _find_decor_layer() -> Node:
 	var tree: SceneTree = get_tree()
 	if not tree:
 		return null
-	return _find_decor_recursive(tree.root)
+	return MAP_LOCATOR.find_actor_container(MAP_LOCATOR.get_map_root(tree))
 
 
 func _find_decor_recursive(node: Node) -> Node:
-	if not is_instance_valid(node):
-		return null
-	if "decor" in node.name.to_lower():
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_decor_recursive(child)
-		if found:
-			return found
-	return null
+	return MAP_LOCATOR.find_legacy_actor_container(node)
 
 
 # ═══════════════════════════════════════
@@ -3550,7 +3559,7 @@ func _reset_boss_deck() -> void:
 	## 若一并计数，两张图就能凑够阈值 → 保底误触发，2026-10-25 用户实测）。
 	if _deck_initialized:
 		var tree0: SceneTree = get_tree()
-		var scene0: Node = tree0.current_scene if tree0 != null else null
+		var scene0: Node = MAP_SCENE_QUERY.get_map_root(tree0) if tree0 != null else null
 		var eligible: bool = scene0 != null and _is_spawn_map() and not _scene_is_safe_room(scene0)
 		if eligible:
 			_prev_map_had_tank = _boss_tanks_dealt > 0
@@ -3600,7 +3609,7 @@ static func _chapter_number_of(scene_path: String) -> int:
 
 func _current_chapter_number() -> int:
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	if scene == null:
 		return -1
 	return _chapter_number_of(scene.scene_file_path)
@@ -3976,7 +3985,7 @@ func _remove_enemy_networkwide(enemy: Node2D) -> void:
 	## ⚠ NetworkWorld 挂在**当前场景**下（GameInit._start_network_world 里 name="NetworkWorld"），
 	## 不是 /root 下的 autoload —— 路径写错会静默找不到，Client 留幽灵实体。
 	var tree: SceneTree = get_tree()
-	var nw: Node = tree.current_scene.get_node_or_null("NetworkWorld") if tree and tree.current_scene else null
+	var nw: Node = MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld") if tree and MAP_SCENE_QUERY.get_map_root(tree) else null
 	if nw and nw.has_method("despawn_enemy_networkwide"):
 		nw.despawn_enemy_networkwide(enemy)
 		return
@@ -4395,7 +4404,7 @@ func debug_event(text: String) -> void:
 ## 面板取数口：把「决策输入 + 已经发生的决定」一次性打包。
 func debug_snapshot() -> Dictionary:
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	var pc: Node = get_node_or_null("PacingController")
 	var sm: Node = get_node_or_null("SpawnManager")
 	var im: Node = get_node_or_null("ItemManager")

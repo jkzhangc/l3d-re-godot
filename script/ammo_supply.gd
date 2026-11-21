@@ -1,6 +1,8 @@
 @tool
 class_name AmmoSupply extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：弹药补给 ｜ 层：玩法（Node2D，可反复使用的地图互动物）
 ## 联机：Host 权威，Client 仅经 NetworkWorld 提交节点路径与位置提示。
@@ -308,7 +310,7 @@ func _request_use(player: Node2D) -> void:
 	if not can_player_use(player):
 		return
 	if _online():
-		var scene := get_tree().current_scene
+		var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 		var world := scene.get_node_or_null("NetworkWorld") if scene else null
 		if world and world.has_method("request_ammo_supply"):
 			world.call("request_ammo_supply", scene.get_path_to(self), player.global_position)

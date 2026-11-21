@@ -1,6 +1,8 @@
 @tool
 class_name ItemPickupPoint extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：剧情机关 ｜ 层：玩法（Node2D, @tool）
 ## 联机：Client 只提交请求；Host 校验后代为结算（NetworkWorld.request_quest_pickup）
@@ -234,7 +236,7 @@ func _request_pickup() -> void:
 	var state := _state_of(_player_ref)
 	if state == null:
 		return
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_quest_pickup"):
 		## 联机：Host 立即结算；Client 提交请求等 flag 回包（_on_quest_flag_changed 复位锁）

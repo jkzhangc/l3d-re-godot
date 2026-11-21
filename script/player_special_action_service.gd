@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家特殊行动（SA / 见切 / 反击 / Heat / 削り / 覚醒 / 搓招）｜ 层：服务类（RefCounted，由 player 持有）
 ## 联机：Host 权威结算 + Client 表现（各接口见方法注释；双域 TP 独立推进）
@@ -135,7 +137,7 @@ func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
 ## 按 skill_type 分派实际效果。
 func _execute_skill_effect(skill: SkillData, trigger: String = "") -> void:
 	if skill.sa_sound:
-		var scene: Node = _p.get_tree().current_scene if _p.get_tree() else null
+		var scene: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree()) if _p.get_tree() else null
 		Global.play_sfx_managed(skill.sa_sound, scene)
 	else:
 		## 通用 SA 发动音（2026-11-09 用户要求）：技能自己没配 sa_sound 时兜底，
@@ -414,7 +416,7 @@ func _deactivate_awaken() -> void:
 	# 单机/Client 端 find_child 找不到 NetworkWorld → no-op。
 	var tree: SceneTree = _p.get_tree()
 	if tree:
-		var scene := tree.current_scene
+		var scene := MAP_SCENE_QUERY.get_map_root(tree)
 		if scene:
 			var world: Node = scene.find_child("NetworkWorld", true, false)
 			if world and world.has_method("announce_player_awaken"):
@@ -487,9 +489,9 @@ func _apply_attrition() -> void:
 ## 联机口径：`_apply_attrition()` 只在权威侧跑（单机 / Host），所以飘字也只在那一端出现。
 func _spawn_attrition_hint(text: String) -> void:
 	var tree: SceneTree = _p.get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
-	DAMAGE_NUMBER.spawn(_p.global_position + Vector2(0, -6), 0.0, tree.current_scene,
+	DAMAGE_NUMBER.spawn(_p.global_position + Vector2(0, -6), 0.0, MAP_SCENE_QUERY.get_map_root(tree),
 		1, ATTRITION_HINT_COLOR, text)
 
 
@@ -631,7 +633,7 @@ func _try_counter() -> void:
 		return
 	_p._counter_cooldown_until_msec = now + COUNTER_COOLDOWN_MS
 	if _p.current_character.counter_sound:
-		var scene: Node = _p.get_tree().current_scene if _p.get_tree() else null
+		var scene: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree()) if _p.get_tree() else null
 		Global.play_sfx_managed(_p.current_character.counter_sound, scene)
 	# 联机（C2）：反击音效广播（反击伤害/击退结算本就在 Host，Client 只需听声）。
 	_announce_network_sa_event("counter")
@@ -730,7 +732,7 @@ func apply_network_sa_skill(trigger: String) -> void:
 	if not skill:
 		return
 	if skill.sa_sound:
-		var scene: Node = _p.get_tree().current_scene if _p.get_tree() else null
+		var scene: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree()) if _p.get_tree() else null
 		Global.play_sfx_managed(skill.sa_sound, scene)
 	match skill.skill_type:
 		SkillData.SkillType.SA_SEEKER:
@@ -750,7 +752,7 @@ func apply_network_crouch_end() -> void:
 ## 联机表现接口（C2，counter_presentation）：反击音效（伤害/击退结算在 Host，快照体现）。
 func play_network_counter_presentation() -> void:
 	if _p.current_character and _p.current_character.counter_sound:
-		var scene: Node = _p.get_tree().current_scene if _p.get_tree() else null
+		var scene: Node = MAP_SCENE_QUERY.get_map_root(_p.get_tree()) if _p.get_tree() else null
 		Global.play_sfx_managed(_p.current_character.counter_sound, scene)
 
 
@@ -810,7 +812,7 @@ func _announce_network_sa_event(event: String) -> void:
 	var tree := _p.get_tree()
 	if not tree:
 		return
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	if not scene:
 		return
 	var world: Node = scene.find_child("NetworkWorld", true, false)

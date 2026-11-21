@@ -1,6 +1,8 @@
 class_name DamageNumber
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：伤害数字 ｜ 层：表现（Node2D）
 ## 联机：不涉及（纯表现）
@@ -176,7 +178,7 @@ func _ensure_shared_canvas() -> void:
 	##（截图里的 node.cpp:1709 @ add_child 就是这一条）。
 	## 后果不止刷屏：`_shared_canvas` 会静默留在树外 → 该帧起的伤害数字全部不显示。
 	## deferred 会在当前 add_child 窗口结束后执行，既不再报错，也照常入树。
-	var target: Node = tree.current_scene if tree.current_scene != null else tree.root
+	var target: Node = MAP_SCENE_QUERY.get_map_root(tree) if MAP_SCENE_QUERY.get_map_root(tree) != null else tree.root
 	if target != null:
 		target.call_deferred("add_child", _shared_canvas)
 

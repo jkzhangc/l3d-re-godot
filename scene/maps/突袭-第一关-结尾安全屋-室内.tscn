@@ -1,16 +1,11 @@
 [gd_scene format=4 uid="uid://c25wurjdc8r8h"]
 
-[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="1_m4o5r"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="2_dcfg"]
 [ext_resource type="TileSet" uid="uid://bxrd7uaa3llxi" path="res://tres/街道A5.tres" id="2_fkgxc"]
 [ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="3_wotmb"]
 [ext_resource type="TileSet" uid="uid://b4cei0e6of7ya" path="res://tres/街道B.tres" id="3_wul0w"]
-[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="4_wotmb"]
 [ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="5_ebheg"]
-[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="5_sjj6e"]
-[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="6_ebheg"]
 [ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="6_mh0mb"]
-[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="7_mh0mb"]
 [ext_resource type="PackedScene" path="res://scene/ui/chapter_summary.tscn" id="8_fkgxc"]
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="9_arrival_script"]
 [ext_resource type="PackedScene" path="res://object/medical_box.tscn" id="9_mh0mb"]
@@ -20,8 +15,8 @@
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="12_e6jfg"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="13_e6jfg"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="14_lfj0y"]
-[ext_resource type="Resource" uid="uid://cbes5afdb8xlt" path="res://object/item_first_aid_spray.tres" id="15_lfj0y"]
-[ext_resource type="Resource" uid="uid://cpsl8udnhaphj" path="res://object/weapon_knife.tres" id="16_ymy3p"]
+[ext_resource type="Resource" uid="uid://36ggmf5skvjg" path="res://object/item_first_aid_spray.tres" id="15_lfj0y"]
+[ext_resource type="Resource" uid="uid://b2dwgd3813nqv" path="res://object/weapon_knife.tres" id="16_ymy3p"]
 [ext_resource type="Resource" uid="uid://coh2o038kbxsu" path="res://object/weapon_magnum.tres" id="17_iub5q"]
 [ext_resource type="Resource" uid="uid://bpt55tvcf1xj" path="res://object/weapon_rifle.tres" id="18_hsddj"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="18_u66fg"]
@@ -29,7 +24,7 @@
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="19_dgg5q"]
 [ext_resource type="Resource" uid="uid://coh5uvkh28t56" path="res://object/weapon_pistol.tres" id="20_hsddj"]
 [ext_resource type="Resource" uid="uid://ccm6q8abo5hy3" path="res://object/weapon_shotgun.tres" id="21_278n4"]
-[ext_resource type="Resource" uid="uid://css1x54ms08ca" path="res://object/weapon_smg.tres" id="22_8d8vq"]
+[ext_resource type="Resource" uid="uid://mc8nxvk7coa8" path="res://object/weapon_smg.tres" id="22_8d8vq"]
 [ext_resource type="Resource" uid="uid://bulbhyls2xeo8" path="res://object/weapon_rocket_launcher.tres" id="23_8d8vq"]
 [ext_resource type="PackedScene" uid="uid://csavpnt0l3d1" path="res://object/save_point.tscn" id="27_io11d"]
 [ext_resource type="PackedScene" path="res://object/ammo_supply.tscn" id="28_1g0bs"]
@@ -74,6 +69,8 @@
 [ext_resource type="Resource" path="res://object/weapon_sledgehammer.tres" id="66"]
 [ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
 [ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
+[ext_resource type="Script" path="res://script/map/map_context.gd" id="map_context_session"]
+
 [sub_resource type="Resource" id="Resource_id55e"]
 script = ExtResource("12_e6jfg")
 items = Array[Resource]([ExtResource("11_ach4w"), ExtResource("nw16"), ExtResource("cw9"), ExtResource("cw10"), ExtResource("cw11"), ExtResource("12_7n5my")])
@@ -159,10 +156,14 @@ weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="突袭第一关结尾安全屋室内" type="Node2D" unique_id=1021800740]
+script = ExtResource("map_context_session")
+map_id = "突袭-第一关-结尾安全屋-室内"
+player_spawn_path = NodePath("DecorLayer/PlayerSpawn")
+camera_boundary_paths = Array[NodePath]([NodePath("GroundLayer"), NodePath("DecorLayer")])
+director_config_path = NodePath("DirectorConfig")
+camera_follow_speed = 6.0
+camera_bounds_margin = 0.0
 metadata/_edit_horizontal_guides_ = [337.0]
-
-[node name="GameInit" type="Node" parent="." unique_id=1074766326]
-script = ExtResource("1_m4o5r")
 
 [node name="SafehouseArrivalMusic" type="Node" parent="." unique_id=500673419]
 script = ExtResource("9_arrival_script")
@@ -188,11 +189,8 @@ tile_map_data = PackedByteArray("AAD2/wYACQAAAAMAAAD2/wUACQAAAAIAAAD2/wQACQAAAAI
 tile_set = ExtResource("3_wul0w")
 occlusion_enabled = false
 
-[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=694438102]
-y_sort_enabled = true
+[node name="PlayerSpawn" type="Marker2D" parent="DecorLayer" unique_id=694438102]
 position = Vector2(-47, 135)
-
-[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("4_wotmb")]
 
 [node name="UpperLayer" type="TileMapLayer" parent="." unique_id=821604667]
 y_sort_enabled = true
@@ -289,17 +287,6 @@ multiplayer_only = true
 position = Vector2(-48, 32)
 pool = SubResource("Resource_028cn")
 multiplayer_only = true
-
-[node name="Menu" parent="." unique_id=610287889 instance=ExtResource("5_sjj6e")]
-
-[node name="Camera2D" type="Camera2D" parent="." unique_id=1571123084]
-zoom = Vector2(2, 2)
-script = ExtResource("6_ebheg")
-follow_speed = 6.0
-bounds_margin = 0.0
-bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-
-[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("7_mh0mb")]
 
 [node name="ChapterSummary" parent="." unique_id=1333217650 instance=ExtResource("8_fkgxc")]
 

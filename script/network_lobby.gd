@@ -1176,6 +1176,13 @@ func _get_auto_client_name() -> String:
 
 func _get_game_scene_for_launch() -> String:
 	var user_args := OS.get_cmdline_user_args()
+	for argument: String in user_args:
+		if argument.begins_with("--net-test-map="):
+			var test_map: String = argument.trim_prefix("--net-test-map=")
+			if ("--net-test=host" in user_args or "--net-test=client" in user_args) \
+					and test_map.begins_with("res://") and test_map.ends_with(".tscn") \
+					and ResourceLoader.exists(test_map):
+				return test_map
 	## 2026-09-24：新增两张结尾安全屋的场景键。用户实测「客户端那边看到主机玩家卡在原地
 	## 踏步」就发生在这两张图 —— 能直接拉双端回归才有定位手段（此前只能用默认开头安全屋）。
 	if "--net-test-scene=safehouse2" in user_args:

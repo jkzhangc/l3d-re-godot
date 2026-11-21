@@ -127,6 +127,10 @@ func _empty_stats(state: String, running: bool) -> Dictionary:
 		"iterations": 0, "max_iteration_gap_usec": 0, "work_usec": 0,
 		"last_pump_usec": 0, "max_pump_usec": 0, "created_sockets": 0,
 		"closed_sockets": 0, "startup_error": int(OK),
+		"poll_interval_usec": 0, "worker_elapsed_usec": 0,
+		"sleep_calls": 0, "sleep_requested_usec": 0, "sleep_actual_usec": 0,
+		"max_sleep_usec": 0, "iteration_gaps_above_5000_usec": 0,
+		"iteration_gaps_above_10000_usec": 0,
 		"max_payload": Codec.MAX_PAYLOAD, "max_datagram": Codec.MAX_DATAGRAM}
 
 
@@ -143,6 +147,8 @@ func _thread_main(config: Dictionary, _lifetime_guard: RefCounted) -> void:
 	_last_publish_usec = 0
 	_next_slot = 0
 	var poll_interval_usec: int = int(config["poll_interval_usec"])
+	_stats["poll_interval_usec"] = poll_interval_usec
+	var worker_started_usec: int = Time.get_ticks_usec()
 	var error: Error = _open_sessions(config)
 	# 丢弃工作线程配置副本；凭据此后只由各 codec 持有。
 	config.clear()
@@ -154,7 +160,13 @@ func _thread_main(config: Dictionary, _lifetime_guard: RefCounted) -> void:
 		var previous_usec: int = Time.get_ticks_usec()
 		while not _should_stop():
 			var started_usec: int = Time.get_ticks_usec()
-			_stats["max_iteration_gap_usec"] = maxi(int(_stats["max_iteration_gap_usec"]), started_usec - previous_usec)
+			var iteration_gap_usec: int = started_usec - previous_usec
+			_stats["max_iteration_gap_usec"] = maxi(int(_stats["max_iteration_gap_usec"]), iteration_gap_usec)
+			if iteration_gap_usec > 5000:
+				_stats["iteration_gaps_above_5000_usec"] += 1
+			if iteration_gap_usec > 10000:
+				_stats["iteration_gaps_above_10000_usec"] += 1
+			_stats["worker_elapsed_usec"] = started_usec - worker_started_usec
 			previous_usec = started_usec
 			_stats["iterations"] += 1
 			_pump(started_usec + PUMP_BUDGET_USEC)
@@ -165,7 +177,16 @@ func _thread_main(config: Dictionary, _lifetime_guard: RefCounted) -> void:
 			_publish()
 			if _should_stop():
 				break
-			OS.delay_usec(maxi(1, poll_interval_usec - (Time.get_ticks_usec() - started_usec)))
+			# 仅观察请求等待与真实等待的差值；不改变sleep策略或系统计时器精度。
+			var requested_usec: int = maxi(1, poll_interval_usec - (Time.get_ticks_usec() - started_usec))
+			var sleep_started_usec: int = Time.get_ticks_usec()
+			OS.delay_usec(requested_usec)
+			var actual_usec: int = Time.get_ticks_usec() - sleep_started_usec
+			_stats["sleep_calls"] += 1
+			_stats["sleep_requested_usec"] += requested_usec
+			_stats["sleep_actual_usec"] += actual_usec
+			_stats["max_sleep_usec"] = maxi(int(_stats["max_sleep_usec"]), actual_usec)
+	_stats["worker_elapsed_usec"] = Time.get_ticks_usec() - worker_started_usec
 	_close_sessions()
 	_stats["state"] = "closed"
 	_stats["running"] = false

@@ -709,7 +709,8 @@ func request_scene_change_rpc(scene_path: String, arrival_id: String = "", arriv
 	start_game.rpc(scene_path, arrival_id, arrival_position, Global.selected_difficulty, friendly_fire_enabled, hazard_hurts_players_enabled)
 
 func _change_scene_safely(scene_path: String) -> void:
-	var err := get_tree().change_scene_to_file(scene_path)
+	var session_script: Script = load("res://script/flow/game_session.gd") as Script
+	var err: Error = session_script.request_map(get_tree(), scene_path)
 	if err != OK:
 		printerr("[Net] CHANGE_SCENE_FAILED path=%s error=%s" % [scene_path, error_string(err)])
 		Global.hide_loading_screen()

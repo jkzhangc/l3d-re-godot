@@ -271,14 +271,14 @@ func _is_host_session() -> bool:
 
 func _network_world() -> Node:
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	return scene.get_node_or_null("NetworkWorld") if scene != null else null
 
 
 ## 相对当前场景根节点的路径（RPC 两端用它定位同一个开关）。
 func _scene_rel_path() -> NodePath:
 	var tree: SceneTree = get_tree()
-	var scene: Node = tree.current_scene if tree != null else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	if scene == null:
 		return NodePath()
 	return scene.get_path_to(self)
@@ -365,8 +365,8 @@ func _resolve_linked_switch(path: NodePath) -> Node:
 	if node != null:
 		return node
 	var tree: SceneTree = get_tree()
-	if tree != null and tree.current_scene != null:
-		return tree.current_scene.get_node_or_null(path)
+	if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
+		return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null(path)
 	return null
 
 

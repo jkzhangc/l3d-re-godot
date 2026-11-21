@@ -1,5 +1,7 @@
 class_name LockOnStrike extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：锁定打击（便携式地对空导弹）｜ 层：玩法（Node2D）
 ## 联机：Host 权威生成（伤害只在这边算）；Client 用 `setup_visual()` 复刻**纯表现**版本
@@ -183,7 +185,7 @@ func _play_beep() -> void:
 	if _bd == null or _bd.lock_on_beep_sound == null:
 		return
 	var tree := get_tree()
-	var scene: Node = tree.current_scene if tree else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree else null
 	if scene == null:
 		return
 	var at: Vector2 = _points[0] if not _points.is_empty() else global_position
@@ -247,7 +249,7 @@ func _play_explosion_fx(point: Vector2) -> void:
 	if _bd == null:
 		return
 	var tree := get_tree()
-	var scene: Node = tree.current_scene if tree else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree else null
 	if scene == null:
 		return
 	if _bd.explode_effect_anim:
@@ -271,7 +273,7 @@ func _detonate_point(center: Vector2) -> void:
 	params["texture"] = null
 	if bullet.has_method("setup"):
 		bullet.setup(params)
-	var host: Node = get_tree().current_scene if get_tree() else null
+	var host: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if host == null:
 		bullet.queue_free()
 		return

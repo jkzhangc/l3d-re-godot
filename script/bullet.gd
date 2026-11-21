@@ -1,5 +1,7 @@
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：子弹 ｜ 层：玩法（Node2D）
 ## 联机：Host 权威伤害，Client 仅轨迹
@@ -414,7 +416,7 @@ func _hit(target: Node2D) -> void:
 		var fx_offset := _hit_effect_offset_override
 		if fx_offset == Vector2.ZERO and "hurt_effect_offset" in damageable:
 			fx_offset = damageable.hurt_effect_offset
-		VXAnimSprite.play_scene(_hit_effect_anim, damageable.global_position, get_tree().current_scene, 10.0, bf, fx_offset)
+		VXAnimSprite.play_scene(_hit_effect_anim, damageable.global_position, MAP_SCENE_QUERY.get_map_root(get_tree()), 10.0, bf, fx_offset)
 		## 联机表现转发（见 hit_effect_applied 声明处注释）。单机也会 emit，
 		## NetworkWorld 侧有 is_host 闸；单机没连监听者，无副作用。
 		var follow_id: int = 0
@@ -426,7 +428,7 @@ func _hit(target: Node2D) -> void:
 	## → 都没配 → 通用默认打击音「殴る」1.5 调（2026-11-04 用户指定）。
 	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(_hit_sound, element)
 	if hit_sfx:
-		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true,
+		Global.play_sfx_managed(hit_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()), true,
 			ELEMENT_FX.resolve_hit_pitch(_hit_sound, element), damageable.global_position,
 			ELEMENT_FX.resolve_hit_volume_db(_hit_sound, element))
 
@@ -490,16 +492,16 @@ func _explode() -> void:
 	var center: Vector2 = global_position
 	## ★调试可视化（2026-10-01 用户需求）：把这一炸的**实际范围**画出来并停留 2 秒。
 	## 对敌半径 = `_explosion_radius`；对玩家自爆半径只在「会波及玩家」且与主环不同时才画。
-	DEBUG_BLAST_RING.show_ring(center, _explosion_radius, get_tree().current_scene,
+	DEBUG_BLAST_RING.show_ring(center, _explosion_radius, MAP_SCENE_QUERY.get_map_root(get_tree()),
 		_explosion_player_radius if _explosion_hurts_players else 0.0)
 	if _explode_effect_anim:
-		VXAnimSprite.play_scene(_explode_effect_anim, center, get_tree().current_scene)
+		VXAnimSprite.play_scene(_explode_effect_anim, center, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	## 爆炸音：数据没配 → 按属性取默认爆炸音（炎/雷/氷/酸 各不相同）
 	var boom_sfx: AudioStream = ELEMENT_FX.resolve_explosion(_explode_sound, element)
 	if boom_sfx:
 		## 世界坐标定位 + 距离衰减（2026-10-20）：播放器挂场景、声源钉在爆心 ——
 		## 子弹随即 queue_free，不能把播放器作为自己的子节点（否则声音被一起释放）。
-		Global.play_sfx_managed(boom_sfx, get_tree().current_scene, true, 1.0, center)
+		Global.play_sfx_managed(boom_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()), true, 1.0, center)
 	# 联机：把爆心与弹丸标识交给 NetworkWorld 广播（Client 用它播同一套爆炸表现）。
 	exploded.emit(network_entity_id, center)
 

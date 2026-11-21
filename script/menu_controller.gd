@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：主菜单 ｜ 层：表现（CanvasLayer）
 ## 联机：联机时屏蔽武器操作
@@ -100,6 +102,14 @@ func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
 	add_to_group("local_pause_menu")
 	_create_menu()
+	hide()
+
+
+func reset_for_map_change() -> void:
+	_menu_open = false
+	_in_settings = false
+	_cursor_idx = 0
+	_settings_cursor_idx = 0
 	hide()
 
 
@@ -638,7 +648,7 @@ func _is_online_session() -> bool:
 func _is_player_in_weapon_state() -> bool:
 	# NetworkWorld is created dynamically by GameInit and owns the authoritative local network entity.
 	# During connection or scene transition Players can still point at an old/preplaced node.
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var network_world: Node = scene.get_node_or_null("NetworkWorld") if scene else null
 	if network_world and network_world.has_method("is_local_weapon_mode_active"):
 		return network_world.is_local_weapon_mode_active()

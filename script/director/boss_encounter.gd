@@ -1,6 +1,9 @@
 @tool
 class_name BossEncounter extends Node2D
 
+# @trace SCENE-002
+const MAP_LOCATOR = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：玩法（Node2D, @tool）
 ## 联机：仅单机/Host 生成；结果由 NetworkWorld 快照同步给 Client
@@ -250,19 +253,11 @@ func _find_decor_layer() -> Node:
 	var tree: SceneTree = get_tree()
 	if tree == null:
 		return null
-	return _find_decor_recursive(tree.root)
+	return MAP_LOCATOR.find_actor_container(MAP_LOCATOR.get_map_root(tree))
 
 
 func _find_decor_recursive(node: Node) -> Node:
-	if not is_instance_valid(node):
-		return null
-	if "decor" in node.name.to_lower():
-		return node
-	for child: Node in node.get_children():
-		var found: Node = _find_decor_recursive(child)
-		if found:
-			return found
-	return null
+	return MAP_LOCATOR.find_legacy_actor_container(node)
 
 
 func _find_player() -> Node2D:

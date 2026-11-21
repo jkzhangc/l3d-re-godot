@@ -1,5 +1,7 @@
 class_name ChapterSummary extends CanvasLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：章节总结 ｜ 层：表现（CanvasLayer）
 ## 联机：联机需全员确认后关闭
@@ -63,6 +65,13 @@ var _font: Font
 var _music_player: AudioStreamPlayer
 
 
+func _exit_tree() -> void:
+	if is_instance_valid(_music_player):
+		_music_player.stop()
+		_music_player.stream = null
+	_music_player = null
+
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 	layer = 100
@@ -99,9 +108,9 @@ func _ready() -> void:
 ## consume_chapter_summary_suppression）。无 Global 或场景路径未知时按「不抑制」处理。
 func _is_suppressed_by_load() -> bool:
 	var tree := get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return false
-	var scene_path: String = tree.current_scene.scene_file_path
+	var scene_path: String = MAP_SCENE_QUERY.get_map_root(tree).scene_file_path
 	if scene_path.is_empty():
 		return false
 	var g: Node = get_node_or_null("/root/Global")
@@ -218,9 +227,9 @@ func _bind_cutscene_network() -> void:
 
 func _find_network_world() -> Node:
 	var tree := get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return null
-	return tree.current_scene.get_node_or_null("NetworkWorld")
+	return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld")
 
 
 func _on_ed_peer_confirmed(peer_id: int) -> void:
@@ -626,7 +635,7 @@ func _finish_summary() -> void:
 				var net: Node = tree.root.get_node_or_null("Net")
 				if net and net.has_method("leave"):
 					net.leave()
-				tree.quit()
+				_finish_auto_test_shutdown(tree)
 			)
 		else:
 			# Client 在收到 Host 最后一份确认并关闭自身总结页后主动退出。
@@ -634,14 +643,32 @@ func _finish_summary() -> void:
 				var net: Node = tree.root.get_node_or_null("Net")
 				if net and net.has_method("leave"):
 					net.leave()
-				tree.quit()
+				_finish_auto_test_shutdown(tree)
 			)
 		# 自动回归必须保留节点，避免 queue_free 断开上面的退出计时器。
 		return
 	queue_free()
 
 
+## 仅自动安全门回归：先执行真实离局清理，再让音频线程回收播放实例。
+## 协程归SceneTree持有，避免总结节点随Session释放后挂起。
+static func _finish_auto_test_shutdown(tree: SceneTree) -> void:
+	var director: Node = tree.root.get_node_or_null("Director")
+	if director != null:
+		director.call("_reset_live_combat_state")
+		director.call("stop_all_music")
+		director.set_process(false)
+	var session: Node = tree.root.get_node_or_null("GameSession")
+	if session != null:
+		session.call("close_session")
+		tree.current_scene = null
+	await tree.process_frame
+	await tree.create_timer(0.15, true).timeout
+	tree.quit()
+
+
 func _build_ui() -> void:
+
 	_root_control = Control.new()
 	_root_control.name = "SummaryRoot"
 	_root_control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

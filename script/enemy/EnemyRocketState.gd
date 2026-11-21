@@ -1,5 +1,7 @@
 class_name EnemyRocketState extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：仅 Host 执行；开火瞬间经 NetworkWorld 广播镜像火箭（Client 只做视觉与音效）
@@ -203,7 +205,7 @@ func _fire_rocket(enemy: Node2D) -> void:
 	proj.set("explosion_effect", enemy.rocket_explosion_effect)
 	proj.set("explode_sound", enemy.rocket_explode_sound)
 	proj.set("source_id", enemy.next_attack_source_id())
-	var parent: Node = enemy.get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(enemy.get_tree())
 	if parent == null:
 		parent = enemy.get_parent()
 	parent.add_child(proj)
@@ -214,9 +216,9 @@ func _fire_rocket(enemy: Node2D) -> void:
 ## enemy 节点字段解析（apply_to_enemy 注入保证有值），资源不经网络传输。
 func _announce_network_rocket(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -> void:
 	var tree := enemy.get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
-	var world: Node = tree.current_scene.find_child("NetworkWorld", true, false)
+	var world: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("NetworkWorld", true, false)
 	if world != null and world.has_method("announce_enemy_rocket"):
 		world.call("announce_enemy_rocket", enemy, spawn_pos, dir)
 

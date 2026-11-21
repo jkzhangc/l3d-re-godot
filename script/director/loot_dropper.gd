@@ -1,5 +1,7 @@
 extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演 / 物品 ｜ 层：玩法工具（RefCounted，纯静态）
 ## 联机：**只由单机 / Host 调用**（掉落物走 ground_pickup 组，由 NetworkWorld 收编后下发）
@@ -22,8 +24,8 @@ const PLAYER_CLEAR_RADIUS: float = 40.0
 ## 找不到就退回锚点的父节点（自定义测试场景）。
 static func _ground_parent(anchor: Node) -> Node:
 	var tree := anchor.get_tree()
-	if tree != null and tree.current_scene != null:
-		var ground: Node = tree.current_scene.find_child("GroundLayer", true, false)
+	if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
+		var ground: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("GroundLayer", true, false)
 		if ground != null:
 			return ground
 	return anchor.get_parent()

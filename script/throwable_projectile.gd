@@ -1,5 +1,7 @@
 class_name ThrowableProjectile extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：投掷投射物 ｜ 层：玩法（Node2D）
 ## 联机：authoritative 才结算
@@ -47,7 +49,7 @@ static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context
 	if not is_instance_valid(scene_context):
 		return
 	var tree := scene_context.get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
 	var proj := ThrowableProjectile.new()
 	proj._td = td
@@ -57,7 +59,7 @@ static func spawn(td: ThrowableData, start: Vector2, end: Vector2, scene_context
 	proj._damage_players = damage_players
 	proj._source_owner = source_owner if is_instance_valid(source_owner) else (scene_context if HitResolver.is_player(scene_context) else null)
 	proj._source_is_player_origin = HitResolver.is_player(proj._source_owner) if is_instance_valid(proj._source_owner) else false
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	scene.add_child(proj)
 	proj.global_position = start
 	## 直线弹道（飞刀）：方向在生成时定死（飞行中不再变），射程取"起点→落点"。
@@ -186,7 +188,7 @@ func _apply_direct_hit(target: Node2D, from: Vector2, to: Vector2) -> void:
 		else ELEMENT_FX.hit_sound(_td.element)
 	var hit_pitch: float = maxf(_td.direct_hit_sound_pitch, 0.01) if _td.direct_hit_sound != null else 1.0
 	if hit_sfx:
-		Global.play_sfx_managed(hit_sfx, get_tree().current_scene, true, hit_pitch,
+		Global.play_sfx_managed(hit_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()), true, hit_pitch,
 			(target as Node2D).global_position)
 
 
@@ -220,7 +222,7 @@ func _nearest_enemy_on_segment(from: Vector2, to: Vector2) -> Node2D:
 ## 撞墙：只查**图块碰撞**（房间墙/家具都由图块表达；节点式门另有自己的碰撞，不在此列）。
 ## 逐 8px 采样 —— 飞行每帧位移 ≤ ~9px，不会跨过一整格(32px)漏判。
 func _crosses_wall(from: Vector2, to: Vector2) -> bool:
-	var anchor: Node2D = get_tree().current_scene as Node2D
+	var anchor: Node2D = MAP_SCENE_QUERY.get_map_root(get_tree()) as Node2D
 	if anchor == null or not is_instance_valid(anchor):
 		return false
 	var distance: float = from.distance_to(to)
@@ -244,14 +246,14 @@ func _land() -> void:
 	if boom_sfx:
 		## 世界坐标定位（2026-10-20）：爆炸音随距离衰减，声源=落点。
 		## 播放器挂场景而非本节点 —— 投掷物随后释放，挂自身会被一起回收掐断声音。
-		Global.play_sfx_managed(boom_sfx, get_tree().current_scene, true, 1.0, global_position)
+		Global.play_sfx_managed(boom_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()), true, 1.0, global_position)
 	if _td.explode_effect_anim:
-		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, get_tree().current_scene)
+		VXAnimSprite.play_scene(_td.explode_effect_anim, global_position, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	## ★调试可视化（2026-10-01 用户需求）：把这一炸的实际范围画出来并停留 2 秒。
 	## 半径按 play 侧同一公式换算（`格 × 32 + 16`），两端都画（`_land` 在所有端都会跑）。
 	if _td.explosion_radius > 0:
 		DEBUG_BLAST_RING.show_ring(global_position,
-			float(_td.explosion_radius) * float(TILE_SIZE) + 16.0, get_tree().current_scene)
+			float(_td.explosion_radius) * float(TILE_SIZE) + 16.0, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	if _authoritative and _td.explosion_radius > 0:
 		_explode()
 	if _authoritative and _td.flash_radius > 0:
@@ -260,7 +262,7 @@ func _land() -> void:
 		## ★灼烧属性跟随投掷物（2026-10-27）：此前 FirePatch 写死 FIRE，酸瓶的火海也会把敌人点燃。
 		## element=0（旧数据未配属性）回退 FIRE，保持燃烧瓶既有表现。
 		var fire_element: int = _td.element if _td.element != WeaponData.Element.NONE else WeaponData.Element.FIRE
-		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, get_tree().current_scene, _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity, _td.fire_light_color, _td.fire_light_flicker, _td.fire_ember_amount,
+		FirePatch.spawn(global_position, _td.fire_radius, _td.fire_duration, _td.damage, _td.fire_tick_interval, _td.fire_char_idx, _td.fire_ambient_sound, MAP_SCENE_QUERY.get_map_root(get_tree()), _authoritative, _damage_players, _source_owner, false, _td.fire_light_extra_px, _td.fire_light_intensity, _td.fire_light_color, _td.fire_light_flicker, _td.fire_ember_amount,
 			{"scale": _td.fire_shadow_scale, "range": _td.fire_shadow_range, "opacity": _td.fire_shadow_opacity}, fire_element)
 	queue_free()
 
@@ -290,7 +292,7 @@ func _screen_white_flash(duration: float) -> void:
 	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(rect)
-	get_tree().current_scene.add_child(layer)
+	MAP_SCENE_QUERY.get_map_root(get_tree()).add_child(layer)
 	var tw := rect.create_tween()
 	tw.tween_property(rect, "color:a", 0.0, duration)
 	tw.tween_callback(layer.queue_free)

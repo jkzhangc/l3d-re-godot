@@ -1,5 +1,7 @@
 extends CanvasLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：触摸操作 ｜ 层：表现（CanvasLayer）
 ## 联机：不涉及（动作由既有 InputMap 承载，权威判定不变）
@@ -100,7 +102,7 @@ func _process(delta: float) -> void:
 	if now_canvas != _last_canvas:
 		_last_canvas = now_canvas
 		apply_saved_layout()
-	var cs: Node = get_tree().current_scene if get_tree() != null else null
+	var cs: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() != null else null
 	if cs != _last_scene:
 		_apply_mode()
 	if _layout_edit:
@@ -199,7 +201,7 @@ func _effective_layer() -> int:
 ## 以便在同一个测试场景里验证菜单场景白名单（见 BtnStart 的 menu_scene_filter）。
 func _apply_mode(scene_key_override: String = "") -> void:
 	var tree: SceneTree = get_tree()
-	var cs: Node = tree.current_scene if tree != null else null
+	var cs: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	_last_scene = cs
 	_menu_mode = _compute_menu_mode()
 	if _layout_edit:
@@ -218,7 +220,7 @@ func _apply_mode(scene_key_override: String = "") -> void:
 ## ⚠ `get_node_or_null()` 只吃 NodePath：StringName / String 都得显式转（实测 StringName 直接报 Parse Error）。
 func _compute_menu_mode() -> bool:
 	var tree: SceneTree = get_tree()
-	var cs: Node = tree.current_scene if tree != null else null
+	var cs: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	var gameplay: bool = cs != null and cs.get_node_or_null(NodePath(gameplay_marker)) != null
 	return (not gameplay) or has_menu_overlay()
 

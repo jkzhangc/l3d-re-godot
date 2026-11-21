@@ -1,6 +1,8 @@
 @tool
 class_name SafeDoor extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：关卡流程 ｜ 层：玩法（Node2D）
 ## 联机：Host 统计全员 ready 后统一切图
@@ -215,7 +217,7 @@ func _update_label() -> void:
 
 
 func get_network_door_key() -> String:
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	return str(scene.get_path_to(self)) if scene else ""
 
 
@@ -242,7 +244,7 @@ func _enter_safe_room() -> void:
 	if net and net.has_method("is_online_session"):
 		online = bool(net.is_online_session())
 	if online:
-		var scene := get_tree().current_scene
+		var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 		var world: Node = scene.find_child("NetworkWorld", true, false) if scene else null
 		if world and world.has_method("request_safe_door_ready"):
 			# 不在本地切图/冻结；只向 Host 请求验证全员是否已经到门。

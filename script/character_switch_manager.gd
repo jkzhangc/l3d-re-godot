@@ -1,5 +1,7 @@
 class_name CharacterSwitchManager extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：角色切换 ｜ 层：玩法（Node）
 ## 联机：单机为主
@@ -71,10 +73,13 @@ func _ready() -> void:
 
 
 func _find_camera() -> Camera2D:
-	if not get_tree() or not get_tree().current_scene:
+	var active: Camera2D = get_viewport().get_camera_2d()
+	if active != null:
+		return active
+	if not get_tree() or not MAP_SCENE_QUERY.get_map_root(get_tree()):
 		return null
 	var cameras: Array[Node] = []
-	_find_cameras_recursive(get_tree().current_scene, cameras)
+	_find_cameras_recursive(MAP_SCENE_QUERY.get_map_root(get_tree()), cameras)
 	if cameras.size() > 0:
 		return cameras[0] as Camera2D
 	return null
@@ -95,14 +100,14 @@ func _create_teammate_sprites() -> void:
 	if not show_teammate_standins:
 		return
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
-	var decor: Node = tree.current_scene.find_child("DecorLayer", true, false)
+	var decor: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("DecorLayer", true, false)
 	for i: int in range(_team_size):
 		if i == Players.active_seat_index:
 			_teammate_nodes.append(null)
 			continue
-		var standin: Node2D = _create_standin_node(i, decor if decor else tree.current_scene)
+		var standin: Node2D = _create_standin_node(i, decor if decor else MAP_SCENE_QUERY.get_map_root(tree))
 		_teammate_nodes.append(standin)
 
 
@@ -127,8 +132,8 @@ func _get_default_spawn_pos() -> Vector2:
 	if _player:
 		return _player.global_position
 	var tree := get_tree()
-	if tree and tree.current_scene:
-		var spawn: Node = tree.current_scene.find_child("PlayerSpawn", true, false)
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		var spawn: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("PlayerSpawn", true, false)
 		if spawn and spawn is Node2D:
 			return (spawn as Node2D).position
 	return Vector2(160, 160)
@@ -195,10 +200,10 @@ func _create_standin_for_index(index: int) -> void:
 	if _teammate_nodes[index] and is_instance_valid(_teammate_nodes[index]):
 		return
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
-	var decor: Node = tree.current_scene.find_child("DecorLayer", true, false)
-	var parent: Node = decor if decor else tree.current_scene
+	var decor: Node = MAP_SCENE_QUERY.get_map_root(tree).find_child("DecorLayer", true, false)
+	var parent: Node = decor if decor else MAP_SCENE_QUERY.get_map_root(tree)
 	var standin: Node2D = _create_standin_node(index, parent)
 	_teammate_nodes[index] = standin
 
@@ -445,7 +450,7 @@ func switch_after_death() -> bool:
 	var dead_name: String = "队员"
 	if dead_state and dead_state.character:
 		dead_name = dead_state.character.character_name
-	var scene: Node = get_tree().current_scene if get_tree() else null
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if scene:
 		var banner: DamageNumber = DamageNumber.spawn(
 			_player.global_position + Vector2(0, -8), 0.0, scene, 3,

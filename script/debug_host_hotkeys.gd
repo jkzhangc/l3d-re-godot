@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：调试工具 ｜ 层：单例挂载（由 Global 在 _ready 里动态创建，不落场景文件）
 ## 联机：**仅 Host / 单机**触发；Client 按键只打印提示，不产生任何权威变更
@@ -197,9 +199,9 @@ func _net() -> Node:
 
 func _world() -> Node:
 	var tree: SceneTree = get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return null
-	return tree.current_scene.get_node_or_null("NetworkWorld")
+	return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null("NetworkWorld")
 
 
 ## 只在地图里生效：标题/菜单/结算页没有玩家实体，直接忽略，避免误触。
@@ -386,7 +388,7 @@ func _spawn_item(path: String) -> void:
 	node.set("pool", pool)
 	# 放在玩家脚下偏下一点，避免和玩家碰撞体重叠导致拾取判定抖动
 	node.global_position = target.global_position + Vector2(0, 20)
-	get_tree().current_scene.add_child(node)
+	MAP_SCENE_QUERY.get_map_root(get_tree()).add_child(node)
 	print("[召唤] 已生成 %s → %s" % [res.get("item_name"), str(node.global_position)])
 
 

@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_vqkax"]
+[ext_resource type="Texture2D" path="res://art/Animations/バズーカ.png" id="2_ympt6"]
+[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="3_2jon7"]
+
+[sub_resource type="Resource" id="Resource_eprvs"]
+script = ExtResource("3_2jon7")
+scale = Vector2(0.5, 0.5)
+
+[sub_resource type="Resource" id="Resource_gtwgi"]
+script = ExtResource("3_2jon7")
+frame_idx = 1
+
+[node name="" type="Node2D" unique_id=372674654]
+script = ExtResource("1_vqkax")
+texture = ExtResource("2_ympt6")
+fps = 20.0
+auto_free = false
+frame_sequence = Array[int]([0, 1])
+frame_durations = Array[float]([0.05, 0.05])
+cell_data = Array[ExtResource("3_2jon7")]([SubResource("Resource_eprvs"), SubResource("Resource_gtwgi")])

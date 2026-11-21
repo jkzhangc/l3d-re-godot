@@ -1,5 +1,10 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
+# @trace SCENE-002
+const MAP_LOCATOR = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：联机世界 ｜ 层：网络（Node，场景内）
 ## 联机：Host 全量权威模拟
@@ -421,7 +426,7 @@ func _ready() -> void:
 		if _a.begins_with("--net-test"):
 			Global.facing_lock_mode = 0
 			break
-	_scene_path = get_tree().current_scene.scene_file_path if get_tree().current_scene else ""
+	_scene_path = MAP_SCENE_QUERY.get_map_root(get_tree()).scene_file_path if MAP_SCENE_QUERY.get_map_root(get_tree()) else ""
 	_players_parent = _find_players_parent()
 	if not _players_parent:
 		push_error("[NetworkWorld] 未找到预置 Player 的父节点")
@@ -1131,7 +1136,7 @@ func team_wipe_presentation() -> void:
 ## RPC 重复到达时复用已有节点，避免叠加多层遮罩；换图时随场景一起释放。
 func _show_team_wipe_fade() -> void:
 	var tree := get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return
 	if is_instance_valid(_wipe_fade_overlay):
 		return
@@ -1142,9 +1147,9 @@ func _show_team_wipe_fade() -> void:
 	_wipe_fade_overlay.name = "TeamWipeFadeOverlay"
 	_wipe_fade_overlay.color = Color(0, 0, 0, 0)
 	_wipe_fade_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_wipe_fade_overlay.size = tree.current_scene.get_viewport().get_visible_rect().size
+	_wipe_fade_overlay.size = MAP_SCENE_QUERY.get_map_root(tree).get_viewport().get_visible_rect().size
 	canvas_layer.add_child(_wipe_fade_overlay)
-	tree.current_scene.add_child(canvas_layer)
+	MAP_SCENE_QUERY.get_map_root(tree).add_child(canvas_layer)
 
 
 ## 团灭黑屏渐变驱动（Host 与 Client 通用）。Host 到时后的重启在
@@ -2247,7 +2252,7 @@ func _perform_host_shove(node: CharacterBody2D, wd: WeaponData, facing: Vector2)
 	## `play_network_shove_presentation` 在命中帧两端各播一次，这里补的是**真正推到人**
 	## 那一声「打撃3」—— Host 本地播一次 + 广播给 Client（挥空不响）。
 	if not hit_enemies.is_empty() and wd.shove_hit_sound:
-		var shove_scene: Node = get_tree().current_scene
+		var shove_scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 		if shove_scene != null:
 			Global.play_sfx_managed(wd.shove_hit_sound, shove_scene, true, 1.0, center)
 		_send_to_ready_clients(&"shove_hit_sfx_presentation", [wd.item_id, center])
@@ -2455,7 +2460,7 @@ func _play_melee_hit_sfx(wd: WeaponData, position: Vector2) -> void:
 	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(wd.hit_sound, wd.element)
 	if hit_sfx == null:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	Global.play_sfx_managed(hit_sfx, scene, true,
@@ -2559,7 +2564,7 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	setup_params["shooter"] = shooter
 	bullet.setup(setup_params)
 	bullet.global_position = start_position
-	get_tree().current_scene.add_child(bullet)
+	MAP_SCENE_QUERY.get_map_root(get_tree()).add_child(bullet)
 	_bullets[bullet_id] = bullet
 	bullet.finished.connect(_on_host_bullet_finished)
 	# 爆炸表现同步（2026-09-24）：Client 的镜像子弹不参与碰撞/扫掠，只在 finished 时被
@@ -2623,7 +2628,7 @@ func _spawn_host_lock_on(shooter: CharacterBody2D, wd: WeaponData, bd: BulletDat
 		damage *= float(shooter.call("get_awaken_damage_mult"))
 	var strike: Node2D = LOCK_ON_STRIKE.new()
 	strike.setup(bd, wd, shooter, damage, awaken or bd.instant_kill, targets)
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		strike.queue_free()
 		return
@@ -2643,7 +2648,7 @@ func lock_on_strike(points: PackedVector2Array, weapon_id: String, bullet_index:
 	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
 	if bd == null or not bd.lock_on_enabled or points.is_empty():
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	var pts: Array[Vector2] = []
@@ -2669,7 +2674,7 @@ func bullet_explode_effect(position: Vector2, weapon_id: String, bullet_index: i
 	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
 	if not bd:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if not scene:
 		return
 	## ★调试可视化（2026-10-01）：Client 也从同一份 BulletData 取证半径 → 与 Host 画的一样大。
@@ -2695,7 +2700,7 @@ func _on_host_bullet_hit_effect(position: Vector2, follow_entity_id: int, weapon
 func bullet_hit_effect(position: Vector2, weapon_id: String, bullet_index: int, follow_entity_id: int) -> void:
 	if net.is_host:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if not scene:
 		return
 	## 资源只从白名单武器解析（远端包只带 id 与索引）——同 bullet_explode_effect 的铁律。
@@ -2915,7 +2920,7 @@ func shove_hit_sfx_presentation(weapon_id: String, position: Vector2) -> void:
 	var wd := _get_network_weapon_data_by_id(weapon_id)
 	if wd == null or wd.shove_hit_sound == null:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	## 世界坐标定位：声源=推击判定框中心（与 Host 侧本地播放同一位置）。
@@ -3487,7 +3492,7 @@ func enemy_acid_spit_presentation(entity_id: int, spawn_pos: Vector2, dir: Vecto
 	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
 	if not is_instance_valid(enemy):
 		return
-	var parent: Node = get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if parent == null:
 		parent = enemy.get_parent()
 	EnemyAcidSpit.spawn_mirror(parent, spawn_pos, dir,
@@ -3518,7 +3523,7 @@ func enemy_rocket_presentation(entity_id: int, spawn_pos: Vector2, dir: Vector2)
 	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
 	if not is_instance_valid(enemy):
 		return
-	var parent: Node = get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if parent == null:
 		parent = enemy.get_parent()
 	## ⚠ 不用 `EnemyRocket.spawn_mirror()`：本工程的 class_name 不在 headless 的全局类缓存里
@@ -3786,7 +3791,7 @@ func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2,
 		"frame_duration": bd.bullet_frame_duration,
 	})
 	bullet.global_position = start_position
-	get_tree().current_scene.add_child(bullet)
+	MAP_SCENE_QUERY.get_map_root(get_tree()).add_child(bullet)
 	_bullets[bullet_id] = bullet
 	bullet.connect("finished", _on_client_bullet_finished)
 	_auto_client_bullet_seen = true
@@ -4534,8 +4539,8 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
 		# 紧凑不可靠包不带场景路径；在可靠 world_snapshot 建立实体前不创建未知敌人。
 		if scene_path.is_empty() and not snap:
 			return
-		if not scene_path.is_empty() and get_tree().current_scene:
-			node = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as CharacterBody2D
+		if not scene_path.is_empty() and MAP_SCENE_QUERY.get_map_root(get_tree()):
+			node = MAP_SCENE_QUERY.get_map_root(get_tree()).get_node_or_null(NodePath(scene_path)) as CharacterBody2D
 			# 该节点若已被别的 entity_id 认领，不得复用（同 pickup 侧的一一对应不变量）
 			node = _reject_claimed_enemy(node, entity_id, _claimed_enemy_nodes())
 		if not is_instance_valid(node):
@@ -4642,7 +4647,7 @@ func _register_initial_host_pickups() -> void:
 	_pickups.clear()
 	_next_pickup_id = 1
 	var candidates: Array[Node2D] = []
-	_collect_network_pickups(get_tree().current_scene, candidates)
+	_collect_network_pickups(MAP_SCENE_QUERY.get_map_root(get_tree()), candidates)
 	candidates.sort_custom(func(a: Node2D, b: Node2D) -> bool: return str(a.get_path()) < str(b.get_path()))
 	for pickup: Node2D in candidates:
 		_register_host_pickup(pickup)
@@ -4768,7 +4773,7 @@ func _register_host_pickup(pickup: Node2D) -> int:
 
 func _prepare_client_preplaced_pickups() -> void:
 	_client_preplaced_pickups_by_path.clear()
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var candidates: Array[Node2D] = []
 	_collect_network_pickups(scene, candidates)
 	for pickup: Node2D in candidates:
@@ -4807,7 +4812,7 @@ func _build_pickup_snapshot() -> Array:
 					or item.item_type == ItemData.ItemType.SUPPORT) else ""
 		if pickup_kind.is_empty():
 			continue
-		var scene := get_tree().current_scene
+		var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 		## -1 = 未携带（Client 侧同样按这个约定回退初始备弹）
 		var reserve_ammo := int(pickup.get("pickup_reserve_ammo")) if weapon else -1
 		var magazine_ammo := int(pickup.get("pickup_magazine_ammo")) if weapon else -1
@@ -4874,7 +4879,7 @@ func _try_host_ammo_supply(peer_id: int, node_path: NodePath, claimed_position: 
 		return 0
 	if node_path.is_empty() or node_path.is_absolute() or ".." in String(node_path).split("/"):
 		return 0
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var supply := scene.get_node_or_null(node_path) as Node2D if scene else null
 	if not is_instance_valid(supply) or not (supply.get_script() == AMMO_SUPPLY_SCRIPT) \
 			or supply.is_queued_for_deletion() or not supply.is_visible_in_tree():
@@ -4927,7 +4932,7 @@ func _try_host_switch_toggle(peer_id: int, node_path: NodePath) -> bool:
 		return false
 	if node_path.is_empty() or node_path.is_absolute() or ".." in String(node_path).split("/"):
 		return false
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	var node: Node = scene.get_node_or_null(node_path) if scene else null
 	if not is_instance_valid(node) or node.get_script() != INTERACTIVE_SWITCH_SCRIPT:
 		return false
@@ -4960,7 +4965,7 @@ func broadcast_switch_state(node_path: NodePath, value: bool, animate: bool) -> 
 func switch_state(node_path: NodePath, value: bool, animate: bool) -> void:
 	if net.is_host or _scene_transitioning:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	var node: Node = scene.get_node_or_null(node_path) if scene else null
 	if is_instance_valid(node) and node.get_script() == INTERACTIVE_SWITCH_SCRIPT \
 			and node.has_method("apply_network_state"):
@@ -4971,7 +4976,7 @@ func switch_state(node_path: NodePath, value: bool, animate: bool) -> void:
 func ammo_supply_feedback(node_path: NodePath) -> void:
 	if net.is_host or _scene_transitioning:
 		return
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var supply := scene.get_node_or_null(node_path) if scene else null
 	if is_instance_valid(supply) and supply.get_script() == AMMO_SUPPLY_SCRIPT:
 		supply.call("play_refill_feedback")
@@ -5268,7 +5273,7 @@ func _play_pickup_sfx(item: ItemData, position: Vector2) -> void:
 		stream = load(Global.default_pickup_sfx_path) as AudioStream
 	if stream == null:
 		return
-	var scene: Node = get_tree().current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if scene == null:
 		return
 	## 世界坐标定位（同 2026-10-20 口径）：远端队友的拾取音随距离衰减，声源=掉落点。
@@ -5316,8 +5321,8 @@ func _spawn_host_dropped_weapon(weapon: WeaponData, player: Node2D, state: Playe
 		pickup.set("pickup_reserve_ammo", reserve)
 		if reserve > 0:
 			state.consume_ammo_item(weapon.ammo_item_id, reserve)
-	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
-	(parent if parent else get_tree().current_scene).add_child(pickup)
+	var parent := MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("GroundLayer", true, false)
+	(parent if parent else MAP_SCENE_QUERY.get_map_root(get_tree())).add_child(pickup)
 	## 落点：先沿玩家朝向推远（2026-09-23 用户：丢下的离玩家远一些，且拾取范围 24→16，
 	## 落点须在拾取范围外，否则刚脱手就被自己的自动拾取捡回），再做
 	## ≥24px 的掉落物间距避让（2026-09-16 反馈②）。必须在 add_child（=入组）之后算，
@@ -5337,8 +5342,8 @@ func _spawn_host_dropped_throwable(throwable: ThrowableData, position: Vector2,
 	if not is_instance_valid(pickup):
 		return
 	pickup.set("item", throwable)
-	var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
-	(parent if parent else get_tree().current_scene).add_child(pickup)
+	var parent := MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("GroundLayer", true, false)
+	(parent if parent else MAP_SCENE_QUERY.get_map_root(get_tree())).add_child(pickup)
 	## ★2026-11-02：与武器掉落同规则 —— 必须过避墙/视线判定（旧实现直接落在
 	## `drop_landing_position`，贴墙替换投掷物时旧投掷物会掉进墙里/墙另一侧）。
 	pickup.global_position = PICKUP_SCRIPT.find_free_drop_position(
@@ -5515,7 +5520,7 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 			pickup = (preplaced_value as Node2D) if is_instance_valid(preplaced_value) else null
 			pickup = _reject_claimed(pickup, pickup_id, claimed)
 			if not is_instance_valid(pickup) and not scene_path.is_empty():
-				pickup = get_tree().current_scene.get_node_or_null(NodePath(scene_path)) as Node2D
+				pickup = MAP_SCENE_QUERY.get_map_root(get_tree()).get_node_or_null(NodePath(scene_path)) as Node2D
 				pickup = _reject_claimed(pickup, pickup_id, claimed)
 			if not is_instance_valid(pickup):
 				# ★ 场景类型必须按「是不是武器」分派（2026-09-23 实测修复）：此前只判 "throwable"，
@@ -5538,8 +5543,8 @@ func _apply_client_pickup_snapshot(states: Array) -> void:
 				# → _pickups[id] 悬垂 → 下个可靠快照按同一 id 重建 → 再淘汰 …… 形成
 				# 2 秒周期的「消失↔重建」无限轮转。★Host 才是地面物集合的唯一真源。
 				pickup.set("cap_exempt", true)
-				var parent := get_tree().current_scene.find_child("GroundLayer", true, false)
-				(parent if parent else get_tree().current_scene).add_child(pickup)
+				var parent := MAP_SCENE_QUERY.get_map_root(get_tree()).find_child("GroundLayer", true, false)
+				(parent if parent else MAP_SCENE_QUERY.get_map_root(get_tree())).add_child(pickup)
 			_pickups[pickup_id] = pickup
 		claimed[pickup.get_instance_id()] = pickup_id
 		if ground_item != null:
@@ -5625,9 +5630,9 @@ func _try_host_safe_door_ready(peer_id: int, door_key: String) -> void:
 
 
 func _find_safe_door(door_key: String) -> Node2D:
-	if door_key.is_empty() or not get_tree().current_scene:
+	if door_key.is_empty() or not MAP_SCENE_QUERY.get_map_root(get_tree()):
 		return null
-	var node := get_tree().current_scene.get_node_or_null(NodePath(door_key)) as Node2D
+	var node := MAP_SCENE_QUERY.get_map_root(get_tree()).get_node_or_null(NodePath(door_key)) as Node2D
 	if not is_instance_valid(node) or not node.has_method("commit_host_network_entry"):
 		return null
 	return node
@@ -5761,7 +5766,7 @@ func holdout_state_sync(phase: int, remaining: float, total: float, token: int) 
 ## 找到场景内所有防守战机器并驱动其本地 HUD。仅 Client 收到 RPC 时调用：
 ## Host 在 broadcast 里不再本地 _apply，避免与机器自身 _process 的驱动重复叠加。
 func _apply_holdout_state(phase: int, remaining: float, total: float, token: int) -> void:
-	var scene := get_tree().current_scene if get_tree() else null
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if not scene:
 		return
 	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
@@ -5780,7 +5785,7 @@ func broadcast_holdout_completed(token: int) -> void:
 func holdout_completed(token: int) -> void:
 	if net.is_host or not is_inside_tree() or _scene_transitioning:
 		return
-	var scene := get_tree().current_scene if get_tree() else null
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if not scene:
 		return
 	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
@@ -5804,7 +5809,7 @@ func broadcast_campaign_ending(fade_seconds: float) -> void:
 func campaign_ending_start(fade_seconds: float) -> void:
 	if net.is_host or not is_inside_tree() or _scene_transitioning:
 		return
-	var scene := get_tree().current_scene if get_tree() else null
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 	if not scene:
 		return
 	for machine: Node in scene.find_children("*", "HoldoutMachine", true, false):
@@ -5863,7 +5868,7 @@ func _register_initial_host_enemies() -> void:
 	for value: Node in get_tree().get_nodes_in_group("enemy"):
 		if value is CharacterBody2D:
 			candidates.append(value as CharacterBody2D)
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	candidates.sort_custom(func(a: CharacterBody2D, b: CharacterBody2D) -> bool:
 		var path_a := str(scene.get_path_to(a)) if scene else str(a.get_path())
 		var path_b := str(scene.get_path_to(b)) if scene else str(b.get_path())
@@ -5904,7 +5909,7 @@ func _register_untracked_host_enemies(delta: float = -1.0) -> void:
 		var tracked := _resolve_enemy_entry(entry_value as Dictionary)
 		if tracked:
 			tracked_nodes[tracked.get_instance_id()] = true
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	for value: Node in get_tree().get_nodes_in_group("enemy"):
 		var enemy := value as CharacterBody2D
 		if not is_instance_valid(enemy) or tracked_nodes.has(enemy.get_instance_id()):
@@ -6302,7 +6307,7 @@ func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> bool:
 		return false
 	var arrival_id: String = str(net.active_arrival_id)
 	var arrival_position: Variant = ArrivalResolver.resolve(
-		get_tree().current_scene, arrival_id, net.active_arrival_position
+		MAP_SCENE_QUERY.get_map_root(get_tree()), arrival_id, net.active_arrival_position
 	)
 	if not arrival_position is Vector2:
 		return false
@@ -6321,7 +6326,7 @@ func _apply_arrival_to_preplaced_player(player: CharacterBody2D) -> bool:
 func _collect_player_slots() -> Dictionary:
 	var out: Dictionary = {}
 	var tree: SceneTree = get_tree()
-	var root: Node = tree.current_scene if tree != null else null
+	var root: Node = MAP_SCENE_QUERY.get_map_root(tree) if tree != null else null
 	if root == null:
 		return out
 	var found: Array[Node] = []
@@ -6409,18 +6414,15 @@ func _apply_own_spawn_slot(node: CharacterBody2D, slot: int) -> bool:
 
 
 func _find_players_parent() -> Node:
+	var container: Node2D = MAP_LOCATOR.find_actor_container(MAP_LOCATOR.get_map_root(get_tree()))
+	if container != null:
+		return container
 	var preplaced := _find_preplaced_player()
 	return preplaced.get_parent() if is_instance_valid(preplaced) else null
 
 
 func _find_preplaced_player() -> CharacterBody2D:
-	var scene := get_tree().current_scene
-	if not scene:
-		return null
-	for node: Node in scene.get_tree().get_nodes_in_group("player"):
-		if node is CharacterBody2D:
-			return node as CharacterBody2D
-	return null
+	return MAP_LOCATOR.find_preplaced_player(MAP_LOCATOR.get_map_root(get_tree()), false)
 
 
 func _instantiate_player(position: Vector2, peer_id: int = 0) -> CharacterBody2D:
@@ -6519,7 +6521,7 @@ func _set_local_player(node: Node2D, seat_index: int) -> void:
 	Players.set_local_entity(node)
 	if _camera_bound_local_node == node:
 		return
-	var camera := get_tree().current_scene.find_child("Camera2D", true, false)
+	var camera: Camera2D = get_viewport().get_camera_2d()
 	if camera and camera.has_method("set_follow_target"):
 		camera.set_follow_target(node)
 	_camera_bound_local_node = node
@@ -6594,7 +6596,7 @@ func quest_pickup_request(node_path: NodePath) -> void:
 func _try_host_quest_pickup(peer_id: int, node_path: NodePath) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var pickup := (scene.get_node_or_null(node_path) if scene else null) as Node2D
 	if not is_instance_valid(pickup) or not pickup.has_method("host_commit_pickup"):
 		return
@@ -6627,7 +6629,7 @@ func wall_place_request(node_path: NodePath) -> void:
 func _try_host_wall_place(peer_id: int, node_path: NodePath) -> void:
 	if not net.is_host or not _players.has(peer_id):
 		return
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var wall := (scene.get_node_or_null(node_path) if scene else null) as Node2D
 	if not is_instance_valid(wall) or not wall.has_method("host_commit_place"):
 		return

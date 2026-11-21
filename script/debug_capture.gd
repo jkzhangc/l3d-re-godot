@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：调试工具 ｜ 层：单例挂载（由 Global 在 _ready 里动态创建，不落场景文件）
 ## 联机：纯本机，只读现场状态，不改任何权威数据
@@ -126,7 +128,7 @@ func _save_shot(index: int) -> void:
 func _write_report() -> void:
 	var out: PackedStringArray = []
 	out.append("=== 现场抓取 %s ===" % Time.get_datetime_string_from_system())
-	var cs: Node = get_tree().current_scene
+	var cs: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	out.append("场景: %s" % (cs.scene_file_path if cs else "(无)"))
 	out.append("debug_enabled=%s  debug_visuals=%s（调试层开关＝TAB）" % [
 		str(Global.debug_enabled), str(Global.debug_visuals)])

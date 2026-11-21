@@ -1,5 +1,7 @@
 class_name SpawnSpotResolver extends RefCounted
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：关卡流程 / 联机实体就位 ｜ 层：工具类（RefCounted）
 ## 联机：不涉及（Host 与 Client 各自本地调用；搜索确定性 → 两端结果一致）
@@ -310,6 +312,9 @@ static func _cache_layers_still_valid() -> bool:
 
 ## 本节点所在的顶层场景节点（SceneTree.root 的下一层）。
 static func _topmost_scene_node(world_node: Node2D, tree: SceneTree) -> Node:
+	var current: Node = MAP_SCENE_QUERY.get_map_root(tree)
+	if is_instance_valid(current) and (current == world_node or current.is_ancestor_of(world_node)):
+		return current
 	var top: Node = world_node
 	while top.get_parent() != null and top.get_parent() != tree.root:
 		top = top.get_parent()

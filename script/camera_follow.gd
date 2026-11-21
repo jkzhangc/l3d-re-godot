@@ -54,6 +54,19 @@ var _pcam: Node2D = null
 # 初始化
 # ═══════════════════════════════════════
 
+## 会话跨图复用镜头，显式重算边界并刷新跟随参数。
+func refresh_map_binding(target: Node2D) -> void:
+	zoom = default_zoom
+	if is_instance_valid(_pcam):
+		_pcam.zoom = default_zoom
+		_pcam.follow_damping = follow_speed > 0.0
+		if follow_speed > 0.0:
+			_pcam.follow_damping_value = Vector2(1.0 / follow_speed, 1.0 / follow_speed)
+		if limit_to_map:
+			_setup_map_limits()
+	set_follow_target(target)
+
+
 func _ready() -> void:
 	# 应用默认缩放
 	zoom = default_zoom
@@ -187,6 +200,8 @@ func _calc_map_rect() -> Rect2:
 
 ## 切换角色/死亡切换后，把镜头瞬切到玩家当前位置（绕过阻尼）。
 func teleport_to_player() -> void:
+	if not is_instance_valid(_target):
+		return
 	if is_instance_valid(_pcam):
 		_pcam.teleport_position()
 	elif _target:

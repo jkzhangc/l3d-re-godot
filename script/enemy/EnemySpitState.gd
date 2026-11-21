@@ -1,5 +1,7 @@
 class_name EnemySpitState extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：Host 权威生成酸弹；Client 靠 transform 快照跟随、靠 visual_char_index 拿吐酸帧。
@@ -139,7 +141,7 @@ func _fire_acid(enemy: Node2D) -> void:
 	proj.source_id = enemy.next_attack_source_id()
 	proj.impact_effect = enemy.spit_impact_effect
 	proj.impact_tone = enemy.spit_impact_tone
-	var parent: Node = enemy.get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(enemy.get_tree())
 	if parent == null:
 		parent = enemy.get_parent()
 	parent.add_child(proj)
@@ -153,7 +155,7 @@ func _announce_network_spit(enemy: Node2D, spawn_pos: Vector2, dir: Vector2) -> 
 	var tree := enemy.get_tree()
 	if tree == null:
 		return
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	if scene == null:
 		return
 	var world := scene.find_child("NetworkWorld", true, false)

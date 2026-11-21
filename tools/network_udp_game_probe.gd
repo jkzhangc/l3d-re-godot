@@ -1,5 +1,7 @@
 extends SceneTree
 
+const MAP_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：UDP弱网验收 ｜ 层：本地隔离真实Net/World事务探针
 ## 真实 ENet 游戏事务探针；只使用内存会话，不调用配置/存档保存入口。
@@ -49,9 +51,28 @@ var _echo_duplicates: int = 0
 var _echo_summary: Dictionary = {}
 var _finish_acks: Dictionary = {}
 var _enet_final_counters: Dictionary = {}
+# 只读、有限采样：不改生产预测/插值/HUD，所有时间差在本进程单调时钟内计算。
+const OBSERVATION_LIMIT := 10000
+var _observing: bool = false
+var _observation_started_usec: int = 0
+var _observation_last_frame_usec: int = 0
+var _observation_last_hot_usec: int = 0
+var _observation_last_hot_epoch: int = -1
+var _observation_last_ping_window: Array = []
+var _observation_last_ping_ema: int = -1
+var _observation_ping_window_full: bool = false
+var _observation_ping_window_limit: int = 0
+var _observation_metrics: Dictionary = {}
+var _observation_ping_samples: Array = []
+var _observation_summary: Dictionary = {}
+var _observation_hot_advances: int = 0
+var _observation_truncated: bool = false
 
 class Probe extends Node:
 	var diagnostic: SceneTree
+
+	func _process(_delta: float) -> void:
+		diagnostic._sample_stability_observation()
 
 	@rpc("authority", "call_remote", "reliable")
 	func command(stage: int, token: String, action: String, data: Dictionary) -> void:
@@ -105,7 +126,8 @@ func _check(ok: bool, label: String) -> bool:
 	return ok
 
 func _world() -> Node:
-	return current_scene.get_node_or_null("NetworkWorld") if current_scene != null else null
+	var map: Node = MAP_QUERY.get_map_root(self)
+	return map.get_node_or_null("NetworkWorld") if map != null else null
 
 func _state(world: Node, peer: int) -> Variant:
 	if not is_instance_valid(world):
@@ -272,8 +294,9 @@ func _host_pickup(peer: int) -> void:
 	pickup.set("cap_exempt", true)
 	pickup.set("require_function_key", true)
 	pickup.process_mode = Node.PROCESS_MODE_DISABLED
-	var ground: Node = current_scene.find_child("GroundLayer", true, false)
-	(ground if ground != null else current_scene).add_child(pickup)
+	var map: Node = MAP_QUERY.get_map_root(self)
+	var ground: Node = map.find_child("GroundLayer", true, false)
+	(ground if ground != null else map).add_child(pickup)
 	pickup.global_position = player.global_position
 	var pickup_id: int = int(world.call("_register_host_pickup", pickup))
 	var baseline: int = _host_dropped_count(world)
@@ -504,7 +527,107 @@ func _client_observe_carry(world: Node, data: Dictionary) -> void:
 		_check(_loadout_matches(world, peer, str(expected[peer_value])), "Client跨图装备peer=%d" % peer)
 		await _client_observe_support(world, peer)
 
+func _start_stability_observation() -> void:
+	_observation_metrics = {"frame_gap_ms": [], "player_hot_ingress_epoch_gap_ms": [],
+		"player_hot_ingress_observed_age_ms": [], "prediction_target_error_px": [],
+		"remote_interp_delay_ms": [], "observer_cost_usec": []}
+	_observation_ping_samples.clear()
+	_observation_summary.clear()
+	_observation_hot_advances = 0
+	_observation_truncated = false
+	_observation_started_usec = Time.get_ticks_usec()
+	_observation_last_frame_usec = _observation_started_usec
+	_observation_last_hot_usec = 0
+	_observation_last_hot_epoch = -1
+	_observation_last_ping_window = (_net.get("_rtt_samples") as Array).duplicate()
+	_observation_last_ping_ema = int(_net.get("rtt_smooth_ms"))
+	_observation_ping_window_full = false
+	_observation_ping_window_limit = int((_net.get_script() as Script).get_script_constant_map()["RTT_SAMPLE_LIMIT"])
+	_observing = true
+
+
+func _observe_value(metric: String, value: float) -> void:
+	var values: Array = _observation_metrics[metric]
+	if values.size() < OBSERVATION_LIMIT:
+		values.append(value)
+	else:
+		_observation_truncated = true
+
+
+func _sample_stability_observation() -> void:
+	if not _observing:
+		return
+	var now: int = Time.get_ticks_usec()
+	_observe_value("frame_gap_ms", float(now - _observation_last_frame_usec) / 1000.0)
+	_observation_last_frame_usec = now
+	var world: Node = _world()
+	if is_instance_valid(world):
+		var hot_epoch: int = int(world.get("_last_player_hot_epoch"))
+		if hot_epoch >= 0 and hot_epoch != _observation_last_hot_epoch:
+			if _observation_last_hot_usec > 0:
+				_observe_value("player_hot_ingress_epoch_gap_ms", float(now - _observation_last_hot_usec) / 1000.0)
+			_observation_last_hot_epoch = hot_epoch
+			_observation_last_hot_usec = now
+			_observation_hot_advances += 1
+		if _observation_last_hot_usec > 0:
+			_observe_value("player_hot_ingress_observed_age_ms", float(now - _observation_last_hot_usec) / 1000.0)
+		var local_id: int = int(_net.call("get_my_peer_id"))
+		var players: Dictionary = world.get("_players")
+		for key: Variant in players:
+			var node: Node2D = _player(world, int(key))
+			if not is_instance_valid(node):
+				continue
+			if int(key) == local_id:
+				if bool(node.get("_network_has_target")):
+					var target: Vector2 = node.get("_network_target_position")
+					_observe_value("prediction_target_error_px", node.global_position.distance_to(target))
+			else:
+				var interp: RefCounted = node.get("_remote_interp")
+				if interp != null:
+					_observe_value("remote_interp_delay_ms", float(interp.call("render_delay")) * 1000.0)
+	# 不逐帧调用会排序/查询ENet的完整诊断；只读生产Net已维护的有限窗口与原始/EMA值。
+	# 生产窗口只有RTT整数，无样本时间戳/序号。满120后比较整个窗口，不用长度或末值冒充水位。
+	var ping_window: Array = _net.get("_rtt_samples")
+	var ping_ema: int = int(_net.get("rtt_smooth_ms"))
+	_observation_ping_window_full = _observation_ping_window_full or ping_window.size() >= _observation_ping_window_limit
+	if not ping_window.is_empty() and (ping_window != _observation_last_ping_window or ping_ema != _observation_last_ping_ema):
+		if _observation_ping_samples.size() < OBSERVATION_LIMIT:
+			_observation_ping_samples.append({"elapsed_ms": float(now - _observation_started_usec) / 1000.0,
+				"raw_ms": _net.get("rtt_ms"), "hud_ema_ms": ping_ema})
+		else:
+			_observation_truncated = true
+		_observation_last_ping_window = ping_window.duplicate()
+	_observation_last_ping_ema = ping_ema
+	_observe_value("observer_cost_usec", float(Time.get_ticks_usec() - now))
+
+
+func _finish_stability_observation() -> void:
+	_sample_stability_observation()
+	_observing = false
+	var metrics: Dictionary = {}
+	for key: String in _observation_metrics:
+		var values: Array = _observation_metrics[key].duplicate()
+		values.sort()
+		metrics[key] = {"count": values.size(), "p50": _percentile(values, 0.50),
+			"p95": _percentile(values, 0.95), "p99": _percentile(values, 0.99),
+			"max": values.back() if not values.is_empty() else -1.0}
+	_observation_summary = {"duration_ms": float(Time.get_ticks_usec() - _observation_started_usec) / 1000.0,
+		"metrics": metrics, "hud_ping_samples": _observation_ping_samples.duplicate(true),
+		"hud_ping_detection": "window_or_ema_change_observed_per_frame_not_per_pong",
+		"hud_ping_count_is_lower_bound": true, "hud_ping_window_reached_limit": _observation_ping_window_full,
+		"player_hot_epoch_advances": _observation_hot_advances,
+		"bounded_sample_limit": OBSERVATION_LIMIT, "truncated": _observation_truncated,
+		"scope": "stationary_safehouse_real_world_echo_not_moving_combat_or_input_to_photon",
+		"caveats": ["epoch按每渲染帧观察，可合并同帧多次到达，不是每包到达时间",
+			"ingress_epoch仅热包入口水位，可能包含动态水位拒绝的旧包，不证明状态已应用",
+			"observed_age仅从本地观测到入口水位推进起算，不是Host生成时间或跨机单程延迟",
+			"target_error不是实际纠偏位移；空样本不证明无纠偏；未测移动/战斗手感",
+			"hud样本仅在生产窗口或EMA变化时记录；满窗口完全相同值及同帧多次pong可被合并，数量只是下界",
+			"生产Net未保存pong时间戳或序号；未改变ping间隔/EMA/文字，不声明逐pong完整采样"]}
+
+
 func _run_echo(stage: int, token: String, count: int) -> void:
+	_start_stability_observation()
 	_echo_stage = stage
 	_echo_token = token
 	_echo_sent.clear()
@@ -539,6 +662,7 @@ func _run_echo(stage: int, token: String, count: int) -> void:
 		"duplicates": _echo_duplicates, "p50_ms": _percentile(samples, 0.50),
 		"p95_ms": _percentile(samples, 0.95), "p99_ms": _percentile(samples, 0.99),
 		"raw": _echo_raw.duplicate(true), "clock": "client_monotonic_usec_only"}
+	_finish_stability_observation()
 
 func _receive_echo_request(sender: int, stage: int, token: String, seq: int, stamp: int) -> void:
 	if _role != "host" or not _peers.has(sender) or stage != _echo_stage or token != _echo_token:
@@ -591,6 +715,7 @@ func _result(ok: bool) -> Dictionary:
 		"failures": _failures.duplicate(), "remote_failures": _remote_failures.duplicate(true),
 		"items": _items.duplicate(true), "transactions": _transactions.duplicate(true),
 		"stages": _stages.duplicate(true), "echo": _echo_summary.duplicate(true),
+		"stability_observation": _observation_summary.duplicate(true),
 		"enet": _enet_final_counters, "network": _net.call("get_network_diagnostics"),
 		"clients": _client_reports.duplicate(true), "count": _count, "fps": _fps,
 		"warnings": ["未测试死亡/气力/ガッツ；不将弱网RTT与20ms阈值比较", "引擎退出残留资源告警由runner另行报告，不替代事务断言"]}

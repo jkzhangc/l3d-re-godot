@@ -1,21 +1,29 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dl30n6gl3onm8"]
 
-[ext_resource type="Script" path="res://script/weapon_data.gd" id="1"]
-[ext_resource type="Script" path="res://script/bullet_data.gd" id="2"]
-[ext_resource type="Texture2D" path="res://art/Characters/ドラえもんセット.png" id="3"]
-[ext_resource type="Texture2D" path="res://art/Barrages/大剑气[3,3].png" id="4"]
-[ext_resource type="Texture2D" path="res://art/Ui/装備アイコン空気砲.png" id="5"]
-[ext_resource type="AudioStream" path="res://sound/bio1_ナイフ空振り.ogg" id="6"]
-[ext_resource type="AudioStream" path="res://sound/カチャ.ogg" id="7"]
-[ext_resource type="AudioStream" path="res://sound/グレネード爆発.ogg" id="8"]
-[ext_resource type="PackedScene" path="res://anim/anim_effect_爆炸动画.tscn" id="9"]
+[ext_resource type="Script" uid="uid://vkfdlah8qfhs" path="res://script/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://anim/_rvdata_生化计划无名/anim_空気砲↓.tscn" id="1_afd1g"]
+[ext_resource type="AudioStream" uid="uid://bag8ypxbot10" path="res://sound/空気砲3.wav" id="1_jdn3j"]
+[ext_resource type="Script" uid="uid://e36o8evyh620" path="res://script/bullet_data.gd" id="2"]
+[ext_resource type="PackedScene" path="res://anim/_rvdata_生化计划无名/anim_空気砲←.tscn" id="2_knbcl"]
+[ext_resource type="Texture2D" uid="uid://dwmfo633yahwu" path="res://art/Characters/ドラえもんセット.png" id="3"]
+[ext_resource type="PackedScene" path="res://anim/_rvdata_生化计划无名/anim_空気砲→.tscn" id="3_00mwv"]
+[ext_resource type="Texture2D" uid="uid://cv1phwee0a04o" path="res://art/Barrages/空气炮[4,1].png" id="3_5me8a"]
+[ext_resource type="Texture2D" uid="uid://dgetuo6o6cppq" path="res://art/Ui/装備アイコン空気砲.png" id="5"]
+[ext_resource type="Script" uid="uid://clc2uli4hs8k0" path="res://script/weapon_effect_offsets.gd" id="6_5me8a"]
+[ext_resource type="AudioStream" uid="uid://cuftrogi86cvv" path="res://sound/リロード.ogg" id="6_jdn3j"]
+[ext_resource type="AudioStream" uid="uid://i7a2gvnqkxjh" path="res://sound/カチャ.ogg" id="7"]
+[ext_resource type="AudioStream" uid="uid://mkmtollalsw" path="res://sound/グレネード爆発.ogg" id="8"]
+[ext_resource type="PackedScene" uid="uid://bg4606rwevqu5" path="res://anim/anim_effect_爆炸动画.tscn" id="9"]
+[ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="9_5me8a"]
+[ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="11_4o8gt"]
+[ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="12_jc0il"]
 
-[sub_resource type="Resource" id="bullet_air_cannon"]
+[sub_resource type="Resource" id="Resource_jc0il"]
 script = ExtResource("2")
-bullet_texture = ExtResource("4")
-bullet_anim_frames = 3
-bullet_frame_duration = 5
-speed = 600.0
+bullet_texture = ExtResource("3_5me8a")
+bullet_anim_frames = 4
+bullet_frame_duration = 2
+speed = 850.0
 max_range = 500.0
 explosion_radius = 48.0
 explosion_hurts_players = false
@@ -24,30 +32,36 @@ explode_sound = ExtResource("8")
 knockback_enabled = true
 knockback_force = 450.0
 
+[sub_resource type="Resource" id="Resource_4o8gt"]
+script = ExtResource("6_5me8a")
+left = Vector2(0, -8)
+right = Vector2(0, -8)
+up = Vector2(8, 0)
+
 [resource]
 script = ExtResource("1")
-attack_power = 90
-attack_speed = 1.0
+attack_power = 100
 attack_range = 300.0
 weapon_state_name = "AirCannon"
 weapon_walk_texture = ExtResource("3")
-weapon_raise_char_sequence = Array[int]([4])
 weapon_raise_frame_durations = Array[float]([0.12])
-weapon_ready_char_index = 4
-attack_sound = ExtResource("6")
+weapon_ready_char_index = 2
+attack_sound = ExtResource("1_jdn3j")
 raise_sound = ExtResource("7")
 lower_sound = ExtResource("7")
-gunshot_range = 500.0
-magazine_capacity = 0
-ammo_item_id = ""
-attack_char_sequence = Array[int]([4, 4, 4, 4])
-attack_frame_durations = Array[float]([0.08, 0.05, 0.17, 0.9])
-fire_at_sequence_idx = 1
-bullet_list = Array[ExtResource("2")]([SubResource("bullet_air_cannon")])
+attack_effect_anim_down = ExtResource("1_afd1g")
+attack_effect_anim_left = ExtResource("2_knbcl")
+attack_effect_anim_right = ExtResource("3_00mwv")
+attack_effect_offset_override = Vector2(0, -18)
+bullet_spawn_offsets = {
+"doraemon": SubResource("Resource_4o8gt")
+}
+attack_frame_durations = Array[float]([0.08, 0.12, 0.08, 0.5])
+bullet_list = Array[ExtResource("2")]([SubResource("Resource_jc0il")])
 item_id = "air_cannon"
 item_name = "空气炮"
 item_type = 3
-description = "挂在身上的气压炮。发射空气弹，命中后爆炸（范围 96×96），不需要换弹；代价是每次开火后约 1.2 秒的后摇。"
+description = "挂在身上的气压炮。发射空气弹，命中后爆炸（范围 96×96），不需要换弹，连续开火之间需要短暂停顿。"
 icon = ExtResource("5")
 sell_price = 300
 max_stack = 1

@@ -1,6 +1,8 @@
 @tool
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：玩法（Node2D）
 ## 联机：仅单机/Host 刷出；拾取交互随具体拾取物节点（weapon_pickup/healing_pickup）
@@ -65,9 +67,9 @@ func _ready() -> void:
 	## 动态生成（owner 空，如 Director/ItemManager 随机投放）不持久化，保持旧行为。
 	if owner != null:
 		var tree: SceneTree = get_tree()
-		if tree != null and tree.current_scene != null:
+		if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
 			_source_key = Global.map_pickup_key(
-				tree.current_scene.scene_file_path, str(tree.current_scene.get_path_to(self)))
+				MAP_SCENE_QUERY.get_map_root(tree).scene_file_path, str(MAP_SCENE_QUERY.get_map_root(tree).get_path_to(self)))
 		if not _source_key.is_empty() and Global.is_map_pickup_consumed(_source_key):
 			print("[随机掉落物] 已消耗，跳过刷出：%s" % _source_key)
 			queue_free()

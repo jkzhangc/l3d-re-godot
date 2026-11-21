@@ -1,5 +1,7 @@
 extends CharacterBody2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：测试工具 ｜ 层：开发者工具（只在调试地图里用）
 ## 联机：不参与（不注册网络实体；联机请用真敌人）
@@ -268,10 +270,10 @@ func _deferred_set_collision(enabled: bool) -> void:
 
 func _spawn_number(text: String, color: Color) -> void:
 	var tree := get_tree()
-	if tree == null or tree.current_scene == null:
+	if tree == null or MAP_SCENE_QUERY.get_map_root(tree) == null:
 		return
 	DamageNumber.spawn(global_position + hurt_effect_offset, 0.0,
-		tree.current_scene, 0, color, text)
+		MAP_SCENE_QUERY.get_map_root(tree), 0, color, text)
 
 
 func _flash() -> void:

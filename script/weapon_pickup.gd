@@ -1,6 +1,8 @@
 @tool
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：武器掉落物 ｜ 层：玩法（Node2D）
 ## 联机：Client 请求 / Host 校验提交
@@ -85,8 +87,8 @@ static func auto_pickup_armed(tree: SceneTree, player: Node2D) -> bool:
 	if not _auto_pick_latch:
 		return true
 	var scene_path: String = ""
-	if tree and tree.current_scene:
-		scene_path = tree.current_scene.scene_file_path
+	if tree and MAP_SCENE_QUERY.get_map_root(tree):
+		scene_path = MAP_SCENE_QUERY.get_map_root(tree).scene_file_path
 	if scene_path != _auto_pick_scene:
 		_auto_pick_latch = false
 		return true
@@ -101,7 +103,7 @@ static func auto_pickup_armed(tree: SceneTree, player: Node2D) -> bool:
 static func mark_auto_picked(tree: SceneTree, player: Node2D) -> void:
 	_auto_pick_latch = true
 	_auto_pick_pos = player.global_position if is_instance_valid(player) else Vector2.ZERO
-	_auto_pick_scene = tree.current_scene.scene_file_path if tree and tree.current_scene else ""
+	_auto_pick_scene = MAP_SCENE_QUERY.get_map_root(tree).scene_file_path if tree and MAP_SCENE_QUERY.get_map_root(tree) else ""
 
 
 ## 掉落落点的朝向推远向量：优先取玩家的朝向单位向量，取不到则退回「朝下」。
@@ -266,7 +268,7 @@ static func _default_free_check(tree: SceneTree) -> Callable:
 static func _resolve_world_node(tree: SceneTree) -> Node2D:
 	if tree == null:
 		return null
-	var scene: Node = tree.current_scene
+	var scene: Node = MAP_SCENE_QUERY.get_map_root(tree)
 	if scene != null:
 		var as_2d: Node2D = scene as Node2D
 		if as_2d != null and is_instance_valid(as_2d) and as_2d.is_inside_tree():
@@ -313,10 +315,10 @@ static func drop_weapon_for_player(player: Node2D, wd: WeaponData) -> Node2D:
 	## 「全部丢弃」后空槽不会立刻把刚丢下的武器自动捡回来。
 	var base: Vector2 = drop_landing_position(player)
 	var parent: Node = null
-	if tree.current_scene:
-		parent = tree.current_scene.find_child("GroundLayer", true, false)
+	if MAP_SCENE_QUERY.get_map_root(tree):
+		parent = MAP_SCENE_QUERY.get_map_root(tree).find_child("GroundLayer", true, false)
 	if parent == null:
-		parent = tree.current_scene if tree.current_scene else player.get_parent()
+		parent = MAP_SCENE_QUERY.get_map_root(tree) if MAP_SCENE_QUERY.get_map_root(tree) else player.get_parent()
 	if parent:
 		parent.add_child(pickup)
 	## anchor = 玩家坐标：围绕玩家搜落点 + 视线判定，贴墙换枪不会再跨过一格墙落到另一侧。
@@ -732,7 +734,7 @@ func _request_network_pickup() -> void:
 	_network_pickup_request_pending = true
 	_network_request_msec = Time.get_ticks_msec()
 	_hold_timer = 0.0
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_pickup"):
 		# 带本机位置上报（滞后补偿）：Host 的拾取距离校验在权威坐标上做，
@@ -966,9 +968,9 @@ func _rebind_player_weapon_presentation(state: PlayerState, slot: String) -> voi
 func _find_ground_layer() -> Node:
 	## 在当前场景中查找 GroundLayer 节点
 	var tree: SceneTree = get_tree()
-	if not tree or not tree.current_scene:
+	if not tree or not MAP_SCENE_QUERY.get_map_root(tree):
 		return null
-	return tree.current_scene.find_child("GroundLayer", true, false)
+	return MAP_SCENE_QUERY.get_map_root(tree).find_child("GroundLayer", true, false)
 
 
 func _find_ammo_resource(state: PlayerState, ammo_item_id: String) -> ItemData:

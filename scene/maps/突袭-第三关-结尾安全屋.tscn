@@ -2,24 +2,19 @@
 
 [ext_resource type="TileSet" uid="uid://djsekyxw3oq3m" path="res://tres/Map0145_lower_tileset.tres" id="1_g7xch"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="2_dcfg"]
-[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="2_ywlmq"]
 [ext_resource type="TileSet" uid="uid://btlyt1a7tsp5m" path="res://tres/Map0145_upper_tileset.tres" id="3_0j83v"]
 [ext_resource type="Script" uid="uid://wp7keldpd8cm" path="res://script/director/teleport_point.gd" id="3_d45xp"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="4_4ej7r"]
 [ext_resource type="Texture2D" uid="uid://dxuic0hkcaq3u" path="res://art/misc/[2K-VX]-安全扉.png" id="4_ijbw6"]
-[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="5_6gpxu"]
 [ext_resource type="Resource" uid="uid://bbqeo4cdcc6sr" path="res://object/item_grenade.tres" id="5_xcdn1"]
-[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="6_4t5pu"]
 [ext_resource type="Resource" uid="uid://cffmcbg60hetr" path="res://object/item_molotov.tres" id="6_h8n3k"]
 [ext_resource type="Script" uid="uid://tq7sgiwglvqk" path="res://script/safehouse_arrival_music.gd" id="7_meh4g"]
 [ext_resource type="Script" uid="uid://bt25yy0w1k47q" path="res://script/director/drop_pool_data.gd" id="7_n6iv6"]
 [ext_resource type="AudioStream" uid="uid://crd1bds8svhtq" path="res://music/l3d_start_1.mp3" id="8_585ik"]
 [ext_resource type="Resource" path="res://object/item_first_aid_spray.tres" id="8_l8yke"]
-[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="9_8to2r"]
 [ext_resource type="Resource" uid="uid://sedjpfqlx8eb" path="res://object/weapon_sniper.tres" id="9_lc7ol"]
 [ext_resource type="Resource" uid="uid://b2dwgd3813nqv" path="res://object/weapon_knife.tres" id="10_847u6"]
 [ext_resource type="Resource" uid="uid://bq7fryp4nw1k2" path="res://object/weapon_frypan.tres" id="10_lc7ol"]
-[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="10_us48l"]
 [ext_resource type="Resource" uid="uid://ctsvaf5ywfd0f" path="res://object/weapon_grenade_launcher.tres" id="11_548yc"]
 [ext_resource type="Resource" uid="uid://bb8mtbat2xk5" path="res://object/weapon_metal_bat.tres" id="11_847u6"]
 [ext_resource type="PackedScene" path="res://scene/ui/chapter_summary.tscn" id="11_guqpu"]
@@ -40,13 +35,13 @@
 [ext_resource type="Resource" uid="uid://1kco17h3mitp" path="res://object/weapon_fire_axe.tres" id="64"]
 [ext_resource type="Resource" uid="uid://htaax3n8fscn" path="res://object/weapon_uchigatana.tres" id="65"]
 [ext_resource type="Resource" uid="uid://bbf6nlf1av85w" path="res://object/weapon_sledgehammer.tres" id="66"]
-[ext_resource type="Resource" uid="uid://ctqod5yy31y7j" path="res://object/item_painkiller.tres" id="cw1"]
-[ext_resource type="Resource" uid="uid://u0luef5osvt4" path="res://object/item_adrenaline.tres" id="cw2"]
+[ext_resource type="Resource" uid="uid://dnis6jovgvl42" path="res://object/item_painkiller.tres" id="cw1"]
+[ext_resource type="Resource" uid="uid://dwpujg63smy5e" path="res://object/item_adrenaline.tres" id="cw2"]
 [ext_resource type="Resource" uid="uid://bip17yw6uvt73" path="res://object/item_acid_bottle.tres" id="cw3"]
 [ext_resource type="Resource" uid="uid://c0aukikk6ru08" path="res://object/item_bolt_grenade.tres" id="cw4"]
 [ext_resource type="Resource" uid="uid://bgdxoiog7xa8f" path="res://object/item_nitrogen.tres" id="cw5"]
 [ext_resource type="Resource" uid="uid://c05b7iuwbt8ov" path="res://object/item_throwing_knife.tres" id="cw6"]
-[ext_resource type="Resource" uid="uid://8mf8cqpqwwr7" path="res://object/item_aid_box.tres" id="cw7"]
+[ext_resource type="Resource" uid="uid://dvsecs3l1tglc" path="res://object/item_aid_box.tres" id="cw7"]
 [ext_resource type="Resource" uid="uid://ca12vm5oxp7k1" path="res://object/throwable_dynamite.tres" id="cw9"]
 [ext_resource type="Resource" uid="uid://bbflshgr4n2x" path="res://object/throwable_flash.tres" id="cw10"]
 [ext_resource type="Resource" uid="uid://b7glacid5x2m" path="res://object/weapon_launcher_acid.tres" id="cw11"]
@@ -70,6 +65,8 @@
 [ext_resource type="Resource" uid="uid://bxdfrkdx1cpw5" path="res://object/weapon_rocket_03.tres" id="nw26"]
 [ext_resource type="Resource" path="res://object/item_greenherbs.tres" id="herb1029"]
 [ext_resource type="Resource" path="res://object/item_mineralwater.tres" id="water1029"]
+
+[ext_resource type="Script" path="res://script/map/map_context.gd" id="map_context_session"]
 
 [sub_resource type="Resource" id="Resource_tgboo"]
 script = ExtResource("7_n6iv6")
@@ -156,6 +153,13 @@ weights = Array[float]([1.0, 1.0, 1.0, 1.0, 1.0])
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0145" type="Node2D" unique_id=1030818130]
+script = ExtResource("map_context_session")
+map_id = "突袭-第三关-结尾安全屋"
+player_spawn_path = NodePath("DecorLayer/PlayerSpawn")
+camera_boundary_paths = Array[NodePath]([NodePath("GroundLayer")])
+director_config_path = NodePath("DirectorConfig")
+camera_follow_speed = 6.0
+camera_bounds_margin = 0.0
 
 [node name="GroundLayer" type="TileMapLayer" parent="." unique_id=261913365]
 tile_map_data = PackedByteArray("AAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAACAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAFAAAAAAAAAAAAAAAGAAAAAAAAAAAAAAAHAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAJAAAAAAAAAAAAAAAKAAAAAAAAAAAAAAALAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAANAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAPAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAARAAAAAAAAAAAAAAASAAAAAAAAAAAAAAATAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAABAAEAAAAAAAAAAAACAAEAAAAAAAAAAAADAAEAAAAAAAAAAAAEAAEAAAAAAAAAAAAFAAEAAAAAAAAAAAAGAAEAAAABAAAAAAAHAAEAAAACAAAAAAAIAAEAAAACAAAAAAAJAAEAAAACAAAAAAAKAAEAAAACAAAAAAALAAEAAAACAAAAAAAMAAEAAAADAAAAAAANAAEAAAAAAAAAAAAOAAEAAAAAAAAAAAAPAAEAAAAAAAAAAAAQAAEAAAAAAAAAAAARAAEAAAAAAAAAAAASAAEAAAAAAAAAAAATAAEAAAAAAAAAAAAAAAIAAAAAAAAAAAABAAIAAAAAAAAAAAACAAIAAAAAAAAAAAADAAIAAAAAAAAAAAAEAAIAAAAAAAAAAAAFAAIAAAAAAAAAAAAGAAIAAAAEAAAAAAAHAAIAAAAFAAAAAAAIAAIAAAAFAAAAAAAJAAIAAAAFAAAAAAAKAAIAAAAFAAAAAAALAAIAAAAFAAAAAAAMAAIAAAAGAAAAAAANAAIAAAAAAAAAAAAOAAIAAAAAAAAAAAAPAAIAAAAAAAAAAAAQAAIAAAAAAAAAAAARAAIAAAAAAAAAAAASAAIAAAAAAAAAAAATAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAABAAMAAAAAAAAAAAACAAMAAAAAAAAAAAADAAMAAAAAAAAAAAAEAAMAAAAAAAAAAAAFAAMAAAAAAAAAAAAGAAMAAAAEAAAAAAAHAAMAAAAHAAAAAAAIAAMAAAAHAAAAAAAJAAMAAAAHAAAAAAAKAAMAAAAHAAAAAAALAAMAAAAHAAAAAAAMAAMAAAAGAAAAAAANAAMAAAAAAAAAAAAOAAMAAAAAAAAAAAAPAAMAAAAAAAAAAAAQAAMAAAAAAAAAAAARAAMAAAAAAAAAAAASAAMAAAAAAAAAAAATAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAABAAQAAAAAAAAAAAACAAQAAAAAAAAAAAADAAQAAAABAAAAAAAEAAQAAAACAAAAAAAFAAQAAAACAAAAAAAGAAQAAAAIAAAAAAAHAAQAAAAJAAAAAAAIAAQAAAAJAAAAAAAJAAQAAAAJAAAAAAAKAAQAAAAJAAAAAAALAAQAAAAJAAAAAAAMAAQAAAAKAAAAAAANAAQAAAACAAAAAAAOAAQAAAACAAAAAAAPAAQAAAADAAAAAAAQAAQAAAAAAAAAAAARAAQAAAAAAAAAAAASAAQAAAAAAAAAAAATAAQAAAAAAAAAAAAAAAUAAAAAAAAAAAABAAUAAAAAAAAAAAACAAUAAAAAAAAAAAADAAUAAAAEAAAAAAAEAAUAAAAFAAAAAAAFAAUAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAAUAAAAJAAAAAAAIAAUAAAAJAAAAAAAJAAUAAAAJAAAAAAAKAAUAAAAJAAAAAAALAAUAAAAJAAAAAAAMAAUAAAAFAAAAAAANAAUAAAAFAAAAAAAOAAUAAAAFAAAAAAAPAAUAAAAGAAAAAAAQAAUAAAAAAAAAAAARAAUAAAAAAAAAAAASAAUAAAAAAAAAAAATAAUAAAAAAAAAAAAAAAYAAAAAAAAAAAABAAYAAAAAAAAAAAACAAYAAAAAAAAAAAADAAYAAAAEAAAAAAAEAAYAAAAHAAAAAAAFAAYAAAAHAAAAAAAGAAYAAAAHAAAAAAAHAAYAAAAJAAAAAAAIAAYAAAAJAAAAAAAJAAYAAAAJAAAAAAAKAAYAAAAJAAAAAAALAAYAAAAJAAAAAAAMAAYAAAAHAAAAAAANAAYAAAAHAAAAAAAOAAYAAAAHAAAAAAAPAAYAAAAGAAAAAAAQAAYAAAAAAAAAAAARAAYAAAAAAAAAAAASAAYAAAAAAAAAAAATAAYAAAAAAAAAAAAAAAcAAAAAAAAAAAABAAcAAAAAAAAAAAACAAcAAAAAAAAAAAADAAcAAAAEAAAAAAAEAAcAAAAJAAAAAAAFAAcAAAAJAAAAAAAGAAcAAAAJAAAAAAAHAAcAAAAJAAAAAAAIAAcAAAAJAAAAAAAJAAcAAAAJAAAAAAAKAAcAAAAJAAAAAAALAAcAAAAJAAAAAAAMAAcAAAAJAAAAAAANAAcAAAAJAAAAAAAOAAcAAAAJAAAAAAAPAAcAAAAGAAAAAAAQAAcAAAAAAAAAAAARAAcAAAAAAAAAAAASAAcAAAAAAAAAAAATAAcAAAAAAAAAAAAAAAgAAAAAAAAAAAABAAgAAAAAAAAAAAACAAgAAAAAAAAAAAADAAgAAAAEAAAAAAAEAAgAAAAJAAAAAAAFAAgAAAAJAAAAAAAGAAgAAAAJAAAAAAAHAAgAAAAJAAAAAAAIAAgAAAAJAAAAAAAJAAgAAAAJAAAAAAAKAAgAAAAJAAAAAAALAAgAAAAJAAAAAAAMAAgAAAAJAAAAAAANAAgAAAAJAAAAAAAOAAgAAAAJAAAAAAAPAAgAAAAGAAAAAAAQAAgAAAAAAAAAAAARAAgAAAAAAAAAAAASAAgAAAAAAAAAAAATAAgAAAAAAAAAAAAAAAkAAAAAAAAAAAABAAkAAAAAAAAAAAACAAkAAAAAAAAAAAADAAkAAAAEAAAAAAAEAAkAAAAJAAAAAAAFAAkAAAAJAAAAAAAGAAkAAAAJAAAAAAAHAAkAAAAJAAAAAAAIAAkAAAAJAAAAAAAJAAkAAAAJAAAAAAAKAAkAAAAJAAAAAAALAAkAAAAJAAAAAAAMAAkAAAAJAAAAAAANAAkAAAAJAAAAAAAOAAkAAAAJAAAAAAAPAAkAAAAGAAAAAAAQAAkAAAAAAAAAAAARAAkAAAAAAAAAAAASAAkAAAAAAAAAAAATAAkAAAAAAAAAAAAAAAoAAAAAAAAAAAABAAoAAAAAAAAAAAACAAoAAAAAAAAAAAADAAoAAAAEAAAAAAAEAAoAAAAJAAAAAAAFAAoAAAAJAAAAAAAGAAoAAAAJAAAAAAAHAAoAAAAJAAAAAAAIAAoAAAAJAAAAAAAJAAoAAAAJAAAAAAAKAAoAAAAJAAAAAAALAAoAAAAJAAAAAAAMAAoAAAAJAAAAAAANAAoAAAAJAAAAAAAOAAoAAAAJAAAAAAAPAAoAAAAGAAAAAAAQAAoAAAAAAAAAAAARAAoAAAAAAAAAAAASAAoAAAAAAAAAAAATAAoAAAAAAAAAAAAAAAsAAAAAAAAAAAABAAsAAAAAAAAAAAACAAsAAAAAAAAAAAADAAsAAAAEAAAAAAAEAAsAAAAJAAAAAAAFAAsAAAAJAAAAAAAGAAsAAAAJAAAAAAAHAAsAAAAJAAAAAAAIAAsAAAAJAAAAAAAJAAsAAAAJAAAAAAAKAAsAAAAJAAAAAAALAAsAAAAJAAAAAAAMAAsAAAAJAAAAAAANAAsAAAAJAAAAAAAOAAsAAAAJAAAAAAAPAAsAAAAGAAAAAAAQAAsAAAAAAAAAAAARAAsAAAAAAAAAAAASAAsAAAAAAAAAAAATAAsAAAAAAAAAAAAAAAwAAAAAAAAAAAABAAwAAAAAAAAAAAACAAwAAAAAAAAAAAADAAwAAAAEAAAAAAAEAAwAAAAJAAAAAAAFAAwAAAAJAAAAAAAGAAwAAAAJAAAAAAAHAAwAAAAJAAAAAAAIAAwAAAAJAAAAAAAJAAwAAAAJAAAAAAAKAAwAAAAJAAAAAAALAAwAAAAJAAAAAAAMAAwAAAAJAAAAAAANAAwAAAAJAAAAAAAOAAwAAAAJAAAAAAAPAAwAAAAGAAAAAAAQAAwAAAAAAAAAAAARAAwAAAAAAAAAAAASAAwAAAAAAAAAAAATAAwAAAAAAAAAAAAAAA0AAAAAAAAAAAABAA0AAAAAAAAAAAACAA0AAAAAAAAAAAADAA0AAAALAAAAAAAEAA0AAAAMAAAAAAAFAA0AAAAMAAAAAAAGAA0AAAAMAAAAAAAHAA0AAAAMAAAAAAAIAA0AAAANAAAAAAAJAA0AAAAJAAAAAAAKAA0AAAAOAAAAAAALAA0AAAAMAAAAAAAMAA0AAAAMAAAAAAANAA0AAAAMAAAAAAAOAA0AAAAMAAAAAAAPAA0AAAAPAAAAAAAQAA0AAAAAAAAAAAARAA0AAAAAAAAAAAASAA0AAAAAAAAAAAATAA0AAAAAAAAAAAAAAA4AAAAAAAAAAAABAA4AAAAAAAAAAAACAA4AAAAAAAAAAAADAA4AAAAAAAAAAAAEAA4AAAAAAAAAAAAFAA4AAAAAAAAAAAAGAA4AAAAAAAAAAAAHAA4AAAAAAAAAAAAIAA4AAAALAAAAAAAJAA4AAAAMAAAAAAAKAA4AAAAPAAAAAAALAA4AAAAAAAAAAAAMAA4AAAAAAAAAAAANAA4AAAAAAAAAAAAOAA4AAAAAAAAAAAAPAA4AAAAAAAAAAAAQAA4AAAAAAAAAAAARAA4AAAAAAAAAAAASAA4AAAAAAAAAAAATAA4AAAAAAAAAAAA=")
@@ -164,10 +168,8 @@ tile_set = ExtResource("1_g7xch")
 [node name="DecorLayer" type="Node2D" parent="." unique_id=1289896770]
 y_sort_enabled = true
 
-[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=528613796]
+[node name="PlayerSpawn" type="Marker2D" parent="DecorLayer" unique_id=528613796]
 position = Vector2(302, 387)
-
-[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("2_ywlmq")]
 
 [node name="TeleportPoint" type="Node2D" parent="DecorLayer" unique_id=358839047]
 z_index = 1
@@ -261,23 +263,9 @@ position = Vector2(368, 128)
 [node name="AmmoSupply" parent="UpperLayer" unique_id=951765721 instance=ExtResource("24_548yc")]
 position = Vector2(248, 144)
 
-[node name="GameInit" type="Node" parent="." unique_id=2012107607]
-script = ExtResource("5_6gpxu")
-
-[node name="Camera2D" type="Camera2D" parent="." unique_id=11467245]
-zoom = Vector2(2, 2)
-script = ExtResource("6_4t5pu")
-follow_speed = 6.0
-bounds_margin = 0.0
-bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-
 [node name="SafehouseArrivalMusic" type="Node" parent="." unique_id=2091004469]
 script = ExtResource("7_meh4g")
 arrival_music = ExtResource("8_585ik")
-
-[node name="Menu" parent="." unique_id=1248163084 instance=ExtResource("9_8to2r")]
-
-[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("10_us48l")]
 
 [node name="ChapterSummary" parent="." unique_id=1332314321 instance=ExtResource("11_guqpu")]
 chapter_title = "第三章 · 矿洞"

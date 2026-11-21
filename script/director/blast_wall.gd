@@ -1,5 +1,7 @@
 extends TileMapLayer
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：剧情机关 ｜ 层：玩法（TileMapLayer）
 ## 联机：爆炸/放置结算仅 Host/单机（call 方是 authoritative 投掷物或请求方）；进度走 Global flag 广播
@@ -186,7 +188,7 @@ func apply_explosion(pos: Vector2, radius_px: float, can_break: bool = true) -> 
 		return false
 	if not can_break:
 		if hit_sound:
-			Global.play_sfx_managed(hit_sound, get_tree().current_scene)
+			Global.play_sfx_managed(hit_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 		print("[BlastWall] %s 挨了一发但纹丝不动（此爆炸物炸不开，需要炸药）" % name)
 		return false
 	_hits_left -= 1
@@ -197,7 +199,7 @@ func apply_explosion(pos: Vector2, radius_px: float, can_break: bool = true) -> 
 		print("[BlastWall] %s 被炸开" % name)
 	else:
 		if hit_sound:
-			Global.play_sfx_managed(hit_sound, get_tree().current_scene)
+			Global.play_sfx_managed(hit_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 		print("[BlastWall] %s 受击，剩余 %d 次" % [name, _hits_left])
 	return true
 
@@ -216,7 +218,7 @@ func _commit_destroy_flag() -> void:
 
 func _request_place(player: CharacterBody2D) -> void:
 	## 确定键入口。单机/Host 直接结算；Client 提交请求，等 place_flag 回包做表现。
-	var scene := get_tree().current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(get_tree())
 	var world := scene.find_child("NetworkWorld", true, false) if scene else null
 	if world and world.has_method("request_wall_place"):
 		_placing = true
@@ -251,7 +253,7 @@ func host_commit_place(player: CharacterBody2D) -> void:
 	if place_consume_flag:
 		Global.request_quest_flag(place_required_flag, false)
 	if place_sound:
-		Global.play_sfx_managed(place_sound, get_tree().current_scene)
+		Global.play_sfx_managed(place_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	print("[BlastWall] %s 炸药已放置，%.1f 秒后引爆" % [name, fuse_time])
 
 
@@ -350,11 +352,11 @@ func _apply_destroyed_visual(blast_pos: Vector2 = Vector2.INF, play_sound: bool 
 	## 瓦砾/爆裂表现：结算路径用爆炸点，广播路径回退层原点
 	if rubble_anim:
 		var at: Vector2 = blast_pos if blast_pos != Vector2.INF else global_position
-		VXAnimSprite.play_scene(rubble_anim, at, get_tree().current_scene)
+		VXAnimSprite.play_scene(rubble_anim, at, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	## 炸开音效（与爆裂动画同时）。位置用爆炸点，广播路径回退层原点，
 	## 与上面 rubble 的回退口径保持一致。
 	if play_sound and destroy_sound:
-		Global.play_sfx_managed(destroy_sound, get_tree().current_scene)
+		Global.play_sfx_managed(destroy_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 
 
 # ═══════════════════════════════════════

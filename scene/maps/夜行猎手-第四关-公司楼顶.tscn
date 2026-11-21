@@ -3,20 +3,15 @@
 [ext_resource type="AudioStream" uid="uid://dopmxyo675a1x" path="res://sound/(効果音)ヘリ.ogg" id="1_dy3sd"]
 [ext_resource type="Texture2D" uid="uid://dyftjsenl8x4l" path="res://art/Panorama/夜空2.png" id="2_n1hwe"]
 [ext_resource type="TileSet" uid="uid://dyjccutk8fd7p" path="res://tres/Map0019_lower_tileset.tres" id="3_4enyn"]
-[ext_resource type="PackedScene" uid="uid://42mbpy3v0641" path="res://object/player.tscn" id="4_flkvs"]
 [ext_resource type="PackedScene" uid="uid://c06omikap4ndl" path="res://object/random_pickup.tscn" id="5_l1ail"]
 [ext_resource type="TileSet" uid="uid://cnsfwb0mveb30" path="res://tres/Map0019_upper_tileset.tres" id="5_xuusb"]
-[ext_resource type="Script" uid="uid://oupcdu8hwr1c" path="res://script/camera_follow.gd" id="6_lvuya"]
 [ext_resource type="PackedScene" path="res://object/move_node.tscn" id="6_n1hwe"]
 [ext_resource type="PackedScene" path="res://object/interactive_switch_node.tscn" id="6_xuusb"]
 [ext_resource type="Texture2D" uid="uid://d0vbfj0ghstth" path="res://art/Characters/$ヘリコプター.png" id="7_4enyn"]
 [ext_resource type="Script" uid="uid://b8udnx3eyss6u" path="res://script/night_overlay.gd" id="7_j5y5h"]
 [ext_resource type="Texture2D" uid="uid://dtdfspg0up23p" path="res://art/Characters/[2K-VX]-徠柧.png" id="7_lvuya"]
 [ext_resource type="PackedScene" path="res://object/signal_visibility_node.tscn" id="8_j5y5h"]
-[ext_resource type="PackedScene" uid="uid://df1lsdh7c3xgr" path="res://scene/menu.tscn" id="8_l1ail"]
 [ext_resource type="Script" uid="uid://cbcmumw4yim7d" path="res://script/fx/light_emitter.gd" id="8_lvuya"]
-[ext_resource type="PackedScene" uid="uid://djp51qjxkq3w4" path="res://scene/ui/combat_hud.tscn" id="9_xj26c"]
-[ext_resource type="Script" uid="uid://bdb5rbxpuvib0" path="res://script/game_init.gd" id="10_qihp3"]
 [ext_resource type="Script" uid="uid://blx0cs5m3w80f" path="res://script/director/director_config.gd" id="11_7n84v"]
 [ext_resource type="Script" uid="uid://dnughnmx1dc5y" path="res://script/enemy/zombie_variant.gd" id="12_lkfj5"]
 [ext_resource type="Resource" uid="uid://dqopj8jt5spmw" path="res://tres/zombies/女性ゾンビ.tres" id="13_1d0ya"]
@@ -62,6 +57,8 @@
 [ext_resource type="Resource" path="res://object/drop_pool_enemy_default.tres" id="41_ob1sc"]
 [ext_resource type="PackedScene" path="res://object/no_spawn_layer.tscn" id="42_5yc87"]
 
+[ext_resource type="Script" path="res://script/map/map_context.gd" id="map_context_session"]
+
 [sub_resource type="Resource" id="Resource_xj26c"]
 script = ExtResource("40_rrris")
 items = Array[Resource]([ExtResource("28_a125r"), ExtResource("28_a125r"), null])
@@ -105,6 +102,13 @@ weights = Array[float]([0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0
 metadata/_custom_type_script = "uid://bt25yy0w1k47q"
 
 [node name="Map0019" type="Node2D" unique_id=1795796612]
+script = ExtResource("map_context_session")
+map_id = "夜行猎手-第四关-公司楼顶"
+player_spawn_path = NodePath("DecorLayer/PlayerSpawn")
+camera_boundary_paths = Array[NodePath]([NodePath("GroundLayer")])
+director_config_path = NodePath("DirectorConfig")
+camera_follow_speed = 6.0
+camera_bounds_margin = 0.0
 
 [node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="." unique_id=323887501]
 stream = ExtResource("1_dy3sd")
@@ -128,10 +132,8 @@ tile_set = ExtResource("3_4enyn")
 [node name="DecorLayer" type="Node2D" parent="." unique_id=2122865722]
 y_sort_enabled = true
 
-[node name="PlayerSpawn" type="Node2D" parent="DecorLayer" unique_id=574051696]
+[node name="PlayerSpawn" type="Marker2D" parent="DecorLayer" unique_id=574051696]
 position = Vector2(464, 816)
-
-[node name="Player" parent="DecorLayer/PlayerSpawn" unique_id=1681709351 instance=ExtResource("4_flkvs")]
 
 [node name="投掷物类" parent="DecorLayer" unique_id=1863981552 instance=ExtResource("5_l1ail")]
 position = Vector2(560, 488)
@@ -282,27 +284,12 @@ texture = ExtResource("7_4enyn")
 target_offset = Vector2(-800, 0)
 duration = 5.0
 
-[node name="Camera2D" type="Camera2D" parent="." unique_id=435361041]
-zoom = Vector2(2, 2)
-script = ExtResource("6_lvuya")
-follow_speed = 6.0
-bounds_margin = 0.0
-bound_layers = Array[NodePath]([NodePath("../GroundLayer"), NodePath("../DecorLayer")])
-
 [node name="NightOverlay" type="Node2D" parent="." unique_id=1213474804]
 script = ExtResource("7_j5y5h")
 night_tint = Color(0.2694199, 0.5116678, 0.7522286, 0.591)
 night_tint_strength = 0.2
 shadow_softness = 2.0
 metadata/_custom_type_script = "uid://b8udnx3eyss6u"
-
-[node name="Menu" parent="." unique_id=666371119 instance=ExtResource("8_l1ail")]
-
-[node name="CombatHUD" parent="." unique_id=410597860 instance=ExtResource("9_xj26c")]
-layer = 10
-
-[node name="GameInit" type="Node" parent="." unique_id=1229957782]
-script = ExtResource("10_qihp3")
 
 [node name="DirectorConfig" type="Node" parent="." unique_id=1266363280]
 script = ExtResource("11_7n84v")

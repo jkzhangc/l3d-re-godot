@@ -1,6 +1,8 @@
 @tool
 class_name MoveNode extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：关卡表现 / 剧情机关 ｜ 层：玩法（Node2D，关卡作者标记）
 ## 联机：**各端本地表现**（触发信号两端同源，见下）—— 无 RPC、无同步
@@ -245,8 +247,8 @@ func _resolve_trigger_source() -> Node:
 		var direct: Node = get_node_or_null(trigger_source_path)
 		if direct != null:
 			return direct
-		if tree.current_scene != null:
-			return tree.current_scene.get_node_or_null(trigger_source_path)
+		if MAP_SCENE_QUERY.get_map_root(tree) != null:
+			return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null(trigger_source_path)
 		return null
 	if not auto_find_holdout:
 		return null

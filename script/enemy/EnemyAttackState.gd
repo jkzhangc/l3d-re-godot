@@ -1,5 +1,7 @@
 extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：Host 结算玩家伤害
@@ -181,7 +183,7 @@ func _do_attack_hit() -> void:
 					enemy._play_pool(enemy.hit_target_sound_pool, enemy.hit_target_sound, enemy.hit_target_sound_pitch)
 					if enemy.attack_effect_anim:
 						var efollow: Node2D = player if enemy.attack_effect_follow else null
-						VXAnimSprite.play_scene(enemy.attack_effect_anim, player.global_position, enemy.get_tree().current_scene, 10.0, efollow, enemy.attack_effect_offset_override)
+						VXAnimSprite.play_scene(enemy.attack_effect_anim, player.global_position, MAP_SCENE_QUERY.get_map_root(enemy.get_tree()), 10.0, efollow, enemy.attack_effect_offset_override)
 				print("[敵人] 攻击命中玩家！伤害=%d" % int(dmg))
 			else:
 				print("[敵人] 攻击！目标无 take_damage 方法")

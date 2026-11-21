@@ -1,5 +1,7 @@
 extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：玩家状态机 ｜ 层：玩法（State）
 ## 联机：弹药由本地单机或 Host 写入
@@ -308,7 +310,7 @@ func _return_to_weapon() -> void:
 
 
 func _play_sound(stream: AudioStream) -> void:
-	Global.play_sfx_managed(stream, character.get_tree().current_scene)
+	Global.play_sfx_managed(stream, MAP_SCENE_QUERY.get_map_root(character.get_tree()))
 
 
 func _get_weapon() -> WeaponData:

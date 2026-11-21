@@ -1,6 +1,8 @@
 @tool
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：医疗箱 ｜ 层：玩法（Node2D，一次性互动物）
 ## 联机：**Host 权威**（2026-09-26 重做）。Client 按键 → 请求 Host → Host 结算并广播已用名单。
@@ -354,7 +356,7 @@ func _heal_entity(entity: Node2D) -> void:
 	if entity.has_method("_play_hit_feedback"):
 		entity._play_hit_feedback(HEAL_FLASH_COLOR, 0.4)
 	if heal_sound:
-		Global.play_sfx_managed(heal_sound, get_tree().current_scene)
+		Global.play_sfx_managed(heal_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 
 
 # ═══════════════════════════════════════
@@ -377,7 +379,7 @@ func _use_solo() -> void:
 			if entity.has_method("_play_hit_feedback"):
 				entity._play_hit_feedback(HEAL_FLASH_COLOR, 0.4)
 	if heal_sound:
-		Global.play_sfx_managed(heal_sound, get_tree().current_scene)
+		Global.play_sfx_managed(heal_sound, MAP_SCENE_QUERY.get_map_root(get_tree()))
 	print("[医疗箱] 单机：全体角色治疗完毕（含死亡队员复活），医疗箱清除")
 	queue_free()
 

@@ -1,6 +1,8 @@
 @tool
 class_name FinaleTrigger extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：关卡流程 ｜ 层：玩法（Node2D，关卡作者标记）
 ## 联机：**Host 权威** —— Client 触发 = 向 Host 请求，Host 广播 ED 给全体（见 HoldoutMachine）
@@ -168,8 +170,8 @@ func _resolve_machine() -> Node:
 		var direct: Node = get_node_or_null(machine_path)
 		if direct != null:
 			return direct
-		if tree.current_scene != null:
-			return tree.current_scene.get_node_or_null(machine_path)
+		if MAP_SCENE_QUERY.get_map_root(tree) != null:
+			return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null(machine_path)
 		return null
 	var best: Node = null
 	var best_dist: float = INF
@@ -198,7 +200,7 @@ func _start_local_ending() -> void:
 		if node.has_method("stop_ending_music"):
 			node.call("stop_ending_music")
 	if ending_sound != null:
-		Global.play_sfx_managed(ending_sound, tree.current_scene)
+		Global.play_sfx_managed(ending_sound, MAP_SCENE_QUERY.get_map_root(tree))
 	var ending: Node = CAMPAIGN_ENDING.new()
 	ending.set("fade_seconds", ending_fade_seconds)
 	tree.root.add_child(ending)

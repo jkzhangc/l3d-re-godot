@@ -87,7 +87,7 @@ var _saved_layers: Dictionary = {}
 func _ready() -> void:
 	layer = tone_layer
 	_mat = _overlay.material as ShaderMaterial
-	_apply_exclusions()
+	_apply_exclusions_when_ready()
 	_push_params()
 
 
@@ -152,10 +152,21 @@ func _push_params() -> void:
 		ov.visible = is_active()
 
 
+func _apply_exclusions_when_ready() -> void:
+	# MapContext延迟接入Session；再等一帧使公共HUD已创建。
+	await get_tree().process_frame
+	if is_inside_tree():
+		_apply_exclusions()
+
+
 ## 把 excluded_nodes 里的 CanvasLayer 抬到色调层之上（原值记下来）。
 func _apply_exclusions() -> void:
 	for p: NodePath in excluded_nodes:
 		var n: Node = get_node_or_null(p)
+		if n == null and str(p).ends_with("CombatHUD"):
+			var candidates: Array[Node] = get_tree().get_nodes_in_group("combat_hud")
+			if not candidates.is_empty():
+				n = candidates[0]
 		if n == null:
 			push_warning("[ScreenTone] excluded_nodes 里找不到节点：%s" % p)
 			continue

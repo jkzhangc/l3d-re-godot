@@ -1,5 +1,7 @@
 class_name EnemySwallowState extends State
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人状态机 ｜ 层：玩法（State）
 ## 联机：仅 Host 执行；命中后玩家进入「被吞」表现由快照同步（玩家隐藏 + 致死）
@@ -301,7 +303,7 @@ func _announce_swallow(active: bool) -> void:
 	var tree := get_tree()
 	if not tree:
 		return
-	var scene := tree.current_scene
+	var scene := MAP_SCENE_QUERY.get_map_root(tree)
 	if not scene:
 		return
 	var world: Node = scene.find_child("NetworkWorld", true, false)

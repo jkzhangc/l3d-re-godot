@@ -1,8 +1,13 @@
-[gd_resource type="Resource" script_class="CharacterData" format=3]
+[gd_resource type="Resource" script_class="CharacterData" format=3 uid="uid://dr4bms7eoqf7i"]
 
 [ext_resource type="Script" path="res://script/character_data.gd" id="1"]
-[ext_resource type="Texture2D" path="res://art/Characters/ドラえもんセット.png" id="t_walk"]
+[ext_resource type="AudioStream" path="res://sound/ドラえもん(悲鳴).ogg" id="1_web4i"]
+[ext_resource type="Texture2D" path="res://art/Face/主人公顔.png" id="4_1cj25"]
+[ext_resource type="AudioStream" path="res://sound/ドラえもん「悲鳴」.ogg" id="4_ksfkw"]
+[ext_resource type="Script" path="res://script/skill_data.gd" id="6_5ul0n"]
+[ext_resource type="Texture2D" path="res://art/misc/キャラ選択アイコン.png" id="6_uwf0o"]
 [ext_resource type="Texture2D" path="res://art/Characters/ドラえもんセット２.png" id="t_fist"]
+[ext_resource type="Texture2D" path="res://art/Characters/ドラえもんセット.png" id="t_walk"]
 [ext_resource type="Resource" path="res://object/weapon_air_cannon.tres" id="w_air"]
 
 [resource]
@@ -11,30 +16,29 @@ character_name = "哆啦A梦"
 character_id = "doraemon"
 max_hp = 200
 max_mp = 30
-max_tp = 100
 base_attack = 12
 base_defense = 4
-hp_growth = 10
-mp_growth = 3
-atk_growth = 3
-def_growth = 2
 initial_weapon = ExtResource("w_air")
+mp_growth = 3
+portrait = ExtResource("4_1cj25")
+portrait_index = 2
 walk_texture = ExtResource("t_walk")
-walk_char_index = 0
 run_texture = ExtResource("t_walk")
 run_char_index = 0
 death_texture = ExtResource("t_walk")
 death_char_index = 5
-fist_walk_texture = ExtResource("t_fist")
 weapon_walk_textures = {
 "AirCannon": ExtResource("t_walk")
-}
-shove_walk_textures = {
-"Fists": ExtResource("t_fist")
 }
 allowed_primary_weapons = Array[String](["air_cannon"])
 allowed_secondary_weapons = Array[String](["fists"])
 weapon_locked = true
-select_icon_sheet = ExtResource("t_walk")
-select_icon_index = 0
-select_icon_direction = 0
+fist_walk_texture = ExtResource("t_fist")
+shove_walk_textures = {
+"Fists": ExtResource("t_fist")
+}
+select_portrait = ExtResource("6_uwf0o")
+select_icon_index = 1
+select_icon_direction = 2
+hurt_sound = ExtResource("4_ksfkw")
+death_sound = ExtResource("1_web4i")

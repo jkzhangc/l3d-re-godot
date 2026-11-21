@@ -1,0 +1,49 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]
+[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="2_cell"]
+[ext_resource type="Texture2D" path="res://art/Animations/バズーカ.png" id="3_sheet"]
+
+[sub_resource type="Resource" id="cell_0"]
+script = ExtResource("2_cell")
+pattern = 1
+offset = Vector2(16, 10)
+scale = Vector2(0.3, 0.3)
+
+[sub_resource type="Resource" id="cell_1"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 1
+offset = Vector2(16, 10)
+scale = Vector2(0.4, 0.4)
+
+[sub_resource type="Resource" id="cell_2"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 1
+offset = Vector2(16, 10)
+scale = Vector2(0.5, 0.5)
+opacity = 0.851
+
+[sub_resource type="Resource" id="cell_3"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 1
+offset = Vector2(16, 10)
+scale = Vector2(0.6, 0.6)
+opacity = 0.749
+
+[sub_resource type="Resource" id="cell_4"]
+script = ExtResource("2_cell")
+frame_idx = 4
+pattern = 1
+offset = Vector2(16, 10)
+scale = Vector2(0.8, 0.8)
+opacity = 0.451
+
+[node name="AnimEdit" type="Node2D" unique_id=605754169]
+script = ExtResource("1_sprite")
+texture = ExtResource("3_sheet")
+fps = 30.0
+frame_sequence = Array[int]([0, 1, 2, 3, 4, 5])
+cell_data = Array[ExtResource("2_cell")]([SubResource("cell_0"), SubResource("cell_1"), SubResource("cell_2"), SubResource("cell_3"), SubResource("cell_4")])

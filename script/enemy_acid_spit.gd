@@ -1,5 +1,7 @@
 class_name EnemyAcidSpit extends Area2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：敌人攻击 ｜ 层：玩法（Area2D 投射物）
 ## 联机：Host/单机生成权威弹（结算伤害与相消）；Client 经 enemy_acid_spit_presentation
@@ -131,7 +133,7 @@ func _impact() -> void:
 func _play_impact_effect() -> void:
 	if impact_effect == null:
 		return
-	var parent: Node = get_tree().current_scene
+	var parent: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	if parent == null:
 		return
 	VXAnimSprite.play_scene(impact_effect, global_position, parent,

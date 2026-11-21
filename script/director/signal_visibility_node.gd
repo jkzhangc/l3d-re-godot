@@ -2,6 +2,8 @@
 class_name SignalVisibilityNode
 extends Node2D
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：关卡机关表现（灯 / 招牌 / 装饰物显隐）｜ 层：玩法（Node2D 包装层）
 ## 联机：**各端本地表现** —— 信号由各端自己发（开关互动是本机玩家），无 RPC、无同步
@@ -112,8 +114,8 @@ func _resolve_source() -> Node:
 		var direct: Node = get_node_or_null(source_path)
 		if direct != null:
 			return direct
-		if tree.current_scene != null:
-			return tree.current_scene.get_node_or_null(source_path)
+		if MAP_SCENE_QUERY.get_map_root(tree) != null:
+			return MAP_SCENE_QUERY.get_map_root(tree).get_node_or_null(source_path)
 		return null
 	var best: Node = null
 	var best_dist: float = INF

@@ -1,0 +1,243 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://script/vx_anim_sprite.gd" id="1_sprite"]
+[ext_resource type="Script" path="res://script/vx_anim_cell_data.gd" id="2_cell"]
+[ext_resource type="Texture2D" path="res://art/Animations/未标题-1.png" id="3_sheet"]
+
+[sub_resource type="Resource" id="cell_0"]
+script = ExtResource("2_cell")
+frame_idx = 0
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_1"]
+script = ExtResource("2_cell")
+frame_idx = 1
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_2"]
+script = ExtResource("2_cell")
+frame_idx = 2
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_3"]
+script = ExtResource("2_cell")
+frame_idx = 3
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_4"]
+script = ExtResource("2_cell")
+frame_idx = 4
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_5"]
+script = ExtResource("2_cell")
+frame_idx = 5
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_6"]
+script = ExtResource("2_cell")
+frame_idx = 6
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_7"]
+script = ExtResource("2_cell")
+frame_idx = 7
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_8"]
+script = ExtResource("2_cell")
+frame_idx = 8
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_9"]
+script = ExtResource("2_cell")
+frame_idx = 9
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_10"]
+script = ExtResource("2_cell")
+frame_idx = 10
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_11"]
+script = ExtResource("2_cell")
+frame_idx = 11
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_12"]
+script = ExtResource("2_cell")
+frame_idx = 12
+pattern = 5
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_13"]
+script = ExtResource("2_cell")
+frame_idx = 13
+pattern = 6
+offset = Vector2(8, 16)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_14"]
+script = ExtResource("2_cell")
+frame_idx = 14
+pattern = 7
+offset = Vector2(8, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_15"]
+script = ExtResource("2_cell")
+frame_idx = 15
+pattern = 7
+offset = Vector2(8, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_16"]
+script = ExtResource("2_cell")
+frame_idx = 16
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_17"]
+script = ExtResource("2_cell")
+frame_idx = 17
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_18"]
+script = ExtResource("2_cell")
+frame_idx = 18
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_19"]
+script = ExtResource("2_cell")
+frame_idx = 19
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_20"]
+script = ExtResource("2_cell")
+frame_idx = 20
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_21"]
+script = ExtResource("2_cell")
+frame_idx = 21
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[sub_resource type="Resource" id="cell_22"]
+script = ExtResource("2_cell")
+frame_idx = 22
+pattern = 8
+offset = Vector2(0, -24)
+scale = Vector2(1, 1)
+rotation_deg = 0
+opacity = 1
+blend_mode = 0
+
+[node name="AnimEdit" type="Node2D"]
+script = ExtResource("1_sprite")
+texture = ExtResource("3_sheet")
+h_frames = 5
+fps = 20
+frame_sequence = Array[int]([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22])
+cell_data = Array[ExtResource("2_cell")]([SubResource("cell_0"), SubResource("cell_1"), SubResource("cell_2"), SubResource("cell_3"), SubResource("cell_4"), SubResource("cell_5"), SubResource("cell_6"), SubResource("cell_7"), SubResource("cell_8"), SubResource("cell_9"), SubResource("cell_10"), SubResource("cell_11"), SubResource("cell_12"), SubResource("cell_13"), SubResource("cell_14"), SubResource("cell_15"), SubResource("cell_16"), SubResource("cell_17"), SubResource("cell_18"), SubResource("cell_19"), SubResource("cell_20"), SubResource("cell_21"), SubResource("cell_22")])

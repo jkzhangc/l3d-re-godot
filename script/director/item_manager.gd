@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：导演系统 ｜ 层：玩法（Node，子模块）
 ## 联机：仅单机/Host（Client 端 Director 早退，本模块不运行）
@@ -236,7 +238,7 @@ func _maybe_fail_safe(player: Node2D) -> bool:
 ## 实际生成地面拾取物。
 ## `use_pool` = 配置了 `DirectorConfig.drop_pool` 时是否按池随机（降级投放传 false 精确投放）。
 func _spawn_pickup(category: String, pos: Vector2, use_pool: bool = true) -> void:
-	var scene := _director.get_tree().current_scene if _director.get_tree() else null
+	var scene := MAP_SCENE_QUERY.get_map_root(_director.get_tree()) if _director.get_tree() else null
 	if not scene:
 		return
 	var parent: Node = scene.find_child("GroundLayer", true, false)

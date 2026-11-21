@@ -1,5 +1,7 @@
 extends Node
 
+const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
+
 ## ── 架构定位 ──
 ## 系统：全局配置 ｜ 层：单例（autoload: Global）
 ## 联机：仅本机设置，不放权威事实
@@ -484,7 +486,8 @@ func is_loading_active() -> bool:
 ## 单机/无 Net 的切图入口：先亮加载画面再换图；失败立即收起。
 func loading_change_scene(path: String) -> Error:
 	show_loading_screen()
-	var err: Error = get_tree().change_scene_to_file(path)
+	var session_script: Script = load("res://script/flow/game_session.gd") as Script
+	var err: Error = session_script.request_map(get_tree(), path)
 	if err != OK:
 		hide_loading_screen()
 	return err
@@ -1248,6 +1251,8 @@ func go_to_title_screen() -> void:
 	var director: Node = get_node_or_null("/root/Director")
 	if director != null and director.has_method("reset_for_title_return"):
 		director.call("reset_for_title_return")
+	var session_script: Script = load("res://script/flow/game_session.gd") as Script
+	session_script.end_session(get_tree())
 	var err: Error = get_tree().change_scene_to_file(TITLE_SCENE_PATH)
 	if err != OK:
 		printerr("[Global] 返回标题画面失败: %d" % err)
@@ -1519,7 +1524,7 @@ func request_quest_flag(flag_name: String, value: bool = true) -> bool:
 		return false
 	var net: Node = get_node_or_null("/root/Net")
 	if net and net.has_method("is_online_session") and bool(net.is_online_session()):
-		var scene := get_tree().current_scene if get_tree() else null
+		var scene := MAP_SCENE_QUERY.get_map_root(get_tree()) if get_tree() else null
 		var world := scene.find_child("NetworkWorld", true, false) if scene else null
 		if world and world.has_method("submit_quest_flag"):
 			world.call("submit_quest_flag", flag_name, value)
@@ -1667,8 +1672,8 @@ func consume_pending_arrival(scene_path: String) -> Dictionary:
 ## 在安全屋捕获 checkpoint —— 深拷贝当前状态为快照
 func capture_checkpoint() -> void:
 	var scene_path: String = ""
-	if get_tree() and get_tree().current_scene:
-		scene_path = get_tree().current_scene.scene_file_path
+	if get_tree() and MAP_SCENE_QUERY.get_map_root(get_tree()):
+		scene_path = MAP_SCENE_QUERY.get_map_root(get_tree()).scene_file_path
 
 	var seat_clones: Array[PlayerState] = []
 	for s: PlayerState in Players.seats:
