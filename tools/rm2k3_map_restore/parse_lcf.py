@@ -18,7 +18,7 @@
       本工程字符串 GBK(中文) 与 SJIS(日文残留) 混用, 两种都试解码。
 
 LMU 地图: [0x0A]"LcfMapUnit" 之后直接跟顶层块(无包裹):
-    0x01=芯片组ID(1字节)   0x02=高 0x03=宽 (BER值; 部分老图/废图缺失!)
+    0x01=芯片组ID(1字节)   0x02=宽 0x03=高 (BER值; 部分老图/废图缺失!)
     0x3C/0x3D/0x3E = 36字节全零块 x3 (用途未知, 忽略)
     0x47=下层矩阵 0x48=上层矩阵: 定长 2字节/格, 小端 uint16
     0x51=事件数据   0x5B=2字节(未知)
@@ -302,9 +302,9 @@ def parse_lmu(path):
         if cid == 0x01 and ln == 1:
             info["chipset"] = d[dp]
         elif cid == 0x02:
-            info["h"] = ber_of(d[dp:dp + ln])
-        elif cid == 0x03:
             info["w"] = ber_of(d[dp:dp + ln])
+        elif cid == 0x03:
+            info["h"] = ber_of(d[dp:dp + ln])
         elif cid == 0x47:
             info["lower_cells"] = ln // 2
         elif cid == 0x48:

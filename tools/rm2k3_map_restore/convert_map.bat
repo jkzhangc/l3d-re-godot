@@ -21,7 +21,11 @@ set "MAP_ID=%~2"
 set "GODOT_DIR=%~3"
 set "OUT_DIR=%~4"
 set "GODOT_EXE=D:\Godot_v4.6.3-stable_win64.exe\Godot_v4.6.3-stable_win64.exe"
-set "PY=python"
+rem PY: interpreter used for the three Python steps.
+rem batch_convert.py sets RM2K3_PY to an interpreter that actually has Pillow;
+rem when this .bat is called directly we fall back to whatever "python" resolves to.
+set "PY=%RM2K3_PY%"
+if not defined PY set "PY=python"
 set "PAD_ID=000%MAP_ID%"
 set "PAD_ID=%PAD_ID:~-4%"
 set "DIM_ARGS="

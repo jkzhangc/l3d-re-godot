@@ -11,7 +11,8 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 三步执行，任一步失败即中断（`convert_map.bat` 内每步都有说明与失败分支）：
 
 1. **A1–A4 自动图块全图案 atlas** —— `rm2k3_autotile_atlas.py`，芯片组按 LMU 字段解析
-2. **LMU → 分层 atlas + TileMap JSON** —— `export_map.py`；LMU 缺宽高时按格数反推
+2. **LMU → 分层 atlas + TileMap JSON** —— `export_map.py`；LMU 缺宽高时**先按已有的一边整除格数补齐**
+   （Map0030 只存高度 25、共 500 格 → 20×25），两边都缺时才按格数反推
    （RM2K3 最小 20×15 下**只有一组**因式分解才接受，如 300 格 → 20×15；多解则仍要求显式 `--width/--height`）
 3. **JSON/atlas → 可编辑 TileMapLayer 场景** —— `map_tilemap_generator.gd`
 
@@ -36,6 +37,29 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 
 > ⚠ `convert_map.bat` 保持**纯 ASCII**：cmd.exe 按 OEM 代码页解析批处理，UTF-8 中文会乱码，
 > 行尾前导字节还可能吞掉换行符把下一行粘成命令。脚本用 `chcp 65001` 让 Python 的中文输出可读。
+
+## 批量转换（多张地图）
+
+`batch_convert.py` 把上面的命令包装成可一次导出多张地图的工具；同目录的 `批量转换地图.cmd`
+双击即进入交互输入（也可从命令行调用）。
+
+```bat
+python batch_convert.py                   :: 交互式输入
+python batch_convert.py 30 31 35-37       :: 直接指定多张
+python batch_convert.py 30:20x25 31       :: 单图显式宽高
+python batch_convert.py 30-35 --rebuild   :: 强制重建 TileSet
+```
+
+- ID 写法可混用：`30`、`30,31,32`、`30-35`（含两端）、`30:20x25`（仅该图显式宽高）。
+- 默认参数已对齐本工程（`E:\15.L3D`、仓库根、`art\Tilesets\rm2k3_auto`），
+  可用 `--game-dir` / `--godot-dir` / `--out-dir` 覆盖。
+- 单张失败**不中断**其余地图；结束打印汇总表并以非零码退出。
+  `--stop-on-error` 改为遇错即停，`--dry-run` 只打印将执行的命令。
+- 每张图的完整输出写入 `_batch_logs\<时间戳>\MapXXXX.log`（已加入 `.gitignore`）。
+- **串行执行**：Godot headless 会占用工程缓存，不要并行跑多份批量任务。
+- 工具会自动探测**带 Pillow 的 Python**并以 `RM2K3_PY` 传给 `convert_map.bat`
+  （不同 shell/IDE 的 `python` 可能指向没装 Pillow 的运行时）；直接调 bat 时也可手动
+  `set RM2K3_PY=<解释器路径>` 覆盖。
 
 ## 地图场景模板（2026-11-21 更新）
 

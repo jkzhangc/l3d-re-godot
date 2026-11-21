@@ -322,18 +322,41 @@ def main():
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     m = read_lmu(game / ('Map%04d.lmu' % args.map_id))
+    cells = len(m['lower'])
     if m['width'] is None or m['height'] is None:
-        if args.width is None or args.height is None:
-            inferred = infer_dimensions(len(m['lower']))
-            if inferred is None:
-                raise ValueError('LMU lacks dimensions and cell count %d has no unique '
-                                 'factorisation; pass --width and --height' % len(m['lower']))
-            m['width'], m['height'] = inferred
-            print('inferred dimensions from %d cells: %d x %d' % (len(m['lower']), m['width'], m['height']))
+        # LMU 只丢了一边是常见情况（Map0030 = 20x25，仅存 0x03=25 的高度）：
+        # 已有的一边必须优先采信，另一边用格数整除求得，**不要**退回因式分解。
+        w = m['width'] if m['width'] is not None else args.width
+        h = m['height'] if m['height'] is not None else args.height
+        if m['width'] is not None and args.width is not None and args.width != m['width']:
+            raise ValueError('width override %d disagrees with LMU field %d'
+                             % (args.width, m['width']))
+        if m['height'] is not None and args.height is not None and args.height != m['height']:
+            raise ValueError('height override %d disagrees with LMU field %d'
+                             % (args.height, m['height']))
+        if w is not None and h is not None:
+            if w * h != cells:
+                raise ValueError('dimensions %dx%d do not match %d cells' % (w, h, cells))
+        elif w is not None or h is not None:
+            known = w if w is not None else h
+            if known <= 0 or cells % known:
+                raise ValueError('cannot derive the missing dimension: %d cells is not '
+                                 'divisible by %d' % (cells, known))
+            other = cells // known
+            if w is None:
+                w = other
+            else:
+                h = other
+            print('derived %dx%d from LMU %s %d and %d cells'
+                  % (w, h, 'width' if m['width'] is not None else 'height', known, cells))
         else:
-            if args.width * args.height != len(m['lower']):
-                raise ValueError('override dimensions do not match %d cells' % len(m['lower']))
-            m['width'], m['height'] = args.width, args.height
+            inferred = infer_dimensions(cells)
+            if inferred is None:
+                raise ValueError('LMU lacks both dimensions and cell count %d has no unique '
+                                 'factorisation; pass --width and --height' % cells)
+            w, h = inferred
+            print('inferred dimensions from %d cells: %d x %d' % (cells, w, h))
+        m['width'], m['height'] = w, h
     elif (args.width is not None and args.height is not None and
           (args.width, args.height) != (m['width'], m['height'])):
         raise ValueError('dimension override disagrees with LMU fields')

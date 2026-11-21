@@ -11,9 +11,10 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 ```
 
 参数依次是：RM2K3 工程目录、地图 ID、Godot 工程目录、输出目录。地图 ID `141` 对应 `Map0141.lmu`；脚本会自动补齐四位编号。
-第 5/6 个参数（可选）是 LMU 缺失宽高字段时的显式尺寸。通常不需要：LMU 缺宽高时
-`export_map.py` 会按格数反推，只有当 RM2K3 最小尺寸 20×15 之下**恰好只有一组**
-因式分解时才自动采用（如 300 格 → 20×15），多解仍会要求显式 `--width/--height`。
+第 5/6 个参数（可选）是 LMU 缺失宽高字段时的显式尺寸。通常不需要：只缺一边时
+`export_map.py` 会用已有的一边整除格数补齐（如 Map0030 只存高度 25、共 500 格 → 20×25）；
+两边都缺时才按格数反推，且只有 RM2K3 最小尺寸 20×15 之下**恰好只有一组**因式分解才自动采用
+（如 300 格 → 20×15），多解仍会要求显式 `--width/--height`。
 第 7 个参数（可选）`rebuild` 强制重建 TileSet，丢弃编辑器侧的碰撞与 `z_index` 加工。
 
 脚本按三步执行，任一步失败即以非零码中断（不会留下半成品）：
@@ -25,6 +26,35 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 | 3/3 | Godot headless 生成器 | `tres/MapXXXX_*_tileset.tres` + `scene/maps_auto/MapXXXX_auto.tscn` |
 
 Godot 路径在 `convert_map.bat` 的 `GODOT_EXE` 中修改。
+
+## 批量转换多张地图
+
+`batch_convert.py` 包装上面的一键命令，可一次转换多张地图；同目录 `批量转换地图.cmd` 双击即用。
+
+```bat
+python batch_convert.py                   :: 交互式输入地图 ID
+python batch_convert.py 30 31 35-37       :: 直接指定多张
+python batch_convert.py 30:20x25 31       :: 单图显式宽高
+python batch_convert.py 30-35 --rebuild   :: 强制重建 TileSet
+```
+
+地图 ID 写法可混用空格、逗号、分号：`30`、`30,31,32`、`30-35`（含两端）、
+`30:20x25`（只对这张图显式指定宽高，等同 `convert_map.bat` 的第 5/6 个参数）。
+
+| 选项 | 作用 |
+|---|---|
+| `--game-dir` / `--godot-dir` / `--out-dir` | 覆盖默认路径（默认 `E:\15.L3D`、仓库根、`art\Tilesets\rm2k3_auto`） |
+| `--rebuild` | 等同 `convert_map.bat` 的 `rebuild`，丢弃编辑器侧碰撞与 `z_index` |
+| `--stop-on-error` | 任一地图失败即停止（默认继续跑完剩余地图） |
+| `--dry-run` | 只打印将执行的命令，不落地任何文件 |
+| `-y` / `--yes` | 交互模式下跳过确认 |
+
+- 单张失败不会中断整批；结束时打印汇总表（每张的结果与耗时），有失败则以非零码退出。
+- 每张图的完整控制台输出记录在 `_batch_logs\<时间戳>\MapXXXX.log`（已 gitignore）。
+- 工具会自动探测**带 Pillow 的 Python**，以环境变量 `RM2K3_PY` 传给 `convert_map.bat`；
+  直接调 bat 时也可自行 `set RM2K3_PY=<解释器路径>` 覆盖（缺 Pillow 会在第 1 步报
+  `ModuleNotFoundError: No module named 'PIL'`）。
+- **必须串行**：Godot headless 生成阶段会读写工程缓存，不要同时开多份批量任务。
 
 > ⚠ **步骤 1 的芯片组来源**：按 LMU 的芯片组字段解析（即本图实际使用的素材），
 > 不是旧实现那样盲取 `ChipSet\` 目录里的第一个文件。详见
