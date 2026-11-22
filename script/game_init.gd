@@ -393,9 +393,16 @@ func _show_safehouse_dialogue(key: String, id_a: String, id_b: String, id_c: Str
 		SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY: id_b,
 		SAFEHOUSE_DIALOGUE_DATA.STAGE_CLOSING: id_c,
 	}
+	var has_npc: bool = SAFEHOUSE_DIALOGUE_DATA.has_npc(key)
+	var npc_name: String = SAFEHOUSE_DIALOGUE_DATA.npc_name(key) if has_npc else ""
 	for stage: String in [SAFEHOUSE_DIALOGUE_DATA.STAGE_ENTER,
 			SAFEHOUSE_DIALOGUE_DATA.STAGE_AFTER_SUMMARY,
 			SAFEHOUSE_DIALOGUE_DATA.STAGE_CLOSING]:
+		## 固定 NPC 页先出（死亡岛第三关的多啦A梦：迎接 / 说明 / 收尾），
+		## 再接该批次的角色台词；其他图没有 npc 数据，行为不变。
+		if has_npc:
+			for npc_page: Variant in SAFEHOUSE_DIALOGUE_DATA.npc_pages_for(key, stage):
+				entries.append({"lines": npc_page, "speaker": npc_name, "portrait": null})
 		var cid: String = str(stage_ids.get(stage, ""))
 		var lines: Array = SAFEHOUSE_DIALOGUE_DATA.lines_for(key, cid, stage)
 		if lines.is_empty():

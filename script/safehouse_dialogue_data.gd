@@ -386,9 +386,20 @@ const DIALOGUES: Dictionary = {
 		},
 	},
 	## ── 死亡岛 · 第三章 结束安全屋（Map0032 セーフハウス），2 批 / 共 29 行 ──
-	## ⚠ 暂不映射到场景：原文是「和多啦A梦对话 → 拿补给后道谢」，
-	##   不是进入安全屋的感叹，当初始台词播会语义错乱。数据先留着，等接补给交互再用。
+	## 这张图多了固定的多啦A梦对话：迎接 → 10 人应答 → 说明（4 屏）→ 10 人道谢 → 收尾。
+	## NPC 页由 `npc` 单独存放，展示时插在角色页之间；其他角色仍走 a/b 两批。
 	"death3_end": {
+		"npc_name": "多啦A梦",
+		"npc": {
+			"a": [["啊、你好。", "我是多啦A梦。"]],
+			"b": [
+				["前面的港口有大型的气垫船。", "我把那个送给诸位。"],
+				["但是、船没有燃料了。", "如果不想到处漂流、一定要", "把燃料加满。"],
+				["燃料罐应该在道路上有摆放", "应该可以随意使用。"],
+				["还有、这个仓库有种各种各样的武器", "挑一个好点的武器带走吧。"],
+			],
+			"c": [["祈祷你们能离开这里。"]],
+		},
 		"a": {
 			"nobita": ["有什么事么？"],
 			"bigg": ["啰嗦。什么事？"],
@@ -423,7 +434,7 @@ const SCENE_KEYS: Array = [
 	["死亡岛-第一关-开头安全屋", "death1_start"],
 	["死亡岛-第一关-结束安全屋", "death1_end"],
 	["死亡岛-第二关-结束安全屋", "death2_end"],
-	## 死亡岛-第三关-结束安全屋（Map0032）提取到的是补给交互对话，不是进入感叹 → 暂不映射。
+	["死亡岛-第三关-结束安全屋", "death3_end"],
 	## ⚠ 顺序即优先级：夜行猎手的三张「结束安全屋」用的是**结束**（突袭用**结尾**，不冲突），
 	## 但「第一关-开头安全屋」两边同名 —— 必须让夜行猎手的具体路径先命中。
 	["夜行猎手-第一关-开头安全屋", "night1_start"],
@@ -487,3 +498,24 @@ static func pages_for(key: String, char_id: String) -> Array:
 
 static func has_key(key: String) -> bool:
 	return DIALOGUES.has(key)
+
+
+## 该图是否有固定的 NPC 台词（目前只有死亡岛第三关的多啦A梦）。
+static func has_npc(key: String) -> bool:
+	return DIALOGUES.has(key) and (DIALOGUES[key] as Dictionary).has("npc")
+
+
+static func npc_name(key: String) -> String:
+	if not DIALOGUES.has(key):
+		return ""
+	return str((DIALOGUES[key] as Dictionary).get("npc_name", ""))
+
+
+## NPC 在该批次的页数组（外层一页、内层该页的多行）；没有返回空数组。
+## ⚠ 统一返回「页数组」：单屏 NPC 台词也要写成 `[[...]]`，调用方不必再分支。
+static func npc_pages_for(key: String, stage: String) -> Array:
+	if not has_npc(key):
+		return []
+	var npc: Dictionary = (DIALOGUES[key] as Dictionary).get("npc", {})
+	var value: Variant = npc.get(stage, [])
+	return value if value is Array else []

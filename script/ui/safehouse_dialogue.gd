@@ -17,8 +17,9 @@ extends CanvasLayer
 signal dialogue_closed
 
 @export_group("行为")
-## 台词最多显示几段（原作每名角色 1~3 句，窗口一次显示一句、按确定键翻页）。
-@export var max_pages: int = 3
+## 台词最多显示几段。普通安全屋 2~3 段；死亡岛第三关有「多啦A梦迎接+说明4屏+收尾」
+## 夹在角色应答/道谢之间，最多 8 段 —— 上限必须覆盖它。
+@export var max_pages: int = 8
 ## 台词出现的最小间隔（秒）——防止反复进出安全屋时刷屏。
 @export var cooldown_seconds: float = 3.0
 
