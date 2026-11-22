@@ -67,9 +67,9 @@ class PickupTests(unittest.TestCase):
                    196: {1: 'ミネラルウォータ代理'.encode('cp932')}}
         self.variables = {1408: {1: 'ｾｰﾌﾊｳｽ固定item表示ok'.encode('cp932')}}
 
-    def analyze(self, ev):
+    def analyze(self, ev, ranges=None):
         return pickup.analyze_event(25, 62, ev, self.db, self.variables, {547},
-                                    self.index, self.names, self.aliases, 40, 40)
+                                    self.index, self.names, self.aliases, 40, 40, ranges)
 
     def test_fixed_profile_and_32px_center(self):
         ev = event([(1, page(graphic=False)), (2, page(l3d_body(), condition=cond(4, variable=1408)))])
@@ -183,6 +183,15 @@ class PickupTests(unittest.TestCase):
         self.assertEqual(len(item['items']), 1)
         self.assertEqual(item['items'][0]['source_item_id'], 198)
         self.assertEqual([u['page_id'] for u in item['unmapped_items']], [3])
+
+    def test_pages_outside_rnd_range_are_dropped(self):
+        pages = [(1, page(graphic=False)),
+                 (2, page(l3d_body(item=198), condition=cond(4, variable=1370, value=1))),
+                 (3, page(l3d_body(item=199), condition=cond(4, variable=1370, value=2))),
+                 (4, page(l3d_body(item=196), condition=cond(4, variable=1370, value=3)))]
+        item, _ = self.analyze(event(pages, name='ショットガン列'), {1370: [(1, 2)]})
+        self.assertEqual([x['source_item_id'] for x in item['items']], [198, 199])
+        self.assertNotIn('empty_weight', item)
 
     def test_infinite_weapon_rack_is_not_converted(self):
         pages = [(1, page(graphic=False)),

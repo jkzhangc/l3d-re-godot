@@ -177,7 +177,7 @@ def _page_source_id(cmds, profile):
 ## 同一物品事件的多个可达页 = 一个随机掉落池（原作用状态变量档位切换页）。
 ## 严格限制：所有页必须是同一状态变量的值比较、按键触发、有行走图；
 ## 无法映射的页只进报告，不阻断其它可映射项；一项都映射不上才整体跳过。
-def _analyze_pool(pages, base, item_db, variables, profile, index, names, aliases):
+def _analyze_pool(pages, base, item_db, variables, profile, index, names, aliases, ranges=None):
     rows = []
     for pid, pg in pages:
         cond = condition(pg)
@@ -192,6 +192,13 @@ def _analyze_pool(pages, base, item_db, variables, profile, index, names, aliase
     if len(used) != 1:
         raise ValueError('多页物品事件混用多个状态变量: %s' % sorted(used))
     var_id = next(iter(used))
+    # 严格还原原作：RND 范围之外的档位永远抽不到，不能进池。
+    if ranges and ranges.get(var_id):
+        lo, hi = min(ranges[var_id], key=lambda r: r[1] - r[0])
+        reachable_rows = [row for row in rows if lo <= row[2].get('5', 0) <= hi]
+        if not reachable_rows:
+            raise ValueError('所有页档位都超出原作 RND 范围 %d..%d' % (lo, hi))
+        rows = reachable_rows
     items, unmapped, page_ids = [], [], []
     for pid, pg, _cond in rows:
         sid = _page_source_id(commands(pg), profile)
@@ -227,7 +234,7 @@ def _analyze_pool(pages, base, item_db, variables, profile, index, names, aliase
                                   if unmapped else '全部页已映射'))
 
 
-def analyze_event(map_id, eid, chunks, item_db, variables, profile, index, names, aliases, width, height):
+def analyze_event(map_id, eid, chunks, item_db, variables, profile, index, names, aliases, width, height, ranges=None):
     name, x, y, pages = event_header(chunks)
     name, x, y = dec(name), 0 if x is None else x, 0 if y is None else y
     base = {'map_id': map_id, 'event_id': eid, 'event_name': name, 'x': x, 'y': y,
@@ -252,7 +259,7 @@ def analyze_event(map_id, eid, chunks, item_db, variables, profile, index, names
         reachable = _dedupe_pages(active)
         if len(reachable) >= 2:
             pickup = _analyze_pool(reachable, base, item_db, variables, profile,
-                                   index, names, aliases)
+                                   index, names, aliases, ranges)
             report.update(status='converted', reason=pickup['mapping_reason'],
                           item_id=pickup['item_id'], resource_path=pickup['resource_path'],
                           item_count=len(pickup['items']),
@@ -424,7 +431,7 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
     for eid, chunks in events:
         try:
             pickup, report = analyze_event(map_id, eid, chunks, item_db, variables, profile,
-                                           index, names, aliases, width, height)
+                                           index, names, aliases, width, height, ranges)
         except (ValueError, IndexError, TypeError) as exc:
             pickup = None
             report = {'map_id': map_id, 'event_id': eid,
