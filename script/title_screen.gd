@@ -135,12 +135,19 @@ var _settings_labels: Array[GradientLabel] = []
 var _settings_value_labels: Array[GradientLabel] = []
 var _settings_bar_bg: Array[ColorRect] = []
 var _settings_bar_fill: Array[ColorRect] = []
+## 音量行在设置列表里的**行号**（顺序 = 音乐 / 音效 / BGS）。
+## 光标/数值刷新都按行号走，避免插入新项后串行。
+var _settings_volume_rows: Array[int] = []
+## 独立设置窗口（2026-11-22）：全屏 dim + RM 窗口，退出时整体释放。
+var _settings_panel: Control = null
+var _settings_window: Control = null
+var _settings_cursor_frame: NinePatchRect = null
 ## 设置项（2026-09-30：移动端多一项「按键布局」—— 手机端可自由拖动按键/摇杆位置）。
-## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**，
-##   所以 0~4（音量 / 固定朝向 / 文字居中 / 界面字体）的序号在所有平台上都不变。
+## ⚠ 用函数而非 const（项数随平台变）。「按键布局」**插在「返回」之前**。
+## ⚠ 音量行一律按**项名**判定，不要写 `i < N`：2026-11-22 插入「BGS音量」后所有序号都后移。
 func _settings_items() -> Array[String]:
-	var out: Array[String] = ["音乐音量", "音效音量", "固定朝向", "文字居中", "界面字体", "拾取方式", "智能提示",
-		"灯光闪烁", "人物影子", "遮挡阴影", "影子质量", "血液颜色", "血液特效"]
+	var out: Array[String] = ["音乐音量", "音效音量", "BGS音量", "固定朝向", "文字居中", "界面字体",
+		"拾取方式", "智能提示", "灯光闪烁", "人物影子", "遮挡阴影", "影子质量", "血液颜色", "血液特效"]
 	if Global.is_mobile_platform():
 		out.append("按键布局")
 	out.append("返回")
@@ -148,21 +155,19 @@ func _settings_items() -> Array[String]:
 ## 菜单窗口与画布上下边的最小留白（像素）。窗口太高时按它夹紧纵向位置，见 `_create_menu_window`。
 const WINDOW_TOP_MARGIN: float = 8.0
 const WINDOW_BOTTOM_MARGIN: float = 8.0
-## 设置页窗口尺寸（2026-09-14）：音量条/数值标签比菜单项宽，进设置时窗口加宽、退出还原
-const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(520, 336)
+## 设置页是**独立叠加窗口**（2026-11-22 用户要求：跟更新日志 / 竞速记录同款单独窗口），
+## 不再复用主菜单那个窄窗口。14 项 + 返回共 15 行，880 高才排得开。
+const SETTINGS_WINDOW_SIZE: Vector2 = Vector2(1040.0, 880.0)
+## 内容区：标题（36px）与分隔线之下；底部留出提示行。
+const SETTINGS_CONTENT_X: float = 48.0
+const SETTINGS_CONTENT_Y: float = 96.0
+const SETTINGS_CONTENT_BOTTOM: float = 64.0
 
 
-## 设置窗实际尺寸：**按项数推导高度**（2026-10-26 加「拾取方式」后桌面也是 7 行）。
-## `_settings_row_step()` 会把行距压到 `avail / 行数`，行数多了会压到和 32px 字号 + 光标框打架，
-## 所以每多一行给 48px；6 行及以下沿用旧高度 336。
-func _settings_window_size() -> Vector2:
-	var rows: int = _settings_items().size()
-	if rows <= 6:
-		return Vector2(520.0, 336.0)
-	return Vector2(520.0, 392.0 + float(rows - 7) * 48.0)
 ## 音量条宽度——背景条与填充条必须同宽（旧版填充刷新写死 80、背景 160，
-## 填充永远只有背景一半长，2026-09-15 用户截图复现）
-const SETTINGS_BAR_W: float = 160.0
+## 填充永远只有背景一半长，2026-09-15 用户截图复现）。
+## 2026-11-22 设置改为独立大窗口后加长到 400，与 1040 宽窗口相称。
+const SETTINGS_BAR_W: float = 400.0
 ## 场景里作者的原始窗口尺寸（宽度基准）。设置页会临时改 `window_size`，退出要用它还原。
 var _base_window_size: Vector2 = Vector2.ZERO
 
@@ -461,6 +466,8 @@ func _build_footer_info() -> void:
 		if win != null:
 			move_child(gl, mini(win.get_index(), get_child_count() - 1))
 		_footer_labels.append(gl)
+	## 设置页期间保持隐藏：字体切换会重建本块，不能只在进设置时关一次。
+	_set_footer_visible(not _in_settings)
 
 
 ## 右上角「F1 更新日志」角标（12px fusion 基底，贴 1280×960 设计分辨率右上）。
@@ -786,6 +793,9 @@ func _on_cursor_blink() -> void:
 		return
 	_cursor_frame_idx = 1 - _cursor_frame_idx
 	_cursor_frame.texture = _cursor_atlas[_cursor_frame_idx]
+	## 设置窗口的光标跟着一起闪（否则两个窗口观感不一致）。
+	if _settings_cursor_frame != null and is_instance_valid(_settings_cursor_frame):
+		_settings_cursor_frame.texture = _cursor_atlas[_cursor_frame_idx]
 
 
 func _get_cursor_height() -> float:
@@ -1250,45 +1260,160 @@ func _apply_window_size(s: Vector2) -> void:
 	_recalc_visible_items()
 
 
-## 当前菜单该用的窗口尺寸（设置页退出时恢复到「进去之前那一级」）。
-func _menu_window_size() -> Vector2:
-	return _window_size_for(OTHER_ITEMS) if _in_other_menu else _window_size_for(MENU_ITEMS)
-
-
-## 设置页行距。默认与主菜单同（item_height + item_spacing），行数多到超出设置窗时
-## 自动压缩 —— 2026-09-24 加了「界面字体」后共 6 行，56×6 会顶出 336 高的窗口。
+## 设置页行距。独立窗口比主菜单高得多，正常情况用满 item_height + item_spacing；
+## 项数再多（移动端 +1 行）时按内容区高度等比压缩，避免顶出窗口。
 func _settings_row_step() -> float:
 	var step: float = item_height + item_spacing
 	var count: int = _settings_items().size()
 	if count <= 0:
 		return step
-	var avail: float = _settings_window_size().y - item_start_y - 8.0
+	var avail: float = SETTINGS_WINDOW_SIZE.y - SETTINGS_CONTENT_Y - SETTINGS_CONTENT_BOTTOM
 	return minf(step, avail / float(count))
 
 
 func _enter_settings() -> void:
 	_in_settings = true
 	_settings_cursor_idx = 0
-	_apply_window_size(_settings_window_size())
 	_set_menu_items_visible(false)
+	## 主菜单的选择框属于主窗口，进设置时让位给设置窗口自己的光标框。
+	if _cursor_frame:
+		_cursor_frame.visible = false
+	## 左下信息块在窗口左侧，大窗口会把它压成「从窗口底下穿出来」的样子 → 设置页期间隐藏。
+	_set_footer_visible(false)
+	_build_settings_window()
 	_build_settings_items()
 	_refresh_settings_cursor()
 
 
 func _exit_settings() -> void:
 	_in_settings = false
+	## 必须先清行再销毁窗口：清理逻辑会逐个访问行内节点。
 	_clear_settings_ui()
-	## 从「其他」子菜单进设置 → 退出要回到子菜单尺寸，否则 6 项会挤进 5 行窗口。
-	_apply_window_size(_menu_window_size())
+	_destroy_settings_window()
+	if _cursor_frame:
+		_cursor_frame.visible = true
+	_set_footer_visible(true)
+	## 主菜单窗口尺寸全程没动过（设置已改成独立窗口），直接重建。
 	_rebuild_menu_items()
 	_refresh_all()
 
 
+func _set_footer_visible(v: bool) -> void:
+	for gl in _footer_labels:
+		if is_instance_valid(gl):
+			gl.visible = v
+
+
+## ── 独立设置窗口（2026-11-22 用户要求：跟更新日志 / 竞速记录同款单独窗口）──
+## 结构：全屏 dim（0.55）+ 居中 RM 窗口（WindowBg 拉满 + WindowFrame 九宫 20px）
+##       + 36px 标题 + 分隔线 + 内容区 + 底部操作提示。
+## 设置行仍由 `_build_settings_items()` 生成，只是父节点从主菜单窗口换成 `_settings_window`。
+func _build_settings_window() -> void:
+	if _settings_panel != null:
+		return
+	var panel := Control.new()
+	panel.name = "SettingsPanel"
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var dim := ColorRect.new()
+	dim.color = Color(0, 0, 0, 0.55)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(dim)
+
+	var win := Control.new()
+	win.name = "SettingsWindow"
+	win.size = SETTINGS_WINDOW_SIZE
+	## 按**当前**画布尺寸居中，别写死 1280（与更新日志同一处理）。
+	win.position = ((get_viewport_rect().size - win.size) * 0.5).floor()
+	panel.add_child(win)
+
+	var bg := TextureRect.new()
+	bg.texture = load("res://art/System/Window background color.png")
+	bg.size = win.size
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	win.add_child(bg)
+
+	var frame := NinePatchRect.new()
+	frame.texture = load("res://art/System/Window frame.png")
+	frame.patch_margin_left = 20
+	frame.patch_margin_top = 20
+	frame.patch_margin_right = 20
+	frame.patch_margin_bottom = 20
+	frame.size = win.size
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	win.add_child(frame)
+
+	var title := _make_menu_gradient_label("设  置", Vector2.ZERO, 36, text_color_index)
+	win.add_child(title)
+	## 居中走 resized 信号跟随（GradientLabel 首帧测宽不稳，与更新日志同款）。
+	title.resized.connect(func() -> void:
+		title.position.x = (win.size.x - title.size.x) / 2.0
+	)
+	title.position.y = 20.0
+
+	var sep := ColorRect.new()
+	sep.color = Color(0.5, 0.5, 0.7, 0.5)
+	sep.position = Vector2(SETTINGS_CONTENT_X - 24.0, 76.0)
+	sep.size = Vector2(win.size.x - (SETTINGS_CONTENT_X - 24.0) * 2.0, 2)
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	win.add_child(sep)
+
+	## 选择框：与主菜单同款九宫格，纹理跟随全局光标闪烁（见 `_on_cursor_blink`）。
+	_settings_cursor_frame = NinePatchRect.new()
+	_settings_cursor_frame.name = "SettingsCursor"
+	_settings_cursor_frame.patch_margin_left = 20
+	_settings_cursor_frame.patch_margin_top = 20
+	_settings_cursor_frame.patch_margin_right = 20
+	_settings_cursor_frame.patch_margin_bottom = 20
+	## 高度取 item_height（不要 +）：移动端 16 行时行距压到 45，再高会压到相邻行。
+	_settings_cursor_frame.size = Vector2(
+		SETTINGS_WINDOW_SIZE.x - SETTINGS_CONTENT_X * 2.0 + 16.0, item_height)
+	_settings_cursor_frame.position = Vector2(SETTINGS_CONTENT_X - 8.0, SETTINGS_CONTENT_Y)
+	_settings_cursor_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if not _cursor_atlas.is_empty():
+		_settings_cursor_frame.texture = _cursor_atlas[_cursor_frame_idx]
+	elif _cursor_frame:
+		_settings_cursor_frame.texture = _cursor_frame.texture
+	win.add_child(_settings_cursor_frame)
+
+	var hint_text: String
+	if Global.is_mobile_platform():
+		hint_text = "摇杆选择    %s / %s 调整    %s 返回" % [Global.key_hint(&"确定键"),
+			Global.key_hint(&"左"), Global.key_hint(&"取消键")]
+	else:
+		hint_text = "↑↓ 选择    ←→ 调整    确定 切换    Esc 返回"
+	var hint := _make_menu_gradient_label(hint_text,
+		Vector2(SETTINGS_CONTENT_X, win.size.y - 46.0), 24, text_color_index)
+	win.add_child(hint)
+
+	add_child(panel)
+	_settings_panel = panel
+	_settings_window = win
+
+
+func _destroy_settings_window() -> void:
+	_settings_cursor_frame = null
+	_settings_window = null
+	if _settings_panel == null:
+		return
+	if is_instance_valid(_settings_panel):
+		remove_child(_settings_panel)
+		_settings_panel.queue_free()
+	_settings_panel = null
+
+
+## 哪些项是音量行（建行、刷新、左右键都靠它，**不写死行号**）。
+func _is_volume_item(text: String) -> bool:
+	return text == "音乐音量" or text == "音效音量" or text == "BGS音量"
+
+
 func _build_settings_items() -> void:
-	var win: Control = $MenuWindow
+	var win: Control = _settings_window
 	var row_step: float = _settings_row_step()
-	var start_y: float = item_start_y
-	var label_x: float = item_text_x
+	var start_y: float = SETTINGS_CONTENT_Y
+	var label_x: float = SETTINGS_CONTENT_X
 	var bar_x: float = label_x + _measure_text("  音乐音量", item_font_size).x + 16.0
 	var bar_w: float = SETTINGS_BAR_W
 	var bar_h: float = 24.0
@@ -1301,7 +1426,7 @@ func _build_settings_items() -> void:
 		var gl := _make_menu_gradient_label("  %s" % text, Vector2(label_x, pos_y), item_font_size, text_color_index)
 		win.add_child(gl)
 		_settings_labels.append(gl)
-		if i < 2:
+		if _is_volume_item(text):
 			# 音量条：背景 + 填充 + 百分比标签
 			var bar_y: float = pos_y + (item_height - bar_h) / 2.0
 
@@ -1323,22 +1448,23 @@ func _build_settings_items() -> void:
 			win.add_child(fill)
 			_settings_bar_fill.append(fill)
 
-			var pct_label := _make_menu_gradient_label("", Vector2(bar_x + bar_w + 12, pos_y), item_font_size, text_color_index)
+			var pct_label := _make_menu_gradient_label("", Vector2(bar_x + bar_w + 24, pos_y), item_font_size, text_color_index)
 			win.add_child(pct_label)
 			_settings_value_labels.append(pct_label)
-		elif i == 2:
+			_settings_volume_rows.append(i)
+		elif text == "固定朝向":
 			# 固定朝向模式标签
 			var mode_text: String = "切换式" if Global.facing_lock_mode == 0 else "按住式"
 			var mode_label := _make_menu_gradient_label(mode_text, Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(mode_label)
 			_settings_value_labels.append(mode_label)
-		elif i == 3:
+		elif text == "文字居中":
 			# 文字居中开关（2026-09-14 新增）
 			var center_text: String = "开" if Global.menu_item_centered else "关"
 			var center_label := _make_menu_gradient_label(center_text, Vector2(bar_x, pos_y), item_font_size, text_color_index)
 			win.add_child(center_label)
 			_settings_value_labels.append(center_label)
-		elif i == 4:
+		elif text == "界面字体":
 			# 界面字体（2026-09-24 新增）：左右或确定键切换，立即重套全 UI
 			var font_label := _make_menu_gradient_label(
 				Global.font_option_label(), Vector2(bar_x, pos_y), item_font_size, text_color_index)
@@ -1418,6 +1544,7 @@ func _clear_settings_ui() -> void:
 		if is_instance_valid(fg):
 			fg.queue_free()
 	_settings_bar_fill.clear()
+	_settings_volume_rows.clear()
 
 
 func _handle_settings_input(event: InputEvent) -> void:
@@ -1449,12 +1576,10 @@ func _handle_settings_input(event: InputEvent) -> void:
 				var new_mode: int = 1 if Global.facing_lock_mode == 0 else 0
 				Global.set_facing_lock_mode(new_mode)
 				var mode_text: String = "切换式" if new_mode == 0 else "按住式"
-				if _settings_value_labels[2]:
-					_settings_value_labels[2].text = mode_text
+				_set_settings_value(items, "固定朝向", mode_text)
 			"文字居中":
 				Global.menu_item_centered = not Global.menu_item_centered
-				if _settings_value_labels[3]:
-					_settings_value_labels[3].text = "开" if Global.menu_item_centered else "关"
+				_set_settings_value(items, "文字居中", "开" if Global.menu_item_centered else "关")
 				# 立即重排当前设置行（标签居中、音量条跟随）
 				_clear_settings_ui()
 				_build_settings_items()
@@ -1511,6 +1636,9 @@ func _handle_settings_input(event: InputEvent) -> void:
 		"音效音量":
 			Global.set_sfx_volume(clampi(Global.sfx_volume + delta_vol, 0, 100))
 			_update_settings_volume_display(1)
+		"BGS音量":
+			Global.set_bgs_volume(clampi(Global.bgs_volume + delta_vol, 0, 100))
+			_update_settings_volume_display(2)
 		"界面字体":  # 左右 = 上一个 / 下一个
 			_cycle_ui_font(-1 if delta_vol < 0 else 1)
 		"影子质量":  # 左右 = 降一档 / 升一档
@@ -1573,15 +1701,17 @@ func _cycle_ui_font(delta: int) -> void:
 	var count: int = Global.ui_font_option_count()
 	var next: int = posmod(Global.font_option + delta, count)
 	Global.set_font_option(next)
-	if _settings_value_labels.size() > 4 and _settings_value_labels[4]:
-		_settings_value_labels[4].text = Global.font_option_label()
+	_set_settings_value(_settings_items(), "界面字体", Global.font_option_label())
 
 
 ## 字体切换回调（Global.font_changed）：设置页里只重建设置行 —— 不能调
 ## _rebuild_menu_items()，它会把隐藏中的主菜单项 show() 回来。
 func _on_global_font_changed(_font_path: String) -> void:
 	if _in_settings:
+		## 独立窗口的标题/提示/光标都按旧字体建过 —— 整窗重建，不只是重建行。
 		_clear_settings_ui()
+		_destroy_settings_window()
+		_build_settings_window()
 		_build_settings_items()
 		_refresh_settings_cursor()
 	else:
@@ -1592,26 +1722,40 @@ func _on_global_font_changed(_font_path: String) -> void:
 	_build_footer_info()
 
 
+## 设置页选择框：只操作独立窗口里的光标（主菜单光标进设置时已隐藏）。
 func _refresh_settings_cursor() -> void:
-	if not _cursor_frame:
+	if _settings_cursor_frame == null or not is_instance_valid(_settings_cursor_frame):
 		return
-	var cur_h := _cursor_frame.size.y
-	_cursor_frame.position.y = item_start_y + _settings_cursor_idx * _settings_row_step() + (item_height - cur_h) / 2.0 + cursor_offset_y
-	_cursor_frame.size.x = _cursor_rect_w()
-	_cursor_frame.position.x = _cursor_rect_x()
+	var cur_h: float = _settings_cursor_frame.size.y
+	_settings_cursor_frame.position.y = SETTINGS_CONTENT_Y \
+		+ _settings_cursor_idx * _settings_row_step() + (item_height - cur_h) / 2.0 + cursor_offset_y
 
 
-func _update_settings_volume_display(idx: int) -> void:
-	var vol: int = Global.music_volume if idx == 0 else Global.sfx_volume
-	if idx < _settings_value_labels.size() and _settings_value_labels[idx]:
-		_settings_value_labels[idx].text = "%d%%" % vol
-	if idx < _settings_bar_fill.size() and _settings_bar_fill[idx]:
-		_settings_bar_fill[idx].size.x = SETTINGS_BAR_W * vol / 100.0
+## 按**音量序号**（0=音乐 1=音效 2=BGS）刷新数值与填充条。
+## 行号从 `_settings_volume_rows` 取，插项/换平台都不会串。
+func _update_settings_volume_display(vol_idx: int) -> void:
+	if vol_idx < 0 or vol_idx >= _settings_volume_rows.size():
+		return
+	var row: int = _settings_volume_rows[vol_idx]
+	var items: Array[String] = _settings_items()
+	var text: String = items[row] if row < items.size() else ""
+	var vol: int = 0
+	match text:
+		"音乐音量":
+			vol = Global.music_volume
+		"音效音量":
+			vol = Global.sfx_volume
+		"BGS音量":
+			vol = Global.bgs_volume
+	if row < _settings_value_labels.size() and _settings_value_labels[row]:
+		_settings_value_labels[row].text = "%d%%" % vol
+	if vol_idx < _settings_bar_fill.size() and _settings_bar_fill[vol_idx]:
+		_settings_bar_fill[vol_idx].size.x = SETTINGS_BAR_W * vol / 100.0
 
 
 func _update_all_settings_volume_display() -> void:
-	_update_settings_volume_display(0)
-	_update_settings_volume_display(1)
+	for k: int in range(_settings_volume_rows.size()):
+		_update_settings_volume_display(k)
 
 func _go_to_network_lobby() -> void:
 	const lobby_scene := "res://scene/network_lobby.tscn"
