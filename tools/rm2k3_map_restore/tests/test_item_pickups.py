@@ -244,6 +244,13 @@ class PickupTests(unittest.TestCase):
             items, report = pickup.export_pickups(root, 25, 40, 40, root, alias)
             self.assertEqual(len(items), 1)
             self.assertEqual(report['summary'], {'error': 1, 'converted': 1})
+            self.assertFalse(report['safehouse'])
+            self.assertEqual(items[0]['empty_weight'], 1.0)
+
+    def test_safehouse_detection_suppresses_empty_result(self):
+        self.assertTrue(pickup.is_safehouse_name('セーフハウス'))
+        self.assertFalse(pickup.is_safehouse_name('CP1-1'))
+        self.assertFalse(pickup.is_safehouse_name('スタート地点'))
 
 
 if __name__ == '__main__':

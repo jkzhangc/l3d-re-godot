@@ -105,6 +105,12 @@ static func sync_item_pickups(map: Node2D, data: Dictionary) -> Dictionary:
 			push_warning("原作物品资源无效，保留旧点位：%s" % key)
 			stats.skipped += 1
 			continue
+		# 野外补给点有概率不刷新：池里追加一个空条目（roll 返回 null → 本点不出物）。
+		# 安全屋的 empty_weight 为 0，必出。空条目不参与 _load_pool_item 校验。
+		var empty_weight := float(entry.get("empty_weight", 0.0))
+		if empty_weight > 0.0:
+			pool_items.append(null)
+			pool_weights.append(empty_weight)
 		var point: Node2D = null
 		var duplicates: Array = existing.get(key, [])
 		if not duplicates.is_empty():

@@ -319,6 +319,8 @@ def main():
     ap.add_argument('--height', type=int)
     ap.add_argument('--project', type=Path, default=Path(__file__).resolve().parents[2])
     ap.add_argument('--item-aliases', type=Path, default=Path(__file__).with_name('item_pickup_aliases.json'))
+    ap.add_argument('--pickup-empty-ratio', type=float, default=0.5,
+                    help='野外补给点不刷新概率（安全屋恒为 0，默认 0.5）')
     args = ap.parse_args()
     game = Path(args.game_dir)
     out = Path(args.output)
@@ -494,7 +496,8 @@ def main():
                           'note': 'frame 0 的格位即 lower_tiles 里的坐标，'
                                   '右侧连续格为其余帧（水面 3 帧 / Block C 4 帧）'}}
     from export_item_pickups import export_pickups
-    pickups, pickup_report = export_pickups(game, args.map_id, w, h, args.project, args.item_aliases)
+    pickups, pickup_report = export_pickups(game, args.map_id, w, h, args.project,
+                                            args.item_aliases, args.pickup_empty_ratio)
     report_path = out / (prefix + '_item_pickups_report.json')
     report_path.write_text(json.dumps(pickup_report, ensure_ascii=False, indent=2) + '\n', encoding='utf8')
     data['item_pickups'] = pickups

@@ -345,7 +345,23 @@ def analyze_event(map_id, eid, chunks, item_db, variables, profile, index, names
         return None, report
 
 
-def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIAS_PATH):
+def is_safehouse_name(name):
+    """地图树名为「セーフハウス」的整张安全屋地图：补给必定出现，不加空结果。"""
+    return 'セーフハウス' in name
+
+
+def map_is_safehouse(game, map_id):
+    """按 RPG_RT.lmt 的地图树名判定；读不到就退回「不算安全屋」。"""
+    try:
+        from parse_lcf import parse_lmt
+        node = parse_lmt(str(Path(game) / 'RPG_RT.lmt')).get(map_id, {})
+        return is_safehouse_name(dec(node.get('name', b'')))
+    except (OSError, ValueError, KeyError, IndexError):
+        return False
+
+
+def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIAS_PATH,
+                   empty_ratio=0.5):
     result, reports = [], []
     try:
         item_db, variables, common = database(game)
@@ -353,6 +369,7 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
         index, names = resource_index(Path(project))
         aliases = json.loads(Path(alias_path).read_text(encoding='utf-8'))['aliases']
         events = lmu_events(str(Path(game) / ('Map%04d.lmu' % map_id)))
+        safehouse = map_is_safehouse(game, map_id)
     except (OSError, ValueError, IndexError, KeyError) as exc:
         return [], {'map_id': map_id, 'status': 'error', 'reason': str(exc), 'events': []}
     for eid, chunks in events:
@@ -367,6 +384,13 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
                       'source_key': 'rm2k3:map:%04d:event:%04d' % (map_id, eid),
                       'status': 'error', 'reason': str(exc)}
         if pickup is not None:
+            if not safehouse and empty_ratio > 0.0:
+                # 原作野外补给点有概率不刷新（固定スプレー是「变量==6」才显示，其余是空页）。
+                # 用「空权重 = 物品总权重 × ratio/(1-ratio)」表达：默认 50% 空、50% 出物。
+                count = len(pickup.get('items') or [pickup])
+                ratio = min(max(empty_ratio, 0.0), 0.95)
+                pickup['empty_weight'] = round(count * ratio / (1.0 - ratio), 4)
+                report['empty_weight'] = pickup['empty_weight']
             result.append(pickup)
         if report is not None:
             reports.append(report)
@@ -377,6 +401,7 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
         elif pickup.get('item_id'):
             flat_items.append(pickup['item_id'])
     return result, {'map_id': map_id, 'generator': GENERATOR, 'events_total': len(events),
+                    'safehouse': safehouse, 'empty_ratio': 0.0 if safehouse else empty_ratio,
                     'summary': dict(Counter(r['status'] for r in reports)),
                     'items': dict(Counter(flat_items)), 'events': reports}
 
@@ -409,6 +434,8 @@ def main():
     ap.add_argument('--project', type=Path, default=PROJECT)
     ap.add_argument('--aliases', type=Path, default=ALIAS_PATH)
     ap.add_argument('--report', type=Path, help='可选审计JSON；不传时不写文件')
+    ap.add_argument('--empty-ratio', type=float, default=0.5,
+                    help='野外补给点不刷新的概率（0~0.95；安全屋恒为 0，默认 0.5）')
     args = ap.parse_args()
     reports = []
     # 事件dry-run独立于Pillow/atlas，也不创建场景、TileSet、配置或缓存。
@@ -416,7 +443,8 @@ def main():
         path = Path(args.game_dir) / ('Map%04d.lmu' % mid)
         try:
             w, h = map_dimensions(path)
-            pickups, report = export_pickups(args.game_dir, mid, w, h, args.project, args.aliases)
+            pickups, report = export_pickups(args.game_dir, mid, w, h, args.project, args.aliases,
+                                             args.empty_ratio)
         except (OSError, ValueError, IndexError) as exc:
             report = {'map_id': mid, 'status': 'error', 'reason': str(exc), 'events': []}
         reports.append(report)

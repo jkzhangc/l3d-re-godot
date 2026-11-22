@@ -59,6 +59,17 @@ func _run() -> void:
 	# 真实入树后 random_pickup 已自毁，必须留下带稳定存档键的实际物品，而非空节点。
 	if args.size() > 1 and args[1] == "--expect-pickup":
 		_check(pre_pool_sizes == [2], "多页事件生成一个两项随机池")
+		# 空条目：null 项按权重返回 null，random_pickup 据此不刷新（野外概率空点）。
+		var probe: Resource = (load("res://script/director/drop_pool_data.gd") as Script).new()
+		var probe_items: Array[Resource] = [load("res://object/item_first_aid_spray.tres"), null]
+		probe.set("items", probe_items)
+		probe.set("weights", [1.0, 1.0])
+		seed(1)
+		var empties: int = 0
+		for _i: int in range(200):
+			if probe.roll() == null:
+				empties += 1
+		_check(empties > 60 and empties < 140, "空条目按 50% 权重真实生效")
 		var allowed: Array[String] = ["first_aid_spray", "greenherbs_01"]
 		var matching: Array[Node] = []
 		for child: Node in actors.get_children():

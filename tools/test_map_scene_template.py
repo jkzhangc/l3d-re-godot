@@ -135,7 +135,7 @@ def main() -> None:
     phases.append(run(args.godot, out, "runtime",
                       ["--quit-after", "1800", "--script",
                        "res://tools/map_template_runtime_check.gd", "--", scene_path, "--expect-pickup"],
-                      "MAP_TEMPLATE_RUNTIME_CHECK: 15 checks / 0 failed"))
+                      "MAP_TEMPLATE_RUNTIME_CHECK: 16 checks / 0 failed"))
     runtime = (out / "runtime.log").read_text(encoding="utf-8")
     assert "玩家已移入与敌人相同的" not in runtime, "new template unexpectedly reparented player"
     report = {"result": "PASS", "generator": "script/map_restore/map_tilemap_generator.gd",

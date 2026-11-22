@@ -77,7 +77,12 @@ func _ready() -> void:
 
 	var picked: Resource = _roll_deterministic()
 	if picked == null:
-		print("[随机掉落物] 掉落池为空或全 0 权重，未生成拾取物")
+		if pool != null and not pool.items.is_empty():
+			# 池里有空条目（原作野外补给点有概率不刷新）：本点安静地不出物，不记为已消耗，
+			# 换图/重载后按同一持久键重新抽。
+			print("[随机掉落物] 本点抽到空结果，不刷新：%s" % name)
+		else:
+			print("[随机掉落物] 掉落池为空或全 0 权重，未生成拾取物")
 		queue_free()
 		return
 
