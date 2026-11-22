@@ -319,8 +319,8 @@ def main():
     ap.add_argument('--height', type=int)
     ap.add_argument('--project', type=Path, default=Path(__file__).resolve().parents[2])
     ap.add_argument('--item-aliases', type=Path, default=Path(__file__).with_name('item_pickup_aliases.json'))
-    ap.add_argument('--pickup-empty-ratio', type=float, default=0.5,
-                    help='野外补给点不刷新概率（安全屋恒为 0，默认 0.5）')
+    ap.add_argument('--pickup-empty-ratio', type=float, default=None,
+                    help='强制覆盖野外空概率；不传则按原作 RND 档位精确计算，安全屋恒为 0')
     args = ap.parse_args()
     game = Path(args.game_dir)
     out = Path(args.output)

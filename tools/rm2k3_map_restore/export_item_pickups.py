@@ -208,7 +208,7 @@ def _analyze_pool(pages, base, item_db, variables, profile, index, names, aliase
             continue
         items.append({'page_id': pid, 'source_item_id': sid, 'source_item_name': item_name,
                       'item_id': index[resource]['item_id'], 'resource_path': resource,
-                      'mapping_reason': why})
+                      'page_value': _cond.get('5', 0), 'mapping_reason': why})
         page_ids.append(pid)
     if not items:
         raise ValueError('多页物品事件没有可映射物品')
@@ -335,6 +335,8 @@ def analyze_event(map_id, eid, chunks, item_db, variables, profile, index, names
                 raise ValueError('给物品但缺少精确地面物品身份/拾取提示，疑似剧情奖励')
         pickup = dict(base, page_id=pid, source_item_id=source_id, source_item_name=item_name,
                       item_id=index[resource]['item_id'], resource_path=resource,
+                      source_variable_id=cond.get('4', 0) if flags else 0,
+                      source_value=cond.get('5', 0) if flags else None,
                       position=[x * 32 + 16, y * 32 + 16], generator=GENERATOR,
                       mapping_reason=reason + '；' + mapping_reason)
         report.update(status='converted', reason=pickup['mapping_reason'],
@@ -360,8 +362,54 @@ def map_is_safehouse(game, map_id):
         return False
 
 
+def rnd_ranges(events):
+    """解析「全マップ共通処理」进图时给点位变量的 RND 赋值：{变量: [(min,max), ...]}。
+    同一变量在难度分支里可能有多个范围，调用方取最窄的一档（最低难度）。"""
+    out = {}
+    for _eid, chunks in events:
+        if '全マップ共通処理' not in dec(chunks.get(1, b'')):
+            continue
+        for pid, pg in event_header(chunks)[3]:
+            for c in parse_commands(pg.get(0x34, b'\0\0\0\0')) or []:
+                if c['code'] != 10220 or len(c['params']) < 7:
+                    continue
+                target, op, kind, lo, hi = (c['params'][1], c['params'][3],
+                                            c['params'][4], c['params'][5], c['params'][6])
+                if op != 0 or kind != 3 or target < 1360 or target > 1410:
+                    continue
+                out.setdefault(target, []).append((min(lo, hi), max(lo, hi)))
+    return out
+
+
+## 按原作 RND 范围算空概率：变量值落在页条件之外的档位 = 空页。
+## 物品每项权重 1，空权重 = 范围大小 − 可达页数，总概率正好等于原作档位比例。
+def _apply_empty(pickup, ranges, override=None):
+    var_id = int(pickup.get('source_variable_id', 0))
+    values = [it.get('page_value') for it in pickup.get('items') or []]
+    if not values:
+        values = [pickup.get('source_value')]
+    values = [v for v in values if v is not None]
+    if override is not None:
+        ratio = min(max(float(override), 0.0), 0.95)
+        if ratio > 0.0 and values:
+            count = max(len(values), 1)
+            pickup['empty_weight'] = round(count * ratio / (1.0 - ratio), 4)
+            pickup['empty_ratio'] = round(ratio, 4)
+        return
+    if not var_id or not values or not ranges.get(var_id):
+        return
+    lo, hi = min(ranges[var_id], key=lambda r: r[1] - r[0])
+    span = hi - lo + 1
+    reachable = [v for v in values if lo <= v <= hi]
+    empty = span - len(reachable)
+    if empty > 0:
+        pickup['empty_weight'] = float(empty)
+        pickup['empty_ratio'] = round(empty / float(span), 4)
+        pickup['rnd_range'] = [lo, hi]
+
+
 def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIAS_PATH,
-                   empty_ratio=0.5):
+                   empty_ratio=None):
     result, reports = [], []
     try:
         item_db, variables, common = database(game)
@@ -370,6 +418,7 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
         aliases = json.loads(Path(alias_path).read_text(encoding='utf-8'))['aliases']
         events = lmu_events(str(Path(game) / ('Map%04d.lmu' % map_id)))
         safehouse = map_is_safehouse(game, map_id)
+        ranges = rnd_ranges(events)
     except (OSError, ValueError, IndexError, KeyError) as exc:
         return [], {'map_id': map_id, 'status': 'error', 'reason': str(exc), 'events': []}
     for eid, chunks in events:
@@ -384,13 +433,11 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
                       'source_key': 'rm2k3:map:%04d:event:%04d' % (map_id, eid),
                       'status': 'error', 'reason': str(exc)}
         if pickup is not None:
-            if not safehouse and empty_ratio > 0.0:
-                # 原作野外补给点有概率不刷新（固定スプレー是「变量==6」才显示，其余是空页）。
-                # 用「空权重 = 物品总权重 × ratio/(1-ratio)」表达：默认 50% 空、50% 出物。
-                count = len(pickup.get('items') or [pickup])
-                ratio = min(max(empty_ratio, 0.0), 0.95)
-                pickup['empty_weight'] = round(count * ratio / (1.0 - ratio), 4)
-                report['empty_weight'] = pickup['empty_weight']
+            if not safehouse:
+                _apply_empty(pickup, ranges, empty_ratio)
+                if pickup.get('empty_weight'):
+                    report['empty_weight'] = pickup['empty_weight']
+                    report['empty_ratio'] = pickup.get('empty_ratio', 0.0)
             result.append(pickup)
         if report is not None:
             reports.append(report)
@@ -401,7 +448,7 @@ def export_pickups(game, map_id, width, height, project=PROJECT, alias_path=ALIA
         elif pickup.get('item_id'):
             flat_items.append(pickup['item_id'])
     return result, {'map_id': map_id, 'generator': GENERATOR, 'events_total': len(events),
-                    'safehouse': safehouse, 'empty_ratio': 0.0 if safehouse else empty_ratio,
+                    'safehouse': safehouse, 'empty_ratio_override': empty_ratio,
                     'summary': dict(Counter(r['status'] for r in reports)),
                     'items': dict(Counter(flat_items)), 'events': reports}
 
@@ -434,8 +481,8 @@ def main():
     ap.add_argument('--project', type=Path, default=PROJECT)
     ap.add_argument('--aliases', type=Path, default=ALIAS_PATH)
     ap.add_argument('--report', type=Path, help='可选审计JSON；不传时不写文件')
-    ap.add_argument('--empty-ratio', type=float, default=0.5,
-                    help='野外补给点不刷新的概率（0~0.95；安全屋恒为 0，默认 0.5）')
+    ap.add_argument('--empty-ratio', type=float, default=None,
+                    help='强制覆盖野外空概率（0~0.95）；不传则按原作 RND 档位精确计算，安全屋恒为 0')
     args = ap.parse_args()
     reports = []
     # 事件dry-run独立于Pillow/atlas，也不创建场景、TileSet、配置或缓存。

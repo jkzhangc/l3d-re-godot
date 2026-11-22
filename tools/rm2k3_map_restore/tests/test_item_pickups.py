@@ -245,7 +245,20 @@ class PickupTests(unittest.TestCase):
             self.assertEqual(len(items), 1)
             self.assertEqual(report['summary'], {'error': 1, 'converted': 1})
             self.assertFalse(report['safehouse'])
-            self.assertEqual(items[0]['empty_weight'], 1.0)
+            self.assertNotIn('empty_weight', items[0])
+
+    def test_empty_weight_follows_original_rnd_range(self):
+        fixed = {'source_variable_id': 1385, 'source_value': 6}
+        pickup._apply_empty(fixed, {1385: [(1, 6)]})
+        self.assertEqual(fixed['empty_weight'], 5.0)
+        self.assertEqual(fixed['rnd_range'], [1, 6])
+        covered = {'source_variable_id': 1377,
+                   'items': [{'page_value': value} for value in range(1, 8)]}
+        pickup._apply_empty(covered, {1377: [(1, 7)]})
+        self.assertNotIn('empty_weight', covered)
+        override = {'source_variable_id': 0, 'source_value': 1}
+        pickup._apply_empty(override, {}, 0.5)
+        self.assertEqual(override['empty_weight'], 1.0)
 
     def test_safehouse_detection_suppresses_empty_result(self):
         self.assertTrue(pickup.is_safehouse_name('セーフハウス'))
