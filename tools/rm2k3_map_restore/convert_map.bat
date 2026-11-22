@@ -63,7 +63,7 @@ if errorlevel 1 (
 rem ------------------------------------------------------------
 rem Step 2/3: LMU -> layered atlas + TileMap JSON
 rem ------------------------------------------------------------
-%PY% "%~dp0export_map.py" "%RM_DIR%" "%MAP_ID%" --output "%OUT_DIR%" %DIM_ARGS%
+%PY% "%~dp0export_map.py" "%RM_DIR%" "%MAP_ID%" --project "%GODOT_DIR%" --output "%OUT_DIR%" %DIM_ARGS%
 if errorlevel 1 (
   echo [FAILED] LMU export did not pass
   exit /b %errorlevel%

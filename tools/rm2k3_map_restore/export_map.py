@@ -317,6 +317,8 @@ def main():
     ap.add_argument('--chipset')
     ap.add_argument('--width', type=int)
     ap.add_argument('--height', type=int)
+    ap.add_argument('--project', type=Path, default=Path(__file__).resolve().parents[2])
+    ap.add_argument('--item-aliases', type=Path, default=Path(__file__).with_name('item_pickup_aliases.json'))
     args = ap.parse_args()
     game = Path(args.game_dir)
     out = Path(args.output)
@@ -491,6 +493,16 @@ def main():
             'animation': {'lower': anim_lower, 'duration': BLOCK_ANIM_DURATION,
                           'note': 'frame 0 的格位即 lower_tiles 里的坐标，'
                                   '右侧连续格为其余帧（水面 3 帧 / Block C 4 帧）'}}
+    from export_item_pickups import export_pickups
+    pickups, pickup_report = export_pickups(game, args.map_id, w, h, args.project, args.item_aliases)
+    report_path = out / (prefix + '_item_pickups_report.json')
+    report_path.write_text(json.dumps(pickup_report, ensure_ascii=False, indent=2) + '\n', encoding='utf8')
+    data['item_pickups'] = pickups
+    data['item_pickups_export_ok'] = pickup_report.get('status') != 'error'
+    data['item_pickups_preserve_keys'] = [event['source_key'] for event in pickup_report['events']
+                                          if event['status'] != 'converted' and 'source_key' in event]
+    data['item_pickups_report'] = report_path.name
+    print('fixed pickups:', len(pickups), 'audit:', report_path)
     json_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf8')
     print('saved', json_path); print('saved', lower_path); print('saved', upper_path)
     print('saved', render_path); print('lower tiles', len(lower_tiles), 'upper tiles', len(upper_tiles), 'map', w, 'x', h)

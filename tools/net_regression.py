@@ -94,8 +94,10 @@ SCENARIOS: dict[str, dict] = {
         "敌人同步：Director Host 化收编 + Client 可靠 spawn/死亡广播（第一关街道图）",
         ["--net-test=host", "--net-test-enemies", "--net-test-scene=enemies"],
         [["--net-test=client", "--net-test-enemies", "--net-test-scene=enemies"]],
-        {"host": ["AUTO_ENEMY_HOST_COMPLETE", "AUTO_ENEMY_HOST_DEATH_COMPLETE"],
-         "client0": ["AUTO_ENEMY_CLIENT_COMPLETE", "AUTO_ENEMY_CLIENT_DEATH_COMPLETE"]},
+        {"host": ["AUTO_ENEMY_HOST_COMPLETE", "AUTO_ENEMY_HOST_BEHAVIOR_COMPLETE",
+                  "AUTO_ENEMY_HOST_DEATH_COMPLETE"],
+         "client0": ["AUTO_ENEMY_CLIENT_COMPLETE", "AUTO_ENEMY_CLIENT_BEHAVIOR_COMPLETE",
+                     "AUTO_ENEMY_CLIENT_DEATH_COMPLETE"]},
     ),
     "appearance": _scenario(
         "外观/难度端到端：特感 A1 复制 + 变体 A5 重建 + 酸弹 A2 镜像 + 难度 B1 同步（第一关街道图）",

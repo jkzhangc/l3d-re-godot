@@ -574,6 +574,7 @@ func _physics_process(delta: float) -> void:
 		# 动态掉落物收编（09-22）：ItemManager 运行期投放的喷雾/药品/弹药堆。
 		_register_untracked_host_pickups(delta)
 		_announce_host_enemy_deaths(delta)
+		_sync_host_enemy_behaviors()
 		_refresh_host_safe_door_readiness()
 		_snapshot_accumulator += delta
 		_player_snapshot_accumulator += delta
@@ -3963,6 +3964,7 @@ func despawn_network_enemy(entity_id: int) -> void:
 
 
 func _despawn_enemy_local(entity_id: int) -> void:
+	_client_enemy_behaviors.erase(entity_id)
 	var entry: Dictionary = _enemies.get(entity_id, {})
 	var node := _resolve_enemy_entry(entry)
 	_enemies.erase(entity_id)
@@ -4569,6 +4571,8 @@ func _ensure_client_player(peer_id: int, public_state: Dictionary, snap: bool,
 		entry["moving"] = false if is_dead else bool(public_state.get("moving", false))
 		entry["walking"] = false if is_dead else bool(public_state.get("walking", false))
 	_players[peer_id] = entry
+	if created:
+		_refresh_client_enemy_targets()
 
 
 # ---------------------------------------------------------------- Client enemy presentation
@@ -4590,6 +4594,7 @@ func _apply_client_enemy_snapshot(states: Array, snap: bool, apply_dynamic: bool
 			var entity_id := int(key)
 			if not seen.has(entity_id):
 				_remove_client_enemy(entity_id)
+				_client_enemy_behaviors.erase(entity_id)
 
 
 ## 可靠 world_snapshot 使用字典（含预置场景路径）；20Hz 快照使用紧凑数组，减少 ENet 包尺寸。
@@ -4656,12 +4661,17 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
 				var variant := _get_network_variant_data(str(public_state.get("variant_id", "")))
 				if variant:
 					variant.apply_to_enemy(node)
+					node.set("variant_data", variant)
 			node.configure_network_entity(entity_id, true)
 			node.global_position = _packet_position(public_state)
 			_players_parent.add_child(node)
 			if special:
 				## 与 Host 同组：Client 侧的调试/统计（以及未来的本地表现）能看到"这是特感"。
 				node.add_to_group("special_enemies")
+		# 复用地图预置节点也保留白名单身份；外观已由该地图本身配置，不重复注入覆盖。
+		var restored_variant := _get_network_variant_data(str(public_state.get("variant_id", "")))
+		if restored_variant:
+			node.set("variant_data", restored_variant)
 		if is_instance_valid(_players_parent) and node.get_parent() != _players_parent:
 			node.reparent(_players_parent, true)
 		node.configure_network_entity(entity_id, true)
@@ -4677,7 +4687,20 @@ func _ensure_client_enemy(entity_id: int, public_state: Dictionary, snap: bool,
 	#      （Host 侧 _find_revive_target_for 复核不过 → 直接拒绝）＝「玩家之间没办法救援」。
 	# 「不许把尸体拉回行走状态」这件事其实已由 player.apply_network_presentation 的
 	# _is_dying 分支保证：它只对齐权威坐标并丢弃插值目标，绝不再调 update_appearance。
-	# 而可靠包与不可靠包同走 ENet 有序通道，不存在「死亡后仍收到死亡前位置」的乱序。
+	# 敌人热包走 channel 2，可靠事件走默认通道，二者不能假定全局有序；
+	# 死亡幂等由实体保证，以下独立行为版本保护强制目标/狂暴/发现状态。
+	# 行为独立版本门控：过期世界快照仍可补建实体，但不能覆盖更新的可靠事件。
+	if public_state.has("behavior_revision"):
+		_apply_client_enemy_behavior(node, public_state)
+	elif public_state.has("ai_state") and (apply_dynamic or not established):
+		# 旧字典包默认不锁定；狂暴仍从既有 element_state bit3 读取。
+		var legacy := public_state.duplicate()
+		legacy["rage"] = bool(int(public_state.get("element_state", 0)) & 8)
+		_apply_client_enemy_behavior(node, legacy)
+	if _client_enemy_behaviors.has(entity_id):
+		var cached_behavior: Dictionary = _client_enemy_behaviors[entity_id]
+		if int(cached_behavior.get("behavior_revision", -1)) > int(node.get("_network_behavior_revision")):
+			_apply_client_enemy_behavior(node, cached_behavior)
 	# 新建的敌人没有更可信的本地状态，必须用本包初始化；已存在的才受版本门控。
 	if apply_dynamic or not established:
 		node.apply_network_presentation(
@@ -4898,7 +4921,7 @@ func _build_pickup_snapshot() -> Array:
 				"throwable" if item and item.item_type == ItemData.ItemType.THROWABLE else \
 				"healing" if item and (item.item_type == ItemData.ItemType.HEALING
 					or item.item_type == ItemData.ItemType.SUPPORT) else \
-				"oil" if bool(pickup.get("is_oil_barrel")) else ""
+				"oil" if (pickup.get("is_oil_barrel") == true) else ""
 		if pickup_kind.is_empty():
 			continue
 		var is_oil: bool = pickup_kind == "oil"
@@ -5290,7 +5313,7 @@ func _try_host_pickup(peer_id: int, pickup_id: int, claimed_position: Variant = 
 	var is_healing_pickup: bool = healing != null and (healing.item_type == ItemData.ItemType.HEALING
 		or healing.item_type == ItemData.ItemType.SUPPORT)
 	## 油桶（2026-11-21）：不是 ItemData，靠脚本字段识别
-	var oil_barrel: bool = bool(pickup.get("is_oil_barrel")) if is_instance_valid(pickup) else false
+	var oil_barrel: bool = (pickup.get("is_oil_barrel") == true) if is_instance_valid(pickup) else false
 	if not is_instance_valid(pickup) or not is_instance_valid(player) or not state \
 			or (not weapon and not throwable and not is_healing_pickup and not oil_barrel):
 		return
@@ -6174,6 +6197,89 @@ func _chunk_enemy_snapshot(states: Array) -> Array:
 	return chunks
 
 
+## 行为为低频可靠状态，不扩大 9 项高频条目。版本只在实际状态变化时递增。
+func _host_enemy_behavior(entity_id: int, enemy: CharacterBody2D) -> Dictionary:
+	var target_peer_id := 0
+	var target: CharacterBody2D = enemy.get_forced_target()
+	if enemy.has_forced_target() and is_instance_valid(target):
+		for key: Variant in _players:
+			if _player_node(_players[key] as Dictionary) == target:
+				target_peer_id = int(key)
+				break
+	var signature: Array = [enemy.get_network_ai_state(), enemy.has_forced_target(), target_peer_id, enemy.is_rage()]
+	var entry: Dictionary = _enemies[entity_id]
+	if entry.get("behavior_signature", []) != signature:
+		entry["behavior_signature"] = signature
+		entry["behavior_revision"] = int(entry.get("behavior_revision", 0)) + 1
+		_enemies[entity_id] = entry
+	return {
+		"behavior_revision": int(entry.get("behavior_revision", 1)),
+		"ai_state": signature[0],
+		"forced_target_locked": signature[1],
+		"forced_target_peer_id": target_peer_id,
+		"rage": signature[3],
+	}
+
+
+func _sync_host_enemy_behaviors() -> void:
+	if not net.is_host:
+		return
+	for key: Variant in _enemies.keys():
+		var entity_id := int(key)
+		var enemy := _resolve_enemy_entry(_enemies[entity_id] as Dictionary)
+		if not is_instance_valid(enemy):
+			continue
+		var behavior := _host_enemy_behavior(entity_id, enemy)
+		var entry: Dictionary = _enemies[entity_id]
+		var revision := int(behavior["behavior_revision"])
+		if revision == int(entry.get("announced_behavior_revision", 0)):
+			continue
+		entry["announced_behavior_revision"] = revision
+		_enemies[entity_id] = entry
+		_send_to_ready_clients(&"enemy_behavior_presentation", [entity_id, behavior])
+
+
+var _client_enemy_behaviors: Dictionary = {}
+
+
+@rpc("authority", "call_remote", "reliable")
+func enemy_behavior_presentation(entity_id: int, behavior: Dictionary) -> void:
+	if net.is_host or _scene_transitioning or entity_id <= 0:
+		return
+	var previous: Dictionary = _client_enemy_behaviors.get(entity_id, {})
+	if int(behavior.get("behavior_revision", -1)) < int(previous.get("behavior_revision", -1)):
+		return
+	_client_enemy_behaviors[entity_id] = behavior.duplicate()
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	if is_instance_valid(enemy):
+		_apply_client_enemy_behavior(enemy, behavior)
+
+
+func _apply_client_enemy_behavior(enemy: CharacterBody2D, behavior: Dictionary) -> void:
+	var entity_id: int = enemy.network_entity_id
+	var revision := int(behavior.get("behavior_revision", -1))
+	var cached: Dictionary = _client_enemy_behaviors.get(entity_id, {})
+	if revision >= 0 and revision >= int(cached.get("behavior_revision", -1)):
+		# 也缓存世界快照的新版本，节点重建后旧生成包不能丢掉已知的可靠状态。
+		_client_enemy_behaviors[entity_id] = behavior.duplicate()
+	var peer_id := int(behavior.get("forced_target_peer_id", 0))
+	var target := _player_node(_players.get(peer_id, {}) as Dictionary)
+	enemy.apply_network_behavior(int(behavior.get("behavior_revision", -1)),
+		str(behavior.get("ai_state", "")), bool(behavior.get("forced_target_locked", false)),
+		peer_id, bool(behavior.get("rage", false)), target)
+
+
+func _refresh_client_enemy_targets() -> void:
+	if net.is_host:
+		return
+	for entry_value: Variant in _enemies.values():
+		var enemy := _resolve_enemy_entry(entry_value as Dictionary)
+		if not is_instance_valid(enemy) or not enemy.has_method("has_forced_target") or not enemy.has_forced_target():
+			continue
+		var peer_id: int = enemy.get_network_forced_target_peer_id()
+		enemy.refresh_network_forced_target(_player_node(_players.get(peer_id, {}) as Dictionary))
+
+
 func _public_enemy_state(entity_id: int) -> Dictionary:
 	if not _enemies.has(entity_id):
 		return {}
@@ -6196,10 +6302,10 @@ func _public_enemy_state(entity_id: int) -> Dictionary:
 		# A1 特感复制：非特感为空串；Client 只在可靠通道（spawn RPC / world_snapshot）
 		# 建实体时消费本字段，紧凑快照不带（_normalize_enemy_snapshot 会剥掉）。
 		"special_id": enemy.get_network_special_id(),
-		# A5 僵尸变体：同 special_id 语义，普通丧尸的差异化行走图靠它重建；
-		# 狂暴换皮不在此 —— 随 element_state bit3 实时同步。
+		# 普通/狂暴素材仍由本地白名单重建；狂暴走下方独立版本行为状态，
+		# element_state bit3 继续保留旧协议编码，不扩展高频条目。
 		"variant_id": enemy.get_network_variant_id(),
-	}
+	}.merged(_host_enemy_behavior(entity_id, enemy))
 
 
 func _prune_invalid_host_enemies() -> void:

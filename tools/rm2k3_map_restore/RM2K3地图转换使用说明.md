@@ -15,7 +15,7 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 `export_map.py` 会用已有的一边整除格数补齐（如 Map0030 只存高度 25、共 500 格 → 20×25）；
 两边都缺时才按格数反推，且只有 RM2K3 最小尺寸 20×15 之下**恰好只有一组**因式分解才自动采用
 （如 300 格 → 20×15），多解仍会要求显式 `--width/--height`。
-第 7 个参数（可选）`rebuild` 强制重建 TileSet，丢弃编辑器侧的碰撞与 `z_index` 加工。
+第 7 个参数（可选）`rebuild` 在新建目标场景路径时强制重建 TileSet（会丢弃碰撞与 `z_index` 加工）；目标场景已存在则忽略，以保护作者资源。
 
 脚本按三步执行，任一步失败即以非零码中断（不会留下半成品）：
 
@@ -44,7 +44,7 @@ python batch_convert.py 30-35 --rebuild   :: 强制重建 TileSet
 | 选项 | 作用 |
 |---|---|
 | `--game-dir` / `--godot-dir` / `--out-dir` | 覆盖默认路径（默认 `E:\15.L3D`、仓库根、`art\Tilesets\rm2k3_auto`） |
-| `--rebuild` | 等同 `convert_map.bat` 的 `rebuild`，丢弃编辑器侧碰撞与 `z_index` |
+| `--rebuild` | 新建目标场景路径时重建 TileSet；已有场景仅同步物品点，忽略此选项 |
 | `--stop-on-error` | 任一地图失败即停止（默认继续跑完剩余地图） |
 | `--dry-run` | 只打印将执行的命令，不落地任何文件 |
 | `-y` / `--yes` | 交互模式下跳过确认 |
@@ -60,13 +60,11 @@ python batch_convert.py 30-35 --rebuild   :: 强制重建 TileSet
 > 不是旧实现那样盲取 `ChipSet\` 目录里的第一个文件。详见
 > [`RM2K3到VX_Ace图块转换说明.md`](RM2K3到VX_Ace图块转换说明.md)。
 
-> **第 3 步是增量的**：目标 TileSet 已存在时**复用**它、只补齐缺失格位，编辑器侧加工
-> （碰撞多边形、逐格 `z_index`、资源与 `ext_resource` 的 `uid`）都会保留；已有 TileSet
-> 覆盖全部所需格位时不写文件。传第 7 个参数 `rebuild` 可强制重建（丢弃上述加工）。
-> ⚠ headless 运行没有编辑器的 ResourceUID 缓存，`ResourceSaver` 不写 `uid=`，
-> 生成器会在保存后把保存前的 uid 与 `ext_resource` 的 uid 补回去
->（`scene/maps/突袭-第二关-学校门口.tscn` 正是按 uid 引用这两个 TileSet 的）。
-> ⚠ `scene/maps_auto/MapXXXX_auto.tscn` 本身始终重生成。
+> **第 3 步的保护规则（2026-11-22）**：首次生成目标场景时，TileSet 沿用原来的增量
+> 复用/补格逻辑；**目标场景已存在时，只同步本工具生成的固定物品点**，不修改作者节点、
+> 图块或 TileSet。此时 `rebuild` 会被忽略并提示；需要重新做图块应另选新的目标场景路径，
+> 不会借一次物品同步丢掉作者已画的碰撞。
+> headless 保存后仍恢复原有资源 uid 元数据。
 
 > ⚠ **批处理文件的编码**：`convert_map.bat` 与 `convert_chipset.bat` 均保持**纯 ASCII**。
 > cmd.exe 用 OEM 代码页（中文 Windows 为 936）解析批处理，UTF-8 中文会乱码，且行尾的
@@ -74,6 +72,35 @@ python batch_convert.py 30-35 --rebuild   :: 强制重建 TileSet
 > `convert_chipset.bat` 原先就是这样**实际不可用**的（无参路径直接报解析错误），
 > 已于 2026-09-11 改为纯 ASCII 并加 `chcp 65001`。**新增 bat 时请同样遵守。**
 
+
+## 固定掉落物事件（2026-11-22）
+
+常规转换已自动接入：`export_map.py` 读取 LMU 的物品命令和 `RPG_RT.ldb` 物品名，
+用现有 `item_name` 或 `item_pickup_aliases.json` 的精确别名映射资源；生成器把匹配项
+放成 DecorLayer 下的 `object/random_pickup.tscn`，内置单项 `DropPoolData`。
+这与现有喷雾/武器随机点相同，可在编辑器把池改成多项；不是剧情钥匙的 ItemPickupPoint 脚本。
+
+- 坐标按32像素格中心换算：`(x * 32 + 16, y * 32 + 16)`。
+- 新增 `MapXXXX_item_pickups_report.json`：含已转换/跳过原因、原事件/页/物品名与目标资源。
+- 节点名 `ItemPickupPoint_RM2K3_E<事件号>` 保持稳定；metadata 标记地图+事件来源键。
+- 已有场景只同步工具标记节点，作者节点不动；未知物品保留旧成功点并报告，不猜配。
+- 简单地面给物品事件和已核实的 L3D 固定拾取模板可转；**同一事件的多个可达页会合并成
+  一个多项随机池**（原作状态变量分档，等价于现有的武器随机掉落物），同条件值的后续页
+  按 RM 页优先级视为死页。
+- 無限固定武器架（拿了不消失）、医疗箱、商店和剧情奖励不自动展开，也不移植原作完整
+  事件运行时；Map0024 的 6 个固定喷雾（V1385..1390 == 6）已能识别。
+- 别名表 `item_pickup_aliases.json` 覆盖原作常见枪械/药品的日文原名到现有资源；
+  未列出的项（MP5、钉枪、機関砲/M61、消火器、链锯、熊玩偶）留在报告里，不猜配。
+- Map0024 现转换 18 个点（9 个多页武器池 + 6 个固定喷雾等），Map0025 转换 14 个多页池。
+
+只读检查（不生成图块或场景，也不需要 Pillow）：
+
+```bash
+python tools/rm2k3_map_restore/export_item_pickups.py E:/15.L3D 25 26 28 32
+```
+
+`export_map.py --item-aliases <json>` 可指定自己的精确映射表。完整规则见同目录
+[README 的固定物品事件导入](README.md)。本轮未重写 `scene/maps/` 的死亡岛手工地图。
 
 ## 分步转换
 
@@ -111,7 +138,7 @@ godot --headless --path . --script res://script/map_restore/map_tilemap_generato
 
 骨架由 `script/map_restore/map_scene_template.gd` 统一生成，地图根挂 `MapContext` 声明地图标识、排序容器与相机参数。模板只保存地图内容和根下独立 `PlayerSpawn(Marker2D)`，玩家由会话在运行时直接创建到 DecorLayer。修改默认出生位只需移动标记；存档或入口落点仍由原有流程优先应用，不会被标记覆盖。
 
-公共跟随相机、Menu 和 CombatHUD 由常驻 GameSession 持有并跨图复用，GameInit 每次入图仅创建一份。直接 F6 运行地图会自动装配会话；正常加载使用 GameSession/MapHost，业务地图身份通过 MapLocator 查询。原命令参数、逐格恢复、TileSet 增量复用和原地图持久键保持不变。现役地图已完成一次性内容迁移，但转换命令不会重生成 `scene/maps/` 手工地图；生成目录下场景仍是可覆盖派生产物，人工修改前应另存。
+公共跟随相机、Menu 和 CombatHUD 由常驻 GameSession 持有并跨图复用，GameInit 每次入图仅创建一份。直接 F6 运行地图会自动装配会话；正常加载使用 GameSession/MapHost，业务地图身份通过 MapLocator 查询。原命令参数、首次逐格恢复与原地图持久键保持不变。转换命令不会自动重生成 `scene/maps/` 手工地图；目标场景已存在时仅同步工具标记物品点，图块和作者节点保留。首次加载时若活动地图尚未注册，预摆物品通过所属地图祖先解析持久键，不把会话路径写进存档。
 
 模板端到端校验可从项目根运行 `python tools/test_map_scene_template.py`，预期 `MAP_SCENE_TEMPLATE_E2E: PASS`；它只在 `.workbuddy/tmp/` 下写隔离测试产物，不覆盖正式地图、TileSet、配置或玩家存档。
 

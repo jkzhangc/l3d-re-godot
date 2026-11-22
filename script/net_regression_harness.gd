@@ -844,6 +844,9 @@ func _run_auto_host_enemy_test() -> void:
 		net.leave()
 		get_tree().quit(1)
 		return
+	var behavior_ok: bool = await _run_auto_host_enemy_behavior_test()
+	if not behavior_ok:
+		return
 	print("[NetworkWorld] AUTO_ENEMY_HOST_COMPLETE registered=%d" % _enemies.size())
 	# 死亡广播回归：等 Client 建立表现实体后击杀一名敌人。
 	# Client 侧断言会验证可靠 enemy_death_presentation 已被应用（而非等 2s 重同步）。
@@ -864,6 +867,134 @@ func _run_auto_host_enemy_test() -> void:
 	print("[NetworkWorld] AUTO_ENEMY_HOST_DEATH_COMPLETE victim=%s dead=%s" % [victim.name, victim.is_network_dead()])
 	# 留出 Client 完成死亡断言并自行退出；Host 随后走 _on_peer_left 的常规收束。
 	await get_tree().create_timer(4.0).timeout
+
+
+var _auto_enemy_behavior_acks: Dictionary = {}
+var _auto_enemy_behavior_old: Dictionary = {}
+var _auto_enemy_behavior_complete: bool = false
+
+
+## 真双端：生产 spawn、行为可靠事件与 world_snapshot；Client 回执前 Host 不进入下一阶段。
+func _run_auto_host_enemy_behavior_test() -> bool:
+	var deadline := Time.get_ticks_msec() + 8000
+	while _ready_client_peers.is_empty() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if _ready_client_peers.is_empty():
+		return false
+	var client_id: int = int(_ready_client_peers.keys()[0])
+	var host_player := _player_node(_players.get(1, {}) as Dictionary)
+	var client_player := _player_node(_players.get(client_id, {}) as Dictionary)
+	if not is_instance_valid(host_player) or not is_instance_valid(client_player):
+		return false
+	for entry_value: Variant in _players.values():
+		var player := _player_node(entry_value as Dictionary)
+		if is_instance_valid(player):
+			player.max_hp = 100000.0
+			player.current_hp = 100000.0
+	var enemy := ENEMY_SCENE.instantiate() as CharacterBody2D
+	NETWORK_VARIANT_MALE.apply_to_enemy(enemy)
+	enemy.variant_data = NETWORK_VARIANT_MALE
+	# 本用例只考察同步，不让力竭随机计时中途改变夹具状态。
+	enemy.variant_rage_exhaust_seconds = 0.0
+	enemy.position = host_player.position + Vector2(300, 0)
+	_players_parent.add_child(enemy)
+	var sm := enemy.get_node("StateMachine")
+	sm.process_mode = Node.PROCESS_MODE_DISABLED
+	sm._on_transition_requested("Idle")
+	_register_untracked_host_enemies()
+	var entity_id: int = enemy.network_entity_id
+	# 无狂暴图变体在收编前带锁定；验证 spawn 初始状态与运行期事件两个入口。
+	var plain := ENEMY_SCENE.instantiate() as CharacterBody2D
+	NETWORK_VARIANT_CHUNEN.apply_to_enemy(plain)
+	plain.variant_data = NETWORK_VARIANT_CHUNEN
+	plain.position = host_player.position + Vector2(-300, 0)
+	_players_parent.add_child(plain)
+	plain.get_node("StateMachine").process_mode = Node.PROCESS_MODE_DISABLED
+	plain.lock_forced_target(client_player)
+	plain.set_rage(true)
+	_register_untracked_host_enemies()
+	var plain_id: int = plain.network_entity_id
+	for phase: int in [1, 2, 3, 4]:
+		if phase == 1:
+			enemy.lock_forced_target(client_player)
+			enemy.set_rage(true)
+		elif phase == 2:
+			sm._on_transition_requested("Chase")
+			enemy.lock_forced_target(host_player)
+		elif phase == 3:
+			enemy.release_forced_target()
+			enemy.set_rage(false)
+		else:
+			_send_to_ready_clients(&"auto_enemy_behavior_rebuild", [entity_id])
+		_sync_host_enemy_behaviors()
+		_broadcast_reliable_world_snapshot()
+		_send_to_ready_clients(&"auto_enemy_behavior_probe", [phase, entity_id, plain_id, client_id])
+		deadline = Time.get_ticks_msec() + 5000
+		while Time.get_ticks_msec() < deadline:
+			var all_acked := true
+			for peer_id: int in _active_client_peer_ids():
+				all_acked = all_acked and bool(_auto_enemy_behavior_acks.get("%d:%d" % [phase, peer_id], false))
+			if all_acked:
+				break
+			await get_tree().create_timer(0.05).timeout
+		for peer_id: int in _active_client_peer_ids():
+			if not bool(_auto_enemy_behavior_acks.get("%d:%d" % [phase, peer_id], false)):
+				printerr("[NetworkWorld] AUTO_ENEMY_HOST_BEHAVIOR_FAILED phase=%d peer=%d" % [phase, peer_id])
+				net.leave()
+				get_tree().quit(1)
+				return false
+	print("[NetworkWorld] AUTO_ENEMY_HOST_BEHAVIOR_COMPLETE phases=4")
+	return true
+
+
+@rpc("authority", "call_remote", "reliable")
+func auto_enemy_behavior_rebuild(entity_id: int) -> void:
+	if not net.is_host and _is_auto_enemy_test_scene():
+		_remove_client_enemy(entity_id)
+
+
+@rpc("authority", "call_remote", "reliable")
+func auto_enemy_behavior_probe(phase: int, entity_id: int, plain_id: int, client_id: int) -> void:
+	if net.is_host or not _is_auto_enemy_test_scene():
+		return
+	var enemy := _resolve_enemy_entry(_enemies.get(entity_id, {}) as Dictionary)
+	var plain := _resolve_enemy_entry(_enemies.get(plain_id, {}) as Dictionary)
+	var ok := is_instance_valid(enemy) and is_instance_valid(plain)
+	if ok:
+		var expected_peer: int = client_id if phase == 1 else (1 if phase == 2 else 0)
+		var expected_target := _player_node(_players.get(expected_peer, {}) as Dictionary)
+		ok = enemy.network_presentation_only and enemy.get_network_variant_id() == "male" \
+			and enemy.has_forced_target() == (phase <= 2) and enemy.is_rage() == (phase <= 2) \
+			and enemy.get_network_forced_target_peer_id() == expected_peer \
+			and (phase > 2 or enemy.get_forced_target() == expected_target) \
+			and enemy.get_network_ai_state() == ("Discover" if phase == 1 else "Chase") \
+			and enemy.discover_label.visible == (phase == 1) \
+			and plain.get_network_variant_id() == "chunen" and not plain.is_rage() \
+			and plain.get_network_forced_target_peer_id() == client_id \
+			and enemy.get_node("StateMachine").process_mode == Node.PROCESS_MODE_DISABLED
+		if phase == 1:
+			_auto_enemy_behavior_old = {"behavior_revision": enemy._network_behavior_revision,
+				"ai_state": "Discover", "forced_target_locked": true, "forced_target_peer_id": client_id, "rage": true}
+		if phase == 3:
+			_apply_client_enemy_behavior(enemy, _auto_enemy_behavior_old)
+			enemy.apply_network_element_tint(8)
+			ok = ok and not enemy.is_rage() and not enemy.has_forced_target()
+	if not ok:
+		printerr("[NetworkWorld] AUTO_ENEMY_CLIENT_BEHAVIOR_FAILED phase=%d" % phase)
+	else:
+		print("[NetworkWorld] AUTO_ENEMY_CLIENT_BEHAVIOR_PHASE phase=%d" % phase)
+		if phase == 4:
+			_auto_enemy_behavior_complete = true
+			print("[NetworkWorld] AUTO_ENEMY_CLIENT_BEHAVIOR_COMPLETE phases=4")
+	auto_enemy_behavior_ack.rpc_id(1, phase, ok)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func auto_enemy_behavior_ack(phase: int, ok: bool) -> void:
+	if net.is_host and _is_auto_enemy_test_scene():
+		var sender := multiplayer.get_remote_sender_id()
+		if _ready_client_peers.has(sender):
+			_auto_enemy_behavior_acks["%d:%d" % [phase, sender]] = ok
 
 
 func _find_first_alive_host_enemy() -> CharacterBody2D:
@@ -892,6 +1023,15 @@ func _run_auto_client_enemy_test() -> void:
 		get_tree().quit(1)
 		return
 	print("[NetworkWorld] AUTO_ENEMY_CLIENT_COMPLETE received=%d" % _enemies.size())
+	# 行为四阶段采用真实双端确认；完成前不把死亡测试的等待窗口提前耗完。
+	deadline = Time.get_ticks_msec() + 25000
+	while not _auto_enemy_behavior_complete and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.05).timeout
+	if not _auto_enemy_behavior_complete:
+		printerr("[NetworkWorld] AUTO_ENEMY_CLIENT_BEHAVIOR_FAILED timeout")
+		net.leave()
+		get_tree().quit(1)
+		return
 	# 死亡广播回归：Host 会击杀一名敌人；Client 必须收到可靠死亡表现并立即变尸体。
 	deadline = Time.get_ticks_msec() + 8000
 	while _auto_client_enemy_death_presentations < 1 and Time.get_ticks_msec() < deadline:

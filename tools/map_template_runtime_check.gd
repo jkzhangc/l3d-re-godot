@@ -30,6 +30,15 @@ func _run() -> void:
 		quit(3)
 		return
 	var map: Node2D = packed.instantiate() as Node2D
+	## random_pickup 入树即自毁，必须在 add_child 之前采集池配置。
+	var pre_pool_sizes: Array[int] = []
+	if args.size() > 1 and args[1] == "--expect-pickup":
+		var decor0: Node = map.get_node_or_null("DecorLayer")
+		if decor0 != null:
+			for child: Node in decor0.get_children():
+				if not str(child.get_meta("rm2k3_generator", "")).is_empty():
+					var pool0: Variant = child.get("pool")
+					pre_pool_sizes.append(int(pool0.items.size()) if pool0 != null else -1)
 	root.add_child(map)
 	current_scene = map
 	for _i: int in range(45):
@@ -47,6 +56,25 @@ func _run() -> void:
 	_check(get_nodes_in_group("combat_hud").size() == 1, "仅一份公共HUD实例")
 	_check(map.get_node("GroundLayer").get_used_cells().size() == 768, "地面768格内容完整")
 	_check(map.get_node("UpperLayer").get_used_cells().size() == 1, "上层图块内容完整")
+	# 真实入树后 random_pickup 已自毁，必须留下带稳定存档键的实际物品，而非空节点。
+	if args.size() > 1 and args[1] == "--expect-pickup":
+		_check(pre_pool_sizes == [2], "多页事件生成一个两项随机池")
+		var allowed: Array[String] = ["first_aid_spray", "greenherbs_01"]
+		var matching: Array[Node] = []
+		for child: Node in actors.get_children():
+			if child.get_script() != null and str(child.get_script().resource_path) == "res://script/healing_pickup.gd":
+				var item: Resource = child.get("item")
+				if item != null and allowed.has(str(item.get("item_id"))):
+					matching.append(child)
+		_check(matching.size() == 1, "多项池只刷出一个物品")
+		if matching.size() == 1:
+			var pickup: Node2D = matching[0] as Node2D
+			_check(pickup.position.is_equal_approx(Vector2(144, 144)), "实际掉落物保持事件坐标")
+			_check(not str(pickup.get("map_source_key")).is_empty() and bool(pickup.get("cap_exempt")),
+				"实际掉落物继承预摆持久键和容量豁免")
+		else:
+			_check(false, "实际掉落物保持事件坐标")
+			_check(false, "实际掉落物继承预摆持久键和容量豁免")
 	_check(LOCATOR.get_map_scene_path(self) == args[0], "current_scene仍为源地图路径")
 	var spawn: Node2D = map.get_node("PlayerSpawn") as Node2D
 	_check(player != null and player.global_position.distance_to(spawn.global_position) < 0.1, "启动未覆盖作者出生位置")

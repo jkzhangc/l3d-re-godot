@@ -748,6 +748,10 @@ var _forced_target_locked: bool = false
 ## 联机表现层：Host 保持 AI 与伤害权威；Client 只接收并渲染快照。
 var network_entity_id: int = 0
 var network_presentation_only: bool = false
+## 独立表现版本：可靠状态事件与高频位置包跨通道到达时，只允许新版本更新目标/狂暴/发现。
+var _network_behavior_revision: int = -1
+var _network_ai_state: String = ""
+var _network_forced_target_peer_id: int = 0
 ## Host 侧：spawn_special_enemy 注入的特感数据引用（联机 spawn 快照据此反查
 ## NetworkWorld.NETWORK_SPECIALS 白名单 id 下发）。Client 重建节点不走本字段 ——
 ## 由 network_world 按 special_id 拿到同一份 tres 后调 apply_to_enemy 注入。
@@ -1167,6 +1171,12 @@ func get_network_variant_id() -> String:
 
 ## entity_id 为 Host 分配的稳定实体 ID。presentation_only=true 时关闭本地 AI/判定。
 func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
+	if presentation_only and network_entity_id != entity_id:
+		_network_behavior_revision = -1
+		_network_ai_state = ""
+		_network_forced_target_peer_id = 0
+		_forced_target_locked = false
+		_forced_target = null
 	network_entity_id = entity_id
 	network_presentation_only = presentation_only
 	velocity = Vector2.ZERO
@@ -1181,6 +1191,9 @@ func configure_network_entity(entity_id: int, presentation_only: bool) -> void:
 ## Client 专用：应用 Host 快照；位置在 _process 中平滑，攻击/死亡帧由 Host 当前角色索引驱动。
 func apply_network_presentation(new_position: Vector2, new_facing: int, moving: bool, hp: float, visual_char_index: int, is_dead: bool, is_headshot: bool, snap: bool = false, element_state: int = -1) -> void:
 	if not network_presentation_only:
+		return
+	# 敌人实体不会原地复活：可靠死亡后跨通道迟到的存活热包不得恢复贴图/AI 表现。
+	if _is_dead and not is_dead:
 		return
 	var was_dead := _is_dead
 	var previous_hp := current_hp
@@ -1248,7 +1261,8 @@ func apply_network_presentation(new_position: Vector2, new_facing: int, moving: 
 			and visual_char_index != walk_char_index:
 		walk_char_index = visual_char_index
 		_anim_step = 0
-	update_moving(moving)
+	# 旧热位置包可能晚于可靠 Discover 事件到达，不能把发现停顿恢复成追击踏步。
+	update_moving(moving and _network_ai_state != "Discover")
 	# 联机（09-22 实测「客户端丧尸攻击动画反复抽搐」根因）：Client 敌人显示动作帧
 	# （攻击/突进/张嘴等非行走角色格）期间**必须停掉行走动画 timer** —— timer 回调
 	# _on_animation_timer_timeout → _refresh_sprite() 会按 _anim_step 把 walk_char 的
@@ -1293,8 +1307,10 @@ func get_network_element_state() -> int:
 func apply_network_element_tint(state: int) -> void:
 	if not sprite:
 		return
-	# A5 狂暴换皮（bit3）：与染色正交，先换皮再调 modulate。
-	set_rage(bool(state & 8))
+	# 新协议的狂暴状态由独立版本可靠事件驱动；旧热包不得回滚它。
+	# 未收到新协议行为状态的旧服务端仍沿用 bit3。音效已有独立可靠事件。
+	if _network_behavior_revision < 0:
+		set_rage(bool(state & 8))
 	if state & 2:
 		sprite.modulate = ELEMENT_TINT_ICE
 	elif state & 4:
@@ -1303,6 +1319,42 @@ func apply_network_element_tint(state: int) -> void:
 		sprite.modulate = ELEMENT_TINT_BURN
 	else:
 		sprite.modulate = ELEMENT_TINT_NONE
+
+
+## Client 只保存权威目标与发现表现；绝不调用状态机 enter/transition 或本地伤害。
+func apply_network_behavior(revision: int, ai_state: String, locked: bool, peer_id: int,
+		rage: bool, target: CharacterBody2D) -> void:
+	if not network_presentation_only or revision < _network_behavior_revision:
+		return
+	_network_behavior_revision = revision
+	_network_ai_state = ai_state
+	_forced_target_locked = locked
+	_network_forced_target_peer_id = peer_id if locked else 0
+	_forced_target = target if locked and is_instance_valid(target) else null
+	if locked:
+		_player_ref = _forced_target
+		_player_in_sight = is_instance_valid(_forced_target)
+	# 释放锁定与 Host 一样保留当前追击目标，只停止强制绑定。
+	# 发现/狂暴音已由 enemy_sfx_presentation 可靠转发，此处只更新贴图，避免双播。
+	if not _is_dead:
+		set_rage(rage)
+	if ai_state == "Discover":
+		update_moving(false)
+	if discover_label:
+		discover_label.visible = ai_state == "Discover" and not _is_dead
+
+
+func get_network_forced_target_peer_id() -> int:
+	return _network_forced_target_peer_id
+
+
+## 玩家镜像可能晚于敌人创建，按保留的 peer 键重新绑定，不驱动 AI。
+func refresh_network_forced_target(target: CharacterBody2D) -> void:
+	if not network_presentation_only or not _forced_target_locked:
+		return
+	_forced_target = target if is_instance_valid(target) else null
+	_player_ref = _forced_target
+	_player_in_sight = is_instance_valid(_forced_target)
 
 
 ## Client 专用：立即应用 Host 可靠广播的死亡表现。
@@ -1395,6 +1447,8 @@ func is_moving_for_network() -> bool:
 func get_network_ai_state() -> String:
 	if _is_dead:
 		return "HeadshotDeath" if _network_headshot_death else "Death"
+	if network_presentation_only:
+		return _network_ai_state
 	var sm: Node = get_node_or_null("StateMachine")
 	return sm.current_state.name if sm and sm.current_state else ""
 
@@ -1770,7 +1824,8 @@ func is_special_enemy() -> bool:
 ## source_is_explosive：本次伤害是否来自**爆炸家族**（RPG/榴弹/弩等，即 bullet 的
 ## explosion_radius > 0）。2026-09-27 新增，专供 Tank（暴君）抗打断判定 —— 见下方抗打断门。
 func take_damage(damage: float, knockback_force: float, direction: Vector2, is_headshot: bool = false, knockback_stun: float = 0.0, hitstun_duration: float = 0.0, source_id: int = 0, element: int = 0, source_is_explosive: bool = false, keep_knockback_on_freeze: bool = false) -> void:
-	if _is_dead:
+	# 镜像只消费 Host 的受击表现，不允许本地弹丸/状态误调用扣血或迁移 AI。
+	if network_presentation_only or _is_dead:
 		return
 	## 每击重新判定「正面走位」，避免上一击的标记泄漏到背刺/侧击上。
 	_frontal_dodge_pending = false
@@ -2418,6 +2473,8 @@ func lock_forced_target(target: Node2D = null) -> void:
 
 ## 解除锁定 → 恢复普通 AI。保留当前目标，后续按视野规则正常追击/放弃。
 func release_forced_target() -> void:
+	if network_presentation_only:
+		return
 	_forced_target_locked = false
 	_forced_target = null
 
@@ -2843,6 +2900,12 @@ func set_rage(on: bool) -> void:
 	if on and variant_rage_texture == null:
 		return  ## 无狂暴形态的外观（如中年ゾンビ）保持普通
 	_rage = on
+	if network_presentation_only:
+		# 镜像只切外观；不改权威速度/攻击、不抽力竭随机数，也不启动本地状态机。
+		walk_texture = NormalMaps.canvas(variant_rage_texture) if on else _base_walk_texture
+		_anim_step = 0
+		_refresh_sprite()
+		return
 	if on:
 		walk_texture = NormalMaps.canvas(variant_rage_texture)
 		if variant_rage_move_speed > 0.0:

@@ -66,10 +66,10 @@ func _ready() -> void:
 	## ★地图预摆补给点：算持久化 key；已消费则不刷出（防重载复活，2026-10-12）。
 	## 动态生成（owner 空，如 Director/ItemManager 随机投放）不持久化，保持旧行为。
 	if owner != null:
-		var tree: SceneTree = get_tree()
-		if tree != null and MAP_SCENE_QUERY.get_map_root(tree) != null:
+		var source_map: Node = _placed_source_map()
+		if source_map != null:
 			_source_key = Global.map_pickup_key(
-				MAP_SCENE_QUERY.get_map_root(tree).scene_file_path, str(MAP_SCENE_QUERY.get_map_root(tree).get_path_to(self)))
+				source_map.scene_file_path, str(source_map.get_path_to(self)))
 		if not _source_key.is_empty() and Global.is_map_pickup_consumed(_source_key):
 			print("[随机掉落物] 已消耗，跳过刷出：%s" % _source_key)
 			queue_free()
@@ -119,6 +119,24 @@ func _ready() -> void:
 		"武器" if picked is WeaponData else "物品",
 		int(pos.x), int(pos.y)])
 	queue_free()
+
+
+## 子节点先于地图根ready；新图入树时active_map可能仍为空或指向旧图。
+## 先认领包含自己的活动图，尚未挂会话则沿父链寻找真正的地图场景根。
+## 不以random_pickup实例自身scene_file_path为地图身份，也不把GameSession路径写进存档。
+func _placed_source_map() -> Node:
+	var active: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
+	if is_instance_valid(active) and active.is_ancestor_of(self) and not active.scene_file_path.is_empty():
+		return active
+	var candidate: Node = get_parent()
+	var outer_scene: Node = null
+	while candidate != null and candidate != get_tree().root:
+		if candidate.has_method("get_actor_container") and candidate.has_method("get_map_scene_path"):
+			return candidate
+		if not candidate.scene_file_path.is_empty():
+			outer_scene = candidate
+		candidate = candidate.get_parent()
+	return outer_scene
 
 
 ## 确定性 roll（2026-10-12）：同一补给点若已记录过结果（map_pickup_rolls），复用之 ——

@@ -1,3 +1,4 @@
+@tool
 extends SceneTree
 
 ## ── 架构定位 ──
@@ -12,7 +13,8 @@ extends SceneTree
 ## 增量约定：目标 TileSet 已存在时**复用**它，只补齐缺失的格位，从而保留编辑器
 ## 侧的加工（碰撞多边形、逐格 z_index、以及把 atlas 链成 ext_resource 而不是内嵌
 ## 纹理）。传第 7 个参数 `rebuild` 可强制重建（会丢弃上述加工）。
-## scene/maps_auto/MapXXXX_auto.tscn 本身始终重生成（它是流水线的派生产物）。
+## 已有场景只同步本工具标记的固定物品点；保留作者节点/图块/TileSet。
+## rebuild仅重建TileSet，不授权重写已有地图场景。
 
 ## RM2K3 Block A（水面）每帧时长（秒），与 export_map.py 的 BLOCK_A_DURATION 一致
 const BLOCK_A_DURATION := 0.3
@@ -38,6 +40,7 @@ func _init() -> void:
 	# 会打断按 uid 引用这些 TileSet 的场景。
 	var lower_before := _read_tres_text(lower_tileset_path)
 	var upper_before := _read_tres_text(upper_tileset_path)
+	var scene_before := _read_tres_text(scene_path)
 	var file := FileAccess.open(json_path, FileAccess.READ)
 	if file == null:
 		push_error("无法打开 JSON: %s" % json_path)
@@ -47,6 +50,42 @@ func _init() -> void:
 	if not data is Dictionary:
 		push_error("JSON 无效: %s" % json_path)
 		quit(4)
+		return
+	# 必须在任何TileSet写入之前判断增量场景，不能先重建后声称保留作者碰撞。
+	if FileAccess.file_exists(scene_path):
+		var existing_scene := ResourceLoader.load(scene_path, "PackedScene", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+		if existing_scene == null:
+			push_error("已有场景无法读取，拒绝覆盖：%s" % scene_path)
+			quit(7)
+			return
+		var existing_root := existing_scene.instantiate() as Node2D
+		if existing_root == null:
+			push_error("已有场景不是Node2D，拒绝覆盖：%s" % scene_path)
+			quit(7)
+			return
+		if not data.has("item_pickups") or not bool(data.get("item_pickups_export_ok", true)):
+			print("JSON没有可用物品数据，保留已有场景及TileSet不变：%s" % scene_path)
+			existing_root.free()
+			quit(0)
+			return
+		if not existing_root.get_node_or_null("DecorLayer") is Node2D:
+			push_error("已有场景缺少DecorLayer，拒绝覆盖：%s" % scene_path)
+			existing_root.free()
+			quit(7)
+			return
+		var pickup_stats: Dictionary = SCENE_TEMPLATE.sync_item_pickups(existing_root, data)
+		var merged := PackedScene.new()
+		if merged.pack(existing_root) != OK or ResourceSaver.save(merged, scene_path) != OK:
+			push_error("增量物品场景保存失败：%s" % scene_path)
+			existing_root.free()
+			quit(8)
+			return
+		_restore_tres_metadata(scene_path, scene_before)
+		print("增量物品点：%s | %s；作者节点/图块/TileSet均保留" % [scene_path, pickup_stats])
+		if rebuild:
+			push_warning("已有场景增量仅更新物品点，忽略rebuild以保护作者TileSet碰撞")
+		existing_root.free()
+		quit(0)
 		return
 	var lower_state := _make_tileset(lower_atlas_path, data.lower_tiles, int(data.tile_size),
 		lower_tileset_path, rebuild, lower_before, _anim_lower(data))
@@ -136,6 +175,9 @@ func _make_tileset(atlas_path: String, mapping: Dictionary, tile_size: int,
 			print("reused existing TileSet unchanged: %s (%d declared tiles)" % [existing_path, mapping.size()])
 		else:
 			print("updated existing TileSet: %s | added %d tiles, refreshed %d textures" % [existing_path, reuse.added, reuse.textures_refreshed])
+		return state
+	if not rebuild and FileAccess.file_exists(existing_path):
+		push_error("现有TileSet不兼容，拒绝自动重建以保护碰撞；请另选新输出路径：%s" % existing_path)
 		return state
 	state.tileset = _build_tileset(atlas_path, mapping, tile_size, anim)
 	return state
@@ -348,7 +390,7 @@ func _restore_tres_metadata(path: String, before_text: String) -> void:
 	var changed := false
 	for index in range(lines.size()):
 		var line: String = lines[index]
-		if index == 0 and line.begins_with("[gd_resource") and line.find("uid=") < 0:
+		if index == 0 and (line.begins_with("[gd_resource") or line.begins_with("[gd_scene")) and line.find("uid=") < 0:
 			var uid_text := _extract_attr(_first_line(before_text), "uid")
 			if uid_text != "":
 				var close := line.rfind("]")
@@ -359,6 +401,14 @@ func _restore_tres_metadata(path: String, before_text: String) -> void:
 			var res_id := _extract_attr(line, "id")
 			if res_id != "" and _extract_attr(line, "uid") == "":
 				var wanted := wanted_uid(before_text, res_id)
+				# 场景增量打包可能重排资源id；必须按path匹配，不能把旧UID贴到另一个资源。
+				if _first_line(text).begins_with("[gd_scene"):
+					wanted = ""
+					var resource_path := _extract_attr(line, "path")
+					for old_line in before_text.split("\n"):
+						if old_line.begins_with("[ext_resource") and _extract_attr(old_line, "path") == resource_path:
+							wanted = _extract_attr(old_line, "uid")
+							break
 				if wanted != "":
 					var close := line.rfind("]")
 					if close >= 0:

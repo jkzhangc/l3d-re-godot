@@ -29,14 +29,47 @@ convert_map.bat "E:\15.L3D" 141 "D:\!bird's-eye-view-arpg-test-\l3d-re-godot" "D
 - `tres/Map0141_upper_tileset.tres`：上层 TileSet
 - `scene/maps_auto/Map0141_auto.tscn`：真实可编辑 TileMapLayer 场景
 
-> **第 3 步是增量的**：目标 TileSet 已存在时**复用**它、只补齐缺失格位，从而保留编辑器侧的
-> 加工 —— 碰撞多边形（`physics_layer_0/*`）、逐格 `z_index`、资源与 `ext_resource` 的 `uid`。
-> 已有 TileSet 覆盖全部所需格位时**完全不动文件**（无格式抖动）。实测 Map0141 的 73 + 35 个
-> 碰撞多边形在多次重跑后原样保留。传第 7 个参数 `rebuild` 可强制重建（会丢弃上述加工）。
-> `scene/maps_auto/MapXXXX_auto.tscn` 本身始终重生成（它是流水线的派生产物）。
+> **第 3 步的保护规则（2026-11-22）**：首次生成地图时，既有 TileSet 沿用原增量复用；
+> 目标场景已经存在时，只同步带工具来源标记的固定物品点，**不重建图块、作者节点或 TileSet**。
+> `rebuild` 只用于没有既有目标场景的新建路径；已有场景时忽略并提示，避免误毁作者碰撞。
+> 工具不自动修改 `scene/maps/` 下另存的手工地图。
 
 > ⚠ `convert_map.bat` 保持**纯 ASCII**：cmd.exe 按 OEM 代码页解析批处理，UTF-8 中文会乱码，
 > 行尾前导字节还可能吞掉换行符把下一行粘成命令。脚本用 `chcp 65001` 让 Python 的中文输出可读。
+
+## 固定物品事件导入（2026-11-22）
+
+正常运行 `convert_map.bat` / `batch_convert.py` 时，第 2 步会自动读取 LMU 事件与
+`RPG_RT.ldb` 的物品名称，生成 `MapXXXX_item_pickups_report.json`，第 3 步把确认的固定
+物品生成到 DecorLayer 下。复用 **`object/random_pickup.tscn` + 单项 DropPoolData**，
+不是剧情钥匙用的 `script/director/item_pickup_point.gd`。因此生成点可在检查器中继续
+改成多项随机池，拾取、存档消费和联机 Host 权威均走原游戏逻辑。
+
+- 物品匹配：现有资源 `item_name` 精确匹配，或 `item_pickup_aliases.json` 的显式名称映射；
+  不做包含/模糊猜测。别名表已覆盖原作常见枪械/药品（原作日文名与现有资源中文名不同，
+  必须逐条列出）。新增别名可用 `export_map.py --item-aliases <json>` 指定自己的文件。
+- 事件识别：完整的 L3D 固定地面拾取模板，或具备精确物品身份、单一给物品命令与
+  消费开关空白页的简单事件。**同一事件的多个可达页（原作状态变量分档）会合并成一个
+  多项随机池**（等价于现有的武器随机掉落物）；同条件值的后续页按 RM 页优先级视为死页。
+  無限固定武器架、商店、剧情、医疗箱不拍平成一次性掉落。
+- 位置：原事件 `(x, y)` → `Vector2(x * 32 + 16, y * 32 + 16)`。节点名稳定为
+  `ItemPickupPoint_RM2K3_E<四位事件号>`，metadata 保留地图/事件/页/原名称/匹配依据。
+- 增量：按地图+事件来源键去重，只增删改本工具标记的节点；作者自行摆放节点保留。
+  暂时无法映射或坏数据的来源键保留上次成功结果，不把失败当成删除指令。
+- **范围限制**：不翻译 RM2K3 的整个事件/条件运行时；复杂条目写进报告，人工决定后再接。
+  本次没有批量重写正在制作的死亡岛手工地图。
+
+只检查事件、不生成图块或场景：
+
+```bash
+python tools/rm2k3_map_restore/export_item_pickups.py E:/15.L3D 25 26 28 32
+python -m unittest discover -s tools/rm2k3_map_restore/tests -p test_item_pickups.py -v
+```
+
+真实样本（2026-11-22 第二轮校准）：Map0024 有 18 个点（9 个多页武器池 + 6 个此前漏检的
+固定喷雾 + 其它单页），Map0025 有 14 个点且全部是多页池；Map0032 有 14 个可确认物品。
+未映射项（MP5、钉枪、機関砲/M61、消火器、链锯、熊玩偶）在各图报告的 `unmapped_items`
+里列出，不替换成别的武器。
 
 ## 批量转换（多张地图）
 
@@ -145,7 +178,7 @@ cd tools/rm2k3_map_restore && python verify_autotile_atlas.py   # 84 项自检�
 并给出 `variant_to_slot` 映射与水体/瀑布动画帧（横向连续帧）。
 细节与参考实现坐标缺陷的实证见 [`RM2K3到VX_Ace图块转换说明.md`](RM2K3到VX_Ace图块转换说明.md)。
 
-事件、碰撞、通行性、寻路不会自动导入。RM2K3 下层动画图块（ID 2000 段，水面）已支持：
+固定物品事件现按上述保守规则导入；其他事件、碰撞、通行性、寻路不会自动导入。RM2K3 下层动画图块（ID 2000 段，水面）已支持：
 会烘焙进下层 atlas 并以 Godot tile 动画播放（每帧 0.3s）；目前只标定了 `2000`/`2004` →
 芯片组动画区 row 7 深水，其余 2000 段 ID 会告警并跳过（`needs_calibration`，见表
 `export_map.py::BLOCK_A_ANIM`）。自动图块报告会明确标记 `needs_calibration`。
