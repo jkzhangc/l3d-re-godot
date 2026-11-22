@@ -130,6 +130,69 @@ func entry_target_global() -> Vector2:
 	return global_position + entry_target_offset
 
 
+# ═══════════════════════════════════════
+# 供其它玩法复用的收集入口（2026-11-22：无限尸潮）
+# ═══════════════════════════════════════
+
+## 收集可用的固定刷怪点，供 `InfiniteHordeMachine` 等**非防守战**玩法复用。
+## 口径与 `HoldoutMachine._collect_spawn_points` 完全一致：
+##   ① 优先 `owner_node` 的子树（含孙节点）—— 归属明确，一台机器一套点；
+##   ② 子树一个都没有时，用 `active_root`（通常是地图根）全场景兜底。
+## 返回元素：`{"pos": Vector2, "allow_in_view": bool, "entry": Dictionary}`，
+## 顺序 = 树序（保证每批轮转可预期）。
+##
+## ⚠ HoldoutMachine 内保留了一份等价实现（其收集与"禁刷层提示"耦合，未改动以免回归）；
+##   两处判据必须同步：`enabled` 开关、脚本身份、entry 字段结构。
+static func collect_points(owner_node: Node, active_root: Node = null) -> Array:
+	var out: Array = []
+	if owner_node != null and owner_node.is_inside_tree():
+		_collect_points_recursive(owner_node, out)
+	if out.is_empty() and active_root != null and active_root.is_inside_tree():
+		_collect_points_recursive(active_root, out)
+	return out
+
+
+static func _collect_points_recursive(node: Node, out: Array) -> void:
+	for child: Node in node.get_children():
+		if _is_spawn_point_node(child) and bool(child.get("enabled")):
+			out.append({
+				"pos": (child as Node2D).global_position,
+				"allow_in_view": bool(child.get("allow_in_view")),
+				"entry": _spawn_entry_payload(child),
+			})
+		_collect_points_recursive(child, out)
+
+
+## 脚本身份判据用 resource_path 而不是 `is HoldoutSpawnPoint`：与 HoldoutMachine 同源，
+## 也避免 class_name 注册时序问题。
+static func _is_spawn_point_node(node: Node) -> bool:
+	if not (node is Node2D):
+		return false
+	var script: Script = node.get_script()
+	if script == null:
+		return false
+	return String(script.resource_path).ends_with("holdout_spawn_point.gd")
+
+
+## 出生演出配置 → 事件配置的 `entry` 字段；空 Dictionary = 该点不演出。
+static func _spawn_entry_payload(node: Node) -> Dictionary:
+	var mode: int = int(node.get("entry_mode"))
+	if mode == 0:
+		return {}
+	var target: Vector2 = node.global_position
+	if node.has_method("entry_target_global"):
+		target = node.call("entry_target_global")
+	return {
+		"mode": mode,
+		"to": target,
+		"duration": float(node.get("entry_duration")),
+		"arc_height": float(node.get("entry_arc_height")),
+		"land_hold": float(node.get("entry_land_hold")),
+		"sound": node.get("entry_sound"),
+		"land_sound": node.get("entry_land_sound"),
+	}
+
+
 ## 出生演出轨迹预览（编辑器 / TAB 调试视图）：轨迹 + 落点十字。
 func _draw_entry_preview(col: Color) -> void:
 	if entry_mode == EntryMode.NONE:

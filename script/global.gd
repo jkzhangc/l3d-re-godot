@@ -1082,6 +1082,9 @@ func _ready() -> void:
 	_touch_service = TouchLayoutService.new(self)
 	_load_config()
 	_ensure_audio_buses()
+	## BGS 总线路由兜底（2026-11-22）：BGS 总线运行时才有，编辑器选不到 →
+	## 任何名为 `BGS` / 在 `bgs` 组的播放器一入树就挂到 BGS 总线（早于 autoplay）。
+	get_tree().node_added.connect(_on_node_added_route_bgs)
 	## 移动平台：横屏 + 全屏（4:3 画布居中留黑边）；桌面端直接早退，行为不变。
 	_setup_platform_display()
 	## 触摸操作层（2026-09-29 改为全局创建）：见 _setup_touch_controls 的注释。
@@ -2171,6 +2174,22 @@ func _ensure_item_flash() -> void:
 func _ensure_audio_buses() -> void:
 	if _audio_service != null:
 		_audio_service.ensure_audio_buses()
+
+
+## 节点入树时只对音频播放器做一次极轻量判断（其余节点立即返回）。
+func _on_node_added_route_bgs(node: Node) -> void:
+	if _audio_service == null:
+		return
+	if node is AudioStreamPlayer or node is AudioStreamPlayer2D:
+		_audio_service.route_bgs_player(node)
+
+
+## 地图载入后把作者摆的 `BGS` 播放器统一挂到 BGS 总线；返回修正数量。
+## 通常不需要手动调用（node_added 已覆盖），留作地图热重载/工具场景的显式入口。
+func route_map_bgs(root: Node) -> int:
+	if _audio_service == null:
+		return 0
+	return _audio_service.route_bgs_players(root)
 
 
 func _apply_volume() -> void:

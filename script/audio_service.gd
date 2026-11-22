@@ -84,6 +84,51 @@ func apply_volume() -> void:
 		AudioServer.set_bus_volume_db(bgs_idx, linear_to_db(maxf(bgs_volume / 100.0, 0.0001)))
 
 
+## ── BGS 总线路由（2026-11-22 用户反馈「BGS 音量设置对 BGS 背景音效没效果」）──
+## 【根因】"BGS" 总线是本服务 `ensure_audio_buses()` **运行时**才创建的，编辑器的音频
+##   总线列表里根本没有它 → 检查器的 bus 下拉框选不到，地图作者只能把播放器留在默认
+##   的 Master 上，于是设置里的 BGS 滑条对它毫无作用（节点上 bus 字段是空的）。
+## 【约定】地图环境音播放器**命名为 `BGS`**（或加入 `bgs` 组 / 写 meta `audio_bus`）；
+##   入树与地图载入时由这里统一挂总线。作者不需要、也无法在检查器里手选 BGS 总线。
+## 【为什么用 node_added 兜底】F6 直接跑地图、运行时动态创建的播放器都不经过
+##   GameSession.attach_map，靠信号才能在播放（autoplay）之前把总线路由好。
+const BGS_BUS_NAME: String = "BGS"
+
+## 单个节点路由；返回是否真的改了（便于日志/自检）。
+func route_bgs_player(node: Node) -> bool:
+	if node == null:
+		return false
+	if not (node is AudioStreamPlayer or node is AudioStreamPlayer2D):
+		return false
+	if not _is_bgs_player(node):
+		return false
+	if String(node.get("bus")) == BGS_BUS_NAME:
+		return false
+	node.set("bus", BGS_BUS_NAME)
+	return true
+
+
+## 整棵子树路由；返回修正数量。地图载入后调用。
+func route_bgs_players(root: Node) -> int:
+	if root == null:
+		return 0
+	var fixed: int = 0
+	if route_bgs_player(root):
+		fixed += 1
+	for child: Node in root.get_children():
+		fixed += route_bgs_players(child)
+	return fixed
+
+
+func _is_bgs_player(node: Node) -> bool:
+	if String(node.name) == BGS_BUS_NAME:
+		return true
+	## 未入树的节点 `is_in_group` 返回 false，不会抛错。
+	if node.is_in_group(&"bgs"):
+		return true
+	return String(node.get_meta(&"audio_bus", "")) == BGS_BUS_NAME
+
+
 func set_music_volume(pct: int) -> void:
 	music_volume = clampi(pct, 0, 100)
 	apply_volume()

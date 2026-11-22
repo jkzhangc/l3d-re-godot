@@ -71,6 +71,13 @@ func attach_map(map: Node2D) -> void:
 	active_map = map
 	map.tree_exiting.connect(_on_map_exiting.bind(map.get_instance_id()), CONNECT_ONE_SHOT)
 	_prepare_local_ui(map)
+	## BGS 环境音：编辑器里没有 BGS 总线可选（运行时才创建），载入时按节点名统一挂载。
+	## node_added 已能覆盖绝大多数情况，这里对整张图再扫一遍兜底（含 preload 的子树）。
+	var global: Node = get_node_or_null("/root/Global")
+	if global != null and global.has_method("route_map_bgs"):
+		var routed: int = int(global.call("route_map_bgs", map))
+		if routed > 0:
+			print("[GameSession] BGS 总线路由 %d 个播放器（%s）" % [routed, map.scene_file_path])
 	var actors: Node2D = LOCATOR.find_actor_container(map)
 	if actors == null:
 		push_error("[GameSession] 地图没有角色排序容器：%s" % map.scene_file_path)

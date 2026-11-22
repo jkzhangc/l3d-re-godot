@@ -188,7 +188,9 @@
 
 ### 音频
 
-Global 启动时自动创建 `SFX` / `Music` 总线。SFX 音效→SFX 总线，BGM/死亡音乐→Music 总线。音量通过 `AudioServer.set_bus_volume_db()` 控制，设置保存到 `config.json`。
+Global 启动时自动创建 `SFX` / `Music` / **`BGS`** 三条总线。SFX 音效→SFX 总线，BGM/死亡音乐→Music 总线，地图环境音（虫鸣/风声/空调声）→BGS 总线。音量通过 `AudioServer.set_bus_volume_db()` 控制，设置保存到 `config.json`。
+
+**地图环境音的约定（2026-11-22）**：BGS 总线是**运行时**才创建的，编辑器的音频总线列表里没有它 → 检查器的 bus 下拉框**选不到**。因此地图作者只需把环境音播放器**命名为 `BGS`**（或加入 `bgs` 组 / 写 meta `audio_bus = "BGS"`），`Global` 在节点入树与 `GameSession.attach_map` 时自动挂到 BGS 总线（`AudioService.route_bgs_player`）。**不要**试着在检查器里手选 BGS 总线。
 
 ### 字体
 

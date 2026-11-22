@@ -18,6 +18,8 @@ extends Node2D
 
 const MAP_SCENE_QUERY = preload("res://script/map/map_locator.gd")
 const HUD := preload("res://script/ui/combat_hud.gd")
+## 固定刷怪点的收集（与防守战同一口径，见 holdout_spawn_point.gd::collect_points）
+const SPAWN_POINT := preload("res://script/director/holdout_spawn_point.gd")
 
 @export_group("启动")
 @export var auto_start: bool = true
@@ -34,6 +36,12 @@ const HUD := preload("res://script/ui/combat_hud.gd")
 @export_range(0.5, 60.0, 0.1) var spawn_interval: float = 3.0
 ## 场上同时存活上限（0 = 不限制）
 @export var max_active: int = 0
+
+@export_group("刷怪点")
+## 地图里摆 `HoldoutSpawnPoint` 后，每批敌人按点位**轮转均分**（与防守战同一套点位、
+## 同一套落点安全校验与出生演出）；一个都没摆则沿用原来的"屏幕外刷"。
+## 点位可以放在本节点子树里，也可以散在场景任意位置（全图兜底扫描）。
+@export var use_spawn_points: bool = true
 
 @export_group("强度（油桶容器调用）")
 @export_range(0.1, 10.0, 0.05) var count_multiplier: float = 1.0
@@ -53,6 +61,10 @@ var _hud_shown: bool = false
 var _net_world: Node = null
 var _net_sync_timer: float = 0.0
 var _suspended_director: bool = false
+## 固定刷怪点缓存（开刷时收集一次；点位是静态的地图资产，运行期不变）。
+var _spawn_points: Array = []
+## 批次轮转序号：让每批从不同点位起算，避免总是同一端出兵。
+var _wave_index: int = 0
 
 
 func _ready() -> void:
@@ -117,6 +129,8 @@ func _begin_active() -> void:
 	_phase = Phase.ACTIVE
 	_timer = 0.0
 	_spawn_timer = 0.0
+	_wave_index = 0
+	_collect_spawn_points()
 	_play_sound(alert_sound)
 	_drive_hud(Phase.ACTIVE, 0.0, 0.0)
 	_suspend_director_once()
@@ -154,7 +168,36 @@ func _spawn_wave() -> void:
 	var decor: Node = root.find_child("DecorLayer", true, false) if root != null else null
 	if decor == null:
 		return
+	## 固定点位优先：`spawn_horde_nodes_at_positions` 与防守战同源 ——
+	## 内部会做「玩家画面内屏蔽」「落点可站性校验」「出生演出」，
+	## 被屏蔽的点位自动退回屏幕外刷法，本批总数不会缺。
+	if use_spawn_points and not _spawn_points.is_empty() \
+			and director.has_method("spawn_horde_nodes_at_positions"):
+		director.call("spawn_horde_nodes_at_positions", _spawn_points, count, decor, _wave_index)
+		_wave_index += 1
+		return
 	director.call("spawn_horde_nodes", count, decor)
+
+
+## 收集固定刷怪点（本节点子树优先、整张地图兜底）。开刷时调用一次。
+## ⚠ 地图根可能取不到：`MapLocator.get_map_root()` 在 F6 / 工具场景 / 无会话宿主下
+##   返回 null（`current_scene` 尚未装配）。此时退回 `current_scene` → `get_parent()`，
+##   否则"点位摆在机器旁边"这种最常见摆法会被静默当成"没有点位"。
+func _collect_spawn_points() -> void:
+	_spawn_points = []
+	if not use_spawn_points:
+		return
+	var tree: SceneTree = get_tree()
+	var root: Node = MAP_SCENE_QUERY.get_map_root(tree)
+	if root == null and tree != null:
+		root = tree.current_scene
+	if root == null:
+		root = get_parent()
+	_spawn_points = SPAWN_POINT.collect_points(self, root)
+	if _spawn_points.is_empty():
+		print("[InfiniteHorde] 未找到 HoldoutSpawnPoint，沿用屏幕外刷法")
+	else:
+		print("[InfiniteHorde] 使用 %d 个固定刷怪点（轮转均分）" % _spawn_points.size())
 
 
 func _suspend_director_once() -> void:
