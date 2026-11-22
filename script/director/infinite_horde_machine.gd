@@ -36,6 +36,9 @@ const SPAWN_POINT := preload("res://script/director/holdout_spawn_point.gd")
 @export_range(0.5, 60.0, 0.1) var spawn_interval: float = 3.0
 ## 场上同时存活上限（0 = 不限制）
 @export var max_active: int = 0
+## 尸潮期间丧尸是否切狂暴形态（クリムゾンヘッド）。
+## 与难度附加参数「尸潮狂暴」是**与**关系：任一关闭 → 只锁定追击、不变红。
+@export var horde_berserk: bool = true
 
 @export_group("刷怪点")
 ## 地图里摆 `HoldoutSpawnPoint` 后，每批敌人按点位**轮转均分**（与防守战同一套点位、
@@ -65,6 +68,8 @@ var _suspended_director: bool = false
 var _spawn_points: Array = []
 ## 批次轮转序号：让每批从不同点位起算，避免总是同一端出兵。
 var _wave_index: int = 0
+## 是否已打开导演的尸潮窗口（关闭时只清自己开的那一次）。
+var _window_opened: bool = false
 
 
 func _ready() -> void:
@@ -134,9 +139,33 @@ func _begin_active() -> void:
 	_play_sound(alert_sound)
 	_drive_hud(Phase.ACTIVE, 0.0, 0.0)
 	_suspend_director_once()
+	## ⚠ 必须在挂起之后开窗：`set_director_suspended(true)` 若正好打断常规尸潮，
+	## 会强制进 cooldown 并清掉 `_horde_rage`；先开窗等于白开。
+	_open_horde_window()
 	_spawn_wave()
 	_broadcast_state()
 	horde_started.emit()
+
+
+## 打开导演的「尸潮窗口」（2026-11-22 用户反馈：无限尸潮的丧尸不追人、不变狂暴）。
+## 窗口内：新刷敌人由 `spawn_enemy` 直接锁定最近玩家，场上已有敌人也补锁；
+## 狂暴形态 = `horde_berserk` ∧ 难度附加参数「尸潮狂暴」。
+func _open_horde_window() -> void:
+	var director: Node = get_node_or_null("/root/Director")
+	if director == null or not director.has_method("set_external_horde_window"):
+		return
+	director.call("set_external_horde_window", true, horde_berserk)
+	_window_opened = true
+	print("[InfiniteHorde] 尸潮窗口开启（锁定追击，狂暴=%s）" % str(horde_berserk))
+
+
+func _close_horde_window() -> void:
+	if not _window_opened:
+		return
+	_window_opened = false
+	var director: Node = get_node_or_null("/root/Director")
+	if director != null and director.has_method("set_external_horde_window"):
+		director.call("set_external_horde_window", false, false)
 
 
 ## 油桶容器装满后调用：提升数量倍率 / 缩短间隔。
@@ -210,6 +239,8 @@ func _suspend_director_once() -> void:
 
 
 func _exit_tree() -> void:
+	## 换图 / 节点释放：先退尸潮窗口，再撤销导演挂起（顺序与开启相反）。
+	_close_horde_window()
 	if _suspended_director:
 		var director: Node = get_node_or_null("/root/Director")
 		if director != null and director.has_method("set_director_suspended"):

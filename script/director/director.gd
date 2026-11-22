@@ -82,6 +82,11 @@ var _zombie_pool: Array = []          ## ZombieVariant 池（_apply_config 注�
 ##   → `_update_horde` 认为达标不再补怪。玩家看到的就是「没补怪 + 新怪不主动来」。
 var _horde_rage: bool = false         ## 尸潮/防守战窗口进行中（决定 spawn 时是否 lock_forced_target）
 var _horde_berserk: bool = false      ## 窗口内是否切狂暴形态（附加参数可关；防守战恒开）
+## 外部玩法（无限尸潮）打开尸潮窗口时的状态快照：退出时恢复，避免把同时进行中的
+## 常规尸潮一起清掉（2026-11-22）。
+var _external_horde_active: bool = false
+var _external_horde_prev_rage: bool = false
+var _external_horde_prev_berserk: bool = false
 var _horde_locked_enemies: Array[Node2D] = []  ## 尸潮期间被锁定"直接追击最近玩家"的丧尸（peak 结束统一解锁）
 var _recycle_timer: float = 0.0
 var _recycle_cleared: int = 0     ## 累计清除的存活敌人数（诊断 / 现场报告用）
@@ -1221,6 +1226,40 @@ func _release_horde_locks() -> void:
 	_horde_locked_enemies.clear()
 	if released > 0:
 		print("[Director] 尸潮结束：解除 %d 只丧尸的目标锁定" % released)
+
+
+## ── 外部玩法的尸潮窗口（2026-11-22）──
+## 【为什么需要】`_horde_rage`（新刷敌人锁定玩家）与 `_horde_berserk`（狂暴形态）
+##   过去只在 pacing 进入 peak 时设置。无限尸潮不经过 pacing（还会挂起导演），
+##   只调 `spawn_horde_nodes()` → 刷出来的丧尸既不追人也不变红，表现与"没有尸潮"一样。
+## 【语义】进入窗口后：`spawn_enemy()` 刷出的敌人直接锁定最近玩家；场上已有敌人补锁；
+##   狂暴形态 = `berserk` ∧ 难度附加参数「尸潮狂暴」（关掉只不变红，锁定照常）。
+## 【幂等 / 不误伤】重复 active=true 直接返回（不重复遍历全场）；退出时恢复到进入前的
+##   rage/berserk，而不是无条件清零 —— 若常规尸潮同时在 peak，不会被误停。
+## ⚠ `_release_horde_locks()` 释放的是共享列表，极端情况下（本节点与常规尸潮同时开窗）
+##   常规尸潮的锁也会被提前释放；默认 `suspend_director = true` 时不会发生。
+func set_external_horde_window(active: bool, berserk: bool = true) -> void:
+	if active:
+		## 已开窗就直接返回：`_set_all_enemies_rage` 会遍历全场，没必要重复。
+		if _external_horde_active:
+			return
+		_external_horde_prev_rage = _horde_rage
+		_external_horde_prev_berserk = _horde_berserk
+		_external_horde_active = true
+		_horde_rage = true
+		_horde_berserk = berserk and _berserk_enabled()
+		if _horde_berserk:
+			_set_all_enemies_rage(true)
+		_lock_all_enemies_for_horde()
+		return
+	if not _external_horde_active:
+		return
+	_external_horde_active = false
+	_horde_rage = _external_horde_prev_rage
+	_horde_berserk = _external_horde_prev_berserk
+	if not _horde_berserk:
+		_set_all_enemies_rage(false)
+	_release_horde_locks()
 
 
 func _input(event: InputEvent) -> void:
