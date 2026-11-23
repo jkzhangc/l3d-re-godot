@@ -4995,6 +4995,10 @@ func _host_drop_oil_barrel(peer_id: int, position: Vector2) -> void:
 	if state == null or not state.carried_oil_barrel:
 		return
 	state.carried_oil_barrel = false
+	## 地上的桶已经生成，玩家身上的「持桶显示」必须一起收掉。
+	var owner_player := _player_node(entry)
+	if is_instance_valid(owner_player) and owner_player.has_method("apply_oil_barrel_carry"):
+		owner_player.call("apply_oil_barrel_carry", false)
 	var barrel := OIL_BARREL_SCENE.instantiate() as Node2D
 	## 复制地图油桶的外观；否则 tscn 默认无贴图 → 丢下的油桶透明看不见。
 	if barrel.has_method("apply_shared_appearance"):

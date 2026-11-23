@@ -78,6 +78,7 @@ func _ready() -> void:
 	_create_collision()
 	if Engine.is_editor_hint():
 		return
+	add_to_group(&"oil_barrel_container")
 	_net_world = _find_network_world()
 	if _net_world != null and _net_world.has_signal("oil_container_state_received"):
 		_net_world.connect("oil_container_state_received", _on_net_state)
@@ -118,6 +119,21 @@ func _check_player() -> void:
 	if _can_deposit:
 		var st: PlayerState = Players.get_state_for_entity(_player)
 		_can_deposit = st != null and st.carried_oil_barrel
+
+
+## 玩家放下前调用（2026-11-23）：交付范围内且持桶时**优先装进容器**，
+## 返回 true = 已处理，调用方不要再丢到地上。容器优先级高于「随地丢弃」。
+func try_deposit_from(player: Node2D) -> bool:
+	if _is_full or player == null or not is_instance_valid(player):
+		return false
+	if player.global_position.distance_to(global_position) > deposit_range:
+		return false
+	var st: PlayerState = Players.get_state_for_entity(player)
+	if st == null or not st.carried_oil_barrel:
+		return false
+	_player = player
+	_try_deposit()
+	return true
 
 
 func _try_deposit() -> void:

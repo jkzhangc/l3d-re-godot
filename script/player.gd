@@ -1100,6 +1100,10 @@ func drop_oil_barrel() -> void:
 	var st: PlayerState = Players.get_state_for_entity(self)
 	if st == null or not st.carried_oil_barrel:
 		return
+	## 容器优先级最高（2026-11-23）：范围内按 D 直接交付，不丢到地上。
+	for node: Node in get_tree().get_nodes_in_group(&"oil_barrel_container"):
+		if node.has_method("try_deposit_from") and bool(node.call("try_deposit_from", self)):
+			return
 	var net: Node = get_node_or_null("/root/Net")
 	var online: bool = net != null and net.has_method("is_online_session") and bool(net.is_online_session())
 	var drop_position: Vector2 = global_position + Vector2(0, 18)
@@ -1117,6 +1121,8 @@ func _apply_drop_local(drop_position: Vector2) -> void:
 	if st == null:
 		return
 	st.carried_oil_barrel = false
+	## 地上的桶已经生成，身上的「持桶显示」必须一起收掉。
+	apply_oil_barrel_carry(false)
 	var packed: PackedScene = load("res://object/oil_barrel.tscn") as PackedScene
 	if packed == null:
 		push_warning("[Player] 油桶场景缺失，放下失败")
