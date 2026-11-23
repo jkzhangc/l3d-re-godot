@@ -29,7 +29,11 @@ func _consume_common_inputs() -> bool:
 	## 功能键(D)只用于「放下」。拾取物脚本已由 registry 的持桶闸门主动让路。
 	var carrying_state: PlayerState = get_player_state()
 	if carrying_state != null and carrying_state.carried_oil_barrel:
-		if Input.is_action_just_pressed("功能键") and character.has_method("drop_oil_barrel"):
+		## 刚捡起后的同一次 D 不能立刻触发放下（拾取与放下共用功能键）。
+		var can_drop: bool = not character.has_method("can_drop_oil_barrel") \
+			or bool(character.call("can_drop_oil_barrel"))
+		if can_drop and Input.is_action_just_pressed("功能键") \
+				and character.has_method("drop_oil_barrel"):
 			character.call("drop_oil_barrel")
 		return false
 

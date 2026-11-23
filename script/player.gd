@@ -518,6 +518,7 @@ func _rescue_if_stuck(delta: float) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_carried_barrel_sprite()
 	_update_burn_status(delta)  # 灼烧 DoT（本机/远端实体均结算，死态内部早退）
 	## 卡墙自救：放在联机分支**之前** —— 联机实体在下面会提前 return，放后面就只管单机了。
 	_rescue_if_stuck(delta)
@@ -1012,6 +1013,17 @@ func consume_fire_input() -> bool:
 
 ## ── 油桶搬运（2026-11-21）──
 ## 持桶 = 双手占用：强制收枪、不能开火/举枪/投掷；再按 D 放下。
+const OIL_BARREL_SCRIPT := preload("res://script/oil_barrel.gd")
+## 刚捡起后的放下保护：拾取与放下共用 D，没有这段冷却会在同一帧内「捡起→立刻丢下」。
+const OIL_BARREL_DROP_GUARD_MSEC: int = 300
+## 持桶显示：以角色身体中心为基准（玩家 Sprite2D 在 (0,-16)），按朝向再偏一点。
+const CARRIED_BARREL_BASE := Vector2(0, -16)
+const CARRIED_BARREL_SHIFT: float = 12.0
+
+var _carried_barrel_sprite: Sprite2D = null
+var _oil_barrel_pick_msec: int = -100000
+
+
 func is_carrying_oil_barrel() -> bool:
 	var st: PlayerState = Players.get_state_for_entity(self)
 	return st != null and st.carried_oil_barrel
@@ -1022,10 +1034,65 @@ func apply_oil_barrel_carry(carrying: bool) -> void:
 	if st != null:
 		st.carried_oil_barrel = carrying
 	if carrying:
+		_oil_barrel_pick_msec = Time.get_ticks_msec()
 		clear_fire_buffer()
 		var sm: Node = get_node_or_null("StateMachine")
 		if sm != null and sm.has_method("request_state"):
 			sm.call("request_state", "Idle")
+	_ensure_carried_barrel_sprite()
+	_carried_barrel_sprite.visible = carrying
+	if carrying:
+		_update_carried_barrel_sprite()
+
+
+## 放下保护：刚捡起 300ms 内忽略 D，避免同一次按键既捡又丢。
+func can_drop_oil_barrel() -> bool:
+	return Time.get_ticks_msec() - _oil_barrel_pick_msec >= OIL_BARREL_DROP_GUARD_MSEC
+
+
+func _ensure_carried_barrel_sprite() -> void:
+	if _carried_barrel_sprite != null and is_instance_valid(_carried_barrel_sprite):
+		return
+	_carried_barrel_sprite = Sprite2D.new()
+	_carried_barrel_sprite.name = "CarriedOilBarrel"
+	_carried_barrel_sprite.centered = true
+	_carried_barrel_sprite.visible = false
+	add_child(_carried_barrel_sprite)
+
+
+## 持桶显示：外观取地图油桶的共享配置，朝向跟随玩家，位置按朝向偏移。
+## 层级：朝上时在玩家身后（show_behind_parent），其余朝向在玩家上层（z_index=1）。
+func _update_carried_barrel_sprite() -> void:
+	if _carried_barrel_sprite == null or not is_instance_valid(_carried_barrel_sprite):
+		return
+	if not _carried_barrel_sprite.visible:
+		return
+	var app: Dictionary = OIL_BARREL_SCRIPT.shared_appearance
+	var tex: Texture2D = app.get("texture") as Texture2D
+	_carried_barrel_sprite.texture = tex
+	if tex == null:
+		_carried_barrel_sprite.visible = false
+		return
+	var walk := preload("res://script/vx_walk_sheet.gd")
+	_carried_barrel_sprite.region_enabled = true
+	_carried_barrel_sprite.region_rect = walk.region_rect(
+		tex, int(app.get("char_index", 0)), _facing, 0)
+	_carried_barrel_sprite.position = CARRIED_BARREL_BASE + _carried_barrel_facing_shift()
+	_carried_barrel_sprite.show_behind_parent = _facing == FaceDir.UP
+	_carried_barrel_sprite.z_index = 0 if _facing == FaceDir.UP else 1
+
+
+func _carried_barrel_facing_shift() -> Vector2:
+	match _facing:
+		FaceDir.DOWN:
+			return Vector2(0, CARRIED_BARREL_SHIFT)
+		FaceDir.LEFT:
+			return Vector2(-CARRIED_BARREL_SHIFT, 0)
+		FaceDir.RIGHT:
+			return Vector2(CARRIED_BARREL_SHIFT, 0)
+		FaceDir.UP:
+			return Vector2(0, -CARRIED_BARREL_SHIFT)
+	return Vector2.ZERO
 
 
 ## 放下油桶（单机/Host 直接落地；Client 发请求给 Host 代结算）。
@@ -1055,6 +1122,9 @@ func _apply_drop_local(drop_position: Vector2) -> void:
 		push_warning("[Player] 油桶场景缺失，放下失败")
 		return
 	var barrel: Node2D = packed.instantiate() as Node2D
+	## 复制地图油桶的外观；否则 tscn 默认无贴图 → 丢下的油桶透明看不见。
+	if barrel.has_method("apply_shared_appearance"):
+		barrel.call("apply_shared_appearance")
 	var scene: Node = get_tree().current_scene
 	var parent: Node = scene.find_child("GroundLayer", true, false) if scene != null else null
 	if parent == null:

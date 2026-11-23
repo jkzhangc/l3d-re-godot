@@ -43,6 +43,8 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 const LABEL_WIDTH: float = 360.0
 const LABEL_HEIGHT: float = 24.0
+## 多行提示逐行拆成独立 Label 后，每行的垂直间距（= 单行高度，保持旧版观感）。
+const LINE_HEIGHT: float = 24.0
 ## 项目铁律：提示字号 12 的整倍（与医疗箱/补给/防守战机器同口径）。
 const FONT_STEP: int = 12
 const FONT_DEFAULT: int = 12
@@ -96,7 +98,10 @@ const COLLISION_LAYER: int = 33
 @export var preview_in_editor: bool = false
 
 var _sprite: Sprite2D = null
-var _label: Label = null
+## ★2026-11-23：多行提示拆成「每行一个 Label」—— 每个 Label 单行，各自套全局单行渐变；
+## 整段一个 Label 会被 shader 按整段高度归一化，三行变成三种颜色（用户截图反馈）。
+var _labels: Array[Label] = []
+var _built_text: String = ""
 
 
 func _ready() -> void:
@@ -112,11 +117,13 @@ func _process(_delta: float) -> void:
 	_refresh_visuals()
 	if Engine.is_editor_hint():
 		## 编辑器里只看作者开关，不做距离判定（没有玩家实体）。
-		if _label:
-			_label.visible = preview_in_editor and not hint_text.strip_edges().is_empty()
+		var preview: bool = preview_in_editor and not hint_text.strip_edges().is_empty()
+		for lbl: Label in _labels:
+			lbl.visible = preview
 		return
-	if _label:
-		_label.visible = _should_show()
+	var show: bool = _should_show()
+	for lbl: Label in _labels:
+		lbl.visible = show
 
 
 ## 是否显示提示：有文字 + 玩家在触发半径内。
@@ -146,17 +153,30 @@ func _ensure_children() -> void:
 		_sprite.name = "Sprite2D"
 		_sprite.region_enabled = true
 		add_child(_sprite)
-	if _label == null or not is_instance_valid(_label):
-		_label = get_node_or_null("HintLabel") as Label
-	if _label == null:
-		_label = Label.new()
-		_label.name = "HintLabel"
-		_label.size = Vector2(LABEL_WIDTH, LABEL_HEIGHT)
-		_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		_label.hide()
-		add_child(_label)
+	if _labels.is_empty():
+		_rebuild_labels()
+
+
+## 按当前 hint_text 的行数重建 Label（只在文本变化时调用）。
+## 每个 Label 只放一行 → 单行渐变各自独立；多行整体以 hint_offset 为中心纵向排列。
+func _rebuild_labels() -> void:
+	for old: Label in _labels:
+		if is_instance_valid(old):
+			old.queue_free()
+	_labels.clear()
+	var lines: PackedStringArray = hint_text.split("\n")
+	if lines.is_empty():
+		lines = PackedStringArray([""])
+	for i: int in range(lines.size()):
+		var lbl := Label.new()
+		lbl.name = "HintLabel%d" % i
+		lbl.size = Vector2(LABEL_WIDTH, LABEL_HEIGHT)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lbl.hide()
+		add_child(lbl)
+		_labels.append(lbl)
 
 
 ## 实体碰撞（可选）。幂等：节点已存在（预置或上一帧建的）时只改参数，不重建。
@@ -203,22 +223,25 @@ func _refresh_visuals() -> void:
 			## `frame_size` 只是**兜底**：文件名带 `$` 时帧尺寸由图本身推导（图/3×4）。
 			_sprite.region_rect = WALK.region_rect(walk_texture, walk_char_index,
 				facing, stand_frame, frame_size)
-	if _label == null:
-		return
-	_label.text = hint_text
-	## Label 的 position 是左上角 → 由「中心偏移」换算，保证文字以节点为中心。
-	var label_pos: Vector2 = hint_offset - Vector2(LABEL_WIDTH, LABEL_HEIGHT) * 0.5
-	_label.position = label_pos
-	_label.add_theme_color_override("font_color", hint_color)
-	## ★字体 / 阴影每次刷新都套（医疗箱 2026-10-03 踩过的坑：写在"新建节点"分支里
-	## 会让预置节点拿不到样式；本节点虽然自己建子节点，但保持同一规则更稳）。
+	if _built_text != hint_text:
+		_built_text = hint_text
+		_rebuild_labels()
+	var lines: PackedStringArray = hint_text.split("\n")
+	var count: int = _labels.size()
 	var g: Node = get_node_or_null("/root/Global")
-	if g:
-		g.apply_hint_font(_label, _normalized_font_size())
-		g.apply_text_shadow(_label)
-	## ★提示文字层（2026-10-28）：搬到提示层（layer=89）这个独立 canvas —— 不被角色/上层图块遮挡，
-	## 也不吃夜图 CanvasModulate 的暗度。编辑器里 attach 会自动跳过。
-	HINT_LAYER.attach(_label, label_pos)
+	for i: int in range(count):
+		var lbl: Label = _labels[i]
+		lbl.text = lines[i] if i < lines.size() else ""
+		## 多行整体以 hint_offset 为中心；单行时与旧版位置完全一致。
+		var center: Vector2 = hint_offset + Vector2(0.0,
+			(float(i) - (float(count) - 1.0) * 0.5) * LINE_HEIGHT)
+		var label_pos: Vector2 = center - Vector2(LABEL_WIDTH, LABEL_HEIGHT) * 0.5
+		lbl.position = label_pos
+		lbl.add_theme_color_override("font_color", hint_color)
+		if g:
+			g.apply_hint_font(lbl, _normalized_font_size())
+			g.apply_text_shadow(lbl)
+		HINT_LAYER.attach(lbl, label_pos)
 
 
 func _normalized_font_size() -> int:

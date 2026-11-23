@@ -55,16 +55,44 @@ var _can_pick: bool = false
 var _request_pending: bool = false
 var _presentation_only: bool = false
 
+## 地图油桶的共享外观（2026-11-23）：丢弃时新实例从这里复制。
+## 不复制的话，`oil_barrel.tscn` 默认没有贴图 → 丢下的油桶透明、看不到行走图。
+## 只由地图上的实例在 _ready 时写入（texture 非空），运行时新实例不覆盖。
+static var shared_appearance: Dictionary = {}
+
 
 func _ready() -> void:
 	_ensure_children()
 	_refresh_sprite()
 	if Engine.is_editor_hint():
 		return
+	_capture_shared_appearance()
 	add_to_group(&"ground_pickup")
 	if not cap_exempt:
 		GROUND_CAP.register(self)
 	_create_collision()
+
+
+func _capture_shared_appearance() -> void:
+	if texture == null:
+		return
+	shared_appearance = {
+		"texture": texture,
+		"char_index": char_index,
+		"sprite_offset": sprite_offset,
+		"sprite_scale": sprite_scale,
+	}
+
+
+## 丢弃后由调用方套用：把地图油桶的外观复制到新实例。
+func apply_shared_appearance() -> void:
+	if shared_appearance.is_empty():
+		return
+	texture = shared_appearance.get("texture") as Texture2D
+	char_index = int(shared_appearance.get("char_index", 0))
+	sprite_offset = shared_appearance.get("sprite_offset", Vector2.ZERO)
+	sprite_scale = float(shared_appearance.get("sprite_scale", 1.0))
+	_refresh_sprite()
 
 
 func _process(_delta: float) -> void:

@@ -4996,6 +4996,9 @@ func _host_drop_oil_barrel(peer_id: int, position: Vector2) -> void:
 		return
 	state.carried_oil_barrel = false
 	var barrel := OIL_BARREL_SCENE.instantiate() as Node2D
+	## 复制地图油桶的外观；否则 tscn 默认无贴图 → 丢下的油桶透明看不见。
+	if barrel.has_method("apply_shared_appearance"):
+		barrel.call("apply_shared_appearance")
 	var root: Node = MAP_SCENE_QUERY.get_map_root(get_tree())
 	var parent: Node = root.find_child("GroundLayer", true, false) if root != null else null
 	if parent == null:
