@@ -331,6 +331,11 @@ func try_activate_awaken() -> bool:
 ## （Host 上读不到 Client 键盘，输入判定由 Client 的 awaken_request 上报替代）。
 ## 校验 awaken_type + TP（PlayerState 权威值），成功后置 _awaken_active + 金色染色。
 func _activate_awaken_core() -> bool:
+	## 搬运油桶 = 双手占用（2026-11-23 用户定稿）：觉醒 / 安雄魂同样不能发动。
+	## 单机入口与联机 Host 代结算（awaken_request → 本函数）都经过这里。
+	if _p.has_method("is_carrying_oil_barrel") and bool(_p.call("is_carrying_oil_barrel")):
+		print("[覚醒] 搬运油桶时无法发动")
+		return false
 	if _p._awaken_active or _p._is_dying:
 		return false
 	## ★安雄魂（2026-11-10 改版）：同一颗「覚醒键」的另一条分支 —— 安雄没有觉醒，
