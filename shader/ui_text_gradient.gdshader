@@ -13,6 +13,8 @@ shader_type canvas_item;
 // 【渐变坐标】VERTEX 是 Label 的本地坐标（左上为原点、y 向下），
 // 除以 text_height 得到 0~1 的纵向比例；每个字形四边形的顶点都落在真实高度上，
 // 所以跨字形的插值是连续的（不是每个字各渐变一次）。
+// ⚠ 多行文本会变成「整段一个大渐变」（第一行白、最后一行蓝）——
+//   2026-11-23 起由 FontService 在 line_count > 1 时**不套本材质**，改纯色+描边。
 
 uniform vec4 top_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec4 bottom_color : source_color = vec4(0.58, 0.76, 1.0, 1.0);

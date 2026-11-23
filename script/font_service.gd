@@ -193,6 +193,13 @@ func apply_text_style(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
 		if current != null:
 			lbl.material = null
 		return false
+	## ★多行文本不套整段渐变（2026-11-23 用户提示纸反馈）：
+	## shader 按整段 text_height 归一化，三行会变成「第一行白、最后一行全蓝」，
+	## 每行颜色都不一样。多行改纯色 + 描边，视觉统一；单行继续用渐变。
+	if lbl.get_line_count() > 1:
+		if current != null:
+			lbl.material = null
+		return false
 	lbl.add_theme_color_override("font_color", Color.WHITE)
 	var mat := _ensure_gradient_material(lbl)
 	if mat == null:
