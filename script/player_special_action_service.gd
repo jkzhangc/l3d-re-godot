@@ -106,6 +106,11 @@ func use_skill(trigger: String = "") -> void:
 ## TP 走 PlayerState 权威值（Host 上 get_state_for_entity 对权威实体返回权威域）。
 ## 返回是否成功释放（校验失败逐项早退）。
 func _use_skill_core(trigger: String, motion_ok: bool) -> bool:
+	## 搬运油桶 = 双手占用（2026-11-23 用户定稿）：SA 技能同样不能使用。
+	## 放在最前，单机与联机 Host 代结算都会经过这里。
+	if _p.has_method("is_carrying_oil_barrel") and bool(_p.call("is_carrying_oil_barrel")):
+		print("[技能] 搬运油桶时无法使用 SA")
+		return false
 	if not _p.current_character:
 		return false
 	var skill: SkillData = _find_skill_by_trigger(_p.current_character.skills, trigger)

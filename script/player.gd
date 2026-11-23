@@ -1063,9 +1063,17 @@ func _ensure_carried_barrel_sprite() -> void:
 ## 持桶显示：外观取地图油桶的共享配置，朝向跟随玩家，位置按朝向偏移。
 ## 层级：朝上时在玩家身后（show_behind_parent），其余朝向在玩家上层（z_index=1）。
 func _update_carried_barrel_sprite() -> void:
+	## ★每帧按「当前绑定座位」的 carried_oil_barrel 同步（2026-11-23）：
+	## 单机切人时玩家实体不变、状态按座位独立 —— 靠这里自动显示/隐藏对应角色的桶，
+	## 切回原角色时会恢复他自己的持桶状态。切到持桶角色时按需补建精灵。
+	var st: PlayerState = Players.get_state_for_entity(self)
+	var carrying: bool = st != null and st.carried_oil_barrel
+	if carrying:
+		_ensure_carried_barrel_sprite()
 	if _carried_barrel_sprite == null or not is_instance_valid(_carried_barrel_sprite):
 		return
-	if not _carried_barrel_sprite.visible:
+	_carried_barrel_sprite.visible = carrying
+	if not carrying:
 		return
 	var app: Dictionary = OIL_BARREL_SCRIPT.shared_appearance
 	var tex: Texture2D = app.get("texture") as Texture2D
