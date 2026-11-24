@@ -35,7 +35,9 @@ extends RefCounted
 ##   Map0014 → 夜行猎手-第二关-结束安全屋.tscn
 ##   Map0018 → 夜行猎手-第三关-结束安全屋.tscn
 ## 这三张图的原作事件分 **2~3 批**（临场感叹 → 对策 → 出发），
-## 批次依次映射到第 1/2/3 页；三页各自独立随机挑说话人（2026-11-02 定稿）。
+## 批次依次映射到第 1/2/3 页；三页的说话人**互不重复**（2026-11-24 修订）：
+##   A 页随机一名队员，B 页随机一名「不是 A」的队员，C 页再排除 A/B。
+##   由 `game_init._pick_dialogue_characters()` 按批次可用台词逐个挑。
 ##
 ## **第三战役 · 死亡岛**（2026-11-22 实装开头安全屋）：
 ##   Map0025 スタート地点 → 死亡岛-第一关-开头安全屋.tscn
@@ -454,6 +456,45 @@ static func key_for_scene(scene_path: String) -> String:
 		if scene_path.contains(str(pair[0])):
 			return str(pair[1])
 	return ""
+
+
+## 按批次挑说话人（2026-11-24 用户需求：A/B/C 三页不能出现同一个角色）。
+##
+## 规则：
+##   · 第 1 页从「该图第 1 批有台词」的候选里随机；
+##   · 第 2 页从「第 2 批有台词、且没在第 1 页说过话」的候选里随机；
+##   · 第 3 页同理，排除前两页的说话人。
+## 池子不够（1~2 人小队：能说这批的人都被前面用过了）时**允许重复** ——
+## 宁可重复也不能整页消失，单人局的安全屋台词必须照常出。
+##
+## `candidates` = 本局队伍里的角色 id。返回长度 = count；
+## 某一项为空串 = 该批次谁都没台词，调用方跳过这一页。
+static func pick_stage_speakers(key: String, candidates: Array[String], count: int) -> Array[String]:
+	var out: Array[String] = []
+	if count <= 0:
+		return out
+	var stages: Array[String] = [STAGE_ENTER, STAGE_AFTER_SUMMARY, STAGE_CLOSING]
+	var used: Dictionary = {}
+	for i: int in range(count):
+		var stage: String = stages[i] if i < stages.size() else ""
+		var fresh: Array[String] = []
+		var fallback: Array[String] = []
+		for cid: String in candidates:
+			if cid.is_empty():
+				continue
+			if stage.is_empty() or lines_for(key, cid, stage).is_empty():
+				continue
+			fallback.append(cid)
+			if not used.has(cid):
+				fresh.append(cid)
+		var bucket: Array[String] = fresh if not fresh.is_empty() else fallback
+		if bucket.is_empty():
+			out.append("")
+			continue
+		var pick: String = bucket[randi_range(0, bucket.size() - 1)]
+		used[pick] = true
+		out.append(pick)
+	return out
 
 
 ## 取「该图 × 该角色 × 该批次」的台词；取不到返回空数组（调用方据此保持安静）。

@@ -288,7 +288,7 @@ func _open_safehouse_dialogue(key: String) -> void:
 		and bool(net.call("is_online_session"))
 	if online:
 		if bool(net.get("is_host")):
-			var ids: Array[String] = _pick_dialogue_characters(3)
+			var ids: Array[String] = _pick_dialogue_characters(3, key)
 			if ids.size() < 3:
 				return
 			## Host 决定后广播；Client 只按 id 查本地同款 CharacterData。
@@ -297,7 +297,7 @@ func _open_safehouse_dialogue(key: String) -> void:
 		else:
 			await _wait_and_show_remote_dialogue(key)
 		return
-	var ids: Array[String] = _pick_dialogue_characters(3)
+	var ids: Array[String] = _pick_dialogue_characters(3, key)
 	if ids.size() < 3:
 		return
 	_show_safehouse_dialogue(key, ids[0], ids[1], ids[2])
@@ -322,17 +322,16 @@ func _wait_and_show_remote_dialogue(key: String) -> void:
 	print("[GameInit] 安全屋台词：等待 Host 选角超时，跳过")
 
 
-## 从队伍里随机抽 count 个角色 id（**每页独立抽**，允许两页同一人）。
+## 从队伍里抽 count 个角色 id，**各页说话人不重复**（2026-11-24 用户需求）。
 ## 单机 = 全部座位；联机 = 所有 peer 在大厅选的角色。Host 调用。
-func _pick_dialogue_characters(count: int) -> Array[String]:
-	var pool: Array[CharacterData] = _dialogue_character_pool()
-	var out: Array[String] = []
-	if pool.is_empty() or count <= 0:
-		return out
-	for _i: int in range(count):
-		var cd: CharacterData = pool[randi_range(0, pool.size() - 1)]
-		out.append(cd.get_character_key())
-	return out
+## 具体规则（按批次过滤 + 去重 + 池子不足时退化）在
+## `SafehouseDialogueData.pick_stage_speakers()` —— 纯数据层逻辑，便于单测。
+func _pick_dialogue_characters(count: int, key: String) -> Array[String]:
+	var candidates: Array[String] = []
+	for cd: CharacterData in _dialogue_character_pool():
+		if cd != null:
+			candidates.append(cd.get_character_key())
+	return SAFEHOUSE_DIALOGUE_DATA.pick_stage_speakers(key, candidates, count)
 
 
 ## 队伍可用角色池（按 id 去重）。联机走 Net 的角色表 —— 大厅选角即写入、跨图常驻，
@@ -424,8 +423,8 @@ func _show_safehouse_dialogue(key: String, id_a: String, id_b: String, id_c: Str
 	var dlg: Node = SAFEHOUSE_DIALOGUE_SCENE.instantiate()
 	MAP_SCENE_QUERY.get_map_root(tree).add_child(dlg)
 	dlg.call("open_mixed_pages", entries)
-	print("[GameInit] 安全屋台词：%s（页1=%s / 页2=%s，%d 页）" % [
-		key, id_a, id_b, entries.size()])
+	print("[GameInit] 安全屋台词：%s（页1=%s / 页2=%s / 页3=%s，%d 页）" % [
+		key, id_a, id_b, id_c, entries.size()])
 
 
 ## 解析「本机玩家」的 CharacterData（台词 / 头像归属）。
