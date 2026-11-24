@@ -68,7 +68,7 @@ var _tunnel_port_row: HBoxContainer
 ## 房主跑起穿透客户端后，把"外网能连到的那个地址与端口"填进来 —— 大厅靠它找到房间。
 var _tunnel_addr_edit: LineEdit
 var _tunnel_port_edit: SpinBox
-var _self_check_labels: Array[Label] = []
+var _self_check_label: Label
 var _create_status: Label
 var _confirm_create_btn: Button
 
@@ -359,15 +359,14 @@ func _update_self_check() -> void:
 	##   ① 本机端口监听 —— 由 Net.host_game() 结果决定，此处先给中性文案
 	##   ② 路由器端口映射 / UPnP —— 由 Net.upnp_port_mapped / upnp_mapping_failed 决定
 	##   ③ 穿透隧道连通 —— 自动模式由隧道客户端状态决定；手动模式靠玩家自行确认
-	if _self_check_labels.size() < 3:
+	if _self_check_label == null:
 		return
+	## 2026-11-24：原来是「── 连通性 ──」+ 三行 36 号说明，把「创建房间」挤到屏幕外。
+	## 现在压成一行 24 号：三个检测点仍在，但不再占掉半屏。
 	var upnp_ok: bool = int(Net.get("_upnp_mapped_port")) > 0
-	_self_check_labels[0].text = "① 本机端口监听      ⏳ 创建时检测"
-	_self_check_labels[1].text = "② 路由器端口映射    %s" % ("✔ UPnP 已映射" if upnp_ok else "⏳ 创建时尝试")
-	if is_auto_tunnel():
-		_self_check_labels[2].text = "③ 隧道自动连接      ⏳ 点击创建后自动连接"
-	else:
-		_self_check_labels[2].text = "③ 穿透隧道连通      ⏳ 请确认穿透客户端日志显示 connected"
+	var upnp_text: String = "✔ 已映射" if upnp_ok else "创建时尝试"
+	var tunnel_text: String = "自动连接" if is_auto_tunnel() else "需客户端在线"
+	_self_check_label.text = "连通性：端口创建时检测 · 路由器映射 %s · 隧道 %s" % [upnp_text, tunnel_text]
 
 
 func _on_confirm_create() -> void:
@@ -591,32 +590,36 @@ func _style_list_card(panel: PanelContainer) -> void:
 
 
 func _build_create_view() -> Control:
-	## ★2026-11-24：正文放大到 36 后这张表单比可视区高，整页放进滚动容器 ——
-	## 不然最下面的「创建房间 / 返回列表」会被挤出屏幕（手机端根本无法滚动）。
-	## 直接返回 ScrollContainer（与 list / load 一致：anchors + 12px 内边距），
-	## 不套额外的 Control —— 空 Control 不在容器里时锚点尺寸不会跟着父节点刷新（实测高度 0）。
-	var scroll := ScrollContainer.new()
-	scroll.name = "CreateView"
-	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
-	scroll.offset_left = 12.0
-	scroll.offset_top = 12.0
-	scroll.offset_right = -12.0
-	scroll.offset_bottom = -12.0
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-
+	## ★2026-11-24 用户实测：正文放大后这张表单比可视区高，要往下滑才看得到「创建房间」。
+	## 现在把**按钮固定在视图底部**（不随表单滚动），中间的说明也压成一行 24 号 ——
+	## 自动穿透模式下整页不用滚动就能看到主按钮；手动穿透模式多两行，只有表单区滚动。
 	var root := VBoxContainer.new()
-	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root.add_theme_constant_override("separation", 12)
-	scroll.add_child(root)
+	root.name = "CreateView"
+	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.offset_left = 12.0
+	root.offset_top = 12.0
+	root.offset_right = -12.0
+	root.offset_bottom = -12.0
+	root.add_theme_constant_override("separation", 10)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	root.add_child(scroll)
+
+	var form := VBoxContainer.new()
+	form.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	form.add_theme_constant_override("separation", 10)
+	scroll.add_child(form)
 
 	var title := Label.new()
 	title.text = "创建互联网房间"
 	title.add_theme_color_override("font_color", COLOR_TITLE)
-	root.add_child(title)
+	form.add_child(title)
 
 	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 8)
-	root.add_child(name_row)
+	name_row.add_theme_constant_override("separation", 10)
+	form.add_child(name_row)
 	var name_tag := Label.new()
 	name_tag.text = "房间名称"
 	name_row.add_child(name_tag)
@@ -625,30 +628,24 @@ func _build_create_view() -> Control:
 	_room_name_edit.max_length = 32
 	name_row.add_child(_room_name_edit)
 
-	var limit_row := HBoxContainer.new()
-	limit_row.add_theme_constant_override("separation", 8)
-	root.add_child(limit_row)
-	var limit_tag := Label.new()
-	limit_tag.text = "人数上限    4（固定）"
-	limit_row.add_child(limit_tag)
-
 	## 自动穿透（路线二）：勾选后游戏内置隧道客户端自动连中继，房主无需手动配置穿透。
+	## 人数上限固定 4，不再单独占一行（四人大厅在玩家槽位里已经写得很清楚）。
 	_auto_tunnel_check = CheckBox.new()
 	_auto_tunnel_check.text = "自动穿透（推荐）"
 	_auto_tunnel_check.button_pressed = true
 	_auto_tunnel_check.pressed.connect(_on_auto_tunnel_toggled)
-	root.add_child(_auto_tunnel_check)
+	form.add_child(_auto_tunnel_check)
 
 	## 隧道状态：自动模式下展示连接进度（由大厅脚本调 set_tunnel_status 更新）。
 	_tunnel_status_label = Label.new()
-	_tunnel_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tunnel_status_label.name = "TunnelStatus"
 	_tunnel_status_label.add_theme_color_override("font_color", COLOR_HINT)
-	root.add_child(_tunnel_status_label)
+	form.add_child(_tunnel_status_label)
 
 	## 手动穿透地址 / 端口（方案 §2.3 A1，自动模式时隐藏）。
 	_tunnel_addr_row = HBoxContainer.new()
-	_tunnel_addr_row.add_theme_constant_override("separation", 8)
-	root.add_child(_tunnel_addr_row)
+	_tunnel_addr_row.add_theme_constant_override("separation", 10)
+	form.add_child(_tunnel_addr_row)
 	var tunnel_tag := Label.new()
 	tunnel_tag.text = "穿透地址"
 	_tunnel_addr_row.add_child(tunnel_tag)
@@ -659,8 +656,8 @@ func _build_create_view() -> Control:
 	_tunnel_addr_row.add_child(_tunnel_addr_edit)
 
 	_tunnel_port_row = HBoxContainer.new()
-	_tunnel_port_row.add_theme_constant_override("separation", 8)
-	root.add_child(_tunnel_port_row)
+	_tunnel_port_row.add_theme_constant_override("separation", 10)
+	form.add_child(_tunnel_port_row)
 	var tunnel_port_tag := Label.new()
 	tunnel_port_tag.text = "穿透端口"
 	_tunnel_port_row.add_child(tunnel_port_tag)
@@ -670,51 +667,48 @@ func _build_create_view() -> Control:
 	_tunnel_port_edit.value = 27015.0
 	_tunnel_port_row.add_child(_tunnel_port_edit)
 	var tunnel_port_hint := Label.new()
-	tunnel_port_hint.text = "穿透客户端分配的公网端口（可能与本机端口不同）"
+	tunnel_port_hint.text = "穿透客户端分配的公网端口"
 	tunnel_port_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	tunnel_port_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tunnel_port_hint.add_theme_color_override("font_color", COLOR_HINT)
 	_tunnel_port_row.add_child(tunnel_port_hint)
 
 	## 初始状态：自动模式 → 隐藏手动行。
 	_on_auto_tunnel_toggled()
 
-	var conn_title := Label.new()
-	conn_title.text = "── 连通性 ──"
-	conn_title.add_theme_color_override("font_color", COLOR_HINT)
-	root.add_child(conn_title)
-
-	_self_check_labels.clear()
-	for i: int in range(3):
-		var l := Label.new()
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		root.add_child(l)
-		_self_check_labels.append(l)
+	_self_check_label = Label.new()
+	_self_check_label.name = "SelfCheck"
+	_self_check_label.text = "连通性：点击创建后自动检测"
+	_self_check_label.add_theme_color_override("font_color", COLOR_HINT)
+	form.add_child(_self_check_label)
 
 	_create_status = Label.new()
+	_create_status.name = "CreateStatus"
 	_create_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(_create_status)
+	form.add_child(_create_status)
 
 	var hint := Label.new()
-	hint.text = "提示：房间会被注册到大厅，好友即可在列表里看到并一键加入。"
+	hint.name = "CreateHint"
+	hint.text = "房间会注册到大厅，好友在列表里一键加入。"
 	hint.add_theme_color_override("font_color", COLOR_HINT)
-	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(hint)
+	form.add_child(hint)
 
+	## 按钮固定在底部：无论表单多长，「创建房间」都不用滚动就能点到。
 	var btn_row := HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.add_theme_constant_override("separation", 10)
 	root.add_child(btn_row)
 	var cancel := Button.new()
 	cancel.text = "返回列表"
+	cancel.custom_minimum_size = Vector2(0, 52)
 	cancel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cancel.pressed.connect(show_list)
 	btn_row.add_child(cancel)
 	_confirm_create_btn = Button.new()
 	_confirm_create_btn.text = "创建房间"
+	_confirm_create_btn.custom_minimum_size = Vector2(0, 52)
 	_confirm_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_confirm_create_btn.pressed.connect(_on_confirm_create)
 	btn_row.add_child(_confirm_create_btn)
-	return scroll
+	return root
 
 
 func _build_load_view() -> Control:
@@ -773,13 +767,14 @@ func _empty_style(label: Label) -> void:
 	Global.apply_text_shadow(label)
 
 
-## 字号与字体统一（正文 24 / 标题 36，均为 12 的整倍）。
+## 字号与字体统一（页内标题 48 / 正文 36 / 辅助 24，均为 12 的整倍）。
 func _apply_fonts() -> void:
 	for node: Node in find_children("*", "Control", true, false):
 		if node is Label:
 			var l := node as Label
 			var is_title: bool = l.name == "Title" or l.text in ["在线房间", "创建互联网房间"]
-			var is_small: bool = l.name in ["LatencyLabel", "LastUpdateLabel", "ListStatus"]
+			var is_small: bool = l.name in ["LatencyLabel", "LastUpdateLabel", "ListStatus",
+				"SelfCheck", "TunnelStatus", "CreateStatus", "CreateHint"]
 			Global.apply_ui_font(l, 48 if is_title else (24 if is_small else 36))
 			if not is_title:
 				Global.apply_text_shadow(l)
