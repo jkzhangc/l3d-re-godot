@@ -137,8 +137,15 @@ func _configure_camera(map: Node2D) -> void:
 func _replace_map(path: String, packed: PackedScene) -> void:
 	if _changing or _closing:
 		return
+	## 同款保护：request_map 是 deferred 调用，极端时序下（请求后立刻 change_scene）
+	## 本会话可能已经退出树 → get_tree() 会报 data.tree is null。
+	if not is_inside_tree():
+		return
 	_changing = true
 	var tree: SceneTree = get_tree()
+	if tree == null:
+		_changing = false
+		return
 	var old: Node = tree.current_scene
 	if is_instance_valid(active_map):
 		old = active_map
@@ -183,9 +190,20 @@ func _on_map_exiting(map_instance_id: int) -> void:
 
 
 func _release_if_not_gameplay(generation: int) -> void:
+	## ★2026-11-24 修「安全屋传送点传送时报 data.tree is null」：
+	## 单机传送（TeleportPoint / SafeDoor）走的是 `change_scene_to_file`，本会话就是 current_scene，
+	## 换图时它会先**退出场景树**再被释放；而 `_on_map_exiting` 里排的 deferred 回调仍会执行。
+	## 不在树里的节点 `get_tree()` 会直接报 "Parameter data.tree is null"，
+	## 随后的 `.current_scene` 再补一条 null 实例错误（就是用户日志里的两条 E）。
+	## 不在树里 = 本次会话正在被换图回收，没有"当前场景"可判断，直接返回。
+	if not is_inside_tree():
+		return
 	if generation != _generation or _changing or _closing or active_map != null:
 		return
-	var scene: Node = get_tree().current_scene
+	var tree: SceneTree = get_tree()
+	if tree == null:
+		return
+	var scene: Node = tree.current_scene
 	if scene != null and not is_instance_of(scene, CONTEXT):
 		close_session()
 
@@ -195,9 +213,11 @@ func close_session() -> void:
 		return
 	_closing = true
 	_generation += 1
+	## 同款保护：会话已退出树时不能直接 get_tree()（会报 data.tree is null）。
+	var tree: SceneTree = get_tree() if is_inside_tree() else null
 	if is_instance_valid(active_map) and active_map.get_parent() == map_host:
 		# SceneTree换图将释放current_scene；先从宿主摘除，避免重复queue_free。
-		if get_tree().current_scene != active_map:
+		if tree == null or tree.current_scene != active_map:
 			active_map.queue_free()
 	active_map = null
 	if is_instance_valid(camera):
