@@ -265,6 +265,22 @@ func _setup_room_panel() -> void:
 	_build_room_settings_dialog()
 	_build_room_summary()
 	_refresh_room_info()
+	## 内容比可视区矮时把 Column 撑满：日志卡才会贴在窗口底部，而不是悬在中间。
+	_sync_room_scroll_fill.call_deferred()
+
+
+## 房间 Column 的最小高度 = 滚动可视区高度（见 `_sync_connect_vbox_min_height` 同款原因：
+## ScrollContainer 只按最小高度摆放子节点，内容一变少就会在窗口下方留一截空白）。
+func _sync_room_scroll_fill() -> void:
+	var scroll: ScrollContainer = room_panel.get_node_or_null("Margin/Scroll") as ScrollContainer
+	var column: Control = room_panel.get_node_or_null("Margin/Scroll/Column") as Control
+	if scroll == null or column == null:
+		return
+	## 房间面板启动时是隐藏的，`size` 要等第一次显示才有值 → 跟着 resized 再补一次。
+	if not scroll.resized.is_connected(_sync_room_scroll_fill):
+		scroll.resized.connect(_sync_room_scroll_fill)
+	if scroll.size.y > 1.0:
+		column.custom_minimum_size.y = scroll.size.y
 
 
 # ── 开局附加参数（2026-10-31 用户需求：联机大厅也加上）──

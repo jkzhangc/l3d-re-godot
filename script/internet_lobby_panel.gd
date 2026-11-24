@@ -49,9 +49,12 @@ var _list_status: Label
 var _refresh_btn: Button
 var _create_btn: Button
 var _last_update_label: Label
-## 大厅地址输入（手机端唯一可改地址的入口，见 _build_list_view 注释）。
-var _server_url_edit: LineEdit
-var _apply_url_btn: Button
+## 大厅延迟（2026-11-24）：每次拉房间列表的往返耗时，由 LobbyClient.request_finished 回报。
+## 地址不再由玩家在界面上改 —— 统一走 config.json / Global.master_server_url。
+var _latency_label: Label
+var _room_scroll: ScrollContainer
+var _empty_box: CenterContainer
+var _empty_label: Label
 
 # ── create 视图控件 ──
 var _room_name_edit: LineEdit
@@ -159,9 +162,6 @@ func _setup_client() -> void:
 	if not _client.setup(url):
 		_set_status(_list_status, "大厅地址不安全或无效：%s" % url, COLOR_ERROR)
 		return
-	## 同步输入框（地址可能来自默认值 / 上次保存 / 外部改动）。
-	if _server_url_edit != null:
-		_server_url_edit.text = url
 	## 明文 http 在移动端**是否被拦尚未实测确认**（Godot 走原生 socket，未必受
 	## Java 层 cleartext 策略影响，见 lobby_client.gd 注释）——这里只提示、不阻断。
 	if not _client.is_mobile_safe():
@@ -175,6 +175,7 @@ func _setup_client() -> void:
 	_client.lobby_unreachable.connect(_on_lobby_unreachable)
 	_client.waking_up.connect(_on_waking_up)
 	_client.rate_limited.connect(_on_rate_limited)
+	_client.request_finished.connect(_on_request_finished)
 
 
 func _process(delta: float) -> void:
@@ -202,7 +203,8 @@ func _on_rooms_received(rooms: Array) -> void:
 	_hide_load_view()
 	_last_rooms = rooms
 	_render_rooms(rooms)
-	_last_update_label.text = "上次更新：刚刚"
+	## 8 秒自动刷新一次，「刚刚」永远成立、看不出到底刷没刷；改显示时刻更实在。
+	_last_update_label.text = "上次更新：%s" % Time.get_time_string_from_system().substr(0, 5)
 	_set_status(_list_status, "", COLOR_HINT)
 
 
@@ -273,16 +275,34 @@ func _render_rooms(rooms: Array) -> void:
 	for child: Node in _room_list.get_children():
 		child.queue_free()
 	if rooms.is_empty():
-		var empty := Label.new()
-		empty.text = "现在没有房间。创建一个，或稍后点[刷新]。"
-		empty.add_theme_color_override("font_color", COLOR_HINT)
-		_empty_style(empty)
-		_room_list.add_child(empty)
+		## 空态居中占满列表卡片：避免"顶部一行小字 + 一大片空白"的挤压感。
+		if _room_scroll != null:
+			_room_scroll.visible = false
+		if _empty_box != null:
+			_empty_box.visible = true
 		return
+	if _room_scroll != null:
+		_room_scroll.visible = true
+	if _empty_box != null:
+		_empty_box.visible = false
 	for room_value: Variant in rooms:
 		if typeof(room_value) != TYPE_DICTIONARY:
 			continue   ## 脏数据不得让界面崩
 		_room_list.add_child(_build_room_row(room_value as Dictionary))
+
+
+## 大厅延迟刷新（每次 fetch_rooms 完成都会来一发；其它请求忽略，免得数字乱跳）。
+func _on_request_finished(operation: String, latency_ms: int, ok: bool) -> void:
+	if operation != "fetch_rooms" or _latency_label == null:
+		return
+	if not ok or latency_ms <= 0:
+		_latency_label.text = "大厅延迟：超时"
+		_latency_label.add_theme_color_override("font_color", COLOR_WARN)
+		return
+	var color: Color = COLOR_OK if latency_ms < 150 \
+		else (COLOR_WARN if latency_ms < 400 else COLOR_ERROR)
+	_latency_label.text = "大厅延迟：%d ms" % latency_ms
+	_latency_label.add_theme_color_override("font_color", color)
 
 
 func _build_room_row(room: Dictionary) -> Control:
@@ -476,68 +496,98 @@ func _build_list_view() -> Control:
 	root.offset_top = 12.0
 	root.offset_right = -12.0
 	root.offset_bottom = -12.0
-	root.add_theme_constant_override("separation", 8)
+	root.add_theme_constant_override("separation", 10)
 
 	var title := Label.new()
 	title.text = "在线房间"
 	title.add_theme_color_override("font_color", COLOR_TITLE)
 	root.add_child(title)
 
-	## 大厅地址：可编辑 + 应用。手机端 config.json 是只读的，这里是**唯一**能改地址的入口；
-	## 备案切 HTTPS 域名时玩家/开发者都不用重新打包。
-	var url_row := HBoxContainer.new()
-	url_row.add_theme_constant_override("separation", 8)
-	root.add_child(url_row)
-	var url_tag := Label.new()
-	url_tag.text = "大厅地址"
-	url_row.add_child(url_tag)
-	_server_url_edit = LineEdit.new()
-	_server_url_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_server_url_edit.text = Global.master_server_url
-	_server_url_edit.placeholder_text = "https://你的域名 或 http://IP:端口"
-	_server_url_edit.tooltip_text = "Master Server 地址。改完点右侧「应用」保存。"
-	url_row.add_child(_server_url_edit)
-	_apply_url_btn = Button.new()
-	_apply_url_btn.text = "应用"
-	_apply_url_btn.pressed.connect(_on_apply_url_pressed)
-	url_row.add_child(_apply_url_btn)
+	## 状态行：大厅延迟 + 上次刷新时刻（2026-11-24）。
+	## 地址输入已移除（玩家不会去改服务器地址），省下的高度让列表卡片更宽松。
+	var status_row := HBoxContainer.new()
+	status_row.add_theme_constant_override("separation", 16)
+	root.add_child(status_row)
+	_latency_label = Label.new()
+	_latency_label.name = "LatencyLabel"
+	_latency_label.text = "大厅延迟：—"
+	_latency_label.tooltip_text = "到大厅服务器的往返时间（每次刷新房间列表时测量）"
+	_latency_label.add_theme_color_override("font_color", COLOR_HINT)
+	status_row.add_child(_latency_label)
+	_last_update_label = Label.new()
+	_last_update_label.name = "LastUpdateLabel"
+	_last_update_label.text = "上次更新：—"
+	_last_update_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_last_update_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_last_update_label.add_theme_color_override("font_color", COLOR_HINT)
+	status_row.add_child(_last_update_label)
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	root.add_child(scroll)
+	## 列表卡片：深底 + 1px 亮边（与房间页的卡片同款）。
+	## 有房间 → 内部滚动列表；没房间 → 居中空态，不再是一行字顶在大片空白上。
+	var card := PanelContainer.new()
+	card.name = "RoomListCard"
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_style_list_card(card)
+	root.add_child(card)
+
+	_room_scroll = ScrollContainer.new()
+	_room_scroll.name = "RoomScroll"
+	_room_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	card.add_child(_room_scroll)
 
 	_room_list = VBoxContainer.new()
 	_room_list.name = "RoomList"
 	_room_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_room_list.add_theme_constant_override("separation", 6)
-	scroll.add_child(_room_list)
+	_room_list.add_theme_constant_override("separation", 8)
+	_room_scroll.add_child(_room_list)
 
-	_last_update_label = Label.new()
-	_last_update_label.text = "上次更新：—"
-	_last_update_label.add_theme_color_override("font_color", COLOR_HINT)
-	root.add_child(_last_update_label)
+	_empty_box = CenterContainer.new()
+	_empty_box.name = "EmptyBox"
+	_empty_box.visible = false
+	card.add_child(_empty_box)
+	_empty_label = Label.new()
+	_empty_label.text = "现在没有房间。\n点下面「创建房间」，或稍后刷新。"
+	_empty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_empty_label.add_theme_color_override("font_color", COLOR_HINT)
+	_empty_box.add_child(_empty_label)
 
 	_list_status = Label.new()
+	_list_status.name = "ListStatus"
 	_list_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_list_status)
 
 	var btn_row := HBoxContainer.new()
-	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.add_theme_constant_override("separation", 10)
 	root.add_child(btn_row)
 
 	_refresh_btn = Button.new()
 	_refresh_btn.text = "刷新"
+	_refresh_btn.custom_minimum_size = Vector2(0, 52)
 	_refresh_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_refresh_btn.pressed.connect(_on_refresh_pressed)
 	btn_row.add_child(_refresh_btn)
 
 	_create_btn = Button.new()
 	_create_btn.text = "创建房间"
+	_create_btn.custom_minimum_size = Vector2(0, 52)
 	_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_create_btn.pressed.connect(show_create)
 	btn_row.add_child(_create_btn)
 	return root
+
+
+## 列表卡片皮肤（与联机房间页的卡片同款：半透明深底 + 1px 亮边）。
+func _style_list_card(panel: PanelContainer) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.04, 0.06, 0.52)
+	sb.border_color = Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 14.0
+	sb.content_margin_right = 14.0
+	sb.content_margin_top = 12.0
+	sb.content_margin_bottom = 12.0
+	panel.add_theme_stylebox_override("panel", sb)
 
 
 func _build_create_view() -> Control:
@@ -704,37 +754,6 @@ func _on_refresh_pressed() -> void:
 	_refresh_now()
 
 
-## 应用新的 hall 地址：校验 → 持久化 → 重建客户端 → 立即刷新。
-func _on_apply_url_pressed() -> void:
-	var url := _server_url_edit.text.strip_edges()
-	if url == Global.master_server_url:
-		_set_status(_list_status, "大厅地址未变化", COLOR_HINT)
-		return
-	## 先落配置：即便校验失败也不至于把界面改成半截状态。
-	Global.master_server_url = url
-	Global.save_config()
-	_set_status(_list_status, "正在切换到 %s …" % url, COLOR_HINT)
-	_rebuild_client()
-
-
-## 用当前的 `Global.master_server_url` 重建客户端（切换地址 / 重试时复用）。
-##
-## ⚠ `queue_free()` 是**延迟**释放：旧节点要到帧末才真正销毁，其间它仍可能发出信号
-## 干扰新客户端的状态。所以先显式断连、再释放。
-func _rebuild_client() -> void:
-	if _client != null:
-		for sig: String in ["rooms_received", "room_registered", "request_failed",
-				"room_deleted", "lobby_unreachable", "waking_up", "rate_limited"]:
-			if _client.is_connected(sig, Callable(self, "_on_" + sig)):
-				_client.disconnect(sig, Callable(self, "_on_" + sig))
-		_client.queue_free()
-		_client = null
-	_delete_pending = false
-	_setup_client()
-	if is_ready():
-		show_list()
-
-
 func _switch_view(name: String) -> void:
 	_current_view = name
 	for key: String in _views.keys():
@@ -760,7 +779,8 @@ func _apply_fonts() -> void:
 		if node is Label:
 			var l := node as Label
 			var is_title: bool = l.name == "Title" or l.text in ["在线房间", "创建互联网房间"]
-			Global.apply_ui_font(l, 48 if is_title else 36)
+			var is_small: bool = l.name in ["LatencyLabel", "LastUpdateLabel", "ListStatus"]
+			Global.apply_ui_font(l, 48 if is_title else (24 if is_small else 36))
 			if not is_title:
 				Global.apply_text_shadow(l)
 		elif node is BaseButton:

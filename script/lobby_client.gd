@@ -38,6 +38,10 @@ signal lobby_unreachable(reason: String)
 signal waking_up(stage: int)
 ## 被限流（429）。UI 约定：**静默退避、不清列表**（方案 §3.6）。
 signal rate_limited(retry_after_sec: int)
+## 每次请求完成后的耗时（ms）与成功与否（2026-11-24）。
+## 大厅界面的「大厅延迟」直接读它：`fetch_rooms` 的往返时间就是到服务器的延迟。
+## ⚠ 这是**应用层**往返（含服务端处理），不是 ICMP ping —— 对玩家而言更贴近"刷新一圈多慢"。
+signal request_finished(operation: String, latency_ms: int, ok: bool)
 
 # ── 常量 ──
 
@@ -164,12 +168,14 @@ func _on_request_completed(result: int, response_code: int,
 	if _current.is_empty():
 		return
 	var op := _current
+	var latency_ms: int = int(round(_elapsed * 1000.0))
 	_current = {}
 	_in_flight = false
 	set_process(false)
 
 	var operation := str(op["operation"])
 	var text := body.get_string_from_utf8()
+	request_finished.emit(operation, latency_ms, result == HTTPRequest.RESULT_SUCCESS)
 
 	# 网络层失败（连不上 / TLS 失败 / 被中断）→ 走"大厅不可达"降级路径。
 	if result != HTTPRequest.RESULT_SUCCESS:

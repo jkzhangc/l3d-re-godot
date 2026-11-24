@@ -318,9 +318,29 @@ func play_lobby_music(path_override: String = "", volume_db: float = 0.0) -> voi
 	if not ResourceLoader.exists(path):
 		push_warning("[AudioService] 大厅音乐不存在：%s" % path)
 		return
-	_lobby_music_player.stream = load(path)
+	## ★2026-11-24 修「大厅 BGM 只播一次就没了」：MP3 流的 `loop` 默认 false，
+	## 播完一遍就停。duplicate() 后再改 loop，避免污染 ResourceLoader 缓存里的母本
+	## （同一文件在别处 load 到的仍然是默认不循环）。
+	var stream: AudioStream = load(path) as AudioStream
+	if stream != null:
+		stream = stream.duplicate() as AudioStream
+		if "loop" in stream:
+			stream.set("loop", true)
+	_lobby_music_player.stream = stream
 	_lobby_music_path = path
 	_lobby_music_player.volume_db = volume_db
+	## 双保险：个别导入设置会让 loop 不生效，靠 finished 再起一遍。
+	if not _lobby_music_player.finished.is_connected(_on_lobby_music_finished):
+		_lobby_music_player.finished.connect(_on_lobby_music_finished)
+	_lobby_music_player.play()
+
+
+## 大厅音乐播完的回调：只要还在大厅（路径非空）就继续循环。
+func _on_lobby_music_finished() -> void:
+	if _lobby_music_player == null or not is_instance_valid(_lobby_music_player):
+		return
+	if _lobby_music_path.is_empty():
+		return
 	_lobby_music_player.play()
 
 
