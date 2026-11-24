@@ -91,19 +91,21 @@ axis_stretch_vertical = 1
 [node name="DescPanel" type="Panel" parent="MenuWindow" unique_id=938196493]
 layout_mode = 0
 offset_left = 40.0
-offset_top = 460.0
+offset_top = 420.0
 offset_right = 820.0
-offset_bottom = 556.0
+offset_bottom = 568.0
 
 [node name="DescLabel" type="Label" parent="MenuWindow/DescPanel" unique_id=1461220690]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 12.0
 offset_right = 788.0
-offset_bottom = 92.0
+offset_bottom = 136.0
 theme_override_fonts/font = ExtResource("7")
 theme_override_font_sizes/font_size = 24
 autowrap_mode = 3
+text_overrun_behavior = 3
+max_lines_visible = 4
 
 [node name="HintLabel" type="Control" parent="MenuWindow" unique_id=640684916]
 anchors_preset = 0

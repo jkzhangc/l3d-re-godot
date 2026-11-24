@@ -151,17 +151,23 @@ func _resolve_window_position() -> Vector2:
 
 
 func _load_campaigns() -> void:
-	var paths: Array[String] = ["res://object/campaign_assault.tres", "res://object/campaign_night_hunter.tres"]
-	for p: String in paths:
-		if ResourceLoader.exists(p):
-			var res: Resource = load(p)
-			if res is CampaignData:
-				var cd := res as CampaignData
-				# 章节骨架期：level_scenes 为空的战役（如夜行猎手）只展示不可开局
-				if cd.level_scenes.is_empty():
-					print("[战役选择] 战役「%s」章节未实装，跳过" % cd.campaign_name)
-					continue
-				_campaigns.append(cd)
+	## ★2026-11-24 修「单人战役选择看不到死亡岛」：这里原来写死两条路径
+	## （assault / night_hunter），新加的战役资源永远进不了列表。
+	## 改为走 `CampaignData.campaign_resource_paths()` —— 扫描 `res://object/campaign_*.tres`
+	## 并按 `campaign_index`（剧情顺序）排，与联机房间的战役选择同源。
+	## 新增战役只要放一个资源文件就能被认出来，不用再改这里。
+	for p: String in CampaignData.campaign_resource_paths():
+		if not ResourceLoader.exists(p):
+			continue
+		var res: Resource = load(p)
+		if not (res is CampaignData):
+			continue
+		var cd := res as CampaignData
+		## 章节骨架期：level_scenes 为空的战役只展示不可开局（历史行为保留）。
+		if cd.level_scenes.is_empty():
+			print("[战役选择] 战役「%s」章节未实装，跳过" % cd.campaign_name)
+			continue
+		_campaigns.append(cd)
 	if _campaigns.is_empty():
 		printerr("[战役选择] 未找到任何战役数据")
 
@@ -230,6 +236,12 @@ func _refresh_description() -> void:
 		_desc_label.text = _campaigns[_cursor_idx].description
 	else:
 		_desc_label.text = ""
+	## ★行数变了必须重套一次样式：`_style_plain_labels()` 在 _ready 里跑，那时标签还没文字
+	## （line_count=1）→ 渐变按"整段"挂上去；之后换成 3 行描述就变成一大段渐变。
+	## 这里按**最终行数**重新算：多行 → 每行各自一段；单行 → 单行渐变。
+	var g: Node = get_node_or_null("/root/Global")
+	if g != null and g.has_method("style_ui_text"):
+		g.call("style_ui_text", _desc_label, desc_font_size)
 
 
 func _create_cursor_frames() -> void:

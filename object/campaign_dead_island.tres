@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CampaignData" format=3 uid="uid://c7q45wybl6itk"]
+
+[ext_resource type="Script" uid="uid://o6wfa4x0wg7a" path="res://script/campaign_data.gd" id="1_kn4ay"]
+
+[resource]
+script = ExtResource("1_kn4ay")
+campaign_id = "dead_island"
+campaign_name = "死亡岛"
+campaign_index = 3
+description = "在《夜行猎手》之后，本该由救援直升机将幸存者们转移到安全地带，但在海上飞行时，飞行员却变成了僵尸，不得已他们只好将其击杀。  
+失去控制的直升机坠毁，幸存者们差点葬身海底。  
+他们好不容易爬出来漂到附近的岛上，却失去了所有武器，简直是赤手空拳。  
+而且，看起来这座岛似乎已经变成了死者的乐园。  
+以GⅡ无人岛（监狱岛）为舞台的战斗就这样拉开了帷幕。"
+level_scenes = Array[String](["res://scene/maps/死亡岛-第一关-开头安全屋.tscn", "res://scene/maps/死亡岛-第一关-监狱外.tscn", "res://scene/maps/死亡岛-第一关-结束安全屋.tscn", "res://scene/maps/死亡岛-第二关-监狱内.tscn", "res://scene/maps/死亡岛-第二关-结束安全屋.tscn", "res://scene/maps/死亡岛-第三关-监狱深处.tscn", "res://scene/maps/死亡岛-第三关-监狱后院入口.tscn", "res://scene/maps/死亡岛-第三关-监狱后院.tscn", "res://scene/maps/死亡岛-第三关-结束安全屋.tscn", "res://scene/maps/死亡岛-第四关-港口.tscn"])

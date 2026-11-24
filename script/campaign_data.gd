@@ -10,6 +10,10 @@ class_name CampaignData extends Resource
 
 @export var campaign_id: String = ""           ## 唯一标识，如 "assault"
 @export var campaign_name: String = ""         ## 显示名称，如 "突袭"
+## 剧情顺序（1 起；0 = 未标注，排在已标注的后面，同号按文件名）。
+## ★2026-11-24：战役列表原来按文件名字母序 → 死亡岛会插在突袭和夜行猎手之间。
+## 单独的序号字段比"改文件名"稳，也不绑死战役 id。
+@export var campaign_index: int = 0
 @export_multiline var description: String = "" ## 战役描述
 @export var level_scenes: Array[String] = []   ## 关卡场景路径列表，按顺序
 @export var campaign_icon: Texture2D           ## 战役选择界面图标（可选）
@@ -26,6 +30,7 @@ class_name CampaignData extends Resource
 const CAMPAIGN_RESOURCE_PATHS: Array[String] = [
 	"res://object/campaign_assault.tres",
 	"res://object/campaign_night_hunter.tres",
+	"res://object/campaign_dead_island.tres",
 ]
 
 static var _cached_campaign_paths: Array[String] = []
@@ -53,9 +58,25 @@ static func campaign_resource_paths() -> Array[String]:
 						out.append(p)
 			f = dir.get_next()
 		dir.list_dir_end()
-	out.sort()
+	## 按「剧情序号 → 文件名」排：见 campaign_index 注释。
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var ia: int = campaign_index_of(a)
+		var ib: int = campaign_index_of(b)
+		if ia != ib:
+			return ia < ib
+		return a < b)
 	_cached_campaign_paths = out
 	return out
+
+
+## 读某个战役资源的剧情序号（0 = 未标注）。资源本身走 ResourceLoader 缓存，重复调用不贵。
+static func campaign_index_of(resource_path: String) -> int:
+	if not ResourceLoader.exists(resource_path):
+		return 0
+	var res: Resource = load(resource_path)
+	if res is CampaignData:
+		return int((res as CampaignData).campaign_index)
+	return 0
 
 
 ## 战役前缀顺序（= 地图文件名第一段，如 "突袭" / "夜行猎手"）。
@@ -71,7 +92,7 @@ static func campaign_order() -> Array[String]:
 			if not nm.is_empty() and nm not in out:
 				out.append(nm)
 	if out.is_empty():
-		var fallback: Array[String] = ["突袭", "夜行猎手"]
+		var fallback: Array[String] = ["突袭", "夜行猎手", "死亡岛"]
 		out = fallback
 	_cached_campaign_order = out
 	return out
@@ -221,6 +242,19 @@ const MAP_SCENE_PATHS: Array[String] = [
 	"res://scene/maps/夜行猎手-第二关-公园入口.tscn",
 	"res://scene/maps/夜行猎手-第二关-公园.tscn",
 	"res://scene/maps/夜行猎手-第二关-结束安全屋.tscn",
+	## ── 死亡岛（第三战役，2026-11-24 补登记）──
+	## 导出包靠 DirAccess 枚举 res://scene/maps 拿不到 .tscn（见上方事故注释），
+	## 不补进本表的话，联机房间的「选择章节」里死亡岛会整段消失。
+	"res://scene/maps/死亡岛-第一关-开头安全屋.tscn",
+	"res://scene/maps/死亡岛-第一关-监狱外.tscn",
+	"res://scene/maps/死亡岛-第一关-结束安全屋.tscn",
+	"res://scene/maps/死亡岛-第二关-监狱内.tscn",
+	"res://scene/maps/死亡岛-第二关-结束安全屋.tscn",
+	"res://scene/maps/死亡岛-第三关-监狱后院入口.tscn",
+	"res://scene/maps/死亡岛-第三关-监狱后院.tscn",
+	"res://scene/maps/死亡岛-第三关-监狱深处.tscn",
+	"res://scene/maps/死亡岛-第三关-结束安全屋.tscn",
+	"res://scene/maps/死亡岛-第四关-港口.tscn",
 ]
 
 ## 战役顺序（2026-10-25）：`_describe_level` 用它给多战役条目排序 + 决定标签是否带战役名。
