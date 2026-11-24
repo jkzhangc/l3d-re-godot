@@ -32,14 +32,12 @@ const AUTO_HOST_TIMEOUT := 30.0
 @onready var host_port_edit: SpinBox = %HostPortEdit
 ## 建主时是否尝试 UPnP 自动端口映射（路由器不支持时改用 frp/樱花等穿透工具）。
 @onready var upnp_check: CheckBox = %UpnpCheck
-@onready var next_room_friendly_fire_check: CheckBox = %NextRoomFriendlyFireCheck
+## ★2026-11-24 用户需求：友伤 / 火焰酸液属于**房间设置**，不该出现在「创建 / 加入房间」页。
+## 大厅只保留昵称与连接参数；这两项改由房间里的「房间设置」弹窗修改。
 @onready var friendly_fire_check: CheckBox = %FriendlyFireCheck
-## 房间设置：地上的火焰 / 酸液是否伤害玩家（2026-11-01）。与友伤分开的独立开关。
-@onready var next_room_hazard_check: CheckBox = %NextRoomHazardCheck
 @onready var hazard_check: CheckBox = %HazardCheck
-## 仅保存当前大厅的下一房间预选，不写 Net/配置；离房后清零。
+## 建主时的初始值（现在没有大厅 UI，保持默认：友伤关、火焰/酸液开）。
 var _pending_friendly_fire_enabled := false
-## 同上；默认开（单机的燃烧瓶本来就会烧到自己，联机没理由突然免疫）。
 var _pending_hazard_hurts_players_enabled := true
 @onready var create_btn: Button = %CreateBtn
 @onready var join_btn: Button = %JoinBtn
@@ -135,9 +133,7 @@ func _ready() -> void:
 	net.player_list_changed.connect(_refresh_ui)
 	net.player_character_list_changed.connect(_refresh_ui)
 	net.room_settings_changed.connect(_on_room_settings_changed)
-	next_room_friendly_fire_check.toggled.connect(_on_next_room_friendly_fire_toggled)
 	friendly_fire_check.toggled.connect(_on_friendly_fire_toggled)
-	next_room_hazard_check.toggled.connect(_on_next_room_hazard_toggled)
 	hazard_check.toggled.connect(_on_hazard_toggled)
 	create_btn.pressed.connect(_on_create_pressed)
 	join_btn.pressed.connect(_on_join_pressed)
@@ -160,6 +156,8 @@ func _ready() -> void:
 	## 两界面正文字号统一放大：正文 36 / 窗内标题 48 / 次级 24（2026-11-24 手机端可读性）。
 	## 放在最后调用，连 `_add_wip_notice()` / `_add_back_button()` 新建的控件一起覆盖。
 	_apply_panel_font_sizes()
+	## 弹窗标题 48 / 提示 24 与「正文 36」不同档，统一覆盖之后再钉一次。
+	_apply_settings_dialog_fonts()
 
 	var user_args := OS.get_cmdline_user_args()
 	if "--net-test=host" in user_args:
@@ -182,6 +180,9 @@ const SECONDARY_FONT_SIZE: int = 24
 const SECONDARY_LABELS: Array[String] = [
 	"LogLabel", "RoomLogLabel", "RoomHint", "SubTitle",
 	"RoomInfoLabel", "CharacterHint", "HostPortHint", "WipNotice",
+	## 房间里的密集信息：玩家槽位与只读摘要（2026-11-24 正文 36 太大，这两处用 24）
+	"SlotName1", "SlotName2", "SlotName3", "SlotName4",
+	"RoomSummary1", "RoomSummary2",
 ]
 
 
@@ -259,7 +260,10 @@ func _setup_room_panel() -> void:
 	_setup_horde_modifier_rows()
 	_setup_visual_style()
 	_setup_level_selectors()
-	_reorder_info_box()
+	## ★2026-11-24 用户需求：参数在信息卡里**只读展示**，点「房间设置」弹窗才修改。
+	## 顺序不能反：先把可编辑行搬进弹窗，信息卡里再补摘要，否则摘要会被搬进弹窗。
+	_build_room_settings_dialog()
+	_build_room_summary()
 	_refresh_room_info()
 
 
@@ -281,8 +285,8 @@ func _setup_horde_modifier_rows() -> void:
 	var box: Node = anchor_row.get_parent()                      ## InfoBox（VBoxContainer）
 	if box == null:
 		return
-	## 插入位置不在这里决定：`_reorder_info_box()` 会统一排成
-	## 「房间信息 → 难度 → 战役 → 章节 → 分隔线 → 友伤/火焰/附加参数」。
+	## 插入位置不在这里决定：`_reorder_settings_box()` 会在弹窗里统一排成
+	## 「难度 → 战役 → 章节 → 分隔线 → 友伤/火焰/附加参数」。
 	## 2026-11-24：三个开关排成「每行两个」（3 项 → 2 行），正文放大到 36 后省一整行高度。
 	## 用 VBox + HBox 而不是 GridContainer：Grid 的列宽按单元格最小宽算，不 expand 时
 	## 标签会被挤成竖排（实测把一行撑到 429px）。VBox 里的 HBox 拿满整行宽，标签不会换行。
@@ -310,7 +314,8 @@ func _setup_horde_modifier_rows() -> void:
 		label.text = str(Global.HORDE_MODIFIER_LABELS.get(key, key))
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
-		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		## ⚠ 不要自动换行：弹窗是隐藏时构建的，Label 会按"最小宽度"（≈0）算最小高度，
+		## 一个短标签能算出 270px 高，整张弹窗被撑到 2000+ 高（实测）。
 		check.toggled.connect(_on_horde_modifier_toggled.bind(key))
 		row.add_child(check)
 		row.add_child(label)
@@ -427,31 +432,215 @@ func _on_difficulty_selected(index: int) -> void:
 	_refresh_room_info()
 
 
-## InfoBox 的最终顺序：「房间/战役信息 → 难度 → 战役 → 章节 → 分隔线 → 房间设置（友伤 / 火焰 / 附加参数）」。
-## 为什么用代码重排：战役行、章节行、附加参数行都是运行时插入的，靠 tscn 静态顺序会插歪
-## （历史版本里附加参数就夹在友伤和火焰之间）。重排只认名字，增删节点都不会错位。
-func _reorder_info_box() -> void:
+## ── 房间设置弹窗（2026-11-24 用户需求）──
+## 信息卡只放「只读摘要 + 房间设置按钮」；难度 / 战役 / 章节 / 友伤 / 火焰 / 附加参数
+## 这些可编辑行全部搬进弹窗。这样房间里不再堆一整屏开关，手机端也不用为了改一个难度
+## 在长列表里找；弹窗盖住整块面板，改完点「完成」回到房间。
+##
+## 【为什么用「搬节点」而不是再建一套控件】这些行与 Net / Global 的联动逻辑都挂在原节点
+## （OptionButton 的 item_selected、CheckBox 的 toggled），复制一套就要复制所有信号与
+## 权限门（只有主机能改）。直接 reparent 到弹窗，逻辑零改动、状态天然一致。
+var _settings_overlay: Control = null
+var _settings_body: VBoxContainer = null
+var _settings_title: Label = null
+var _settings_hint: Label = null
+var _settings_done_btn: Button = null
+## 信息卡里的只读摘要（24 号，随设置变化重刷）
+var _summary_diff_label: Label = null
+var _summary_mod_label: Label = null
+var _settings_open_btn: Button = null
+
+
+func _build_room_settings_dialog() -> void:
+	if _settings_overlay != null or room_panel == null:
+		return
+	var overlay := Control.new()
+	overlay.name = "RoomSettingsOverlay"
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.visible = false
+	room_panel.add_child(overlay)
+	_settings_overlay = overlay
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.66)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(dim)
+
+	var box_size := Vector2(920.0, 640.0)
+	var vp: Vector2 = get_viewport_rect().size
+	var win := Control.new()
+	win.name = "SettingsWindow"
+	win.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.add_child(win)
+	## 入树后再定尺寸（与 Content 同理：先设 size 再 add_child 会被父级重算一次）。
+	win.size = box_size
+	win.position = ((vp - box_size) * 0.5).floor()
+	win.add_child(_make_window_texture(true))
+	win.add_child(_make_window_texture(false))
+
+	var content := VBoxContainer.new()
+	content.name = "Content"
+	## ⚠ 必须先入树再设锚点/偏移：先设 size 再 add_child 时，控件会按新父级的锚点
+	## 重新算一次矩形（实测宽度塌成 329）→ 36 号自动换行的行被压成竖排（内容高 1151）。
+	content.add_theme_constant_override("separation", 12)
+	win.add_child(content)
+	content.set_anchors_preset(Control.PRESET_FULL_RECT)
+	content.offset_left = 36.0
+	content.offset_top = 24.0
+	content.offset_right = -36.0
+	content.offset_bottom = -24.0
+
+	_settings_title = Label.new()
+	_settings_title.name = "SettingsTitle"
+	_settings_title.text = "房间设置"
+	_settings_title.add_theme_color_override("font_color", Color("e8c44b"))
+	content.add_child(_settings_title)
+
+	var body := VBoxContainer.new()
+	body.name = "SettingsBody"
+	body.add_theme_constant_override("separation", 8)
+	content.add_child(body)
+	_settings_body = body
+	for row_name: String in ["DiffRow", "CampaignRow", "ChapterRow"]:
+		_move_settings_row(body, row_name)
+	body.add_child(_make_separator("SettingsSep"))
+	for row_name: String in ["FriendlyFireRow", "HazardRow", "ModGrid"]:
+		_move_settings_row(body, row_name)
+	_reorder_settings_box()
+
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(spacer)
+
+	_settings_hint = Label.new()
+	_settings_hint.name = "SettingsHint"
+	_settings_hint.text = "只有主机能修改，改动会立即同步给房间里所有人；取消键 / 完成 关闭。"
+	_settings_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	## 固定最小宽：隐藏构建时 Label 按 0 宽算高度会把弹窗撑爆（见上条注释）。
+	_settings_hint.custom_minimum_size = Vector2(760.0, 0.0)
+	_settings_hint.modulate = Color(0.82, 0.84, 0.78)
+	content.add_child(_settings_hint)
+
+	_settings_done_btn = Button.new()
+	_settings_done_btn.text = "完成"
+	_settings_done_btn.custom_minimum_size = Vector2(0, 52)
+	_settings_done_btn.pressed.connect(_close_room_settings)
+	content.add_child(_settings_done_btn)
+
+
+## 信息卡的只读摘要：把当前参数摊成两行 24 号正文 + 一个「房间设置」按钮。
+func _build_room_summary() -> void:
 	var box: VBoxContainer = room_info_box as VBoxContainer
+	if box == null or _summary_diff_label != null:
+		return
+	_summary_diff_label = Label.new()
+	_summary_diff_label.name = "RoomSummary1"
+	_summary_diff_label.clip_text = true
+	box.add_child(_summary_diff_label)
+	_summary_mod_label = Label.new()
+	_summary_mod_label.name = "RoomSummary2"
+	_summary_mod_label.clip_text = true
+	box.add_child(_summary_mod_label)
+	_settings_open_btn = Button.new()
+	_settings_open_btn.name = "RoomSettingsBtn"
+	_settings_open_btn.text = "房间设置…"
+	_settings_open_btn.custom_minimum_size = Vector2(0, 52)
+	_settings_open_btn.pressed.connect(_open_room_settings)
+	box.add_child(_settings_open_btn)
+
+
+func _move_settings_row(target: Node, row_name: String) -> void:
+	var row: Node = room_info_box.get_node_or_null(row_name)
+	if row == null:
+		return
+	row.get_parent().remove_child(row)
+	target.add_child(row)
+
+
+## 弹窗内的顺序：难度 → 战役 → 起始章节 → 分隔线 → 友伤 → 火焰/酸液 → 附加参数。
+func _reorder_settings_box() -> void:
+	var box: VBoxContainer = _settings_body
 	if box == null:
 		return
-	if box.get_node_or_null("SettingsSep") == null:
-		var sep: ColorRect = ColorRect.new()
-		sep.name = "SettingsSep"
-		sep.color = Color(0.78, 0.78, 0.72, 0.28)
-		sep.custom_minimum_size = Vector2(0, 2)
-		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(sep)
 	var order: Array[Node] = []
-	for node_name: String in ["MetaRow", "DiffRow", "CampaignRow", "ChapterRow",
-			"SettingsSep", "FriendlyFireRow", "HazardRow"]:
+	for node_name: String in ["DiffRow", "CampaignRow", "ChapterRow", "SettingsSep",
+			"FriendlyFireRow", "HazardRow", "ModGrid"]:
 		var n: Node = box.get_node_or_null(node_name)
 		if n != null:
 			order.append(n)
-	var grid: Node = box.get_node_or_null("ModGrid")
-	if grid != null:
-		order.append(grid)
 	for i: int in range(order.size()):
 		box.move_child(order[i], i)
+
+
+func _make_separator(sep_name: String) -> ColorRect:
+	var sep := ColorRect.new()
+	sep.name = sep_name
+	sep.color = Color(0.78, 0.78, 0.72, 0.28)
+	sep.custom_minimum_size = Vector2(0, 2)
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return sep
+
+
+## 弹窗的窗口皮：底色 / 九宫边框（与 _skin_panel 同款素材，但尺寸固定不跟锚点）。
+func _make_window_texture(is_bg: bool) -> Control:
+	if is_bg:
+		var bg := TextureRect.new()
+		bg.texture = ResourceLoader.load(WINDOW_BG_PATH) as Texture2D
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		return bg
+	var frame := NinePatchRect.new()
+	frame.texture = ResourceLoader.load(WINDOW_FRAME_PATH) as Texture2D
+	frame.patch_margin_left = 20
+	frame.patch_margin_top = 20
+	frame.patch_margin_right = 20
+	frame.patch_margin_bottom = 20
+	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return frame
+
+
+func _open_room_settings() -> void:
+	if _settings_overlay == null:
+		return
+	_refresh_room_info()
+	_apply_settings_dialog_fonts()
+	_settings_overlay.visible = true
+	## 弹窗一直在隐藏状态下构建，显示后显式排一次版（容器不会替隐藏子树排序）。
+	if _settings_body != null and _settings_body.get_parent() != null:
+		(_settings_body.get_parent() as Control).queue_sort()
+	Global.play_ui_sfx("cursor")
+
+
+func _close_room_settings() -> void:
+	if _settings_overlay == null or not _settings_overlay.visible:
+		return
+	_settings_overlay.visible = false
+	_refresh_room_info()
+	Global.play_ui_sfx("cancel")
+
+
+## 弹窗打开时吞掉取消键：房间界面本身没有 Esc 处理，但别让事件漏给后面的层。
+func _input(event: InputEvent) -> void:
+	if _settings_overlay == null or not _settings_overlay.visible:
+		return
+	if event.is_action_pressed("取消键"):
+		get_viewport().set_input_as_handled()
+		_close_room_settings()
+
+
+## 弹窗标题 / 提示的字号：在 `_apply_panel_font_sizes()` 统一覆盖之后再钉一次。
+func _apply_settings_dialog_fonts() -> void:
+	if _settings_title != null:
+		Global.apply_ui_font(_settings_title, PANEL_TITLE_FONT_SIZE)
+		_settings_title.add_theme_color_override("font_color", Color("e8c44b"))
+	if _settings_hint != null:
+		Global.apply_ui_font(_settings_hint, SECONDARY_FONT_SIZE)
+	if _settings_done_btn != null:
+		_settings_done_btn.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 
 
 func _refresh_room_info() -> void:
@@ -462,15 +651,38 @@ func _refresh_room_info() -> void:
 	var campaign: String = _selected_campaign_name()
 	var total: int = _chapter_entries.size()
 	if campaign.is_empty():
-		room_info_label.text = "战役：—"
+		room_info_label.text = "关卡：—"
 	elif total <= 0:
-		room_info_label.text = "战役：%s · 无可用关卡" % campaign
+		room_info_label.text = "关卡：%s · 无可用关卡" % campaign
 	else:
-		room_info_label.text = "战役：%s · %d/%d" % [campaign,
-			clampi(_selected_chapter, 0, total - 1) + 1, total]
+		var entry: Dictionary = _chapter_entries[clampi(_selected_chapter, 0, total - 1)]
+		room_info_label.text = "关卡：%s · %s" % [campaign, _chapter_item_text(entry)]
 	_refresh_campaign_select()
 	_refresh_chapter_select()
 	_refresh_horde_modifier_controls()
+	_refresh_room_summary()
+
+
+## 信息卡的只读摘要：难度 / 友伤 / 火焰酸液 一行，附加参数一行。
+## 数据源与弹窗里的控件同源（Global / Net），改完设置关弹窗后这里立刻反映。
+func _refresh_room_summary() -> void:
+	if _summary_diff_label == null:
+		return
+	var diff_text: String = "—"
+	if difficulty_select.item_count > 0:
+		diff_text = difficulty_select.get_item_text(
+			clampi(difficulty_select.selected, 0, difficulty_select.item_count - 1))
+	var ff_on: bool = net != null and bool(net.friendly_fire_enabled)
+	var hz_on: bool = net == null or bool(net.hazard_hurts_players_enabled)
+	_summary_diff_label.text = "难度：%s　友伤：%s　火焰/酸液：%s" % [
+		diff_text, "开" if ff_on else "关", "开" if hz_on else "关"]
+	_summary_diff_label.add_theme_color_override("font_color", Color(0.86, 0.88, 0.82))
+	var mods: Array[String] = []
+	for key: String in Global.HORDE_MODIFIER_ORDER:
+		if Global.horde_modifier(key):
+			mods.append(str(Global.HORDE_MODIFIER_LABELS.get(key, key)))
+	_summary_mod_label.text = "附加：%s" % ("无" if mods.is_empty() else " / ".join(mods))
+	_summary_mod_label.add_theme_color_override("font_color", Color(0.72, 0.76, 0.86))
 
 
 ## 大厅 / 房间两个界面按"是否已连接"切换。
@@ -479,27 +691,16 @@ func _sync_panels() -> void:
 		connect_panel.visible = not _connected
 	if room_panel:
 		room_panel.visible = _connected
+	## 断开/回大厅时把「房间设置」弹窗收掉，下次进房不该还盖着。
+	if not _connected and _settings_overlay != null:
+		_settings_overlay.visible = false
 
 
 # ---------------------------------------------------------------- 房间友伤设置
 
-func _on_next_room_friendly_fire_toggled(enabled: bool) -> void:
-	if net == null or net.has_network():
-		_refresh_friendly_fire_controls()
-		return
-	_pending_friendly_fire_enabled = enabled
-
-
 func _on_friendly_fire_toggled(enabled: bool) -> void:
 	if not net.set_host_friendly_fire_enabled(enabled):
 		_refresh_friendly_fire_controls()
-
-
-func _on_next_room_hazard_toggled(enabled: bool) -> void:
-	if net == null or net.has_network():
-		_refresh_friendly_fire_controls()
-		return
-	_pending_hazard_hurts_players_enabled = enabled
 
 
 func _on_hazard_toggled(enabled: bool) -> void:
@@ -516,13 +717,9 @@ func _on_room_settings_changed() -> void:
 
 func _refresh_friendly_fire_controls() -> void:
 	var online: bool = net.has_network()
-	next_room_friendly_fire_check.disabled = online
-	next_room_friendly_fire_check.set_pressed_no_signal(_pending_friendly_fire_enabled)
 	friendly_fire_check.disabled = not (online and net.is_host and net.handshake_ok)
 	friendly_fire_check.set_pressed_no_signal(bool(net.friendly_fire_enabled))
 	## 2026-11-01：火焰/酸液伤玩家（房间设置第二项），交互规则与友伤完全一致。
-	next_room_hazard_check.disabled = online
-	next_room_hazard_check.set_pressed_no_signal(_pending_hazard_hurts_players_enabled)
 	hazard_check.disabled = not (online and net.is_host and net.handshake_ok)
 	hazard_check.set_pressed_no_signal(bool(net.hazard_hurts_players_enabled))
 
@@ -565,8 +762,7 @@ func _setup_connection_tabs() -> void:
 			continue
 		if child is Label and (child as Label).name == "Title":
 			continue      ## 窗内标题留在外面（它是面板级标题）
-		if child.name in ["NameRow", "NextRoomFriendlyFireRow", "NextRoomHazardRow",
-				"BackToTitleBtn", "WipNotice"]:
+		if child.name in ["NameRow", "BackToTitleBtn", "WipNotice"]:
 			continue      ## 属于大厅界面而非连接方式
 		if child is Control:
 			vbox.remove_child(child)
@@ -662,9 +858,8 @@ func _reorder_connect_column() -> void:
 	if vbox == null:
 		return
 	var idx: int = 0
-	for node_name: String in ["Title", "WipNotice", "NameRow", "NextRoomFriendlyFireRow",
-			"NextRoomHazardRow", "ConnectionTabs", "DirectView", "InternetView",
-			"BackToTitleBtn"]:
+	for node_name: String in ["Title", "WipNotice", "NameRow", "ConnectionTabs",
+			"DirectView", "InternetView", "BackToTitleBtn"]:
 		var node: Node = vbox.get_node_or_null(node_name)
 		if node == null:
 			continue

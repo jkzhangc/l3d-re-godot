@@ -6,7 +6,8 @@ extends Node2D
 ## 联机：Host 权威拾取/放下；Client 发请求，地面状态走 NetworkWorld 掉落物快照。
 ## 职责：地面油桶。靠近按功能键(D)拾取 → 玩家进入「持桶」状态（收枪、禁开火）；
 ##       持有中再按 D 由玩家侧放下（见 player.gd `drop_oil_barrel`）。
-## 依赖：Players / NetworkWorld / Global / HintTextLayer / GroundItemCap
+## 依赖：Players / NetworkWorld / Global / HintTextLayer
+## ⚠ 不进 GroundItemCap（油桶是关卡道具，见 `_ready` 注释）
 ##
 ## 【为什么是独立脚本而不是 ItemData】油桶不是消耗品，也不进治疗/辅助/投掷槽，
 ## 它是「双手占用」的搬运物；用独立掉落物 + PlayerState.carried_oil_barrel 最干净。
@@ -16,7 +17,6 @@ extends Node2D
 const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 const PICKUP_INTERACTION := preload("res://script/pickup_interaction.gd")
 const INTERACT_PRIORITY := preload("res://script/interact_priority.gd")
-const GROUND_CAP := preload("res://script/ground_item_cap.gd")
 
 @export_group("外观")
 @export var texture: Texture2D:
@@ -68,8 +68,14 @@ func _ready() -> void:
 		return
 	_capture_shared_appearance()
 	add_to_group(&"ground_pickup")
-	if not cap_exempt:
-		GROUND_CAP.register(self)
+	## ★2026-11-24 修「往容器里装了两个桶之后，其他桶自己消失」：
+	## 油桶是**关卡道具**（如「死亡岛-第四关-港口」required_count=5，正好对应地图上摆的 5 个桶），
+	## 此前却和掉落杂物一起注册 GroundItemCap(8)。尸潮里敌人掉的枪/药一旦把地面物顶过 8 个，
+	## 被淘汰的"最早的"就是地图油桶 → 逐个 queue_free，容器永远装不满、尸潮也开不了。
+	## 与 weapon_pickup / healing_pickup 的**地图预摆物**同款：油桶不参与「掉落杂物上限」。
+	## 这里干脆全豁免（运行时丢下的桶也算）：丢一个桶再被杂物顶掉 = 关卡永久缺件，
+	## 而油桶总量本来就由地图作者控制，不会像枪械掉落那样无限堆积。
+	## `cap_exempt` 字段保留：NetworkWorld 的客户端镜像仍会在 add_child 前置位。
 	_create_collision()
 
 
