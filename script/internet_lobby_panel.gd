@@ -31,7 +31,7 @@ const CLIENT_SCRIPT := "res://script/lobby_client.gd"
 ## 列表自动刷新间隔（方案 §5.3：8s）。
 const REFRESH_INTERVAL := 8.0
 ## 触摸友好的行高下限（列表项可点高度 ≥ 触摸控件同级规格）。
-const ROW_MIN_HEIGHT := 56.0
+const ROW_MIN_HEIGHT := 76.0
 
 const COLOR_TITLE := Color("e8c44b")
 const COLOR_HINT := Color(0.78, 0.84, 0.9)
@@ -541,14 +541,23 @@ func _build_list_view() -> Control:
 
 
 func _build_create_view() -> Control:
+	## ★2026-11-24：正文放大到 36 后这张表单比可视区高，整页放进滚动容器 ——
+	## 不然最下面的「创建房间 / 返回列表」会被挤出屏幕（手机端根本无法滚动）。
+	## 直接返回 ScrollContainer（与 list / load 一致：anchors + 12px 内边距），
+	## 不套额外的 Control —— 空 Control 不在容器里时锚点尺寸不会跟着父节点刷新（实测高度 0）。
+	var scroll := ScrollContainer.new()
+	scroll.name = "CreateView"
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.offset_left = 12.0
+	scroll.offset_top = 12.0
+	scroll.offset_right = -12.0
+	scroll.offset_bottom = -12.0
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+
 	var root := VBoxContainer.new()
-	root.name = "CreateView"
-	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	root.offset_left = 12.0
-	root.offset_top = 12.0
-	root.offset_right = -12.0
-	root.offset_bottom = -12.0
-	root.add_theme_constant_override("separation", 10)
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 12)
+	scroll.add_child(root)
 
 	var title := Label.new()
 	title.text = "创建互联网房间"
@@ -655,7 +664,7 @@ func _build_create_view() -> Control:
 	_confirm_create_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_confirm_create_btn.pressed.connect(_on_confirm_create)
 	btn_row.add_child(_confirm_create_btn)
-	return root
+	return scroll
 
 
 func _build_load_view() -> Control:
@@ -741,7 +750,7 @@ func _set_status(label: Label, text: String, color: Color) -> void:
 
 
 func _empty_style(label: Label) -> void:
-	Global.apply_ui_font(label, 24)
+	Global.apply_ui_font(label, 36)
 	Global.apply_text_shadow(label)
 
 
@@ -751,10 +760,10 @@ func _apply_fonts() -> void:
 		if node is Label:
 			var l := node as Label
 			var is_title: bool = l.name == "Title" or l.text in ["在线房间", "创建互联网房间"]
-			Global.apply_ui_font(l, 36 if is_title else 24)
+			Global.apply_ui_font(l, 48 if is_title else 36)
 			if not is_title:
 				Global.apply_text_shadow(l)
 		elif node is BaseButton:
-			(node as BaseButton).add_theme_font_size_override("font_size", 24)
+			(node as BaseButton).add_theme_font_size_override("font_size", 36)
 		elif node is LineEdit:
-			(node as LineEdit).add_theme_font_size_override("font_size", 24)
+			(node as LineEdit).add_theme_font_size_override("font_size", 36)

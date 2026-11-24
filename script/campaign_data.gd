@@ -132,6 +132,51 @@ static func collect_chapter_entries() -> Array[Dictionary]:
 	return out
 
 
+## 场景路径 → 战役前缀（按本工程命名约定「战役名-第N关-…」取第一段）。
+## 认不出（文件名不足三段）返回空串。**不查战役资源** —— 死亡岛这类还没建
+## `campaign_*.tres` 的战役也要能被分组显示（联机房间的战役选择 / 存档槽位）。
+static func campaign_prefix_for_scene(scene_path: String) -> String:
+	var parts: PackedStringArray = scene_path.get_file().get_basename().split("-")
+	if parts.size() < 3:
+		return ""
+	var prefix: String = parts[0].strip_edges()
+	if prefix.is_empty() or prefix.length() > 12:
+		return ""
+	return prefix
+
+
+## 场景路径 → 战役显示名（"突袭" / "夜行猎手" / "死亡岛"）。认不出时返回空串。
+## 存档槽位要显示「这是哪个战役的档」：先按文件名前缀，再按战役资源兜底。
+static func campaign_name_for_scene(scene_path: String) -> String:
+	var prefix: String = campaign_prefix_for_scene(scene_path)
+	if not prefix.is_empty():
+		return prefix
+	var cid: String = campaign_id_for_scene(scene_path)
+	if cid.is_empty():
+		return ""
+	for p: String in campaign_resource_paths():
+		if not ResourceLoader.exists(p):
+			continue
+		var res: Resource = load(p)
+		if res is CampaignData and str((res as CampaignData).campaign_id) == cid:
+			return str((res as CampaignData).campaign_name)
+	return ""
+
+
+## 场景路径 → 关卡短标签（**不含战役名**）："第一关 · 街道" / "开头安全屋 · 户外"。
+## 存档槽位与联机房间把战役名单独显示，这里不能再重复。
+## 认不出的地图（文件名不足三段，如测试图）退回文件名。
+static func level_label_for_scene(scene_path: String) -> String:
+	var base: String = scene_path.get_file().get_basename()
+	if base.is_empty():
+		return ""
+	var parts: PackedStringArray = base.split("-")
+	if parts.size() < 3:
+		return base
+	var rest: String = base.substr((parts[0] + "-" + parts[1] + "-").length())
+	return "%s · %s" % [parts[1], rest.replace("-", " · ")]
+
+
 ## 章节短名：取场景文件名最后一个"-"之后的部分（"突袭-第一关-街道.tscn" → "街道"）。
 static func _chapter_title_of(scene_path: String) -> String:
 	var base: String = scene_path.get_file().get_basename()
@@ -188,9 +233,13 @@ const _CN_NUMBERS: Dictionary = {
 	"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
 }
 ## 关内先后顺序（按"包含"匹配，取最先命中的一条）。安全屋永远在最前/最后。
+## ★2026-11-24 补「死亡岛」的关内顺序：缺失时该战役每关的第一张图会被排到最后
+## （"第一关 · 结束安全屋" 跑到 "监狱外" 前面），联机选章节看着就是乱的。
+## 匹配是"包含"且取最先命中 —— 「监狱后院入口」必须排在「监狱后院」之前。
 const _SUB_ORDER_KEYWORDS: Array[String] = [
-	"开头安全屋", "街道", "门口", "内部", "R市", "公园入口", "公园",
-	"矿洞", "实验室走廊", "电视台外", "电视台内", "列车台", "结尾安全屋", "结束安全屋",
+	"开头安全屋", "街道", "门口", "内部", "监狱外", "R市", "公园入口", "公园",
+	"监狱内", "监狱后院入口", "监狱后院", "监狱深处", "矿洞", "实验室走廊",
+	"电视台外", "电视台内", "港口", "列车台", "结尾安全屋", "结束安全屋",
 ]
 
 
@@ -259,6 +308,18 @@ static func _list_scene_paths(map_dir: String, include_dev_maps: bool = false) -
 	return paths
 
 
+## 章节排序键：「关号-关内序-文件名」。联机房间按战役分组后要靠它排关卡顺序 ——
+## 否则未登记的战役（如死亡岛）会按文件名的汉字顺序排成「一、三、二、四」。
+static func chapter_sort_key(scene_path: String) -> String:
+	var base: String = scene_path.get_file().get_basename()
+	var parts: PackedStringArray = base.split("-")
+	if parts.size() < 3:
+		return "99-99-%s" % base
+	var chapter: int = int(_CN_NUMBERS.get(parts[1].replace("第", "").replace("关", ""), 99))
+	var rest: String = base.substr((parts[0] + "-" + parts[1] + "-").length())
+	return "%02d-%02d-%s" % [chapter, _sub_order_of(rest), rest]
+
+
 ## 场景 → 章节号（1 = 第一关；**不是** level_scenes 下标）。
 ## 为什么需要单独一个函数：第一关在 level_scenes 里占了三张图
 ## （开头安全屋 / 街道 / 结尾安全屋），按下标判断会把"街道"当成第二张图。
@@ -282,12 +343,16 @@ static func _describe_level(scene_path: String) -> Dictionary:
 	var prefix: String = parts[0] if parts.size() >= 3 else ""
 	var order: int = campaign_order().find(prefix)
 	if order < 0:
+		var other_chapter: int = int(_CN_NUMBERS.get(parts[1].replace("第", "").replace("关", ""), 0)) \
+			if parts.size() >= 3 else 0
+		var other_rest: String = base.substr((parts[0] + "-" + parts[1] + "-").length()) \
+			if parts.size() >= 3 else base
 		return {
 			"campaign": "其它",
-			"chapter": 0,
+			"chapter": other_chapter,
 			"label": "[其它] %s" % base,
 			"scene": scene_path,
-			"sort_key": "1-0-00-00-%s" % base,
+			"sort_key": "1-%02d-%02d-%s" % [other_chapter, _sub_order_of(other_rest), base],
 		}
 	var chapter: int = int(_CN_NUMBERS.get(parts[1].replace("第", "").replace("关", ""), 99))
 	var rest: String = base.substr((prefix + "-" + parts[1] + "-").length())

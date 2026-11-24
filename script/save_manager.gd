@@ -117,6 +117,11 @@ static func save_to_slot(idx: int, spawn_position: Variant = null, player_positi
 		#   只存 count → 读档后 count>0 但 item=null → 喷雾用不了且每按一次白扣一支。
 		"team_spray_item": _encode_item(Players.team_spray_item) if Players.using_shared_spray_pool() else {},
 		"selected_campaign": Global.selected_campaign.resource_path if Global.selected_campaign else "",
+		## ★存档槽位识别用（2026-11-24）：战役名与关卡短名在**保存当时**落盘。
+		## 为什么不只在读列表时从路径反推：地图文件日后改名 / 战役资源被换掉时，
+		## 旧档仍能显示玩家当时看到的那一行字（槽位列表的判据是"我当时存的哪一档"）。
+		"campaign_name": str(Global.selected_campaign.campaign_name) if Global.selected_campaign else "",
+		"map_label": CampaignData.level_label_for_scene(scene_path),
 		"selected_difficulty": Global.selected_difficulty,
 		# ★开局附加参数（2026-10-31）：尸潮狂暴 / 强制不加压 / 关闭尸潮 —— 属于本局设置，
 		#   必须跟着存档走；读旧档（无此键）回落默认值。
@@ -233,7 +238,10 @@ static func _encode_item(it: ItemData) -> Dictionary:
 # ═══════════════════════════════════════
 
 ## 只读槽位摘要（**不改动任何运行时状态**），供槽位列表显示。
-## 返回 {} 表示空槽；键：leader / party_size / members / scene_name / timestamp。
+## 返回 {} 表示空槽；键：leader / party_size / members / scene_name / map_label /
+## campaign_name / timestamp / timestamp_display。
+## ★2026-11-24：新增 campaign_name / map_label / timestamp_display —— 槽位列表靠它们
+##   区分「这是哪个战役、哪张图、什么时候存的」（用户需求）。
 static func slot_info(idx: int) -> Dictionary:
 	if not has_slot(idx):
 		return {}
@@ -242,10 +250,52 @@ static func slot_info(idx: int) -> Dictionary:
 		return {}
 	var info: Dictionary = (data.get("preview", {}) as Dictionary).duplicate(true)
 	info["slot_index"] = idx
-	info["scene_name"] = str(data.get("scene_path", "")).get_file().get_basename()
-	info["timestamp"] = data.get("timestamp", "")
+	var scene_path: String = str(data.get("scene_path", ""))
+	info["scene_name"] = scene_path.get_file().get_basename()
+	info["campaign_name"] = _slot_campaign_name(data, scene_path)
+	## 新档直接读落盘值；旧档没有该键 → 按场景文件名反推（同一套命名约定）。
+	var map_label: String = str(data.get("map_label", ""))
+	info["map_label"] = map_label if not map_label.is_empty() \
+		else CampaignData.level_label_for_scene(scene_path)
+	info["timestamp"] = str(data.get("timestamp", ""))
+	info["timestamp_display"] = _format_timestamp(str(info["timestamp"]), idx)
 	info["save_version"] = int(data.get("save_version", 1))
 	return info
+
+
+## 槽位所属战役名：新档存了就用存档里的；旧档按「战役资源 → 文件名前缀」反推。
+static func _slot_campaign_name(data: Dictionary, scene_path: String) -> String:
+	var saved: String = str(data.get("campaign_name", ""))
+	if not saved.is_empty():
+		return saved
+	var campaign_path: String = str(data.get("selected_campaign", ""))
+	if not campaign_path.is_empty() and ResourceLoader.exists(campaign_path):
+		var res: Resource = load(campaign_path)
+		if res is CampaignData:
+			var nm: String = str((res as CampaignData).campaign_name)
+			if not nm.is_empty():
+				return nm
+	return CampaignData.campaign_name_for_scene(scene_path)
+
+
+## 存档时间 → 「2026-11-24 10:52」（秒级对玩家没有意义，去掉更整齐）。
+## 旧档没有 timestamp 键 → 退回**文件修改时间**（同一份档最后一次写入的时刻），
+## 至少能让玩家按时间先后区分；两者都拿不到就返回空串。
+static func _format_timestamp(raw: String, idx: int) -> String:
+	var t: String = raw.strip_edges().replace("T", " ")
+	if not t.is_empty():
+		return t.substr(0, 16) if t.length() >= 16 else t
+	var epoch: int = FileAccess.get_modified_time(slot_path(idx))
+	if epoch <= 0:
+		epoch = FileAccess.get_modified_time(bak_path(idx))
+	if epoch <= 0:
+		return ""
+	## `get_datetime_string_from_unix_time` 按 UTC 解释 → 补上本机时区偏移才是玩家看到的时间。
+	var bias_min: int = int(Time.get_time_zone_from_system().get("bias", 0))
+	var dt: Dictionary = Time.get_datetime_dict_from_unix_time(epoch + bias_min * 60)
+	return "%04d-%02d-%02d %02d:%02d" % [
+		int(dt.get("year", 0)), int(dt.get("month", 0)), int(dt.get("day", 0)),
+		int(dt.get("hour", 0)), int(dt.get("minute", 0))]
 
 
 ## 加载槽位并**应用**到运行时（Players / Global）。

@@ -60,11 +60,17 @@ var _pending_hazard_hurts_players_enabled := true
 @onready var room_log_label: Label = %RoomLogLabel
 ## 演示用未类型化 Array：`%` 取到的节点静态类型未知，写死 Array[Label] 会在赋值时校验失败。
 @onready var slot_labels: Array = [%SlotName1, %SlotName2, %SlotName3, %SlotName4]
-## 房间信息卡的容器（代码往里面插「选择章节」一行，避免再改 .tscn）。
-@onready var room_info_box: Control = $RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox
-## 房间内「选择章节」（代码创建）：主机可选从战役的哪一关开始，客户端只显示。
+## 房间信息卡的容器（代码往里面插「选择战役 / 起始章节」两行，避免再改 .tscn）。
+@onready var room_info_box: Control = $RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox
+## 房间内「选择战役」「选择章节」（代码创建）：主机可选从哪个战役的哪一关开始，客户端只显示。
+## ★2026-11-24 用户需求：原来只有一条扁平的章节列表（把两个战役的关卡混在一起），
+##   想开第二战役只能在一长串里找 —— 现在先选战役，章节列表只列该战役的关卡。
+var campaign_select: OptionButton = null
 var chapter_select: OptionButton = null
-var _chapter_entries: Array[Dictionary] = []
+var _campaign_entries: Array[String] = []        ## 可选战役名（按出现顺序，含未登记战役的目录名）
+var _all_level_entries: Array[Dictionary] = []   ## 全部可跳转关卡的扁平表（只读缓存）
+var _chapter_entries: Array[Dictionary] = []     ## **当前战役**下的关卡（随战役切换重建）
+var _selected_campaign: int = 0
 var _selected_chapter: int = 0
 
 var _connected := false
@@ -151,7 +157,7 @@ func _ready() -> void:
 	_setup_room_panel()
 	_setup_connection_tabs()
 	_sync_panels()
-	## 两界面正文字号统一放大（2026-09-28 用户反馈"文字太小"）：正文 24 / 窗内标题 36。
+	## 两界面正文字号统一放大：正文 36 / 窗内标题 48 / 次级 24（2026-11-24 手机端可读性）。
 	## 放在最后调用，连 `_add_wip_notice()` / `_add_back_button()` 新建的控件一起覆盖。
 	_apply_panel_font_sizes()
 
@@ -164,29 +170,44 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- 两界面结构（2026-09-27）
 
-## 档位：正文 24、窗内标题 36（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
-## 提为类级常量（2026-10-01）：端口框宽度要按同一字号算，两处必须同源。
-const BODY_FONT_SIZE: int = 24
-const PANEL_TITLE_FONT_SIZE: int = 36
+## 档位：正文 36、窗内标题 48（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
+## ★2026-11-24 用户反馈「手机上看整体字体偏小」：正文 24 → 36、窗内标题 36 → 48。
+##   24 号在 1280×960 逻辑画布上只占屏高 2.5%，6 寸手机实际不到 2mm 高；
+##   36 号提高到 3.75%，配合按钮/勾选项的内边距才看得清。
+const BODY_FONT_SIZE: int = 36
+const PANEL_TITLE_FONT_SIZE: int = 48
+## 次级文字（日志 / 说明 / 副标题）：保持 24 —— 与存档槽位的信息行同档。
+## 不跟着正文一起放大是有意的：日志一屏要看 4~5 行，36 号只能显示 2 行，反而更难读。
+const SECONDARY_FONT_SIZE: int = 24
+const SECONDARY_LABELS: Array[String] = [
+	"LogLabel", "RoomLogLabel", "RoomHint", "SubTitle",
+	"RoomInfoLabel", "CharacterHint", "HostPortHint", "WipNotice",
+]
 
 
 ## 大厅 / 房间两界面的正文字号统一（2026-09-28 用户反馈「文字太小」）。
-## 档位：正文 24、窗内标题 36（都是 12 的整倍 —— 像素字体铁律）；页标题是 60px 渐变，不动。
+## 档位：正文 36、窗内标题 48、次级文字 24（都是 12 的整倍 —— 像素字体铁律）；页标题 60 渐变不动。
 ## 刻意用代码统一覆盖而不写进 .tscn：既避免「编辑器重存丢属性」，也让之后新增的控件自动跟随。
 func _apply_panel_font_sizes() -> void:
 	for panel: Control in [connect_panel, room_panel]:
 		if panel == null:
 			continue
 		for node: Node in panel.find_children("*", "Control", true, false):
+			## 互联网面板（internet_lobby_panel.gd）自己管字号（标题 48 / 正文 36），
+			## 这里跳过它，否则它的页内标题会被压回 36。
+			if _internet_panel != null and _internet_panel.is_ancestor_of(node):
+				continue
 			if node is Label:
-				Global.apply_ui_font(node as Label, BODY_FONT_SIZE)
+				var size: int = SECONDARY_FONT_SIZE if str(node.name) in SECONDARY_LABELS \
+					else BODY_FONT_SIZE
+				Global.apply_ui_font(node as Label, size)
 			elif node is BaseButton:
 				## Button / OptionButton / CheckBox 都走这里（OptionButton 继承 Button）。
 				(node as BaseButton).add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 			elif node is LineEdit:
 				(node as LineEdit).add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 	## 窗内标题比正文大一档，保住层级。
-	for title_path: String in ["ConnectPanel/VBox/Title", "RoomPanel/Margin/Column/Title"]:
+	for title_path: String in ["ConnectPanel/Scroll/VBox/Title", "RoomPanel/Margin/Scroll/Column/Title"]:
 		var title: Label = get_node_or_null(title_path) as Label
 		if title != null:
 			Global.apply_ui_font(title, PANEL_TITLE_FONT_SIZE)
@@ -237,7 +258,8 @@ func _setup_room_panel() -> void:
 	_diff_sel = _attach_arrow_selector(difficulty_select, "难度")
 	_setup_horde_modifier_rows()
 	_setup_visual_style()
-	_setup_chapter_select()
+	_setup_level_selectors()
+	_reorder_info_box()
 	_refresh_room_info()
 
 
@@ -259,25 +281,39 @@ func _setup_horde_modifier_rows() -> void:
 	var box: Node = anchor_row.get_parent()                      ## InfoBox（VBoxContainer）
 	if box == null:
 		return
+	## 插入位置不在这里决定：`_reorder_info_box()` 会统一排成
+	## 「房间信息 → 难度 → 战役 → 章节 → 分隔线 → 友伤/火焰/附加参数」。
+	## 2026-11-24：三个开关排成「每行两个」（3 项 → 2 行），正文放大到 36 后省一整行高度。
+	## 用 VBox + HBox 而不是 GridContainer：Grid 的列宽按单元格最小宽算，不 expand 时
+	## 标签会被挤成竖排（实测把一行撑到 429px）。VBox 里的 HBox 拿满整行宽，标签不会换行。
+	var grid: VBoxContainer = box.get_node_or_null("ModGrid") as VBoxContainer
+	if grid == null:
+		grid = VBoxContainer.new()
+		grid.name = "ModGrid"
+		grid.add_theme_constant_override("separation", 6)
+		box.add_child(grid)
+	var pair_rows: Array[HBoxContainer] = []
 	for i: int in range(Global.HORDE_MODIFIER_ORDER.size()):
 		var key: String = Global.HORDE_MODIFIER_ORDER[i]
-		var row := HBoxContainer.new()
-		row.name = "ModRow_%s" % key
-		row.add_theme_constant_override("separation", 8)
+		var pair_index: int = i / 2
+		if pair_rows.size() <= pair_index:
+			var pair := HBoxContainer.new()
+			pair.name = "ModPair%d" % pair_index
+			pair.add_theme_constant_override("separation", 28)
+			grid.add_child(pair)
+			pair_rows.append(pair)
+		var row: HBoxContainer = pair_rows[pair_index]
 		var check := CheckBox.new()
 		check.name = "ModCheck_%s" % key
 		check.tooltip_text = "仅房主可以修改；尸潮相关设置只影响房主端的导演系统。"
 		var label := Label.new()
 		label.text = str(Global.HORDE_MODIFIER_LABELS.get(key, key))
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		label.add_theme_font_size_override("font_size", 24)
+		label.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		check.toggled.connect(_on_horde_modifier_toggled.bind(key))
 		row.add_child(check)
 		row.add_child(label)
-		box.add_child(row)
-		## 插在友伤行后面，保持「本局设置」这一组连在一起
-		box.move_child(row, anchor_row.get_index() + 1 + i)
 		_modifier_checks[key] = check
 	_refresh_horde_modifier_controls()
 
@@ -315,6 +351,7 @@ class ArrowSelector:
 	var label: Label
 
 var _diff_sel: ArrowSelector = null
+var _campaign_sel: ArrowSelector = null
 var _chapter_sel: ArrowSelector = null
 
 
@@ -333,7 +370,9 @@ func _attach_arrow_selector(option: OptionButton, title: String) -> ArrowSelecto
 	sel.label.name = "%sValue" % option.name
 	sel.label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	sel.label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sel.label.add_theme_font_size_override("font_size", 24)
+	## ★必须 clip_text：值 Label 的文本宽度会算进最小尺寸 → 章节名一长就把整页撑宽（实测 1324px）。
+	sel.label.clip_text = true
+	sel.label.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 	sel.label.tooltip_text = title
 	sel.label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(sel.prev)
@@ -348,8 +387,8 @@ func _make_arrow_button(text: String) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.focus_mode = Control.FOCUS_ALL
-	b.custom_minimum_size = Vector2(44, 32)
-	b.add_theme_font_size_override("font_size", 24)
+	b.custom_minimum_size = Vector2(56, 44)
+	b.add_theme_font_size_override("font_size", BODY_FONT_SIZE)
 	return b
 
 
@@ -388,16 +427,48 @@ func _on_difficulty_selected(index: int) -> void:
 	_refresh_room_info()
 
 
+## InfoBox 的最终顺序：「房间/战役信息 → 难度 → 战役 → 章节 → 分隔线 → 房间设置（友伤 / 火焰 / 附加参数）」。
+## 为什么用代码重排：战役行、章节行、附加参数行都是运行时插入的，靠 tscn 静态顺序会插歪
+## （历史版本里附加参数就夹在友伤和火焰之间）。重排只认名字，增删节点都不会错位。
+func _reorder_info_box() -> void:
+	var box: VBoxContainer = room_info_box as VBoxContainer
+	if box == null:
+		return
+	if box.get_node_or_null("SettingsSep") == null:
+		var sep: ColorRect = ColorRect.new()
+		sep.name = "SettingsSep"
+		sep.color = Color(0.78, 0.78, 0.72, 0.28)
+		sep.custom_minimum_size = Vector2(0, 2)
+		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(sep)
+	var order: Array[Node] = []
+	for node_name: String in ["MetaRow", "DiffRow", "CampaignRow", "ChapterRow",
+			"SettingsSep", "FriendlyFireRow", "HazardRow"]:
+		var n: Node = box.get_node_or_null(node_name)
+		if n != null:
+			order.append(n)
+	var grid: Node = box.get_node_or_null("ModGrid")
+	if grid != null:
+		order.append(grid)
+	for i: int in range(order.size()):
+		box.move_child(order[i], i)
+
+
 func _refresh_room_info() -> void:
 	var host_side: bool = net != null and bool(net.get("is_host"))
 	difficulty_select.disabled = not host_side
 	_refresh_arrow_selector(_diff_sel, host_side)
 	room_name_label.text = "房间：%s" % ("本机（主机）" if host_side else "已加入")
-	var campaign_name: String = "—"
-	if _chapter_entries.size() > 0:
-		campaign_name = str(_chapter_entries[clampi(_selected_chapter, 0,
-			_chapter_entries.size() - 1)].get("campaign", "—"))
-	room_info_label.text = "战役：%s\n起始章节：%s" % [campaign_name, _selected_chapter + 1]
+	var campaign: String = _selected_campaign_name()
+	var total: int = _chapter_entries.size()
+	if campaign.is_empty():
+		room_info_label.text = "战役：—"
+	elif total <= 0:
+		room_info_label.text = "战役：%s · 无可用关卡" % campaign
+	else:
+		room_info_label.text = "战役：%s · %d/%d" % [campaign,
+			clampi(_selected_chapter, 0, total - 1) + 1, total]
+	_refresh_campaign_select()
 	_refresh_chapter_select()
 	_refresh_horde_modifier_controls()
 
@@ -494,20 +565,18 @@ func _setup_connection_tabs() -> void:
 			continue
 		if child is Label and (child as Label).name == "Title":
 			continue      ## 窗内标题留在外面（它是面板级标题）
-		if child.name in ["NameRow", "NextRoomFriendlyFireRow", "BackToTitleBtn", "WipNotice"]:
+		if child.name in ["NameRow", "NextRoomFriendlyFireRow", "NextRoomHazardRow",
+				"BackToTitleBtn", "WipNotice"]:
 			continue      ## 属于大厅界面而非连接方式
 		if child is Control:
 			vbox.remove_child(child)
 			_direct_container.add_child(child)
 
-	## 2) 页签栏插到公共昵称行下方。
+	## 2) 页签栏插到「房间设置」两行之后（昵称行与友伤/火焰行属于大厅公共设置）。
 	_tab_bar = HBoxContainer.new()
 	_tab_bar.name = "ConnectionTabs"
-	_tab_bar.add_theme_constant_override("separation", 8)
+	_tab_bar.add_theme_constant_override("separation", 12)
 	vbox.add_child(_tab_bar)
-	vbox.move_child($ConnectPanel/VBox/NameRow, 1)
-	vbox.move_child($ConnectPanel/VBox/NextRoomFriendlyFireRow, 2)
-	vbox.move_child(_tab_bar, 3)   ## 标题 → 公共昵称 → 下一房间设置 → 连接方式页签
 
 	_internet_tab_btn = Button.new()
 	_internet_tab_btn.name = "InternetTabBtn"
@@ -561,9 +630,46 @@ func _setup_connection_tabs() -> void:
 				_tunnel_client.connect(sig, handler)
 
 	_select_tab(TAB_DIRECT)   ## 默认直连：不改变老玩家的既有路径
+	_reorder_connect_column()
 	## ⚠ 新增控件是在 `_setup_room_panel()` 的 `_push_down_content()` **之后**加进来的，
 	## 需要再套一次缩进，否则页签会压在页标题上。
 	_push_down_content(connect_panel)
+	_sync_connect_vbox_min_height.call_deferred()
+
+
+## ★2026-11-24：外层加了 ScrollContainer 后，VBox 默认只拿「最小高度」——
+## 切到互联网页签时隐藏 DirectView，VBox 立刻缩到 332px，里面的 InternetView
+## 只分到 0 高度（整页看不见，实测）。给它一个「至少填满可视区」的最小高度：
+## 页面正常时正好铺满，内容一旦变高仍可滚动。
+func _sync_connect_vbox_min_height() -> void:
+	var vbox: Control = _connect_vbox()
+	if vbox == null:
+		return
+	var scroll: ScrollContainer = connect_panel.get_node_or_null("ConnectPanel/Scroll") as ScrollContainer
+	var h: float = scroll.size.y if scroll != null else 0.0
+	if h <= 1.0:
+		h = maxf(get_viewport_rect().size.y
+			- (WINDOW_MARGIN + PAGE_TITLE_BAND + CONTENT_PADDING) - 72.0, 600.0)
+	vbox.custom_minimum_size.y = h
+
+
+## 大厅界面的纵向顺序（2026-11-24 重排）：
+## 标题 → 联机提示 → 昵称 → 房间设置（友伤 / 火焰）→ 连接方式页签 → 表单 / 互联网 → 返回标题。
+## 旧版用三个写死的 move_child 下标，顺序实际是「标题 → 昵称 → 友伤 → 页签 → 提示 → 火焰 →
+## 返回 → 表单」—— 返回按钮卡在表单上方、提示被夹在设置中间。改成按名字一次性排好。
+func _reorder_connect_column() -> void:
+	var vbox: Control = _connect_vbox()
+	if vbox == null:
+		return
+	var idx: int = 0
+	for node_name: String in ["Title", "WipNotice", "NameRow", "NextRoomFriendlyFireRow",
+			"NextRoomHazardRow", "ConnectionTabs", "DirectView", "InternetView",
+			"BackToTitleBtn"]:
+		var node: Node = vbox.get_node_or_null(node_name)
+		if node == null:
+			continue
+		vbox.move_child(node, idx)
+		idx += 1
 
 
 func _select_tab(which: String) -> void:
@@ -572,6 +678,12 @@ func _select_tab(which: String) -> void:
 	var internet: bool = which == TAB_INTERNET
 	_direct_container.visible = not internet
 	_internet_panel.visible = internet
+	## ★切页签后必须显式排一次版：VBox 外面套了 ScrollContainer，隐藏子节点变可见时
+	## 容器不会自动重算（实测 InternetView 高度停在 0，创建房间页整页不可见）。
+	var vbox: Control = _connect_vbox()
+	if vbox != null:
+		vbox.queue_sort()
+		vbox.reset_size()
 	if _internet_tab_btn != null:
 		_internet_tab_btn.button_pressed = internet
 	if _direct_tab_btn != null:
@@ -711,9 +823,10 @@ func _on_internet_create_requested(room_name: String, tunnel_address: String, tu
 
 
 func _current_chapter_label() -> String:
-	if _chapter_entries.size() == 0:
+	if _chapter_entries.is_empty():
 		return ""
-	return str(_chapter_entries[clampi(_selected_chapter, 0, _chapter_entries.size() - 1)].get("label", ""))
+	var entry: Dictionary = _chapter_entries[clampi(_selected_chapter, 0, _chapter_entries.size() - 1)]
+	return "%s · %s" % [_selected_campaign_name(), _chapter_item_text(entry)]
 
 
 func _changelog_version() -> String:
@@ -816,15 +929,19 @@ func _refresh_slots(names: Dictionary, peer_ids: Array[int]) -> void:
 			continue
 		if i >= peer_ids.size():
 			(label as Label).text = "○ 有空位\n　 等待玩家加入"
+			(label as Label).modulate = Color(0.62, 0.64, 0.70)
 			continue
 		var peer_id: int = peer_ids[i]
 		var character_path: String = str(net.get_player_character_path(peer_id))
 		var character_name: String = str(net.get_character_display_name(character_path)) \
 			if not character_path.is_empty() else "未选择角色"
 		var tag: String = "（主机）" if peer_id == 1 else ""
-		var ready: String = "已选角色" if not character_path.is_empty() else "待选角色"
+		var ready: bool = not character_path.is_empty()
+		var ready_text: String = "已选角色" if ready else "待选角色"
 		(label as Label).text = "● %s%s\n　 角色：%s · %s" % [
-			str(names[peer_id]), tag, character_name, ready]
+			str(names[peer_id]), tag, character_name, ready_text]
+		## 已选角色 → 偏绿（一眼看出谁还没准备好）；待选 → 暖白。
+		(label as Label).modulate = Color(0.86, 1.0, 0.88) if ready else Color(1.0, 0.94, 0.80)
 
 
 # ---------------------------------------------------------------- 视觉样式（2026-09-27）
@@ -851,16 +968,54 @@ func _setup_visual_style() -> void:
 	## ⚠ 必须在 _skin_panel 之后：这样连窗口皮（WindowBg/WindowFrame）一起下移。
 	_push_down_content(connect_panel)
 	_push_down_content(room_panel)
-	_style_window_title("ConnectPanel/VBox/Title", "创建 / 加入房间")
-	_style_window_title("RoomPanel/Margin/Column/Title", "游戏大厅")
+	_style_window_title("ConnectPanel/Scroll/VBox/Title", "创建 / 加入房间")
+	_style_window_title("RoomPanel/Margin/Scroll/Column/Title", "游戏大厅")
+	_style_cards()
+
+
+## 卡片皮肤（2026-11-24）：房间信息 / 菜单 / 玩家槽位 / 日志都改成同一种
+## 「半透明深底 + 1px 亮边」——默认 PanelContainer 皮肤是引擎自带灰块，和 RM 窗口皮不搭。
+func _style_cards() -> void:
+	_style_card(get_node_or_null("ConnectPanel/Scroll/VBox/Center/Window") as PanelContainer, 10.0)
+	_style_card(get_node_or_null(
+		"RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard") as PanelContainer, 10.0)
+	_style_card(get_node_or_null(
+		"RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard") as PanelContainer, 12.0)
+	var log_card: PanelContainer = get_node_or_null("RoomPanel/Margin/Scroll/Column/LogCard") as PanelContainer
+	_style_card(log_card, 10.0)
+	## 大厅日志卡：此时它还在 VBox 下（页签拆分会稍后把它挪进 DirectView），按引用取最稳。
+	if log_label != null:
+		_style_card(log_label.get_parent().get_parent() as PanelContainer, 10.0)
+	for i: int in range(1, 5):
+		_style_card(get_node_or_null(
+			"RoomPanel/Margin/Scroll/Column/Row/Right/Slot%d" % i) as PanelContainer, 8.0)
+
+
+func _style_card(panel: PanelContainer, pad_y: float) -> void:
+	if panel == null:
+		return
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.03, 0.04, 0.06, 0.52)
+	sb.border_color = Color(1, 1, 1, 0.15)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = 16.0
+	sb.content_margin_right = 16.0
+	sb.content_margin_top = pad_y
+	sb.content_margin_bottom = pad_y
+	panel.add_theme_stylebox_override("panel", sb)
 
 
 ## 把面板下的控件排进「窗口」里：窗口皮下移到页标题之下，内容再往里缩 CONTENT_PADDING。
+## ★2026-11-24 修：横向缩进原来**复用了纵向的 128px**（页标题带 + 内边距），
+##   左右各吃掉 92px → 1280 宽的画布只剩 1024 可用，表单和卡片都显得窄。
+##   横向只留 WINDOW_MARGIN + CONTENT_PADDING = 36px（与窗口皮内边对齐）。
 func _push_down_content(panel: Control) -> void:
 	if panel == null:
 		return
 	var skin_top: float = WINDOW_MARGIN + PAGE_TITLE_BAND
-	var inner: float = skin_top + CONTENT_PADDING
+	var inner_top: float = skin_top + CONTENT_PADDING
+	var inner_side: float = WINDOW_MARGIN + CONTENT_PADDING
 	for child: Node in panel.get_children():
 		var ctrl: Control = child as Control
 		if ctrl == null:
@@ -868,9 +1023,9 @@ func _push_down_content(panel: Control) -> void:
 		if ctrl.name == "WindowBg" or ctrl.name == "WindowFrame":
 			ctrl.offset_top = skin_top
 			continue
-		ctrl.offset_top = inner
-		ctrl.offset_left = inner
-		ctrl.offset_right = -inner
+		ctrl.offset_top = inner_top
+		ctrl.offset_left = inner_side
+		ctrl.offset_right = -inner_side
 
 
 func _add_backdrop() -> void:
@@ -946,32 +1101,145 @@ func _style_window_title(path: String, text_value: String) -> void:
 	if label == null:
 		return
 	label.text = text_value
-	label.add_theme_font_size_override("font_size", 36)
+	label.add_theme_font_size_override("font_size", PANEL_TITLE_FONT_SIZE)
 	label.add_theme_color_override("font_color", Color("e8c44b"))
 
 
-## 房间内「选择章节」：主机可选从战役的哪一关开始；客户端只显示。
-## 章节表与调试「跳转章节」共用 CampaignData.collect_chapter_entries()。
-func _setup_chapter_select() -> void:
+## 房间内「选择战役」+「起始章节」：章节列表**只列所选战役的关卡**（用户 2026-11-24 需求）。
+## ★为什么不再用一条扁平章节表：原来所有地图混在一起（"[其它] 死亡岛-第一关-监狱外" 之类），
+##   想开第二战役得在一长串里翻 —— 现在先选战役，章节跟随战役重建。
+func _setup_level_selectors() -> void:
 	if room_info_box == null or chapter_select != null:
 		return
+	_all_level_entries = CampaignData.collect_all_level_entries()
+	_campaign_entries = _collect_campaign_names(_all_level_entries)
+
+	## ① 选择战役
+	var c_row: HBoxContainer = HBoxContainer.new()
+	c_row.name = "CampaignRow"
+	c_row.add_theme_constant_override("separation", 12)
+	var c_tag: Label = Label.new()
+	c_tag.text = "选择战役："
+	c_row.add_child(c_tag)
+	campaign_select = OptionButton.new()
+	campaign_select.name = "CampaignSelect"
+	campaign_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	campaign_select.fit_to_longest_item = false
+	campaign_select.clip_text = true
+	c_row.add_child(campaign_select)
+	room_info_box.add_child(c_row)
+	for campaign_name: String in _campaign_entries:
+		campaign_select.add_item(campaign_name)
+	campaign_select.item_selected.connect(_on_campaign_selected)
+	_campaign_sel = _attach_arrow_selector(campaign_select, "战役")
+
+	## ② 起始章节（内容随战役重建）
 	var row: HBoxContainer = HBoxContainer.new()
 	row.name = "ChapterRow"
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 12)
 	var tag: Label = Label.new()
-	tag.text = "选择章节："
+	tag.text = "起始章节："
 	row.add_child(tag)
 	chapter_select = OptionButton.new()
 	chapter_select.name = "ChapterSelect"
 	chapter_select.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chapter_select.fit_to_longest_item = false
+	chapter_select.clip_text = true
 	row.add_child(chapter_select)
 	room_info_box.add_child(row)
-	_chapter_entries = CampaignData.collect_all_level_entries()
-	for entry: Dictionary in _chapter_entries:
-		chapter_select.add_item(str(entry.get("label", "?")))
 	chapter_select.item_selected.connect(_on_chapter_selected)
 	_chapter_sel = _attach_arrow_selector(chapter_select, "起始章节")
+
+	## ③ 初始战役：跟随本局已选战役（标题画面选的），没有就取第一个
+	_selected_campaign = maxi(_campaign_entries.find(_active_campaign_name()), 0)
+	if campaign_select.item_count > 0:
+		campaign_select.select(clampi(_selected_campaign, 0, campaign_select.item_count - 1))
+	_selected_chapter = 0
+	_rebuild_chapter_items()
+
+
+## 扁平关卡表 → 战役名清单：先按战役资源的顺序（突袭 / 夜行猎手 …），
+## 再补上「还没建 campaign_*.tres、但按命名约定成组」的战役（如死亡岛），"其它" 永远最后。
+func _collect_campaign_names(entries: Array[Dictionary]) -> Array[String]:
+	var found: Array[String] = []
+	for entry: Dictionary in entries:
+		var name: String = _campaign_of_entry(entry)
+		if not name.is_empty() and name not in found:
+			found.append(name)
+	var out: Array[String] = []
+	for name: String in CampaignData.campaign_order():
+		if name in found:
+			out.append(name)
+	for name: String in found:
+		if name not in out and name != "其它":
+			out.append(name)
+	if "其它" in found:
+		out.append("其它")
+	return out
+
+
+## 关卡条目 → 战役名（按"突袭-第一关-街道"的命名约定取第一段；认不出归"其它"）。
+func _campaign_of_entry(entry: Dictionary) -> String:
+	var prefix: String = CampaignData.campaign_prefix_for_scene(str(entry.get("scene", "")))
+	if not prefix.is_empty():
+		return prefix
+	return str(entry.get("campaign", "其它"))
+
+
+## 本局已选的战役名（标题画面选的那一个；直接联机开房时可能为空）。
+func _active_campaign_name() -> String:
+	if Global.selected_campaign != null:
+		return str(Global.selected_campaign.campaign_name)
+	return ""
+
+
+func _selected_campaign_name() -> String:
+	if _selected_campaign >= 0 and _selected_campaign < _campaign_entries.size():
+		return _campaign_entries[_selected_campaign]
+	return ""
+
+
+## 按当前战役重建章节列表（选中项回到第一章）。
+func _rebuild_chapter_items() -> void:
+	if chapter_select == null:
+		return
+	_chapter_entries.clear()
+	var campaign: String = _selected_campaign_name()
+	for entry: Dictionary in _all_level_entries:
+		if _campaign_of_entry(entry) == campaign:
+			_chapter_entries.append(entry)
+	## 按「第X关 → 关内顺序」重排：扁平表对未登记战役只保证文件名序，
+	## 会出现「一、三、二、四」这种乱序（死亡岛就是这种）。
+	_chapter_entries.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return CampaignData.chapter_sort_key(str(a.get("scene", ""))) \
+			< CampaignData.chapter_sort_key(str(b.get("scene", ""))))
+	chapter_select.clear()
+	for entry: Dictionary in _chapter_entries:
+		chapter_select.add_item(_chapter_item_text(entry))
+	if _chapter_entries.is_empty():
+		chapter_select.add_item("（该战役没有可用关卡）")
+	_selected_chapter = clampi(_selected_chapter, 0, maxi(chapter_select.item_count - 1, 0))
+	chapter_select.select(_selected_chapter)
 	_refresh_chapter_select()
+
+
+## 章节下拉项：只显示"第一关 · 街道"（战役名已在上方单独选，不重复）。
+func _chapter_item_text(entry: Dictionary) -> String:
+	var label: String = CampaignData.level_label_for_scene(str(entry.get("scene", "")))
+	if label.is_empty():
+		label = str(entry.get("label", "?"))
+	return label
+
+
+func _on_campaign_selected(index: int) -> void:
+	if net == null or not bool(net.get("is_host")):
+		_refresh_campaign_select()
+		return
+	_selected_campaign = clampi(index, 0, maxi(_campaign_entries.size() - 1, 0))
+	_selected_chapter = 0
+	_rebuild_chapter_items()
+	_log("战役已设为：%s（章节已切换到该战役）" % _selected_campaign_name())
+	_refresh_room_info()
 
 
 func _on_chapter_selected(index: int) -> void:
@@ -979,8 +1247,19 @@ func _on_chapter_selected(index: int) -> void:
 		_refresh_chapter_select()
 		return
 	_selected_chapter = index
-	_log("起始章节已设为：%s" % chapter_select.get_item_text(index))
+	_log("起始章节已设为：%s · %s" % [_selected_campaign_name(),
+		chapter_select.get_item_text(index)])
 	_refresh_room_info()
+
+
+func _refresh_campaign_select() -> void:
+	if campaign_select == null:
+		return
+	var host_side: bool = net != null and bool(net.get("is_host"))
+	campaign_select.disabled = not host_side or campaign_select.item_count == 0
+	if campaign_select.item_count > 0:
+		campaign_select.select(clampi(_selected_campaign, 0, campaign_select.item_count - 1))
+	_refresh_arrow_selector(_campaign_sel, host_side and campaign_select.item_count > 0)
 
 
 func _refresh_chapter_select() -> void:
@@ -1020,7 +1299,7 @@ func _add_back_button() -> void:
 ## 大厅（连接）界面的纵向容器。2026-09-27 拆成「大厅 / 房间」两界面后，路径从 `VBox`
 ## 变成 `ConnectPanel/VBox` —— 「返回标题」与 WIP 提示都只属于大厅界面，房间界面不放它们。
 func _connect_vbox() -> Control:
-	return get_node_or_null("ConnectPanel/VBox") as Control
+	return get_node_or_null("ConnectPanel/Scroll/VBox") as Control
 
 
 func _on_back_to_title_pressed() -> void:
@@ -1047,9 +1326,9 @@ func _add_wip_notice() -> void:
 	notice.name = "WipNotice"
 	notice.text = "※ 联机模式仍有 bug 在处理 —— 遇到问题请到交流群反馈，我们会尽快修。"
 	notice.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
-	## ★2026-11-04：15 → 12（12 的整倍铁律）。像素字体 12px 基底，15 号 = 1.25 倍非整数
-	## 缩放栅格化，笔画粗细不匀、边缘发虚。要小字就用 12。
-	notice.add_theme_font_size_override("font_size", 12)
+	## ★2026-11-24：12 → 24（12 的整倍，仍然守像素字体铁律）。用户反馈手机上看不清小字；
+	## 这行是**劝退/反馈入口**，比日志更重要，不能是全场唯一看不清的一行。
+	notice.add_theme_font_size_override("font_size", 24)
 	notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	Global.apply_text_shadow(notice)
 	vbox.add_child(notice)
@@ -1460,7 +1739,27 @@ func _log(msg: String) -> void:
 	_log_lines.append("[%s] %s" % [Time.get_time_string_from_system(), msg])
 	if _log_lines.size() > 14:
 		_log_lines.pop_front()
-	log_label.text = "\n".join(_log_lines)
+	var text: String = "\n".join(_log_lines)
+	log_label.text = text
 	## 房间界面也有一个日志栏（两个界面互斥，各自显示同一份日志）
 	if room_log_label:
-		room_log_label.text = "\n".join(_log_lines)
+		room_log_label.text = text
+	call_deferred("_scroll_logs_to_bottom")
+
+
+## 日志卡片是**固定高度 + 内部滚动**（2026-11-24）：以前日志 Label 直接吃布局，
+## 行数一多就把上面的参数设置顶出可视区 —— 现在日志再长也只占自己那一格。
+func _scroll_logs_to_bottom() -> void:
+	if not is_inside_tree():
+		return
+	## 等一帧：Label 的最小尺寸要等容器重新排版后才写进滚动条。
+	await get_tree().process_frame
+	for label: Label in [log_label, room_log_label]:
+		if label == null or not is_instance_valid(label):
+			continue
+		var scroll: ScrollContainer = label.get_parent() as ScrollContainer
+		if scroll == null:
+			continue
+		var bar: VScrollBar = scroll.get_v_scroll_bar()
+		if bar != null:
+			scroll.scroll_vertical = int(bar.max_value)

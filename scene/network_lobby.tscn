@@ -19,7 +19,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBox" type="VBoxContainer" parent="ConnectPanel" unique_id=1653230865]
+[node name="Scroll" type="ScrollContainer" parent="ConnectPanel"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -30,164 +30,185 @@ offset_right = -16.0
 offset_bottom = -72.0
 grow_horizontal = 2
 grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="ConnectPanel/Scroll" unique_id=1653230865]
+layout_mode = 2
+size_flags_horizontal = 3
 theme_override_constants/separation = 8
 
-[node name="Title" type="Label" parent="ConnectPanel/VBox" unique_id=1190004924]
+[node name="Title" type="Label" parent="ConnectPanel/Scroll/VBox" unique_id=1190004924]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "多人大厅"
 
-[node name="NameRow" type="HBoxContainer" parent="ConnectPanel/VBox" unique_id=924446196]
+[node name="NameRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox" unique_id=924446196]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="NameTag" type="Label" parent="ConnectPanel/VBox/NameRow" unique_id=290855698]
+[node name="NameTag" type="Label" parent="ConnectPanel/Scroll/VBox/NameRow" unique_id=290855698]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "昵称："
 
-[node name="NameEdit" type="LineEdit" parent="ConnectPanel/VBox/NameRow" unique_id=1125376809]
+[node name="NameEdit" type="LineEdit" parent="ConnectPanel/Scroll/VBox/NameRow" unique_id=1125376809]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "玩家"
 max_length = 16
 tooltip_text = "互联网 / 局域网共用，修改自动保存；连接期间不可修改。"
 
-[node name="NextRoomFriendlyFireRow" type="HBoxContainer" parent="ConnectPanel/VBox"]
+[node name="NextRoomFriendlyFireRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="NextRoomFriendlyFireCheck" type="CheckBox" parent="ConnectPanel/VBox/NextRoomFriendlyFireRow"]
+[node name="NextRoomFriendlyFireCheck" type="CheckBox" parent="ConnectPanel/Scroll/VBox/NextRoomFriendlyFireRow"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = false
 tooltip_text = "下一次创建房间使用；加入时以房主为准，离房后恢复关闭。"
 
-[node name="FriendlyFireLabel" type="Label" parent="ConnectPanel/VBox/NextRoomFriendlyFireRow"]
+[node name="FriendlyFireLabel" type="Label" parent="ConnectPanel/Scroll/VBox/NextRoomFriendlyFireRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "友伤（每次1–2点）"
 autowrap_mode = 2
 
-[node name="NextRoomHazardRow" type="HBoxContainer" parent="ConnectPanel/VBox"]
+[node name="NextRoomHazardRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="NextRoomHazardCheck" type="CheckBox" parent="ConnectPanel/VBox/NextRoomHazardRow"]
+[node name="NextRoomHazardCheck" type="CheckBox" parent="ConnectPanel/Scroll/VBox/NextRoomHazardRow"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
 tooltip_text = "地面的火焰 / 酸液会不会烧到玩家。下一次创建房间使用；加入时以房主为准，默认开启。"
 
-[node name="HazardLabel" type="Label" parent="ConnectPanel/VBox/NextRoomHazardRow"]
+[node name="HazardLabel" type="Label" parent="ConnectPanel/Scroll/VBox/NextRoomHazardRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "火焰/酸液伤玩家"
 autowrap_mode = 2
 
-[node name="SubTitle" type="Label" parent="ConnectPanel/VBox" unique_id=2110000002]
+[node name="SubTitle" type="Label" parent="ConnectPanel/Scroll/VBox" unique_id=2110000002]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "创建房间 = 本机当主机（下面填监听端口）；加入房间 = 填上方 IP 与端口。"
 autowrap_mode = 2
 
-[node name="Center" type="CenterContainer" parent="ConnectPanel/VBox" unique_id=2110000003]
+[node name="Center" type="CenterContainer" parent="ConnectPanel/Scroll/VBox" unique_id=2110000003]
 layout_mode = 2
 size_flags_vertical = 3
 
-[node name="Window" type="PanelContainer" parent="ConnectPanel/VBox/Center" unique_id=2110000004]
-custom_minimum_size = Vector2(640, 0)
+[node name="Window" type="PanelContainer" parent="ConnectPanel/Scroll/VBox/Center" unique_id=2110000004]
+custom_minimum_size = Vector2(880, 0)
 layout_mode = 2
 
-[node name="Form" type="VBoxContainer" parent="ConnectPanel/VBox/Center/Window" unique_id=2110000005]
+[node name="Form" type="VBoxContainer" parent="ConnectPanel/Scroll/VBox/Center/Window" unique_id=2110000005]
 layout_mode = 2
-theme_override_constants/separation = 10
+theme_override_constants/separation = 12
 
-[node name="JoinRow" type="HBoxContainer" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=1293217784]
+[node name="JoinRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox/Center/Window/Form" unique_id=1293217784]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="IpTag" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/JoinRow" unique_id=968283124]
+[node name="IpTag" type="Label" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/JoinRow" unique_id=968283124]
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "IP 地址："
 
-[node name="IpEdit" type="LineEdit" parent="ConnectPanel/VBox/Center/Window/Form/JoinRow" unique_id=1338840019]
+[node name="IpEdit" type="LineEdit" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/JoinRow" unique_id=1338840019]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
 text = "127.0.0.1"
 max_length = 45
 
-[node name="PortTag" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/JoinRow" unique_id=2056295527]
+[node name="PortTag" type="Label" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/JoinRow" unique_id=2056295527]
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "端口："
 
-[node name="PortEdit" type="SpinBox" parent="ConnectPanel/VBox/Center/Window/Form/JoinRow" unique_id=387216945]
+[node name="PortEdit" type="SpinBox" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/JoinRow" unique_id=387216945]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 min_value = 1024.0
 max_value = 65535.0
 value = 27015.0
 
-[node name="HostRow" type="HBoxContainer" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=2110000006]
+[node name="HostRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox/Center/Window/Form" unique_id=2110000006]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="HostPortTag" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/HostRow" unique_id=2110000007]
+[node name="HostPortTag" type="Label" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/HostRow" unique_id=2110000007]
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "创建房间端口："
 
-[node name="HostPortEdit" type="SpinBox" parent="ConnectPanel/VBox/Center/Window/Form/HostRow" unique_id=2110000008]
+[node name="HostPortEdit" type="SpinBox" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/HostRow" unique_id=2110000008]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 min_value = 1024.0
 max_value = 65535.0
 value = 27015.0
 
-[node name="HostPortHint" type="Label" parent="ConnectPanel/VBox/Center/Window/Form/HostRow" unique_id=2110000009]
+[node name="HostPortHint" type="Label" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/HostRow" unique_id=2110000009]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 24
 text = "本机监听端口（可改）"
 autowrap_mode = 2
 
-[node name="BtnRow" type="HBoxContainer" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=1979459331]
+[node name="BtnRow" type="HBoxContainer" parent="ConnectPanel/Scroll/VBox/Center/Window/Form" unique_id=1979459331]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="CreateBtn" type="Button" parent="ConnectPanel/VBox/Center/Window/Form/BtnRow" unique_id=1346851598]
+[node name="CreateBtn" type="Button" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/BtnRow" unique_id=1346851598]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "创建房间"
 
-[node name="JoinBtn" type="Button" parent="ConnectPanel/VBox/Center/Window/Form/BtnRow" unique_id=717107865]
+[node name="JoinBtn" type="Button" parent="ConnectPanel/Scroll/VBox/Center/Window/Form/BtnRow" unique_id=717107865]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "加入房间"
 
-[node name="UpnpCheck" type="CheckBox" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=-1553050974]
+[node name="UpnpCheck" type="CheckBox" parent="ConnectPanel/Scroll/VBox/Center/Window/Form" unique_id=-1553050974]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-text = "UPnP 自动端口映射（路由器不支持时请用 frp 等工具映射 UDP 端口）"
+text = "UPnP 自动端口映射（不支持时请用 frp 等工具）"
 autowrap_mode = 2
 
-[node name="StatusLabel" type="Label" parent="ConnectPanel/VBox/Center/Window/Form" unique_id=1847775365]
+[node name="StatusLabel" type="Label" parent="ConnectPanel/Scroll/VBox/Center/Window/Form" unique_id=1847775365]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "状态：未连接"
 autowrap_mode = 2
 
-[node name="LogLabel" type="Label" parent="ConnectPanel/VBox" unique_id=245060377]
+[node name="LogCard" type="PanelContainer" parent="ConnectPanel/Scroll/VBox"]
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+
+[node name="LogScroll" type="ScrollContainer" parent="ConnectPanel/Scroll/VBox/LogCard"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="LogLabel" type="Label" parent="ConnectPanel/Scroll/VBox/LogCard/LogScroll"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_vertical = 3
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
 text = "请创建房间或加入已有房间（默认 127.0.0.1:27015）"
 autowrap_mode = 2
 
@@ -212,178 +233,205 @@ offset_bottom = -72.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Column" type="VBoxContainer" parent="RoomPanel/Margin" unique_id=2110000012]
+[node name="Scroll" type="ScrollContainer" parent="RoomPanel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 8
+horizontal_scroll_mode = 0
 
-[node name="Title" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000013]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "游戏大厅"
-
-[node name="Row" type="HBoxContainer" parent="RoomPanel/Margin/Column" unique_id=2110000014]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 16
-
-[node name="Left" type="VBoxContainer" parent="RoomPanel/Margin/Column/Row" unique_id=2110000015]
+[node name="Column" type="VBoxContainer" parent="RoomPanel/Margin/Scroll" unique_id=2110000012]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
-[node name="InfoCard" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Left" unique_id=2110000016]
+[node name="Title" type="Label" parent="RoomPanel/Margin/Scroll/Column" unique_id=2110000013]
+layout_mode = 2
+theme_override_font_sizes/font_size = 48
+text = "游戏大厅"
+
+[node name="Row" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column" unique_id=2110000014]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 20
+
+[node name="Left" type="VBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row" unique_id=2110000015]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="InfoCard" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left" unique_id=2110000016]
 layout_mode = 2
 
-[node name="InfoBox" type="VBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard" unique_id=2110000017]
+[node name="InfoBox" type="VBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard" unique_id=2110000017]
 layout_mode = 2
 theme_override_constants/separation = 6
 
-[node name="RoomNameLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000018]
-unique_name_in_owner = true
+[node name="MetaRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox"]
 layout_mode = 2
-text = "房间：—"
+theme_override_constants/separation = 16
 
-[node name="DiffRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000019]
-layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="DiffTag" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/DiffRow" unique_id=2110000020]
-layout_mode = 2
-text = "难度："
-
-[node name="DifficultySelect" type="OptionButton" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/DiffRow" unique_id=2110000021]
+[node name="RoomNameLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/MetaRow" unique_id=2110000018]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
+text = "房间：—"
+clip_text = true
 
-[node name="FriendlyFireRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox"]
+[node name="RoomInfoLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/MetaRow" unique_id=2110000022]
+unique_name_in_owner = true
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_font_sizes/font_size = 24
+text = "战役：—"
+clip_text = true
 
-[node name="FriendlyFireCheck" type="CheckBox" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
+[node name="DiffRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000019]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DiffTag" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/DiffRow" unique_id=2110000020]
+layout_mode = 2
+theme_override_font_sizes/font_size = 36
+text = "难度："
+
+[node name="DifficultySelect" type="OptionButton" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/DiffRow" unique_id=2110000021]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
+
+[node name="FriendlyFireRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="FriendlyFireCheck" type="CheckBox" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 button_pressed = false
 tooltip_text = "仅房主可以修改，所有玩家共享此房间设置。"
 
-[node name="FriendlyFireLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
+[node name="FriendlyFireLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/FriendlyFireRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "友伤（每次1–2点）"
 autowrap_mode = 2
 
-[node name="HazardRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox"]
+[node name="HazardRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox"]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="HazardCheck" type="CheckBox" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
+[node name="HazardCheck" type="CheckBox" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
 unique_name_in_owner = true
 layout_mode = 2
 disabled = true
 button_pressed = true
 tooltip_text = "仅房主可以修改，所有玩家共享此房间设置。关闭后燃烧瓶的火海与酸液不再伤害玩家。"
 
-[node name="HazardLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
+[node name="HazardLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/InfoCard/InfoBox/HazardRow"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 36
 text = "火焰/酸液伤玩家"
 autowrap_mode = 2
 
-[node name="RoomInfoLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Left/InfoCard/InfoBox" unique_id=2110000022]
-unique_name_in_owner = true
+[node name="MenuCard" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left" unique_id=2110000023]
 layout_mode = 2
-text = "战役：—"
-autowrap_mode = 2
 
-[node name="MenuCard" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Left" unique_id=2110000023]
+[node name="MenuBox" type="VBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard" unique_id=2110000024]
 layout_mode = 2
-size_flags_vertical = 3
+theme_override_constants/separation = 10
 
-[node name="MenuBox" type="VBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/MenuCard" unique_id=2110000024]
+[node name="CharacterRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox" unique_id=1032345164]
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 12
 
-[node name="CharacterRow" type="HBoxContainer" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox" unique_id=1032345164]
+[node name="CharacterTag" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox/CharacterRow" unique_id=1712657184]
 layout_mode = 2
-theme_override_constants/separation = 8
-
-[node name="CharacterTag" type="Label" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox/CharacterRow" unique_id=1712657184]
-layout_mode = 2
+theme_override_font_sizes/font_size = 36
 text = "选择角色："
 
-[node name="CharacterSelect" type="OptionButton" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox/CharacterRow" unique_id=1020836607]
+[node name="CharacterSelect" type="OptionButton" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox/CharacterRow" unique_id=1020836607]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 36
+disabled = true
+
+[node name="CharacterHint" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox" unique_id=1991161928]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "连接并完成握手后可选择角色"
+autowrap_mode = 2
+
+[node name="ActionRow" type="HBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StartBtn" type="Button" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox/ActionRow" unique_id=939028129]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 disabled = true
-
-[node name="CharacterHint" type="Label" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox" unique_id=1991161928]
-unique_name_in_owner = true
-layout_mode = 2
-text = "连接并完成握手后可选择角色"
-autowrap_mode = 2
-
-[node name="StartBtn" type="Button" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox" unique_id=939028129]
-unique_name_in_owner = true
-layout_mode = 2
-disabled = true
 text = "开始游戏（主机）"
 
-[node name="LeaveBtn" type="Button" parent="RoomPanel/Margin/Column/Row/Left/MenuCard/MenuBox" unique_id=871765043]
+[node name="LeaveBtn" type="Button" parent="RoomPanel/Margin/Scroll/Column/Row/Left/MenuCard/MenuBox/ActionRow" unique_id=871765043]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 disabled = true
 text = "离开该大厅"
 
-[node name="Right" type="VBoxContainer" parent="RoomPanel/Margin/Column/Row" unique_id=2110000025]
-custom_minimum_size = Vector2(420, 0)
+[node name="Right" type="VBoxContainer" parent="RoomPanel/Margin/Scroll/Column/Row" unique_id=2110000025]
+custom_minimum_size = Vector2(440, 0)
 layout_mode = 2
-theme_override_constants/separation = 8
+theme_override_constants/separation = 10
 
-[node name="Slot1" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Right" unique_id=2110000026]
+[node name="Slot1" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Right" unique_id=2110000026]
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 
-[node name="SlotName1" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot1" unique_id=2110000027]
+[node name="SlotName1" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Right/Slot1" unique_id=2110000027]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
-[node name="Slot2" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Right" unique_id=2110000028]
+[node name="Slot2" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Right" unique_id=2110000028]
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 
-[node name="SlotName2" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot2" unique_id=2110000029]
+[node name="SlotName2" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Right/Slot2" unique_id=2110000029]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
-[node name="Slot3" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Right" unique_id=2110000030]
+[node name="Slot3" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Right" unique_id=2110000030]
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 
-[node name="SlotName3" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot3" unique_id=2110000031]
+[node name="SlotName3" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Right/Slot3" unique_id=2110000031]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
-[node name="Slot4" type="PanelContainer" parent="RoomPanel/Margin/Column/Row/Right" unique_id=2110000032]
+[node name="Slot4" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column/Row/Right" unique_id=2110000032]
+custom_minimum_size = Vector2(0, 100)
 layout_mode = 2
 
-[node name="SlotName4" type="Label" parent="RoomPanel/Margin/Column/Row/Right/Slot4" unique_id=2110000033]
+[node name="SlotName4" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Right/Slot4" unique_id=2110000033]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "○ 有空位"
 autowrap_mode = 2
 
-[node name="PlayersLabel" type="Label" parent="RoomPanel/Margin/Column/Row/Right" unique_id=1155596099]
+[node name="PlayersLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/Row/Right" unique_id=1155596099]
 unique_name_in_owner = true
 visible = false
 custom_minimum_size = Vector2(0, 100)
@@ -391,13 +439,22 @@ layout_mode = 2
 text = "玩家列表（0）："
 vertical_alignment = 1
 
-[node name="RoomLogLabel" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000034]
+[node name="LogCard" type="PanelContainer" parent="RoomPanel/Margin/Scroll/Column" unique_id=2110000036]
+custom_minimum_size = Vector2(0, 108)
+layout_mode = 2
+
+[node name="RoomLogScroll" type="ScrollContainer" parent="RoomPanel/Margin/Scroll/Column/LogCard"]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="RoomLogLabel" type="Label" parent="RoomPanel/Margin/Scroll/Column/LogCard/RoomLogScroll" unique_id=2110000034]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 theme_override_font_sizes/font_size = 24
 autowrap_mode = 2
 
-[node name="RoomHint" type="Label" parent="RoomPanel/Margin/Column" unique_id=2110000035]
+[node name="RoomHint" type="Label" parent="RoomPanel/Margin/Scroll/Column" unique_id=2110000035]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
 text = "全部玩家选好角色后由主机确认开局；Esc / 离开该大厅 返回大厅界面。"

@@ -4,7 +4,7 @@ extends CanvasLayer
 ## 系统：存档 ｜ 层：表现（CanvasLayer，**代码构建、无 tscn**；标题画面 / 存档点共用）
 ## 联机：不涉及（存档点本身在联机会话里被禁用）
 ## 职责：存档槽位一览（20 格，**竖排滚动列表**）—— 保存模式 / 读取模式；每格显示该档的
-##       **整支队伍**（名字 + Lv + HP）与队长头像 + 大立绘。
+##       **战役名 / 地图关卡名 / 保存时间** + **整支队伍**（名字 + Lv + HP）与队长头像。
 ## 依赖：SaveManager（槽位读写）、Global（字体 / 音效 / 窗口皮肤）
 ##
 ## 【为什么是全代码构建】字段多、数量随 SLOT_COUNT 变，手写 tscn 得不偿失；
@@ -16,6 +16,12 @@ extends CanvasLayer
 ##   行与行之间一条细白线；右侧上下箭头表示还能滚动；光标套一个白框（原作同款）。
 ##   字体统一 24 / 36（像素字体只允许 12 的整倍），窗口改用 `art/System/Window *` 皮肤
 ##   （与角色选择 / 安全屋台词窗口同一套）。
+##
+## ★2026-11-24 补存档识别信息（用户需求）：
+##   原来一行只有「档案 N + 队伍」，20 个档案全是同样的头像和名字，玩家分不清谁是谁。
+##   现在每行左侧加三行 24 号正文：**战役 / 地图 · 关卡 / 保存时间（年月日 时:分）**，
+##   队伍列表右移到信息区之后。版式按比例分配宽度（`cell.size.x`），
+##   窄屏也不会把队伍挤成一条缝。
 ##
 ## 方向键：上下移动 1 行；左右整页翻（= 当前可见行数）；边缘环绕；光标始终保持在可视区内。
 
@@ -35,6 +41,7 @@ const ARROW_DOWN_PATH := "res://art/System/arrow_down.png"
 # ── 字号（像素字体铁律：只能是 12 的整倍）──
 const FONT_TITLE: int = 36
 const FONT_ROW: int = 36
+const FONT_META: int = 24         ## 战役 / 地图 / 时间三行正文
 const FONT_HINT: int = 24
 
 # ── 版式 ──
@@ -42,7 +49,7 @@ const MARGIN: float = 32.0        ## 屏幕四周边距
 const PAD: float = 14.0           ## 窗口内边距
 const HEADER_H: float = 84.0      ## 标题窗高度
 const HEADER_GAP: float = 12.0    ## 标题窗与列表窗之间的缝
-const ROW_H: float = 142.0        ## 单行高度（容纳 3 行 36 号字）
+const ROW_H: float = 142.0        ## 单行高度（标题 36 + 三行 24 正文 / 队伍 2×36）
 const ROW_GAP: float = 6.0        ## 行间距
 const VISIBLE_ROWS: int = 5       ## 一屏可见行数（放不下会自动减少）
 const ARROW_GUTTER: float = 44.0  ## 右侧滚动箭头占用的通道宽
@@ -50,6 +57,12 @@ const PORTRAIT: float = 116.0     ## 立绘边长
 const ARROW_W: float = 40.0
 const ARROW_H: float = 24.0
 const MAX_MEMBER_SLOTS: int = 4   ## 单格最多列出 4 名队员（2 列 × 2 行）
+## 左侧信息区宽度 = 行宽 × 该比例（夹在上下限内）；队伍列吃剩下的宽度。
+const META_RATIO: float = 0.33
+const META_MIN_W: float = 300.0
+const META_MAX_W: float = 460.0
+const META_LINE_H: float = 28.0   ## 24 号字行距（三行 48 / 76 / 104）
+const META_GAP: float = 28.0      ## 信息区与队伍列之间的留白
 
 var mode: int = Mode.SAVE
 ## 打开时是否暂停游戏（存档点 = true；标题画面 = false，标题没有战斗可暂停）。
@@ -244,7 +257,7 @@ func _build_cell(cell: Control, idx: int) -> void:
 	var info: Dictionary = SAVE_MANAGER.slot_info(idx)
 
 	var head := _make_label("档案 %d" % (idx + 1), FONT_ROW)
-	head.position = Vector2(16, 6)
+	head.position = Vector2(16, 2)
 	head.size = Vector2(320, 46)
 	head.modulate = Color(0.95, 0.92, 0.80)
 	cell.add_child(head)
@@ -260,35 +273,59 @@ func _build_cell(cell: Control, idx: int) -> void:
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_child(sep)
 
+	## ── 三段等分：左侧信息区 / 队伍列 / 右侧立绘 ──
+	## 宽度全部按行宽比例算（不写死像素）—— 窄屏时队伍列不会被挤成一条缝。
+	var meta_w: float = clampf(cell.size.x * META_RATIO, META_MIN_W, META_MAX_W)
+	var portrait_left: float = cell.size.x - PORTRAIT - 12.0
+	var party_x: float = 16.0 + meta_w + META_GAP
+	var party_w: float = maxf(portrait_left - party_x - 12.0, 240.0)
+	var col_w: float = party_w * 0.5
+
 	if info.is_empty():
 		var empty := _make_label("— 空 —", FONT_ROW)
 		empty.position = Vector2(16, 52)
-		empty.size = Vector2(400, 46)
+		empty.size = Vector2(meta_w, 46)
 		empty.modulate = Color(0.55, 0.55, 0.50)
 		cell.add_child(empty)
+		if mode == Mode.SAVE:
+			var tip := _make_label("可保存到这一格", FONT_META)
+			tip.position = Vector2(16, 100)
+			tip.size = Vector2(meta_w, 30)
+			tip.modulate = Color(0.52, 0.52, 0.46)
+			cell.add_child(tip)
 		return
+
+	## ── 识别信息（用户 2026-11-24 需求）：战役 / 地图关卡 / 现实时间 ──
+	var campaign: String = str(info.get("campaign_name", ""))
+	var map_label: String = str(info.get("map_label", ""))
+	var stamp: String = str(info.get("timestamp_display", ""))
+	_add_meta_line(cell, "战役：%s" % (campaign if not campaign.is_empty() else "—"),
+		0, meta_w, Color(0.98, 0.86, 0.55))
+	_add_meta_line(cell, "地图：%s" % (map_label if not map_label.is_empty() else "—"),
+		1, meta_w, Color(0.78, 0.86, 0.98))
+	_add_meta_line(cell, "时间：%s" % (stamp if not stamp.is_empty() else "—"),
+		2, meta_w, Color(0.74, 0.74, 0.68))
 
 	## 队伍全体：每名成员一格「名字 Lv? HP?」—— 2 列 × 2 行 = 一屏看全最多 4 人
 	## （★用户 2026-10-03 要求"槽位要显示整支队伍"，2026-10-04 版式重做时保持：
 	##   原作每格只画队长，这里按用户要求列整队。）
-	## 排版：每行 2 人（列宽 = 可用宽 / 2）；超过 MAX_MEMBER_SLOTS 人时最后一格写「…等 N 人」。
+	## 排版：每行 2 人（列宽 = 队伍区可用宽 / 2）；超过 MAX_MEMBER_SLOTS 人时最后一格写「…等 N 人」。
 	var members: Array = info.get("members", [])
-	var text_w: float = cell.size.x - PORTRAIT - 40.0
-	var col_w: float = text_w * 0.5
 	for k: int in range(mini(members.size(), MAX_MEMBER_SLOTS)):
 		var m: Dictionary = members[k]
-		var line := _make_label("%s  Lv%d  HP%d" % [
+		## 单人信息行去掉双空格：36 号字下双空格要多吃 36px，窄列会被裁掉血量的末位。
+		var line := _make_label("%s Lv%d HP%d" % [
 			str(m.get("name", "?")), int(m.get("level", 1)), int(m.get("hp", 0))
 		], FONT_ROW)
-		line.position = Vector2(16.0 + (k % 2) * col_w, 52.0 + (k / 2) * 46.0)
+		line.position = Vector2(party_x + (k % 2) * col_w, 52.0 + (k / 2) * 46.0)
 		line.size = Vector2(col_w - 12.0, 46)
 		line.clip_text = true
 		line.modulate = Color(0.68, 0.78, 0.96)
 		cell.add_child(line)
 	if members.size() > MAX_MEMBER_SLOTS:
-		var more := _make_label("…等 %d 人" % members.size(), FONT_HINT)
-		more.position = Vector2(16.0 + col_w, 98.0)
-		more.size = Vector2(col_w - 12.0, 32)
+		var more := _make_label("…等 %d 人" % members.size(), FONT_META)
+		more.position = Vector2(party_x + col_w, 100.0)
+		more.size = Vector2(col_w - 12.0, 30)
 		more.modulate = Color(0.72, 0.76, 0.86)
 		cell.add_child(more)
 
@@ -300,9 +337,19 @@ func _build_cell(cell: Control, idx: int) -> void:
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		pic.size = Vector2(PORTRAIT, PORTRAIT)
-		pic.position = Vector2(cell.size.x - PORTRAIT - 10.0, (cell.size.y - PORTRAIT) * 0.5)
+		pic.position = Vector2(portrait_left, (cell.size.y - PORTRAIT) * 0.5)
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(pic)
+
+
+## 左侧信息区的第 n 行（24 号正文，单行裁切）。
+func _add_meta_line(cell: Control, text: String, n: int, width: float, color: Color) -> void:
+	var l := _make_label(text, FONT_META)
+	l.position = Vector2(16.0, 48.0 + n * META_LINE_H)
+	l.size = Vector2(width, META_LINE_H + 4.0)
+	l.clip_text = true
+	l.modulate = color
+	cell.add_child(l)
 
 
 func _make_arrow(path: String) -> TextureRect:
