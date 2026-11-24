@@ -193,13 +193,9 @@ func apply_text_style(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
 		if current != null:
 			lbl.material = null
 		return false
-	## ★多行文本不套整段渐变（2026-11-23 用户提示纸反馈）：
-	## shader 按整段 text_height 归一化，三行会变成「第一行白、最后一行全蓝」，
-	## 每行颜色都不一样。多行改纯色 + 描边，视觉统一；单行继续用渐变。
-	if lbl.get_line_count() > 1:
-		if current != null:
-			lbl.material = null
-		return false
+	## ★2026-11-24：多行改成**每行各自一段渐变**（shader 的 line_height 参数）。
+	## 旧做法（2026-11-23）为了避开"整段一个大渐变"直接不给多行套材质 → 多行纯色；
+	## 用户要的是单行单独渐变、不要把所有行当一个整体，所以把归一化基准换成单行高度。
 	lbl.add_theme_color_override("font_color", Color.WHITE)
 	var mat := _ensure_gradient_material(lbl)
 	if mat == null:
@@ -209,6 +205,16 @@ func apply_text_style(lbl: Label, size: int = UI_FONT_BASE_SIZE) -> bool:
 		Color(_host.get("ui_text_gradient_top_color")))))
 	mat.set_shader_parameter("pivot", float(_host.get("ui_text_gradient_pivot")))
 	mat.set_shader_parameter("text_height", _measure_text_height(lbl, size))
+	## 行数 > 1：交给 shader 按「每行一段」算；单行：line_height=0 保持整段渐变。
+	## 注意行高必须含 line_spacing —— 否则第 N 行会累计偏移，渐变越往下越错位。
+	var line_step: float = 0.0
+	if maxi(1, lbl.get_line_count()) > 1:
+		## `get_line_height()` **不含行距**，而行与行的实际间隔 = 行高 + line_spacing。
+		## 少了这个 3px，第二行会从渐变 10% 处开始、往下越差越多（"每行不一样"）。
+		line_step = lbl.get_line_height(0) + float(lbl.get_theme_constant("line_spacing"))
+		if line_step <= 0.0:
+			line_step = float(size) * 1.3
+	mat.set_shader_parameter("line_height", line_step)
 	return true
 
 
