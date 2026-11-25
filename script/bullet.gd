@@ -357,6 +357,11 @@ func _on_body_entered(body: Node2D) -> void:
 ## 期间每 spray_tick_sec 对锥内可伤害目标 / 可交互机关结算一次。
 ## Client 的镜像弹（network_visual_only）只播粒子，不结算。
 func _setup_spray_stream() -> void:
+	## 关掉子弹本体精灵：`bullet_texture` 是 6 帧横条，喷雾流不播帧动画（anim_frames=1），
+	## 整条 288px 贴图会被当成一张图绘制 → 视觉上就是"朝向上排了一整列子弹"。
+	var body_sprite := get_node_or_null("Sprite2D") as Sprite2D
+	if body_sprite != null:
+		body_sprite.visible = false
 	if _area:
 		_area.monitoring = false
 		_area.collision_mask = 0
@@ -425,7 +430,9 @@ func _apply_spray_hits() -> void:
 			continue
 		if absf(_spray_dir.angle_to(to)) > half:
 			continue
-		if node.in_group("player") and node == _shooter:
+		## ⚠ Node 的方法是 is_in_group()（没有 in_group）——写成 in_group 会让每次 tick 抛
+		## "Nonexistent function"，整段锥内结算中断（训练木偶实测）。
+		if node == _shooter:
 			continue
 		node.take_damage(damage, 0.0, _spray_dir, false, 0.0, 0.0, _source_id, element)
 	for prop: Node in tree.get_nodes_in_group("interactive_prop"):
