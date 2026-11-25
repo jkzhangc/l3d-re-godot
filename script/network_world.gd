@@ -2562,7 +2562,9 @@ func _notify_host_melee_props(node: CharacterBody2D, wd: WeaponData,
 func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, bd: BulletData, bullet_index: int) -> void:
 	var bullet_id := _next_bullet_id
 	_next_bullet_id += 1
-	var direction := bd.get_fire_direction(shooter.get_facing_vector())
+	## 每次开火各 roll 一次随机扰动（与单机同一入口；Client 镜像弹拿 Host 的最终值）。
+	var variation: Dictionary = bd.roll_shot_variation()
+	var direction := bd.get_fire_direction(shooter.get_facing_vector(), float(variation["angle_deg"]))
 	## 枪口偏移与单机同规则（2026-09-16）：角色专属（WeaponData.bullet_spawn_offsets）
 	## **配置了条目即生效**（显式 (0,0) 合法）；未配置回退 BulletData 的逐方向 offset_*。
 	## 两端必须用同一套，否则联机弹道错位。
@@ -2572,7 +2574,8 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 		muzzle_extra = wd.get_bullet_spawn_offset(shooter_cd, shooter.facing)
 	else:
 		muzzle_extra = bd.get_extra_offset(shooter.facing)
-	var start_position := shooter.global_position + direction * bd.spawn_offset + muzzle_extra
+	var start_position := shooter.global_position + direction * bd.spawn_offset + muzzle_extra \
+		+ direction.orthogonal() * float(variation["lateral"])
 	var bullet := BULLET_SCENE.instantiate() as Node2D
 	if not bullet:
 		return
@@ -2586,6 +2589,8 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 		# 漏了伤害倍率 → 联机覚醒射击威力显著低于单机）。
 		shoot_damage *= float(shooter.call("get_awaken_damage_mult"))
 	var setup_params: Dictionary = bd.build_setup_params(wd, shoot_damage, shoot_awaken or bd.instant_kill)
+	setup_params["speed"] = float(setup_params["speed"]) * float(variation["speed_scale"])
+	setup_params["max_range"] = float(setup_params["max_range"]) * float(variation["range_scale"])
 	setup_params["network_entity_id"] = bullet_id
 	setup_params["network_visual_only"] = false
 	setup_params["direction"] = direction
@@ -2603,7 +2608,9 @@ func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, 
 	if bullet.has_signal("hit_effect_applied"):
 		bullet.connect("hit_effect_applied", _on_host_bullet_hit_effect.bind(wd.item_id, bullet_index))
 	# Client 只从 Host 确认的白名单 weapon_id + 弹丸索引还原视觉弹道，绝不接收伤害或子弹数据对象。
-	_send_to_ready_clients(&"spawn_bullet", [bullet_id, peer_id, start_position, direction, wd.item_id, bullet_index])
+	## 速度/射程也要带过去：随机扰动后两端必须用同一组数值，否则镜像弹会飞得不一样长。
+	_send_to_ready_clients(&"spawn_bullet", [bullet_id, peer_id, start_position, direction,
+		wd.item_id, bullet_index, float(setup_params["speed"]), float(setup_params["max_range"])])
 
 
 ## Host 权威弹爆炸 → 广播爆心（Client 播同一套爆炸特效/音效）。
@@ -3904,7 +3911,9 @@ func empty_fire_presentation(peer_id: int, weapon_id: String) -> void:
 
 
 @rpc("authority", "call_remote", "reliable")
-func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2, direction: Vector2, weapon_id: String, bullet_index: int) -> void:
+func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2, direction: Vector2,
+		weapon_id: String, bullet_index: int, host_speed: float = 0.0,
+		host_range: float = 0.0) -> void:
 	if net.is_host or bullet_id <= 0 or _bullets.has(bullet_id):
 		return
 	var bd: BulletData = _get_network_bullet_data(weapon_id, bullet_index)
@@ -3913,12 +3922,15 @@ func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2,
 	var bullet := BULLET_SCENE.instantiate() as Node2D
 	if not bullet:
 		return
+	## Host 带了随机扰动后的最终值就用它（0 = 旧协议/未扰动，回退数据表）。
+	var shot_speed: float = host_speed if host_speed > 0.0 else bd.speed
+	var shot_range: float = host_range if host_range > 0.0 else bd.max_range
 	bullet.call("setup", {
 		"network_entity_id": bullet_id,
 		"network_visual_only": true,
 		"direction": direction,
-		"speed": bd.speed,
-		"max_range": bd.max_range,
+		"speed": shot_speed,
+		"max_range": shot_range,
 		"damage": 0.0,
 		"texture": bd.bullet_texture,
 		"anim_frames": bd.bullet_anim_frames,

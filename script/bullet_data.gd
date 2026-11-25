@@ -49,6 +49,23 @@ class_name BulletData extends Resource
 
 
 # ═══════════════════════════════════════
+# 每次发射的随机扰动（2026-11-25）
+# ═══════════════════════════════════════
+## 【为什么需要】固定角度的多发子弹看起来是"排成一排的点"，不像喷雾/霰弹那样自然。
+## 这些参数在**每次开火时各 roll 一次**（不是每帧），单机与联机 Host 用同一个入口，
+## 客户端镜像弹由 Host 把最终 speed/max_range 一起广播，两端轨迹一致。
+@export_group("随机扰动（每次发射）")
+## 在 angle_offset 上叠加的随机角度（±度）。0 = 固定角度（旧行为）。
+@export_range(0.0, 45.0, 0.5) var angle_jitter: float = 0.0
+## 生成位置沿"垂直于发射方向"的随机偏移（±像素）。让多发子弹不在一条线上重叠。
+@export_range(0.0, 32.0, 0.5) var lateral_jitter: float = 0.0
+## 速度随机倍率（±比例，0.1 = 90%~110%）。
+@export_range(0.0, 0.5, 0.01) var speed_jitter_ratio: float = 0.0
+## 射程随机倍率（±比例）。
+@export_range(0.0, 0.5, 0.01) var range_jitter_ratio: float = 0.0
+
+
+# ═══════════════════════════════════════
 # 按方向额外偏移
 # ═══════════════════════════════════════
 @export_group("方向额外偏移")
@@ -220,9 +237,28 @@ func get_extra_offset(facing: int) -> Vector2:
 ## - direction_override 非零 → 使用绝对方向（忽略 base_dir 和 angle_offset）
 ## - angle_offset 非零 → base_dir 旋转 angle_offset 度
 ## - 否则 → 直接返回 base_dir
-func get_fire_direction(base_dir: Vector2) -> Vector2:
+func get_fire_direction(base_dir: Vector2, extra_angle_deg: float = 0.0) -> Vector2:
 	if direction_override != Vector2.ZERO:
 		return direction_override.normalized()
-	if angle_offset != 0.0:
-		return base_dir.rotated(deg_to_rad(angle_offset))
+	var total: float = angle_offset + extra_angle_deg
+	if absf(total) > 0.0001:
+		return base_dir.rotated(deg_to_rad(total))
 	return base_dir
+
+
+## 本次发射的随机扰动（每次开火调一次）。返回值：
+##   angle_deg   —— 叠加到 angle_offset 上的角度（度）
+##   lateral     —— 垂直于发射方向的生成偏移（像素）
+##   speed_scale / range_scale —— 速度 / 射程倍率
+## 全为 0 的参数不消耗随机数，保持旧弹道逐帧完全一致。
+func roll_shot_variation() -> Dictionary:
+	var out := {"angle_deg": 0.0, "lateral": 0.0, "speed_scale": 1.0, "range_scale": 1.0}
+	if angle_jitter > 0.0:
+		out["angle_deg"] = randf_range(-angle_jitter, angle_jitter)
+	if lateral_jitter > 0.0:
+		out["lateral"] = randf_range(-lateral_jitter, lateral_jitter)
+	if speed_jitter_ratio > 0.0:
+		out["speed_scale"] = randf_range(1.0 - speed_jitter_ratio, 1.0 + speed_jitter_ratio)
+	if range_jitter_ratio > 0.0:
+		out["range_scale"] = randf_range(1.0 - range_jitter_ratio, 1.0 + range_jitter_ratio)
+	return out

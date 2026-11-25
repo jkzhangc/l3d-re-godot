@@ -188,8 +188,11 @@ func _fire_bullet() -> void:
 
 	# 遍历 bullet_list，每颗子弹独立配置
 	for bd: BulletData in _wd.bullet_list:
-		# 方向：BulletData 控制角度/方向覆盖
-		var dir_vec: Vector2 = bd.get_fire_direction(base_dir)
+		## 每次开火各 roll 一次随机扰动（角度 / 横向 / 速度 / 射程，2026-11-25）。
+		## 全为 0 的参数不消耗随机数 → 旧武器的弹道与之前逐帧一致。
+		var variation: Dictionary = bd.roll_shot_variation()
+		# 方向：BulletData 控制角度/方向覆盖（随机角度叠加在 angle_offset 上）
+		var dir_vec: Vector2 = bd.get_fire_direction(base_dir, float(variation["angle_deg"]))
 		var damage: float = bd.get_effective_damage(_wd.attack_power)
 		# 覚醒「集中射撃」：射撃威力 ×1.5，子弹附带即死・怯み（bullet 侧对 Boss 自动降级为 ×1.5+怯み）
 		var awaken: bool = character.is_awaken_active()
@@ -222,6 +225,8 @@ func _fire_bullet() -> void:
 			var params: Dictionary = bd.build_setup_params(_wd, damage, awaken or bd.instant_kill)
 			params["direction"] = dir_vec
 			params["shooter"] = character
+			params["speed"] = float(params["speed"]) * float(variation["speed_scale"])
+			params["max_range"] = float(params["max_range"]) * float(variation["range_scale"])
 			bullet.setup(params)
 
 		# 子弹初始位置 = 角色位置 + 前方偏移 + 枪口偏移
@@ -231,7 +236,8 @@ func _fire_bullet() -> void:
 		var extra: Vector2 = bd.get_extra_offset(character.facing)
 		if _wd.has_bullet_spawn_offset(character.current_character):
 			extra = _wd.get_bullet_spawn_offset(character.current_character, character.facing)
-		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra
+		bullet.position = base_pos + dir_vec * bd.spawn_offset + extra \
+			+ dir_vec.orthogonal() * float(variation["lateral"])
 
 		# 添加到场景树
 		MAP_SCENE_QUERY.get_map_root(character.get_tree()).add_child(bullet)
