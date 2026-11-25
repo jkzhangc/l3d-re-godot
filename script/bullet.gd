@@ -86,6 +86,8 @@ var _distance_traveled: float = 0.0
 var _hits: int = 0
 var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防止重复命中同一目标）
 var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
+## 命中标签：命中后交给目标的 `on_hit_tag()`（灭火器喷溅等非伤害互动，2026-11-25）
+var _hit_tag: String = ""
 var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
@@ -158,6 +160,7 @@ func setup(params: Dictionary) -> void:
 	_hit_effect_follow = params.get("hit_effect_follow", false)
 	_hit_effect_offset_override = params.get("hit_effect_offset_override", Vector2.ZERO)
 	_hit_sound = params.get("hit_sound", null)
+	_hit_tag = str(params.get("hit_tag", ""))
 	_shooter = params.get("shooter", null)
 	_source_is_player_origin = HitResolver.is_player(_shooter)
 	_source_id = _next_source_id
@@ -408,6 +411,11 @@ func _hit(target: Node2D) -> void:
 		damageable.take_damage(final_damage, _knockback_force, direction, is_headshot, _knockback_stun, hitstun, _source_id, element, _explosion_radius > 0.0)
 	var hp_after: float = float(damageable.get("current_hp")) if damageable.get("current_hp") != null else hp_before
 	_record_chapter_damage(hp_before, hp_after, is_headshot, backstab_applied)
+
+	## 命中标签（2026-11-25）：灭火器喷溅 / 其他"非伤害互动"子弹在正常伤害之后
+	## 额外通知目标。目标没实现 on_hit_tag 就跳过 —— 对普通敌人零影响。
+	if not _hit_tag.is_empty() and damageable.has_method("on_hit_tag"):
+		damageable.call("on_hit_tag", _hit_tag, element)
 
 	# 播放命中特效
 	if _hit_effect_anim:

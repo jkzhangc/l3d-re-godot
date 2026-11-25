@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>消火器喷溅预览（四方向）</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #10131a; color: #dfe4ee;
+         font: 14px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif; }
+  header { padding: 12px 16px; border-bottom: 1px solid #263043; }
+  h1 { font-size: 16px; margin: 0 0 6px; font-weight: 600; }
+  .hint { color: #8f9bb3; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr));
+          gap: 12px; padding: 16px; max-width: 900px; }
+  .pane { background: #161b25; border: 1px solid #263043; border-radius: 6px; }
+  .pane h2 { margin: 0; padding: 6px 10px; font-size: 12px; color: #9fb0cc;
+             border-bottom: 1px solid #263043; font-weight: 500; }
+  canvas { display: block; width: 100%; height: 260px; }
+  .bar { display: flex; gap: 18px; flex-wrap: wrap; align-items: center;
+         padding: 0 16px 16px; }
+  label { display: flex; gap: 8px; align-items: center; font-size: 12px; color: #9fb0cc; }
+  input[type=range] { width: 140px; }
+  button { background: #24314a; color: #dfe4ee; border: 1px solid #3a4a68;
+           border-radius: 4px; padding: 4px 12px; cursor: pointer; }
+</style>
+</head>
+<body>
+<header>
+  <h1>消火器喷溅 · 四方向预览</h1>
+  <div class="hint">这是给美术/玩法对齐用的临时预览，不进游戏。粉尘以角色为中心朝面朝方向呈锥形喷出，先快后慢、逐渐扩散变淡；每个方向单独一张，方便对照行走图朝下/左/右/上。</div>
+</header>
+<div class="grid">
+  <div class="pane"><h2>朝下 ↓</h2><canvas data-dir="down"></canvas></div>
+  <div class="pane"><h2>朝左 ←</h2><canvas data-dir="left"></canvas></div>
+  <div class="pane"><h2>朝右 →</h2><canvas data-dir="right"></canvas></div>
+  <div class="pane"><h2>朝上 ↑</h2><canvas data-dir="up"></canvas></div>
+</div>
+<div class="bar">
+  <label>锥角 <input id="cone" type="range" min="20" max="80" value="46"> <span id="coneVal">46°</span></label>
+  <label>喷射距离 <input id="range" type="range" min="60" max="180" value="116"> <span id="rangeVal">116</span></label>
+  <label>粒子密度 <input id="density" type="range" min="4" max="30" value="16"> <span id="densityVal">16</span></label>
+  <button id="toggle">暂停</button>
+</div>
+<script>
+(() => {
+  const DIRS = {
+    down:  { dx: 0,  dy: 1 },
+    left:  { dx: -1, dy: 0 },
+    right: { dx: 1,  dy: 0 },
+    up:    { dx: 0,  dy: -1 },
+  };
+  const cfg = { cone: 46, range: 116, density: 16, running: true };
+  const bind = (id, key, fmt) => {
+    const input = document.getElementById(id);
+    const out = document.getElementById(id + 'Val');
+    const sync = () => { cfg[key] = Number(input.value); out.textContent = fmt(input.value); };
+    input.addEventListener('input', sync); sync();
+  };
+  bind('cone', 'cone', v => v + '°');
+  bind('range', 'range', v => v);
+  bind('density', 'density', v => v);
+
+  document.getElementById('toggle').addEventListener('click', (e) => {
+    cfg.running = !cfg.running;
+    e.target.textContent = cfg.running ? '暂停' : '继续';
+  });
+
+  const panes = [...document.querySelectorAll('canvas')].map(c => {
+    const ctx = c.getContext('2d');
+    c.width = c.clientWidth * devicePixelRatio;
+    c.height = c.clientHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    return {
+      ctx, w: c.clientWidth, h: c.clientHeight,
+      dir: DIRS[c.dataset.dir], particles: [], acc: 0,
+      next: () => rand(0.10, 0.16),
+    };
+  });
+
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  function spawn(p) {
+    const { dir, w, h } = p;
+    const cx = w / 2, cy = h / 2 - 6;
+    const base = Math.atan2(dir.dy, dir.dx);
+    const spread = (cfg.cone * Math.PI / 180) / 2;
+    const a = base + rand(-spread, spread);
+    const speed = rand(140, 260) * (cfg.range / 116);
+    const life = rand(0.38, 0.62);
+    p.particles.push({
+      x: cx + dir.dx * 10, y: cy + dir.dy * 10,
+      vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.55,
+      t: 0, life,
+      r0: rand(1.5, 2.6), r1: rand(5, 9),
+    });
+  }
+
+  function frame(dt) {
+    for (const p of panes) {
+      const { ctx, w, h } = p;
+      ctx.clearRect(0, 0, w, h);
+      // 地面网格，方便看方向
+      ctx.strokeStyle = 'rgba(120,140,180,.12)'; ctx.lineWidth = 1;
+      for (let gx = 0; gx < w; gx += 32) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke(); }
+      for (let gy = 0; gy < h; gy += 32) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke(); }
+
+      // 角色占位（16×24）
+      const cx = w / 2, cy = h / 2 - 6;
+      ctx.fillStyle = '#5b708f';
+      ctx.fillRect(cx - 8, cy - 20, 16, 24);
+      ctx.fillStyle = '#9fb6d8';
+      ctx.fillRect(cx - 5, cy - 17, 10, 8);
+      // 面朝指示
+      ctx.fillStyle = '#e8c44b';
+      ctx.fillRect(cx - 2 + p.dir.dx * 7, cy - 14 + p.dir.dy * 7, 4, 4);
+
+      if (cfg.running) {
+        p.acc += dt;
+        while (p.acc >= 1 / cfg.density) { p.acc -= 1 / cfg.density; spawn(p); }
+      }
+
+      for (let i = p.particles.length - 1; i >= 0; i--) {
+        const q = p.particles[i];
+        q.t += dt;
+        if (q.t >= q.life) { p.particles.splice(i, 1); continue; }
+        q.x += q.vx * dt; q.y += q.vy * dt;
+        q.vx *= 0.94; q.vy *= 0.94;
+        const k = q.t / q.life;
+        const r = q.r0 + (q.r1 - q.r0) * k;
+        const alpha = 0.55 * (1 - k) * (1 - k * 0.3);
+        const g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r);
+        g.addColorStop(0, `rgba(255,255,255,${alpha})`);
+        g.addColorStop(0.6, `rgba(235,242,250,${alpha * 0.5})`);
+        g.addColorStop(1, 'rgba(220,232,245,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    frame(dt);
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

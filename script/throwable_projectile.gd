@@ -325,3 +325,10 @@ func _explode() -> void:
 	for w: Node in get_tree().get_nodes_in_group("blast_wall"):
 		if w is Node2D and (w as Node2D).has_method("apply_explosion"):
 			(w as Node2D).call("apply_explosion", global_position, radius_px, _td.breaks_blast_wall)
+	## 可交互机关（死亡岛火堆等，2026-11-25）：独立组 + 独立方法，
+	## **不进 enemy 组**（否则会被寻路/背刺/导演系统当成敌人）。
+	## 液体窒素ボトル = 氷属性 → 火堆熄灭；其它投掷物只算物理冲击，不触发。
+	for prop: Node in get_tree().get_nodes_in_group("interactive_prop"):
+		if prop is Node2D and (prop as Node2D).global_position.distance_to(global_position) <= radius_px \
+				and (prop as Node2D).has_method("on_throwable_hit"):
+			(prop as Node2D).call("on_throwable_hit", str(_td.item_id), int(_td.element))

@@ -31,6 +31,9 @@ class_name BulletData extends Resource
 @export var destroy_on_hit: bool = true       ## 击中后是否消失
 @export var penetration: int = 0              ## 穿透数（0=单目标）
 @export var spawn_offset: float = 24.0        ## 子弹生成位置的前方偏移（像素）
+## 命中标签（2026-11-25）：命中后原样交给目标的 `on_hit_tag(tag, element)`。
+## 用于"非伤害类"互动 —— 灭火器喷溅打火堆 = "extinguish"。留空 = 不做额外通知。
+@export var hit_tag: String = ""
 
 
 # ═══════════════════════════════════════
@@ -186,6 +189,7 @@ func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Di
 		"knockback_force": knockback_force if knockback_enabled else 0.0,
 		"knockback_stun": knockback_stun_duration if knockback_enabled else 0.0,
 		"hitstun_duration": hitstun_duration if hitstun_duration > 0.0 else (wd.hitstun_duration if wd else 0.0),
+		"hit_tag": hit_tag,
 	}
 
 

@@ -63,6 +63,8 @@ const NETWORK_SMG: WeaponData = preload("res://object/weapon_smg.tres")
 const NETWORK_SHOTGUN: WeaponData = preload("res://object/weapon_shotgun.tres")
 const NETWORK_SNIPER: WeaponData = preload("res://object/weapon_sniper.tres")
 const NETWORK_MAGNUM: WeaponData = preload("res://object/weapon_magnum.tres")
+## 消火器（死亡岛专属，2026-11-25）：联机端也要能按 id 解析，否则客户端看不见。
+const NETWORK_EXTINGUISHER: WeaponData = preload("res://object/weapon_fire_extinguisher.tres")
 const NETWORK_LAUNCHER: WeaponData = preload("res://object/weapon_grenade_launcher.tres")
 const NETWORK_ROCKET: WeaponData = preload("res://object/weapon_rocket_launcher.tres")
 ## 便携式地对空导弹（锁定打击）：Client 需要它来解析准星/爆炸表现与弹丸索引。
@@ -111,6 +113,7 @@ const NETWORK_WEAPONS: Dictionary = {
 	"shotgun_01": NETWORK_SHOTGUN,
 	"sniper_01": NETWORK_SNIPER,
 	"magnum_01": NETWORK_MAGNUM,
+	"extinguisher_01": NETWORK_EXTINGUISHER,
 	"launcher_01": NETWORK_LAUNCHER,
 	"rocket_01": NETWORK_ROCKET,
 	"rocket_03": NETWORK_ROCKET_03,
