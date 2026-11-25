@@ -4,67 +4,102 @@
 [ext_resource type="Script" path="res://script/bullet_data.gd" id="2_bd"]
 [ext_resource type="Texture2D" path="res://art/Barrages/灭火器喷雾.png" id="3_spray"]
 
-[sub_resource type="Resource" id="Bullet_center"]
+[sub_resource type="Resource" id="Bullet_a"]
 script = ExtResource("2_bd")
 bullet_texture = ExtResource("3_spray")
-bullet_anim_frames = 4
-bullet_frame_duration = 2
-speed = 320.0
-max_range = 116.0
+bullet_anim_frames = 6
+bullet_frame_duration = 3
+speed = 300.0
+max_range = 100.0
+damage = 1.0
+destroy_on_hit = true
+penetration = 3
+spawn_offset = 14.0
+angle_offset = -24.0
+hit_tag = "extinguish"
+collision_size = Vector2(26, 26)
+offset_up = Vector2(0, -12)
+offset_down = Vector2(0, 8)
+offset_left = Vector2(-6, -4)
+offset_right = Vector2(6, -4)
+[sub_resource type="Resource" id="Bullet_b"]
+script = ExtResource("2_bd")
+bullet_texture = ExtResource("3_spray")
+bullet_anim_frames = 6
+bullet_frame_duration = 3
+speed = 330.0
+max_range = 110.0
+damage = 1.0
+destroy_on_hit = true
+penetration = 3
+spawn_offset = 16.0
+angle_offset = -12.0
+hit_tag = "extinguish"
+collision_size = Vector2(26, 26)
+offset_up = Vector2(0, -12)
+offset_down = Vector2(0, 8)
+offset_left = Vector2(-6, -4)
+offset_right = Vector2(6, -4)
+[sub_resource type="Resource" id="Bullet_c"]
+script = ExtResource("2_bd")
+bullet_texture = ExtResource("3_spray")
+bullet_anim_frames = 6
+bullet_frame_duration = 3
+speed = 350.0
+max_range = 120.0
 damage = 1.0
 destroy_on_hit = true
 penetration = 3
 spawn_offset = 18.0
+angle_offset = 0.0
 hit_tag = "extinguish"
-collision_size = Vector2(18, 18)
-offset_up = Vector2(0, -10)
-offset_down = Vector2(0, 6)
-offset_left = Vector2(-4, -4)
-offset_right = Vector2(4, -4)
-
-[sub_resource type="Resource" id="Bullet_left"]
+collision_size = Vector2(26, 26)
+offset_up = Vector2(0, -12)
+offset_down = Vector2(0, 8)
+offset_left = Vector2(-6, -4)
+offset_right = Vector2(6, -4)
+[sub_resource type="Resource" id="Bullet_d"]
 script = ExtResource("2_bd")
 bullet_texture = ExtResource("3_spray")
-bullet_anim_frames = 4
-bullet_frame_duration = 2
-speed = 320.0
-max_range = 116.0
+bullet_anim_frames = 6
+bullet_frame_duration = 3
+speed = 330.0
+max_range = 110.0
 damage = 1.0
 destroy_on_hit = true
 penetration = 3
 spawn_offset = 16.0
-angle_offset = -13.0
+angle_offset = 12.0
 hit_tag = "extinguish"
-collision_size = Vector2(16, 16)
-offset_up = Vector2(0, -10)
-offset_down = Vector2(0, 6)
-offset_left = Vector2(-4, -4)
-offset_right = Vector2(4, -4)
-
-[sub_resource type="Resource" id="Bullet_right"]
+collision_size = Vector2(26, 26)
+offset_up = Vector2(0, -12)
+offset_down = Vector2(0, 8)
+offset_left = Vector2(-6, -4)
+offset_right = Vector2(6, -4)
+[sub_resource type="Resource" id="Bullet_e"]
 script = ExtResource("2_bd")
 bullet_texture = ExtResource("3_spray")
-bullet_anim_frames = 4
-bullet_frame_duration = 2
-speed = 320.0
-max_range = 116.0
+bullet_anim_frames = 6
+bullet_frame_duration = 3
+speed = 300.0
+max_range = 100.0
 damage = 1.0
 destroy_on_hit = true
 penetration = 3
-spawn_offset = 16.0
-angle_offset = 13.0
+spawn_offset = 14.0
+angle_offset = 24.0
 hit_tag = "extinguish"
-collision_size = Vector2(16, 16)
-offset_up = Vector2(0, -10)
-offset_down = Vector2(0, 6)
-offset_left = Vector2(-4, -4)
-offset_right = Vector2(4, -4)
+collision_size = Vector2(26, 26)
+offset_up = Vector2(0, -12)
+offset_down = Vector2(0, 8)
+offset_left = Vector2(-6, -4)
+offset_right = Vector2(6, -4)
 
 [resource]
 script = ExtResource("1_wd")
 attack_power = 1
 attack_speed = 1.4
-attack_range = 120.0
+attack_range = 124.0
 is_ranged = true
 fire_mode = 1
 weapon_slot = 0
@@ -75,4 +110,4 @@ item_type = 3
 description = "死亡岛战役专属。喷射灭火粉末，射程很短、几乎没有伤害；可以把挡路的火堆扑灭。只有大雄和胖虎会使用。"
 sell_price = 80
 max_stack = 1
-bullet_list = Array[ExtResource("2_bd")]([SubResource("Bullet_left"), SubResource("Bullet_center"), SubResource("Bullet_right")])
+bullet_list = Array[ExtResource("2_bd")]([SubResource("Bullet_a"), SubResource("Bullet_b"), SubResource("Bullet_c"), SubResource("Bullet_d"), SubResource("Bullet_e")])

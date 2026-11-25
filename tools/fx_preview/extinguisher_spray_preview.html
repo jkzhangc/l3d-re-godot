@@ -38,7 +38,7 @@
 <div class="bar">
   <label>锥角 <input id="cone" type="range" min="20" max="80" value="46"> <span id="coneVal">46°</span></label>
   <label>喷射距离 <input id="range" type="range" min="60" max="180" value="116"> <span id="rangeVal">116</span></label>
-  <label>粒子密度 <input id="density" type="range" min="4" max="30" value="16"> <span id="densityVal">16</span></label>
+  <label>粒子密度 <input id="density" type="range" min="4" max="30" value="14"> <span id="densityVal">14</span></label>
   <button id="toggle">暂停</button>
 </div>
 <script>
@@ -91,7 +91,7 @@
       x: cx + dir.dx * 10, y: cy + dir.dy * 10,
       vx: Math.cos(a) * speed, vy: Math.sin(a) * speed * 0.55,
       t: 0, life,
-      r0: rand(1.5, 2.6), r1: rand(5, 9),
+      r0: rand(2.2, 3.6), r1: rand(9, 16),
     });
   }
 
