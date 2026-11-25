@@ -88,6 +88,19 @@ var _hit_targets: Dictionary = {}   ## instance_id → true（永久标记，防
 var _shooter: Node2D = null         ## 发射者引用（防止击中自己）
 ## 命中标签：命中后交给目标的 `on_hit_tag()`（灭火器喷溅等非伤害互动，2026-11-25）
 var _hit_tag: String = ""
+## 喷雾流（2026-11-25）：本颗子弹不飞行，原地喷出粒子锥并周期结算（灭火器）。
+var _spray_stream: bool = false
+var _spray_duration: float = 0.32
+var _spray_tick_sec: float = 0.08
+var _spray_cone_deg: float = 46.0
+var _spray_particle_tex: Texture2D = null
+var _spray_amount: int = 28
+var _spray_life: float = 0.45
+var _silent_hit: bool = false
+var _spray_age: float = 0.0
+var _spray_tick_acc: float = 0.0
+var _spray_emitter: CPUParticles2D = null
+var _spray_dir: Vector2 = Vector2.RIGHT
 var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
@@ -161,6 +174,15 @@ func setup(params: Dictionary) -> void:
 	_hit_effect_offset_override = params.get("hit_effect_offset_override", Vector2.ZERO)
 	_hit_sound = params.get("hit_sound", null)
 	_hit_tag = str(params.get("hit_tag", ""))
+	_silent_hit = bool(params.get("silent_hit", false))
+	_spray_stream = bool(params.get("spray_stream", false))
+	_spray_duration = float(params.get("spray_duration", 0.32))
+	_spray_tick_sec = float(params.get("spray_tick_sec", 0.08))
+	_spray_cone_deg = float(params.get("spray_cone_deg", 46.0))
+	_spray_particle_tex = params.get("spray_particle_texture", null)
+	_spray_amount = int(params.get("spray_particle_amount", 28))
+	_spray_life = float(params.get("spray_particle_lifetime", 0.45))
+	_spray_dir = direction.normalized()
 	_shooter = params.get("shooter", null)
 	_source_is_player_origin = HitResolver.is_player(_shooter)
 	_source_id = _next_source_id
@@ -168,6 +190,8 @@ func setup(params: Dictionary) -> void:
 	_apply_collision_shape()
 	_refresh_sprite()
 	_update_area_rotation()
+	if _spray_stream:
+		_setup_spray_stream()
 
 
 func _process(_delta: float) -> void:
@@ -177,6 +201,9 @@ func _process(_delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	if _finished:
+		return
+	if _spray_stream:
+		_tick_spray_stream(delta)
 		return
 	var step: float = speed * delta
 	## 扫掠判定（2026-09-16）：Area2D 只在物理帧边界采样重叠，而子弹每帧位移 16~20px，
@@ -325,6 +352,95 @@ func _on_body_entered(body: Node2D) -> void:
 	_hit(body)
 
 
+## ── 喷雾流 ──
+## 子弹本身不移动：生成一个朝 `direction` 的 CPUParticles2D 锥，持续 spray_duration 秒；
+## 期间每 spray_tick_sec 对锥内可伤害目标 / 可交互机关结算一次。
+## Client 的镜像弹（network_visual_only）只播粒子，不结算。
+func _setup_spray_stream() -> void:
+	if _area:
+		_area.monitoring = false
+		_area.collision_mask = 0
+		_area.monitorable = false
+	z_index = maxi(z_index, 2)
+	var p := CPUParticles2D.new()
+	p.name = "SprayParticles"
+	p.amount = maxi(4, _spray_amount)
+	p.lifetime = maxf(0.1, _spray_life)
+	p.one_shot = false
+	p.explosiveness = 0.0
+	p.direction = _spray_dir
+	p.spread = _spray_cone_deg * 0.5
+	p.gravity = Vector2.ZERO
+	## 初速按"射程 / 粒子寿命"反算：最远的粒子正好在消失前飞到射程边缘。
+	var v_max: float = max_range / maxf(_spray_life, 0.1)
+	p.initial_velocity_min = v_max * 0.45
+	p.initial_velocity_max = v_max * 0.85
+	p.damping_min = v_max * 0.15
+	p.damping_max = v_max * 0.35
+	p.scale_amount_min = 1.1
+	p.scale_amount_max = 2.4
+	p.color = Color(1.0, 1.0, 1.0, 0.9)
+	## 粒子从白到透明（与 HTML 预览的径向渐变+淡出同观感）。
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(1, 1, 1, 0.85))
+	ramp.set_color(1, Color(1, 1, 1, 0.0))
+	ramp.add_point(0.6, Color(1, 1, 1, 0.55))
+	p.color_ramp = ramp
+	if _spray_particle_tex != null:
+		p.texture = _spray_particle_tex
+	p.emitting = true
+	add_child(p)
+	_spray_emitter = p
+	_apply_spray_hits()
+
+
+func _tick_spray_stream(delta: float) -> void:
+	_spray_age += delta
+	if _spray_age <= _spray_duration:
+		if not network_visual_only:
+			_spray_tick_acc += delta
+			if _spray_tick_acc >= _spray_tick_sec:
+				_spray_tick_acc = 0.0
+				_apply_spray_hits()
+		return
+	if _spray_emitter != null:
+		_spray_emitter.emitting = false
+	## 粒子寿命结束后收尾（表现侧多留一点，保证最后一颗也散完）。
+	if _spray_age >= _spray_duration + _spray_life + 0.1:
+		_finish()
+
+
+## 锥内结算：敌人按 take_damage，可交互机关按 on_hit_tag。
+func _apply_spray_hits() -> void:
+	if not is_inside_tree() or network_visual_only:
+		return
+	var tree := get_tree()
+	var half := deg_to_rad(_spray_cone_deg * 0.5)
+	for e: Node in HitResolver.damage_targets(tree):
+		if not (e is Node2D) or not (e as Node2D).has_method("take_damage"):
+			continue
+		var node := e as Node2D
+		var to: Vector2 = node.global_position - global_position
+		if to.length() > max_range or to.length() < 0.001:
+			continue
+		if absf(_spray_dir.angle_to(to)) > half:
+			continue
+		if node.in_group("player") and node == _shooter:
+			continue
+		node.take_damage(damage, 0.0, _spray_dir, false, 0.0, 0.0, _source_id, element)
+	for prop: Node in tree.get_nodes_in_group("interactive_prop"):
+		if not (prop is Node2D):
+			continue
+		var pnode := prop as Node2D
+		var pto: Vector2 = pnode.global_position - global_position
+		if pto.length() > max_range or pto.length() < 0.001:
+			continue
+		if absf(_spray_dir.angle_to(pto)) > half:
+			continue
+		if not _hit_tag.is_empty() and pnode.has_method("on_hit_tag"):
+			pnode.call("on_hit_tag", _hit_tag, element)
+
+
 func _hit(target: Node2D) -> void:
 	## 击中目标的默认处理 — 子类或外部可覆写
 	if not is_instance_valid(target) or network_visual_only or _finished \
@@ -434,7 +550,9 @@ func _hit(target: Node2D) -> void:
 	# 播放命中音效（世界坐标定位：声源=命中点，2026-10-20）
 	## 数据没配 → 按属性取默认击中音（2026-11-01 用户要求「每个属性不同击中音」）
 	## → 都没配 → 通用默认打击音「殴る」1.5 调（2026-11-04 用户指定）。
-	var hit_sfx: AudioStream = ELEMENT_FX.resolve_hit(_hit_sound, element)
+	## silent_hit（2026-11-25）：灭火器这类工具命中时不播任何击中音 ——
+	## 注意 resolve_hit 在"没配"时会回退属性音/通用打击音，光把 hit_sound 留空是不够的。
+	var hit_sfx: AudioStream = null if _silent_hit else ELEMENT_FX.resolve_hit(_hit_sound, element)
 	if hit_sfx:
 		Global.play_sfx_managed(hit_sfx, MAP_SCENE_QUERY.get_map_root(get_tree()), true,
 			ELEMENT_FX.resolve_hit_pitch(_hit_sound, element), damageable.global_position,

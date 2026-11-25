@@ -66,6 +66,32 @@ class_name BulletData extends Resource
 
 
 # ═══════════════════════════════════════
+# 喷雾流（持续喷射，2026-11-25）
+# ═══════════════════════════════════════
+## 【为什么需要】灭火器这类"喷雾"用多发子弹拼出来永远像几颗点：
+## 弹道是离散的、每颗都会飞走。真正的喷雾应该是**一个持续发射的粒子锥**，
+## 从枪口不断冒出、边飞边散，同时按 tick 对锥内目标结算。
+## 打开 `spray_stream` 后本颗子弹不再飞行：原地生成粒子锥，持续 `spray_duration` 秒，
+## 每 `spray_tick_sec` 对锥内敌人/机关结算一次，粒子寿命结束后自动消失。
+@export_group("喷雾流")
+@export var spray_stream: bool = false
+## 持续喷射时长（秒）。≈ 一次攻击动作的时长，按住开火时前后两团能接上。
+@export_range(0.05, 2.0, 0.01) var spray_duration: float = 0.32
+## 结算间隔（秒）。越小越连续，但查询次数越多。
+@export_range(0.02, 0.5, 0.01) var spray_tick_sec: float = 0.08
+## 锥角（度，总张角）。
+@export_range(5.0, 120.0, 1.0) var spray_cone_deg: float = 46.0
+## 粒子贴图（单帧软圆）。留空 = 用内置程序生成的圆点。
+@export var spray_particle_texture: Texture2D = null
+## 同时存在的粒子数。
+@export_range(4, 120, 1) var spray_particle_amount: int = 28
+## 单颗粒子寿命（秒）。
+@export_range(0.1, 2.0, 0.01) var spray_particle_lifetime: float = 0.45
+## 命中时不播任何击中音（世界/属性默认音也不播）。喷雾类工具用。
+@export var silent_hit: bool = false
+
+
+# ═══════════════════════════════════════
 # 按方向额外偏移
 # ═══════════════════════════════════════
 @export_group("方向额外偏移")
@@ -207,6 +233,15 @@ func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Di
 		"knockback_stun": knockback_stun_duration if knockback_enabled else 0.0,
 		"hitstun_duration": hitstun_duration if hitstun_duration > 0.0 else (wd.hitstun_duration if wd else 0.0),
 		"hit_tag": hit_tag,
+		"silent_hit": silent_hit,
+		# 喷雾流
+		"spray_stream": spray_stream,
+		"spray_duration": spray_duration,
+		"spray_tick_sec": spray_tick_sec,
+		"spray_cone_deg": spray_cone_deg,
+		"spray_particle_texture": spray_particle_texture,
+		"spray_particle_amount": spray_particle_amount,
+		"spray_particle_lifetime": spray_particle_lifetime,
 	}
 
 

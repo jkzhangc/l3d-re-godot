@@ -3935,6 +3935,17 @@ func spawn_bullet(bullet_id: int, shooter_peer_id: int, start_position: Vector2,
 		"texture": bd.bullet_texture,
 		"anim_frames": bd.bullet_anim_frames,
 		"frame_duration": bd.bullet_frame_duration,
+		## 喷雾流（2026-11-25）：Client 也要看到同一团粒子锥 —— 这些参数就在 BulletData 里，
+		## 两端同一份资源，不需要额外 RPC 字段。
+		"hit_tag": bd.hit_tag,
+		"silent_hit": bd.silent_hit,
+		"spray_stream": bd.spray_stream,
+		"spray_duration": bd.spray_duration,
+		"spray_tick_sec": bd.spray_tick_sec,
+		"spray_cone_deg": bd.spray_cone_deg,
+		"spray_particle_texture": bd.spray_particle_texture,
+		"spray_particle_amount": bd.spray_particle_amount,
+		"spray_particle_lifetime": bd.spray_particle_lifetime,
 	})
 	bullet.global_position = start_position
 	MAP_SCENE_QUERY.get_map_root(get_tree()).add_child(bullet)
