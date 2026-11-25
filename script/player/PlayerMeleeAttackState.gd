@@ -379,9 +379,39 @@ func _check_melee_hits() -> void:
 			print("[小刀] 击中 area: %s | 伤害=%d | 爆头=%s" % [parent.name, int(damage), str(_is_headshot)])
 			hit_any = true
 
+	## 可交互机关（火堆等，2026-11-25）：机关在 世界/子弹阻挡 层，上面的敌人判定框扫不到，
+	## 这里用同一块矩形单独查一遍；是否熄灭由机关自己的 `melee_trigger_ids` 决定。
+	var prop_hit: bool = _notify_melee_props()
+
 	# 只在真正命中时标记完成，避免物理服务器延迟导致空判
-	if hit_any:
+	if hit_any or prop_hit:
 		_hit_done = true
+
+
+## 近战命中「可交互机关」的通知（不改动敌人命中流程）。
+## 返回 true = 打到了至少一个机关（调用方据此结束本次判定，避免逐帧重复查）。
+func _notify_melee_props() -> bool:
+	if _wd == null or character == null or not is_instance_valid(character):
+		return false
+	var touched: bool = false
+	var query := PhysicsShapeQueryParameters2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = _hitbox_size()
+	query.shape = shape
+	query.transform = Transform2D(0.0, character.global_position + _get_melee_offset())
+	query.collision_mask = 1 | 32   ## 世界(1) + 子弹阻挡(32)
+	query.collide_with_bodies = true
+	query.collide_with_areas = false
+	var results: Array[Dictionary] = character.get_world_2d().direct_space_state.intersect_shape(query, 32)
+	for r: Dictionary in results:
+		var collider: Node = r.get("collider") as Node
+		if not is_instance_valid(collider):
+			continue
+		var prop: Node = collider if collider.is_in_group("interactive_prop") else collider.get_parent()
+		if prop != null and prop.is_in_group("interactive_prop") and prop.has_method("on_melee_hit"):
+			prop.call("on_melee_hit", _wd.item_id)
+			touched = true
+	return touched
 
 
 ## 背刺（必杀）：玩家**从背后**（敌我朝向同向）或打**尚未察觉**的敌人 → 非 Boss 即死（原作 §4.3）。

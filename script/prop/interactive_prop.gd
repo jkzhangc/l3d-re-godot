@@ -21,6 +21,9 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 @export var consume_tags: Array[String] = ["extinguish"]
 ## 被命中后算作「已熄灭」的投掷物属性（3 = 氷，见 WeaponData.Element）。
 @export var consume_on_ice: bool = true
+## 允许**近战武器**触发熄灭的 item_id 列表（2026-11-25）。
+## ⚠ 默认空 = 近战不可触发；想用某把近战武器打掉这个机关，必须显式把它的 id 写进来。
+@export var melee_trigger_ids: Array[String] = []
 @export_group("外观（行走图）")
 @export var walk_texture: Texture2D:
 	set(v):
@@ -56,6 +59,8 @@ signal extinguished
 
 var _sprite: Sprite2D = null
 var _body: StaticBody2D = null
+var _net_world: Node = null
+var _remote_consumed: bool = false   ## 本次熄灭来自 Host 广播（不再回推）
 var _last_hit_element: int = -1
 var _step_index: int = 0
 var _step_timer: float = 0.0
@@ -70,6 +75,9 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	add_to_group(&"interactive_prop")
+	_net_world = _find_network_world()
+	if _net_world != null and _net_world.has_signal("interactive_prop_consumed_received"):
+		_net_world.connect("interactive_prop_consumed_received", _on_net_consumed)
 	if consumed:
 		_apply_consumed_visual()
 
@@ -113,6 +121,15 @@ func on_throwable_hit(item_id: String, element: int) -> void:
 		consume(item_id if not item_id.is_empty() else "ice")
 
 
+## 近战命中（PlayerMeleeAttackState / NetworkWorld 的近战判定额外查一遍本机关）。
+## 只有武器 id 在 `melee_trigger_ids` 里才生效 —— 没配置 = 近战打不掉。
+func on_melee_hit(weapon_id: String) -> void:
+	if consumed or weapon_id.is_empty():
+		return
+	if weapon_id in melee_trigger_ids:
+		consume(weapon_id)
+
+
 ## 熄灭 / 破坏：撤碰撞、播粒子、隐藏或移除。
 func consume(reason: String = "") -> void:
 	if consumed:
@@ -126,6 +143,7 @@ func consume(reason: String = "") -> void:
 		if g != null and g.has_method("play_sfx_managed"):
 			g.call("play_sfx_managed", consume_sound, get_parent())
 	print("[交互精灵] %s 已熄灭（来源=%s，element=%s）" % [name, reason, str(_last_hit_element)])
+	_broadcast_consumed()
 	extinguished.emit()
 	_apply_consumed_visual()
 	if free_after_consume:
@@ -135,6 +153,44 @@ func consume(reason: String = "") -> void:
 			timer.timeout.connect(queue_free)
 		else:
 			queue_free()
+
+
+## 联机同步（2026-11-25）：Host 判定熄灭 → 广播路径；Client 收到后本地隐藏 + 撤碰撞。
+## 后加入的客户端由 Host 在 ready 时补发已熄灭列表（见 NetworkWorld）。
+func _broadcast_consumed() -> void:
+	if _remote_consumed:
+		return
+	var net: Node = get_node_or_null("/root/Net")
+	if net == null or not net.has_method("is_online_session") or not bool(net.call("is_online_session")):
+		return
+	if not bool(net.get("is_host")):
+		return
+	if _net_world != null and _net_world.has_method("broadcast_interactive_prop_consumed"):
+		_net_world.call("broadcast_interactive_prop_consumed", get_path())
+
+
+func _on_net_consumed(node_path: NodePath) -> void:
+	if consumed or str(node_path) != str(get_path()):
+		return
+	_remote_consumed = true
+	consumed = true
+	remove_from_group(&"interactive_prop")
+	_disable_collision()
+	_play_consume_fx()
+	_apply_consumed_visual()
+	if free_after_consume:
+		var timer: SceneTreeTimer = get_tree().create_timer(0.6) if is_inside_tree() else null
+		if timer != null:
+			timer.timeout.connect(queue_free)
+
+
+func _find_network_world() -> Node:
+	if not is_inside_tree():
+		return null
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return null
+	return scene.find_child("NetworkWorld", true, false)
 
 
 func _apply_consumed_visual() -> void:

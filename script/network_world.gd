@@ -759,6 +759,8 @@ func _finish_host_world_initialization() -> void:
 	# 兜底补发：对"在 Host 世界初始化前就已 ready"的 Client（ready 被 Net 缓冲、
 	# 上方只标记未发快照），此刻世界已完整，统一补发可靠世界快照。
 	# 对已在 _accept_ready_peer 中收过快照的对端，重复收一次是幂等的可靠包。
+	## 机关的已熄灭表是**场景内路径**，换图后整套失效 → 新图初始化时清空。
+	_consumed_prop_paths.clear()
 	_broadcast_reliable_world_snapshot()
 	_host_world_ready = true
 	_check_loading_complete()
@@ -2531,7 +2533,30 @@ func _perform_host_melee_attack(node: CharacterBody2D, wd: WeaponData, is_headsh
 		enemy.take_damage(melee_damage, 0.0, node.get_facing_vector(), is_headshot, 0.0, wd.hitstun_duration, 0, wd.element)
 		print("[NetworkWorld] HOST_MELEE_HIT enemy=%s damage=%d headshot=%s stage=%d" % [enemy.name, int(melee_damage), is_headshot, 2 if second else 1])
 		hit_count += 1
+	## 可交互机关（火堆等，2026-11-25）：不在敌人层，上面的查询扫不到 ——
+	## 用同一个判定矩形再查一次「世界 + 子弹阻挡」层，命中后交给机关自己判断武器 id。
+	_notify_host_melee_props(node, wd, shape, query.transform)
 	return hit_count
+
+
+## 近战打机关：mask 33 = 世界(1) + 子弹阻挡(32)；只认 `interactive_prop` 组。
+func _notify_host_melee_props(node: CharacterBody2D, wd: WeaponData,
+		shape: RectangleShape2D, xform: Transform2D) -> void:
+	var prop_query := PhysicsShapeQueryParameters2D.new()
+	prop_query.shape = shape
+	prop_query.transform = xform
+	prop_query.collision_mask = 1 | 32
+	prop_query.collide_with_bodies = true
+	prop_query.collide_with_areas = false
+	prop_query.exclude = [node.get_rid()]
+	var hits: Array[Dictionary] = node.get_world_2d().direct_space_state.intersect_shape(prop_query, 32)
+	for hit: Dictionary in hits:
+		var collider: Node = hit.get("collider") as Node
+		if not is_instance_valid(collider):
+			continue
+		var prop: Node = collider if collider.is_in_group("interactive_prop") else collider.get_parent()
+		if prop != null and prop.is_in_group("interactive_prop") and prop.has_method("on_melee_hit"):
+			prop.call("on_melee_hit", wd.item_id)
 
 
 func _spawn_host_bullet(peer_id: int, shooter: CharacterBody2D, wd: WeaponData, bd: BulletData, bullet_index: int) -> void:
@@ -2806,6 +2831,32 @@ func infinite_horde_intensity(count_mult: float, interval_mult: float) -> void:
 ## ── 油桶容器（2026-11-21）──
 ## 交付请求 Host 权威校验（距离 + 是否真的持桶）；计数/装满状态广播给全体。
 signal oil_container_state_received(node_path: NodePath, count: int, filled: bool)
+## 可交互机关（火堆等）被熄灭（2026-11-25）：Host 权威，Client 只按路径本地隐藏。
+signal interactive_prop_consumed_received(node_path: NodePath)
+
+## Host 侧已熄灭机关的路径集合（跨 peer 保持一致；换图时清空）。
+var _consumed_prop_paths: Dictionary = {}
+
+
+## Host：机关熄灭后广播。由 interactive_prop.consume() 调用（Client 不会走到这里）。
+func broadcast_interactive_prop_consumed(node_path: NodePath) -> void:
+	if not net.is_host:
+		return
+	_consumed_prop_paths[str(node_path)] = true
+	if _scene_transitioning:
+		return
+	_send_to_ready_clients(&"interactive_prop_state", [node_path])
+
+
+@rpc("authority", "call_local", "reliable")
+func interactive_prop_state(node_path: NodePath) -> void:
+	interactive_prop_consumed_received.emit(node_path)
+
+
+## 中途加入的 Client 补发已熄灭机关列表（与防守战倒计时同一时机）。
+func _send_consumed_props_to(peer_id: int) -> void:
+	for key: String in _consumed_prop_paths.keys():
+		rpc_id(peer_id, &"interactive_prop_state", NodePath(key))
 
 
 func request_oil_container_deposit(node_path: NodePath) -> void:
@@ -4111,6 +4162,8 @@ func _accept_ready_peer(peer_id: int, send_snapshot: bool = true) -> void:
 	# 中途加入的 Client 补发覚醒中的玩家染色（C1）。
 	for awaken_peer: int in _awaken_active_peers.keys():
 		awaken_presentation.rpc_id(peer_id, awaken_peer, true)
+	# 中途加入的 Client 补发已熄灭的可交互机关（火堆等），否则它仍会被挡住。
+	_send_consumed_props_to(peer_id)
 	## 加载画面：本 peer 已就绪；若全场都就绪则广播收起。
 	if _loading_complete_sent:
 		loading_complete.rpc_id(peer_id)
