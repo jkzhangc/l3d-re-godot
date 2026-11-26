@@ -387,17 +387,23 @@ func _setup_spray_stream() -> void:
 	p.direction = _spray_dir
 	p.spread = _spray_cone_deg * 0.5
 	p.gravity = Vector2.ZERO
-	## 初速与阻尼要一起解，否则「视觉射程」和「判定射程」对不上（2026-11-26 用户反馈）。
-	##   位移 = v·T - ½·d·T²，取 d = 0.35·v_ref/T（T 内速度衰减 35%）：
-	##     最慢 v=0.85·v_ref → 0.675·R；最快 v=1.15·v_ref → 0.975·R
-	##   也就是粒子落在 81~117px（标称 R=120），判定按 0.95·R 收口。
-	## 旧实现给 0.45/0.85 的 v、又叠 0.15~0.35·v_max 的阻尼 → 实际只飞 ~50px，
-	## 判定却按 120 算，表现为「打到没雾的地方 / 雾盖住敌人却不掉血」。
+	## 初速 / 阻尼（2026-11-26 用户第二次调参：要更快，且「一开始很快、后面越来越慢」）。
+	##
+	## CPUParticles2D 只有线性 `damping`（匀减速），没有速度曲线，所以用
+	## **高初速 + 强阻尼**去做 ease-out 的观感：匀减速到静止的位移 = v₀²/(2d)，
+	## 令它正好等于 max_range → d = v₀²/(2R)。这样：
+	##   · 前 20% 时间内走完约 48% 路程，前 40% 时间走完约 78%（实测），
+	##     视觉上就是「冲出去 → 迅速被空气阻力刹住 → 原地散开」；
+	##   · 速度降到 0 后停住（Godot 的 damping 不会让速度反向）；
+	##   · 最远落点仍 ≈ max_range，判定射程继续和视觉对齐。
+	## 初速从 0.85~1.15·v_ref 提到 1.9~2.5·v_ref（约 2.2 倍），阻尼相应提到约 9 倍。
 	var v_ref: float = max_range / maxf(_spray_life, 0.1)
-	var damp_ratio: float = 0.35
-	p.initial_velocity_min = v_ref * 0.85
-	p.initial_velocity_max = v_ref * 1.15
-	var damp: float = v_ref * damp_ratio / maxf(_spray_life, 0.1)
+	p.initial_velocity_min = v_ref * 1.9
+	p.initial_velocity_max = v_ref * 2.5
+	## 用**最快那颗**反解阻尼：它正好在 R 处停下；慢粒子停在更近的位置，
+	## 自然形成「近处浓、远处稀」的层次（不需要额外配置）。
+	var v_stop: float = v_ref * 2.5
+	var damp: float = v_stop * v_stop / (2.0 * maxf(max_range, 1.0))
 	p.damping_min = damp
 	p.damping_max = damp
 	## 粒子尺寸（用户 2026-11-26：之前 1.1~2.4 太大，盖住整个角色）。
