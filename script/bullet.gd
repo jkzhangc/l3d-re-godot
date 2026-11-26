@@ -498,6 +498,25 @@ func _hit(target: Node2D) -> void:
 	if not damageable.has_method("take_damage"):
 		return
 
+	## ★可交互机关（火堆等，2026-11-26 用户反馈）：
+	## 它实现 `take_damage` 只是为了让子弹/近战能"命中"它，本质上不该吃普通伤害 ——
+	## 但走常规分支会连带血量结算、**喷血特效**和**通用打击音**，手枪打火堆就在流血。
+	## 这里只把它自己的 tag / 元素判定转过去，然后让子弹停下
+	## （机关在「子弹阻挡」层 32，本来就该挡弹）。
+	var prop: Node = null
+	if damageable.is_in_group("interactive_prop"):
+		prop = damageable
+	elif damageable.get_parent() != null and damageable.get_parent().is_in_group("interactive_prop"):
+		prop = damageable.get_parent()
+	if prop != null:
+		if not _hit_tag.is_empty() and prop.has_method("on_hit_tag"):
+			prop.call("on_hit_tag", _hit_tag, element)
+		if prop.has_method("take_damage"):
+			## 伤害恒为 0：机关只看 element（3=氷 才熄灭），不看数值。
+			prop.call("take_damage", 0.0, 0.0, direction, false, 0.0, 0.0, _source_id, element)
+		_finish()
+		return
+
 	# 关闭友伤的队友必须透明：早于去重、穿透计数和爆炸触发。单机保留旧排除。
 	if damageable == _shooter:
 		return
@@ -737,6 +756,18 @@ func _explode() -> void:
 	for w: Node in get_tree().get_nodes_in_group("blast_wall"):
 		if w is Node2D and (w as Node2D).has_method("apply_explosion"):
 			(w as Node2D).call("apply_explosion", center, _explosion_radius, _breaks_blast_wall)
+
+	## 可交互机关（火堆等，2026-11-26）：爆炸也能触发 tag / 元素判定。
+	## 与 throwable_projectile._explode 走同一个 `on_throwable_hit`，
+	## 避免出现"手雷能灭、火箭弹不能灭"这种分叉。
+	for prop: Node in get_tree().get_nodes_in_group("interactive_prop"):
+		if not (prop is Node2D) or not is_instance_valid(prop):
+			continue
+		var pn := prop as Node2D
+		if pn.global_position.distance_to(center) > _explosion_radius:
+			continue
+		if pn.has_method("on_throwable_hit"):
+			pn.call("on_throwable_hit", "", element)
 
 
 func _record_chapter_damage(hp_before: float, hp_after: float, is_headshot: bool,

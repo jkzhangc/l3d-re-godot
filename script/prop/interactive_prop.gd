@@ -164,13 +164,7 @@ func consume(reason: String = "") -> void:
 	_broadcast_consumed()
 	extinguished.emit()
 	_apply_consumed_visual()
-	if free_after_consume:
-		## 等粒子播完再移除（内置粒子挂在自身下，立刻 free 会看不到）。
-		var timer: SceneTreeTimer = get_tree().create_timer(0.6) if is_inside_tree() else null
-		if timer != null:
-			timer.timeout.connect(queue_free)
-		else:
-			queue_free()
+	_schedule_release()
 
 
 ## 联机同步（2026-11-25）：Host 判定熄灭 → 广播路径；Client 收到后本地隐藏 + 撤碰撞。
@@ -196,10 +190,29 @@ func _on_net_consumed(node_path: NodePath) -> void:
 	_disable_collision()
 	_play_consume_fx()
 	_apply_consumed_visual()
-	if free_after_consume:
-		var timer: SceneTreeTimer = get_tree().create_timer(0.6) if is_inside_tree() else null
-		if timer != null:
-			timer.timeout.connect(queue_free)
+	_schedule_release()
+
+
+## 熄灭后延迟释放节点。
+##
+## ★2026-11-26 用户反馈「粒子还是突然消失」：旧实现写死 0.6s ——
+## 当时 `consume_particle_lifetime` 是 0.55，刚好卡在粒子结束前一点点；
+## 后来默认寿命提到 0.8，节点在粒子播到 75% 时就被 `queue_free`，
+## 内置粒子挂在本节点下 → 被连根拔掉，看起来就是"戛然消失"。
+## 现在按实际寿命留 0.25s 余量；自定义粒子场景（consume_effect）挂在 current_scene
+## 上，不受本节点释放影响，沿用保守值即可。
+func _schedule_release() -> void:
+	if not free_after_consume:
+		return
+	var wait: float = 0.6
+	if consume_effect == null:
+		wait = maxf(0.3, consume_particle_lifetime) + 0.25
+	var tree: SceneTree = get_tree() if is_inside_tree() else null
+	if tree == null:
+		queue_free()
+		return
+	var timer: SceneTreeTimer = tree.create_timer(wait)
+	timer.timeout.connect(queue_free)
 
 
 func _find_network_world() -> Node:
@@ -311,4 +324,5 @@ func _play_consume_fx() -> void:
 	if consume_particle_texture != null:
 		p.texture = consume_particle_texture
 	add_child(p)
+	## 入树之后再点火：未入树时设 emitting 在部分版本里不会补发首帧粒子。
 	p.emitting = true
