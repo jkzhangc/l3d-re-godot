@@ -94,6 +94,10 @@ enum Element { NONE = 0, FIRE = 1, LIGHTNING = 2, ICE = 3, ACID = 4 }
 @export var raise_sound: AudioStream = null      ## 举起武器音效
 @export var lower_sound: AudioStream = null      ## 放下武器音效
 @export var hit_sound: AudioStream = null        ## 击中目标音效（子弹/近战命中时播放）
+## 无视背刺判定（2026-11-26）：命中敌人时不检查背面、不触发背刺翻倍与背刺成就。
+## 用于喷雾 / 火焰 / 范围性这类「方向没有意义」的武器 —— 灭火器边走边喷时，
+## 玩家朝向与敌人相对位置随时在变，不该被判定成背刺。
+@export var ignore_backstab: bool = false
 @export var gunshot_range: float = 500.0         ## 枪声传播范围（像素）。0=静音武器（近战），>0=开火时范围内敌人会被惊动
 ## 推击**动作**音效（挥空也响）。默认「回避2」（2026-11-04 用户指定）。
 ## 推击是空手/枪托都能做的动作，因此**不按武器区分**，所有武器共用一个默认值；tres 可逐个覆盖。

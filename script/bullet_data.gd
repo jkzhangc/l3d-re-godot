@@ -243,6 +243,7 @@ func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Di
 		"hitstun_duration": hitstun_duration if hitstun_duration > 0.0 else (wd.hitstun_duration if wd else 0.0),
 		"hit_tag": hit_tag,
 		"silent_hit": silent_hit,
+		"ignore_backstab": wd.ignore_backstab if wd else false,
 		# 喷雾流
 		"spray_stream": spray_stream,
 		"spray_duration": spray_duration,

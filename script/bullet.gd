@@ -108,6 +108,11 @@ var _spray_hit_radius: float = 12.0
 ## 粒子实际能飞到的最远距离（按初速/寿命/阻尼反算）——判定用它，而不是标称 max_range，
 ## 否则会出现「打中了雾还没到的地方」（2026-11-26 用户反馈碰撞体与粒子不匹配）。
 var _spray_reach: float = 0.0
+## 开火瞬间「子弹位置 − 射手位置」的相对偏移（含枪口高度 + spawn_offset）。
+## 喷雾流每帧用它重新定位，这样玩家移动时喷口跟着走，而不是把雾留在原地。
+var _spray_follow_offset: Vector2 = Vector2.ZERO
+## 无视背刺判定（WeaponData.ignore_backstab）：喷雾/火焰这类武器方向无意义。
+var _ignore_backstab: bool = false
 var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
@@ -193,6 +198,7 @@ func setup(params: Dictionary) -> void:
 	_spray_scale_max = float(params.get("spray_particle_scale_max", 0.9))
 	_spray_hit_radius = float(params.get("spray_hit_radius", 12.0))
 	_spray_dir = direction.normalized()
+	_ignore_backstab = bool(params.get("ignore_backstab", false))
 	_shooter = params.get("shooter", null)
 	_source_is_player_origin = HitResolver.is_player(_shooter)
 	_source_id = _next_source_id
@@ -378,8 +384,15 @@ func _setup_spray_stream() -> void:
 		_area.collision_layer = 0
 		_area.monitorable = false
 	z_index = maxi(z_index, 2)
+	## 记录「当前位置 − 射手位置」：含枪口高度 + spawn_offset，后面每帧用它把喷口钉在枪口上。
+	if is_instance_valid(_shooter) and (_shooter as Node2D) != null:
+		_spray_follow_offset = global_position - (_shooter as Node2D).global_position
 	var p := CPUParticles2D.new()
 	p.name = "SprayParticles"
+	## ★local_coords = false（2026-11-26）：粒子出生后用自己的世界坐标，
+	## 父节点（本子弹）移动时只改变**新粒子**的出生点，不会把已经喷出去的雾拖着平移。
+	## 配合 _update_spray_anchor()，玩家边走边喷时喷口跟着人、雾留在身后。
+	p.local_coords = false
 	p.amount = maxi(4, _spray_amount)
 	p.lifetime = maxf(0.1, _spray_life)
 	p.one_shot = false
@@ -428,6 +441,8 @@ func _setup_spray_stream() -> void:
 
 func _tick_spray_stream(delta: float) -> void:
 	_spray_age += delta
+	## 喷口实时跟随射手（2026-11-26 用户反馈：移动时喷雾留在原地，看起来怪）。
+	_update_spray_anchor()
 	if _spray_age <= _spray_duration:
 		if not network_visual_only:
 			_spray_tick_acc += delta
@@ -442,6 +457,23 @@ func _tick_spray_stream(delta: float) -> void:
 	## 粒子寿命结束后收尾（表现侧多留一点，保证最后一颗也散完）。
 	if _spray_age >= _spray_duration + _spray_life + 0.1:
 		_finish()
+
+
+## 把喷雾发射点钉在射手身上。
+##
+## 【只跟位置、不跟朝向】方向在开火那一刻由 `_spray_dir` 锁定 ——
+## 如果跟着转身，已经喷出去的雾会拐弯，比"留在原地"更怪。
+##
+## 【为什么要偏移】子弹生成点是「枪口高度 + 前向 spawn_offset」，
+## 直接吸到 `shooter.global_position`（脚下原点）会让雾从脚底冒出来。
+## 所以在开火瞬间记下相对偏移，之后每帧用 `射手位置 + 偏移` 还原。
+func _update_spray_anchor() -> void:
+	if not is_instance_valid(_shooter):
+		return
+	var shooter_node: Node2D = _shooter as Node2D
+	if shooter_node == null:
+		return
+	global_position = shooter_node.global_position + _spray_follow_offset
 
 
 ## 锥内结算：敌人按 take_damage，可交互机关按 on_hit_tag。
@@ -574,6 +606,7 @@ func _hit(target: Node2D) -> void:
 	## 背刺是否在本击生效（供击杀归属：即死击杀成就 / 必杀次数成就）
 	var backstab_applied: bool = false
 	if not _instant_kill \
+			and not _ignore_backstab \
 			and HitResolver.is_player(_shooter) \
 			and damageable.is_in_group("enemy") \
 			and damageable.has_method("is_backstab_hit") \

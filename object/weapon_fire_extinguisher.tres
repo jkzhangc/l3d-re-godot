@@ -38,6 +38,7 @@ weapon_state_name = "Extinguisher"
 weapon_raise_char_sequence = Array[int]([4, 4])
 fire_mode = 1
 attack_sound = ExtResource("9_spray")
+ignore_backstab = true
 attack_char_sequence = Array[int]([4, 4])
 attack_frame_durations = Array[float]([0.1, 0.1])
 bullet_list = Array[ExtResource("2_bd")]([SubResource("Bullet_spray")])
