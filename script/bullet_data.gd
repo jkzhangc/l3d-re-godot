@@ -87,6 +87,15 @@ class_name BulletData extends Resource
 @export_range(4, 120, 1) var spray_particle_amount: int = 28
 ## 单颗粒子寿命（秒）。
 @export_range(0.1, 2.0, 0.01) var spray_particle_lifetime: float = 0.45
+## 单颗粒子的缩放范围（贴图像素 × scale = 屏幕像素）。
+## ★2026-11-26 用户反馈「粒子太大」：48px 贴图 × 1.1~2.4 = 53~115px，比角色（48x64）还大。
+## 现在默认 0.35~0.9 → 17~43px，大约是半个身位，叠几颗才读成一片雾。
+@export_range(0.05, 3.0, 0.05) var spray_particle_scale_min: float = 0.35
+@export_range(0.05, 3.0, 0.05) var spray_particle_scale_max: float = 0.9
+## 命中判定半径（像素）：目标中心到喷雾锥轴的垂直距离小于它就算命中。
+## ★为什么需要：粒子有体积（几十像素），雾已经盖住敌人身体了，但敌人中心点还在锥外 →
+## 旧实现只看中心点角度会漏判，表现为「碰撞体比粒子小」。这个容差把两者对齐。
+@export_range(0.0, 48.0, 1.0) var spray_hit_radius: float = 12.0
 ## 命中时不播任何击中音（世界/属性默认音也不播）。喷雾类工具用。
 @export var silent_hit: bool = false
 
@@ -242,6 +251,9 @@ func build_setup_params(wd: WeaponData, damage: float, instant_kill: bool) -> Di
 		"spray_particle_texture": spray_particle_texture,
 		"spray_particle_amount": spray_particle_amount,
 		"spray_particle_lifetime": spray_particle_lifetime,
+		"spray_particle_scale_min": spray_particle_scale_min,
+		"spray_particle_scale_max": spray_particle_scale_max,
+		"spray_hit_radius": spray_hit_radius,
 	}
 
 

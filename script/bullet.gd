@@ -101,6 +101,13 @@ var _spray_age: float = 0.0
 var _spray_tick_acc: float = 0.0
 var _spray_emitter: CPUParticles2D = null
 var _spray_dir: Vector2 = Vector2.RIGHT
+## 粒子缩放范围（贴图像素 × scale）与命中判定半径，见 BulletData 同名字段。
+var _spray_scale_min: float = 0.35
+var _spray_scale_max: float = 0.9
+var _spray_hit_radius: float = 12.0
+## 粒子实际能飞到的最远距离（按初速/寿命/阻尼反算）——判定用它，而不是标称 max_range，
+## 否则会出现「打中了雾还没到的地方」（2026-11-26 用户反馈碰撞体与粒子不匹配）。
+var _spray_reach: float = 0.0
 var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
@@ -182,6 +189,9 @@ func setup(params: Dictionary) -> void:
 	_spray_particle_tex = params.get("spray_particle_texture", null)
 	_spray_amount = int(params.get("spray_particle_amount", 28))
 	_spray_life = float(params.get("spray_particle_lifetime", 0.45))
+	_spray_scale_min = float(params.get("spray_particle_scale_min", 0.35))
+	_spray_scale_max = float(params.get("spray_particle_scale_max", 0.9))
+	_spray_hit_radius = float(params.get("spray_hit_radius", 12.0))
 	_spray_dir = direction.normalized()
 	_shooter = params.get("shooter", null)
 	_source_is_player_origin = HitResolver.is_player(_shooter)
@@ -365,6 +375,7 @@ func _setup_spray_stream() -> void:
 	if _area:
 		_area.monitoring = false
 		_area.collision_mask = 0
+		_area.collision_layer = 0
 		_area.monitorable = false
 	z_index = maxi(z_index, 2)
 	var p := CPUParticles2D.new()
@@ -376,14 +387,22 @@ func _setup_spray_stream() -> void:
 	p.direction = _spray_dir
 	p.spread = _spray_cone_deg * 0.5
 	p.gravity = Vector2.ZERO
-	## 初速按"射程 / 粒子寿命"反算：最远的粒子正好在消失前飞到射程边缘。
-	var v_max: float = max_range / maxf(_spray_life, 0.1)
-	p.initial_velocity_min = v_max * 0.45
-	p.initial_velocity_max = v_max * 0.85
-	p.damping_min = v_max * 0.15
-	p.damping_max = v_max * 0.35
-	p.scale_amount_min = 1.1
-	p.scale_amount_max = 2.4
+	## 初速与阻尼要一起解，否则「视觉射程」和「判定射程」对不上（2026-11-26 用户反馈）。
+	##   位移 = v·T - ½·d·T²，取 d = 0.35·v_ref/T（T 内速度衰减 35%）：
+	##     最慢 v=0.85·v_ref → 0.675·R；最快 v=1.15·v_ref → 0.975·R
+	##   也就是粒子落在 81~117px（标称 R=120），判定按 0.95·R 收口。
+	## 旧实现给 0.45/0.85 的 v、又叠 0.15~0.35·v_max 的阻尼 → 实际只飞 ~50px，
+	## 判定却按 120 算，表现为「打到没雾的地方 / 雾盖住敌人却不掉血」。
+	var v_ref: float = max_range / maxf(_spray_life, 0.1)
+	var damp_ratio: float = 0.35
+	p.initial_velocity_min = v_ref * 0.85
+	p.initial_velocity_max = v_ref * 1.15
+	var damp: float = v_ref * damp_ratio / maxf(_spray_life, 0.1)
+	p.damping_min = damp
+	p.damping_max = damp
+	## 粒子尺寸（用户 2026-11-26：之前 1.1~2.4 太大，盖住整个角色）。
+	p.scale_amount_min = maxf(0.05, _spray_scale_min)
+	p.scale_amount_max = maxf(_spray_scale_min, _spray_scale_max)
 	p.color = Color(1.0, 1.0, 1.0, 0.9)
 	## 粒子从白到透明（与 HTML 预览的径向渐变+淡出同观感）。
 	var ramp := Gradient.new()
@@ -393,6 +412,8 @@ func _setup_spray_stream() -> void:
 	p.color_ramp = ramp
 	if _spray_particle_tex != null:
 		p.texture = _spray_particle_tex
+	## 最远粒子的落点 ≈ 0.975·max_range；判定按 0.95 收口，留一点余量防边界抖动。
+	_spray_reach = max_range * 0.95
 	p.emitting = true
 	add_child(p)
 	_spray_emitter = p
@@ -420,15 +441,11 @@ func _apply_spray_hits() -> void:
 	if not is_inside_tree() or network_visual_only:
 		return
 	var tree := get_tree()
-	var half := deg_to_rad(_spray_cone_deg * 0.5)
 	for e: Node in HitResolver.damage_targets(tree):
 		if not (e is Node2D) or not (e as Node2D).has_method("take_damage"):
 			continue
 		var node := e as Node2D
-		var to: Vector2 = node.global_position - global_position
-		if to.length() > max_range or to.length() < 0.001:
-			continue
-		if absf(_spray_dir.angle_to(to)) > half:
+		if not _in_spray_cone(node.global_position):
 			continue
 		## ⚠ Node 的方法是 is_in_group()（没有 in_group）——写成 in_group 会让每次 tick 抛
 		## "Nonexistent function"，整段锥内结算中断（训练木偶实测）。
@@ -439,13 +456,32 @@ func _apply_spray_hits() -> void:
 		if not (prop is Node2D):
 			continue
 		var pnode := prop as Node2D
-		var pto: Vector2 = pnode.global_position - global_position
-		if pto.length() > max_range or pto.length() < 0.001:
-			continue
-		if absf(_spray_dir.angle_to(pto)) > half:
+		if not _in_spray_cone(pnode.global_position):
 			continue
 		if not _hit_tag.is_empty() and pnode.has_method("on_hit_tag"):
 			pnode.call("on_hit_tag", _hit_tag, element)
+
+
+## 喷雾锥内判定（2026-11-26 重写）。
+##
+## 【旧实现的问题】只比较「目标中心点到锥轴的角度」。粒子有体积（17~43px），
+## 雾已经糊在敌人身上、敌人中心点却还在锥外 → 表现为「碰撞体比粒子小、打不到」。
+## 另外距离上限用的是标称 max_range，而粒子受阻尼实际只飞一半 → 「打到没雾的地方」。
+##
+## 【现在的判据】
+##   ① 距离 ≤ _spray_reach（按粒子初速/寿命/阻尼反算的真实落点）；
+##   ② 在锥轴前方（点积 > 0，排除背后）；
+##   ③ 到锥轴的垂直距离 ≤ _spray_hit_radius（贴脸必中），或中心点落在半锥角内。
+func _in_spray_cone(point: Vector2) -> bool:
+	var to: Vector2 = point - global_position
+	var dist: float = to.length()
+	if dist < 0.001 or dist > _spray_reach:
+		return false
+	if to.dot(_spray_dir) <= 0.0:
+		return false
+	if absf(to.cross(_spray_dir)) <= _spray_hit_radius:
+		return true
+	return absf(_spray_dir.angle_to(to)) <= deg_to_rad(_spray_cone_deg * 0.5)
 
 
 func _hit(target: Node2D) -> void:
@@ -772,6 +808,12 @@ func _draw() -> void:
 	## 调试可视化：绘制子弹碰撞体（跟随 Area2D 旋转 + 偏移）
 	if not Global.debug_visuals:
 		return
+	## ★喷雾流（2026-11-26）：Area2D 已退出碰撞，再画那个 26x26 的小方框只会误导 ——
+	## 雾在扩散、框却停在原点，看起来就是「碰撞体比粒子小」。这里改画真实判定范围：
+	## 锥角两条边 + 有效射程封口 + 沿锥轴的「必中带」（spray_hit_radius）。
+	if _spray_stream:
+		_draw_spray_debug()
+		return
 	if not _area:
 		return
 
@@ -783,6 +825,26 @@ func _draw() -> void:
 		draw_set_transform(offset, _area.rotation)
 		draw_rect(Rect2(-s / 2, s), Color.CYAN, false, 1.0)
 		draw_set_transform(Vector2.ZERO, 0.0)
+
+
+## 喷雾流的调试可视化：与 `_in_spray_cone()` 用同一组参数，所见即判定。
+func _draw_spray_debug() -> void:
+	var reach: float = _spray_reach if _spray_reach > 0.0 else max_range
+	if reach <= 0.0:
+		return
+	var half: float = deg_to_rad(_spray_cone_deg * 0.5)
+	var left: Vector2 = _spray_dir.rotated(-half) * reach
+	var right: Vector2 = _spray_dir.rotated(half) * reach
+	var cone_col := Color(1.0, 0.72, 0.2, 0.85)
+	draw_line(Vector2.ZERO, left, cone_col, 1.0)
+	draw_line(Vector2.ZERO, right, cone_col, 1.0)
+	draw_line(left, right, cone_col, 1.0)
+	if _spray_hit_radius > 0.0:
+		var n: Vector2 = _spray_dir.orthogonal() * _spray_hit_radius
+		var far: Vector2 = _spray_dir * reach
+		var band_col := Color(0.35, 1.0, 0.6, 0.55)
+		draw_line(n, far + n, band_col, 1.0)
+		draw_line(-n, far - n, band_col, 1.0)
 
 
 func _roll_critical() -> bool:

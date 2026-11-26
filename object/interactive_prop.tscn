@@ -1,12 +1,16 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://script/prop/interactive_prop.gd" id="1_prop"]
+[ext_resource type="Texture2D" uid="uid://snnuwnhn50w7" path="res://art/Barrages/烟雾粒子.png" id="2_puff"]
+[ext_resource type="AudioStream" uid="uid://c4rdn460u8x17" path="res://sound/水3.ogg" id="3_sound"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(32, 32)
 
 [node name="InteractiveProp" type="Node2D"]
 script = ExtResource("1_prop")
+consume_particle_texture = ExtResource("2_puff")
+consume_sound = ExtResource("3_sound")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 

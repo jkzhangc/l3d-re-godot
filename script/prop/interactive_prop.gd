@@ -48,9 +48,27 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 @export var blocking: bool = true
 @export var collision_size: Vector2 = Vector2(32, 32)
 @export_group("熄灭表现")
-## 自定义粒子（VXAnimSprite 场景）。留空 = 用内置的白色烟尘粒子兜底。
+## 自定义粒子（VXAnimSprite 场景）。留空 = 用下面「熄灭粒子（内置）」的一组参数生成。
 @export var consume_effect: PackedScene = null
 @export var consume_sound: AudioStream = null
+
+@export_group("熄灭粒子（内置）")
+## 粒子贴图。留空 = 纯色软点（CPUParticles2D 默认方块会显得很硬，建议配一张云状图，
+## 例如 res://art/Barrages/烟雾粒子.png）。
+@export var consume_particle_texture: Texture2D = null
+@export_range(2, 96, 1) var consume_particle_amount: int = 18
+@export_range(0.1, 3.0, 0.05) var consume_particle_lifetime: float = 0.8
+@export_range(0.0, 200.0, 1.0) var consume_particle_speed_min: float = 20.0
+@export_range(0.0, 300.0, 1.0) var consume_particle_speed_max: float = 70.0
+@export_range(0.05, 6.0, 0.05) var consume_particle_scale_min: float = 0.5
+@export_range(0.05, 8.0, 0.05) var consume_particle_scale_max: float = 1.6
+@export var consume_particle_color: Color = Color(0.92, 0.94, 0.96, 0.9)
+## 渐隐起点（占生命周期的比例）：0 = 从出生就开始淡出，0.45 = 前 45% 保持、之后淡出。
+## ★2026-11-26 用户反馈「粒子出现后应该渐渐消失，而不是直接消失」——
+## 旧的兜底粒子没有 color_ramp，alpha 恒定，生命周期一结束整团瞬间消失。
+@export_range(0.0, 0.9, 0.05) var consume_particle_fade_from: float = 0.4
+## 扩散倍率：粒子在生命周期内从 scale_min 涨到 scale_max × 该值（烟往外散的感觉）。
+@export_range(1.0, 3.0, 0.05) var consume_particle_expand: float = 1.35
 ## 熄灭后是否从场景移除（false = 只隐藏，保留节点供存档/联机状态参考）
 @export var free_after_consume: bool = true
 @export var consumed: bool = false
@@ -262,20 +280,35 @@ func _play_consume_fx() -> void:
 			if fx is Node2D:
 				(fx as Node2D).global_position = global_position
 			return
-	## 兜底：内置白色烟尘（不需要任何素材，保证机关熄灭时一定有反馈）。
+	## 兜底：内置烟尘（不需要任何素材也能有反馈），参数全部来自上面的导出组。
 	var p := CPUParticles2D.new()
 	p.name = "ConsumePuff"
-	p.amount = 18
-	p.lifetime = 0.55
+	p.amount = maxi(2, consume_particle_amount)
+	p.lifetime = maxf(0.1, consume_particle_lifetime)
 	p.one_shot = true
 	p.explosiveness = 1.0
 	p.direction = Vector2.UP
 	p.spread = 180.0
 	p.gravity = Vector2(0, -40)
-	p.initial_velocity_min = 20.0
-	p.initial_velocity_max = 70.0
-	p.scale_amount_min = 1.5
-	p.scale_amount_max = 3.0
-	p.color = Color(0.92, 0.94, 0.96, 0.85)
+	p.initial_velocity_min = consume_particle_speed_min
+	p.initial_velocity_max = maxf(consume_particle_speed_min, consume_particle_speed_max)
+	p.scale_amount_min = maxf(0.05, consume_particle_scale_min)
+	p.scale_amount_max = maxf(consume_particle_scale_min, consume_particle_scale_max)
+	p.color = consume_particle_color
+	## ★渐隐（2026-11-26）：没有 color_ramp 时粒子 alpha 恒定，寿命一到整团瞬间消失。
+	## 这里按 fade_from 把后段 alpha 压到 0；再配一条尺寸曲线让粒子边散边变大。
+	var base: Color = consume_particle_color
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(base.r, base.g, base.b, base.a))
+	ramp.set_color(1, Color(base.r, base.g, base.b, 0.0))
+	ramp.add_point(clampf(consume_particle_fade_from, 0.0, 0.9),
+		Color(base.r, base.g, base.b, base.a * 0.9))
+	p.color_ramp = ramp
+	var grow := Curve.new()
+	grow.add_point(Vector2(0.0, 1.0))
+	grow.add_point(Vector2(1.0, maxf(1.0, consume_particle_expand)))
+	p.scale_amount_curve = grow
+	if consume_particle_texture != null:
+		p.texture = consume_particle_texture
 	add_child(p)
 	p.emitting = true
