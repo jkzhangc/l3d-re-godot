@@ -68,6 +68,11 @@ const BLOCK_LAYER_ENEMY_ONLY: int = 4  ## 人物层：只有敌人 mask 含 → 
 		walk_texture = v
 		_refresh_sprite()
 @export var capture_checkpoint: bool = true        ## 传送前捕获 checkpoint（安全屋出口应为 true）
+@export_group("音效")
+## 触发传送时立刻播放（开门）。播放器挂在 Global 上，切场景不会截断。
+@export var door_open_sound: AudioStream = null
+## 到达目标场景后播放（关门）。经 Global 中转，等加载画面收起后响。
+@export var door_close_sound: AudioStream = null
 @export var walk_char_index: int = 0:              ## 精灵表中的角色索引
 	set(v):
 		walk_char_index = v
@@ -548,6 +553,9 @@ func _do_teleport() -> void:
 		printerr("[TeleportPoint] target_scene 为空，无法传送")
 		return
 	_transitioning = true
+	## 门音（2026-11-26）：开门立刻响；关门存到 Global，等新场景 ready 后播。
+	## 放在所有早退校验（锁门/目标为空）之后，避免"锁着的门也响"。
+	_play_door_transition_sfx()
 	## 开门 flag：单机/Host 立即生效；联机 Client 经 NetworkWorld 转 Host 广播
 	if not open_flag_to_set.is_empty():
 		var g: Node = get_node_or_null("/root/Global")
@@ -573,6 +581,19 @@ func _do_teleport() -> void:
 	if tree:
 		Global.show_loading_screen()
 		tree.change_scene_to_file.call_deferred(target_scene)
+
+
+## 传送音效：开门现在响、关门交给新场景。
+## 联机 Client 不本地切图（由 Host 广播），但门是它自己点的 —— 音效照播、
+## 关门音存进它自己的 Global，等它收到切图后由 GameInit 消费。
+func _play_door_transition_sfx() -> void:
+	## 直接用 autoload 引用（同文件其它地方也是 `Global.set_pending_arrival(...)`），
+	## 不用 get_node_or_null("/root/Global") —— 节点尚未入树时绝对路径解析不出来，
+	## 会静默不响（探针里 new 出来没 add_child 就复现过）。
+	if door_open_sound != null:
+		Global.play_door_sfx(door_open_sound)
+	if door_close_sound != null:
+		Global.set_pending_arrive_sound(door_close_sound)
 
 
 func _find_player() -> CharacterBody2D:

@@ -19,6 +19,9 @@ func _ready() -> void:
 	## 安全屋台词（2026-09-28）：进入安全屋 / 章节总结结束后随机说 1~2 句。
 	## 纯本地表现（各端显示自己角色的台词），不暂停游戏；延后一帧等场景节点就绪。
 	call_deferred("_spawn_safehouse_dialogue")
+	## 跨场景「关门音」（2026-11-26）：传送节点切图前存在 Global，这里取走并播放。
+	## 用 deferred + 轮询加载画面，保证声音落在新场景"看得见"之后，而不是加载条上。
+	call_deferred("_play_pending_arrive_sound")
 	var net: Node = get_node_or_null("/root/Net")
 	## ★A* 网格预构建**必须在联机早退之前、且排除联机客户端**（2026-10-10 修「主机端加载慢」）：
 	## 此前它在 `is_online_session()` 的 `return` 之后 → 联机**从不预构建**，
@@ -116,6 +119,29 @@ func _watch_loading_screen_online() -> void:
 	if is_inside_tree() and Global.is_loading_active():
 		print("[GameInit] 加载等待超时（20s），强制关闭加载画面")
 		Global.hide_loading_screen()
+
+
+## 播放上一张图留下的「到达音」（传送门的关门声）。
+## 之所以要等加载画面：切图会亮 loading（Global.show_loading_screen），
+## 在黑屏/加载条上响关门声听起来像"门在加载时关的"，和画面脱节。
+func _play_pending_arrive_sound() -> void:
+	var snd: AudioStream = Global.consume_pending_arrive_sound()
+	if snd == null:
+		return
+	_wait_loading_then_play_arrive(snd)
+
+
+func _wait_loading_then_play_arrive(snd: AudioStream, tries: int = 60) -> void:
+	## 最多等 3 秒（60 × 0.05s）；超时或加载已结束就播。
+	## SceneTreeTimer 属于 SceneTree，不随场景销毁，可以安全跨帧。
+	var tree := get_tree()
+	if tree == null:
+		return
+	if tries <= 0 or not Global.is_loading_active():
+		Global.play_door_sfx(snd)
+		return
+	var timer: SceneTreeTimer = tree.create_timer(0.05)
+	timer.timeout.connect(func() -> void: _wait_loading_then_play_arrive(snd, tries - 1))
 
 
 func _apply_pending_arrival() -> void:

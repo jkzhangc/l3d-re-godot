@@ -58,6 +58,12 @@ const HINT_LAYER := preload("res://script/ui/hint_text_layer.gd")
 @export var interact_label: String = "进入安全屋"
 @export_range(8.0, 512.0, 1.0) var interact_range: float = 56.0
 
+@export_group("音效")
+## 触发传送时立刻播放（开门）。播放器挂在 Global 上，切场景不会截断。
+@export var door_open_sound: AudioStream = preload("res://sound/ドア開け2.ogg")
+## 到达目标场景后播放（关门）。经 Global 中转，等加载画面收起后响。
+@export var door_close_sound: AudioStream = preload("res://sound/ドア閉め2.ogg")
+
 @export_group("进入效果")
 @export var heal_on_enter: bool = false
 @export var reset_pacing: bool = true
@@ -238,6 +244,9 @@ func _enter_safe_room() -> void:
 	if target_scene.is_empty() or not ResourceLoader.exists(target_scene):
 		printerr("[SafeDoor] 无法进入安全屋，目标场景不存在: %s" % target_scene)
 		return
+	## 门音（2026-11-26）：点门即响开门音；关门音存到 Global，等新场景 ready 后播。
+	## 放在联机分支之前 —— 联机 Client 不本地切图，但门是它点的，音效要照播。
+	_play_door_transition_sfx()
 
 	var net: Node = get_node_or_null("/root/Net")
 	var online: bool = false
@@ -259,6 +268,17 @@ func _enter_safe_room() -> void:
 	print("[SafeDoor] 进入安全屋: %s" % target_scene)
 	Global.show_loading_screen()
 	get_tree().change_scene_to_file.call_deferred(target_scene)
+
+
+## 传送音效：开门现在响、关门交给新场景。
+func _play_door_transition_sfx() -> void:
+	## 直接用 autoload 引用（同文件其它地方也是 `Global.set_pending_arrival(...)`），
+	## 不用 get_node_or_null("/root/Global") —— 节点尚未入树时绝对路径解析不出来，
+	## 会静默不响（探针里 new 出来没 add_child 就复现过）。
+	if door_open_sound != null:
+		Global.play_door_sfx(door_open_sound)
+	if door_close_sound != null:
+		Global.set_pending_arrive_sound(door_close_sound)
 
 
 func commit_host_network_entry() -> void:

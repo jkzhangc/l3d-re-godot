@@ -1672,6 +1672,34 @@ func consume_pending_arrival(scene_path: String) -> Dictionary:
 	return arrival
 
 
+# ── 跨场景「到达音」（2026-11-26）──
+# 传送节点在切图前把"关门"音存这里，新场景的 GameInit._ready 取走并播放。
+# 关门的瞬间正好是场景切换的那一刻，本节点会随旧场景销毁，只能靠 autoload 中转。
+var _pending_arrive_sound: AudioStream = null
+
+## 存一个「到达新场景后播放」的音效（会覆盖上一个未消费的）。
+func set_pending_arrive_sound(stream: AudioStream) -> void:
+	_pending_arrive_sound = stream
+
+## 取走待播放的到达音（取一次就清空，避免每张图都响）。
+func consume_pending_arrive_sound() -> AudioStream:
+	var snd := _pending_arrive_sound
+	_pending_arrive_sound = null
+	return snd
+
+
+## 传送 / 开关门音效的统一入口。
+##
+## 【为什么 parent 传 self】`play_sfx_managed` 会把播放器 add_child 到 parent 下。
+## 开门音是在 `change_scene_to_file` **之前**触发的，如果挂在当前场景上，
+## 切图的同一瞬间播放器被销毁 → 声音被掐断（`play_ui_sfx` 的注释里也提到过同一坑，
+## 它把播放器挂在宿主 Global 下）。这里显式挂 autoload：跨场景常驻。
+func play_door_sfx(stream: AudioStream, volume_db: float = 0.0) -> void:
+	if stream == null:
+		return
+	play_sfx_managed(stream, self, false, 1.0, Vector2.INF, volume_db)
+
+
 ## 在安全屋捕获 checkpoint —— 深拷贝当前状态为快照
 func capture_checkpoint() -> void:
 	var scene_path: String = ""
