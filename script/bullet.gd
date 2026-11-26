@@ -432,7 +432,9 @@ func _tick_spray_stream(delta: float) -> void:
 		if not network_visual_only:
 			_spray_tick_acc += delta
 			if _spray_tick_acc >= _spray_tick_sec:
-				_spray_tick_acc = 0.0
+				## 减去步长而不是归零：归零会把超出部分丢掉，tick 节奏随帧数漂移，
+				## 实测 0.32s 只打出 4 次而不是预期的 5 次（2026-11-26）。
+				_spray_tick_acc -= _spray_tick_sec
 				_apply_spray_hits()
 		return
 	if _spray_emitter != null:
