@@ -68,11 +68,6 @@ const BLOCK_LAYER_ENEMY_ONLY: int = 4  ## 人物层：只有敌人 mask 含 → 
 		walk_texture = v
 		_refresh_sprite()
 @export var capture_checkpoint: bool = true        ## 传送前捕获 checkpoint（安全屋出口应为 true）
-@export_group("音效")
-## 触发传送时立刻播放（开门）。播放器挂在 Global 上，切场景不会截断。
-@export var door_open_sound: AudioStream = null
-## 到达目标场景后播放（关门）。经 Global 中转，等加载画面收起后响。
-@export var door_close_sound: AudioStream = null
 @export var walk_char_index: int = 0:              ## 精灵表中的角色索引
 	set(v):
 		walk_char_index = v
@@ -81,6 +76,12 @@ const BLOCK_LAYER_ENEMY_ONLY: int = 4  ## 人物层：只有敌人 mask 含 → 
 	set(v):
 		walk_direction = v
 		_refresh_sprite()
+
+@export_group("音效")
+## 触发传送时立刻播放（开门）。播放器挂在 Global 上，切场景不会截断。
+@export var door_open_sound: AudioStream = null
+## 到达目标场景后播放（关门）。经 Global 中转，等加载画面收起后响。
+@export var door_close_sound: AudioStream = null
 
 @export_group("踏步动画")
 @export var step_frames: Array[int] = [1, 0, 1, 2] ## 踏步帧序列

@@ -52,6 +52,10 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 @export var consume_effect: PackedScene = null
 @export var consume_sound: AudioStream = null
 
+## 熄灭后是否从场景移除（false = 只隐藏，保留节点供存档/联机状态参考）
+@export var free_after_consume: bool = true
+@export var consumed: bool = false
+
 @export_group("熄灭粒子（内置）")
 ## 粒子贴图。留空 = 纯色软点（CPUParticles2D 默认方块会显得很硬，建议配一张云状图，
 ## 例如 res://art/Barrages/烟雾粒子.png）。
@@ -69,9 +73,6 @@ const WALK := preload("res://script/vx_walk_sheet.gd")
 @export_range(0.0, 0.9, 0.05) var consume_particle_fade_from: float = 0.4
 ## 扩散倍率：粒子在生命周期内从 scale_min 涨到 scale_max × 该值（烟往外散的感觉）。
 @export_range(1.0, 3.0, 0.05) var consume_particle_expand: float = 1.35
-## 熄灭后是否从场景移除（false = 只隐藏，保留节点供存档/联机状态参考）
-@export var free_after_consume: bool = true
-@export var consumed: bool = false
 
 signal extinguished
 
