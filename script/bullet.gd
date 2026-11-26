@@ -113,6 +113,8 @@ var _spray_reach: float = 0.0
 var _spray_follow_offset: Vector2 = Vector2.ZERO
 ## 无视背刺判定（WeaponData.ignore_backstab）：喷雾/火焰这类武器方向无意义。
 var _ignore_backstab: bool = false
+## 喷雾粒子是否已经开始（第一帧才建，见 _spawn_spray_particles 注释）。
+var _spray_started: bool = false
 var _source_is_player_origin: bool = false
 var _spawn_offset: float = 0.0      ## 生成点前方偏移（扫掠起点回溯用，2026-09-16）
 var _swept_once: bool = false       ## 首帧扫掠已执行（回溯到枪口）
@@ -384,7 +386,24 @@ func _setup_spray_stream() -> void:
 		_area.collision_layer = 0
 		_area.monitorable = false
 	z_index = maxi(z_index, 2)
-	## 记录「当前位置 − 射手位置」：含枪口高度 + spawn_offset，后面每帧用它把喷口钉在枪口上。
+	## 最远粒子的落点 ≈ 0.975·max_range；判定按 0.95 收口，留一点余量防边界抖动。
+	_spray_reach = max_range * 0.95
+	## ★粒子**不在这里**创建 —— 原因见 _spawn_spray_particles() 的注释：
+	## setup() 在 `bullet.position = 枪口位置` 之前被调用，此刻节点还在世界原点。
+
+
+## 创建喷雾粒子锥并点火。
+##
+## 【为什么必须延后到第一帧】
+## `PlayerRangedAttackState` 的调用顺序是 `bullet.setup()`(行 230) → `bullet.position = 枪口位置`(行 239)。
+## 也就是说 setup 时本节点还在**世界原点**。而 `local_coords = false` 的粒子用
+## 「出生瞬间的世界坐标」定位 —— 在这里建粒子，整团雾会堆在世界原点，
+## 玩家看到的就是「喷出去一瞬间就消失」（2026-11-26 用户实测）。
+##
+## `_spray_follow_offset` 同理：必须等 position 就位后再算，否则偏移是 `-shooter.position`，
+## 每帧 `_update_spray_anchor()` 会把节点强行拉回原点。
+func _spawn_spray_particles() -> void:
+	## 此刻 global_position 已经是真实枪口位置，减出来的偏移才有意义。
 	if is_instance_valid(_shooter) and (_shooter as Node2D) != null:
 		_spray_follow_offset = global_position - (_shooter as Node2D).global_position
 	var p := CPUParticles2D.new()
@@ -431,16 +450,19 @@ func _setup_spray_stream() -> void:
 	p.color_ramp = ramp
 	if _spray_particle_tex != null:
 		p.texture = _spray_particle_tex
-	## 最远粒子的落点 ≈ 0.975·max_range；判定按 0.95 收口，留一点余量防边界抖动。
-	_spray_reach = max_range * 0.95
 	p.emitting = true
 	add_child(p)
 	_spray_emitter = p
-	_apply_spray_hits()
 
 
 func _tick_spray_stream(delta: float) -> void:
 	_spray_age += delta
+	## 第一帧才建粒子（见 _spawn_spray_particles 注释），顺便补一次开局结算。
+	if not _spray_started:
+		_spray_started = true
+		_spawn_spray_particles()
+		if not network_visual_only:
+			_apply_spray_hits()
 	## 喷口实时跟随射手（2026-11-26 用户反馈：移动时喷雾留在原地，看起来怪）。
 	_update_spray_anchor()
 	if _spray_age <= _spray_duration:
