@@ -1,0 +1,37 @@
+(効果音)消火器噴射.wav  /  (効果音)火消し.wav
+
+来源
+  OpenGameArt.org —「Steam release sounds」by bart
+  https://opengameart.org/content/steam-release-sounds
+  许可：CC0 1.0（公共领域，可商用、无需署名）
+
+为什么引入
+  项目 sound/ 里 1449 个音频中没有合适的灭火器/蒸汽音效：
+  最接近的只有「水鉄砲１/２」（水枪）、「水1~6」（水声）、「風1~11」（风声），
+  都不是灭火器那种高压气雾的「嗤——」。
+
+原始素材
+  steam_hisses.zip（622 KB，5 个 take）
+  每个 take：1.85s / 44.1kHz / 16bit / 立体声，真实蒸汽喷射录音
+  #1 ZCR≈17.3kHz（最沉，衰减平缓）→ 用作熄灭
+  #5 ZCR≈30.8kHz（最亮，衰减最快）→ 用作喷射
+
+处理方式（Python wave 直处理，无 ffmpeg）
+  (効果音)消火器噴射.wav
+    源 #5 → 加速 1.55×（音调升高、时长缩短）→ 裁 0.42s → 700Hz 一阶高通
+    → 4ms 淡入 / 90ms 淡出 → 归一化 -3dBFS
+    包络（每 40ms）：69754322100 —— 快起音 + 0.35s 衰减，对应一发喷雾
+
+  (効果音)火消し.wav
+    源 #1 → 裁 0.95s → 7.5kHz 一阶低通 → 归一化 -4dBFS
+    → 叠 85Hz 指数衰减瞬态 70ms（火堆被浇灭的「噗」）→ 2ms 淡入 / 280ms 淡出
+    → 归一化 -1.5dBFS
+    包络（每 40ms）：7987665443322111100 —— 快起音 + 0.8s 带尾，对应蒸汽腾起
+
+挂载位置
+  (効果音)消火器噴射.wav → WeaponData.attack_sound（object/weapon_fire_extinguisher.tres）
+  (効果音)火消し.wav     → interactive_prop.consume_sound（object/interactive_prop.tscn）
+
+想换音色
+  原始 zip 的 5 个 take 仍在 .workbuddy/tmp/sfx/steam/（临时目录，未入库）。
+  需要更亮/更沉的版本，改上面的加速倍数与滤波截止频率即可。

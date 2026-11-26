@@ -10,7 +10,7 @@
 [ext_resource type="AudioStream" uid="uid://c2wygjvvf8qf8" path="res://sound/チャキッ.ogg" id="6_rwij3"]
 [ext_resource type="AudioStream" uid="uid://dyx2xgvjy14cy" path="res://sound/(効果音)打撃3.ogg" id="7_8brvw"]
 [ext_resource type="AudioStream" uid="uid://joleh4qofehc" path="res://sound/回避2.ogg" id="8_7bk7u"]
-[ext_resource type="AudioStream" uid="uid://dw0e7lhwy2dy3" path="res://sound/水鉄砲１.ogg" id="9_spray"]
+[ext_resource type="AudioStream" uid="uid://b7ev5qx0sibgw" path="res://sound/(効果音)消火器噴射.wav" id="9_spray"]
 
 [sub_resource type="Resource" id="Bullet_spray"]
 script = ExtResource("2_bd")

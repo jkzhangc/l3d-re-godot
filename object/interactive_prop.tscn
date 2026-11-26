@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://script/prop/interactive_prop.gd" id="1_prop"]
 [ext_resource type="Texture2D" uid="uid://snnuwnhn50w7" path="res://art/Barrages/烟雾粒子.png" id="2_puff"]
-[ext_resource type="AudioStream" uid="uid://c4rdn460u8x17" path="res://sound/水3.ogg" id="3_sound"]
+[ext_resource type="AudioStream" uid="uid://w6sj02i1wm3s" path="res://sound/(効果音)火消し.wav" id="3_sound"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_1"]
 size = Vector2(32, 32)
